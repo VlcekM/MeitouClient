@@ -153,34 +153,22 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The towns' alarms the investigators answer (<see cref="AiBehaviour.Investigate"/>); null: none are raised.
     /// </summary>
-    public Crime.CrimeSystem? Crimes
-    {
-        get;
-        set;
-    }
+    public Crime.CrimeSystem? Crimes { get; set; }
 
     /// <summary>
     /// The squads' memory (the dialogue system's): the contract packages' update tags their mission target in it (<see cref="TagMissionTarget"/>).
     /// </summary>
-    public Dialogue.SquadMemory? Memory
-    {
-        get;
-        set;
-    }
+    public Dialogue.SquadMemory? Memory { get; set; }
 
     /// <summary>
     /// The combat system, for the threats Self preservation reads (<see cref="Combat.CombatSystem.ThreatLevel"/>) and its fight's attacker (row 13);
     /// null: the world's, once the serial step has found it (none: nothing threatens anyone).
     /// </summary>
-    public Combat.CombatSystem? ThreatSource
-    {
-        get;
-        set;
-    }
+    public Combat.CombatSystem? ThreatSource { get; set; }
 
     /// <summary>
-    /// The alarm an investigator answers: its squad's town's nearest in reach, for goal 210 only its own faction's (<see
-    /// cref="Crime.CrimeSystem.AlarmFor"/>).
+    /// The alarm an investigator answers: its squad's town's nearest in reach, for goal 210 only its own faction's
+    /// (<see cref="Crime.CrimeSystem.AlarmFor"/>).
     /// </summary>
     internal Crime.TownAlarm? AlarmOf(World world, int slot, TaskType type, Blackboard board) =>
         Crimes is { Alarms.Count: > 0 } crimes && world.Characters.Cold(slot) is { } cold
@@ -292,8 +280,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         /// </summary>
         Self,
         /// <summary>
-        /// The combat goals and Self preservation (priority 3): a fight they start ends an engine duty through its task's end; what an <see
-        /// cref="AiMind.Engine"/> mind weighs on its routine and in its own fight.
+        /// The combat goals and Self preservation (priority 3): a fight they start ends an engine duty through its task's end; what an
+        /// <see cref="AiMind.Engine"/> mind weighs on its routine and in its own fight.
         /// </summary>
         Combat,
     }
@@ -305,9 +293,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// Self preservation alone, whose fight or run (<see cref="SelfPreservation.Runs"/>) ends the duty's task as any fight's start does (in a fight,
     /// only its run changes anything). The duties a fight may interrupt: treating (<see cref="FirstAid.FirstAidSystem"/> lets go of the patient at
     /// the fight's start), a town errand's walk but the cage walk (<see cref="Kidnap.TownDutySystem"/> waits for the fight to end and walks on; one
-    /// carrying an intruder out fights with the body on its shoulder, as the original's carrier does), a captive job's walk carrying nothing (<see
-    /// cref="Kidnap.CaptiveSystem"/> gives the job up), and the routine of an <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>). Nothing
-    /// for one fleeing, imprisoned, carried or down, nor for a gunner or a carrier in a fight.
+    /// carrying an intruder out fights with the body on its shoulder, as the original's carrier does), a captive job's walk carrying nothing
+    /// (<see cref="Kidnap.CaptiveSystem"/> gives the job up), and the routine of an <see cref="AiMind.Engine"/> mind (<see cref="EngineRoutine"/>).
+    /// Nothing for one fleeing, imprisoned, carried or down, nor for a gunner or a carrier in a fight.
     /// </summary>
     internal static Restrict Preempts(in CharacterHot n, CharacterCold cold)
     {
@@ -400,8 +388,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <summary>
     /// The goal to act out, with its plan in <see cref="AiMind.Plan"/>: by tier (urgent, non-urgent, fluff), the goals with a positive score highest
     /// first, leaving out one whose list A already holds; the first whose plan succeeds wins (docs/game/ai-tasks.md "Planner": the pick). Idle when
-    /// none does. With <paramref name="only"/>, only the priority-3 goals that may take over a character the AI does not hold (<see
-    /// cref="Preempts"/>) are weighed, and null comes back when none plans.
+    /// none does. With <paramref name="only"/>, only the priority-3 goals that may take over a character the AI does not hold
+    /// (<see cref="Preempts"/>) are weighed, and null comes back when none plans.
     /// </summary>
     AiGoal? Choose(World world, int slot, CharacterId id, AiMind mind, Squad squad, Blackboard board, IReadOnlyList<AiGoal> roles,
         int hour, Restrict only = Restrict.None)
@@ -715,8 +703,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     if (Sittable(b.SeatAt(i).Kind, dummies: true))
                     {
                         seats.Add(new SeatClaim(b, i));
-                        if (!seatOwners.ContainsKey(b))
-                            seatOwners[b] = BuildingOwner(world, b, townFaction);
+                        if (!seatOwners.ContainsKey(b)) seatOwners[b] = BuildingOwner(world, b, townFaction);
                     }
             }
             _places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
@@ -826,9 +813,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// The building a worker works at (the finders of goals 189 / 190: a random building of the town with a function in <see cref="WorkFunctions"/>,
-    /// slot 2 of the building finder <c>FUN_1409fb020</c>); the roll is the character's and its <paramref name="epoch"/> of picks (<see
-    /// cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none. 189 (<paramref name="type"/>, real work) takes only
-    /// the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
+    /// slot 2 of the building finder <c>FUN_1409fb020</c>); the roll is the character's and its <paramref name="epoch"/> of picks
+    /// (<see cref="AiMind.WorkEpoch"/>), so asking twice names the same one. Null: the town has none. 189 (<paramref name="type"/>, real work) takes
+    /// only the workplaces it can run (<see cref="RealWork"/>); 190 (pretend) any.
     /// </summary>
     TownBuilding? PickWork(World world, CharacterId self, int town, int epoch, TaskType type = TaskType.AutoLabouringMinesPretend)
     {
@@ -1625,8 +1612,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Where Task_GoHomeTown / Task_GoHomeTownFast walk (<c>FUN_14033dd70</c>, <b>Verified</b>): the platoon's object hand (<c>+0xb8</c> of its
-    /// platoon, meaning <b>Unknown</b>, never set here) if it resolves, else the point outside the gates of the ownerships' home town (<see
-    /// cref="TownExit"/>, Town vfunc <c>0x38</c>), else (no home town) the character's own spot; null for that last case.
+    /// platoon, meaning <b>Unknown</b>, never set here) if it resolves, else the point outside the gates of the ownerships' home town
+    /// (<see cref="TownExit"/>, Town vfunc <c>0x38</c>), else (no home town) the character's own spot; null for that last case.
     /// </summary>
     Vector2? RetreatPoint(Squad squad) =>
         squad.Town >= 0 && squad.Town < data.Sites.Count ? TownExit.Of(data.Sites[squad.Town], _locks?.Regions) : null;
@@ -1659,9 +1646,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The <paramref name="index"/>-th spot of a kind (null: any node, <see cref="HomeSpot.IsNode"/>, shopkeeper nodes left out with <paramref
-    /// name="notCounter"/>) of a building, uniformly at random by the goal's <paramref name="roll"/> (<see cref="AiMind.NodeRoll"/>; the node finders
-    /// draw uniformly and keep the pick until the goal is renewed), else round robin; null when it has none.
+    /// The <paramref name="index"/>-th spot of a kind (null: any node, <see cref="HomeSpot.IsNode"/>, shopkeeper nodes left out with
+    /// <paramref name="notCounter"/>) of a building, uniformly at random by the goal's <paramref name="roll"/> (<see cref="AiMind.NodeRoll"/>; the
+    /// node finders draw uniformly and keep the pick until the goal is renewed), else round robin; null when it has none.
     /// </summary>
     internal static HomeSpot? Pick(TownBuilding home, HomeSpotKind? kind, int index, ulong roll = 0, bool notCounter = false)
     {
@@ -1748,11 +1735,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Walks the character to a spot; true when it is there (and not walking). A walk that ends away from the spot counts as failed; after <see
-    /// cref="MaxFailedWalks"/> in a row it gives the spot up as <paramref name="giveUp"/> says. <paramref name="slack"/> overrides <see
-    /// cref="AiSettings.PostSlack"/> where the spot must be exact (a turret's gun); <paramref name="height"/> is the floor the spot is on, so the
-    /// path reaches a floor or walkway above the ground; a spot over a hole furniture cuts in that floor is walked to beside it, on the floor (<see
-    /// cref="IWalkability.FloorNear"/>).
+    /// Walks the character to a spot; true when it is there (and not walking). A walk that ends away from the spot counts as failed; after
+    /// <see cref="MaxFailedWalks"/> in a row it gives the spot up as <paramref name="giveUp"/> says. <paramref name="slack"/> overrides
+    /// <see cref="AiSettings.PostSlack"/> where the spot must be exact (a turret's gun); <paramref name="height"/> is the floor the spot is on, so
+    /// the path reaches a floor or walkway above the ground; a spot over a hole furniture cuts in that floor is walked to beside it, on the floor
+    /// (<see cref="IWalkability.FloorNear"/>).
     /// </summary>
     /// <summary>
     /// Where 200 Task_LeaveBuilding walks (docs/game/ai-tasks.md): A + (A − B) × 1.1 of the building's first door with a known leaf, A and B its
@@ -2243,14 +2230,14 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Gives the members whose role list has relaxing (under a bar package), sitting around or staying home open at this hour a seat of their <see
-    /// cref="Blackboard.Home"/> (the package's bar under a bar package): in member order each takes the first seat no one in that building claimed in
-    /// this cadence pass; members left without one do not relax or sit. Relaxing takes a chair, else a bar node, else a general node (the original
-    /// operates furniture of the bar, docs/game/ai-tasks.md "Town goals", Observed; the node fallbacks are an engine choice); staying home a chair
-    /// only (the original's furniture not claimed by others, Observed; its mask also holds training furniture, which Meitou leaves out). Sitting
-    /// around (275) claims in <see cref="ClaimSitting"/>. A member keeps the seat it had while it still relaxes or stays (engine choice: reassigning
-    /// every pass in member order moved every later sitter to another chair whenever one came or went); the seats kept, and those a character sits on
-    /// by an order (the player's Use), are reserved for every squad first (<see cref="ReserveSeats"/>).
+    /// Gives the members whose role list has relaxing (under a bar package), sitting around or staying home open at this hour a seat of their
+    /// <see cref="Blackboard.Home"/> (the package's bar under a bar package): in member order each takes the first seat no one in that building
+    /// claimed in this cadence pass; members left without one do not relax or sit. Relaxing takes a chair, else a bar node, else a general node (the
+    /// original operates furniture of the bar, docs/game/ai-tasks.md "Town goals", Observed; the node fallbacks are an engine choice); staying home a
+    /// chair only (the original's furniture not claimed by others, Observed; its mask also holds training furniture, which Meitou leaves out).
+    /// Sitting around (275) claims in <see cref="ClaimSitting"/>. A member keeps the seat it had while it still relaxes or stays (engine choice:
+    /// reassigning every pass in member order moved every later sitter to another chair whenever one came or went); the seats kept, and those a
+    /// character sits on by an order (the player's Use), are reserved for every squad first (<see cref="ReserveSeats"/>).
     /// </summary>
     void ClaimSeats(World world, Blackboard board, Squad squad)
     {
@@ -2303,8 +2290,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     readonly Dictionary<int, HomeSpot> _kept = [];
 
     /// <summary>
-    /// Marks taken the chairs and thrones of <paramref name="home"/> a character sits on by an order (the player's Use, <see
-    /// cref="CharacterTask.Operate"/>), so no member claims them.
+    /// Marks taken the chairs and thrones of <paramref name="home"/> a character sits on by an order (the player's Use,
+    /// <see cref="CharacterTask.Operate"/>), so no member claims them.
     /// </summary>
     static void TakeOperatedSeats(World world, TownBuilding home, HashSet<int> taken)
     {
@@ -2489,8 +2476,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// Whether sitting around takes a piece of furniture of this kind (bits CHAIR and THRONE of the mask; TRAINING too unless <paramref
-    /// name="dummies"/> is false).
+    /// Whether sitting around takes a piece of furniture of this kind (bits CHAIR and THRONE of the mask; TRAINING too unless
+    /// <paramref name="dummies"/> is false).
     /// </summary>
     static bool Sittable(HomeSpotKind kind, bool dummies) =>
         kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat || dummies && kind == HomeSpotKind.Training;
@@ -2713,8 +2700,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     }
 
     /// <summary>
-    /// The package a template's squad starts with (<see cref="Blackboard.Update"/> over its slots, as the population's stand-in takes it, <see
-    /// cref="PlatoonJobs.For"/>); null without one.
+    /// The package a template's squad starts with (<see cref="Blackboard.Update"/> over its slots, as the population's stand-in takes it,
+    /// <see cref="PlatoonJobs.For"/>); null without one.
     /// </summary>
     AiPackage? FirstPackage(string templateId)
     {
@@ -2760,8 +2747,8 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
 
     /// <summary>
     /// Whether the running package moves the squad itself (the trader, the refugee, the shipping and retreat classes): one of its goals travels and a
-    /// mission town is set. Else the population's trip or campaign march moves a platoon's squad and its members keep the engine's routine (<see
-    /// cref="AiMind.Engine"/>), as before the platoons ran a blackboard.
+    /// mission town is set. Else the population's trip or campaign march moves a platoon's squad and its members keep the engine's routine
+    /// (<see cref="AiMind.Engine"/>), as before the platoons ran a blackboard.
     /// </summary>
     internal static bool BoardMoves(Blackboard board)
     {
@@ -2866,9 +2853,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const int RehomeFunctions = 0x13;
 
     /// <summary>
-    /// The home a squad moving out is given (<c>FUN_14099e6e0</c> through <c>FUN_1409fc2e0</c>, <b>Observed</b>): one of its town's buildings in <see
-    /// cref="RehomeFunctions"/> that is for sale (the panel's test, slot 88 <c>FUN_14029c500</c>: <see cref="Locks.FixtureRegistry.SalePrice"/>), at
-    /// random; null when there is none. The original also tests the squad against each (<c>FUN_140621230</c>, meaning <b>Unknown</b>, not modelled).
+    /// The home a squad moving out is given (<c>FUN_14099e6e0</c> through <c>FUN_1409fc2e0</c>, <b>Observed</b>): one of its town's buildings in
+    /// <see cref="RehomeFunctions"/> that is for sale (the panel's test, slot 88 <c>FUN_14029c500</c>:
+    /// <see cref="Locks.FixtureRegistry.SalePrice"/>), at random; null when there is none. The original also tests the squad against each
+    /// (<c>FUN_140621230</c>, meaning <b>Unknown</b>, not modelled).
     /// </summary>
     TownBuilding? HouseForSale(World world, Squad squad)
     {

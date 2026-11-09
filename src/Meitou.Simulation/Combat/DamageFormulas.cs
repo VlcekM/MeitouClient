@@ -93,8 +93,7 @@ public static class DamageFormulas
     /// <summary>
     /// The packet of an armed blow: the three damages, scaled by the weapon's multiplier for the target kind, the weapon's per-race damage (percent x
     /// 0.01) and the wearer's general damage multiplier (worn gear's <c>damage output mult</c>); the weapon's bleed multiplier and armour penetration
-    /// ride along.
-    /// <paramref name="targetRace"/> is the target's RACE string id (null for none).
+    /// ride along. <paramref name="targetRace"/> is the target's RACE string id (null for none).
     /// </summary>
     public static DamagePacket Packet(
         float skill,

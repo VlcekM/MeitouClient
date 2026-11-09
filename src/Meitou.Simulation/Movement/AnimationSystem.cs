@@ -585,8 +585,7 @@ public sealed class AnimationSystem(
         if (combat!.Playing(id, tick) is { } playing)
             return (Library.IndexOfTechnique(playing.Technique.StringId), playing.Progress);
 
-        if (combat.RangedPoseOf(id, tick, tickSeconds) is { } pose)
-            return RangedClip(pose, cold);
+        if (combat.RangedPoseOf(id, tick, tickSeconds) is { } pose) return RangedClip(pose, cold);
 
         return (-1, 0);
     }
@@ -1271,10 +1270,9 @@ public sealed class AnimationSystem(
     /// <summary>
     /// One tick of an animal's animation (docs/simulation.md "Animation", animals): its own clips only. Moving, the movement clips of its list by
     /// speed (unsynched: F x <c>play speed</c> x v clip seconds per second, F = 1 / its size: the humanoid F = (2 - H) / g with H = 1 and g the size,
-    /// an
-    /// <b>engine reading</b>); standing (in a fight too), one of its idles; a creature technique the combat system plays, over everything; down, its
-    /// <c>gotosleep</c> once, then <c>sleep</c> (or the fall's last frame held); no hit reactions (no animal record has <c>stumbles</c>) and no getting up (none
-    /// exists: it fades back to standing). Root motion of an attack is scaled by the size.
+    /// an <b>engine reading</b>); standing (in a fight too), one of its idles; a creature technique the combat system plays, over everything; down,
+    /// its <c>gotosleep</c> once, then <c>sleep</c> (or the fall's last frame held); no hit reactions (no animal record has <c>stumbles</c>) and no
+    /// getting up (none exists: it fades back to standing). Root motion of an attack is scaled by the size.
     /// </summary>
     Vector2 UpdateAnimal(CharacterAnimation a, CharacterCold cold, AnimalPlan plan, float speed, float dt, ulong seed, ulong key, long tick,
         List<(int Index, float Weight)> wanted, in CombatView fight, RagdollView ragdoll)

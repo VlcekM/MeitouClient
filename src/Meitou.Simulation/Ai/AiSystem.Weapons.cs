@@ -14,9 +14,9 @@ public sealed partial class AiSystem
     /// nor the hip gave a weapon of the task's kind and the character is not of a player faction, the first item of its inventory (in inventory
     /// order, the worn backpack's contents after the items) of the kind goes into its hand. The task flag is the weapon's ranged flag: 6 EQUIP_WEAPON
     /// takes a melee WEAPON, 264 EQUIP_CROSSBOW a CROSSBOW. The AI's usability test (vfunc <c>0x68</c>) is not decoded and counts as true. Meitou has
-    /// no held-item pointer (the drawn weapon follows the back and hip sections), so the item goes into the first weapon section it fits (<see
-    /// cref="InventoryCommands.TryEquip"/>) and the fighter is rebuilt; with both sections full nothing is replaced and the hand stays empty. True
-    /// when a weapon came out.
+    /// no held-item pointer (the drawn weapon follows the back and hip sections), so the item goes into the first weapon section it fits
+    /// (<see cref="InventoryCommands.TryEquip"/>) and the fighter is rebuilt; with both sections full nothing is replaced and the hand stays empty.
+    /// True when a weapon came out.
     /// </summary>
     internal bool DrawFromInventory(World world, CharacterCold cold, bool ranged)
     {

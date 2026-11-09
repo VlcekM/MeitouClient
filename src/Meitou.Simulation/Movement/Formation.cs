@@ -48,8 +48,7 @@ public static class Formation
         Func<float> draw)
     {
         var slots = new Dictionary<CharacterId, Vector2> { [head.Id] = Vector2.Zero };
-        if (others.Count == 0 && slaves.Count == 0)
-            return slots;
+        if (others.Count == 0 && slaves.Count == 0) return slots;
 
         float Range(float a, float b) => a + draw() * (b - a);
         switch (type)
@@ -91,8 +90,7 @@ public static class Formation
         };
         foreach (var block in blocks)
         {
-            if (block.Count == 0)
-                continue;
+            if (block.Count == 0) continue;
 
             float r = block.Max(m => m.Radius);
             float step = 2 * r + 10;
@@ -166,8 +164,7 @@ public static class Formation
             for (int tries = 0; tries < 256; tries++)
             {
                 at.Y += range(10, 50) * sign;
-                if (Free(at, m.Radius))
-                    break;
+                if (Free(at, m.Radius)) break;
             }
 
             return at;
@@ -228,12 +225,10 @@ public static class Formation
         foreach (var m in all)
         {
             var at = Polar(spread);
-            if (at.X > front)
-                front = at.X;
+            if (at.X > front) front = at.X;
 
             at = PushApart(circles, at, m.Radius, draw);
-            if (m.Id != head.Id)
-                slots[m.Id] = at;
+            if (m.Id != head.Id) slots[m.Id] = at;
 
             circles.Add((at, m.Radius));
         }
@@ -258,8 +253,7 @@ public static class Formation
             while (last > 0 && all[last].Animal)
                 last--;
 
-            if (last == 0)
-                break;
+            if (last == 0) break;
 
             var at = PushApart(circles, new Vector2(front + ScatterGap + 20 + circles[last].R, 0), circles[last].R, draw, last);
             circles[last] = (at, circles[last].R);
@@ -278,20 +272,17 @@ public static class Formation
         int pushes = 0;
         for (int j = 0; j < circles.Count && pushes < 64; j++)
         {
-            if (j == self)
-                continue;
+            if (j == self) continue;
 
             var (c, r) = circles[j];
             float reach = r + radius + ScatterGap;
             var v = at - c;
-            if (v.LengthSquared() >= reach * reach)
-                continue;
+            if (v.LengthSquared() >= reach * reach) continue;
 
             var d = v == Vector2.Zero ? new Vector2(draw() - 0.5f, draw() - 0.5f) : v;
             if (pushes == 0)
                 first = d;
-            else if (Vector2.Dot(d, first) < 0)
-                d = first;
+            else if (Vector2.Dot(d, first) < 0) d = first;
 
             d = Vector2.Normalize(d);
             float b = Vector2.Dot(v, d);

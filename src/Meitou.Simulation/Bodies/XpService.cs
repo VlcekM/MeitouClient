@@ -96,11 +96,12 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
 
     /// <summary>
     /// A combat event for one character (<c>FUN_1408c6980</c>). <paramref name="opponentSkill"/> is the opponent's defence for the attacker's events
-    /// (<see cref="XpEvent.HitDealt"/>, <see cref="XpEvent.GlancingHit"/>) and the opponent's attack for <see cref="XpEvent.Defended"/> and <see
-    /// cref="XpEvent.HitTaken"/>. <paramref name="weaponStat"/> is the current weapon's skill (none when unarmed); <paramref name="strengthFactor"/>
-    /// is <see cref="WeaponWeightStrengthFactor"/>, or for unarmed (1 - the encumbrance factor). <paramref name="damageTaken"/> is the incoming
-    /// packet's cut + blunt + pierce + stun (<see cref="XpEvent.HitTaken"/> only). The gains are scaled by the Global damage multiplier option.
-    /// <b>Verified</b> coefficients (decompile, docs/game/character-stats.md "Levelling"): per event, which stats gain and by how much.
+    /// (<see cref="XpEvent.HitDealt"/>, <see cref="XpEvent.GlancingHit"/>) and the opponent's attack for <see cref="XpEvent.Defended"/> and
+    /// <see cref="XpEvent.HitTaken"/>. <paramref name="weaponStat"/> is the current weapon's skill (none when unarmed);
+    /// <paramref name="strengthFactor"/> is <see cref="WeaponWeightStrengthFactor"/>, or for unarmed (1 - the encumbrance factor).
+    /// <paramref name="damageTaken"/> is the incoming packet's cut + blunt + pierce + stun (<see cref="XpEvent.HitTaken"/> only). The gains are
+    /// scaled by the Global damage multiplier option. <b>Verified</b> coefficients (decompile, docs/game/character-stats.md "Levelling"): per event,
+    /// which stats gain and by how much.
     /// </summary>
     public void Combat(CharacterStats stats, RaceData race, XpEvent ev, bool unarmed, StatsEnumerated weaponStat, float opponentSkill,
         float strengthFactor, float damageTaken = 0)
@@ -205,8 +206,8 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
             : MathF.Min((1 - encumbranceFactor) * (1 - encumbranceFactor), 0.5f) * (doubled ? 2 : 1) * constants.XpRateStrengthFromWalking;
 
     /// <summary>
-    /// What the information panel shows as "Athletics XP:" (<c>FUN_1408c5ec0</c>): the encumbrance factor, x1.5 above 80 % of the run value; <see
-    /// cref="AthleticsFromRunning"/> scales it by <c>xp rate athletics</c>.
+    /// What the information panel shows as "Athletics XP:" (<c>FUN_1408c5ec0</c>): the encumbrance factor, x1.5 above 80 % of the run value;
+    /// <see cref="AthleticsFromRunning"/> scales it by <c>xp rate athletics</c>.
     /// </summary>
     public static float AthleticsRate(float encumbranceFactor, float speed, float runValue) =>
         MathF.Max(encumbranceFactor, 0) * (runValue * 0.8f < speed ? 1.5f : 1);
@@ -230,8 +231,8 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     /// <summary>
     /// Stealth while sneaking (<c>FUN_1408c65a0</c>, from the sneaker's sense update): the continuous entry with amount 0.2 when no hostile NPC is
     /// about, 0.9 when one has it within sight range unseen, 1.5 when a looker's spot meter on it is filling or full (Verified literals; the "about"
-    /// and "seen" gates are <b>Observed</b> readings of the original's flags). The per-hearing-check gain of <c>FUN_1408c7330</c> is <see
-    /// cref="HearingCheck"/>.
+    /// and "seen" gates are <b>Observed</b> readings of the original's flags). The per-hearing-check gain of <c>FUN_1408c7330</c> is
+    /// <see cref="HearingCheck"/>.
     /// </summary>
     public float Sneaking(CharacterStats stats, RaceData race, StealthExposure exposure, float dtSeconds, bool moving = true) =>
         Continuous(stats, race, StatsEnumerated.Stealth, dtSeconds, SneakRate(exposure) * (moving ? 1 : NotMovingFactor));
@@ -320,8 +321,8 @@ public sealed class XpService(GameConstants constants, BodyOptions options)
     }
 
     /// <summary>
-    /// Toughness for getting up on the player's order near enemies (<c>FUN_1408c6780</c>, <b>Observed</b>): the core gain of 0.075 x f x (<paramref
-    /// name="enemies"/> + 10) x race[toughness], f = <see cref="ToughnessFactor"/>.
+    /// Toughness for getting up on the player's order near enemies (<c>FUN_1408c6780</c>, <b>Observed</b>): the core gain of 0.075 x f x
+    /// (<paramref name="enemies"/> + 10) x race[toughness], f = <see cref="ToughnessFactor"/>.
     /// </summary>
     public float ToughnessFromGettingUp(CharacterStats stats, RaceData race, MedicalState medical, int enemies) =>
         PerEvent(stats, race, StatsEnumerated.Toughness, ToughnessFactor(medical) * (enemies + 10));

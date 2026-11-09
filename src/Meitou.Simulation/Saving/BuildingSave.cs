@@ -12,12 +12,11 @@ namespace Meitou.Simulation.Saving;
 /// The player's buildings and construction sites in a save (docs/formats/zones.md "Placement keys", docs/formats/save.md). Each is an instance of its
 /// zone file's <c>0-buildinglist</c>, id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, with a GAMESTATE_BUILDING state <c>&lt;id&gt;-S23</c> in
 /// the keys of the original's writer (<c>FUN_1405547f0</c>, <b>Verified</b> by code): <c>name</c>, <c>owner faction ID</c>, <c>floornum</c>,
-/// <c>destroyed</c>, <c>flags</c>,
-/// <c>is complete</c>, <c>pause</c>, <c>construction progress</c>, <c>&lt;i&gt;construction mats</c> (delivered of entry i), <c>world Y pos</c> (absolute),
-/// <c>player furniture Y offset</c> (relative to the parent's origin) and the handles <c>handle</c>, <c>isInsideBuilding</c>, <c>town</c>, <c>residents</c>.
-/// Instance Y is written relative to terrain outdoors, to the parent indoors (docs/formats/save.md); reading takes <c>world Y pos</c>. Meitou's own key
-/// <c>meitou parent</c> (the parent's instance id) carries a parent the original's handle cannot name, and wins on load. <c>town</c> is the handle of the
-/// player outpost the site belongs to (<see cref="WriteTowns"/>).
+/// <c>destroyed</c>, <c>flags</c>, <c>is complete</c>, <c>pause</c>, <c>construction progress</c>, <c>&lt;i&gt;construction mats</c> (delivered of
+/// entry i), <c>world Y pos</c> (absolute), <c>player furniture Y offset</c> (relative to the parent's origin) and the handles <c>handle</c>,
+/// <c>isInsideBuilding</c>, <c>town</c>, <c>residents</c>. Instance Y is written relative to terrain outdoors, to the parent indoors
+/// (docs/formats/save.md); reading takes <c>world Y pos</c>. Meitou's own key <c>meitou parent</c> (the parent's instance id) carries a parent the
+/// original's handle cannot name, and wins on load. <c>town</c> is the handle of the player outpost the site belongs to (<see cref="WriteTowns"/>).
 /// </summary>
 public static class BuildingSave
 {

@@ -170,7 +170,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         if ((n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0 || n.TaskTime > 0) return;
 
         // The point past the runner only now, at most once per RepathSeconds: the navmesh test is a point query per chaser.
-        if (behind) goal = PassPoint(world, i, cold, tc, next[t], d, tv, lead, goal);
+        if (behind) goal = PassPoint(world, i, cold, tc, next[t].Position.Y, d, tv, lead, goal);
 
         bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > RepathDistance * RepathDistance;
         if (!stale) return;
@@ -190,16 +190,17 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     /// RepathSeconds of the runner's way past the lead. <paramref name="goal"/> stays when that point is off the navmesh (a wall, a cliff): the
     /// chaser then goes for the target itself.
     /// </summary>
-    static Vector2 PassPoint(World world, int i, CharacterCold cold, CharacterCold? tc, CharacterHot target, Vector3 d, Vector3 tv, float lead, Vector2 goal)
+    static Vector2 PassPoint(World world, int i, CharacterCold cold, CharacterCold? tc, float targetHeight, Vector3 d, Vector3 tv, float lead,
+        Vector2 goal)
     {
         var heading = Vector2.Normalize(new Vector2(tv.X, tv.Z));
         var across = new Vector2(-heading.Y, heading.X);
         float side = across.X * -d.X + across.Y * -d.Z;
         float pass = CombatTuning.PassWidth * (CombatTuning.Footprint(cold) + CombatTuning.Footprint(tc));
-        float sideSign = side > 0 || side == 0 && (i & 1) == 0 ? pass : -pass;
-        var ahead = goal + new Vector2(tv.X, tv.Z) * (lead + RepathSeconds) + across * sideSign;
+        float offset = side > 0 || side == 0 && (i & 1) == 0 ? pass : -pass;
+        var ahead = goal + new Vector2(tv.X, tv.Z) * (lead + RepathSeconds) + across * offset;
 
-        return world.Walkability.IsWalkable(ahead.X, ahead.Y, target.Position.Y) ? ahead : goal;
+        return world.Walkability.IsWalkable(ahead.X, ahead.Y, targetHeight) ? ahead : goal;
     }
 
     /// <summary>
@@ -315,8 +316,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     /// <summary>
     /// Lapses the path failures and, after a path request that found no way, adds <paramref name="target"/> (<see cref="CharacterCold.Ignored"/>). A
     /// lapsed one is armed for another <see cref="PathFailureSeconds"/> while there is still no path to its target, else dropped
-    /// (<c>AITaskSytem::update4Frame</c>,
-    /// <b>Observed</b>; at most one dropped per call).
+    /// (<c>AITaskSytem::update4Frame</c>, <b>Observed</b>; at most one dropped per call).
     /// </summary>
     internal static void NotePathFailure(World world, int i, CharacterCold cold, CharacterId target, float endReach)
     {
@@ -398,15 +398,15 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 /// (<see cref="AggroSystem.Force"/>) and, with the target's fight off, asks it to be decided again unless it gets up or is player-side and moving).
 /// An NPC with a mind defends itself by its 32 Self preservation in the AI's chooser (row 13 on its own attacker,
 /// <see cref="Ai.AiSystem.SelfDefencePick"/>), which the alert asks to think at the next tick. One without a mind (no squad: scripted and test
-/// worlds) gets the engine's answer here: at the alert and again every
-/// <see cref="CheckEveryTicks"/> ticks, awake, armed with a <see cref="Fighter"/>, not crawling and not fighting already, it fights its attacker at any distance
-/// (<b>engine choice</b>). Nobody else joins here: squad mates and allies come by their own protect goals in the chooser (AiSystem.Fights.cs), which
-/// the alert asks to think (<see cref="AskProtectors"/>). A player character's own defence is the decision step's 32 Self preservation
-/// (<see cref="DecisionSystem"/>; this system offers the attacker, <see cref="SelfFoe"/>), except a bodyguard's against an attacker within 40 (row
-/// 45's <c>!39</c>); followers and bodyguards fight their target's attacker within 40 of it (rows 31 / 45 / 289's <c>!16</c>, <see cref="Guards"/>).
-/// Passive keeps a character from helping others, not from defending itself. The orders go into the world's deferred list for the next tick
-/// (<see cref="World.Defer"/>) and are marked <see cref="AttackOrder.Defensive"/>. A player character's help for others (squad mates, with
-/// <see cref="SquadAi.Help"/> allied factions) is the decision step's 15 Protect allies (<see cref="JoinFight"/>), not this pass.
+/// worlds) gets the engine's answer here: at the alert and again every <see cref="CheckEveryTicks"/> ticks, awake, armed with a
+/// <see cref="Fighter"/>, not crawling and not fighting already, it fights its attacker at any distance (<b>engine choice</b>). Nobody else joins
+/// here: squad mates and allies come by their own protect goals in the chooser (AiSystem.Fights.cs), which the alert asks to think
+/// (<see cref="AskProtectors"/>). A player character's own defence is the decision step's 32 Self preservation (<see cref="DecisionSystem"/>; this
+/// system offers the attacker, <see cref="SelfFoe"/>), except a bodyguard's against an attacker within 40 (row 45's <c>!39</c>); followers and
+/// bodyguards fight their target's attacker within 40 of it (rows 31 / 45 / 289's <c>!16</c>, <see cref="Guards"/>). Passive keeps a character from
+/// helping others, not from defending itself. The orders go into the world's deferred list for the next tick (<see cref="World.Defer"/>) and are
+/// marked <see cref="AttackOrder.Defensive"/>. A player character's help for others (squad mates, with <see cref="SquadAi.Help"/> allied factions) is
+/// the decision step's 15 Protect allies (<see cref="JoinFight"/>), not this pass.
 /// </summary>
 public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecisionOwner
 {
@@ -556,9 +556,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// <summary>
     /// The finder <c>FUN_14099ca10</c> shared by both kinds of looker (<b>Verified</b>): over the sensed entries tagged ALLY and not
     /// <paramref name="exclude"/>, seen or heard at the last look, alive, a slave or escaped slave only where <paramref name="slaveOk"/> says (asked
-    /// once, for the first), each worth
-    /// <paramref name="weigh"/> of its fight threat (0 or less skips it). The best (the first on a tie), and the first above 0, which the desire
-    /// <c>FUN_140599b90</c> takes (the finder called to stop at it, uncapped).
+    /// once, for the first), each worth <paramref name="weigh"/> of its fight threat (0 or less skips it). The best (the first on a tie), and the
+    /// first above 0, which the desire <c>FUN_140599b90</c> takes (the finder called to stop at it, uncapped).
     /// </summary>
     internal static (int Best, float Value, float First) ScanAllies(
         World world,
@@ -611,13 +610,12 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         int foe = combat.BestAttackerOf(world, ally, slot);
         if (foe < 0 || table.Cold(slot) is not { } cold) return -1;
 
-        var next = table.Next;
-        bool foeCrawls = table.Cold(foe)?.Medical?.Crawling == true || combat.StateOf(table.IdOf(foe)).AttackTech >= 0;
-        if (Orders.Holding(cold) && !Orders.HoldPost(next[slot].Position, Orders.HoldPointOf(cold, next[slot].Position), next[foe].Position, next[foe].Velocity,
-            next[foe].Yaw, foeCrawls, true))
-            return -1;
+        if (!Orders.Holding(cold)) return foe;
 
-        return foe;
+        var next = table.Next;
+        var post = Orders.HoldPointOf(cold, next[slot].Position);
+        bool foeCrawls = table.Cold(foe)?.Medical?.Crawling == true || combat.StateOf(table.IdOf(foe)).AttackTech >= 0;
+        return Orders.HoldPost(next[slot].Position, post, next[foe].Position, next[foe].Velocity, next[foe].Yaw, foeCrawls, true) ? foe : -1;
     }
 
     #endregion
@@ -649,10 +647,12 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         var d = next[a].Position - next[t].Position;
         if (d.X * d.X + d.Z * d.Z > SelfDefenceReach * SelfDefenceReach) return;
 
-        bool attackerCrawls = ac.Medical?.Crawling == true || st.AttackTech >= 0;
-        if (Orders.Holding(tc) && !Orders.HoldPost(next[t].Position, Orders.HoldPointOf(tc, next[t].Position), next[a].Position, next[a].Velocity, next[a].Yaw,
-            attackerCrawls, true))
-            return;
+        if (Orders.Holding(tc))
+        {
+            var post = Orders.HoldPointOf(tc, next[t].Position);
+            bool attackerCrawls = ac.Medical?.Crawling == true || st.AttackTech >= 0;
+            if (!Orders.HoldPost(next[t].Position, post, next[a].Position, next[a].Velocity, next[a].Yaw, attackerCrawls, true)) return;
+        }
 
         _selfFoes.Add(t, a);
     }
@@ -772,6 +772,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         for (int a = 0; a < table.HighWater; a++) JoinAttack(world, table, a, periodic, taken);
     }
 
+    /// <summary>
+    /// Grows the per-slot alert arrays to at least <paramref name="highWater"/> (doubling).
+    /// </summary>
     void GrowAlertArrays(int highWater)
     {
         int size = Math.Max(highWater, _alertSlot.Length * 2);
@@ -822,10 +825,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
         // The Hold order takes on only an attacker its post test accepts (Orders.HoldPost).
         var from = next[a].Position;
+        bool attackerCrawls = table.Cold(a)?.Medical?.Crawling == true || st.AttackTech >= 0;
         for (int k = defenders.Count - 1; k >= 0; k--)
         {
             int ds = defenders[k].Slot;
-            bool attackerCrawls = table.Cold(a)?.Medical?.Crawling == true || st.AttackTech >= 0;
             if (table.Cold(ds) is { } dc && Orders.Holding(dc)
                 && !Orders.HoldPost(next[ds].Position, Orders.HoldPointOf(dc, next[ds].Position), from, next[a].Velocity, next[a].Yaw, attackerCrawls, true))
                 defenders.RemoveAt(k);

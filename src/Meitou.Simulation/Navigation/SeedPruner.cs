@@ -35,8 +35,7 @@ internal static class SeedPruner
     public static int Prune(ZoneNavMesh mesh, ZoneGeometry g, NavBuildSettings s)
     {
         int n = mesh.PolygonCount;
-        if (n == 0)
-            return 0;
+        if (n == 0) return 0;
 
         var keep = new bool[n];
         var queue = new Queue<int>();
@@ -45,13 +44,11 @@ internal static class SeedPruner
         // "Narrow portals").
         int portalsBelow = g.InteriorOf is null ? int.MaxValue : 0;
         int matched = Match(mesh, g.Seeds, s, keep, queue);
-        if (matched == 0 && g.NodeSeeds.Count > 0)
-            matched = Match(mesh, g.NodeSeeds, s, keep, queue);
+        if (matched == 0 && g.NodeSeeds.Count > 0) matched = Match(mesh, g.NodeSeeds, s, keep, queue);
 
         // Regions reaching the zone's border at ground level are kept when the zone is published, toward the sides whose neighbour is not loaded
         // (ExtendBorder), and from the neighbours' kept polygons when it is (ZoneKeptClosure): the cached pruning is the zone's own.
-        if (g.InteriorDestroyed)
-            return PruneDestroyed(mesh, keep, queue, matched, portalsBelow);
+        if (g.InteriorDestroyed) return PruneDestroyed(mesh, keep, queue, matched, portalsBelow);
 
         if (matched == 0 && g.ClippedAtBorder)
         {
@@ -84,8 +81,7 @@ internal static class SeedPruner
     static int PruneDestroyed(ZoneNavMesh mesh, bool[] keep, Queue<int> queue, int matched, int portalsBelow)
     {
         int n = mesh.PolygonCount;
-        if (matched > 0)
-            Spread(mesh, keep, queue, portalsBelow);
+        if (matched > 0) Spread(mesh, keep, queue, portalsBelow);
 
         var component = Components(mesh, portalsBelow);
         var bottom = new Dictionary<int, float>();
@@ -111,8 +107,7 @@ internal static class SeedPruner
         int best = component.GroupBy(c => c).OrderByDescending(c => c.Count()).First().Key;
         for (int p = 0; p < component.Length; p++)
         {
-            if (component[p] == best)
-                keep[p] = true;
+            if (component[p] == best) keep[p] = true;
         }
 
         for (int p = 0; p < keep.Length; p++)
@@ -125,13 +120,11 @@ internal static class SeedPruner
     /// </summary>
     public static bool Extend(ZoneNavMesh mesh, bool[] keep, IReadOnlyList<Vector3> seeds, NavBuildSettings s)
     {
-        if (mesh.PolygonCount == 0 || seeds.Count == 0)
-            return false;
+        if (mesh.PolygonCount == 0 || seeds.Count == 0) return false;
 
         var queue = new Queue<int>();
         Match(mesh, seeds, s, keep, queue);
-        if (queue.Count == 0)
-            return false;
+        if (queue.Count == 0) return false;
 
         Spread(mesh, keep, queue, mesh.InteriorStart);
         return true;
@@ -148,29 +141,24 @@ internal static class SeedPruner
     /// </summary>
     public static bool ExtendBorder(ZoneNavMesh mesh, bool[] keep, int dx, int dz)
     {
-        if (mesh.Terrain is not { } terrain)
-            return false;
+        if (mesh.Terrain is not { } terrain) return false;
 
         var queue = new Queue<int>();
         foreach (var (p, k) in mesh.BorderEdges(dx, dz, skipLinked: false, all: true))
         {
-            if (keep[p])
-                continue;
+            if (keep[p]) continue;
 
             var poly = mesh.Polygons[p];
             var mid = (mesh.Vertices[poly[k]] + mesh.Vertices[poly[(k + 1) % poly.Length]]) / 2;
-            if (!terrain.TryHeightAt(mid.X, mid.Z, out float ground))
-                continue;
+            if (!terrain.TryHeightAt(mid.X, mid.Z, out float ground)) continue;
 
-            if (MathF.Abs(mid.Y - MathF.Max(ground, WorldWater.Height)) > BorderGroundSlack)
-                continue;
+            if (MathF.Abs(mid.Y - MathF.Max(ground, WorldWater.Height)) > BorderGroundSlack) continue;
 
             keep[p] = true;
             queue.Enqueue(p);
         }
 
-        if (queue.Count == 0)
-            return false;
+        if (queue.Count == 0) return false;
 
         Spread(mesh, keep, queue, mesh.InteriorStart);
         return true;
@@ -192,12 +180,10 @@ internal static class SeedPruner
             foreach (float slack in new[] { s.SeedHeightSlack, 3 * s.SeedHeightSlack })
             {
                 found = MatchWithin(mesh, ix, seed, s.SeedDistance, slack, keep, queue) || found;
-                if (found)
-                    break;
+                if (found) break;
             }
 
-            if (found)
-                matched++;
+            if (found) matched++;
         }
 
         return matched;
@@ -228,12 +214,10 @@ internal static class SeedPruner
                     if (seed.X < ix.Min[p].X - reach || seed.X > ix.Max[p].X + reach || seed.Z < ix.Min[p].Y - reach || seed.Z > ix.Max[p].Y + reach)
                         continue;
 
-                    if (mesh.DistanceXz(p, seed.X, seed.Z) > reach)
-                        continue;
+                    if (mesh.DistanceXz(p, seed.X, seed.Z) > reach) continue;
 
                     float y = mesh.HeightAt(p, Math.Clamp(seed.X, ix.Min[p].X, ix.Max[p].X), Math.Clamp(seed.Z, ix.Min[p].Y, ix.Max[p].Y));
-                    if (Math.Abs(y - seed.Y) > slack)
-                        continue;
+                    if (Math.Abs(y - seed.Y) > slack) continue;
 
                     keep[p] = true;
                     queue.Enqueue(p);
@@ -260,8 +244,7 @@ internal static class SeedPruner
     /// </summary>
     static bool Narrow(ZoneNavMesh mesh, int p, int k, int portalsBelow)
     {
-        if (p >= portalsBelow)
-            return false;
+        if (p >= portalsBelow) return false;
 
         var poly = mesh.Polygons[p];
         return Narrow(mesh.Vertices[poly[k]], mesh.Vertices[poly[(k + 1) % poly.Length]]);
@@ -275,8 +258,7 @@ internal static class SeedPruner
         var nb = mesh.Neighbours[p];
         for (int k = 0; k < nb.Length; k++)
         {
-            if (nb[k] >= 0 && !Narrow(mesh, p, k, portalsBelow))
-                yield return nb[k];
+            if (nb[k] >= 0 && !Narrow(mesh, p, k, portalsBelow)) yield return nb[k];
         }
 
         var links = mesh.Links is { } all && all[p] is { } own ? own : [];
@@ -294,8 +276,7 @@ internal static class SeedPruner
         {
             foreach (int q in PassableNeighbours(mesh, queue.Dequeue(), portalsBelow))
             {
-                if (keep[q])
-                    continue;
+                if (keep[q]) continue;
 
                 keep[q] = true;
                 queue.Enqueue(q);
@@ -314,8 +295,7 @@ internal static class SeedPruner
         var stack = new Stack<int>();
         for (int p = 0; p < id.Length; p++)
         {
-            if (id[p] >= 0)
-                continue;
+            if (id[p] >= 0) continue;
 
             id[p] = next;
             stack.Push(p);
@@ -324,8 +304,7 @@ internal static class SeedPruner
                 int c = stack.Pop();
                 foreach (int q in PassableNeighbours(mesh, c, portalsBelow))
                 {
-                    if (id[q] >= 0)
-                        continue;
+                    if (id[q] >= 0) continue;
 
                     id[q] = next;
                     stack.Push(q);

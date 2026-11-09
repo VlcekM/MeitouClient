@@ -33,8 +33,7 @@ public static partial class NestFurniture
     {
         foreach (var entry in nest.Debris)
         {
-            if (db.Find(entry.Id) is not { } item)
-                continue;
+            if (db.Find(entry.Id) is not { } item) continue;
 
             float scale = entry.V2 == 0 ? 1 : entry.V2 * 0.01f;
             var centre = new Vector3(at.X, walk.GroundHeight(at.X, at.Y), at.Y);
@@ -81,13 +80,11 @@ public static partial class NestFurniture
                     string mesh = MeshOf(item, ref rolls);
                     float size = scale + Between(ref rolls, -MeshScaleSpread, MeshScaleSpread);
                     last = Ground(walk, last, Direction(ref rolls) * Between(ref rolls, 0, range * scale));
-                    if (mesh.Length > 0)
-                        layout.Meshes.Add(new NestMesh(item.StringId, mesh, last, yaw, size));
+                    if (mesh.Length > 0) layout.Meshes.Add(new NestMesh(item.StringId, mesh, last, yaw, size));
                 }
             }
 
-            if (depth >= MaxDebrisDepth)
-                continue;
+            if (depth >= MaxDebrisDepth) continue;
 
             foreach (var sub in item.GetReferences("cluster"))
             {
@@ -108,8 +105,7 @@ public static partial class NestFurniture
     {
         string mesh = item.GetPath("ground mesh") is { Length: > 0 } ground ? ground : item.GetPath("mesh") ?? "";
         int variants = item.GetInt("number of meshes");
-        if (variants < 2 || mesh.Length == 0)
-            return mesh;
+        if (variants < 2 || mesh.Length == 0) return mesh;
 
         return Data.World.WorldObjectLayout.MeshVariant(mesh, IntIn(ref rolls, 1, variants));
     }

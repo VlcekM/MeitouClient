@@ -38,8 +38,8 @@ public enum DecisionStep : byte
 
 /// <summary>
 /// A source's answer for one character (<see cref="IDecisionSource.CanRun"/>, a pure read): it can run (<see cref="Can"/>; the original's desire x
-/// finder above 0), it runs the character's task already (<see cref="Running"/>: the plan goes on, nothing is started), or why not (<see
-/// cref="Why"/>: an order's failure text, "no attacker in range"; null: none to show).
+/// finder above 0), it runs the character's task already (<see cref="Running"/>: the plan goes on, nothing is started), or why not
+/// (<see cref="Why"/>: an order's failure text, "no attacker in range"; null: none to show).
 /// </summary>
 public readonly record struct DecisionCheck(bool Can, bool Running = false, string? Why = null)
 {
@@ -50,9 +50,9 @@ public readonly record struct DecisionCheck(bool Can, bool Running = false, stri
 
 /// <summary>
 /// One source of the decision step (<see cref="DecisionSystem"/>): an order queue, a goal, a job. <see cref="CanRun"/> and <see cref="Desire"/> are
-/// pure reads of the world (serial phases), so the same answer serves the step, the UI and a command gate; <see cref="Start"/> starts it through <see
-/// cref="TaskStart"/> (or a deferred fight). Sources are registered in an open list (<see cref="DecisionSystem.Register"/>), sorted by the original's
-/// <see cref="Step"/> and, within it, its <see cref="Key"/>.
+/// pure reads of the world (serial phases), so the same answer serves the step, the UI and a command gate; <see cref="Start"/> starts it through
+/// <see cref="TaskStart"/> (or a deferred fight). Sources are registered in an open list (<see cref="DecisionSystem.Register"/>), sorted by the
+/// original's <see cref="Step"/> and, within it, its <see cref="Key"/>.
 /// </summary>
 public interface IDecisionSource
 {
@@ -105,8 +105,8 @@ public interface IDecisionOwner
 public interface IJobSource
 {
     /// <summary>
-    /// Whether job <paramref name="k"/> of the character's list can run now (a pure read: the original's desire x finder above 0); <see
-    /// cref="DecisionCheck.Runs"/> when the character's task is that job's already.
+    /// Whether job <paramref name="k"/> of the character's list can run now (a pure read: the original's desire x finder above 0);
+    /// <see cref="DecisionCheck.Runs"/> when the character's task is that job's already.
     /// </summary>
     DecisionCheck CanRun(World world, int slot, int k);
 
@@ -140,9 +140,9 @@ public sealed record DecisionTrace(long Tick, string Winner, IReadOnlyList<strin
 /// stagger outside a fight, the melee alert with the fight off, the jobs changed, a load), when its front order's task ended, and (<b>engine</b>)
 /// every <see cref="Production.ProductionSystem.JobCheckTicks"/> while it is idle or on a job's task. The sources are asked in the original's order
 /// and the first that can run starts (step 4: the best score); a source already running ends the step. Steps 3 and 5 walk the character's job list
-/// through the systems' job contributors (<see cref="RegisterJob"/>); step 6 ends in 14 Idleness, which always answers. NPCs keep <see
-/// cref="Ai.AiSystem"/>. Run in the slow world after retaliation, aggro and flight (<see cref="World.RunTick"/>), and for orders only between ticks
-/// (<see cref="World.ApplyPausedInterfaceCommands"/>).
+/// through the systems' job contributors (<see cref="RegisterJob"/>); step 6 ends in 14 Idleness, which always answers. NPCs keep
+/// <see cref="Ai.AiSystem"/>. Run in the slow world after retaliation, aggro and flight (<see cref="World.RunTick"/>), and for orders only between
+/// ticks (<see cref="World.ApplyPausedInterfaceCommands"/>).
 /// </summary>
 public sealed class DecisionSystem
 {
@@ -184,11 +184,7 @@ public sealed class DecisionSystem
     /// <summary>
     /// Record each decision in <see cref="CharacterCold.Decision"/> (a debug toggle; off by default, never hashed).
     /// </summary>
-    public bool Tracing
-    {
-        get;
-        set;
-    }
+    public bool Tracing { get; set; }
 
     /// <summary>
     /// Adds a source after those of a lower step or key and after equal ones (an open list: a mod may add its own).
@@ -229,8 +225,8 @@ public sealed class DecisionSystem
     /// <summary>
     /// The <b>engine</b> re-ask (design D4: no periodic replan was found in the original, but Meitou's idleness and job tasks do not end where the
     /// original's plans do): a character not fighting whose task is a job's or 14 Idleness's, or that no start runs (idle, a standing task), is
-    /// decided every <see cref="Production.ProductionSystem.JobCheckTicks"/>; so is one on an order whose row needs no melee threat (146, <see
-    /// cref="PlayerOrders.NeedsNoThreat"/>), which a threat must take off its turret.
+    /// decided every <see cref="Production.ProductionSystem.JobCheckTicks"/>; so is one on an order whose row needs no melee threat (146,
+    /// <see cref="PlayerOrders.NeedsNoThreat"/>), which a threat must take off its turret.
     /// </summary>
     public static bool ReAsked(World world, int slot, CharacterCold cold) =>
         GoalsComeFirst(world.Characters, slot, cold)
@@ -260,8 +256,7 @@ public sealed class DecisionSystem
         for (int i = 0; i < table.HighWater; i++)
         {
             // a far character decides at its step (the far cadence)
-            if (!table.Next[i].Alive || !world.Steps(i) || table.Cold(i) is not { } cold || !Decides(cold))
-                continue;
+            if (!table.Next[i].Alive || !world.Steps(i) || table.Cold(i) is not { } cold || !Decides(cold)) continue;
             if (cold.SavedOrders is not null) Saving.OrderSave.Restore(world, i, cold);
             bool front = cold.OrderQueue.Front is { } f && (!f.Tried || f.Started && !PlayerOrders.Runs(world, i, f));
             bool due = !paused && (world.Tick + i) % Production.ProductionSystem.JobCheckTicks == 0 && ReAsked(world, i, cold);
@@ -355,8 +350,8 @@ public sealed class DecisionSystem
     /// Steps 3 and 5: the character's job list in order (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Perma-jobs"): the jobs switch gates every job
     /// but 16, 31, 45, 57, 58 and 250 (<c>FUN_14050c1c0</c>) in both passes; a job whose type has no contributor or whose row the repertoire does not
     /// register is skipped; the first job that can run wins (one that runs the character's task already ends the step), so a higher job takes over a
-    /// lower one at the next decision. Step 3 asks only the jobs that are urgent now. The implicit jobs are step 5's next source (<see
-    /// cref="Production.ProductionSystem"/>).
+    /// lower one at the next decision. Step 3 asks only the jobs that are urgent now. The implicit jobs are step 5's next source
+    /// (<see cref="Production.ProductionSystem"/>).
     /// </summary>
     sealed class JobSource(DecisionSystem owner, bool urgent) : IDecisionSource
     {

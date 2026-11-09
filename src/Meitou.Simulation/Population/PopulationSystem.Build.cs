@@ -134,8 +134,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The bar squad entries of a town (Observed): without <c>residents override</c> the faction's <c>bar squads</c> (for towns of type Town only),
     /// then the town's; with it the town's only. v0 = 0 entries are dropped. A town with no faction has none (its entry count is filled by the same
-    /// builder,
-    /// <c>FUN_140936e60</c>).
+    /// builder, <c>FUN_140936e60</c>).
     /// </summary>
     public static List<RecordLink> BarEntries(TownData town, FactionData? faction)
     {

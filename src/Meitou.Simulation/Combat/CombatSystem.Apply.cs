@@ -22,9 +22,9 @@ public sealed partial class CombatSystem
     /// <summary>
     /// Whether a blocked blow rings as a parry and throws sparks (the take-hit <c>FUN_1404394f0</c>, outcome 5, <b>Verified</b>): not when the
     /// attacker fights with fists (weapon category 5) and <c>FUN_140436980</c> is false. That test is true when the attacker's race is a robot (race
-    /// byte +0x7c), or when the
-    /// <i>defender's</i> own limb of the number the blow strikes with (technique <c>limb N</c>: 0 left arm, 1 right arm, 2 left leg, 3 right leg, 4 weapon: never)
-    /// is a fitted prosthetic (limb state 2): the original reads its own medical object there, not the attacker's.
+    /// byte +0x7c), or when the <i>defender's</i> own limb of the number the blow strikes with (technique <c>limb N</c>: 0 left arm, 1 right arm, 2
+    /// left leg, 3 right leg, 4 weapon: never) is a fitted prosthetic (limb state 2): the original reads its own medical object there, not the
+    /// attacker's.
     /// </summary>
     static bool IsParry(CharacterCold attacker, CharacterCold defender, CombatTechnique tech, int blow)
     {
@@ -148,8 +148,8 @@ public sealed partial class CombatSystem
         float dex = Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult;
         float str = Eff(ac, StatsEnumerated.Strength);
         var packet = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(
-                UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind, dc.Race.StringId, fighter.DamageOutput, _combat)
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind,
+                dc.Race.StringId, fighter.DamageOutput, _combat)
             : DamageFormulas.Packet(skill, dex, str, fighter.Weapon!, kind, dc.Race.StringId, fighter.DamageOutput, _combat);
         packet = Powered(packet, tech, blow);
 
@@ -328,8 +328,7 @@ public sealed partial class CombatSystem
     /// hit is light and one is already playing; it is big when heavy and none was playing. A picked clip cancels the defender's own swing (that blow
     /// never lands) and its reaction, and holds it helpless until the clip ends (the knockback is the clip's root motion). With no clip to play the
     /// swing is still cancelled, with a short pause. Takes effect at the next Act. A <paramref name="bolt"/> leaves one getting up alone with no
-    /// knock-down roll (its shot handler
-    /// <c>FUN_140999d50</c> has none).
+    /// knock-down roll (its shot handler <c>FUN_140999d50</c> has none).
     /// </summary>
     void Stagger(World world, ref CombatSlot dSlot, int d, CharacterCold dc, bool heavy, int now, ulong counter, bool bolt = false)
     {

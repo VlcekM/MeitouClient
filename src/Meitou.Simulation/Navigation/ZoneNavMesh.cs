@@ -317,8 +317,7 @@ public sealed class ZoneNavMesh
     {
         if (!TryCell(x, z, out var ix, out var cell)) return;
         foreach (int p in cell)
-            if (Covers(ix, p, x, z))
-                result.Add(p);
+            if (Covers(ix, p, x, z)) result.Add(p);
     }
 
     /// <summary>
@@ -500,8 +499,8 @@ public sealed class ZoneNavMesh
     /// (<paramref name="dx"/>, <paramref name="dz"/>) and lead nowhere inside the mesh (edges that have a link are left out when
     /// <paramref name="skipLinked"/>).
     /// </summary>
-    /// <param name="keep">The kept set to read instead of <see cref="Kept"/>; null with <paramref name="all"/> false reads <see
-    /// cref="Kept"/>.</param>
+    /// <param name="keep">The kept set to read instead of <see cref="Kept"/>; null with <paramref name="all"/> false reads
+    /// <see cref="Kept"/>.</param>
     /// <param name="all">Every polygon, kept or not.</param>
     internal List<(int Polygon, int Edge)> BorderEdges(int dx, int dz, bool skipLinked, bool[]? keep = null, bool all = false)
     {

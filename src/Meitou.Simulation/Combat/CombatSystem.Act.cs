@@ -61,9 +61,9 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// The HUD's crossbow accuracy (the Current Skill line in ranged mode): the crossbow's deviation at 0 skill, the effective crossbows skill and
-    /// the resulting deviation in degrees (<see cref="RangedFormulas.Deviation"/>, as a shot takes it); null without a crossbow. <paramref
-    /// name="stat"/>: Crossbows, or Turrets when <see cref="CharacterCold.LastWeaponCategory"/> is 7 (the crossbow's deviation with the Turrets
-    /// level).
+    /// the resulting deviation in degrees (<see cref="RangedFormulas.Deviation"/>, as a shot takes it); null without a crossbow.
+    /// <paramref name="stat"/>: Crossbows, or Turrets when <see cref="CharacterCold.LastWeaponCategory"/> is 7 (the crossbow's deviation with the
+    /// Turrets level).
     /// </summary>
     internal static (float Weapon, float Skill, float Deviation)? HudAccuracy(CharacterCold c, StatsEnumerated stat = StatsEnumerated.Crossbows)
     {
@@ -161,8 +161,9 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// The defence rating (<c>FUN_140886290</c> → <c>FUN_140884f50</c>, <b>Verified</b>): unarmed, the fist rating; else the trained melee defence
-    /// (no injury or hunger multiplier) plus the gear's defence bonus, the weapon's defence mod, the indoors modifier inside and, with <paramref
-    /// name="guard"/> (the function's flag), 20 when guarding. The block contest's defence (<see cref="DefenceFormulas.Defence"/>) is the same sum.
+    /// (no injury or hunger multiplier) plus the gear's defence bonus, the weapon's defence mod, the indoors modifier inside and, with
+    /// <paramref name="guard"/> (the function's flag), 20 when guarding. The block contest's defence (<see cref="DefenceFormulas.Defence"/>) is the
+    /// same sum.
     /// </summary>
     internal static float DefenceRating(World world, int slot, CharacterCold c, Fighter f, bool guard = true) =>
         f.Unarmed ? UnarmedRating(world, slot, c, f)

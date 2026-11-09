@@ -58,8 +58,7 @@ public sealed class NavGateRegions : IGateRegions
     {
         var (gateOf, gates) = CollectGateDoors(world, isGate);
         var codes = new Dictionary<long, int>();
-        if (gates.Count == 0)
-            return new NavGateRegions(world, codes, []);
+        if (gates.Count == 0) return new NavGateRegions(world, codes, []);
 
         var outside = new HashSet<long>();
         var links = new List<GateLink>();
@@ -74,8 +73,7 @@ public sealed class NavGateRegions : IGateRegions
             {
                 foreach (var seed in Around(world, door))
                 {
-                    if (gateOf.ContainsKey(seed.Key) || !world.Mesh(seed.Zone).Kept[seed.Polygon])
-                        continue;
+                    if (gateOf.ContainsKey(seed.Key) || !world.Mesh(seed.Zone).Kept[seed.Polygon]) continue;
 
                     if (codes.TryGetValue(seed.Key, out int code))
                     {
@@ -123,25 +121,20 @@ public sealed class NavGateRegions : IGateRegions
         for (int slot = 0; slot < world.ZoneCount; slot++)
         {
             var m = world.Mesh(slot);
-            if (m.DoorOf is not { } doorOf || m.DoorIds is not { } ids)
-                continue;
+            if (m.DoorOf is not { } doorOf || m.DoorIds is not { } ids) continue;
 
             for (int p = 0; p < m.PolygonCount; p++)
             {
-                if (doorOf[p] < 0 || !m.Kept[p])
-                    continue;
+                if (doorOf[p] < 0 || !m.Kept[p]) continue;
 
                 string id = ids[doorOf[p]];
-                if (!known.TryGetValue(id, out bool gate))
-                    known[id] = gate = isGate(id);
+                if (!known.TryGetValue(id, out bool gate)) known[id] = gate = isGate(id);
 
-                if (!gate)
-                    continue;
+                if (!gate) continue;
 
                 var r = new NavRef(slot, p);
                 gateOf[r.Key] = id;
-                if (!gates.TryGetValue(id, out var list))
-                    gates[id] = list = [];
+                if (!gates.TryGetValue(id, out var list)) gates[id] = list = [];
 
                 list.Add(r);
             }
@@ -174,8 +167,7 @@ public sealed class NavGateRegions : IGateRegions
 
             foreach (var n in Around(world, r))
             {
-                if (gateOf.ContainsKey(n.Key) || !seen.Add(n.Key) || !world.Mesh(n.Zone).Kept[n.Polygon])
-                    continue;
+                if (gateOf.ContainsKey(n.Key) || !seen.Add(n.Key) || !world.Mesh(n.Zone).Kept[n.Polygon]) continue;
 
                 queue.Enqueue(n);
             }
@@ -205,17 +197,13 @@ public sealed class NavGateRegions : IGateRegions
         foreach (int v in m.Polygons[polygon])
         {
             var p = m.Vertices[v];
-            if (p.X <= m.BoundsMin.X + slack && !world.Contains(new ZoneCoordinate(m.ZoneX - 1, m.ZoneZ)))
-                return true;
+            if (p.X <= m.BoundsMin.X + slack && !world.Contains(new ZoneCoordinate(m.ZoneX - 1, m.ZoneZ))) return true;
 
-            if (p.X >= m.BoundsMax.X - slack && !world.Contains(new ZoneCoordinate(m.ZoneX + 1, m.ZoneZ)))
-                return true;
+            if (p.X >= m.BoundsMax.X - slack && !world.Contains(new ZoneCoordinate(m.ZoneX + 1, m.ZoneZ))) return true;
 
-            if (p.Z <= m.BoundsMin.Y + slack && !world.Contains(new ZoneCoordinate(m.ZoneX, m.ZoneZ - 1)))
-                return true;
+            if (p.Z <= m.BoundsMin.Y + slack && !world.Contains(new ZoneCoordinate(m.ZoneX, m.ZoneZ - 1))) return true;
 
-            if (p.Z >= m.BoundsMax.Y - slack && !world.Contains(new ZoneCoordinate(m.ZoneX, m.ZoneZ + 1)))
-                return true;
+            if (p.Z >= m.BoundsMax.Y - slack && !world.Contains(new ZoneCoordinate(m.ZoneX, m.ZoneZ + 1))) return true;
         }
 
         return false;

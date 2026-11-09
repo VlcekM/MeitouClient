@@ -259,8 +259,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The walk to the machine ended: if the carrier is not at it, the path failed and the carrier skips that machine for <see
-    /// cref="ConstructionSystem.UnreachableSeconds"/> in the shared ignore map, <see cref="CharacterCold.Unreachable"/> (<c>FUN_1405b0290</c> in
+    /// The walk to the machine ended: if the carrier is not at it, the path failed and the carrier skips that machine for
+    /// <see cref="ConstructionSystem.UnreachableSeconds"/> in the shared ignore map, <see cref="CharacterCold.Unreachable"/> (<c>FUN_1405b0290</c> in
     /// <c>FUN_1408d0770</c>).
     /// </summary>
     void NoteWalkEnd(World world, CharacterCold cold, in CharacterHot n, Errand e)

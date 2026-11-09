@@ -69,9 +69,5 @@ public sealed record BodyOptions
     /// Debug (F10 "Force hits to", <see cref="DebugForceHits"/>): every blow lands on the part of this template string id, else of this name, when
     /// the victim has it and a blow could pick it; else as usual. Null: off. Not saved.
     /// </summary>
-    public (string Id, string Name)? ForcedHitPart
-    {
-        get;
-        set;
-    }
+    public (string Id, string Name)? ForcedHitPart { get; set; }
 }

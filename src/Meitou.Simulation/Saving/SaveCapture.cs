@@ -93,8 +93,8 @@ public static partial class SaveCapture
     /// <summary>
     /// <paramref name="prepared"/> is a <see cref="PrepareBase"/> made with the same <paramref name="loaded"/> (null: made here, which is the slow part).
     /// </summary>
-    public static SaveGame Capture(
-        World world, PopulationData data, SaveClock clock, LoadedSave? loaded = null, SaveCaptureOptions? options = null, SaveBuilder? prepared = null)
+    public static SaveGame Capture(World world, PopulationData data, SaveClock clock, LoadedSave? loaded = null, SaveCaptureOptions? options = null,
+        SaveBuilder? prepared = null)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(data);
@@ -208,9 +208,8 @@ public static partial class SaveCapture
     /// <summary>
     /// The NPC platoons: the loaded roaming platoons, the save's own, and the population's fresh ones. Returns the fresh ones by world platoon id.
     /// </summary>
-    static Dictionary<int, SavePlatoon> WriteNpcPlatoons(
-        SaveBuilder builder, World world, PopulationData data, LoadedSave? loaded, SaveCaptureOptions options, SaveClock clock,
-        IReadOnlyDictionary<string, FcsRecord> buildings, Dictionary<string, RaceData?> races)
+    static Dictionary<int, SavePlatoon> WriteNpcPlatoons(SaveBuilder builder, World world, PopulationData data, LoadedSave? loaded,
+        SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings, Dictionary<string, RaceData?> races)
     {
         if (loaded is not null) WriteRoaming(builder.Game, world, loaded);
         WriteSavedNpcs(builder, world, data, options, clock, buildings, races);
@@ -220,8 +219,8 @@ public static partial class SaveCapture
     /// <summary>
     /// The war states, which name the campaign platoons by the handles they were just written with.
     /// </summary>
-    static void WriteWars(
-        SaveGame game, World world, PopulationData data, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh, IReadOnlyDictionary<int, Hand> outposts)
+    static void WriteWars(SaveGame game, World world, PopulationData data, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh,
+        IReadOnlyDictionary<int, Hand> outposts)
     {
         if (world.Systems.OfType<PopulationSystem>().FirstOrDefault() is { } wars)
             WarSave.Write(game, world, data, wars, PlatoonHands(game, world, loaded, fresh), outposts);
@@ -230,9 +229,8 @@ public static partial class SaveCapture
     /// <summary>
     /// The wild squads and the nests of the population, as new platoons and town states.
     /// </summary>
-    static void WriteWild(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
-        Dictionary<string, RaceData?> races, List<(SaveItem Item, int Camp)> campItems)
+    static void WriteWild(SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings, Dictionary<string, RaceData?> races, List<(SaveItem Item, int Camp)> campItems)
     {
         if (world.Systems.OfType<PopulationSystem>().FirstOrDefault() is not { } population) return;
 
@@ -671,9 +669,9 @@ public static partial class SaveCapture
     /// The character's GAMESTATE_CHARACTER keys: name, leader, bounties, crime marks, slave, dialogue, orders, jobs, queued orders, held state,
     /// carrying, ragdoll, portrait and age.
     /// </summary>
-    static void WriteGameState(
-        FcsRecord g, SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
-        IReadOnlyDictionary<string, FcsRecord> buildings, SaveCharacter sc, CharacterCold cold, CharacterId id, bool isLeader, bool orders, SavedCharacterLink? link)
+    static void WriteGameState(FcsRecord g, SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings, SaveCharacter sc, CharacterCold cold, CharacterId id, bool isLeader, bool orders,
+        SavedCharacterLink? link)
     {
         g.Strings["name"] = cold.Name;
         g.Bools["is leader"] = isLeader;
@@ -887,9 +885,8 @@ public static partial class SaveCapture
     /// <summary>
     /// A character of a saved platoon that left the world: written as it was when its platoon left (place, facing, body, bounties and kit).
     /// </summary>
-    static void WriteLeftCharacter(
-        SaveBuilder builder, World world, PopulationData data, SaveClock clock, Dictionary<string, RaceData?> races, SavePlatoon platoon, SaveCharacter sc,
-        SavedMember m, Vector3 at)
+    static void WriteLeftCharacter(SaveBuilder builder, World world, PopulationData data, SaveClock clock, Dictionary<string, RaceData?> races,
+        SavePlatoon platoon, SaveCharacter sc, SavedMember m, Vector3 at)
     {
         // As it was when its platoon left the world.
         sc.Position = at;

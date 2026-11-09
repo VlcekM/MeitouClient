@@ -22,16 +22,17 @@ public static class Encumbrance
     public static float WeaponWeight(GameConstants c, float weaponWeight) => weaponWeight * c.WeaponInventoryWeightMult;
 
     /// <summary>
-    /// Capacity C = <c>carry weight mult</c> x strength x strengthInjuryMultiplier + <c>encumbrance base</c>. <paramref
-    /// name="strengthInjuryMultiplier"/> is the stat multiplier of strength (<see cref="MedicalState.StatMultiplier"/> with strength, 1 when unhurt).
+    /// Capacity C = <c>carry weight mult</c> x strength x strengthInjuryMultiplier + <c>encumbrance base</c>.
+    /// <paramref name="strengthInjuryMultiplier"/> is the stat multiplier of strength (<see cref="MedicalState.StatMultiplier"/> with strength, 1
+    /// when unhurt).
     /// </summary>
     public static float Capacity(GameConstants c, float strength, float strengthInjuryMultiplier = 1) =>
         c.CarryWeightMult * strength * strengthInjuryMultiplier + c.EncumbranceBase;
 
     /// <summary>
     /// The maximum the inventory window prints (<b>Observed</b>, docs/game/ui-screens.md "Total Weight"): the strength (with its injury multiplier)
-    /// plus <c>encumbrance base</c>, truncated. It has no <c>carry weight mult</c>: that only enters the capacity of the encumbrance factor (<see
-    /// cref="Capacity"/>).
+    /// plus <c>encumbrance base</c>, truncated. It has no <c>carry weight mult</c>: that only enters the capacity of the encumbrance factor
+    /// (<see cref="Capacity"/>).
     /// </summary>
     public static float WindowCapacity(GameConstants c, float strength, float strengthInjuryMultiplier = 1) =>
         MathF.Floor(strength * strengthInjuryMultiplier + c.EncumbranceBase);

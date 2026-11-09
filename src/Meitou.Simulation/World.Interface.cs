@@ -64,8 +64,8 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The first system of type <typeparamref name="T"/> this world runs, or null.
-    /// Remembered per type (the finders ask once per candidate pair; any thread).
+    /// The first system of type <typeparamref name="T"/> this world runs, or null. Remembered per type (the finders ask once per candidate pair; any
+    /// thread).
     /// </summary>
     internal T? SystemOf<T>() where T : class => (T?)_systemsByType.GetOrAdd(typeof(T), static (_, list) => list.OfType<T>().FirstOrDefault(), _systems);
 

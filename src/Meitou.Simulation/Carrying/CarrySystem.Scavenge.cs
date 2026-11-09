@@ -33,9 +33,9 @@ public sealed partial class CarrySystem
 
     /// <summary>
     /// Each tick (serial, slot order), every <see cref="CarrySettings.AutoEveryTicks"/> ticks per character on its slot's turn (slot mod the period,
-    /// so the looks spread over the ticks): each member of an NPC squad whose running package lists goal 177 for its role in the hour's window (<see
-    /// cref="PopulationSystem.GoalDuty"/>) and that the AI runs now (<see cref="Ai.AiSystem.Holds"/>) walks to the body <see cref="LootTarget"/>
-    /// picks and loots it (<see cref="CharacterTask.Loot"/>, <see cref="NpcLoot"/>).
+    /// so the looks spread over the ticks): each member of an NPC squad whose running package lists goal 177 for its role in the hour's window
+    /// (<see cref="PopulationSystem.GoalDuty"/>) and that the AI runs now (<see cref="Ai.AiSystem.Holds"/>) walks to the body
+    /// <see cref="LootTarget"/> picks and loots it (<see cref="CharacterTask.Loot"/>, <see cref="NpcLoot"/>).
     /// </summary>
     void Scavenge(World world, CharacterTable table)
     {
@@ -72,8 +72,8 @@ public sealed partial class CarrySystem
     /// <summary>
     /// Goal 177's finder (<c>FUN_14099ae10(ai, 0)</c>): within <see cref="ScavengeRange"/> in 3D (<c>FUN_14099ae10</c> :42, :88), not carried, not
     /// worked by a squad mate (the squad's goal list) and not tagged <see cref="MemoryTag.Looted"/> by the looter's squad; first the dead, then the
-    /// downed living of factions neither its own nor allied (the kidnap finder's masks), not of the player's faction unless <see
-    /// cref="PlayerState.BanditsLoot"/>, whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its
+    /// downed living of factions neither its own nor allied (the kidnap finder's masks), not of the player's faction unless
+    /// <see cref="PlayerState.BanditsLoot"/>, whom <see cref="ScrewsOver"/> allows. Engine choices: the nearest of each pass (the original takes its
     /// sensed-list order); the dead pass has no faction test, so a body of the looter's own faction is looted too (Verified). -1: none.
     /// </summary>
     int LootTarget(World world, CharacterTable table, int slot, CharacterCold cold, SquadGoals goals, List<int> bodies, SquadMemory? memory)
@@ -130,10 +130,10 @@ public sealed partial class CarrySystem
 
     /// <summary>
     /// The finder's two per-body tests, both passes (<c>FUN_14099ae10</c>, <b>Verified</b>): <c>FUN_140597160</c>
-    /// (DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS: the gate codes of the two match, or the route between them is open, <see
-    /// cref="Locks.LockSystem.NotBlocked"/>) and <c>FUN_140597030</c> (<c>AI::isDestinationAccessible</c>: a body in a building the looter is not in
-    /// needs that building to have an open door, <c>Building::hasAnOpenDoor</c>; a human looter's "may use it" test, slot 0x328, is always true). Not
-    /// modelled: the building-link branch of the first, the animal looter's slot 0x328, a body in a part building with a parent.
+    /// (DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS: the gate codes of the two match, or the route between them is open,
+    /// <see cref="Locks.LockSystem.NotBlocked"/>) and <c>FUN_140597030</c> (<c>AI::isDestinationAccessible</c>: a body in a building the looter is
+    /// not in needs that building to have an open door, <c>Building::hasAnOpenDoor</c>; a human looter's "may use it" test, slot 0x328, is always
+    /// true). Not modelled: the building-link branch of the first, the animal looter's slot 0x328, a body in a part building with a parent.
     /// </summary>
     static bool Reachable(World world, int looter, int body)
     {
@@ -171,8 +171,8 @@ public sealed partial class CarrySystem
     /// An NPC at the body it loots (<c>Task_Loot_AI</c>, <b>Observed</b>): kneels at the medic clip while <see cref="CharacterCold.LiftTime"/> counts
     /// (from its arrival). Past <see cref="NpcWeaponGrabSeconds"/>, a looter without a weapon that takes more than food from a living player-side
     /// body takes one weapon of its hip and back and is done; else past <see cref="NpcLootSeconds"/> (an animal: <see cref="NpcLootAnimalSeconds"/>)
-    /// it takes (<see cref="NpcTake"/>). Then its squad tags the body <see cref="MemoryTag.Looted"/> and the task ends. What it takes follows <see
-    /// cref="CharacterCold.LootFlags"/>, fixed when the task starts (the update only reads them, <b>Verified</b> <c>FUN_14034d930</c>).
+    /// it takes (<see cref="NpcTake"/>). Then its squad tags the body <see cref="MemoryTag.Looted"/> and the task ends. What it takes follows
+    /// <see cref="CharacterCold.LootFlags"/>, fixed when the task starts (the update only reads them, <b>Verified</b> <c>FUN_14034d930</c>).
     /// </summary>
     void NpcLoot(World world, CharacterTable table, int i, int t, float dt)
     {

@@ -18,9 +18,9 @@ public sealed partial class AiSystem
 
     /// <summary>
     /// Row 98 Sleeping's desire (AI slot 30, <c>FUN_1405a0880</c>, <b>Verified</b>; the planner drops a node whose desire is not above 0, so 0 makes
-    /// 153 Going to bed a dead end): 0 for a character carrying someone (Character <c>+0x348</c>) or of a robot race; 0 while <see
-    /// cref="SleepDanger"/> is above 0; for an NPC 1 while it lies in a bed (status <c>+0xb4</c>), 0 when it is in its home and knows a neutral or
-    /// enemy that is in the same building, 0 for an animal that used a bed under 180 minutes ago and 0.3 for any character under 20 minutes ago
+    /// 153 Going to bed a dead end): 0 for a character carrying someone (Character <c>+0x348</c>) or of a robot race; 0 while
+    /// <see cref="SleepDanger"/> is above 0; for an NPC 1 while it lies in a bed (status <c>+0xb4</c>), 0 when it is in its home and knows a neutral
+    /// or enemy that is in the same building, 0 for an animal that used a bed under 180 minutes ago and 0.3 for any character under 20 minutes ago
     /// (status <c>+0xc0</c>, <see cref="CharacterCold.BedUsedHours"/>), else 1. The player-faction branch is not modelled: the AI plans for no player
     /// character.
     /// </summary>

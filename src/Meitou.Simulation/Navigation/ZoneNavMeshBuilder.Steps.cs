@@ -148,8 +148,7 @@ internal static partial class ZoneNavMeshBuilder
     /// </summary>
     static bool OnTerrain(RcCompactHeightfield chf, HeightWindow? terrain, int x, int z, int i, int d, int j)
     {
-        if (terrain is null)
-            return false;
+        if (terrain is null) return false;
 
         int nx = x + RcRecast.GetDirOffsetX(d);
         int nz = z + RcRecast.GetDirOffsetY(d);

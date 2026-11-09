@@ -94,8 +94,8 @@ public sealed class GroundItems
 
     /// <summary>
     /// Lays a slot's item (<see cref="ItemSlots"/>) on the ground, turned <paramref name="yaw"/> about Y and laid flat as a dropped one (no limit
-    /// while it keeps
-    /// <paramref name="slot"/>; null: a loose item at once), or a camp's (<paramref name="camp"/>, <see cref="GroundItem.Camp"/>); returns its id.
+    /// while it keeps <paramref name="slot"/>; null: a loose item at once), or a camp's (<paramref name="camp"/>, <see cref="GroundItem.Camp"/>);
+    /// returns its id.
     /// </summary>
     public int Place(ItemInstance item, Vector3 position, float yaw, string? slot, int owner, int? camp = null)
     {

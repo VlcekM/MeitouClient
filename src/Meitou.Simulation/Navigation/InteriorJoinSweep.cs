@@ -47,8 +47,7 @@ internal static class InteriorJoinSweep
     /// </summary>
     public static Site? Owner(OriginalInterior group, IReadOnlyList<Site> sites)
     {
-        if (sites.Count == 0)
-            return null;
+        if (sites.Count == 0) return null;
 
         var site = sites.MaxBy(s => Inside(group, s))!;
         return Inside(group, site) > 0 ? site : null;
@@ -140,8 +139,7 @@ internal static class InteriorJoinSweep
         HashSet<string>? neighbours = null;
         bool JoinedAnywhere(string key)
         {
-            if (joined.Contains(key))
-                return true;
+            if (joined.Contains(key)) return true;
 
             if (neighbours is null)
             {
@@ -150,8 +148,7 @@ internal static class InteriorJoinSweep
                 {
                     for (int dx = -1; dx <= 1; dx++)
                     {
-                        if (dx == 0 && dz == 0)
-                            continue;
+                        if (dx == 0 && dz == 0) continue;
 
                         var n = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
                         var built = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(n), settings, out _, out var nInner, interiors: true);

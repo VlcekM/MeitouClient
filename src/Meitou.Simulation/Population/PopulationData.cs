@@ -120,8 +120,7 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     /// <summary>
     /// The TOWN the town is now, as the original's <c>Town::getGameData</c> (its replacement, else its own record): <see cref="Replacement"/> with
     /// the placement's id and names (engine choice: the override records' names are editor labels) and, when it names no faction, the faction the
-    /// town had; else
-    /// <see cref="Record"/>.
+    /// town had; else <see cref="Record"/>.
     /// </summary>
     public TownData Town { get; private set; } = Record;
 
@@ -296,8 +295,7 @@ public sealed class PopulationData
     /// <summary>
     /// Lays building <paramref name="b"/> of town <paramref name="site"/> out with other layout names (a town override's or a loaded save's
     /// residents, docs/game/factions-squads-towns.md "Town residents"), or only renamed (<paramref name="naming"/>): the new building takes its place
-    /// in
-    /// <see cref="TownSite.Buildings"/> and is returned; <paramref name="b"/> itself when the names are its own already or there are no layouts.
+    /// in <see cref="TownSite.Buildings"/> and is returned; <paramref name="b"/> itself when the names are its own already or there are no layouts.
     /// </summary>
     public TownBuilding Relay(int site, TownBuilding b, string interior, string exterior, BuildingNaming? naming = null)
     {

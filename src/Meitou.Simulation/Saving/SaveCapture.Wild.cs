@@ -19,9 +19,9 @@ public static partial class SaveCapture
     /// The nests made so far in <c>quick.save</c>'s town list, the original's way (docs/formats/save.md "Nests"): a nest the save already holds keeps
     /// its entry and state, and gets the player's knowledge of it; a rolled one that has loaded (a rolled one that has not is left out: the layout
     /// rolls it again) gets an entry <c>&lt;n&gt;-quick.save-INGAME</c> (target the TOWN record, its position, a zero quaternion) and a
-    /// GAMESTATE_TOWN <c>&lt;entry&gt;-S5e</c> named
-    /// <c>Nest state &lt;name&gt; &lt;k&gt;</c> with a type-85 <c>hand</c> and the key set of the samples. The population remembers each one, so the next save
-    /// reuses it. Returns each nest site's handle (what its platoons' <c>hometown</c> names).
+    /// GAMESTATE_TOWN <c>&lt;entry&gt;-S5e</c> named <c>Nest state &lt;name&gt; &lt;k&gt;</c> with a type-85 <c>hand</c> and the key set of the
+    /// samples. The population remembers each one, so the next save reuses it. Returns each nest site's handle (what its platoons' <c>hometown</c>
+    /// names).
     /// </summary>
     static Dictionary<int, Hand> WriteNests(SaveBuilder builder, World world, PopulationData data, PopulationSystem population, ulong seed)
     {

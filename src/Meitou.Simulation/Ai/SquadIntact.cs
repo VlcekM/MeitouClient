@@ -6,8 +6,8 @@ using Meitou.Simulation.Factions;
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// The squad-intact test (<c>FUN_14079acf0</c>, docs/game/perception.md "Fleeing", <b>Verified</b>), shared by the retreat package (<see
-/// cref="AiSystem"/>) and the flee trigger (<see cref="FleeSystem"/>).
+/// The squad-intact test (<c>FUN_14079acf0</c>, docs/game/perception.md "Fleeing", <b>Verified</b>), shared by the retreat package
+/// (<see cref="AiSystem"/>) and the flee trigger (<see cref="FleeSystem"/>).
 /// </summary>
 static class SquadIntact
 {
@@ -45,13 +45,17 @@ static class SquadIntact
     /// </summary>
     public static bool DownIsAble(float need, bool persistentHome) => need < (persistentHome ? AbleNeedHome : AbleNeed);
 
-    static float Need(World world, CharacterCold c, MedicalState med) =>
-        c.Race is { } race
-            ? med.FirstAidNeeds(
-                race,
-                MathF.Max(MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1),
-                world.SystemOf<BodySystem>()?.Constants.ExtraBloodLossFromBodyparts ?? 1).Organic
-            : 0;
+    /// <summary>
+    /// A member's organic first aid need (<see cref="Bodies.MedicalState.FirstAidNeeds"/>), 0 without a race.
+    /// </summary>
+    static float Need(World world, CharacterCold c, MedicalState med)
+    {
+        if (c.Race is not { } race) return 0;
+
+        float capacity = MathF.Max(MedicalState.BloodCapacity(race, c.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1);
+        float extraLoss = world.SystemOf<BodySystem>()?.Constants.ExtraBloodLossFromBodyparts ?? 1;
+        return med.FirstAidNeeds(race, capacity, extraLoss).Organic;
+    }
 
     /// <summary>
     /// A member in a cage or restraint, or carried by a character not allied with it (<c>FUN_14079ab40</c>, <b>Verified</b>): the squad stays intact,
@@ -84,10 +88,10 @@ static class SquadIntact
     public static bool PersistentHome(Squad squad) => squad.Town >= 0 && squad.Ai?.OwnHome is not null;
 
     /// <summary>
-    /// The verdict once no member is <see cref="Held"/>: a squad without a leader or with no able member is not intact; under <see
-    /// cref="MinForRatio"/> members a persistent squad with a home is intact while anyone is able, any other while its leader is up; from that many,
-    /// while the able are at least <see cref="Ratio"/> of the size (<see cref="LeaderDownRatio"/> with the leader down). <paramref name="able"/>
-    /// counts <see cref="Able"/> members.
+    /// The verdict once no member is <see cref="Held"/>: a squad without a leader or with no able member is not intact; under
+    /// <see cref="MinForRatio"/> members a persistent squad with a home is intact while anyone is able, any other while its leader is up; from that
+    /// many, while the able are at least <see cref="Ratio"/> of the size (<see cref="LeaderDownRatio"/> with the leader down).
+    /// <paramref name="able"/> counts <see cref="Able"/> members.
     /// </summary>
     public static bool Decide(int able, int size, bool hasLeader, bool leaderDown, bool persistentHome)
     {

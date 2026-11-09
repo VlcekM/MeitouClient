@@ -24,9 +24,9 @@ public static class Repertoire
 
     /// <summary>
     /// The repertoire of a character, the first of: caged (<see cref="Imprisoned"/>), prone (<see cref="Crippled"/>: the posture setter
-    /// <c>FUN_1405c7e20</c> sets the bit for posture 1 staying low and 2 crippled and clears it for the others, <b>Verified</b>; <see
-    /// cref="Bodies.MedicalState.StayingLow"/>, <see cref="Bodies.MedicalState.Crawling"/>), restrained (<see cref="Chained"/>), a human (<see
-    /// cref="Human"/>), else <see cref="Animal"/>. The platoon repertoire is not modelled.
+    /// <c>FUN_1405c7e20</c> sets the bit for posture 1 staying low and 2 crippled and clears it for the others, <b>Verified</b>;
+    /// <see cref="Bodies.MedicalState.StayingLow"/>, <see cref="Bodies.MedicalState.Crawling"/>), restrained (<see cref="Chained"/>), a human
+    /// (<see cref="Human"/>), else <see cref="Animal"/>. The platoon repertoire is not modelled.
     /// </summary>
     public static int Of(World world, CharacterCold cold)
     {
@@ -108,59 +108,31 @@ public readonly record struct TaskRequest(CharacterTask Task, TaskType Row, Task
 {
     public int Job { get; init; } = -1;
     public CharacterId Target { get; init; } = CharacterId.None;
-    public string? Site
-    {
-        get;
-        init;
-    }
-    public System.Numerics.Vector3 Point
-    {
-        get;
-        init;
-    }
-    public CharacterTask Resume
-    {
-        get;
-        init;
-    }
+    public string? Site { get; init; }
+    public System.Numerics.Vector3 Point { get; init; }
+    public CharacterTask Resume { get; init; }
 
     /// <summary>
     /// An implicit job (a squad AI option, <see cref="SquadAi"/>: 242, 153, 275) rather than a job of the list (<see cref="TaskSource.Job"/> with
     /// <see cref="Job"/> -1).
     /// </summary>
-    public bool Implicit
-    {
-        get;
-        init;
-    }
+    public bool Implicit { get; init; }
 
     /// <summary>
     /// The act-out's own parameters the fields above do not hold (a shackle job, a ground item, a warden's round); its handler reads them.
     /// </summary>
-    public object? Detail
-    {
-        get;
-        init;
-    }
+    public object? Detail { get; init; }
 
     /// <summary>
     /// An engine walk's goal (X/Z): a <see cref="CharacterTask.GoTo"/> goes there as given (<see cref="MovementSystem.GoTo"/>); without one it goes
     /// onto the floor at <see cref="Point"/>.
     /// </summary>
-    public System.Numerics.Vector2? Goal
-    {
-        get;
-        init;
-    }
+    public System.Numerics.Vector2? Goal { get; init; }
 
     /// <summary>
     /// The speed mode of a walk (null: the character's run speed).
     /// </summary>
-    public byte? Mode
-    {
-        get;
-        init;
-    }
+    public byte? Mode { get; init; }
 }
 
 /// <summary>
@@ -176,24 +148,16 @@ public sealed record RunningTask(CharacterTask Task, TaskType Row, TaskSource So
     /// The task the act-out goes back to when it ends by itself (engine): the AI's and the engine's characters only; one the decision step decides
     /// stands idle and is decided again.
     /// </summary>
-    public CharacterTask Resume
-    {
-        get;
-        init;
-    }
+    public CharacterTask Resume { get; init; }
 
     /// <summary>
     /// Started by an implicit job of the squad AI options (<see cref="TaskRequest.Implicit"/>).
     /// </summary>
-    public bool Implicit
-    {
-        get;
-        init;
-    }
+    public bool Implicit { get; init; }
 
     /// <summary>
-    /// Whether this is the provenance of <paramref name="task"/>, the character's task now (a step of the same act-out counts, <see
-    /// cref="TaskStart.ActOut"/>).
+    /// Whether this is the provenance of <paramref name="task"/>, the character's task now (a step of the same act-out counts,
+    /// <see cref="TaskStart.ActOut"/>).
     /// </summary>
     public bool Runs(CharacterTask task) => TaskStart.ActOut(Task) == TaskStart.ActOut(task);
 }
@@ -256,8 +220,8 @@ public sealed class TaskHandlers
     public ITaskHandler? Of(CharacterTask task, TaskType row) => _rows.TryGetValue(row, out var own) ? own : _handlers[(byte)task];
 
     /// <summary>
-    /// The handler of the character's task <paramref name="task"/>: the one of its running row when its provenance runs it (<see
-    /// cref="RunningTask.Runs"/>), else the task's.
+    /// The handler of the character's task <paramref name="task"/>: the one of its running row when its provenance runs it
+    /// (<see cref="RunningTask.Runs"/>), else the task's.
     /// </summary>
     public ITaskHandler? Of(CharacterCold cold, CharacterTask task) => cold.Running is { } run && run.Runs(task) ? Of(task, run.Row) : Of(task);
 }
@@ -277,10 +241,10 @@ public static class TaskStart
 
     /// <summary>
     /// Starts a task (serial phases only): the row must be <see cref="Eligible"/>; then a fight ends (a new task drops the fight task,
-    /// docs/game/combat.md "Fight lifecycle and orders"), the task before ends through its handler, the provenance is recorded (<see
-    /// cref="CharacterCold.Running"/>) and the act-out starts. A fight the character did not take up by an order or a job, while it runs a follow row
-    /// (31, 45, 289), is a step of that row (31 and 45 need state 16, which 13 "Attacking attackers of" gives; docs/game/ai-tasks.md "Precedence"):
-    /// the row's provenance is kept, so the follow is taken up again after it.
+    /// docs/game/combat.md "Fight lifecycle and orders"), the task before ends through its handler, the provenance is recorded
+    /// (<see cref="CharacterCold.Running"/>) and the act-out starts. A fight the character did not take up by an order or a job, while it runs a
+    /// follow row (31, 45, 289), is a step of that row (31 and 45 need state 16, which 13 "Attacking attackers of" gives; docs/game/ai-tasks.md
+    /// "Precedence"): the row's provenance is kept, so the follow is taken up again after it.
     /// </summary>
     public static StartResult Start(World world, int slot, in TaskRequest request)
     {
@@ -315,15 +279,15 @@ public static class TaskStart
     }
 
     /// <summary>
-    /// Starts an engine walk to <paramref name="goal"/> at <paramref name="mode"/> as row <paramref name="row"/> (<see cref="Start"/> of a <see
-    /// cref="CharacterTask.GoTo"/> with <see cref="TaskRequest.Goal"/>).
+    /// Starts an engine walk to <paramref name="goal"/> at <paramref name="mode"/> as row <paramref name="row"/> (<see cref="Start"/> of a
+    /// <see cref="CharacterTask.GoTo"/> with <see cref="TaskRequest.Goal"/>).
     /// </summary>
     public static StartResult Walk(World world, int slot, System.Numerics.Vector2 goal, byte mode, TaskType row, TaskSource source) =>
         Start(world, slot, new TaskRequest(CharacterTask.GoTo, row, source) { Goal = goal, Mode = mode });
 
     /// <summary>
-    /// Starts an engine walk onto the floor at <paramref name="at"/> (<see cref="MovementSystem.GoToFloor"/>), as <see cref="Walk(World, int,
-    /// System.Numerics.Vector2, byte, TaskType, TaskSource)"/>.
+    /// Starts an engine walk onto the floor at <paramref name="at"/> (<see cref="MovementSystem.GoToFloor"/>), as
+    /// <see cref="Walk(World, int, System.Numerics.Vector2, byte, TaskType, TaskSource)"/>.
     /// </summary>
     public static StartResult Walk(World world, int slot, System.Numerics.Vector3 at, byte mode, TaskType row, TaskSource source) =>
         Start(world, slot, new TaskRequest(CharacterTask.GoTo, row, source) { Point = at, Mode = mode });
@@ -338,10 +302,11 @@ public static class TaskStart
             ? Start(world, slot, new TaskRequest(CharacterTask.Idle, TaskType.Idle, source)) : started;
 
     /// <summary>
-    /// A start in a parallel phase, on the caller's own slot (the AI's think): it records the provenance and starts the walk to <see
-    /// cref="TaskRequest.Goal"/>, or stops the character on the standing task (its <see cref="CharacterHot.TaskTime"/> restarted); nothing outside
-    /// the slot is touched, so no fight or task before it is ended (the AI acts out nothing for a fighting character, and its walks and standing
-    /// tasks hold nothing) and no handler runs. The row's repertoire is not tested: the AI's planner chose the row (<see cref="Ai.AiSystem"/>).
+    /// A start in a parallel phase, on the caller's own slot (the AI's think): it records the provenance and starts the walk to
+    /// <see cref="TaskRequest.Goal"/>, or stops the character on the standing task (its <see cref="CharacterHot.TaskTime"/> restarted); nothing
+    /// outside the slot is touched, so no fight or task before it is ended (the AI acts out nothing for a fighting character, and its walks and
+    /// standing tasks hold nothing) and no handler runs. The row's repertoire is not tested: the AI's planner chose the row
+    /// (<see cref="Ai.AiSystem"/>).
     /// </summary>
     public static void StartOwn(World world, int slot, in TaskRequest request)
     {
@@ -384,8 +349,8 @@ public static class TaskStart
     }
 
     /// <summary>
-    /// Whether the character walks for its AI (a goal's act-out, <see cref="TaskSource.Goal"/>): a walk another system may stop with <see
-    /// cref="Stand"/>, the AI walking on once it decides again (the stop counts as neither arrival nor failure).
+    /// Whether the character walks for its AI (a goal's act-out, <see cref="TaskSource.Goal"/>): a walk another system may stop with
+    /// <see cref="Stand"/>, the AI walking on once it decides again (the stop counts as neither arrival nor failure).
     /// </summary>
     public static bool OnAiWalk(CharacterTable table, int slot) =>
         table.Next[slot].Task == (byte)CharacterTask.GoTo && table.Cold(slot)!.Running is { Source: TaskSource.Goal };
@@ -440,10 +405,10 @@ public static class TaskStart
         task is CharacterTask.DeliverMaterials or CharacterTask.FetchMaterials or CharacterTask.Dismantle ? CharacterTask.Build : task;
 
     /// <summary>
-    /// Debug builds, at the end of a tick: a character whose task changed this tick had it set by the start path (<see cref="Start"/>, <see
-    /// cref="End"/>, <see cref="StartOwn"/>, <see cref="Step"/>, <see cref="Stand"/>: the task it stamped is the task now) or moved on to another
-    /// step of its act-out (<see cref="ActOut"/>); a direct write of <see cref="CharacterHot.Task"/> outside them throws. A character spawned or
-    /// loaded this tick is not checked.
+    /// Debug builds, at the end of a tick: a character whose task changed this tick had it set by the start path (<see cref="Start"/>,
+    /// <see cref="End"/>, <see cref="StartOwn"/>, <see cref="Step"/>, <see cref="Stand"/>: the task it stamped is the task now) or moved on to
+    /// another step of its act-out (<see cref="ActOut"/>); a direct write of <see cref="CharacterHot.Task"/> outside them throws. A character spawned
+    /// or loaded this tick is not checked.
     /// </summary>
     [System.Diagnostics.Conditional("DEBUG")]
     internal static void CheckStarts(World world)

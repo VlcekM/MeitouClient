@@ -263,8 +263,8 @@ public static class CombatSteering
     }
 
     /// <summary>
-    /// The nearest bodies <see cref="Gather"/> takes within <paramref name="reach"/> of <paramref name="me"/>: those of a circle of <see
-    /// cref="NearFirst"/>, twice as wide while it does not hold <see cref="Push.Capacity"/> of them nearer than its radius (none outside it is
+    /// The nearest bodies <see cref="Gather"/> takes within <paramref name="reach"/> of <paramref name="me"/>: those of a circle of
+    /// <see cref="NearFirst"/>, twice as wide while it does not hold <see cref="Push.Capacity"/> of them nearer than its radius (none outside it is
     /// nearer), the whole reach last. Those beyond the circle count as left out (when only these are in reach, the pushers' pass finds the same
     /// ones).
     /// </summary>
@@ -288,9 +288,9 @@ public static class CombatSteering
     /// The steering velocity of fighter <paramref name="i"/> this tick (units per second, X and Z), with <paramref name="face"/> the flat unit vector
     /// to whom it faces (<see cref="SteerState.Face"/>, else its band target); zero when the band target is gone. The seek and the power-through cone
     /// go along the line to the band target, the side-step snap and the speed caps along the facing (<c>FUN_1402af1e0</c> overwrites its direction
-    /// with the look-at's after the forces). <paramref name="strafing"/> is its side-stepping state (the animation's, last tick); <paramref
-    /// name="moving"/> whether it moved last tick (the dead zone's STOP or START). Reads the last tick's places only; partition-safe (writes the
-    /// fighter's own smoothing).
+    /// with the look-at's after the forces). <paramref name="strafing"/> is its side-stepping state (the animation's, last tick);
+    /// <paramref name="moving"/> whether it moved last tick (the dead zone's STOP or START). Reads the last tick's places only; partition-safe
+    /// (writes the fighter's own smoothing).
     /// </summary>
     public static Vector2 Velocity(World world, CombatSystem combat, int i, CharacterCold cold, SteerState s, float maxSpeed, bool strafing,
         bool moving, out Vector2 face)

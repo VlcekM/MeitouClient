@@ -87,8 +87,8 @@ public enum RngPurpose : uint
     /// </summary>
     ChaseSense = 24,
     /// <summary>
-    /// Squad formations: a layout's draws (keyed by the squad) and a plain follower's distance (keyed by the follower) (<see
-    /// cref="MovementSystem"/>).
+    /// Squad formations: a layout's draws (keyed by the squad) and a plain follower's distance (keyed by the follower)
+    /// (<see cref="MovementSystem"/>).
     /// </summary>
     Formation = 25,
     /// <summary>

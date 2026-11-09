@@ -29,8 +29,7 @@ public sealed partial class NavmeshWalkability
     public Vector2 Slide(Vector3 from, Vector2 step, float radius)
     {
         var w = _world;
-        if (step == Vector2.Zero || radius <= 0 || !w.Contains(WorldLayout.ZoneOf(from.X, from.Z)))
-            return step;
+        if (step == Vector2.Zero || radius <= 0 || !w.Contains(WorldLayout.ZoneOf(from.X, from.Z))) return step;
 
         var walls = s_wallScratch ??= [];
         walls.Clear();
@@ -68,8 +67,7 @@ public sealed partial class NavmeshWalkability
             if (d2 < r2)
             {
                 var n = d2 > 1e-8f ? off / MathF.Sqrt(d2) : wall.Inward;
-                if (Vector2.Dot(step, n) < -approach * length && best > 0)
-                    (best, normal) = (0, n);
+                if (Vector2.Dot(step, n) < -approach * length && best > 0) (best, normal) = (0, n);
 
                 continue;
             }
@@ -128,8 +126,7 @@ public sealed partial class NavmeshWalkability
         {
             for (int zx = Math.Min(lo.X, hi.X); zx <= Math.Max(lo.X, hi.X); zx++)
             {
-                if (!w.TryGetSlot(new ZoneCoordinate(zx, zz), out int slot))
-                    continue;
+                if (!w.TryGetSlot(new ZoneCoordinate(zx, zz), out int slot)) continue;
 
                 var m = w.Mesh(slot);
                 var ix = m.Index;
@@ -144,8 +141,7 @@ public sealed partial class NavmeshWalkability
                     {
                         foreach (int p in ix.Cells[cz * ix.Columns + cx])
                         {
-                            if (!m.Kept[p] || !seen.Add(p) || ClosedDoor(m, p, doors))
-                                continue;
+                            if (!m.Kept[p] || !seen.Add(p) || ClosedDoor(m, p, doors)) continue;
 
                             if (from.X < ix.Min[p].X - reach || from.X > ix.Max[p].X + reach || from.Z < ix.Min[p].Y - reach || from.Z > ix.Max[p].Y + reach)
                                 continue;
@@ -163,15 +159,13 @@ public sealed partial class NavmeshWalkability
         var poly = m.Polygons[p];
         for (int k = 0; k < poly.Length; k++)
         {
-            if (Open(m, p, k, doors))
-                continue;
+            if (Open(m, p, k, doors)) continue;
 
             var a = m.Vertices[poly[k]];
             var b = m.Vertices[poly[(k + 1) % poly.Length]];
             var ab = new Vector2(b.X - a.X, b.Z - a.Z);
             float ab2 = ab.LengthSquared();
-            if (ab2 < 1e-8f)
-                continue;
+            if (ab2 < 1e-8f) continue;
 
             float u = Math.Clamp(((from.X - a.X) * ab.X + (from.Z - a.Z) * ab.Y) / ab2, 0, 1);
             float nx = a.X + ab.X * u - from.X;

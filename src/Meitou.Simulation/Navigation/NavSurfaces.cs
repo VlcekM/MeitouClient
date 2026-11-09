@@ -110,8 +110,7 @@ public sealed class NavSurfaces
     {
         height = y;
         beside = false;
-        if (_cells.Length == 0)
-            return false;
+        if (_cells.Length == 0) return false;
 
         float best = range;
         float bestEdge = range;
@@ -142,8 +141,7 @@ public sealed class NavSurfaces
                     {
                         float h = l1 * a.Y + l2 * b.Y + l3 * c.Y;
                         float d = MathF.Abs(h - y);
-                        if (d > best)
-                            continue;
+                        if (d > best) continue;
 
                         best = d;
                         height = h;
@@ -159,8 +157,7 @@ public sealed class NavSurfaces
             }
         }
 
-        if (foundEdge && (!found || bestEdge < best))
-            (height, beside) = (edgeHeight, true);
+        if (foundEdge && (!found || bestEdge < best)) (height, beside) = (edgeHeight, true);
 
         return found || foundEdge;
     }
@@ -183,8 +180,7 @@ public sealed class NavSurfaces
             float ex = p.X + t * dx - x;
             float ez = p.Z + t * dz - z;
             float d = ex * ex + ez * ez;
-            if (d > bestD)
-                continue;
+            if (d > bestD) continue;
 
             bestD = d;
             reach = MathF.Sqrt(d);
@@ -207,8 +203,7 @@ public sealed class NavSurfaces
         var v = g.Vertices;
         for (int t = g.BuildingFirstTriangle; t < g.TriangleCount; t++)
         {
-            if (g.Areas[t] != NavArea.Ground)
-                continue;
+            if (g.Areas[t] != NavArea.Ground) continue;
 
             int ia = g.Indices[t * 3] * 3;
             int ib = g.Indices[t * 3 + 1] * 3;
@@ -228,16 +223,14 @@ public sealed class NavSurfaces
             float z1 = MathF.Max(a.Z, MathF.Max(b.Z, c.Z));
             foreach (var solid in g.Solids)
             {
-                if (x1 < solid.Min.X || x0 > solid.Max.X || z1 < solid.Min.Y || z0 > solid.Max.Y)
-                    continue;
+                if (x1 < solid.Min.X || x0 > solid.Max.X || z1 < solid.Min.Y || z0 > solid.Max.Y) continue;
 
                 next.Clear();
                 foreach (var piece in pieces)
                     Outside(piece, solid, next);
 
                 (pieces, next) = (next, pieces);
-                if (pieces.Count == 0)
-                    break;
+                if (pieces.Count == 0) break;
             }
 
             foreach (var piece in pieces)
@@ -304,11 +297,9 @@ public sealed class NavSurfaces
                 }
             }
 
-            if (outside.Count >= 3)
-                output.Add(outside);
+            if (outside.Count >= 3) output.Add(outside);
 
-            if (inside.Count < 3)
-                return;
+            if (inside.Count < 3) return;
 
             rest = inside;
         }

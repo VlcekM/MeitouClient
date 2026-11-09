@@ -32,12 +32,10 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
 
     IReadOnlyList<(Vector3[] Vertices, int[] Indices)> FindShape((string Building, int Door) key)
     {
-        if (db.Find(key.Building) is not { Type: FcsRecordType.Building } building)
-            return [];
+        if (db.Find(key.Building) is not { Type: FcsRecordType.Building } building) return [];
 
         float scale = building.GetFloat("scale", 1);
-        if (scale <= 0)
-            scale = 1;
+        if (scale <= 0) scale = 1;
 
         var result = new List<(Vector3[] Vertices, int[] Indices)>();
         foreach (var mesh in WorldObjectLayout.Building(db, building, "", Vector3.Zero, Quaternion.Identity))
@@ -54,8 +52,7 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
 
     DoorSpot? Find((string Building, int Door) key)
     {
-        if (db.Find(key.Building) is not { Type: FcsRecordType.Building } building)
-            return null;
+        if (db.Find(key.Building) is not { Type: FcsRecordType.Building } building) return null;
 
         float scale = building.GetFloat("scale", 1);
         var node = Matrix4x4.CreateScale(scale <= 0 ? 1 : scale);
@@ -86,8 +83,7 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
             }
         }
 
-        if (lo.X > hi.X)
-            return null;
+        if (lo.X > hi.X) return null;
 
         var size = hi - lo;
         var spot = size.X <= size.Z

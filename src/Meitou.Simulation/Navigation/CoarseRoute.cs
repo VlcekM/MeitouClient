@@ -121,8 +121,7 @@ public sealed class CoarseRoute
                         continue;
                     }
 
-                    if (TooSteep(height, c, Centre(nx, nz), rise))
-                        flags |= (ushort)(1 << k);
+                    if (TooSteep(height, c, Centre(nx, nz), rise)) flags |= (ushort)(1 << k);
                 }
                 result[z * Side + x] = flags;
             }
@@ -241,8 +240,7 @@ public sealed class CoarseRoute
         {
             var p = Vector2.Lerp(a, b, i / (float)steps);
             float h = MathF.Max(terrain(p.X, p.Y), WorldWater.Height);   // the water surface is flat: swimming has no slope
-            if (MathF.Abs(h - previous) > rise * (Vector2.Distance(a, b) / steps) / SlopeStep)
-                return true;
+            if (MathF.Abs(h - previous) > rise * (Vector2.Distance(a, b) / steps) / SlopeStep) return true;
             previous = h;
         }
         return false;
@@ -274,8 +272,7 @@ public sealed class CoarseRoute
             cellsOnRoute = SearchCells(start, goal, gx, gz, map, crossing, waterCost, slopes);
         }
 
-        if (cellsOnRoute is null)
-            return [];
+        if (cellsOnRoute is null) return [];
 
         cellsOnRoute.Reverse();
         return Turns(from, to, cellsOnRoute, map, crossing, slopes);

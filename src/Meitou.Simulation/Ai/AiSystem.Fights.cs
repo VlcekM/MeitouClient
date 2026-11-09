@@ -49,8 +49,7 @@ public sealed partial class AiSystem
         if (world.Characters.Cold(slot) is not { Fighter.CanAttack: true, Medical: { Crawling: false } medical, Gunning: null } cold)
             return 0;
 
-        if (SelfPreservation.Flees(cold, 1, SelfPreservation.Walled(world, slot)))
-            return 0;
+        if (SelfPreservation.Flees(cold, 1, SelfPreservation.Walled(world, slot))) return 0;
 
         bool passive = (cold.Orders & CharacterOrders.Passive) != 0;
         bool sneaking = (cold.Orders & CharacterOrders.Sneak) != 0 && !cold.InCombat;
@@ -70,8 +69,7 @@ public sealed partial class AiSystem
     /// </summary>
     float ProtectGoalDesire(World world, int slot, TaskType type, AiMind mind, CharacterCold cold, bool idle)
     {
-        if (idle || cold.SlaveState == 1 && cold.SlaveMaster >= 0)
-            return 0;
+        if (idle || cold.SlaveState == 1 && cold.SlaveMaster >= 0) return 0;
 
         return ProtectScan(world, slot, type, mind).First * (cold.Carrying.IsNone ? 1 : 0.5f);
     }
@@ -80,17 +78,15 @@ public sealed partial class AiSystem
     /// 32 Self preservation's desire (AI slot 17 <c>FUN_140599d20</c>, <b>Verified</b>): the threat level
     /// (<see cref="Combat.CombatSystem.ThreatLevel"/>: 1 with a threat within 40, 0.7 with one within 181.7, else 0). In its own fight the goal is
     /// kept while it is not done (its list A <c>!159</c>, a threat on its list at any distance, <c>FUN_140436720</c>; the plan step,
-    /// <c>FUN_14050d970</c>):
-    /// <b>engine</b>, a threat only beyond 181.7 keeps it at 0.7 at Meitou's re-think (the original does not weigh a running goal again).
+    /// <c>FUN_14050d970</c>): <b>engine</b>, a threat only beyond 181.7 keeps it at 0.7 at Meitou's re-think (the original does not weigh a
+    /// running goal again).
     /// </summary>
     float SelfPreservationDesire(World world, int slot, AiMind mind)
     {
-        if ((ThreatSource ?? _combat) is not { } source)
-            return 0;
+        if ((ThreatSource ?? _combat) is not { } source) return 0;
 
         float level = source.ThreatLevel(world, slot, out _);
-        if (level > 0)
-            return level;
+        if (level > 0) return level;
 
         bool holdsGoal = mind.Goal?.Task.Type == TaskType.SelfPreservation;
         bool ownFight = holdsGoal && world.Characters.Cold(slot) is { InCombat: true } cold && OwnsFight(cold, mind);
@@ -135,10 +131,10 @@ public sealed partial class AiSystem
     /// <summary>
     /// A combat goal's finder factor for the chooser (<see cref="FightPick"/>). The current goal whose fight runs (<see cref="OwnsFight"/>) is kept
     /// while its goal is not done (the original's plan step ends a goal only when its list A holds, its hours end or its row cannot run,
-    /// <c>FUN_14050d970</c>,
-    /// <b>Observed</b>; the running fight is the queued task its plan accepts): an attack goal while the looker senses an enemy (16's effect, state 6
-    /// <c>isNoEnemiesInVicinity</c>, <c>numEnemies</c>; engine reading for 21, 144 and 34) or its finder still picks one; a protect goal while its finder
-    /// values a mate or ally above 0 (its own fight counts for 143: <c>FUN_14099a190</c>'s 0.01 floor), row 13 not asked again.
+    /// <c>FUN_14050d970</c>, <b>Observed</b>; the running fight is the queued task its plan accepts): an attack goal while the looker senses an enemy
+    /// (16's effect, state 6 <c>isNoEnemiesInVicinity</c>, <c>numEnemies</c>; engine reading for 21, 144 and 34) or its finder still picks one; a
+    /// protect goal while its finder values a mate or ally above 0 (its own fight counts for 143: <c>FUN_14099a190</c>'s 0.01 floor), row 13 not
+    /// asked again.
     /// </summary>
     float FightFactor(World world, int slot, TaskType type, AiMind mind)
     {
@@ -161,11 +157,9 @@ public sealed partial class AiSystem
     internal CharacterId SelfDefencePick(World world, int slot, IReadOnlyDictionary<int, int>? pending = null)
     {
         var table = world.Characters;
-        if ((ThreatSource ?? _combat) is not { } source)
-            return CharacterId.None;
+        if ((ThreatSource ?? _combat) is not { } source) return CharacterId.None;
 
-        if (table.Cold(slot) is not { Fighter.CanAttack: true, Medical.Crawling: false } cold)
-            return CharacterId.None;
+        if (table.Cold(slot) is not { Fighter.CanAttack: true, Medical.Crawling: false } cold) return CharacterId.None;
 
         int foe = source.BestAttackerOf(world, slot, slot, pending);
         if (foe < 0) return CharacterId.None;
@@ -209,8 +203,7 @@ public sealed partial class AiSystem
         if (me.Fighter?.IsAnimal != true)
             return me is { WaterState: 3, InSomething: Locks.HeldState.None } || target.WaterState == 3;
 
-        if (target.IsImprisoned)
-            return true;
+        if (target.IsImprisoned) return true;
 
         var mine = Flat(table.Previous[slot].Position);
         var theirs = Flat(table.Previous[f].Position);
@@ -358,17 +351,14 @@ public sealed partial class AiSystem
     {
         var fights = _combat;
         var id = new CharacterId(owned, world.Characters.Previous[owned].Generation);
-        if (fights?.TargetOf(owned, id.Generation) is not { Slot: >= 0 } t)
-            return false;
+        if (fights?.TargetOf(owned, id.Generation) is not { Slot: >= 0 } t) return false;
 
         if ((uint)t.Slot >= (uint)world.Characters.HighWater || world.Characters.Cold(t.Slot) is not { } target)
             return false;
 
-        if (world.Characters.Cold(looker) is not { } me)
-            return false;
+        if (world.Characters.Cold(looker) is not { } me) return false;
 
-        if (target.Faction == me.Faction)
-            return true;
+        if (target.Faction == me.Faction) return true;
 
         return data.Relations.Contains(target.Faction) && data.Relations.Contains(me.Faction) && data.Relations.IsAlly(me.Faction, target.Faction);
     }
@@ -388,8 +378,7 @@ public sealed partial class AiSystem
         if (best < 0 || _combat is not { } fights) return (0, CharacterId.None);
         if (!attacker) return (MathF.Min(value, CombatSystem.ProtectCap), CharacterId.None);
         int foe = fights.BestAttackerOf(world, best, slot, pending);
-        if (foe < 0)
-            return (0, CharacterId.None);
+        if (foe < 0) return (0, CharacterId.None);
 
         return (MathF.Min(value, CombatSystem.ProtectCap), new CharacterId(foe, prev[foe].Generation));
     }

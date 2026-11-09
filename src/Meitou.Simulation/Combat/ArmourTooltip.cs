@@ -83,10 +83,10 @@ public static class ArmourTooltip
 
     /// <summary>
     /// The lines below the price: the coverage by part and the skill effects that are not neutral (<b>Observed</b>, docs/game/ui-screens.md "Item
-    /// tooltip"; checked against the six grades of the Samurai Armour and Legplates). Stealth effect is the piece's stealth factor (<see
-    /// cref="ArmourPiece.StealthOf"/>); Athletics effect is the record's <c>athletics mult</c> x the class table's lerp(t, lo, hi) (medium 0.85 to 1,
-    /// heavy 0.8 to 0.95, forced to 1 for slots 3, 5 and 8) and Combat speed effect likewise (heavy 0.9 to 1, forced to 1 for a hat). The dexterity,
-    /// defence, perception and ranged bonus lines are not shown: their formulas and labels are <b>Unknown</b>.
+    /// tooltip"; checked against the six grades of the Samurai Armour and Legplates). Stealth effect is the piece's stealth factor
+    /// (<see cref="ArmourPiece.StealthOf"/>); Athletics effect is the record's <c>athletics mult</c> x the class table's lerp(t, lo, hi) (medium 0.85
+    /// to 1, heavy 0.8 to 0.95, forced to 1 for slots 3, 5 and 8) and Combat speed effect likewise (heavy 0.9 to 1, forced to 1 for a hat). The
+    /// dexterity, defence, perception and ranged bonus lines are not shown: their formulas and labels are <b>Unknown</b>.
     /// </summary>
     public static IReadOnlyList<Line> Tail(ArmourData a, Func<string, string?> partName, float quality)
     {

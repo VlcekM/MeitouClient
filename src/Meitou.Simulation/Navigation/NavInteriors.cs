@@ -39,8 +39,7 @@ internal static class NavInteriors
     /// </summary>
     public static ZoneNavMesh Combine(ZoneNavMesh exterior, IReadOnlyList<InteriorMesh> interiors, Action<string>? log = null)
     {
-        if (interiors.Count == 0)
-            return exterior;
+        if (interiors.Count == 0) return exterior;
 
         var vertices = new List<Vector3>(exterior.Vertices);
         var polygons = new List<int[]>(exterior.Polygons);
@@ -134,8 +133,7 @@ internal static class NavInteriors
     /// </summary>
     static List<int>? ShiftedLinks(ReadOnlySpan<int> l, int po)
     {
-        if (l.Length == 0)
-            return null;
+        if (l.Length == 0) return null;
 
         var list = new List<int>();
         for (int i = 0; i < l.Length; i += 2)
@@ -170,8 +168,7 @@ internal static class NavInteriors
         var queue = new Queue<int>();
         for (int p = 0; p < m.Kept.Count; p++)
         {
-            if (m.Kept[p])
-                queue.Enqueue(p);
+            if (m.Kept[p]) queue.Enqueue(p);
         }
 
         while (queue.Count > 0)
@@ -180,8 +177,7 @@ internal static class NavInteriors
             var nb = m.Neighbours[p];
             for (int k = 0; k < nb.Length; k++)
             {
-                if (!NarrowExteriorEdge(m, p, k))
-                    Keep(nb[k]);
+                if (!NarrowExteriorEdge(m, p, k)) Keep(nb[k]);
             }
 
             if (m.Links[p] is { } l)
@@ -193,8 +189,7 @@ internal static class NavInteriors
 
         void Keep(int n)
         {
-            if (n < 0 || m.Kept[n] || m.Areas[n] == NavArea.Null)
-                return;
+            if (n < 0 || m.Kept[n] || m.Areas[n] == NavArea.Null) return;
 
             m.Kept[n] = true;
             queue.Enqueue(n);
@@ -206,8 +201,7 @@ internal static class NavInteriors
     /// </summary>
     static bool NarrowExteriorEdge(KeptSet m, int p, int k)
     {
-        if (p >= m.ExteriorCount)
-            return false;
+        if (p >= m.ExteriorCount) return false;
 
         var poly = m.Polygons[p];
         return SeedPruner.Narrow(m.Vertices[poly[k]], m.Vertices[poly[(k + 1) % poly.Length]]);
@@ -237,15 +231,13 @@ internal static class NavInteriors
         for (int door = 0; door < doorIds.Count; door++)
         {
             var inside = Enumerable.Range(first, count).Where(p => areas[p] == NavArea.Door && doorOf[p] == door).ToList();
-            if (inside.Count == 0)
-                continue;
+            if (inside.Count == 0) continue;
 
             var outside = Enumerable.Range(0, exteriorCount).Where(p => kept[p] && areas[p] == NavArea.Door && doorOf[p] == door).ToList();
 
             // An edge that faces several polygons links to all of them, so which edges are open is decided before any link is added.
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            if (Link(openInside, OpenEdges(outside), doorIds[door]) > 0)
-                continue;
+            if (Link(openInside, OpenEdges(outside), doorIds[door]) > 0) continue;
 
             // A door leaf set back inside the interior hull paints nothing outside it (the exterior is carved to the hull): the doorway's interior
             // polygons meet the exterior's ground along the hull's edge (Observed: the L-House 13-rebirth-INGAME, zone 18.35).
@@ -265,8 +257,7 @@ internal static class NavInteriors
             var near = Enumerable.Range(0, exteriorCount)
                 .Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y))
                 .ToList();
-            if (Link(openInside, OpenEdges(near), $"{doorIds[door]} (doorway edge)") > 0)
-                continue;
+            if (Link(openInside, OpenEdges(near), $"{doorIds[door]} (doorway edge)") > 0) continue;
 
             // A raised sill reached by steps that cross the hull: the steps' upper part is the interior's (joined to the door polygons), the lower part the
             // exterior's, and the two meet on the hull's edge below the door (Observed: 29- and 27-rebirth-INGAME, zone 18.35). So the interior polygons
@@ -280,8 +271,7 @@ internal static class NavInteriors
             {
                 foreach (int n in neighbours[queue.Dequeue()])
                 {
-                    if (n >= 0 && areas[n] != NavArea.Null && InBox(n) && approach.Add(n))
-                        queue.Enqueue(n);
+                    if (n >= 0 && areas[n] != NavArea.Null && InBox(n) && approach.Add(n)) queue.Enqueue(n);
                 }
             }
 
@@ -333,8 +323,7 @@ internal static class NavInteriors
                     var a1 = v[polygons[p][(e + 1) % polygons[p].Length]];
                     var b0 = v[polygons[q][f]];
                     var b1 = v[polygons[q][(f + 1) % polygons[q].Length]];
-                    if (!Facing(a0, a1, b0, b1, distance))
-                        continue;
+                    if (!Facing(a0, a1, b0, b1, distance)) continue;
 
                     log?.Invoke($"    door join {kind}: interior polygon {p - first} edge {e} to exterior {q} edge {f}");
                     (links[p] ??= []).AddRange([e, q]);
@@ -355,19 +344,16 @@ internal static class NavInteriors
     {
         var ma = (a0 + a1) * 0.5f;
         var mb = (b0 + b1) * 0.5f;
-        if (MathF.Abs(ma.Y - mb.Y) > JoinHeight)
-            return false;
+        if (MathF.Abs(ma.Y - mb.Y) > JoinHeight) return false;
 
         var d = new Vector2(a1.X - a0.X, a1.Z - a0.Z);
         float len = d.Length();
-        if (len < 1e-4f)
-            return false;
+        if (len < 1e-4f) return false;
 
         d /= len;
         float Along(Vector3 p) => (p.X - a0.X) * d.X + (p.Z - a0.Z) * d.Y;
         float Off(Vector3 p) => MathF.Abs((p.X - a0.X) * d.Y - (p.Z - a0.Z) * d.X);
-        if (Off(b0) > distance || Off(b1) > distance)
-            return false;
+        if (Off(b0) > distance || Off(b1) > distance) return false;
 
         float lo = Math.Min(Along(b0), Along(b1));
         float hi = Math.Max(Along(b0), Along(b1));

@@ -12,10 +12,10 @@ namespace Meitou.Simulation.Carrying;
 
 /// <summary>
 /// The stealth knock-out (<see cref="CharacterTask.StealthKo"/>, the original's <c>Task_StealthKO</c>; docs/game/combat.md "Stealth knock-out"): a
-/// sneaking character creeps to a point behind its target, swings the <c>knockout</c> clip at x1.2 and at half of it rolls 0-100 against <see
-/// cref="StealthKoChance"/>. A hit knocks the target out for <see cref="MedicalState.PutDownKoSeconds"/> with the attacker's assassination / 100; a
-/// miss turns the target on the attacker. Either trains assassination (a miss three times as much). The walk breaks off when the target has spotted
-/// the attacker (its <see cref="AggroSystem"/> spot meter is full). A miss also has the target say event 56, alarm its hearing and go for the
+/// sneaking character creeps to a point behind its target, swings the <c>knockout</c> clip at x1.2 and at half of it rolls 0-100 against
+/// <see cref="StealthKoChance"/>. A hit knocks the target out for <see cref="MedicalState.PutDownKoSeconds"/> with the attacker's assassination /
+/// 100; a miss turns the target on the attacker. Either trains assassination (a miss three times as much). The walk breaks off when the target has
+/// spotted the attacker (its <see cref="AggroSystem"/> spot meter is full). A miss also has the target say event 56, alarm its hearing and go for the
 /// attacker.
 /// </summary>
 public sealed partial class CarrySystem
@@ -49,19 +49,15 @@ public sealed partial class CarrySystem
     const int AssassinationFailed = 56;
 
     /// <summary>
-    /// The length of the <c>knockout</c> clip in seconds (1 when the clip lengths are not known); the swing lasts this / <see
-    /// cref="KnockoutPlaySpeed"/>.
+    /// The length of the <c>knockout</c> clip in seconds (1 when the clip lengths are not known); the swing lasts this /
+    /// <see cref="KnockoutPlaySpeed"/>.
     /// </summary>
     public float KnockoutSeconds { get; set; } = 1;
 
     /// <summary>
     /// The senses the walk checks (a target that spotted the attacker turns round); null: never spotted.
     /// </summary>
-    public AggroSystem? Aggro
-    {
-        get;
-        set;
-    }
+    public AggroSystem? Aggro { get; set; }
 
     readonly List<StealthKoEntry> _knockouts = [];
     XpService? _xp;
@@ -209,8 +205,8 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>
-    /// <c>FUN_140855830</c>: the target's sense entry for the attacker has its seen flag. Stand-in: its spot meter on the attacker is full (<see
-    /// cref="AggroSystem.Spotted"/>), or it fights the attacker (a fighter has the enemy in sight). Checked every tick, in every state, by the
+    /// <c>FUN_140855830</c>: the target's sense entry for the attacker has its seen flag. Stand-in: its spot meter on the attacker is full
+    /// (<see cref="AggroSystem.Spotted"/>), or it fights the attacker (a fighter has the enemy in sight). Checked every tick, in every state, by the
     /// original's update; a hit cancels the task silently.
     /// </summary>
     bool Senses(World world, CharacterTable table, int target, int attacker)

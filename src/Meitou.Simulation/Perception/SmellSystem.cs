@@ -56,8 +56,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
 
     public void SlowWorld(World world)
     {
-        if (world.Tick % EveryTicks != 0)
-            return;
+        if (world.Tick % EveryTicks != 0) return;
 
         // The sources step once per 10 game seconds with the whole time since the last step as dt (FUN_1408f85f0: its timer runs to DAT_14167fad4 =
         // 10 and the step takes the frozen value).
@@ -68,8 +67,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
             _elapsed = 0;
         }
 
-        if (population is not null)
-            Hunt(world);
+        if (population is not null) Hunt(world);
     }
 
     void Update(World world, float dt)
@@ -100,13 +98,11 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
         var sums = new Dictionary<int, (int Corpses, Vector2 CorpseSum)>();
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || table.Cold(s) is not { Medical: { Dead: true } } c || !c.HasFlies)
-                continue;
+            if (!table.Next[s].Alive || table.Cold(s) is not { Medical: { Dead: true } } c || !c.HasFlies) continue;
 
             var p = table.Next[s].Position;
             var zone = WorldLayout.ZoneOf(p.X, p.Z);
-            if (zone.X is < 0 or >= WorldLayout.ZoneCount || zone.Y is < 0 or >= WorldLayout.ZoneCount)
-                continue;
+            if (zone.X is < 0 or >= WorldLayout.ZoneCount || zone.Y is < 0 or >= WorldLayout.ZoneCount) continue;
 
             int key = Key(zone);
             var a = sums.GetValueOrDefault(key);
@@ -133,8 +129,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     /// </summary>
     float Threshold(CharacterCold c)
     {
-        if (_thresholds.TryGetValue(c.RecordId, out float t))
-            return t;
+        if (_thresholds.TryGetValue(c.RecordId, out float t)) return t;
 
         t = data.Db.Find(c.RecordId)?.GetFloat("smell blood") ?? 0;
         _thresholds[c.RecordId] = t;
@@ -155,8 +150,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
             int zone = listed && threshold > 0 ? PickZone(world, squad, lead, threshold) : -1;
             if (zone < 0)
             {
-                if (_hunts.Remove(squad.Id))
-                    Release(world, squad);
+                if (_hunts.Remove(squad.Id)) Release(world, squad);
 
                 continue;
             }
@@ -184,8 +178,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
             int dx = Math.Abs(key % WorldLayout.ZoneCount - here.X);
             int dy = Math.Abs(key / WorldLayout.ZoneCount - here.Y);
             float w = z.Value * (dx == 0 && dy == 0 ? 1 : dx <= 1 && dy <= 1 ? NeighbourWeight : FarWeight);
-            if (w > best)
-                (best, zone) = (w, key);
+            if (w > best) (best, zone) = (w, key);
         }
 
         return zone;
@@ -201,8 +194,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
             || !c.CarriedBy.IsNone)
             return;
 
-        if (!c.Engaged && !AiSystem.Holds(table.Next[s], c))
-            return;
+        if (!c.Engaged && !AiSystem.Holds(table.Next[s], c)) return;
 
         c.Engaged = true;
         ref var n = ref table.Next[s];
@@ -225,8 +217,7 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
 
     public void Hash(ref StateHasher hasher)
     {
-        if (_zones.Count == 0 && _hunts.Count == 0)
-            return;
+        if (_zones.Count == 0 && _hunts.Count == 0) return;
 
         hasher.Add(0x536D656C);
         foreach (var (k, z) in _zones)

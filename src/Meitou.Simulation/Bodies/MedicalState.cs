@@ -7,8 +7,8 @@ namespace Meitou.Simulation.Bodies;
 /// <summary>
 /// A character's medical state: body parts, blood, wounds, hunger and the KO timer (docs/game/character-stats.md "Needs", "Blood and bleeding", "Body
 /// parts and injuries", "First aid"). It belongs to one character and is stepped with <see cref="Tick"/> in seconds of character time; the world runs
-/// characters in parallel, so nothing here touches shared state. Randomness comes from the world's seeded rolls through the <see
-/// cref="MedicalContext"/>, with a per-character counter kept in the state.
+/// characters in parallel, so nothing here touches shared state. Randomness comes from the world's seeded rolls through the
+/// <see cref="MedicalContext"/>, with a per-character counter kept in the state.
 /// <para>Time (<b>Verified</b>, docs/game/character-stats.md "Time"): <c>dt</c> is the character time, real seconds x game speed (the
 /// <c>dt * 0.05</c> factors of the original are kept as written); hunger follows the game clock in hours. The KO timer counts the same
 /// seconds.</para> Field names follow the save
@@ -38,20 +38,12 @@ public sealed partial class MedicalState
     /// <summary>
     /// Save key <c>blood</c>. Current blood; a character has capacity <see cref="BloodCapacity(RaceData, float, bool, float, float)"/>.
     /// </summary>
-    public float Blood
-    {
-        get;
-        set;
-    }
+    public float Blood { get; set; }
 
     /// <summary>
     /// Save key <c>bleeding</c>: the current bleed rate (blood per second of character time), recomputed each tick.
     /// </summary>
-    public float Bleeding
-    {
-        get;
-        private set;
-    }
+    public float Bleeding { get; private set; }
 
     /// <summary>
     /// Save key <c>hung</c>: the hunger level 0 to 3 (3 full; 2 and above well fed, below 1 starving).
@@ -61,65 +53,37 @@ public sealed partial class MedicalState
     /// <summary>
     /// Save key <c>fed</c>: the stomach buffer, food waiting to be digested (<b>Unknown</b> in the save, inferred from the name).
     /// </summary>
-    public float Fed
-    {
-        get;
-        set;
-    }
+    public float Fed { get; set; }
 
     /// <summary>
     /// Save key <c>KO</c>: game minutes of knock-out left (<b>Unknown</b> in the save, inferred from the name).
     /// </summary>
-    public float KoTimer
-    {
-        get;
-        set;
-    }
+    public float KoTimer { get; set; }
 
     /// <summary>
     /// Save key <c>unconcious</c> (sic): knocked out.
     /// </summary>
-    public bool Unconscious
-    {
-        get;
-        private set;
-    }
+    public bool Unconscious { get; private set; }
 
     /// <summary>
     /// Save key <c>dead</c>.
     /// </summary>
-    public bool Dead
-    {
-        get;
-        private set;
-    }
+    public bool Dead { get; private set; }
 
-    public DeathCause Cause
-    {
-        get;
-        private set;
-    }
+    public DeathCause Cause { get; private set; }
 
     /// <summary>
     /// Set when blood reached 0 or while a limb is freshly cut off (<c>+0x163 bloodlossTrauma</c>, <see cref="HasFreshStump"/>); clears only on a
     /// tick that finds blood below capacity and then above 25 (docs/game/character-stats.md "Blood and KO"). While set, a conscious character goes
     /// down only under -25, and the HUD's Toughness XP shows "Blood loss trauma: +2x".
     /// </summary>
-    public bool BloodKo
-    {
-        get;
-        private set;
-    }
+    public bool BloodKo { get; private set; }
 
     /// <summary>
     /// Save key <c>coma</c> (medical <c>+0x162</c>, "Recovery coma"): set when a vital part fell under the KO point, cleared once no vital part is
     /// under 0 (<see cref="VitalPartsKeepDown"/>).
     /// </summary>
-    public bool Coma
-    {
-        get;
-        private set;
-    }
+    public bool Coma { get; private set; }
 
     /// <summary>
     /// Knocked out or dead. Also written as save key <c>incapacitated</c>, which in the original is medical <c>+0x160</c> (a leg-collapse part down,
@@ -185,14 +149,10 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// Set by <see cref="Tick"/> on the update that finds a leg down where the last one did not (the original's first set of the crippled flag, which
-    /// calls <c>FUN_1405c8330</c>: the character stops and its orders and tasks are cleared, docs/game/ragdolls.md "Forced crawl"); <see
-    /// cref="BodySystem"/> takes it in a serial phase. The first tick after a load only learns the state. Not saved.
+    /// calls <c>FUN_1405c8330</c>: the character stops and its orders and tasks are cleared, docs/game/ragdolls.md "Forced crawl");
+    /// <see cref="BodySystem"/> takes it in a serial phase. The first tick after a load only learns the state. Not saved.
     /// </summary>
-    public bool CollapseOnset
-    {
-        get;
-        set;
-    }
+    public bool CollapseOnset { get; set; }
     int _legsWereDown = -1;
 
     /// <summary>
@@ -224,26 +184,18 @@ public sealed partial class MedicalState
     /// order, sneak off, Stand Up or a melee attack. Kept on the medical state beside <see cref="Crawling"/> so <see cref="Prone"/> reads both; not
     /// saved (the original's save key, if any, is <b>Unknown</b>).
     /// </summary>
-    public bool StayingLow
-    {
-        get;
-        set;
-    }
+    public bool StayingLow { get; set; }
 
     /// <summary>
     /// Playing dead (posture 3 <c>PS_PLAYING_DEAD</c>, docs/game/ragdolls.md "Playing dead"): the knockout is over but the character lies on, still
     /// <see cref="Unconscious"/> to everyone, until it is safe to get up (<see cref="MedicalContext.PlayDead"/>) or <see cref="StandUp"/>. Not saved:
     /// after a load the next tick decides again.
     /// </summary>
-    public bool PlayingDead
-    {
-        get;
-        private set;
-    }
+    public bool PlayingDead { get; private set; }
 
     /// <summary>
-    /// Knocked out with nothing but the KO timer keeping it down (vital parts and blood allow waking): whether it may wake within <paramref
-    /// name="dt"/> seconds.
+    /// Knocked out with nothing but the KO timer keeping it down (vital parts and blood allow waking): whether it may wake within
+    /// <paramref name="dt"/> seconds.
     /// </summary>
     public bool WakesWithin(float dt) => Unconscious && !Dead && KoTimer <= dt && !VitalPartsKeepDown(LegKoPoint) && Blood >= WakeBloodFloor;
 
@@ -271,11 +223,7 @@ public sealed partial class MedicalState
     /// <summary>
     /// How <see cref="StandUp"/> ended playing dead (staying low or not) for the get-up to take, instead of the sneak order; null when it did not.
     /// </summary>
-    public bool? WokenLow
-    {
-        get;
-        set;
-    }
+    public bool? WokenLow { get; set; }
 
     /// <summary>
     /// Posture 0 (or 1 with <paramref name="stayLow"/>): ends staying low, and playing dead at once.
@@ -298,8 +246,8 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// The character's light level P that the stat multiplier's light term reads (<c>FUN_1406457e0</c> reads Character <c>+0xd8</c>, the light level
-    /// of docs/game/perception.md "Sight", <b>Verified</b>): 1 in daylight, 0 in the dark. <see cref="BodySystem"/> copies it from <see
-    /// cref="SightMap.Light"/> every tick; derived, not saved.
+    /// of docs/game/perception.md "Sight", <b>Verified</b>): 1 in daylight, 0 in the dark. <see cref="BodySystem"/> copies it from
+    /// <see cref="SightMap.Light"/> every tick; derived, not saved.
     /// </summary>
     public float Light { get; set; } = 1;
 
@@ -341,8 +289,8 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// False for an animal: the character's slot 0x250 (the humanoid stats object) is null for a <c>CharacterAnimal</c> (<b>Observed</b>,
-    /// docs/game/animals.md), so the blood capacity takes s = 1 and the hit path cannot sever limbs. Set at creation; ANDed with <see
-    /// cref="MedicalContext.HasStats"/>.
+    /// docs/game/animals.md), so the blood capacity takes s = 1 and the hit path cannot sever limbs. Set at creation; ANDed with
+    /// <see cref="MedicalContext.HasStats"/>.
     /// </summary>
     public bool HasStatsObject { get; private set; } = true;
 

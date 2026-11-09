@@ -26,8 +26,7 @@ sealed class BuildingSight(GameInstall install, GameDatabase db, WorldLevelData 
     /// </summary>
     public IReadOnlyList<WorldLight> SiteLights(Construction.BuildSite site)
     {
-        if (db.Find(site.Record) is not { } record)
-            return [];
+        if (db.Find(site.Record) is not { } record) return [];
 
         var placed = new List<PlacedLight>();
         WorldObjectLayout.Building(db, record, site.Id, site.Position, site.Rotation, new BuildingState { Identity = site.Id }, placed);

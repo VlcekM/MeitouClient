@@ -36,8 +36,8 @@ public enum AiBehaviour : byte
     /// </summary>
     Sit = 6,
     /// <summary>
-    /// While a patrol package runs, the leader walks the patrol's route and the others follow it; otherwise wanders about the town (<see
-    /// cref="CharacterTask.Wander"/>).
+    /// While a patrol package runs, the leader walks the patrol's route and the others follow it; otherwise wanders about the town
+    /// (<see cref="CharacterTask.Wander"/>).
     /// </summary>
     Patrol = 7,
     /// <summary>
@@ -79,8 +79,8 @@ public enum AiBehaviour : byte
     Work = 15,
     /// <summary>
     /// Answers a raised alarm of its town (INVESTIGATE_ALARMS 209, and 210 for its own faction's only; <c>Task_InvestigateAlarms</c>,
-    /// docs/game/economy.md "Town alarms"): runs to it, looks about there and clears it, attacking criminals it sees on the way (<see
-    /// cref="Crime.CrimeSystem"/>'s serial step). Wanted only while an alarm is in reach.
+    /// docs/game/economy.md "Town alarms"): runs to it, looks about there and clears it, attacking criminals it sees on the way
+    /// (<see cref="Crime.CrimeSystem"/>'s serial step). Wanted only while an alarm is in reach.
     /// </summary>
     Investigate = 16,
     /// <summary>
@@ -90,15 +90,15 @@ public enum AiBehaviour : byte
     /// </summary>
     Assault = 17,
     /// <summary>
-    /// SELF_PRESERVATION (32, every NPC's urgent goal, <see cref="SelfPreservation"/>): wanted at the threat level (<see
-    /// cref="Combat.CombatSystem.ThreatLevel"/>), planned as [35, 32] when its provider is 35 Running away (a crippled NPC, or one with no working
-    /// arm; acted out as <see cref="Flee"/>), else [13, 32] on its own attacker (acted out as a <see cref="Fight"/>).
+    /// SELF_PRESERVATION (32, every NPC's urgent goal, <see cref="SelfPreservation"/>): wanted at the threat level
+    /// (<see cref="Combat.CombatSystem.ThreatLevel"/>), planned as [35, 32] when its provider is 35 Running away (a crippled NPC, or one with no
+    /// working arm; acted out as <see cref="Flee"/>), else [13, 32] on its own attacker (acted out as a <see cref="Fight"/>).
     /// </summary>
     SelfPreserve = 18,
     /// <summary>
     /// RUN_AWAY (35, <c>Task_Runaway</c>): asks <see cref="FleeSystem"/> to run the character from its enemies (its first run, then hops, until it is
-    /// safe); a goal of the packages that list it ("Leader flees while guards fight", the police stations' slaves), wanted at row 35's desire (<see
-    /// cref="SelfPreservation.RunDesire"/>) while an enemy is near.
+    /// safe); a goal of the packages that list it ("Leader flees while guards fight", the police stations' slaves), wanted at row 35's desire
+    /// (<see cref="SelfPreservation.RunDesire"/>) while an enemy is near.
     /// </summary>
     Flee = 19,
     /// <summary>
@@ -109,9 +109,9 @@ public enum AiBehaviour : byte
     /// </summary>
     Fight = 20,
     /// <summary>
-    /// JOB_MEDIC (58, the Medic goal of most packages, docs/game/ai-tasks.md "Medic jobs"): wanted at the patient finder's score (<see
-    /// cref="FirstAid.FirstAidSystem.FindPatient"/>, run on the NPC's sweep turn and kept in <see cref="AiMind.MedicScore"/>); the think asks for the
-    /// treatment (<see cref="AiMind.MedicAsk"/>) and the serial step starts it, row 58's Treat.
+    /// JOB_MEDIC (58, the Medic goal of most packages, docs/game/ai-tasks.md "Medic jobs"): wanted at the patient finder's score
+    /// (<see cref="FirstAid.FirstAidSystem.FindPatient"/>, run on the NPC's sweep turn and kept in <see cref="AiMind.MedicScore"/>); the think asks
+    /// for the treatment (<see cref="AiMind.MedicAsk"/>) and the serial step starts it, row 58's Treat.
     /// </summary>
     Medic = 21,
     /// <summary>
@@ -128,8 +128,8 @@ public enum AiBehaviour : byte
     RescueLeader = 23,
     /// <summary>
     /// Crouches (CROUCH 27, <c>Task_Crouch</c>) or stands up from a crouch (STAND_UP 28, <c>Task_UnCrouch</c>) where it stands: the <c>squat T</c>
-    /// clip plays forwards or backwards and the animation stance's crouched byte is set once it passes 0.9 or cleared under 0.1 (<see
-    /// cref="AnimationSystem"/>). The base data lists neither goal; modded packages may.
+    /// clip plays forwards or backwards and the animation stance's crouched byte is set once it passes 0.9 or cleared under 0.1
+    /// (<see cref="AnimationSystem"/>). The base data lists neither goal; modded packages may.
     /// </summary>
     Crouch = 24,
     /// <summary>

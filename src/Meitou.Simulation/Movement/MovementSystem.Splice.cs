@@ -44,8 +44,7 @@ public sealed partial class MovementSystem
         {
             var b = new Vector2(path[i].X, path[i].Z);
             along += Vector2.Distance(a, b);
-            if (along > SpliceReach && i > cursor)
-                break;
+            if (along > SpliceReach && i > cursor) break;
 
             end = i;
             a = b;
@@ -63,8 +62,7 @@ public sealed partial class MovementSystem
         var a = at;
         for (int i = cursor; i < path.Length; i++)
         {
-            if (Crosses(a, [path[i]], 0, zones))
-                last = i;
+            if (Crosses(a, [path[i]], 0, zones)) last = i;
 
             a = path[i];
         }
@@ -92,8 +90,7 @@ public sealed partial class MovementSystem
     /// </summary>
     static bool TakeSpliceAnswer(IWalkability walk, ref CharacterHot n, CharacterCold cold, PathAnswer answer)
     {
-        if (answer.Id != cold.SpliceRequest)
-            return false;
+        if (answer.Id != cold.SpliceRequest) return false;
 
         var old = cold.SplicePath;
         cold.SpliceRequest = 0;
@@ -120,8 +117,7 @@ public sealed partial class MovementSystem
             : cold.PathExact == int.MaxValue ? int.MaxValue
             : added + Math.Max(cold.PathExact - (end + 1), 0);
 
-        if (head.Exact > 1)
-            cold.ProvisionalBlocked = 0;
+        if (head.Exact > 1) cold.ProvisionalBlocked = 0;
 
         n.PathCursor = Join(walk, n.Position, head.Points[0], cold.Path);
     }

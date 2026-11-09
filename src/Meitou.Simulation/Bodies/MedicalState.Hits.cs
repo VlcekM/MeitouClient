@@ -9,8 +9,8 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// The game's F10 debug heal (Meitou only, not the original's): every part whole (no wear, stun, bandage or splint), full blood, no wounds and no
-    /// KO time left and awake (also a character playing dead). A dead character stays dead; a stump or crushed limb stays one (<see
-    /// cref="RestoreLimbs"/> gives it back).
+    /// KO time left and awake (also a character playing dead). A dead character stays dead; a stump or crushed limb stays one
+    /// (<see cref="RestoreLimbs"/> gives it back).
     /// </summary>
     public void Heal(in MedicalContext ctx)
     {
@@ -192,11 +192,7 @@ public sealed partial class MedicalState
     /// The head was cut off by the blow that killed the character (Meitou, <see cref="BodyOptions.Decapitation"/>); saved as <c>meitou
     /// decapitated</c>.
     /// </summary>
-    public bool Decapitated
-    {
-        get;
-        private set;
-    }
+    public bool Decapitated { get; private set; }
 
     /// <summary>
     /// Cuts the head off a character the blow has just killed (<see cref="BodyOptions.Decapitation"/>): only the look changes, nothing drops.
@@ -210,9 +206,9 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// Cuts a limb off (<c>FUN_14064edc0</c>, <b>Verified</b>): the part becomes a stump (base HP 5), the character loses rand(5, 30) blood and gets
-    /// a wound of strength <c>bleed rate</c> x 200. A leg's stump is down, so a character standing (posture 0) is knocked out by <see
-    /// cref="LegCollapse"/>, which the caller runs after its checks. The caller awards the toughness XP (<see
-    /// cref="XpService.ToughnessFromLimbLoss"/>) and spawns the severed limb item from the race's <c>severed limbs</c>.
+    /// a wound of strength <c>bleed rate</c> x 200. A leg's stump is down, so a character standing (posture 0) is knocked out by
+    /// <see cref="LegCollapse"/>, which the caller runs after its checks. The caller awards the toughness XP
+    /// (<see cref="XpService.ToughnessFromLimbLoss"/>) and spawns the severed limb item from the race's <c>severed limbs</c>.
     /// </summary>
     public void Sever(int part, in MedicalContext ctx, List<MedicalEvent>? events = null)
     {
@@ -274,9 +270,9 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// Fits a prosthetic on the part of its slot (<c>FUN_1406445b0</c>): the part's base HP becomes the limb's HP at the item's level, its wear and
-    /// stun the item's, and its flesh the maximum less the item's damage (<paramref name="damage"/>, <paramref name="wear"/>, <paramref
-    /// name="stun"/>: the INVENTORY_ITEM_STATE <c>dam</c>, <c>wear</c>, <c>stun</c> a removed limb carries). Bandage and splint are cleared (an
-    /// engine choice).
+    /// stun the item's, and its flesh the maximum less the item's damage (<paramref name="damage"/>, <paramref name="wear"/>,
+    /// <paramref name="stun"/>: the INVENTORY_ITEM_STATE <c>dam</c>, <c>wear</c>, <c>stun</c> a removed limb carries). Bandage and splint are cleared
+    /// (an engine choice).
     /// </summary>
     public bool FitReplacement(LimbReplacement limb, Items.ItemInstance? item, float damage = 0, float wear = 0, float stun = 0)
     {

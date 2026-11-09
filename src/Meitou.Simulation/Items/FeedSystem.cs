@@ -113,8 +113,8 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     }
 
     /// <summary>
-    /// The hunger at or under which a player animal looks for food on the ground (259's desire, medical hunger <= 2.4, <b>Verified</b>), and under
-    /// which it does so in a fight (1.2).
+    /// The hunger at or under which a player animal looks for food on the ground (259's desire, medical hunger
+    /// <= 2.4, <b>Verified</b>), and under which it does so in a fight (1.2).
     /// </summary>
     public const float FoodOnGroundBelow = 2.4f, FoodOnGroundInFight = 1.2f;
     /// <summary>

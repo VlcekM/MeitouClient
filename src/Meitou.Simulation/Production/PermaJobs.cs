@@ -41,8 +41,8 @@ public sealed record PermaJob(TaskType Type, string? Site, Hand Saved)
 public static class PermaJobs
 {
     /// <summary>
-    /// A TaskData row's job fields: +4 <paramref name="Kind"/> (2: also runs before urgent tasks), +8 <paramref name="PerTarget"/>, +0xc <paramref
-    /// name="Job"/>, +0x10 <paramref name="Companion"/> (0: none).
+    /// A TaskData row's job fields: +4 <paramref name="Kind"/> (2: also runs before urgent tasks), +8 <paramref name="PerTarget"/>, +0xc
+    /// <paramref name="Job"/>, +0x10 <paramref name="Companion"/> (0: none).
     /// </summary>
     readonly record struct Rule(int Kind, bool PerTarget, TaskType Job, TaskType Companion);
 

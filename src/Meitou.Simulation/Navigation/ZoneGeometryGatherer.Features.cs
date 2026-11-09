@@ -14,8 +14,8 @@ internal sealed partial class ZoneGeometryGatherer
     /// The collision of the map features (<c>features.dat</c>: rocks, cliffs, the Rebirth statue, gravel piles, trestle bridges) placed in the zone
     /// and its eight neighbours, walkable up to the terrain's slope like walkable foliage (docs/game/pathfinding.md, "Map features"): an owner-less
     /// collision object, group 14, material −1 to the original's generator, cutting and walkable. A closed convex shape is a <see cref="NavSolid"/>;
-    /// a triangle mesh a
-    /// <see cref="NavMeshSolid"/>, so the ground inside the rock is removed (Observed: Rebirth, zone 21.19, the statue's foundation and the gravel piles).
+    /// a triangle mesh a <see cref="NavMeshSolid"/>, so the ground inside the rock is removed (Observed: Rebirth, zone 21.19, the statue's foundation
+    /// and the gravel piles).
     /// </summary>
     void AddMapFeatures(ZoneGeometry g)
     {
@@ -23,8 +23,7 @@ internal sealed partial class ZoneGeometryGatherer
         foreach (var zone in FoliageRing(g.Zone))
         {
             int index = zone.Y * WorldLayout.ZoneCount + zone.X;
-            if (index >= features.Zones.Count)
-                continue;
+            if (index >= features.Zones.Count) continue;
 
             for (int i = 0; i < features.Zones[index].Count; i++)
                 AddMapFeature(g, features.Zones[index][i]);
@@ -36,14 +35,11 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     void AddMapFeature(ZoneGeometry g, MapFeature f)
     {
-        if (_db.Find(f.StringId) is not { Type: FcsRecordType.MapFeatures } record)
-            return;
+        if (_db.Find(f.StringId) is not { Type: FcsRecordType.MapFeatures } record) return;
 
-        if (record.GetPath("collision") is not { Length: > 0 } path)
-            return;
+        if (record.GetPath("collision") is not { Length: > 0 } path) return;
 
-        if (_collision.Get(path) is not { } prepared)
-            return;
+        if (_collision.Get(path) is not { } prepared) return;
 
         var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
         int solids = g.Solids.Count;
@@ -51,8 +47,7 @@ internal sealed partial class ZoneGeometryGatherer
         foreach (var shape in prepared.Shapes)
             AddShape(g, shape, node, TerrainSlopeDegrees, carve: false, meshSolid: true);
 
-        if (g.Solids.Count > solids || g.MeshSolids.Count > meshSolids)
-            g.Stats.MapFeatures++;
+        if (g.Solids.Count > solids || g.MeshSolids.Count > meshSolids) g.Stats.MapFeatures++;
 
         string owner = $"feature {record.Name} [{f.StringId}]";
         for (int k = solids; k < g.Solids.Count; k++)
@@ -79,8 +74,7 @@ internal sealed partial class ZoneGeometryGatherer
         foreach (var near in FoliageRing(zone))
         {
             int index = near.Y * WorldLayout.ZoneCount + near.X;
-            if (index >= features.Zones.Count)
-                continue;
+            if (index >= features.Zones.Count) continue;
 
             foreach (var f in features.Zones[index])
                 AddRagdollFeature(zone, f, output);
@@ -92,14 +86,11 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     void AddRagdollFeature(ZoneCoordinate zone, MapFeature f, List<Vector3> output)
     {
-        if (_db.Find(f.StringId) is not { Type: FcsRecordType.MapFeatures } record)
-            return;
+        if (_db.Find(f.StringId) is not { Type: FcsRecordType.MapFeatures } record) return;
 
-        if (record.GetPath("collision") is not { Length: > 0 } path)
-            return;
+        if (record.GetPath("collision") is not { Length: > 0 } path) return;
 
-        if (_collision.Get(path) is not { } prepared)
-            return;
+        if (_collision.Get(path) is not { } prepared) return;
 
         var node = WorldObjectLayout.InstanceTransform(f.Position, f.Rotation, f.Scale);
         foreach (var shape in prepared.Shapes)
@@ -110,8 +101,7 @@ internal sealed partial class ZoneGeometryGatherer
                 Vector3 b = Vector3.Transform(shape.Vertices[shape.Indices[t + 1]], node);
                 Vector3 c = Vector3.Transform(shape.Vertices[shape.Indices[t + 2]], node);
                 var centre = (a + b + c) / 3;
-                if (WorldLayout.ZoneOf(centre.X, centre.Z) != zone)
-                    continue;
+                if (WorldLayout.ZoneOf(centre.X, centre.Z) != zone) continue;
 
                 output.Add(a);
                 output.Add(b);
@@ -133,8 +123,7 @@ internal sealed partial class ZoneGeometryGatherer
             Vector3 c = pts[idx[t + 2]];
 
             // Vertical: no height over a cell.
-            if (MathF.Abs((b.X - a.X) * (c.Z - a.Z) - (b.Z - a.Z) * (c.X - a.X)) < 1e-6f)
-                continue;
+            if (MathF.Abs((b.X - a.X) * (c.Z - a.Z) - (b.Z - a.Z) * (c.X - a.X)) < 1e-6f) continue;
 
             tris.Add(a);
             tris.Add(b);

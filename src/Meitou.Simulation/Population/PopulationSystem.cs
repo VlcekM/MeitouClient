@@ -121,8 +121,8 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
 
     readonly WorldStates _live;
     /// <summary>
-    /// The world states the population's spawns and campaigns read: the data's fixed ones when it has any, else the live ones of this world (<see
-    /// cref="WorldStates"/>).
+    /// The world states the population's spawns and campaigns read: the data's fixed ones when it has any, else the live ones of this world
+    /// (<see cref="WorldStates"/>).
     /// </summary>
     public IWorldStates States => ReferenceEquals(_data.States, IWorldStates.None) ? _live : _data.States;
 

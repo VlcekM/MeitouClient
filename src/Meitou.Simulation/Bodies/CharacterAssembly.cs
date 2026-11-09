@@ -55,8 +55,8 @@ sealed class CharacterAssembly(PopulationData data)
     public GameRecord? RaceOf(string recordId, CharacterAppearance? look) => RaceRecord(data.Db, recordId, look);
 
     /// <summary>
-    /// The top speed a character starts with: the 45 of a creature without a race. A character with a race gets its real top speed from <see
-    /// cref="Attach"/> (docs/game/pathfinding.md "Speed"), so the lerp over the race's speed skills that stood in for it before stats existed is
+    /// The top speed a character starts with: the 45 of a creature without a race. A character with a race gets its real top speed from
+    /// <see cref="Attach"/> (docs/game/pathfinding.md "Speed"), so the lerp over the race's speed skills that stood in for it before stats existed is
     /// gone.
     /// </summary>
     public const float StandInMaxSpeed = 45;
@@ -67,9 +67,9 @@ sealed class CharacterAssembly(PopulationData data)
     public static float WalkSpeed(GameRecord? race) => race?.GetFloat("walk speed", 15) ?? 15;
 
     /// <summary>
-    /// The weapons (the first of the hip and of the back section; quality the level x 0.01; which is in hand goes by the arms, <see
-    /// cref="Fighter.Weapon"/>) and the worn armour (quality / 100), docs/simulation.md "Combat". The fists' length is the race's <c>fists lv1</c>
-    /// WEAPON's, else <c>FISTS</c>' (docs/game/combat.md "Attack technique choice").
+    /// The weapons (the first of the hip and of the back section; quality the level x 0.01; which is in hand goes by the arms,
+    /// <see cref="Fighter.Weapon"/>) and the worn armour (quality / 100), docs/simulation.md "Combat". The fists' length is the race's <c>fists
+    /// lv1</c> WEAPON's, else <c>FISTS</c>' (docs/game/combat.md "Attack technique choice").
     /// </summary>
     Fighter MakeFighter(Inventory inventory, MedicalState? medical, string? raceId)
     {

@@ -278,11 +278,10 @@ public sealed partial class CombatSystem
     /// The fight threat of a character (<c>FUN_14099a190</c> on its <c>CombatClassAI</c>, <b>Verified</b>; docs/game/ai-tasks.md "Combat goals"), the
     /// value the protect finders give an ally or squad mate (143, 15, 288): 0 when it is down; 0.01 when exactly one attacker fights it and someone
     /// else already fights that attacker; else 0.25 n - 0.2 for n attackers (at most 5; none: 0), raised to 0.1 x the threat sum of its senses
-    /// (<see cref="SenseBlock.ThreatToMe"/>,
-    /// <paramref name="senses"/>, its own); and 0.01 at least while it is in a fight. Engine reading: n is every standing fighter whose target it is
-    /// (<see cref="AttackerCount"/>; the original counts its engaged list of askers, at most 5), and "someone else fights the attacker" is that
-    /// attacker's own count above 1 (the original adds its refused askers, an approximation); Meitou's threat sum adds 1 per threat where the
-    /// original adds its aggression. As of the last tick; any thread after Schedule.
+    /// (<see cref="SenseBlock.ThreatToMe"/>, <paramref name="senses"/>, its own); and 0.01 at least while it is in a fight. Engine reading: n is
+    /// every standing fighter whose target it is (<see cref="AttackerCount"/>; the original counts its engaged list of askers, at most 5), and
+    /// "someone else fights the attacker" is that attacker's own count above 1 (the original adds its refused askers, an approximation); Meitou's
+    /// threat sum adds 1 per threat where the original adds its aggression. As of the last tick; any thread after Schedule.
     /// </summary>
     public float FightThreat(World world, int slot, SenseBlock? senses)
     {
@@ -366,9 +365,8 @@ public sealed partial class CombatSystem
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
     /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>), within <see cref="SameFloorHeight"/> in height, and
-    /// every
-    /// <see cref="SteerLineStep"/> of the straight line between them walkable from the last (engine stand-in for the navmesh line query). Last tick's places;
-    /// any thread after Sight's update.
+    /// every <see cref="SteerLineStep"/> of the straight line between them walkable from the last (engine stand-in for the navmesh line query). Last
+    /// tick's places; any thread after Sight's update.
     /// </summary>
     public bool SteersAt(World world, int a, int t)
     {

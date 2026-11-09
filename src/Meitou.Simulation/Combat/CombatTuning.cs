@@ -17,8 +17,8 @@ public static class CombatTuning
     /// <summary>
     /// The clip progress past which a swing is finished and the wait after it starts (<b>Verified</b>, 0.98 read from the binary:
     /// <c>FUN_14060a590</c> arms +0x144 once <c>FUN_1405b4c00</c> reports the clip done); the wait runs only while no clip is busy
-    /// (<c>FUN_1405b34b0</c>: progress under the technique's
-    /// <c>acceptable end time</c>, a 0 there is never busy), so it starts at the later of the two. A data 0 (many mods) does not end the swing at once.
+    /// (<c>FUN_1405b34b0</c>: progress under the technique's <c>acceptable end time</c>, a 0 there is never busy), so it starts at the later of the
+    /// two. A data 0 (many mods) does not end the swing at once.
     /// </summary>
     public const float SwingFinished = 0.98f;
 

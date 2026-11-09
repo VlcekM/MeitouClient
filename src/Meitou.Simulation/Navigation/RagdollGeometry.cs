@@ -51,8 +51,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     {
         _gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install), runtime) { IncludeFoliage = false };
         this._runtime = runtime;
-        if (runtime is not null)
-            runtime.Changed += Changed;
+        if (runtime is not null) runtime.Changed += Changed;
 
         _terrain = terrainHeight;
         try
@@ -81,16 +80,14 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     public float GroundHeight(float x, float z, float nearY)
     {
-        if (_map is null)
-            return _terrain(x, z);
+        if (_map is null) return _terrain(x, z);
 
         var (column, row) = WorldLayout.ToSample(x, z);
         int bx = (int)Math.Floor(column / BlockSamples);
         int bz = (int)Math.Floor(row / BlockSamples);
         if (!_blocks.TryGetValue((bx, bz), out var block))
         {
-            if (_blocks.Count >= MaxBlocks)
-                _blocks.Clear();
+            if (_blocks.Count >= MaxBlocks) _blocks.Clear();
 
             block = _map.ReadWindow(bx * BlockSamples, bz * BlockSamples, BlockSamples + 1, BlockSamples + 1);
             _blocks[(bx, bz)] = block;
@@ -122,8 +119,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
             for (int zx = first.X; zx <= last.X; zx++)
             {
                 var zone = new ZoneCoordinate(zx, zy);
-                if (!zone.IsInsideGrid)
-                    continue;
+                if (!zone.IsInsideGrid) continue;
 
                 _used[(zone, roofs)] = Interlocked.Increment(ref _clock);
                 var task = _zones.GetOrAdd((zone, roofs), k => Task.Run(() => Gather(k.Zone, k.Roofs)));
@@ -151,8 +147,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         {
             for (int z = cz0; z <= cz1; z++)
             {
-                if (cells.TryGetValue((x, z), out var cell))
-                    triangles.AddRange(cell);
+                if (cells.TryGetValue((x, z), out var cell)) triangles.AddRange(cell);
             }
         }
     }
@@ -182,8 +177,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
             {
                 for (int z = Cell(lo.Z); z <= Cell(hi.Z); z++)
                 {
-                    if (!cells.TryGetValue((x, z), out var list))
-                        cells[(x, z)] = list = [];
+                    if (!cells.TryGetValue((x, z), out var list)) cells[(x, z)] = list = [];
 
                     list.Add(a);
                     list.Add(b);
@@ -197,8 +191,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 
     void Evict()
     {
-        if (_zones.Count <= MaxZones)
-            return;
+        if (_zones.Count <= MaxZones) return;
 
         foreach (var (zone, _) in _used.OrderBy(u => u.Value).Take(_zones.Count - MaxZones).ToList())
         {
@@ -209,8 +202,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 
     public void Dispose()
     {
-        if (_runtime is not null)
-            _runtime.Changed -= Changed;
+        if (_runtime is not null) _runtime.Changed -= Changed;
 
         foreach (var task in _zones.Values)
         {

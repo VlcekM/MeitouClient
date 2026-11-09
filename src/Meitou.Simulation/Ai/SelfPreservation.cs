@@ -4,8 +4,8 @@ using Meitou.Simulation.Combat;
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// Self preservation (goal 32, docs/game/ai-tasks.md "Self preservation"), every character's urgent goal: its desire is the threat level (<see
-/// cref="Combat.CombatSystem.ThreatLevel"/>) and it is achieved by the first provider of <c>!isAggressionTowardsMe</c> the planner reaches: 13
+/// Self preservation (goal 32, docs/game/ai-tasks.md "Self preservation"), every character's urgent goal: its desire is the threat level
+/// (<see cref="Combat.CombatSystem.ThreatLevel"/>) and it is achieved by the first provider of <c>!isAggressionTowardsMe</c> the planner reaches: 13
 /// "Attacking attackers of" (which leads to 4 Attacking; Meitou: the AI's serial step starts the fight on its own attacker, <see cref="AiSystem"/>)
 /// or 35 "Running away" (<see cref="FleeSystem"/> runs). This holds the two rows' desires and the planner's choice between them, which depends only
 /// on the character's body. The player's characters are the player's to drive (the original's veto for them, which wants no working arm, is not
@@ -80,8 +80,8 @@ public static class SelfPreservation
     static float Value(float level, float desire) => MathF.Min(level, desire) + desire;
 
     /// <summary>
-    /// Whether this character flees under Self preservation when threatened: an NPC with an AI whose body takes the choice to 35 (<see
-    /// cref="Runs"/>).
+    /// Whether this character flees under Self preservation when threatened: an NPC with an AI whose body takes the choice to 35
+    /// (<see cref="Runs"/>).
     /// </summary>
     public static bool Flees(CharacterCold cold, float level, bool walled = false) =>
         !cold.IsPlayer && cold.Ai is not null && Runs(cold, level, walled);

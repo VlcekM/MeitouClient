@@ -29,8 +29,7 @@ public sealed class NavDoors
     public void Set(string buildingInstance, bool closed)
     {
         var state = _doors.GetOrAdd(buildingInstance, _ => new State());
-        if (state.Closed == closed)
-            return;
+        if (state.Closed == closed) return;
 
         state.Closed = closed;
         Interlocked.Increment(ref _version);

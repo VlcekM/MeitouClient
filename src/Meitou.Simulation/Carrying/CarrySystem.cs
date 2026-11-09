@@ -21,14 +21,14 @@ namespace Meitou.Simulation.Carrying;
 /// <item><b>The link</b>: <see cref="CharacterCold.Carrying"/> on the carrier and <see cref="CharacterCold.CarriedBy"/> on the body, set and cleared
 /// together, in serial phases only. The body is always on the left shoulder (the original's side setter, <b>Verified</b>), so a carrier needs a
 /// usable left arm. The body keeps the carrier's position (the renderer is told the bone, <see cref="AttachBone"/>), weighs <c>carry person
-/// weight</c> in the carrier's load (<see cref="BodySystem"/>) and lifts a carrier's speed mode from walk to run (<see
-/// cref="MovementSystem"/>).</item>
+/// weight</c> in the carrier's load (<see cref="BodySystem"/>) and lifts a carrier's speed mode from walk to run
+/// (<see cref="MovementSystem"/>).</item>
 /// <item><b>Pick up</b> (<see cref="CharacterTask.PickUp"/>): the walk to the body (the first aid pattern), then the <c>shoulder lift left</c> clip:
 /// attached at 0.4 of it, done at 0.95. <b>Put down</b> (<see cref="CharacterTask.PutDown"/>): the clip backwards, let go below 0.2; a body the
 /// carrier does not regard as friendly is knocked out again.</item>
 /// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A body that comes round is put down by
-/// an NPC carrier when the carrier's lists hold goal 169 (<see cref="ListsPutDown"/>) unless it is chained and the carrier's enemy (<see
-/// cref="WakesIntoPutDown"/>); any other rides on awake (a player-side body that is no friend is knocked out again on the shoulder, engine choice); a
+/// an NPC carrier when the carrier's lists hold goal 169 (<see cref="ListsPutDown"/>) unless it is chained and the carrier's enemy
+/// (<see cref="WakesIntoPutDown"/>); any other rides on awake (a player-side body that is no friend is knocked out again on the shoulder, engine choice); a
 /// player-side carrier sets only a friendly one down. A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until put
 /// down.</item>
 /// <item><b>Rescue</b>: the rescue job, and NPC squads' knocked-out leaders (<see cref="CarrySettings.RescueNpcLeaders"/>).</item>
@@ -72,39 +72,23 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// <summary>
     /// The live relation table: with it an ally counts as friendly. Null: only the same faction does.
     /// </summary>
-    public FactionRelations? Relations
-    {
-        get;
-        set;
-    }
+    public FactionRelations? Relations { get; set; }
 
     /// <summary>
     /// The crime system a player's looting is reported to (a pending Looting; null: no crimes).
     /// </summary>
-    public Crime.CrimeSystem? Crimes
-    {
-        get;
-        set;
-    }
+    public Crime.CrimeSystem? Crimes { get; set; }
 
     /// <summary>
     /// Re-dresses a character whose worn gear the loot window moved (null: the looks and fighters stay).
     /// </summary>
-    internal CharacterAssembly? Assembly
-    {
-        get;
-        set;
-    }
+    internal CharacterAssembly? Assembly { get; set; }
 
     /// <summary>
     /// The game data, to price money taken out of a loot (<see cref="PlayerSystem.Cash(World, PopulationData?, ItemInstance, int)"/>); null: money
     /// moves as an item.
     /// </summary>
-    internal PopulationData? Data
-    {
-        get;
-        set;
-    }
+    internal PopulationData? Data { get; set; }
     readonly BodyOptions _bodyOptions = options;
     readonly List<LootEntry> _loots = [];
 
@@ -124,8 +108,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     #region Rules
 
     /// <summary>
-    /// Whether the left arm can carry (the original's <c>isCarryingArmOK</c>, the medical object's left-arm byte, <see
-    /// cref="MedicalState.ArmWorks"/>; <b>Verified</b>: the bit and the three writers, docs/game/carry-loot.md). The right arm does not matter.
+    /// Whether the left arm can carry (the original's <c>isCarryingArmOK</c>, the medical object's left-arm byte,
+    /// <see cref="MedicalState.ArmWorks"/>; <b>Verified</b>: the bit and the three writers, docs/game/carry-loot.md). The right arm does not matter.
     /// </summary>
     public static bool LeftArmUsable(MedicalState medical) => medical.ArmWorks(left: true);
 
@@ -167,8 +151,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         cold is { Medical.Incapacitated: true, Race.Carriable: true, IsImprisoned: false } && !cold.CarriedBy.IsNone;
 
     /// <summary>
-    /// Whether the lift of the carrier in <paramref name="carrier"/> may still take the body in <paramref name="body"/>: <see
-    /// cref="CanBeLifted(World, CharacterCold)"/>, or a snatch from another carrier.
+    /// Whether the lift of the carrier in <paramref name="carrier"/> may still take the body in <paramref name="body"/>:
+    /// <see cref="CanBeLifted(World, CharacterCold)"/>, or a snatch from another carrier.
     /// </summary>
     static bool Liftable(World world, int carrier, int body)
     {
@@ -189,8 +173,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             && world.Fixtures.Find(id) is { } cage && cage.Lock is not { EffectivelyLocked: true } ? cage : null;
 
     /// <summary>
-    /// How near a carrier must come to lift a body: <see cref="CarrySettings.Reach"/>, or for a caged one the cage's <c>use range</c> + <see
-    /// cref="Locks.LockSystem.Reach"/> (the cage is in the way).
+    /// How near a carrier must come to lift a body: <see cref="CarrySettings.Reach"/>, or for a caged one the cage's <c>use range</c> +
+    /// <see cref="Locks.LockSystem.Reach"/> (the cage is in the way).
     /// </summary>
     float ReachOf(World world, CharacterCold body) =>
         body.IsImprisoned && body.InWhat is { } id && world.Fixtures.Find(id) is { } cage
@@ -216,8 +200,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Another faction's character that is not down but whose inventory Loot (26) opens as a pickpocket: asleep (the original's state 1) or
-    /// imprisoned (state 2), not carried (docs/game/ui-input.md "Context menu verbs"); what is taken from it rolls the steal check (<see
-    /// cref="Crime.CrimeSystem.Pickpocket"/>).
+    /// imprisoned (state 2), not carried (docs/game/ui-input.md "Context menu verbs"); what is taken from it rolls the steal check
+    /// (<see cref="Crime.CrimeSystem.Pickpocket"/>).
     /// </summary>
     public static bool CanBePickpocketed(CharacterTable table, int slot) =>
         table.Cold(slot) is { IsPlayer: false, Inventory: not null, Medical.Incapacitated: false } c && c.CarriedBy.IsNone
@@ -249,8 +233,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Whether <paramref name="a"/> is within <paramref name="reach"/> of <paramref name="b"/> (<see cref="Gap"/>) on its floor: no more than <see
-    /// cref="MovementSystem.FloorSlack"/> apart in height, so a body on the floor below is walked down to, not reached through the floor (#292).
+    /// Whether <paramref name="a"/> is within <paramref name="reach"/> of <paramref name="b"/> (<see cref="Gap"/>) on its floor: no more than
+    /// <see cref="MovementSystem.FloorSlack"/> apart in height, so a body on the floor below is walked down to, not reached through the floor (#292).
     /// Outdoors at this reach the height only parts a cliff's top from its foot. A body's height is its ragdoll root's, which a big body holds well
     /// off the ground: the floor under it counts too (<see cref="FloorUnder"/>).
     /// </summary>
@@ -260,16 +244,16 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     static bool Level(float a, float b) => MathF.Abs(a - b) <= MovementSystem.FloorSlack;
 
     /// <summary>
-    /// The floor a body at <paramref name="body"/> lies over: the walkable surface under its point (<see cref="IWalkability.GroundHeight(float,
-    /// float, float)"/>), so a storey above stays apart. <b>Observed</b> (Gigachad save, a downed Cleanser Unit, Big-Bones, frozen on a slope): its
-    /// root is 67 over the terrain under it, and a looter standing there never reached it.
+    /// The floor a body at <paramref name="body"/> lies over: the walkable surface under its point
+    /// (<see cref="IWalkability.GroundHeight(float, float, float)"/>), so a storey above stays apart. <b>Observed</b> (Gigachad save, a downed
+    /// Cleanser Unit, Big-Bones, frozen on a slope): its root is 67 over the terrain under it, and a looter standing there never reached it.
     /// </summary>
     static float FloorUnder(World world, Vector3 body) => world.Walkability.GroundHeight(body.X, body.Z, body.Y);
 
     /// <summary>
-    /// Where a carrier walks to reach a body at <paramref name="body"/>: a floor point (<see cref="IWalkability.FloorNear"/>) within <see
-    /// cref="MovementSystem.FloorSlack"/> of the body's height, asked at the body's height and then lower. A body lying on furniture (a counter, a
-    /// table) is over the hole the furniture cuts in the floor, where a walker's height snaps to the storey above (<b>Observed</b>: a body 16 over
+    /// Where a carrier walks to reach a body at <paramref name="body"/>: a floor point (<see cref="IWalkability.FloorNear"/>) within
+    /// <see cref="MovementSystem.FloorSlack"/> of the body's height, asked at the body's height and then lower. A body lying on furniture (a counter,
+    /// a table) is over the hole the furniture cuts in the floor, where a walker's height snaps to the storey above (<b>Observed</b>: a body 16 over
     /// the Hub bar's floor, under its upper floor 38 over it, was walked to upstairs and never reached). The body's own point when no floor is found.
     /// </summary>
     static Vector3 Approach(World world, Vector3 body)
@@ -381,9 +365,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// The carry orders' checks: the target must still fit the verb (else the order leaves the queue); the character must be able to lift (<see
-    /// cref="CanCarry"/>, ordered: a fight ends with the order's task), loot (awake, an inventory, not carried), knock out (<see
-    /// cref="CanKnockOut"/>) or put down (awake); the Rescue button needs a rescuer (not fleeing, able to lift, not on Hold) and a free bed.
+    /// The carry orders' checks: the target must still fit the verb (else the order leaves the queue); the character must be able to lift
+    /// (<see cref="CanCarry"/>, ordered: a fight ends with the order's task), loot (awake, an inventory, not carried), knock out
+    /// (<see cref="CanKnockOut"/>) or put down (awake); the Rescue button needs a rescuer (not fleeing, able to lift, not on Hold) and a free bed.
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -470,9 +454,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Starts a pick-up of <paramref name="body"/> by the character in <paramref name="carrier"/> (serial phases; the arrest and kidnap systems'
-    /// lift), going back to <paramref name="resume"/> afterwards: false when it cannot carry or the body cannot be lifted. With <paramref
-    /// name="kidnap"/> a sleeper may be taken too (<see cref="CanBeKidnapped"/>): the lift is then a kidnap, which rolls on arrival. A job's lift
-    /// (<paramref name="source"/> <see cref="TaskSource.Job"/>, a carrying errand) names its <paramref name="job"/> and <paramref name="row"/>.
+    /// lift), going back to <paramref name="resume"/> afterwards: false when it cannot carry or the body cannot be lifted. With
+    /// <paramref name="kidnap"/> a sleeper may be taken too (<see cref="CanBeKidnapped"/>): the lift is then a kidnap, which rolls on arrival. A
+    /// job's lift (<paramref name="source"/> <see cref="TaskSource.Job"/>, a carrying errand) names its <paramref name="job"/> and
+    /// <paramref name="row"/>.
     /// </summary>
     public bool BeginPickUp(World world, int carrier, CharacterId body, CharacterTask resume = CharacterTask.Idle, bool kidnap = false,
         TaskSource source = TaskSource.Npc, int job = -1, TaskType? row = null)
@@ -566,8 +551,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// Starts a pick-up, a loot or a stealth knock-out of <paramref name="target"/> as row <paramref name="row"/> through <see
-    /// cref="TaskStart.Start"/>: false when the row is not the character's.
+    /// Starts a pick-up, a loot or a stealth knock-out of <paramref name="target"/> as row <paramref name="row"/> through
+    /// <see cref="TaskStart.Start"/>: false when the row is not the character's.
     /// </summary>
     static bool Start(World world, int slot, CharacterTask task, TaskType row, TaskSource source, CharacterId target, CharacterTask resume,
         int job = -1) =>
@@ -884,8 +869,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Ends a link (serial). <paramref name="drop"/>: the body falls where the carrier stands (the carrier went down, lost its arm or turned to
-    /// fight); else it is set down beside the carrier and, when the carrier does not regard it as friendly, knocked out again (<see
-    /// cref="MedicalState.PutDownKoSeconds"/>). <paramref name="released"/>: the put-down ran its course (its update's release,
+    /// fight); else it is set down beside the carrier and, when the carrier does not regard it as friendly, knocked out again
+    /// (<see cref="MedicalState.PutDownKoSeconds"/>). <paramref name="released"/>: the put-down ran its course (its update's release,
     /// <c>FUN_1403504f0</c>), which also spares a chained slave of the carrier's faction (<c>FUN_14032e2a0</c>); a put-down cut short (its end
     /// handler, <c>FUN_1403509f0</c>) has no such test.
     /// </summary>
@@ -1072,8 +1057,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// The open-loot walker's window opens: <see cref="PlayerState.OpenLoot"/> is its body, and the looter holds it (<see
-    /// cref="LootStart.WindowHeld"/>).
+    /// The open-loot walker's window opens: <see cref="PlayerState.OpenLoot"/> is its body, and the looter holds it
+    /// (<see cref="LootStart.WindowHeld"/>).
     /// </summary>
     static void OpenWindow(PlayerState player, CharacterCold cold)
     {
@@ -1097,9 +1082,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// The looter holding the open window (<c>Task_Loot_Order</c>'s update, <c>FUN_140354ef0</c>): it stays in the task, with no other task, while
-    /// the window stays open, and ends it when the window closes or a melee threat is within 40 (Character <c>+0x2b0</c>, <see
-    /// cref="CharacterFacts.ImmediateThreat"/>). Only this held phase tests the threat, not the walk to the body (#372). The task's end closes the
-    /// window (<see cref="CloseHeldWindow"/>).
+    /// the window stays open, and ends it when the window closes or a melee threat is within 40 (Character <c>+0x2b0</c>,
+    /// <see cref="CharacterFacts.ImmediateThreat"/>). Only this held phase tests the threat, not the walk to the body (#372). The task's end closes
+    /// the window (<see cref="CloseHeldWindow"/>).
     /// </summary>
     static void HoldWindow(World world, int i, CharacterCold cold)
     {
@@ -1121,9 +1106,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// What a loot of <paramref name="taken"/> items sets off: being seen by the victim's faction (true), the pending Looting crime, the <see
-    /// cref="Loots"/> entry. No relation event: none of the game's relation events comes from looting (docs/game/factions-squads-towns.md 3.5); the
-    /// crime's witnesses do the rest.
+    /// What a loot of <paramref name="taken"/> items sets off: being seen by the victim's faction (true), the pending Looting crime, the
+    /// <see cref="Loots"/> entry. No relation event: none of the game's relation events comes from looting (docs/game/factions-squads-towns.md 3.5);
+    /// the crime's witnesses do the rest.
     /// </summary>
     bool Looted(World world, CharacterTable table, int i, int t, int taken, int left, bool crime = true)
     {
@@ -1166,9 +1151,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// A right click on an item of the open loot (its grids, bag or worn gear): units into the looter's inventory (<see
-    /// cref="InventoryCommands.MoveInto"/>; what does not fit stays), marked stolen when the take marks (<see cref="Crime.CrimeSystem.MarksTheft"/>,
-    /// an unmarked item only). Gear changing hands re-dresses both.
+    /// A right click on an item of the open loot (its grids, bag or worn gear): units into the looter's inventory
+    /// (<see cref="InventoryCommands.MoveInto"/>; what does not fit stays), marked stolen when the take marks
+    /// (<see cref="Crime.CrimeSystem.MarksTheft"/>, an unmarked item only). Gear changing hands re-dresses both.
     /// </summary>
     void TakeLoot(World world, TakeLootItem take)
     {
@@ -1243,9 +1228,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         OpenLootPair(world) is var (i, t) ? (world.Characters.IdOf(i), world.Characters.IdOf(t)) : null;
 
     /// <summary>
-    /// A held item that came out of the open loot's body went to someone else (placed in a window or given; its stolen mark is the held item's, <see
-    /// cref="PlayerState.Held"/>): a death item butchers a live body (<paramref name="death"/>: it was one), and the looting may be seen (<see
-    /// cref="Looted"/>), as a right click's take.
+    /// A held item that came out of the open loot's body went to someone else (placed in a window or given; its stolen mark is the held item's,
+    /// <see cref="PlayerState.Held"/>): a death item butchers a live body (<paramref name="death"/>: it was one), and the looting may be seen
+    /// (<see cref="Looted"/>), as a right click's take.
     /// </summary>
     internal void TookHeld(World world, bool death)
     {
@@ -1549,10 +1534,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     /// <summary>
     /// Goal 142's finder (<c>FUN_140598540</c>) with its list B state 101 (<c>isLeaderDown</c>) and the lift row's state 7: the slot of the
-    /// character's squad leader when it is not the character itself, not dead, down and one the lift can take (<see
-    /// cref="CanBeLifted(CharacterCold)"/>: out cold, a carriable race, free; engine cap: the original's state 101 also counts a crippled or carried
-    /// leader and its state 7 a crawling one, which Meitou's lift does not take), and the character carries nothing (the goal's done state 48); -1
-    /// for none.
+    /// character's squad leader when it is not the character itself, not dead, down and one the lift can take
+    /// (<see cref="CanBeLifted(CharacterCold)"/>: out cold, a carriable race, free; engine cap: the original's state 101 also counts a crippled or
+    /// carried leader and its state 7 a crawling one, which Meitou's lift does not take), and the character carries nothing (the goal's done state
+    /// 48); -1 for none.
     /// </summary>
     public static int LeaderToRescue(World world, int slot)
     {

@@ -154,15 +154,15 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     public const uint UpperContentsMask = 0x760000;
 
-    /// <param name="floor">For a layout object: the floor it stands on (its state's <c>floornum</c>), the object floor of <see
-    /// cref="CollisionGroup"/>.</param>
+    /// <param name="floor">For a layout object: the floor it stands on (its state's <c>floornum</c>), the object floor of
+    /// <see cref="CollisionGroup"/>.</param>
     /// <param name="open">
     /// Exterior gather: the placed building (for a layout object, its building) has no real interior (<see cref="InteriorOf"/>), so every shape of a
     /// WALKABLE building is walkable, not only its floor-0 parts and furniture (docs/game/pathfinding.md, "Generator", building shapes; Observed:
     /// Heft's Shield Bridge, an `is stairs` part, was an obstacle, issue #141).
     /// </param>
-    /// <param name="upper">Exterior gather: its interior is blank and it is no wall or gate, so its upper-floor contents (<see
-    /// cref="UpperContentsMask"/>) are gathered too.</param>
+    /// <param name="upper">Exterior gather: its interior is blank and it is no wall or gate, so its upper-floor contents
+    /// (<see cref="UpperContentsMask"/>) are gathered too.</param>
     void AddBuilding(ZoneGeometry g, GameRecord building, string placementId, Vector3 position, Quaternion rotation, bool destroyed,
             InteriorContext? interior = null, int? floor = null, bool open = false, bool upper = false)
     {
@@ -271,8 +271,8 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     const float CarverDrop = 60;
 
-    /// <param name="meshSolid">A triangle mesh that encloses a volume (a map feature's rock, walkable foliage) also removes the floor inside it (<see
-    /// cref="NavMeshSolid"/>).</param>
+    /// <param name="meshSolid">A triangle mesh that encloses a volume (a map feature's rock, walkable foliage) also removes the floor inside it
+    /// (<see cref="NavMeshSolid"/>).</param>
     void AddShape(ZoneGeometry g, PreparedShape shape, Matrix4x4 node, float walkableSlope, bool carve, bool meshSolid = false)
     {
         var pts = new Vector3[shape.Vertices.Length];

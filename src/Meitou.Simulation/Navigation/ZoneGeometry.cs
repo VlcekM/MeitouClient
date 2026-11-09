@@ -260,11 +260,9 @@ internal sealed class ZoneGeometry
         Vertices.Add(p.X);
         Vertices.Add(p.Y);
         Vertices.Add(p.Z);
-        if (p.Y < MinY)
-            MinY = p.Y;
+        if (p.Y < MinY) MinY = p.Y;
 
-        if (p.Y > MaxY)
-            MaxY = p.Y;
+        if (p.Y > MaxY) MaxY = p.Y;
 
         return i;
     }

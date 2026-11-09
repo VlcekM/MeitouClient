@@ -25,11 +25,11 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The animation sandbox's spawn (the game host's <c>--sandbox</c>): one character made from <paramref name="recordId"/> at a place, alone in a
     /// squad of its own, standing idle. <paramref name="player"/> makes it one of the player's (the first call also sets the player faction and the
-    /// factions it knows, as
-    /// <see cref="StartPlayer"/> does); otherwise it belongs to the first faction that is hostile to the player's. A <paramref name="variant"/> above 0 is a
-    /// bystander with a look of its own: of the faction <paramref name="player"/> picks, in a squad of its own that is not the player's.
-    /// <paramref name="faction"/> (a position in the factions) overrides both choices: the game's <c>--duel</c> makes two NPCs of one faction. Before the first
-    /// tick or in the serial Inputs phase; only the sandbox, the game's <c>--crowd</c> test, its <c>--duel</c> and the F10 debug menu call it.
+    /// factions it knows, as <see cref="StartPlayer"/> does); otherwise it belongs to the first faction that is hostile to the player's. A
+    /// <paramref name="variant"/> above 0 is a bystander with a look of its own: of the faction <paramref name="player"/> picks, in a squad of its
+    /// own that is not the player's. <paramref name="faction"/> (a position in the factions) overrides both choices: the game's <c>--duel</c> makes
+    /// two NPCs of one faction. Before the first tick or in the serial Inputs phase; only the sandbox, the game's <c>--crowd</c> test, its
+    /// <c>--duel</c> and the F10 debug menu call it.
     /// </summary>
     public CharacterId SpawnSandbox(World world, string recordId, Vector2 at, bool player, float yaw = 0, int variant = 0, int? faction = null)
     {

@@ -43,8 +43,7 @@ public sealed class PathService : IDisposable
     {
         this._walkability = walkability;
         IsSynchronous = synchronous;
-        if (synchronous)
-            return;
+        if (synchronous) return;
 
         _requests = new BlockingCollection<PathRequest>();
         _threads = new Thread[Threads];
@@ -135,8 +134,7 @@ public sealed class PathService : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_disposed)
-            return;
+        if (_disposed) return;
 
         _disposed = true;
         _requests?.CompleteAdding();

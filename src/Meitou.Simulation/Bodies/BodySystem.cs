@@ -21,8 +21,8 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 /// <remarks>
 /// The medical tick takes the tick's seconds of character time (<see cref="World.TickSeconds"/>, character-stats.md "Time"); hunger converts them to
-/// game hours. <see cref="BodyTimeScale"/> multiplies the time of the part and blood rates (not hunger or the knock-out timer), see <see
-/// cref="MedicalContext.BodyTimeScale"/>. The bed a character lies in comes from <paramref name="db"/> (none without it).
+/// game hours. <see cref="BodyTimeScale"/> multiplies the time of the part and blood rates (not hunger or the knock-out timer), see
+/// <see cref="MedicalContext.BodyTimeScale"/>. The bed a character lies in comes from <paramref name="db"/> (none without it).
 /// </remarks>
 public sealed class BodySystem(GameConstants constants, BodyOptions? options = null, float bodyTimeScale = 1, GameDatabase? db = null) : ITickSystem
 {
@@ -108,8 +108,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// A living animal grows (<c>CharacterAnimal</c> slot 0xe8, <c>FUN_1405cdf00</c>, docs/game/animals.md "Ageing", <b>Observed</b>): while its age
     /// is below <see cref="AnimalData.GrowUntil"/> it gains <paramref name="dt"/> / (day length x <c>lifespan</c>) per update. The age is its stats
     /// multiplier; its size lerp(age, scale min, scale max) is the parts' HP multiplier, the blood capacity's and the hunger rate's k at once (the
-    /// original reads slot 0x390 each time). The drawn size follows only in steps: once the age has moved more than 0.05 past <see
-    /// cref="CharacterCold.ShownAge"/> it is noted, and below 0.95 the look is refreshed to it.
+    /// original reads slot 0x390 each time). The drawn size follows only in steps: once the age has moved more than 0.05 past
+    /// <see cref="CharacterCold.ShownAge"/> it is noted, and below 0.95 the look is refreshed to it.
     /// </summary>
     static void Age(CharacterCold cold, AnimalData animal, CharacterStats stats, MedicalState medical, float dt)
     {
@@ -120,8 +120,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     }
 
     /// <summary>
-    /// The character loop's update budgets, for the second add to the medical time (<see cref="MedicalContext.BudgetSeconds"/>); run by <see
-    /// cref="Schedule"/>.
+    /// The character loop's update budgets, for the second add to the medical time (<see cref="MedicalContext.BudgetSeconds"/>); run by
+    /// <see cref="Schedule"/>.
     /// </summary>
     readonly MedicalTimeBudget _medicalBudget = new();
 
@@ -147,8 +147,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
 
     /// <summary>
     /// The update budgets' turns of this tick (<see cref="MedicalTimeBudget"/>); then who may not get up this tick: a knocked-out person (not an
-    /// animal) whose knockout ends, or who plays dead, when <see cref="SafeToGetUp"/> fails, and who is kept down until it has looked (<see
-    /// cref="Unasked"/>). Serial, from the last tick's state.
+    /// animal) whose knockout ends, or who plays dead, when <see cref="SafeToGetUp"/> fails, and who is kept down until it has looked
+    /// (<see cref="Unasked"/>). Serial, from the last tick's state.
     /// </summary>
     public void Schedule(World world)
     {
@@ -341,8 +341,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// <summary>
     /// The blood a bleeding character out of the water leaves (<c>FUN_140652000</c>, docs/game/blood-decals.md): standing still (by its carrier's
     /// speed when carried) its pool grows; walking, a smear every 4 units, as opaque as the bleeding (at most 1); carried, drops of min(0.5, bleeding
-    /// / 10) once a build-up of random × bleeding × dt × 10 passes 1, where it has moved more than a unit. Display only (<see
-    /// cref="World.BloodMarks"/>): the trail's state on the cold row is not hashed.
+    /// / 10) once a build-up of random × bleeding × dt × 10 passes 1, where it has moved more than a unit. Display only
+    /// (<see cref="World.BloodMarks"/>): the trail's state on the cold row is not hashed.
     /// </summary>
     static void BloodTrail(
         World world, ConcurrentQueue<BloodMark> marks, int slot, CharacterCold cold, float bleeding, RaceData race, in CharacterHot n)
@@ -387,8 +387,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     /// which needs the fight and turret state of other characters.
     /// </summary>
     /// <summary>
-    /// The functionality <c>hunger rate</c> of the machine a character works or the chair it sits on, while it stands still out of combat (<see
-    /// cref="MedicalContext.UseHungerRate"/>); null otherwise.
+    /// The functionality <c>hunger rate</c> of the machine a character works or the chair it sits on, while it stands still out of combat
+    /// (<see cref="MedicalContext.UseHungerRate"/>); null otherwise.
     /// </summary>
     static float? UseHungerRate(CharacterCold cold, in CharacterHot n)
     {
@@ -430,9 +430,10 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     }
 
     /// <summary>
-    /// The extended numbers as the HUD shows them (<c>FUN_140895350</c>): in combat mode (<c>Character::isInCombatMode(1, 1)</c>, <paramref
-    /// name="combatMode"/>) Strength XP is CharStats <c>+0x184</c>, <see cref="XpService.WeaponWeightStrengthFactor"/> of the drawn weapon's weight
-    /// (<see cref="Combat.CombatSystem.HandWeight"/>, a crossbow's too), or with nothing drawn (current weapon type 5) 1 - the encumbrance factor.
+    /// The extended numbers as the HUD shows them (<c>FUN_140895350</c>): in combat mode (<c>Character::isInCombatMode(1, 1)</c>,
+    /// <paramref name="combatMode"/>) Strength XP is CharStats <c>+0x184</c>, <see cref="XpService.WeaponWeightStrengthFactor"/> of the drawn
+    /// weapon's weight (<see cref="Combat.CombatSystem.HandWeight"/>, a crossbow's too), or with nothing drawn (current weapon type 5) 1 - the
+    /// encumbrance factor.
     /// </summary>
     internal ExtendedStats WithCombatMode(ExtendedStats x, CharacterCold cold, bool combatMode)
     {
@@ -478,8 +479,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
         cold.StealthFactor = 1;   // the sneak XP step resets the hearing checks' exposure factor (FUN_1408c65a0)
         var exposure = PaidExposureOf(world, cold);
         // the 'observed' argument is forced by a pending crime
-        if (cold.Pending is not null && exposure == StealthExposure.Unobserved)
-            exposure = StealthExposure.Near;
+        if (cold.Pending is not null && exposure == StealthExposure.Unobserved) exposure = StealthExposure.Near;
         if (exposure != StealthExposure.Unobserved || SomeoneAbout(world, i)) _xp.Sneaking(stats, race, exposure, dt, moving);
     }
 
@@ -642,9 +642,9 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     public const float FliesHours = 4;
 
     /// <summary>
-    /// Corpse flies (<c>FUN_1405ccd90</c>, docs/game/character-stats.md "Corpses"): a corpse of a race that is not a robot gets them <see
-    /// cref="FliesHours"/> after its death while the weather there acts on no one (<see cref="Meitou.Data.World.WeatherAffecting.None"/>) and loses
-    /// them while it does. A world without weather has none.
+    /// Corpse flies (<c>FUN_1405ccd90</c>, docs/game/character-stats.md "Corpses"): a corpse of a race that is not a robot gets them
+    /// <see cref="FliesHours"/> after its death while the weather there acts on no one (<see cref="Meitou.Data.World.WeatherAffecting.None"/>) and
+    /// loses them while it does. A world without weather has none.
     /// </summary>
     static void Flies(World world, int slot, CharacterCold cold)
     {
@@ -660,8 +660,8 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
     public const float BurstSpread = 30;
 
     /// <summary>
-    /// luckyren Mode (<see cref="World.Luckyren"/>): a character a fatal hit burst. Everything it had (worn, carried, fitted) falls within <see
-    /// cref="BurstSpread"/> units around it, an <see cref="BloodMarkKind.Explosion"/> goes to the host and the body is gone at once.
+    /// luckyren Mode (<see cref="World.Luckyren"/>): a character a fatal hit burst. Everything it had (worn, carried, fitted) falls within
+    /// <see cref="BurstSpread"/> units around it, an <see cref="BloodMarkKind.Explosion"/> goes to the host and the body is gone at once.
     /// </summary>
     static void Burst(World world, int slot, CharacterCold cold, Vector2 blow)
     {

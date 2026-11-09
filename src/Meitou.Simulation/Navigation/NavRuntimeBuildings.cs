@@ -40,8 +40,7 @@ public sealed class NavRuntimeBuildings
             _byZone = _all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
         }
 
-        if (old is not null && old.Zone != placement.Zone)
-            Changed?.Invoke(old.Zone);
+        if (old is not null && old.Zone != placement.Zone) Changed?.Invoke(old.Zone);
 
         Changed?.Invoke(placement.Zone);
     }
@@ -54,8 +53,7 @@ public sealed class NavRuntimeBuildings
         BuildingPlacement? removed;
         lock (_gate)
         {
-            if (!_all.Remove(instanceId, out removed))
-                return null;
+            if (!_all.Remove(instanceId, out removed)) return null;
 
             _byZone = _all.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
         }
@@ -105,14 +103,12 @@ public sealed class NavRuntimeBuildings
             for (int dx = -1; dx <= 1; dx++)
             {
                 var zone = new ZoneCoordinate(home.X + dx, home.Y + dz);
-                if (!zone.IsInsideGrid)
-                    continue;
+                if (!zone.IsInsideGrid) continue;
 
                 var (ox, oz) = WorldLayout.ZoneOrigin(zone);
                 bool outside = position.X < ox - Reach || position.X > ox + WorldLayout.ZoneSize + Reach
                     || position.Z < oz - Reach || position.Z > oz + WorldLayout.ZoneSize + Reach;
-                if (outside)
-                    continue;
+                if (outside) continue;
 
                 yield return zone;
             }

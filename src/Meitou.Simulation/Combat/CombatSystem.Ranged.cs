@@ -245,8 +245,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// Half the size of a character's click hull (<c>CharMovement +0x3b0</c>, a kinematic PhysX box in collision group 0 that the rays of bolts and
     /// of the line of fire hit; built by <c>FUN_140661a70</c>, docs/game/combat.md "Line of fire and the hit shape"): the race's <c>hull size X, Y,
     /// Z</c>, Y = max(X, Z) while it is not upright (prone state not 0), all times half the size factor (slot 0x390), Y also times the look's height
-    /// (the appearance's
-    /// <c>characterHeight</c>). The box is not turned with the character.
+    /// (the appearance's <c>characterHeight</c>). The box is not turned with the character.
     /// </summary>
     internal static Vector3 HullHalf(CharacterCold c)
     {
@@ -430,9 +429,9 @@ public sealed partial class CombatSystem : IProjectileSource
     /// orders", melee or shooting): in Ranged mode (on for every NPC, the player's toggle for its characters) the crossbow while it has shots or
     /// ammunition and no threat is within <see cref="RetaliationSystem.ImmediateReach"/>, melee otherwise; out of Ranged mode never the crossbow. A
     /// character without a crossbow is left alone. A reload in progress is paused, not abandoned, when the controller stops or the fighter turns to
-    /// melee: the original's reload timer and flag (controller
-    /// <c>+0x78</c>, <c>+0x80</c>) are written only by the reload step and the constructor, so it resumes where it was the next time the crossbow is used
-    /// (docs/game/combat.md "Turrets", fire gate). A fight without a target keeps the crossbow and the controller (its reload counts on); the fight's end stops it.
+    /// melee: the original's reload timer and flag (controller <c>+0x78</c>, <c>+0x80</c>) are written only by the reload step and the constructor,
+    /// so it resumes where it was the next time the crossbow is used (docs/game/combat.md "Turrets", fire gate). A fight without a target keeps the
+    /// crossbow and the controller (its reload counts on); the fight's end stops it.
     /// </summary>
     void ChooseMode(World world, int i, ref CombatSlot s, CharacterCold cold, bool fighting)
     {
@@ -605,8 +604,7 @@ public sealed partial class CombatSystem : IProjectileSource
     /// The closing ray (<c>FUN_140438c70</c> → <c>FUN_140435b40</c> with mask <c>0x87f9e04</c>: the terrain and the buildings, no characters): from
     /// the barrel along the line between the two feet (both raised <see cref="RangedTuning.ClosingRayHeight"/>), it passes when it meets something
     /// farther from the shooter than the target is (<c>FUN_1404346d0</c>). A ray that meets nothing does not pass. The original's ray is unbounded;
-    /// here it ends
-    /// <see cref="RangedTuning.RayReach"/> on.
+    /// here it ends <see cref="RangedTuning.RayReach"/> on.
     /// </summary>
     bool ClosingRayPasses(World world, int i, int t, Vector3 barrel)
     {

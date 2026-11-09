@@ -14,8 +14,7 @@ internal static class NavSeeds
     public static List<Vector3>[]? Load(GameInstall install)
     {
         var path = Path.Combine(install.DataDirectory, RelativePath);
-        if (!File.Exists(path))
-            return null;
+        if (!File.Exists(path)) return null;
 
         var bytes = File.ReadAllBytes(path);
         var zones = new List<Vector3>[WorldLayout.ZoneCount * WorldLayout.ZoneCount];
@@ -26,8 +25,7 @@ internal static class NavSeeds
         {
             var p = new Vector3(BitConverter.ToSingle(bytes, o), BitConverter.ToSingle(bytes, o + 4), BitConverter.ToSingle(bytes, o + 8));
             var z = WorldLayout.ZoneOf(p.X, p.Z);
-            if (z.IsInsideGrid)
-                zones[z.Y * WorldLayout.ZoneCount + z.X].Add(p);
+            if (z.IsInsideGrid) zones[z.Y * WorldLayout.ZoneCount + z.X].Add(p);
         }
 
         return zones;

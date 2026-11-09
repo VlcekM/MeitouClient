@@ -77,8 +77,7 @@ public sealed partial class PopulationSystem
     /// Whether a wanted platoon comes in behind the loading screen. Every one does except a save's never-made town squad
     /// (<see cref="Platoon.Unmade"/>) outside the zones of the player's box: that one waits its 5 s dwell (<see cref="Platoon.DwellLeft"/>), as the
     /// original's (<b>Observed</b> on one save, a new game saved at once: such squads in the player's zone at once, in the camera block's other zones
-    /// 4 to 6 simulated s after load).
-    /// <see cref="Platoon.Position"/> is X and Z.
+    /// 4 to 6 simulated s after load). <see cref="Platoon.Position"/> is X and Z.
     /// </summary>
     internal static bool ActivatesAtLoad(Platoon p, IReadOnlySet<ZoneCoordinate> playerBox) =>
         !p.Unmade || playerBox.Contains(WorldLayout.ZoneOf(p.Position.X, p.Position.Y));

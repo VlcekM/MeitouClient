@@ -1040,9 +1040,9 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     const float RainWaterFactor = 3;
 
     /// <summary>
-    /// The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. A farm not inside a building (<see
-    /// cref="Machine.Indoors"/>, slot 59; its own indoor flag, fertility effect 0, is not read) has its first input rained on first: level += wetness
-    /// x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).
+    /// The farm tick (<b>Observed</b>, <c>FarmBuilding::vfunc_28</c>), every tick whether anyone is there. A farm not inside a building
+    /// (<see cref="Machine.Indoors"/>, slot 59; its own indoor flag, fertility effect 0, is not read) has its first input rained on first: level +=
+    /// wetness x water rate x rate x dt x 3, at most 1 (<b>Verified</b>, <c>FUN_1400e5580</c>).
     /// </summary>
     void FarmTick(World world, Machine m, float dt)
     {

@@ -17,16 +17,8 @@ public sealed partial class MedicalState
     /// (<c>+0x148</c>) turns on with the first positive one and nothing turns it off, and nothing else writes the value, so it keeps its last value
     /// after the storm (<b>Observed</b>: no other writer in the binary). Not saved.
     /// </summary>
-    public float Dust
-    {
-        get;
-        private set;
-    }
-    public bool DustSet
-    {
-        get;
-        private set;
-    }
+    public float Dust { get; private set; }
+    public bool DustSet { get; private set; }
 
     /// <summary>
     /// The dust in effect: <see cref="Dust"/> when it is set and positive, else 0.

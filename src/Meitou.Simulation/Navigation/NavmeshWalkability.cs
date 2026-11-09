@@ -16,8 +16,8 @@ public sealed partial class NavmeshWalkability : IWalkability
     readonly IWalkability _fallback;
     volatile NavWorld _world = NavWorld.Empty;
 
-    /// <param name="routeTerrain">Makes the finer height function the long-range grid is built from (<see cref="CoarseRoute"/>); null: <paramref
-    /// name="terrainHeight"/>.</param>
+    /// <param name="routeTerrain">Makes the finer height function the long-range grid is built from (<see cref="CoarseRoute"/>); null:
+    /// <paramref name="terrainHeight"/>.</param>
     /// <param name="routeObstacles">Makes the building footprints the long-range grid avoids; null: none.</param>
     public NavmeshWalkability(Func<float, float, float> terrainHeight, IWalkability? fallback = null, Func<Func<float, float,
             float>>? routeTerrain = null,

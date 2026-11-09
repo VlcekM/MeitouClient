@@ -88,8 +88,7 @@ public static class OriginalNavTiles
     /// </summary>
     static OriginalEdge EdgeKind(HkObject[] edges, HashSet<(long, long)> joined, int f, long edge)
     {
-        if (Int(edges[edge]["oppositeFace"]) >= 0)
-            return OriginalEdge.Inner;
+        if (Int(edges[edge]["oppositeFace"]) >= 0) return OriginalEdge.Inner;
 
         return joined.Contains((f, edge)) ? OriginalEdge.TileBorder : OriginalEdge.End;
     }
@@ -122,12 +121,10 @@ public static class OriginalNavTiles
     {
         var result = new List<OriginalInterior>();
         string path = GameFiles.Resolve(PathOf(install, zone));
-        if (!File.Exists(path))
-            return result;
+        if (!File.Exists(path)) return result;
 
         var file = HavokTagfile.ReadFile(path);
-        if (file.Root?["namedVariants"] is not object[] variants)
-            return result;
+        if (file.Root?["namedVariants"] is not object[] variants) return result;
 
         HkObject? mesh = null;
         bool hashed = true;
@@ -160,8 +157,7 @@ public static class OriginalNavTiles
     static OriginalInterior? Group(HkObject mesh, string info)
     {
         var parts = info.Split(';');
-        if (parts.Length < 4)
-            return null;
+        if (parts.Length < 4) return null;
 
         var origin = new Vector3(Float(parts[1]), Float(parts[2]), Float(parts[3]));
         if (mesh["faces"] is not HkObject[] faces || mesh["edges"] is not HkObject[] edges || mesh["vertices"] is not object[] raw)
@@ -170,8 +166,7 @@ public static class OriginalNavTiles
         var vertices = new Vector3[raw.Length];
         for (int i = 0; i < raw.Length; i++)
         {
-            if (raw[i] is float[] f)
-                vertices[i] = origin + Scale * new Vector3(f[0], f[1], f[2]);
+            if (raw[i] is float[] f) vertices[i] = origin + Scale * new Vector3(f[0], f[1], f[2]);
         }
 
         // Its door connections to the exterior: a streaming set's mesh connections (docs/formats/havok-tagfile.md, "Interior joins").
@@ -208,10 +203,10 @@ public static class OriginalNavTiles
     public const float InteriorCoverReach = 3;
 
     /// <summary>
-    /// How much of each original interior group a built zone covers: of the group's faces whose centre lies in the zone's box, those with a kept polygon of
-    /// <paramref name="mesh"/> within <see cref="InteriorCoverHeight"/> of the centre's height over the centre or within <see cref="InteriorCoverReach"/> of
-    /// it. A stair or storey we lose shows as uncovered faces
-    /// (<c>meitou-tools navmesh --compare-interiors</c>, <c>InteriorCoverageTests</c>).
+    /// How much of each original interior group a built zone covers: of the group's faces whose centre lies in the zone's box, those with a kept
+    /// polygon of <paramref name="mesh"/> within <see cref="InteriorCoverHeight"/> of the centre's height over the centre or within
+    /// <see cref="InteriorCoverReach"/> of it. A stair or storey we lose shows as uncovered faces (<c>meitou-tools navmesh --compare-interiors</c>,
+    /// <c>InteriorCoverageTests</c>).
     /// </summary>
     public static List<InteriorCoverage> CoverInteriors(IReadOnlyList<OriginalInterior> groups, ZoneNavMesh mesh, Vector2 zoneMin, Vector2 zoneMax)
     {
@@ -225,16 +220,14 @@ public static class OriginalNavTiles
             float hi = float.MinValue;
             foreach (var poly in group.Polygons)
             {
-                if (poly.Length < 3)
-                    continue;
+                if (poly.Length < 3) continue;
 
                 var c = Vector3.Zero;
                 foreach (int i in poly)
                     c += group.Vertices[i];
 
                 c /= poly.Length;
-                if (c.X < zoneMin.X || c.X >= zoneMax.X || c.Z < zoneMin.Y || c.Z >= zoneMax.Y)
-                    continue;
+                if (c.X < zoneMin.X || c.X >= zoneMax.X || c.Z < zoneMin.Y || c.Z >= zoneMax.Y) continue;
 
                 n++;
                 if (Covers(mesh, c, heights))

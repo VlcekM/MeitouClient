@@ -37,8 +37,8 @@ static class HudTips
     /// <summary>
     /// The stats panel's lines (docs/game/ui-screens.md section 4), each with its tooltip. <paramref name="inBuilding"/>: in a building at all, on
     /// top included (the original's location type is not 0xb); <paramref name="inside"/>: in its indoor volume (<see cref="SightMap.Inside"/>), which
-    /// the indoors modifiers of the values need. <paramref name="displayMode"/>: <c>getGUIStatsDisplayMode</c> (<see
-    /// cref="CombatSystem.StatsDisplayMode"/>), 1 Martial Arts, 2 the crossbow lines, 0 Attack and Defense.
+    /// the indoors modifiers of the values need. <paramref name="displayMode"/>: <c>getGUIStatsDisplayMode</c>
+    /// (<see cref="CombatSystem.StatsDisplayMode"/>), 1 Martial Arts, 2 the crossbow lines, 0 Attack and Defense.
     /// </summary>
     public static List<HudStatLine> Lines(
         CharacterCold cold, MedicalState med, CharacterStats stats, HudCombat? hc, GameConstants? constants, bool inBuilding, bool inside,

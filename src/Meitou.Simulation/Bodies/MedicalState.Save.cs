@@ -85,9 +85,9 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// Applies a saved <c>limbs</c> value (<c>FUN_1400d0190</c>): a stump stays a stump; a replaced slot gets the prosthetic <paramref
-    /// name="fitted"/> gives for it, or becomes a stump without one; crushed is kept as the state. The parts' saved flesh, wear and stun are not
-    /// touched (the load fits the item without taking its damage).
+    /// Applies a saved <c>limbs</c> value (<c>FUN_1400d0190</c>): a stump stays a stump; a replaced slot gets the prosthetic
+    /// <paramref name="fitted"/> gives for it, or becomes a stump without one; crushed is kept as the state. The parts' saved flesh, wear and stun
+    /// are not touched (the load fits the item without taking its damage).
     /// </summary>
     public void ApplySavedLimbs(int bits, Func<int, (LimbReplacement Limb, Items.ItemInstance? Item)?> fitted)
     {
@@ -119,9 +119,9 @@ public sealed partial class MedicalState
 
     /// <summary>
     /// Reads what <see cref="WriteSave"/> wrote. <paramref name="resolve"/> finds a LOCATIONAL_DAMAGE template by string id; the base HP of each part
-    /// comes from the race's anatomy (100 when the race does not list the part). The parts come back in the original's part order (<see
-    /// cref="BodyPartTemplate.MedicalOrder"/>; a vanilla save already has it, an older Meitou save may not), ties in the saved order. The limbs are
-    /// applied after (<see cref="ApplySavedLimbs"/>).
+    /// comes from the race's anatomy (100 when the race does not list the part). The parts come back in the original's part order
+    /// (<see cref="BodyPartTemplate.MedicalOrder"/>; a vanilla save already has it, an older Meitou save may not), ties in the saved order. The limbs
+    /// are applied after (<see cref="ApplySavedLimbs"/>).
     /// </summary>
     public static MedicalState ReadSave(RaceData race, IReadOnlyDictionary<string, float> floats, IReadOnlyDictionary<string, bool> bools,
         IReadOnlyDictionary<string, string> strings, Func<string, BodyPartTemplate?> resolve)

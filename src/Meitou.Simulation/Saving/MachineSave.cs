@@ -11,12 +11,11 @@ namespace Meitou.Simulation.Saving;
 /// <summary>
 /// The machines of the player's buildings in a save (docs/simulation.md "Production"): the production and farm keys of each building's
 /// GAMESTATE_BUILDING (docs/game/buildings-production.md "Production", "Farming" and "Power": <c>production amount</c>, <c>resource mult</c>,
-/// <c>power on</c>,
-/// <c>gets battery</c>, <c>batterycharge</c>, <c>consumption amount-&lt;k&gt;</c>, <c>plant growth</c>, <c>plant death</c>, <c>plant start</c>,
-/// <c>plants harvested</c>, <c>save time</c>), and its items in an INVENTORY_STATE named first by the building's instance states (docs/formats/save.md "Zone
-/// files"). The items' sections are <c>in&lt;k&gt;</c>, <c>out</c> and, for the storage grid, <c>main</c> (the original's storage section name is
-/// <b>Unknown</b>; no sample save holds a player building with items, so the original reading these is unverified). A loaded farm's plants all take the
-/// farm's growth (the harvested ones -10): the stagger between plants is not saved.
+/// <c>power on</c>, <c>gets battery</c>, <c>batterycharge</c>, <c>consumption amount-&lt;k&gt;</c>, <c>plant growth</c>, <c>plant death</c>, <c>plant
+/// start</c>, <c>plants harvested</c>, <c>save time</c>), and its items in an INVENTORY_STATE named first by the building's instance states
+/// (docs/formats/save.md "Zone files"). The items' sections are <c>in&lt;k&gt;</c>, <c>out</c> and, for the storage grid, <c>main</c> (the original's
+/// storage section name is <b>Unknown</b>; no sample save holds a player building with items, so the original reading these is unverified). A loaded
+/// farm's plants all take the farm's growth (the harvested ones -10): the stagger between plants is not saved.
 /// </summary>
 public static class MachineSave
 {

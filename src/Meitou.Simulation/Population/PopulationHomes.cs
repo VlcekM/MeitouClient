@@ -25,8 +25,8 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// Houses the town's resident entries in its buildings (<see cref="ResidentHomes.Assign"/>) and builds their squads into
     /// <paramref name="squads"/>, each building with its template into <paramref name="homes"/>; returns the town's bars (for the bar squads). Each
-    /// housed template's squads: its
-    /// <c>housemates</c> (v0, or v0..v1 when v1 &gt; 0), then itself. The buildings in <paramref name="playerOwned"/> (the player's) house nobody.
+    /// housed template's squads: its <c>housemates</c> (v0, or v0..v1 when v1 &gt; 0), then itself. The buildings in <paramref name="playerOwned"/>
+    /// (the player's) house nobody.
     /// </summary>
     List<TownBuilding> HouseResidents(TownSite site, FactionData? faction, int factionIndex, ulong seed, IWalkability walk,
         List<BuiltSquad> squads, List<(TownBuilding Building, SquadTemplate Template)> homes, IReadOnlySet<string>? playerOwned)
@@ -152,8 +152,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The spot of one member of a resident squad of <paramref name="b"/> (<c>FUN_14057f820</c>:86-103, Verified): a random general (1) node, else a
     /// shopkeeper (0) node, at the node plus <see cref="SpotLift"/>; null: the building has neither and the member stands at the platoon point. One
-    /// draw per member, from
-    /// <paramref name="salt"/>.
+    /// draw per member, from <paramref name="salt"/>.
     /// </summary>
     internal static Vector3? MemberSpot(TownBuilding b, ulong seed, ulong salt)
     {

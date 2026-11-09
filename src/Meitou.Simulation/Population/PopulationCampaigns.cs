@@ -528,10 +528,10 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// A target and home (<c>CampaignData::vfunc_0</c>): the towns of <paramref name="enemy"/> (the player's for rolls) in the faction's
-    /// <c>biomes</c>, else all of them, less those not active (<see cref="TownActive"/>, Town slot 70),
-    /// those with hostile occupiers when the campaign is not hostile
-    /// (Town +0x128, <see cref="Ai.AiSystem.Occupied"/>), and those in its <c>no-go zones</c> unless the campaign ignores them; then the first source
-    /// town in site order with one of its 5 nearest candidates within <c>range far</c> is the home, that candidate the target.
+    /// <c>biomes</c>, else all of them, less those not active (<see cref="TownActive"/>, Town slot 70), those with hostile occupiers when the
+    /// campaign is not hostile (Town +0x128, <see cref="Ai.AiSystem.Occupied"/>), and those in its <c>no-go zones</c> unless the campaign ignores
+    /// them; then the first source town in site order with one of its 5 nearest candidates within <c>range far</c> is the home, that candidate the
+    /// target.
     /// </summary>
     bool FindTarget(World world, int faction, CampaignData c, int enemy, out CampaignTown target, out CampaignTown home)
     {
@@ -1009,8 +1009,7 @@ public sealed partial class PopulationSystem : IStateHashed
         if (!world.Characters.TryResolveNext(speaker, out int s) || world.Characters.Cold(s) is not { SquadId: >= 0 } sc) return false;
 
         var loaded = world.Platoons.All.FirstOrDefault(p => p.SquadId == sc.SquadId && p.State == PlatoonState.Loaded && p.Campaign is not null);
-        if (loaded?.Campaign is not { Phase: not 2 } inst
-            || CampaignOf(inst.CampaignId) is not { } c) return false;
+        if (loaded?.Campaign is not { Phase: not 2 } inst || CampaignOf(inst.CampaignId) is not { } c) return false;
 
         int phase = assault && c.HasPt2 ? 1 : 2;
         if (inst.Phase == phase) return false;
@@ -1174,9 +1173,8 @@ public sealed partial class PopulationSystem : IStateHashed
     /// <summary>
     /// One campaign's update (<c>CampaignInstance::vfunc_10</c>); true when it is to be removed. Phase 0: the leader within 0.8 × the town's radius
     /// arrives ("{1} has arrived at {2}"), then phase 1, or 2 without victory or defeat when there is no <c>pt2</c>. Phase 1: the leader back in its
-    /// home town wins; else by <c>key</c> (assault 4 h or 0.2 h after its first loaded fight;
-    /// defend 12 h with no hostile campaign against the player;
-    /// trader visit 1 h); then fewer than 20 % intact platoons lose. Any phase but 2: the leader platoon loaded with everyone down loses.
+    /// home town wins; else by <c>key</c> (assault 4 h or 0.2 h after its first loaded fight; defend 12 h with no hostile campaign against the
+    /// player; trader visit 1 h); then fewer than 20 % intact platoons lose. Any phase but 2: the leader platoon loaded with everyone down loses.
     /// Phase 2: removed after 3 h.
     /// </summary>
     bool UpdateCampaign(World world, WarManager m, CampaignInstance inst, double now)
@@ -1327,8 +1325,7 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// Whether a point is within 1.8 × the radius of the campaign's own target when it has hostile occupiers (<c>FUN_1409c70f0</c> phase 0,
-    /// <b>Verified</b>: no other
-    /// town is looked at; <see cref="Ai.AiSystem.Occupied"/>).
+    /// <b>Verified</b>: no other town is looked at; <see cref="Ai.AiSystem.Occupied"/>).
     /// </summary>
     bool OccupiedNear(World world, CampaignTown target, Vector2 at)
     {
@@ -1337,11 +1334,10 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Whether a loaded platoon of a cannibal assault carries enough to retreat (<c>FUN_14028fdf0</c>, <b>Verified</b>;
-    /// it first marks every member of the loaded squad
-    /// "ordered", <c>FUN_14028a4e0</c>): each platoon counts its own carriers and keeps its own stamp of the first one,
-    /// cleared while nobody (or no loaded squad)
-    /// carries; any platoon with three carriers, or more than <see cref="CannibalCarryHours"/> since its first, ends the campaign's assault.
+    /// Whether a loaded platoon of a cannibal assault carries enough to retreat (<c>FUN_14028fdf0</c>, <b>Verified</b>; it first marks every member
+    /// of the loaded squad "ordered", <c>FUN_14028a4e0</c>): each platoon counts its own carriers and keeps its own stamp of the first one, cleared
+    /// while nobody (or no loaded squad) carries; any platoon with three carriers, or more than <see cref="CannibalCarryHours"/> since its first,
+    /// ends the campaign's assault.
     /// </summary>
     bool CannibalsLoaded(World world, CampaignInstance inst, double now)
     {
@@ -1380,16 +1376,15 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Game hours after a platoon's first cannibal carrier that end the assault
-    /// (more than 15 game minutes: the timer in hours x 60 above 15, <b>Verified</b>).
+    /// Game hours after a platoon's first cannibal carrier that end the assault (more than 15 game minutes: the timer in hours x 60 above 15,
+    /// <b>Verified</b>).
     /// </summary>
     public const double CannibalCarryHours = 0.25;
 
     /// <summary>
-    /// Whether the members of a squad run the "find, kidnap and put in a cage" goal now
-    /// (task 254, <see cref="TaskType.FinalKidnapperCageJob"/>): the goals of
-    /// <paramref name="role"/> in the package their campaign is in the phase of (a loaded campaign squad is driven by the campaign, not the AI),
-    /// or in the squad's running AI package, in the hour's window.
+    /// Whether the members of a squad run the "find, kidnap and put in a cage" goal now (task 254, <see cref="TaskType.FinalKidnapperCageJob"/>): the
+    /// goals of <paramref name="role"/> in the package their campaign is in the phase of (a loaded campaign squad is driven by the campaign, not the
+    /// AI), or in the squad's running AI package, in the hour's window.
     /// </summary>
     public bool KidnapDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role) =>
         GoalDuty(world, squad, role, Meitou.Data.Gameplay.Ai.TaskType.FinalKidnapperCageJob);
@@ -1424,8 +1419,7 @@ public sealed partial class PopulationSystem : IStateHashed
         inst.Phase = 2;
         inst.PhaseStart = now;
         inst.FightStart = -1;
-        if (c.IsHostile)
-            world.Post(Loc.Tr("{1} against {2} has ended", c.DisplayName, NameOf(world, inst.Target)));
+        if (c.IsHostile) world.Post(Loc.Tr("{1} against {2} has ended", c.DisplayName, NameOf(world, inst.Target)));
 
         Log($"{_data.Factions[m.Faction].Name}: {c.Name} against {NameOf(world, inst.Target)} won");
         FollowUp(world, m, c.VictoryTriggers, inst, now, 1);
@@ -1491,8 +1485,7 @@ public sealed partial class PopulationSystem : IStateHashed
 
             foreach (var member in squad.Members)
             {
-                if (!table.TryResolveNext(member, out int slot) || table.Cold(slot) is not { InCombat: true })
-                    continue;
+                if (!table.TryResolveNext(member, out int slot) || table.Cold(slot) is not { InCombat: true }) continue;
 
                 if (id == inst.Leader && !inst.FoughtPlayer && PlayerNear(world, table.Previous[slot].Position, 300))
                     inst.FoughtPlayer = true;
@@ -1644,8 +1637,7 @@ public sealed partial class PopulationSystem : IStateHashed
         int player = PlayerFactionOf(world);
         foreach (var m in _wars!)
             foreach (var a in m.Actives)
-                if (a.Phase != 2 && a.Enemy == player && CampaignOf(a.CampaignId) is { IsHostile: true })
-                    return true;
+                if (a.Phase != 2 && a.Enemy == player && CampaignOf(a.CampaignId) is { IsHostile: true }) return true;
 
         return false;
     }
@@ -1655,10 +1647,9 @@ public sealed partial class PopulationSystem : IStateHashed
     #region Moving
 
     /// <summary>
-    /// Sets every campaign platoon's goal (the leader's: the target, or home once ended; the others': the leader)
-    /// and moves the unloaded ones in straight lines at the
-    /// <c>travel speed unloaded</c> speeds (leader TRAVEL_TARGET, others TRAVEL_TARGET_FAST: WALK 25, JOG 55, RUN 90;
-    /// GROUPED and NO_SPEED_CHANGE leader 25, others 60 or 90 beyond 25000; all capped at 70). Serial: followers read their leader's place.
+    /// Sets every campaign platoon's goal (the leader's: the target, or home once ended; the others': the leader) and moves the unloaded ones in
+    /// straight lines at the <c>travel speed unloaded</c> speeds (leader TRAVEL_TARGET, others TRAVEL_TARGET_FAST: WALK 25, JOG 55, RUN 90; GROUPED
+    /// and NO_SPEED_CHANGE leader 25, others 60 or 90 beyond 25000; all capped at 70). Serial: followers read their leader's place.
     /// </summary>
     void MoveCampaigns(World world, float dt)
     {
@@ -1716,8 +1707,7 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// The dialogue's announcement and pending-talk queries (<see cref="Dialogue.DialogueSystem.Announce"/>,
-    /// <see cref="Dialogue.DialogueSystem.HasInterrupt"/>), set by
-    /// the host; null: none.
+    /// <see cref="Dialogue.DialogueSystem.HasInterrupt"/>), set by the host; null: none.
     /// </summary>
     public Func<World, CharacterId, string, bool>? Announcer { get; set; }
     public Func<CharacterId, bool>? PendingTalk { get; set; }
@@ -1738,9 +1728,8 @@ public sealed partial class PopulationSystem : IStateHashed
     const float AnnounceRange = 2500;
 
     /// <summary>
-    /// A loaded leader in phase 0 that has arrived at the target (task 129 needs state 131 <c>atPackageTarget</c>;
-    /// Meitou: <see cref="CampaignInstance.ArrivedAt"/>) and
-    /// is not down (!101) says its campaign's <c>dialog announcement</c>, again each time it has ended,
+    /// A loaded leader in phase 0 that has arrived at the target (task 129 needs state 131 <c>atPackageTarget</c>; Meitou:
+    /// <see cref="CampaignInstance.ArrivedAt"/>) and is not down (!101) says its campaign's <c>dialog announcement</c>, again each time it has ended,
     /// while the camera and a target-faction member are within 2500 of it.
     /// </summary>
     void TryAnnounce(World world, CampaignInstance inst, CharacterId leader, Vector3 at)
@@ -1767,11 +1756,8 @@ public sealed partial class PopulationSystem : IStateHashed
     /// </summary>
     bool AnnouncementHeard(World world, CampaignInstance inst, Vector2 at)
     {
-        if (inst.Enemy < 0 || _focus is not { } camera)
-            return false;
-
-        if (Vector2.DistanceSquared(at, new Vector2(camera.X, camera.Z)) > AnnounceRange * AnnounceRange)
-            return false;
+        if (inst.Enemy < 0 || _focus is not { } camera) return false;
+        if (Vector2.DistanceSquared(at, new Vector2(camera.X, camera.Z)) > AnnounceRange * AnnounceRange) return false;
 
         var table = world.Characters;
         for (int i = 0; i < table.Previous.Length; i++)
@@ -1797,8 +1783,8 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// The leader's trail, each war-manager run (<b>Verified</b>): an empty one is seeded with <paramref name="slots"/> + 1 points within ±100 of the
-    /// leader; the leader's
-    /// place is added once it is over 150 from the newest; one oldest point is dropped while there are more points than platoons.
+    /// leader; the leader's place is added once it is over 150 from the newest; one oldest point is dropped while there are more points than
+    /// platoons.
     /// </summary>
     void LayTrail(World world, CampaignInstance inst, Vector2 leader, int slots, int platoons)
     {
@@ -1813,8 +1799,7 @@ public sealed partial class PopulationSystem : IStateHashed
                 trail.Add(leader + new Vector2(x, z));
             }
         }
-        else if (Vector2.Distance(trail[^1], leader) > TrailStep)
-            trail.Add(leader);
+        else if (Vector2.Distance(trail[^1], leader) > TrailStep) trail.Add(leader);
 
         if (trail.Count > Math.Max(platoons, 1)) trail.RemoveAt(0);
     }
@@ -1946,8 +1931,7 @@ public sealed partial class PopulationSystem : IStateHashed
         float arrive = leads ? _settings.RoamArrivalRadius : CampaignFollowDistance;
 
         // A travelling follower (task 215) never mills: inside 100 of its trail point it keeps walking straight at it at the leader's pace
-        // (FUN_140349e70);
-        // only the arrival at the target (phase 1) mills.
+        // (FUN_140349e70); only the arrival at the target (phase 1) mills.
         bool arrived = Vector2.Distance(p.Position, goal) <= arrive && (leads || inst.Phase == 1);
         if (!arrived) return false;
 

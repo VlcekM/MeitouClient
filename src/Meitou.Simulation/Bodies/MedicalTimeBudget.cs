@@ -6,8 +6,8 @@ namespace Meitou.Simulation.Bodies;
 /// The original character loop's two round-robin update budgets (<c>FUN_140786e30</c>, docs/game/game-loop.md "The character update budget"), kept
 /// for the one effect the simulation needs from them: a character inside a budget gets the frame time added to its medical time a second time
 /// (<c>FUN_1405cfd90</c>), so the medical rates run 1 to 2 x dt (docs/game/character-stats.md "Time"). One tick stands for one frame of that loop and
-/// the occupied slots in slot order for its character list; each turn adds <see cref="World.TickSeconds"/> to <see
-/// cref="CharacterCold.MedicalBudgetSeconds"/>. Serial, once a tick, before the body step.
+/// the occupied slots in slot order for its character list; each turn adds <see cref="World.TickSeconds"/> to
+/// <see cref="CharacterCold.MedicalBudgetSeconds"/>. Serial, once a tick, before the body step.
 /// </summary>
 public sealed class MedicalTimeBudget
 {

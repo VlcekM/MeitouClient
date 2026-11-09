@@ -25,8 +25,7 @@ internal static class NavGeometry
     /// </summary>
     public static float SignedArea(Vector2[] p)
     {
-        if (p.Length < 3)
-            return 0;
+        if (p.Length < 3) return 0;
 
         double area = 0, ox = p[0].X, oy = p[0].Y;
         for (int i = 1; i + 1 < p.Length; i++)
@@ -43,8 +42,7 @@ internal static class NavGeometry
         float sign = SignedArea(polygon) >= 0 ? 1 : -1;
         for (int i = 0; i < polygon.Length; i++)
         {
-            if (EdgeOutside(polygon, i, point, sign, out float d) && d > tolerance)
-                return false;
+            if (EdgeOutside(polygon, i, point, sign, out float d) && d > tolerance) return false;
         }
 
         return true;
@@ -64,15 +62,13 @@ internal static class NavGeometry
             {
                 var a = points[indices[t + e]];
                 var b = points[indices[t + (e + 1) % 3]];
-                if ((a.Y < y) == (b.Y < y))
-                    continue;
+                if ((a.Y < y) == (b.Y < y)) continue;
 
                 float f = (y - a.Y) / (b.Y - a.Y);
                 cut[n++] = new Vector2(a.X + (b.X - a.X) * f, a.Z + (b.Z - a.Z) * f);
             }
 
-            if (n == 2)
-                segments.Add((cut[0], cut[1]));
+            if (n == 2) segments.Add((cut[0], cut[1]));
         }
 
         return segments;
@@ -102,8 +98,7 @@ internal static class NavGeometry
         float outside = 0;
         for (int i = 0; i < polygon.Length; i++)
         {
-            if (EdgeOutside(polygon, i, point, sign, out float d))
-                outside = Math.Max(outside, d);
+            if (EdgeOutside(polygon, i, point, sign, out float d)) outside = Math.Max(outside, d);
         }
 
         return outside;
@@ -157,8 +152,7 @@ internal static class NavGeometry
     public static Vector2[] ConvexHull2D(List<Vector2> pts)
     {
         pts.Sort((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y));
-        if (pts.Count < 3)
-            return [.. pts];
+        if (pts.Count < 3) return [.. pts];
 
         var hull = new List<Vector2>();
         foreach (var p in pts)
@@ -226,8 +220,7 @@ internal static class NavGeometry
     {
         for (int i = 0; i < links.Length; i += 2)
         {
-            if (links[i] == edge)
-                return true;
+            if (links[i] == edge) return true;
         }
 
         return false;
@@ -243,18 +236,15 @@ internal static class NavGeometry
         lo = hi = yLo = yHi = 0;
         var d = a1 - a0;
         float len2 = d.X * d.X + d.Z * d.Z;
-        if (len2 < 1e-9f)
-            return false;
+        if (len2 < 1e-9f) return false;
 
         float t0 = ((b0.X - a0.X) * d.X + (b0.Z - a0.Z) * d.Z) / len2;
         float t1 = ((b1.X - a0.X) * d.X + (b1.Z - a0.Z) * d.Z) / len2;
-        if (t1 >= t0)
-            return false;
+        if (t1 >= t0) return false;
 
         lo = Math.Max(0, t1);
         hi = Math.Min(1, t0);
-        if (hi - lo < 1e-4f)
-            return false;
+        if (hi - lo < 1e-4f) return false;
 
         var bLo = Vector3.Lerp(b0, b1, (lo - t0) / (t1 - t0));
         var bHi = Vector3.Lerp(b0, b1, (hi - t0) / (t1 - t0));
@@ -288,8 +278,7 @@ internal static class NavGeometry
     public static bool SpansMeet((float From, float To, float YFrom, float YTo) a, (float From, float To, float YFrom, float YTo) b, float maxStep)
     {
         float lo = Math.Max(a.From, b.From), hi = Math.Min(a.To, b.To);
-        if (hi - lo < 0.01f)
-            return false;
+        if (hi - lo < 0.01f) return false;
 
         float mid = (lo + hi) / 2;
         return !(Math.Abs(Lerp(a.From, a.To, a.YFrom, a.YTo, mid) - Lerp(b.From, b.To, b.YFrom, b.YTo, mid)) > maxStep);

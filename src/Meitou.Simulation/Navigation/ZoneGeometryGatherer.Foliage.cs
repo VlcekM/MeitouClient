@@ -33,12 +33,10 @@ internal sealed partial class ZoneGeometryGatherer
         var missing = zones.Where(z => !_foliageZones.ContainsKey(z)).ToList();
         if (missing.Count > 0)
         {
-            if (_foliageZones.Count + missing.Count > MaxCachedFoliageZones)
-                _foliageZones.Clear();
+            if (_foliageZones.Count + missing.Count > MaxCachedFoliageZones) _foliageZones.Clear();
 
             _foliageCatalog ??= FoliageCatalog.Load(_db);
-            if (_overlayTiles.Count > 6)
-                _overlayTiles.Clear();
+            if (_overlayTiles.Count > 6) _overlayTiles.Clear();
 
             var options = new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Math.Min(missing.Count, Environment.ProcessorCount - 1)) };
             Parallel.ForEach(missing, options, z => PlaceFoliageZone(z));
@@ -65,8 +63,7 @@ internal sealed partial class ZoneGeometryGatherer
                 float cutter = rec.GetFloat("navmesh cutter");
                 if (path.Length == 0)
                 {
-                    if (cutter > 0)
-                        list.Add(new(inst.Position, inst.Transform, null, false, cutter));
+                    if (cutter > 0) list.Add(new(inst.Position, inst.Transform, null, false, cutter));
                 }
                 else if (path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
                 {
@@ -93,8 +90,7 @@ internal sealed partial class ZoneGeometryGatherer
             for (int dx = -1; dx <= 1; dx++)
             {
                 var z = new ZoneCoordinate(zone.X + dx, zone.Y + dz);
-                if (z.IsInsideGrid)
-                    zones.Add(z);
+                if (z.IsInsideGrid) zones.Add(z);
             }
         }
 
@@ -137,16 +133,14 @@ internal sealed partial class ZoneGeometryGatherer
         }
 
         var prepared = _collision.Get(o.Collision);
-        if (prepared is null)
-            return;
+        if (prepared is null) return;
 
         g.Stats.FoliageInstances++;
         int solids = g.Solids.Count;
         foreach (var shape in prepared.Shapes)
         {
             g.Stats.FoliageShapes++;
-            if (!shape.IsConvex)
-                g.Stats.FoliageMeshes++;
+            if (!shape.IsConvex) g.Stats.FoliageMeshes++;
 
             // Walkable foliage meshes (swamp tree domes, open below) hold no ground under them in the original's tiles (docs/game/pathfinding.md, "Map features").
             AddShape(g, shape, o.Transform, o.Walkable ? TerrainSlopeDegrees : 0, carve: CarveConvexObstacles && !o.Walkable, meshSolid: o.Walkable);

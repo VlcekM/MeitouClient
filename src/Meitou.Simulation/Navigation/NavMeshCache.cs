@@ -93,14 +93,12 @@ public sealed class NavMeshCache
     public ZoneNavMesh? TryLoad(int zoneX, int zoneZ, uint buildingHash, uint settingsHash)
     {
         var path = PathOf(zoneX, zoneZ);
-        if (!File.Exists(path))
-            return null;
+        if (!File.Exists(path)) return null;
 
         try
         {
             using var r = new BinaryReader(File.OpenRead(path), Encoding.UTF8);
-            if (!r.ReadBytes(4).AsSpan().SequenceEqual(Magic) || r.ReadInt32() != FormatVersion)
-                return null;
+            if (!r.ReadBytes(4).AsSpan().SequenceEqual(Magic) || r.ReadInt32() != FormatVersion) return null;
 
             if (r.ReadInt32() != zoneX || r.ReadInt32() != zoneZ || r.ReadUInt32() != buildingHash || r.ReadUInt32() != settingsHash)
                 return null;
@@ -157,8 +155,7 @@ public sealed class NavMeshCache
                     links[p]![i] = r.ReadInt32();
             }
 
-            if (doorOf is not null)
-                doorOf[p] = r.ReadInt16();
+            if (doorOf is not null) doorOf[p] = r.ReadInt16();
         }
 
         var corners = new Vector3[r.ReadInt32() * 3];
@@ -194,14 +191,12 @@ public sealed class NavMeshCache
     /// </summary>
     static HeightGrid?[]? ReadHeights(BinaryReader r, int count)
     {
-        if (!r.ReadBoolean())
-            return null;
+        if (!r.ReadBoolean()) return null;
 
         var heights = new HeightGrid?[count];
         for (int p = 0; p < count; p++)
         {
-            if (!r.ReadBoolean())
-                continue;
+            if (!r.ReadBoolean()) continue;
 
             float x0 = r.ReadSingle();
             float z0 = r.ReadSingle();
@@ -288,8 +283,7 @@ public sealed class NavMeshCache
         foreach (int i in l)
             w.Write(i);
 
-        if (withDoors)
-            w.Write((short)(m.DoorOf?[p] ?? -1));
+        if (withDoors) w.Write((short)(m.DoorOf?[p] ?? -1));
     }
 
     /// <summary>
@@ -298,14 +292,12 @@ public sealed class NavMeshCache
     static void WriteHeights(BinaryWriter w, HeightGrid?[]? heights)
     {
         w.Write(heights is not null);
-        if (heights is null)
-            return;
+        if (heights is null) return;
 
         foreach (var grid in heights)
         {
             w.Write(grid is not null);
-            if (grid is null)
-                continue;
+            if (grid is null) continue;
 
             w.Write(grid.X0);
             w.Write(grid.Z0);

@@ -53,8 +53,7 @@ internal static class ZoneKeptClosure
                 foreach (var (dx, dz) in Sides)
                 {
                     var b = new ZoneCoordinate(a.X + dx, a.Y + dz);
-                    if (!full.TryGetValue(b, out var mb))
-                        continue;
+                    if (!full.TryGetValue(b, out var mb)) continue;
 
                     grew |= SeedPruner.Extend(mb, keep[b], BorderSeeds(ma, keep[a], dx, dz), s);
                 }
@@ -76,8 +75,7 @@ internal static class ZoneKeptClosure
             var va = mesh.Vertices[poly[k]];
             var vb = mesh.Vertices[poly[(k + 1) % poly.Length]];
             float length = Vector3.Distance(va, vb);
-            if (length < 1e-3f)
-                continue;
+            if (length < 1e-3f) continue;
 
             float t = Math.Min(0.5f, 1 / length);
             seeds.Add(Vector3.Lerp(va, vb, t));

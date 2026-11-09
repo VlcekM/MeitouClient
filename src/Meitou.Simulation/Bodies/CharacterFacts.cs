@@ -11,9 +11,9 @@ namespace Meitou.Simulation.Bodies;
 
 /// <summary>
 /// One member per predicate of the original, named after it and citing the original function, so that a fact the simulation and the UI both need has
-/// one definition. Merge by original function, not by English word: "down" is three different originals (<see cref="Down"/>, <see
-/// cref="TargetDown"/>, and the capture finders' KO / crawling sense tags, <c>CaptiveSystem</c>). Pure reads; callable from any phase that may read
-/// the character. docs/simulation.md "Shared predicates".
+/// one definition. Merge by original function, not by English word: "down" is three different originals (<see cref="Down"/>,
+/// <see cref="TargetDown"/>, and the capture finders' KO / crawling sense tags, <c>CaptiveSystem</c>). Pure reads; callable from any phase that may
+/// read the character. docs/simulation.md "Shared predicates".
 /// </summary>
 public static class CharacterFacts
 {
@@ -41,8 +41,8 @@ public static class CharacterFacts
 
     /// <summary>
     /// <c>Character</c> slot 6 <c>isDown</c> (vfunc 0x30, <c>FUN_1405c9e10</c>, <b>Verified</b>): dead or out cold, playing dead (which is
-    /// unconscious to everyone), ragdolled or carried. A crawler is not down. A ragdoll is only ever whole for an incapacitated character, so <see
-    /// cref="Ragdolls.RagdollSystem.IsRagdoll"/> adds nothing the first test lacks, and is kept for the original's reading.
+    /// unconscious to everyone), ragdolled or carried. A crawler is not down. A ragdoll is only ever whole for an incapacitated character, so
+    /// <see cref="Ragdolls.RagdollSystem.IsRagdoll"/> adds nothing the first test lacks, and is kept for the original's reading.
     /// </summary>
     public static bool Down(CharacterCold cold) =>
         cold.Medical is { Incapacitated: true } or { PlayingDead: true } || !cold.CarriedBy.IsNone || Ragdolls.RagdollSystem.IsRagdoll(cold);
@@ -80,8 +80,8 @@ public static class CharacterFacts
         fightsPlayer || relations is null || player < 0 || !relations.Contains(faction) || relations.IsHostile(player, faction);
 
     /// <summary>
-    /// The "getting up" byte (<c>Character</c> <c>+0x278</c>): set while the character rises from a knock-down (<see
-    /// cref="CharacterCold.GettingUpUntil"/>).
+    /// The "getting up" byte (<c>Character</c> <c>+0x278</c>): set while the character rises from a knock-down
+    /// (<see cref="CharacterCold.GettingUpUntil"/>).
     /// </summary>
     public static bool GettingUp(CharacterCold cold, long tick) => cold.GettingUpUntil > tick;
 
@@ -118,9 +118,9 @@ public static class CharacterFacts
     internal static bool RegardsFriendly(DialogueSystem dialogue, World world, int a, int b) => dialogue.RegardsFriendly(world, a, b);
 
     /// <summary>
-    /// Slot 125, "A regards B as an enemy" (<c>FUN_14079c950</c>), faction part: hostile and not coexisting in either direction (<see
-    /// cref="AggroSystem.IsEnemy"/>), another faction when the world has no relation table. Engine reading: the original's squad memory tests are not
-    /// read.
+    /// Slot 125, "A regards B as an enemy" (<c>FUN_14079c950</c>), faction part: hostile and not coexisting in either direction
+    /// (<see cref="AggroSystem.IsEnemy"/>), another faction when the world has no relation table. Engine reading: the original's squad memory tests
+    /// are not read.
     /// </summary>
     public static bool RegardsEnemy(FactionRelations? relations, int mine, int theirs) =>
         relations is not null ? AggroSystem.IsEnemy(relations, mine, theirs) : mine != theirs;
@@ -136,8 +136,8 @@ public static class CharacterFacts
     }
 
     /// <summary>
-    /// The character's senses (<c>SensoryData</c>, Character vfunc 0x68; docs/game/perception.md "Senses"), as of its last look (<see
-    /// cref="AggroSystem"/>); null before its first look or in a world without the look.
+    /// The character's senses (<c>SensoryData</c>, Character vfunc 0x68; docs/game/perception.md "Senses"), as of its last look
+    /// (<see cref="AggroSystem"/>); null before its first look or in a world without the look.
     /// </summary>
     public static SenseBlock? Senses(World world, int slot) => world.SystemOf<AggroSystem>()?.SensesOf(slot);
 
@@ -150,9 +150,9 @@ public static class CharacterFacts
 
     /// <summary>
     /// Whether <paramref name="target"/> is on the looker's sensed list, as the original's finders that walk it (<c>FUN_140853960</c>) take their
-    /// candidates: an entry of its senses, with <paramref name="now"/> only one seen or heard at the last look. The capped block (<see
-    /// cref="SenseBlock.Cap"/>) may lack a character the original's unbounded map holds, so one it lacks is judged by the shared sight test (<see
-    /// cref="SightMap.Sees"/>: same building or outdoors, unless either stands on top; engine choice). True without senses.
+    /// candidates: an entry of its senses, with <paramref name="now"/> only one seen or heard at the last look. The capped block
+    /// (<see cref="SenseBlock.Cap"/>) may lack a character the original's unbounded map holds, so one it lacks is judged by the shared sight test
+    /// (<see cref="SightMap.Sees"/>: same building or outdoors, unless either stands on top; engine choice). True without senses.
     /// </summary>
     public static bool Perceives(World world, int looker, int target, bool now = false)
     {

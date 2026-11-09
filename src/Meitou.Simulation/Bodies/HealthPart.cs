@@ -78,11 +78,7 @@ public sealed class HealthPart(BodyPartTemplate template, int hitWeight, float b
     /// <summary>
     /// RACE <c>self healing</c>: untreated damage turns slowly into treated damage while the owner is conscious.
     /// </summary>
-    public bool SelfHealing
-    {
-        get;
-        set;
-    }
+    public bool SelfHealing { get; set; }
 
     public LimbState Limb { get; set { if (field != value) { field = value; Version++; } } }
 
@@ -100,30 +96,18 @@ public sealed class HealthPart(BodyPartTemplate template, int hitWeight, float b
     /// The fitted prosthetic as an item (its level, quality and saved record), when <see cref="Limb"/> is <see cref="LimbState.Replaced"/>; null for
     /// one fitted without an item.
     /// </summary>
-    public Items.ItemInstance? ReplacementItem
-    {
-        get;
-        set;
-    }
+    public Items.ItemInstance? ReplacementItem { get; set; }
 
     /// <summary>
-    /// Counts the changes to the values the health figures read (flesh, stun, bandage, rig, wear, the maximum's terms, the limb): <see
-    /// cref="MedicalState"/> keeps its part summaries until it moves. Only grows.
+    /// Counts the changes to the values the health figures read (flesh, stun, bandage, rig, wear, the maximum's terms, the limb):
+    /// <see cref="MedicalState"/> keeps its part summaries until it moves. Only grows.
     /// </summary>
-    internal int Version
-    {
-        get;
-        private set;
-    }
+    internal int Version { get; private set; }
 
     /// <summary>
     /// The part's own state flag for edge detection of <see cref="MedicalEventKind.PartDown"/> events.
     /// </summary>
-    internal bool WasDown
-    {
-        get;
-        set;
-    }
+    internal bool WasDown { get; set; }
 
     /// <summary>
     /// Base HP in force: 5 for a stump, the prosthetic's HP when one is fitted, else the race's.

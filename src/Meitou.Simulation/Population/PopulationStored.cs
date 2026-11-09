@@ -163,8 +163,8 @@ public sealed partial class PopulationSystem
     /// Stored characters into the world as a squad of <paramref name="town"/> (-1: a wild one) homed at the given circle, moved along when
     /// <paramref name="position"/> is not where they were stored.
     /// </summary>
-    Squad? SpawnKept(
-        World world, StoredSquad stored, string templateId, int faction, int town, int platoonId, Vector2 position, Vector2 homeCentre, float homeRadius, int size)
+    Squad? SpawnKept(World world, StoredSquad stored, string templateId, int faction, int town, int platoonId, Vector2 position, Vector2 homeCentre,
+        float homeRadius, int size)
     {
         if (stored.Members.Count == 0) return null;
 
@@ -218,8 +218,8 @@ public sealed partial class PopulationSystem
     /// One stored member back in the world as a member of <paramref name="squad"/>: the leader (or the successor) wanders when its squad is pinned,
     /// the rest follow it.
     /// </summary>
-    void SpawnKeptMember(
-        World world, Squad squad, StoredSquad stored, StoredMember m, StoredMember? successor, Vector2 delta, bool moved, Vector2 position)
+    void SpawnKeptMember(World world, Squad squad, StoredSquad stored, StoredMember m, StoredMember? successor, Vector2 delta, bool moved,
+        Vector2 position)
     {
         var walk = world.Walkability;
         var cold = m.Cold;

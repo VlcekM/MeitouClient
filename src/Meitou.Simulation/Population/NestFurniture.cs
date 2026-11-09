@@ -55,8 +55,7 @@ public static partial class NestFurniture
 
     static void Buildings(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, string idPrefix, List<NestPiece> pieces)
     {
-        if (nest.NumCentrepoints <= 0 || nest.DebrisBuilding.Count == 0)
-            return;
+        if (nest.NumCentrepoints <= 0 || nest.DebrisBuilding.Count == 0) return;
 
         var centres = new List<Vector2>();
         float nestY = walk.GroundHeight(at.X, at.Y);
@@ -92,11 +91,9 @@ public static partial class NestFurniture
         {
             var p = Spaced(new Vector2(centre.X, centre.Z) + Direction(ref rolls) * Between(ref rolls, entry.V1, entry.V2), batch, PieceSpacing, PiecePush);
             float yaw = rolls.NextFloat() * MathF.Tau;
-            if (!walk.TryStand(p.X, p.Y, centre.Y, out float y) || MathF.Abs(y - centre.Y) > NavReach)
-                continue;
+            if (!walk.TryStand(p.X, p.Y, centre.Y, out float y) || MathF.Abs(y - centre.Y) > NavReach) continue;
 
-            if (batch.Exists(b => Vector2.DistanceSquared(b, p) < PieceGap * PieceGap))
-                continue;
+            if (batch.Exists(b => Vector2.DistanceSquared(b, p) < PieceGap * PieceGap)) continue;
 
             batch.Add(p);
             var position = new Vector3(p.X, y, p.Y);
@@ -109,11 +106,9 @@ public static partial class NestFurniture
     /// </summary>
     static int Count(ref RandomStream rolls, int v0)
     {
-        if (v0 <= 0)
-            return rolls.NextFloat() < 0.5f ? 1 : 0;
+        if (v0 <= 0) return rolls.NextFloat() < 0.5f ? 1 : 0;
 
-        if (v0 == 1)
-            return 1;
+        if (v0 == 1) return 1;
 
         int lo = (int)(-v0 * CountSpread);
         int hi = (int)(v0 * CountSpread);
@@ -128,8 +123,7 @@ public static partial class NestFurniture
         foreach (var e in earlier)
         {
             var d = p - e;
-            if (d.LengthSquared() >= spacing * spacing)
-                continue;
+            if (d.LengthSquared() >= spacing * spacing) continue;
 
             p = e + (d.LengthSquared() > 1e-6f ? Vector2.Normalize(d) : Vector2.UnitX) * push;
         }
@@ -157,8 +151,7 @@ public static partial class NestFurniture
         var turn = Quaternion.CreateFromAxisAngle(Vector3.UnitY, yaw);
         var normal = GroundNormal(walk, p);
         float tilt = MathF.Acos(Math.Clamp(normal.Y, -1, 1)) * (180 / MathF.PI);
-        if (tilt < 1e-3f)
-            return turn;
+        if (tilt < 1e-3f) return turn;
 
         var axis = Vector3.Normalize(Vector3.Cross(Vector3.UnitY, normal));
         var tilted = Quaternion.CreateFromAxisAngle(axis, tilt * (MathF.PI / 180)) * turn;
@@ -218,8 +211,7 @@ public sealed class NestBuildings
 
     public bool Remove(int camp)
     {
-        if (!_camps.Remove(camp))
-            return false;
+        if (!_camps.Remove(camp)) return false;
 
         Changed();
         return true;

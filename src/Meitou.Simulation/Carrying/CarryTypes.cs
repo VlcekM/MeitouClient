@@ -12,14 +12,10 @@ namespace Meitou.Simulation.Carrying;
 public sealed record PickUpOrder(IReadOnlyList<CharacterId> Carriers, CharacterId Target) : OrderCommand
 {
     /// <summary>
-    /// The verb was Kidnap (246, <c>Task_Kidnapping</c>): a sleeping target may be taken too, and the lift rolls <see
-    /// cref="CarrySystem.KidnapChance"/> first.
+    /// The verb was Kidnap (246, <c>Task_Kidnapping</c>): a sleeping target may be taken too, and the lift rolls
+    /// <see cref="CarrySystem.KidnapChance"/> first.
     /// </summary>
-    public bool Kidnap
-    {
-        get;
-        init;
-    }
+    public bool Kidnap { get; init; }
 }
 
 /// <summary>
@@ -50,40 +46,24 @@ public sealed record OpenLootOrder(IReadOnlyList<CharacterId> Looters, Character
 /// </summary>
 public sealed record TakeLootItem(Items.InventoryItemToken Item) : SimCommand
 {
-    public int Count
-    {
-        get;
-        init;
-    }
-    public bool BagFirst
-    {
-        get;
-        init;
-    }
+    public int Count { get; init; }
+    public bool BagFirst { get; init; }
 }
 
 /// <summary>
-/// A right click on the looter's (<see cref="Character"/>, the one who opened it) <see cref="Item"/>: units into the open loot, as <see
-/// cref="TakeLootItem"/> the other way.
+/// A right click on the looter's (<see cref="Character"/>, the one who opened it) <see cref="Item"/>: units into the open loot, as
+/// <see cref="TakeLootItem"/> the other way.
 /// </summary>
 public sealed record PutLootItem(CharacterId Character, Items.InventoryItemToken Item) : SimCommand
 {
-    public int Count
-    {
-        get;
-        init;
-    }
-    public bool BagFirst
-    {
-        get;
-        init;
-    }
+    public int Count { get; init; }
+    public bool BagFirst { get; init; }
 }
 
 /// <summary>
 /// Orders one of the attackers (the selection when the list is empty) to knock <see cref="Target"/> out from behind (the original's order 228, verb
-/// "Stealth KO", <c>Task_StealthKO</c>): the nearest sneaking one that can act creeps up behind it and swings; the roll (<see
-/// cref="CarrySystem.StealthKoChance"/>) decides between a knock-out and a fight.
+/// "Stealth KO", <c>Task_StealthKO</c>): the nearest sneaking one that can act creeps up behind it and swings; the roll
+/// (<see cref="CarrySystem.StealthKoChance"/>) decides between a knock-out and a fight.
 /// </summary>
 public sealed record StealthKoOrder(IReadOnlyList<CharacterId> Attackers, CharacterId Target) : OrderCommand;
 

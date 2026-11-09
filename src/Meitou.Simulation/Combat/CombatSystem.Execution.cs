@@ -28,10 +28,10 @@ public sealed partial class CombatSystem
         float skill = Eff(ac, fighter.WeaponSkill);
         float str = Eff(ac, StatsEnumerated.Strength);
         var packet = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(
-                UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind, race.StringId, fighter.DamageOutput, _combat)
-            : DamageFormulas.Packet(
-                skill, Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, kind, race.StringId, fighter.DamageOutput, _combat);
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind,
+                race.StringId, fighter.DamageOutput, _combat)
+            : DamageFormulas.Packet(skill, Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, kind, race.StringId,
+                fighter.DamageOutput, _combat);
 
         var ctx = MakeContext(world, d, dc);
         var events = _hitEvents;
@@ -82,10 +82,7 @@ public sealed partial class CombatSystem
                     var template = dc.Medical!.Parts[ev.Part].Template;
                     _xp.ToughnessFromLimbLoss(dc.Stats!, dc.Race!);
                     table.LimbsChanged.Enqueue((d, template.LimbSlot));
-                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None, template.LimbSlot is 2 or 3 ? 70 : 71)
-                    {
-                        Tick = world.Tick + 1,
-                    });
+                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None, template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
                     break;
             }
         }

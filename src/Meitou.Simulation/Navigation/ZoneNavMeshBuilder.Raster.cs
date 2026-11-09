@@ -39,8 +39,7 @@ internal static partial class ZoneNavMeshBuilder
         int i = 0;
         foreach (int t in tris)
         {
-            if ((areas[t] != NavArea.Null) != walkable)
-                continue;
+            if ((areas[t] != NavArea.Null) != walkable) continue;
 
             tileTris[i * 3] = indices[t * 3];
             tileTris[i * 3 + 1] = indices[t * 3 + 1];
@@ -69,8 +68,7 @@ internal static partial class ZoneNavMeshBuilder
             {
                 bool fromWalk = walk is not null && (cut is null || walk.smin <= cut.smin);
                 var next = fromWalk ? walk : cut;
-                if (next is null || span is not null && next.smin > span.smax)
-                    break;
+                if (next is null || span is not null && next.smin > span.smax) break;
 
                 if (fromWalk)
                 {
@@ -96,8 +94,7 @@ internal static partial class ZoneNavMeshBuilder
 
             span!.next = null;
             span.area = walkTop >= span.smax - climb ? walkArea : NavArea.Null;
-            if (span.area != NavArea.Null)
-                span.smax = walkTop;
+            if (span.area != NavArea.Null) span.smax = walkTop;
 
             if (tail is null)
                 head = span;

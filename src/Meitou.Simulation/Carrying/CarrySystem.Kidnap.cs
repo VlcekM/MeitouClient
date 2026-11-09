@@ -8,10 +8,10 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Carrying;
 
 /// <summary>
-/// The kidnap (verb 246, the original's <c>Task_Kidnapping</c> over the lift; docs/game/carry-loot.md "Kidnapping"): a <see
-/// cref="PickUpOrder.Kidnap"/> may also take a sleeping character, and on arrival the carrier rolls 0-100 against <see cref="KidnapChance"/>. A hit
-/// knocks a sleeper out and the lift goes on; a miss wakes it, raises its town's alarm and turns it on the kidnapper. Either way the victim's squad
-/// takes the kidnapper for an enemy and the kidnapping is a pending crime.
+/// The kidnap (verb 246, the original's <c>Task_Kidnapping</c> over the lift; docs/game/carry-loot.md "Kidnapping"): a
+/// <see cref="PickUpOrder.Kidnap"/> may also take a sleeping character, and on arrival the carrier rolls 0-100 against <see cref="KidnapChance"/>. A
+/// hit knocks a sleeper out and the lift goes on; a miss wakes it, raises its town's alarm and turns it on the kidnapper. Either way the victim's
+/// squad takes the kidnapper for an enemy and the kidnapping is a pending crime.
 /// </summary>
 public sealed partial class CarrySystem
 {
@@ -58,10 +58,10 @@ public sealed partial class CarrySystem
 
     /// <summary>
     /// The kidnap's roll on arrival (<c>Task_Kidnapping</c> vfunc 1, <b>Observed</b>); true when the lift goes on. First the victim's squad tags the
-    /// kidnapper TEMP_ENEMY and the kidnapping becomes a pending crime on it. A hit (roll &lt;= chance) knocks an awake victim out (<see
-    /// cref="KidnapKoMin"/>..<see cref="KidnapKoMax"/>) and trains assassination by 100. A miss: the victim's town alarm is raised at the kidnapper;
-    /// its squad remembers it (long-term intruder) and says event 8 to it; assassination trains by 300; a sleeping victim wakes and goes for the
-    /// kidnapper. The victim notices the kidnapper for 5 s (<see cref="AggroSystem.Alarm"/>). Engine: the kidnapper's field +0x110 = 250
+    /// kidnapper TEMP_ENEMY and the kidnapping becomes a pending crime on it. A hit (roll &lt;= chance) knocks an awake victim out
+    /// (<see cref="KidnapKoMin"/>..<see cref="KidnapKoMax"/>) and trains assassination by 100. A miss: the victim's town alarm is raised at the
+    /// kidnapper; its squad remembers it (long-term intruder) and says event 8 to it; assassination trains by 300; a sleeping victim wakes and goes
+    /// for the kidnapper. The victim notices the kidnapper for 5 s (<see cref="AggroSystem.Alarm"/>). Engine: the kidnapper's field +0x110 = 250
     /// (<b>Unknown</b>) are not modelled.
     /// </summary>
     bool Kidnap(World world, CharacterTable table, int i)

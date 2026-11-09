@@ -151,9 +151,9 @@ public struct CombatSlot
     public bool Engaged;
 
     /// <summary>
-    /// The engaged list's generation: raised when the character's own fight ends, which empties the list (<c>FUN_1406659b0</c> mode 2). <see
-    /// cref="JoinedEpoch"/> is the target's <see cref="ListEpoch"/> when this fighter joined its list; it is out of it (<see
-    /// cref="CombatSystem.Listed"/>) once the target's has moved on.
+    /// The engaged list's generation: raised when the character's own fight ends, which empties the list (<c>FUN_1406659b0</c> mode 2).
+    /// <see cref="JoinedEpoch"/> is the target's <see cref="ListEpoch"/> when this fighter joined its list; it is out of it
+    /// (<see cref="CombatSystem.Listed"/>) once the target's has moved on.
     /// </summary>
     public int ListEpoch, JoinedEpoch;
 

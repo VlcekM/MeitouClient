@@ -173,11 +173,7 @@ public sealed class Blackboard
     /// <summary>
     /// The package running (null: none could start; the members take only their default goals).
     /// </summary>
-    public AiPackage? Current
-    {
-        get;
-        private set;
-    }
+    public AiPackage? Current { get; private set; }
     public PackageClass CurrentClass => Current is { } p ? PackageClasses.Of(p.Signal) : PackageClass.Plain;
     public int CurrentSlot { get; private set; } = -1;
 
@@ -189,11 +185,7 @@ public sealed class Blackboard
     /// <summary>
     /// Raised whenever another package starts, so the members choose again at once.
     /// </summary>
-    public int Version
-    {
-        get;
-        private set;
-    }
+    public int Version { get; private set; }
 
     /// <summary>
     /// The current package's goals per <see cref="AiRole"/>.
@@ -232,20 +224,12 @@ public sealed class Blackboard
     /// A contract package (the original's <c>contractjob</c>, set by dialogue's <c>AI contract</c>): while it runs it takes precedence over every
     /// slot.
     /// </summary>
-    public AiPackage? Contract
-    {
-        get;
-        private set;
-    }
+    public AiPackage? Contract { get; private set; }
 
     /// <summary>
     /// The game hours (<see cref="World.GameHours"/>) the contract ends at.
     /// </summary>
-    public double ContractEnd
-    {
-        get;
-        private set;
-    }
+    public double ContractEnd { get; private set; }
 
     /// <summary>
     /// The town the squad belongs to (a site index, -1: none) and the building it lives in (null: none known); <see cref="OwnHome"/> is the one it
@@ -282,37 +266,21 @@ public sealed class Blackboard
     /// The gate the squad guards (its home when that is a gate, else for a gate guard goal the town's gate nearest the squad), as the last serial
     /// step found it (derived, not hashed); null: none, or its door's place not known.
     /// </summary>
-    public GatePost? Gate
-    {
-        get;
-        set;
-    }
+    public GatePost? Gate { get; set; }
 
     /// <summary>
     /// The home the gate guard post was first resolved to (the blackboard's HOME_GATE hand, <c>FUN_14026b410</c>): taken from <see cref="OwnHome"/>
     /// once it is set, then kept even when the home changes.
     /// </summary>
-    public TownBuilding? GateHome
-    {
-        get;
-        set;
-    }
-    public TownBuilding? OwnHome
-    {
-        get;
-        set;
-    }
+    public TownBuilding? GateHome { get; set; }
+    public TownBuilding? OwnHome { get; set; }
 
     /// <summary>
     /// The template's <c>public day</c>, which the original writes over <see cref="OwnHome"/>'s public flag (docs/game/locks.md "Data"): what
     /// trespassing reads.
     /// </summary>
     public bool HomePublic { get; init; } = true;
-    public TownBuilding? Home
-    {
-        get;
-        set;
-    }
+    public TownBuilding? Home { get; set; }
 
     /// <summary>
     /// The table a bar package reserved for the squad: an index into <see cref="Home"/>'s <see cref="TownBuilding.Tables"/>, 0 for an outdoor table
@@ -323,11 +291,7 @@ public sealed class Blackboard
     /// <summary>
     /// The members it was made with: the squad size of the intact rule.
     /// </summary>
-    public int Size
-    {
-        get;
-        set;
-    }
+    public int Size { get; set; }
 
     /// <summary>
     /// The squad is intact (docs/game/perception.md 7.3), as the last serial step found it.
@@ -338,25 +302,13 @@ public sealed class Blackboard
     /// A patrol's route (world X/Z) and the point the leader walks to next; empty when no patrol runs.
     /// </summary>
     public Vector2[] Route { get; set; } = [];
-    public int RouteIndex
-    {
-        get;
-        set;
-    }
+    public int RouteIndex { get; set; }
 
     /// <summary>
     /// The game hours from which the next patrol may start, and when the running one gives up.
     /// </summary>
-    public double NextPatrol
-    {
-        get;
-        set;
-    }
-    public double PatrolGiveUp
-    {
-        get;
-        set;
-    }
+    public double NextPatrol { get; set; }
+    public double PatrolGiveUp { get; set; }
 
     /// <summary>
     /// The town (site index) a retreat or slave shipping package goes to, set when it starts; -1: none.
@@ -369,11 +321,7 @@ public sealed class Blackboard
     /// the choice.
     /// </summary>
     public CampaignTown InTown { get; set; } = CampaignTown.None;
-    public double InTownSince
-    {
-        get;
-        set;
-    }
+    public double InTownSince { get; set; }
 
     /// <summary>
     /// The running package's mission town (its <c>mission town</c> hand): the trader's next town, the assaulted or occupied player town; none for
@@ -385,37 +333,17 @@ public sealed class Blackboard
     /// The trader's state (<c>Package_WanderingTrader</c> +0xe0: 0 on the way, 1 just in the town, 2 done there) and the hours it stays in a town
     /// before it may go on (+0xd4, uniform [5, 8) at each start). Kept while other packages run, as the original's package object.
     /// </summary>
-    public int TraderState
-    {
-        get;
-        set;
-    }
-    public float TraderWait
-    {
-        get;
-        set;
-    }
+    public int TraderState { get; set; }
+    public float TraderWait { get; set; }
 
     /// <summary>
     /// The passing-by assault (<c>Package_PassingByTownAssault</c>): the game hour it started (+0xb8), the faction it attacks (+0x100, the town's),
     /// whether it is spent (+0xb4: it never starts again) and its faction's wait after the last such assault ends (+0xb0, hours).
     /// </summary>
-    public double AssaultStart
-    {
-        get;
-        set;
-    }
+    public double AssaultStart { get; set; }
     public int AssaultEnemy { get; set; } = -1;
-    public bool AssaultDone
-    {
-        get;
-        set;
-    }
-    public float AssaultCooldown
-    {
-        get;
-        set;
-    }
+    public bool AssaultDone { get; set; }
+    public float AssaultCooldown { get; set; }
 
     /// <summary>
     /// The passing-by assault's target set (+0xd8): the town faction's people within <see cref="AiSystem.AssaultReach"/> of the town at the start,
@@ -424,30 +352,18 @@ public sealed class Blackboard
     /// (<see cref="AssaultSeeded"/>) and refills from the scan.
     /// </summary>
     public HashSet<CharacterId> AssaultTargets { get; } = [];
-    public bool AssaultSeeded
-    {
-        get;
-        set;
-    }
+    public bool AssaultSeeded { get; set; }
 
     /// <summary>
     /// The occupation's clock (<c>Package_OccupyTown</c> +0xc0): game seconds in a row with no able member in the town; past 4 it ends.
     /// </summary>
-    public float OccupyAway
-    {
-        get;
-        set;
-    }
+    public float OccupyAway { get; set; }
 
     /// <summary>
     /// The refugee package (<c>Package_Refugee</c>): the squad was not intact when it started (+0xb0), and the squad it makes for to join (its
     /// mission target, +0x28; -1: none yet).
     /// </summary>
-    public bool RefugeeBroken
-    {
-        get;
-        set;
-    }
+    public bool RefugeeBroken { get; set; }
     public int RefugeeTarget { get; set; } = -1;
 
     /// <summary>
@@ -599,11 +515,7 @@ public sealed class Blackboard
     /// <summary>
     /// The package <c>change AI</c> put in place of the template's (saved as <c>replacementAI</c>); null: the template's.
     /// </summary>
-    public AiPackage? Replacement
-    {
-        get;
-        private set;
-    }
+    public AiPackage? Replacement { get; private set; }
 
     /// <summary>
     /// The squad's mission target: whom its running contract is aimed at (none without one).
@@ -713,29 +625,17 @@ public sealed class AiMind
     /// The squad it thinks for (fixed for the mind's life: a character does not change squads), held so the think needs no lookup. Not hashed (the
     /// squad is).
     /// </summary>
-    public required Squad Squad
-    {
-        get;
-        init;
-    }
+    public required Squad Squad { get; init; }
 
     /// <summary>
     /// Its place among the squad's members when the mind was made: which bed and which node of the home it takes.
     /// </summary>
-    public int MemberIndex
-    {
-        get;
-        init;
-    }
+    public int MemberIndex { get; init; }
 
     /// <summary>
     /// The goal being acted out (null before the first think).
     /// </summary>
-    public AiGoal? Goal
-    {
-        get;
-        set;
-    }
+    public AiGoal? Goal { get; set; }
 
     /// <summary>
     /// The goal's plan (<see cref="TaskPlanner"/>), leaf first: the step carried out is the first. Planned again at every think.
@@ -746,11 +646,7 @@ public sealed class AiMind
     /// The plan's first step (None without a plan).
     /// </summary>
     public TaskType Step => Plan.Count > 0 ? Plan[0].Type : TaskType.None;
-    public AiBehaviour Behaviour
-    {
-        get;
-        set;
-    }
+    public AiBehaviour Behaviour { get; set; }
 
     /// <summary>
     /// The <see cref="Blackboard.Version"/> the goal was chosen under.
@@ -760,54 +656,30 @@ public sealed class AiMind
     /// <summary>
     /// Its own spot: where it stood when the AI took it over (the stand-in where the home has no node or bed for it).
     /// </summary>
-    public Vector2 Post
-    {
-        get;
-        set;
-    }
+    public Vector2 Post { get; set; }
 
     /// <summary>
     /// The game hours (<see cref="World.GameHours"/>) until which it is committed to its goal (docs/game/ai.md "Packages and goals").
     /// </summary>
-    public double CommitUntil
-    {
-        get;
-        set;
-    }
+    public double CommitUntil { get; set; }
 
     /// <summary>
     /// Where its town goal goes (a node, a shop, a town; null: not picked yet, picked when the goal is acted out).
     /// </summary>
-    public Vector3? Target
-    {
-        get;
-        set;
-    }
+    public Vector3? Target { get; set; }
 
     /// <summary>
     /// The centre and radius <see cref="MovementSystem"/>'s wander uses instead of the squad's home (radius 0: the squad's).
     /// </summary>
-    public Vector2 WanderCentre
-    {
-        get;
-        set;
-    }
-    public float WanderRadius
-    {
-        get;
-        set;
-    }
+    public Vector2 WanderCentre { get; set; }
+    public float WanderRadius { get; set; }
 
     /// <summary>
     /// Its routine is the engine's, not the AI's: it is a member of a squad the AI does not run (a roaming platoon's active half, whose trip is the
     /// population's, or a squad whose template lists no AI packages). The AI weighs only its combat goals (<see cref="EngineGoals"/> and its race's)
     /// and Self preservation, on that routine and in its fights, and acts nothing else out (docs/simulation.md "AI").
     /// </summary>
-    public bool Engine
-    {
-        get;
-        init;
-    }
+    public bool Engine { get; init; }
 
     /// <summary>
     /// The combat goals of its platoon's package for its role (none without a package), set by the AI's serial step on the package cadence. Follow
@@ -824,31 +696,19 @@ public sealed class AiMind
     /// <summary>
     /// It was sent walking to a spot and has not arrived.
     /// </summary>
-    public bool Walking
-    {
-        get;
-        set;
-    }
+    public bool Walking { get; set; }
 
     /// <summary>
     /// The spot its last walk ended at on its own (the movement followed the path to its last point, <see cref="WalkEnd.Finished"/>, and no fight or
     /// flight took it): the original counts a finished path as arrival before any distance test (<c>isAtLocation</c> <c>FUN_1405a2450</c>, Verified).
     /// Cleared when it walks again; <see cref="ArrivedFrom"/> is where the walk ended.
     /// </summary>
-    public Vector2? ArrivedAt
-    {
-        get;
-        set;
-    }
+    public Vector2? ArrivedAt { get; set; }
 
     /// <summary>
     /// Where it stood when the walk to <see cref="ArrivedAt"/> finished. Not hashed: it follows the position.
     /// </summary>
-    public Vector2 ArrivedFrom
-    {
-        get;
-        set;
-    }
+    public Vector2 ArrivedFrom { get; set; }
 
     /// <summary>
     /// How far (units) it may have moved from <see cref="ArrivedFrom"/> and still count as arrived at <see cref="ArrivedAt"/> (engine choice: shoves
@@ -865,49 +725,29 @@ public sealed class AiMind
     /// <summary>
     /// Walks in a row that ended away from the spot (no way there, or interrupted); at <see cref="AiSystem.MaxFailedWalks"/> it gives the spot up.
     /// </summary>
-    public int FailedWalks
-    {
-        get;
-        set;
-    }
+    public int FailedWalks { get; set; }
 
     /// <summary>
     /// The home's spots kept failing: it uses <see cref="Post"/> instead until its home changes.
     /// </summary>
-    public bool HomeUnreachable
-    {
-        get;
-        set;
-    }
+    public bool HomeUnreachable { get; set; }
 
     /// <summary>
     /// Walks to its seat kept failing: it does not relax or sit there any more.
     /// </summary>
-    public bool SeatUnreachable
-    {
-        get;
-        set;
-    }
+    public bool SeatUnreachable { get; set; }
 
     /// <summary>
     /// The guard post of its town it holds for 157 Static town guard (<see cref="AiSystem"/>'s serial step draws it on the package
     /// cadence); null on another goal or when no post was free. Not saved: a load draws again (derived, not hashed).
     /// </summary>
-    public SeatClaim? TownPost
-    {
-        get;
-        set;
-    }
+    public SeatClaim? TownPost { get; set; }
 
     /// <summary>
     /// The sitting clip of the chair it sits on (<see cref="HomeSpot.SitClip"/>), for <see cref="AnimationSystem"/>; null when not seated. Follows
     /// from the goal and seat, so not hashed.
     /// </summary>
-    public string? SitClip
-    {
-        get;
-        set;
-    }
+    public string? SitClip { get; set; }
 
     /// <summary>
     /// That chair's functionality <c>hunger rate</c> (<see cref="HomeSpot.HungerRate"/>; 1 when not seated). Set with <see cref="SitClip"/>, so not
@@ -919,114 +759,62 @@ public sealed class AiMind
     /// The work goals' pick of building (<see cref="AiBehaviour.Work"/>): the number of picks made since it last stopped working, so the plan's
     /// finder and the act-out name the same building (the pick is a roll of this and the character), and whether it is working now.
     /// </summary>
-    public int WorkEpoch
-    {
-        get;
-        set;
-    }
+    public int WorkEpoch { get; set; }
 
     /// <summary>
     /// The roll that picks this goal's node among the home's (uniform; 0: not drawn yet, the member's round robin stands in) and the number of draws:
     /// renewed when a goal is taken up anew.
     /// </summary>
-    public ulong NodeRoll
-    {
-        get;
-        set;
-    }
-    public int NodeEpoch
-    {
-        get;
-        set;
-    }
-    public bool WorkActive
-    {
-        get;
-        set;
-    }
+    public ulong NodeRoll { get; set; }
+    public int NodeEpoch { get; set; }
+    public bool WorkActive { get; set; }
 
     /// <summary>
     /// The town building it operates this tick (Task_OperateMachine, row 87, at the building) or empties the output of (row 92), and the faction
     /// owning its machine; set by the think, applied by <see cref="Production.ProductionSystem"/> (derived, not hashed).
     /// </summary>
-    public TownBuilding? WorkOperate
-    {
-        get;
-        set;
-    }
-    public TownBuilding? CollectFrom
-    {
-        get;
-        set;
-    }
+    public TownBuilding? WorkOperate { get; set; }
+    public TownBuilding? CollectFrom { get; set; }
 
     /// <summary>
-    /// The town building it fills (Task_FillMachine, row 93, at the building) with the inputs it carries this tick; set by the think, applied by <see
-    /// cref="Production.ProductionSystem"/> (derived, not hashed).
+    /// The town building it fills (Task_FillMachine, row 93, at the building) with the inputs it carries this tick; set by the think, applied by
+    /// <see cref="Production.ProductionSystem"/> (derived, not hashed).
     /// </summary>
-    public TownBuilding? FillTo
-    {
-        get;
-        set;
-    }
+    public TownBuilding? FillTo { get; set; }
 
     /// <summary>
     /// The plan's step 93 Filling machine into the ditch target (rows 113, 114, 242) is due: the think sets it, <see cref="Kidnap.TownDutySystem"/>
     /// starts the errand and clears it (derived, not hashed).
     /// </summary>
-    public bool DitchRequest
-    {
-        get;
-        set;
-    }
-    public int WorkOwner
-    {
-        get;
-        set;
-    }
+    public bool DitchRequest { get; set; }
+    public int WorkOwner { get; set; }
 
     /// <summary>
     /// The building its work goals picked (set with <see cref="WorkClip"/>).
     /// </summary>
-    public TownBuilding? WorkBuilding
-    {
-        get;
-        set;
-    }
+    public TownBuilding? WorkBuilding { get; set; }
 
     /// <summary>
     /// The workplace it holds an operator slot of while on 189 / 190 (<see cref="AiSystem"/>'s serial step claims it on the package cadence); null on
     /// another goal or when no workplace had a free slot. Not saved: a load claims again (derived, not hashed).
     /// </summary>
-    public TownBuilding? WorkPost
-    {
-        get;
-        set;
-    }
+    public TownBuilding? WorkPost { get; set; }
 
     /// <summary>
     /// The clip it plays at its work (the ANIMATION its building's functionality names), cleared with <see cref="CharacterCold.ActionClip"/> when it
     /// stops; null when not working.
     /// </summary>
-    public string? WorkClip
-    {
-        get;
-        set;
-    }
+    public string? WorkClip { get; set; }
 
     /// <summary>
     /// Its work building's BUILDING_FUNCTIONALITY (string id; null without one), whose <c>animation events</c> sound on <see cref="WorkClip"/>. Set
     /// with it, so not hashed.
     /// </summary>
-    public string? WorkFunctionality
-    {
-        get;
-        set;
-    }
+    public string? WorkFunctionality { get; set; }
 
     /// <summary>
-    /// Its work building's functionality <c>hunger rate</c> (1 by default), what <c>Task_OperateMachine</c> gives its operator. Set with <see
-    /// cref="WorkClip"/>, so not hashed.
+    /// Its work building's functionality <c>hunger rate</c> (1 by default), what <c>Task_OperateMachine</c> gives its operator. Set with
+    /// <see cref="WorkClip"/>, so not hashed.
     /// </summary>
     public float WorkHungerRate { get; set; } = 1;
 
@@ -1039,29 +827,17 @@ public sealed class AiMind
     /// <summary>
     /// Its first think puts it where its plan's walk ends (<see cref="Squad.Resume"/>: back from its town's time unloaded); cleared by that think.
     /// </summary>
-    public bool Resume
-    {
-        get;
-        set;
-    }
+    public bool Resume { get; set; }
 
     /// <summary>
     /// Where the serial step puts it this tick (set by the think that took <see cref="Resume"/> up); null otherwise.
     /// </summary>
-    public Vector3? PlaceAt
-    {
-        get;
-        set;
-    }
+    public Vector3? PlaceAt { get; set; }
 
     /// <summary>
     /// The bed the serial step lies it in this tick (set by the think that arrived at its home's bed spot to sleep); null otherwise.
     /// </summary>
-    public string? BedAt
-    {
-        get;
-        set;
-    }
+    public string? BedAt { get; set; }
 
     /// <summary>
     /// Whom its follow goal follows instead of the squad leader: the contract's mission target for a goal aimed at it (none: the leader).
@@ -1079,21 +855,13 @@ public sealed class AiMind
     /// think reads what it kept.
     /// </summary>
     public CharacterId MedicPatient { get; set; } = CharacterId.None;
-    public float MedicScore
-    {
-        get;
-        set;
-    }
+    public float MedicScore { get; set; }
 
     /// <summary>
-    /// The think chose the Medic goal: the serial step of the same tick starts the treatment (<see
-    /// cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).
+    /// The think chose the Medic goal: the serial step of the same tick starts the treatment
+    /// (<see cref="FirstAid.FirstAidSystem.SendGoalTreatments"/>) and clears it (not hashed).
     /// </summary>
-    public bool MedicAsk
-    {
-        get;
-        set;
-    }
+    public bool MedicAsk { get; set; }
 
     /// <summary>
     /// The captive goals (<see cref="AiBehaviour.Captive"/>) whose job would start, each with the original's desire, found on the character's last
@@ -1106,11 +874,7 @@ public sealed class AiMind
     /// The think chose a captive goal: the serial step of the same tick starts its job (<see cref="Kidnap.CaptiveSystem.SendGoalJobs"/>) and clears
     /// it (not hashed).
     /// </summary>
-    public bool CaptiveAsk
-    {
-        get;
-        set;
-    }
+    public bool CaptiveAsk { get; set; }
 
     /// <summary>
     /// The desire kept for the captive goal <paramref name="type"/> (<see cref="CaptiveOffers"/>); 0 without one.
@@ -1122,9 +886,10 @@ public sealed class AiMind
         return 0;
     }
 
+    /// <summary>
     /// The Assault order a dialogue attack effect gave this character (<c>FUN_140680560</c> cases 6, 0x37 and 0x39 order goal 101, or 248 for 0x37,
-    /// on the effect's target): the member of the target's squad it attacks, picked again whenever it is free (<see
-    /// cref="AiSystem.AssaultTargetFor"/>); none when it has no such order. Not saved; hashed while set.
+    /// on the effect's target): the member of the target's squad it attacks, picked again whenever it is free
+    /// (<see cref="AiSystem.AssaultTargetFor"/>); none when it has no such order. Not saved; hashed while set.
     /// </summary>
     public CharacterId ForcedAssault { get; set; } = CharacterId.None;
 
@@ -1132,76 +897,47 @@ public sealed class AiMind
     /// Where the stranger a static guard stands beside is (<see cref="AiSystem"/>'s <c>GuardFactor</c>, FUN_14099edd0); null: the plain guard post.
     /// Derived by the think; hashed while set.
     /// </summary>
-    public Vector3? GuardVisitorAt
-    {
-        get;
-        set;
-    }
+    public Vector3? GuardVisitorAt { get; set; }
 
     /// <summary>
     /// What the think asks of the <see cref="FleeSystem"/> this tick: to run the character from its threats (Self preservation's provider 35) or from
     /// the enemies it senses (a goal 35 of its lists). Set by the think on the mind's own character, taken and cleared by the serial flee step of the
     /// same tick, so it is never set between ticks (not hashed).
     /// </summary>
-    public FleeAsk FleeRequest
-    {
-        get;
-        set;
-    }
+    public FleeAsk FleeRequest { get; set; }
 
     /// <summary>
     /// The fight the think chose for it (a combat goal's, <see cref="AiBehaviour.Fight"/>): the goal and the character the goal's finder (and, for
     /// the protect goals, row 13) picked. Set by the think on the mind's own character, taken and cleared by <see cref="AiSystem"/>'s serial step of
     /// the same tick, which starts the fight; never set between ticks (not hashed).
     /// </summary>
-    public TaskType FightGoal
-    {
-        get;
-        set;
-    }
+    public TaskType FightGoal { get; set; }
     public CharacterId FightTarget { get; set; } = CharacterId.None;
 
     /// <summary>
-    /// <summary>
-    /// The leader rescue goal's factor (<see cref="AiBehaviour.RescueLeader"/>): 1 while the squad leader is down and can be lifted, kept by the
-    /// carry system's serial sweep (the think reads it).
+    /// <summary> The leader rescue goal's factor (<see cref="AiBehaviour.RescueLeader"/>): 1 while the squad leader is down and can be lifted, kept
+    /// by the carry system's serial sweep (the think reads it).
     /// </summary>
-    public float RescueWant
-    {
-        get;
-        set;
-    }
+    public float RescueWant { get; set; }
 
     /// <summary>
     /// The tick the last fight the serial step started for it begins (<see cref="CharacterCold.Running"/>'s <c>Tick</c> of that fight; 0: none yet):
     /// while it runs, the fight is the AI's own, a plan step of its combat goal, and the character thinks in it (<see cref="AiSystem.Holds"/>).
     /// </summary>
-    public long FightFrom
-    {
-        get;
-        set;
-    }
+    public long FightFrom { get; set; }
 
     /// <summary>
     /// The think of a fighter chose a goal that is no fight: the serial step of the same tick ends the fight, and it thinks again at the next tick.
     /// Never set between ticks (not hashed).
     /// </summary>
-    public bool LeaveFight
-    {
-        get;
-        set;
-    }
+    public bool LeaveFight { get; set; }
 
     /// <summary>
     /// It thinks at the next tick whatever its cadence (a replan request, engine stand-in for the original's triggers): set by a sighting of its own
     /// or of a squad mate, a new enemy sensed while it fights (<see cref="AggroSystem"/>), an alert near it (<see cref="RetaliationSystem"/>), a
     /// mate's fight start and the end of its own fight (<see cref="Combat.CombatSystem"/>); cleared by that think.
     /// </summary>
-    public bool Replan
-    {
-        get;
-        set;
-    }
+    public bool Replan { get; set; }
 
     /// <summary>
     /// The AI task system's plan reset (<c>FUN_1405074a0</c>): the pending steps and the committed goal go, so the next think chooses again.
@@ -1222,31 +958,19 @@ public sealed class AiMind
     /// The shop it walks to for goal 118 (set when the target is picked, so the arrival knows what the shop stocks); follows from the target, so not
     /// hashed.
     /// </summary>
-    public TownBuilding? ShopAt
-    {
-        get;
-        set;
-    }
+    public TownBuilding? ShopAt { get; set; }
 
     /// <summary>
     /// The world tick of its next unit at the shop (<c>Task_Shopping</c>, goal 119: a second after it arrived, then a second after each sale); 0: the
     /// task is not running. Not saved (the task is not).
     /// </summary>
-    public long NextBuyTick
-    {
-        get;
-        set;
-    }
+    public long NextBuyTick { get; set; }
 
     /// <summary>
     /// The cage the kill and eat goals chose last (the AI memory's hand <c>+0x88</c>, <c>FUN_1408d0d90</c>, <b>Verified</b>): asked again while it
     /// still holds a captive, the finder returns it as it is. One memory for goals 135, 139, 282 and the eat goals. Not saved.
     /// </summary>
-    public string? FateCage
-    {
-        get;
-        set;
-    }
+    public string? FateCage { get; set; }
 
     /// <summary>
     /// The investigation's look-about count in seconds (<see cref="Crime.CrimeSystem.LookAboutSeconds"/>; the task starts it at 15).

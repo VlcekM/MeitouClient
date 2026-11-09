@@ -377,8 +377,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 if ((r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0) Launch(r, launch, advanced, world.Seed);
             }
             if (!r.Frozen && ToneOf(cold, r.Mask, advanced) is var tone && tone != r.Tone) SetTone(r, tone);
-            if (!r.Frozen && r.Dynamic.Any(d => !d))
-                Pin(r, animated ?? Animated(r, cold, placement), dt);
+            if (!r.Frozen && r.Dynamic.Any(d => !d)) Pin(r, animated ?? Animated(r, cold, placement), dt);
             if (!r.Frozen) _physics.Cover(r.Definition.RootAt(r.Pose), TileReach * r.Scale, env, tick, ref tilesLeft);
         }
 

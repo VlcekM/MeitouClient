@@ -1164,14 +1164,12 @@ public sealed partial class FixtureRegistry
 
     /// <summary>
     /// The bed search of a player-faction character (the original's <c>FUN_1408cfe00</c>, docs/game/locks.md "Beds", <b>Observed</b>): the bed it
-    /// lies in; else among the complete BF_BED (6;
-    /// a skeleton bed is not searched) beds that are free for it (<see cref="IsFree"/>) and <see cref="Reachable"/> (standing in for the original's
-    /// give-up list), a bed of its own faction
-    /// weighs 0.5, one of a faction that counts it as an ally (<paramref name="relations"/>, ally(bed's faction, character's)) 0.01, any other none;
-    /// x3 when the bed needs more than one
+    /// lies in; else among the complete BF_BED (6; a skeleton bed is not searched) beds that are free for it (<see cref="IsFree"/>) and
+    /// <see cref="Reachable"/> (standing in for the original's give-up list), a bed of its own faction weighs 0.5, one of a faction that counts it as
+    /// an ally (<paramref name="relations"/>, ally(bed's faction, character's)) 0.01, any other none; x3 when the bed needs more than one
     /// construction material, x2 indoors, x4 inside town walls (<see cref="InsideWallsBedFactor"/>). The heaviest wins, the first registered on a
-    /// tie. The candidates are the beds within <see cref="BedSearchRange"/> (engine, for the town);
-    /// <paramref name="skip"/> leaves out beds others are on their way to. Null when none.
+    /// tie. The candidates are the beds within <see cref="BedSearchRange"/> (engine, for the town); <paramref name="skip"/> leaves out beds others
+    /// are on their way to. Null when none.
     /// </summary>
     public Fixture? FindBed(World world, int slot, FactionRelations? relations, Func<Fixture, bool>? skip = null)
     {

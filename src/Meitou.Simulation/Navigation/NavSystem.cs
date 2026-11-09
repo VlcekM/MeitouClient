@@ -87,8 +87,7 @@ public sealed class NavSystem : IDisposable
             for (int dx = -radius; dx <= radius; dx++)
             {
                 var z = new ZoneCoordinate(centre.X + dx, centre.Y + dz);
-                if (z.IsInsideGrid)
-                    zones.Add(z);
+                if (z.IsInsideGrid) zones.Add(z);
             }
         }
 
@@ -111,8 +110,7 @@ public sealed class NavSystem : IDisposable
     /// </summary>
     public void RebuildZone(ZoneCoordinate zone)
     {
-        if (Walkability.World.Find(zone) is not null)
-            _ = _service.Rebuild(zone);
+        if (Walkability.World.Find(zone) is not null) _ = _service.Rebuild(zone);
     }
 
     /// <summary>
@@ -165,8 +163,7 @@ public sealed class NavSystem : IDisposable
     /// </summary>
     public void RemoveRuntimeBuilding(string instanceId)
     {
-        if (Runtime.Remove(instanceId) is not { } removed)
-            return;
+        if (Runtime.Remove(instanceId) is not { } removed) return;
 
         foreach (var zone in NavRuntimeBuildings.ZonesReached(removed.Position))
             RebuildZone(zone);
@@ -216,8 +213,7 @@ public sealed class NavSystem : IDisposable
     /// </summary>
     bool IsGateId(Dictionary<string, string> runtime, string id)
     {
-        if (!runtime.TryGetValue(id, out var record) && !LevelRecords().TryGetValue(id, out record))
-            return false;
+        if (!runtime.TryGetValue(id, out var record) && !LevelRecords().TryGetValue(id, out record)) return false;
 
         return _db.Find(record) is { } building && TownBuildings.IsGate(_db, building, _functions);
     }
@@ -225,8 +221,7 @@ public sealed class NavSystem : IDisposable
     Dictionary<string, string> LevelRecords()
     {
         int revision = _levels.EditRevision;
-        if (_levelRecords is { } known && known.Revision == revision)
-            return known.Map;
+        if (_levelRecords is { } known && known.Revision == revision) return known.Map;
 
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var b in _levels.Buildings())

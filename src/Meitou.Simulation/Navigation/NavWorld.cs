@@ -81,12 +81,10 @@ public sealed class NavWorld
         foreach (var (key, value) in _links)
         {
             int zoneOfKey = (int)(key >> 32);
-            if (zoneOfKey == slot)
-                continue;
+            if (zoneOfKey == slot) continue;
 
             var kept = value.Where(l => l.To.Zone != slot).ToArray();
-            if (kept.Length > 0)
-                newLinks[key] = kept;
+            if (kept.Length > 0) newLinks[key] = kept;
         }
 
         var world = new NavWorld([.. list], newSlots, newLinks);
@@ -104,8 +102,7 @@ public sealed class NavWorld
     /// </summary>
     public NavWorld Without(ZoneCoordinate zone)
     {
-        if (!_slots.TryGetValue(zone, out int removed))
-            return this;
+        if (!_slots.TryGetValue(zone, out int removed)) return this;
 
         var kept = _slots.Where(kv => kv.Key != zone).OrderBy(kv => kv.Value).ToList();
         var remap = new Dictionary<int, int>();
@@ -122,15 +119,13 @@ public sealed class NavWorld
         foreach (var (key, value) in _links)
         {
             int zoneOfKey = (int)(key >> 32);
-            if (zoneOfKey == removed)
-                continue;
+            if (zoneOfKey == removed) continue;
 
             var ls = value
                 .Where(l => l.To.Zone != removed)
                 .Select(l => l with { To = new NavRef(remap[l.To.Zone], l.To.Polygon) })
                 .ToArray();
-            if (ls.Length > 0)
-                newLinks[new NavRef(remap[zoneOfKey], (int)(key & 0xffffffff)).Key] = ls;
+            if (ls.Length > 0) newLinks[new NavRef(remap[zoneOfKey], (int)(key & 0xffffffff)).Key] = ls;
         }
 
         return new NavWorld([.. newMeshes], newSlots, newLinks);
@@ -150,8 +145,7 @@ public sealed class NavWorld
         {
             foreach (var eb in edgesB)
             {
-                if (!NavGeometry.SpansMeet(Span(ma, ea, alongX), Span(mb, eb, alongX), maxStep))
-                    continue;
+                if (!NavGeometry.SpansMeet(Span(ma, ea, alongX), Span(mb, eb, alongX), maxStep)) continue;
 
                 Add(new NavRef(a, ea.Polygon), new NavLink(ea.Edge, new NavRef(b, eb.Polygon)));
                 Add(new NavRef(b, eb.Polygon), new NavLink(eb.Edge, new NavRef(a, ea.Polygon)));
@@ -180,8 +174,7 @@ public sealed class NavWorld
     {
         height = float.MinValue;
         var zone = WorldLayout.ZoneOf(x, z);
-        if (!_slots.TryGetValue(zone, out int slot))
-            return false;
+        if (!_slots.TryGetValue(zone, out int slot)) return false;
 
         return _meshes[slot].TryHighestAt(x, z, out height);
     }
@@ -224,13 +217,11 @@ public sealed class NavWorld
     /// </param>
     public void HeightsAt(float x, float z, List<float> heights, float nearY = 0, float edge = 0)
     {
-        if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot))
-            return;
+        if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return;
 
         var m = _meshes[slot];
         m.HeightsAt(x, z, heights);
-        if (heights.Count == 0 && edge > 0 && TryEdgeHeight(x, z, nearY, edge, out float h))
-            heights.Add(h);
+        if (heights.Count == 0 && edge > 0 && TryEdgeHeight(x, z, nearY, edge, out float h)) heights.Add(h);
     }
 
     /// <summary>
@@ -240,12 +231,10 @@ public sealed class NavWorld
     public bool TryEdgeHeight(float x, float z, float nearY, float edge, out float height)
     {
         height = 0;
-        if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot))
-            return false;
+        if (!_slots.TryGetValue(WorldLayout.ZoneOf(x, z), out int slot)) return false;
 
         var m = _meshes[slot];
-        if (m.Nearest(x, nearY, z, edge, out _) is not (var p and >= 0))
-            return false;
+        if (m.Nearest(x, nearY, z, edge, out _) is not (var p and >= 0)) return false;
 
         height = ClosestPoint(m, p, new Vector3(x, nearY, z)).Y;
         return true;
@@ -268,18 +257,15 @@ public sealed class NavWorld
         {
             for (int dx = -1; dx <= 1; dx++)
             {
-                if (!_slots.TryGetValue(new ZoneCoordinate(zone.X + dx, zone.Y + dz), out int slot))
-                    continue;
+                if (!_slots.TryGetValue(new ZoneCoordinate(zone.X + dx, zone.Y + dz), out int slot)) continue;
 
                 var m = _meshes[slot];
                 int poly = m.Nearest(p.X, p.Y, p.Z, maxDistance, out float d, skip is null ? null : q => skip(new NavRef(slot, q)));
-                if (poly < 0)
-                    continue;
+                if (poly < 0) continue;
 
                 float y = m.HeightAt(poly, Math.Clamp(p.X, m.BoundsMin.X, m.BoundsMax.X), Math.Clamp(p.Z, m.BoundsMin.Y, m.BoundsMax.Y));
                 float score = d * 4 + Math.Abs(y - p.Y);
-                if (score >= bestScore)
-                    continue;
+                if (score >= bestScore) continue;
 
                 bestScore = score;
                 found = true;

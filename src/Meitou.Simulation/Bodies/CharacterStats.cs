@@ -3,9 +3,9 @@ using Meitou.Data.Gameplay.Bodies;
 namespace Meitou.Simulation.Bodies;
 
 /// <summary>
-/// A character's stats: one float per stat, no level and no XP counter (docs/game/character-stats.md "Stats"). Training raises a stat through <see
-/// cref="Gain"/>, whose curve saturates near 101. The instance belongs to one character; nothing here is shared, so the world can run characters in
-/// parallel. The XP sources that call <see cref="Gain"/> are in <see cref="XpService"/>.
+/// A character's stats: one float per stat, no level and no XP counter (docs/game/character-stats.md "Stats"). Training raises a stat through
+/// <see cref="Gain"/>, whose curve saturates near 101. The instance belongs to one character; nothing here is shared, so the world can run characters
+/// in parallel. The XP sources that call <see cref="Gain"/> are in <see cref="XpService"/>.
 /// </summary>
 public sealed class CharacterStats
 {
@@ -68,9 +68,9 @@ public sealed class CharacterStats
     internal float[]? GodOriginal => _godOriginal;
 
     /// <summary>
-    /// Debug god mode (Meitou only): keeps the current values for <see cref="Unboost"/> and sets every stat that has storage to <paramref
-    /// name="value"/>. Does nothing while already boosted, so the first values stay the ones that come back. Training while boosted changes nothing
-    /// visible (the XP curve gives a stat this high no gain) and anything it adds is dropped by <see cref="Unboost"/>.
+    /// Debug god mode (Meitou only): keeps the current values for <see cref="Unboost"/> and sets every stat that has storage to
+    /// <paramref name="value"/>. Does nothing while already boosted, so the first values stay the ones that come back. Training while boosted changes
+    /// nothing visible (the XP curve gives a stat this high no gain) and anything it adds is dropped by <see cref="Unboost"/>.
     /// </summary>
     public void Boost(float value)
     {
@@ -124,9 +124,9 @@ public sealed class CharacterStats
     }
 
     /// <summary>
-    /// A new character's stats (docs/game/character-stats.md "Building a character's stats"): the base values (a STATS record through <see
-    /// cref="StatsData.Read"/>, or <see cref="FromGroups"/>), then the CHARACTER's <c>stats randomise</c> n adding a uniform offset in [-n, n] to
-    /// each of the 33 record stats (the original's "about 30"; the exact set is <b>Unknown</b>; floored at 0 here), then every stat number 1 to 38
+    /// A new character's stats (docs/game/character-stats.md "Building a character's stats"): the base values (a STATS record through
+    /// <see cref="StatsData.Read"/>, or <see cref="FromGroups"/>), then the CHARACTER's <c>stats randomise</c> n adding a uniform offset in [-n, n]
+    /// to each of the 33 record stats (the original's "about 30"; the exact set is <b>Unknown</b>; floored at 0 here), then every stat number 1 to 38
     /// times the race multiplier of that number. Medic's storage is shared by numbers 9, 14 and 15, so it takes the product of the three entries, as
     /// a literal reading of the loop gives (<b>Observed</b>). The offsets come from the world's seeded rolls, so the result depends only on the
     /// arguments.

@@ -9,8 +9,8 @@ namespace Meitou.Simulation.Carrying;
 /// The reaction of a player character to a failed kidnap or stealth knock-out (docs/game/carry-loot.md "Kidnapping", docs/game/combat.md "Stealth
 /// knock-out"): the original does not push a fight task. The attacker is made known to the victim (forced sense <c>FUN_140858f40</c>, the engaged
 /// list <c>FUN_1405cb0a0</c>, <c>Character::attackTarget</c> <c>FUN_140999f00</c>), a replan is asked (<c>FUN_14001a5b9</c>) and the chooser decides;
-/// a sleeper's kidnap also gives order 116 with the queue cleared (<c>FUN_1405d20d0</c>). So the victim's fight is a goal of the decision step (<see
-/// cref="EngagedFoe"/>, step 4 beside 32 Self preservation) that an order running at step 1 beats.
+/// a sleeper's kidnap also gives order 116 with the queue cleared (<c>FUN_1405d20d0</c>). So the victim's fight is a goal of the decision step
+/// (<see cref="EngagedFoe"/>, step 4 beside 32 Self preservation) that an order running at step 1 beats.
 /// </summary>
 public sealed partial class CarrySystem
 {

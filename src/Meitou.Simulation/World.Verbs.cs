@@ -63,10 +63,9 @@ public sealed partial class World
         && CharacterFacts.RegardsFriendly(dialogue, this, a, b);
 
     /// <summary>
-    /// The facts the pick-up verb reads (<see cref="VerbFacts"/>), the host asking between ticks;
-    /// null when the world has no population data or a character is gone.
-    /// The town a character stands in is the one its point is in
-    /// (<c>AiSystem.TownAt</c>, <b>engine reading</b> of the status object's <c>+0x88</c>, docs/game/ui-input.md).
+    /// The facts the pick-up verb reads (<see cref="VerbFacts"/>), the host asking between ticks; null when the world has no population data or a
+    /// character is gone. The town a character stands in is the one its point is in (<c>AiSystem.TownAt</c>, <b>engine reading</b> of the status
+    /// object's <c>+0x88</c>, docs/game/ui-input.md).
     /// </summary>
     public VerbFacts? VerbFactsOf(CharacterId lead, CharacterId target)
     {

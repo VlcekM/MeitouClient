@@ -96,8 +96,7 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// The strength of each member able to fight (alive and conscious): 10 + the mean of its melee attack, melee defence and toughness. A platoon
     /// whose characters were never made (no stored state) counts <see cref="Platoon.Size"/> members of strength 25. The object identifies the member
-    /// for
-    /// <see cref="Kill"/>.
+    /// for <see cref="Kill"/>.
     /// </summary>
     List<(object? Member, float Strength)> Strengths(Platoon p)
     {

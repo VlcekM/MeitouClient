@@ -111,8 +111,8 @@ public sealed class RagdollDefinition
     public int Root { get; init; }
 
     /// <summary>
-    /// Where the character stands while its whole body is a ragdoll in <paramref name="pose"/>: the root actor's origin, which is its bone's (<see
-    /// cref="RagdollBody.BoneInBody"/>).
+    /// Where the character stands while its whole body is a ragdoll in <paramref name="pose"/>: the root actor's origin, which is its bone's
+    /// (<see cref="RagdollBody.BoneInBody"/>).
     /// </summary>
     public Vector3 RootAt(ReadOnlySpan<RigidTransform> pose) => pose[Root].Apply(Bodies[Root].BoneInBody.Position);
     /// <summary>

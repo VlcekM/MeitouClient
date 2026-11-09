@@ -131,8 +131,7 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         double buildings = sw.Elapsed.TotalMilliseconds;
         sw.Restart();
 
-        if (foliageTask is not null)
-            AddFoliage(g, foliageTask.GetAwaiter().GetResult());
+        if (foliageTask is not null) AddFoliage(g, foliageTask.GetAwaiter().GetResult());
 
         Phases = (terrain, buildings, sw.Elapsed.TotalMilliseconds);
         sw.Restart();
@@ -154,14 +153,12 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
         get
         {
             int revision = _levels.EditRevision;
-            if (_indexedRevision == revision)
-                return _byZone;
+            if (_indexedRevision == revision) return _byZone;
 
             var map = new Dictionary<ZoneCoordinate, List<BuildingPlacement>>();
             foreach (var b in _levels.Buildings())
             {
-                if (!map.TryGetValue(b.Zone, out var list))
-                    map[b.Zone] = list = [];
+                if (!map.TryGetValue(b.Zone, out var list)) map[b.Zone] = list = [];
 
                 list.Add(b);
             }

@@ -515,9 +515,8 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// One nest a tick, in turn over every nest (<c>TownList::vfunc_4</c>'s nest cursor, <b>Verified</b>; the original's frame is the tick here):
     /// when loaded and its pool has room it makes one more squad (built on the population thread): not a wiped-out nest, not one with a player
-    /// character within
-    /// <see cref="NestGuardRadius"/> (it is only weighed then, so a nest left with nothing to make is still found wiped out). The turn is the tick modulo the
-    /// nest count, so it needs no saved cursor.
+    /// character within <see cref="NestGuardRadius"/> (it is only weighed then, so a nest left with nothing to make is still found wiped out). The
+    /// turn is the tick modulo the nest count, so it needs no saved cursor.
     /// </summary>
     void TopUpNest(World world)
     {

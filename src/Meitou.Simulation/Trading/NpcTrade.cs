@@ -93,7 +93,6 @@ public static class NpcTrade
                     yield return (shop.Stock, shop.Stock.Regions![k], squad);
         }
         foreach (var f in building.Fixtures)
-            if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Contents is { } box)
-                yield return (box, null, resident);
+            if (f.HoldsShopStock && world.Fixtures.Find(f.Id)?.Contents is { } box) yield return (box, null, resident);
     }
 }

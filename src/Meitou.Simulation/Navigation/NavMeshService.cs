@@ -83,8 +83,7 @@ internal sealed class NavMeshService : IDisposable
     {
         get
         {
-            if (Covered || Settings.Threads > 0)
-                return Settings;
+            if (Covered || Settings.Threads > 0) return Settings;
 
             return Settings with { Threads = Math.Max(1, Environment.ProcessorCount / 4) };
         }
@@ -107,8 +106,7 @@ internal sealed class NavMeshService : IDisposable
 
         var tcs = new TaskCompletionSource<NavZoneReady>(TaskCreationOptions.RunContinuationsAsynchronously);
         var existing = _pending.GetOrAdd(zone, tcs);
-        if (ReferenceEquals(existing, tcs))
-            _queue.Add(zone);
+        if (ReferenceEquals(existing, tcs)) _queue.Add(zone);
 
         return existing.Task;
     }
@@ -132,8 +130,7 @@ internal sealed class NavMeshService : IDisposable
 
         var tcs = new TaskCompletionSource<NavZoneReady>(TaskCreationOptions.RunContinuationsAsynchronously);
         var existing = _pending.GetOrAdd(zone, tcs);
-        if (ReferenceEquals(existing, tcs))
-            _queue.Add(zone);
+        if (ReferenceEquals(existing, tcs)) _queue.Add(zone);
 
         return existing.Task;
     }
@@ -153,8 +150,7 @@ internal sealed class NavMeshService : IDisposable
                 return false;
 
             var test = (bool[])kept.Clone();
-            if (!SeedPruner.Extend(mesh, test, [at], Settings))
-                return false;
+            if (!SeedPruner.Extend(mesh, test, [at], Settings)) return false;
 
             (_standing.TryGetValue(zone, out var points) ? points : _standing[zone] = []).Add(at);
             Walkability.SetWorld(Publish(Walkability.World));
@@ -202,8 +198,7 @@ internal sealed class NavMeshService : IDisposable
                 published |= _full.Remove(zone);
                 _live.Remove(zone);
                 _standing.Remove(zone);
-                if (_pending.TryRemove(zone, out var tcs))
-                    cancelled.Add(tcs);
+                if (_pending.TryRemove(zone, out var tcs)) cancelled.Add(tcs);
             }
 
             // Its neighbours' border regions toward it are kept again (a zone never published changed nothing).
@@ -220,12 +215,10 @@ internal sealed class NavMeshService : IDisposable
         uint settingsHash = NavMeshCache.SettingsHash(Settings) * 16777619 ^ NavMeshCache.ContentHash(_install, _db);
         foreach (var zone in _queue.GetConsumingEnumerable())
         {
-            if (_disposed)
-                break;
+            if (_disposed) break;
 
             // Unloaded while it waited, or published by an earlier entry.
-            if (!_pending.ContainsKey(zone))
-                continue;
+            if (!_pending.ContainsKey(zone)) continue;
 
             var watch = Stopwatch.StartNew();
             try
@@ -257,8 +250,7 @@ internal sealed class NavMeshService : IDisposable
                 lock (_publishLock)
                 {
                     // Unloaded while it was built: only the cache keeps it (in `full` it would spread kept regions into its neighbours).
-                    if (!_pending.TryRemove(zone, out tcs))
-                        continue;
+                    if (!_pending.TryRemove(zone, out tcs)) continue;
 
                     _full[zone] = mesh;
 
@@ -273,13 +265,11 @@ internal sealed class NavMeshService : IDisposable
                 ZoneReady?.Invoke(ready);
 
                 // The buildings changed while this one was built: it may have missed it.
-                if (_rebuilds.GetValueOrDefault(zone) != rebuildVersion)
-                    _ = Rebuild(zone);
+                if (_rebuilds.GetValueOrDefault(zone) != rebuildVersion) _ = Rebuild(zone);
             }
             catch (Exception e)
             {
-                if (_pending.TryRemove(zone, out var tcs))
-                    tcs.TrySetException(e);
+                if (_pending.TryRemove(zone, out var tcs)) tcs.TrySetException(e);
             }
         }
     }

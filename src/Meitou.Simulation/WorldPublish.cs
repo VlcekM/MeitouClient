@@ -584,9 +584,9 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// A skill's tooltip terms (<c>FUN_140890b00</c>): the stat multiplier (<c>FUN_1406457e0</c>) asked for one term at a time, injuries (the limb term), hunger, weather (the dust
-    /// factor), darkness (the light term), robotics (fitted limbs and the disabled-arm 0.66) and, but for strength and perception, the worn gear (perception has its armour bonus,
-    /// added to the level before the multiplier, instead); for strength the 0.66 of a
+    /// A skill's tooltip terms (<c>FUN_140890b00</c>): the stat multiplier (<c>FUN_1406457e0</c>) asked for one term at a time, injuries (the limb
+    /// term), hunger, weather (the dust factor), darkness (the light term), robotics (fitted limbs and the disabled-arm 0.66) and, but for strength
+    /// and perception, the worn gear (perception has its armour bonus, added to the level before the multiplier, instead); for strength the 0.66 of a
     /// disabled arm again as the missing arm penalty. The total is the stat with every term.
     /// </summary>
     internal static (float Level, int Penalty) EffectiveSkill(CharacterCold cold, MedicalState med, CharacterStats stats, StatsEnumerated stat)

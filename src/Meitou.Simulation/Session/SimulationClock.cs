@@ -1,16 +1,16 @@
 namespace Meitou.Simulation.Session;
 
 /// <summary>
-/// The world's clock: how many simulation ticks a frame owes (docs/simulation.md "Time model", owner decisions 1 and 2). One tick is
-/// 1/30 s of GAME time at every speed, so the accumulator is fed <c>real dt x speed</c> and speeds 1, 2 and 5 run 30, 60 and 150
-/// ticks per real second; a paused world runs none. Speeds are the game's {pause, 1, 2, 5} (Verified, docs/game/game-loop.md
-/// "Speed and pause"); the two fast ones are settings (<see cref="SetFastSpeeds"/>). The pause key stores the speed and sets 0, and resumes at the stored one (<see cref="PauseKey"/>); the HUD pause button only sets 0; a separate <see cref="RequestedPause"/>
-/// (menus, loading) stops the world without touching the speed, and the world is paused when either holds, as the game's paused
-/// flag is "requested pause OR speed 0".
-/// A frame's real time is capped at <see cref="MaxFrameSeconds"/> BEFORE the speed multiplier, as the original does (FUN_14082ac70; it slows below 20 fps at every
-/// speed, Verified, docs/game/game-loop.md "Frame clocks"). A frame also owes at most <see cref="MaxTicksPerFrame"/> x speed ticks, a safety limit above that cap
-/// (engine choice: 2 ticks is 0.067 s of game time at 1x, the cap owes 1.5); the rest are dropped (<see cref="AchievedSpeed"/>). The tick count depends only on the
-/// summed <c>real time x speed</c>, not on how frames split it (the <see cref="FixedStepClock"/> property), as long as no tick is dropped.
+/// The world's clock: how many simulation ticks a frame owes (docs/simulation.md "Time model", owner decisions 1 and 2). One tick is 1/30 s of GAME
+/// time at every speed, so the accumulator is fed <c>real dt x speed</c> and speeds 1, 2 and 5 run 30, 60 and 150 ticks per real second; a paused
+/// world runs none. Speeds are the game's {pause, 1, 2, 5} (Verified, docs/game/game-loop.md "Speed and pause"); the two fast ones are settings
+/// (<see cref="SetFastSpeeds"/>). The pause key stores the speed and sets 0, and resumes at the stored one (<see cref="PauseKey"/>); the HUD pause
+/// button only sets 0; a separate <see cref="RequestedPause"/> (menus, loading) stops the world without touching the speed, and the world is paused
+/// when either holds, as the game's paused flag is "requested pause OR speed 0". A frame's real time is capped at <see cref="MaxFrameSeconds"/>
+/// BEFORE the speed multiplier, as the original does (FUN_14082ac70; it slows below 20 fps at every speed, Verified, docs/game/game-loop.md "Frame
+/// clocks"). A frame also owes at most <see cref="MaxTicksPerFrame"/> x speed ticks, a safety limit above that cap (engine choice: 2 ticks is 0.067 s
+/// of game time at 1x, the cap owes 1.5); the rest are dropped (<see cref="AchievedSpeed"/>). The tick count depends only on the summed <c>real time
+/// x speed</c>, not on how frames split it (the <see cref="FixedStepClock"/> property), as long as no tick is dropped.
 /// </summary>
 public sealed class SimulationClock
 {

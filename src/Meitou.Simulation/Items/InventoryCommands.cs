@@ -369,12 +369,10 @@ public static class InventoryCommands
 
     /// <summary>
     /// The right click's move into another character (<c>FUN_140713d20</c>, its target <c>FUN_14070dcd0</c>): one unit at a time, at most
-    /// <paramref name="count"/> (0: until one fails), each
-    /// into the target's open bag window first (<paramref name="bagFirst"/>), then its character window: the slots of the item's type
-    /// (<see cref="TryEquip"/>), then the main grid, stacks of it
-    /// first (<see cref="Inventory.AddTo"/>). Leaving its owner a unit is no longer a death item. Returns the units moved;
-    /// <paramref name="equipped"/>: one was worn.
-    /// <paramref name="bagOnly"/>: only into the target's worn bag, nowhere else.
+    /// <paramref name="count"/> (0: until one fails), each into the target's open bag window first (<paramref name="bagFirst"/>), then its character
+    /// window: the slots of the item's type (<see cref="TryEquip"/>), then the main grid, stacks of it first (<see cref="Inventory.AddTo"/>). Leaving
+    /// its owner a unit is no longer a death item. Returns the units moved; <paramref name="equipped"/>: one was worn. <paramref name="bagOnly"/>:
+    /// only into the target's worn bag, nowhere else.
     /// </summary>
     public static int MoveInto(Inventory owner, ItemInstance item, int count, Inventory into, bool bagFirst, out bool equipped,
             CharacterCold? wearer = null, bool bagOnly = false)

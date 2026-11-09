@@ -120,9 +120,8 @@ public static class TechniqueChooser
     /// <summary>
     /// Whether a technique is for weapon category <paramref name="category"/> (the technique's per-category table, <c>FUN_1406684c0</c>,
     /// <b>Verified</b>): a creature technique (<c>animal</c> 9 and up) for that category only; any other by its flags, <c>katanas</c> 0, <c>sabre</c>
-    /// 1, <c>blunt</c> 2,
-    /// <c>heavy weapons</c> 3, <c>hackers</c> 4, <c>unarmed</c> 5, <c>bow</c> 6 and <c>polearm</c> 8 (the <c>1 handed</c> flag is not read; a category 7 or a
-    /// creature one never fits).
+    /// 1, <c>blunt</c> 2, <c>heavy weapons</c> 3, <c>hackers</c> 4, <c>unarmed</c> 5, <c>bow</c> 6 and <c>polearm</c> 8 (the <c>1 handed</c> flag is
+    /// not read; a category 7 or a creature one never fits).
     /// </summary>
     internal static bool Fits(CombatTechnique t, int category)
     {
@@ -160,8 +159,7 @@ public static class TechniqueChooser
     /// success the candidates are the block techniques that are not dodges (<b>Verified</b>, the block pool needs <c>is dodge</c> 0, so the "Dodge
     /// back" rows flagged as blocks too are out) whose direction equals the blow's, on failure those of a different direction in the same class, so
     /// the blow passes. A fighter without one is dodge-capable only when the roll against <paramref name="dodgeChancePercent"/> succeeds, and then
-    /// picks among the dodge techniques. The pick is weighted on
-    /// <c>chance</c>. -1 when there is no reaction.
+    /// picks among the dodge techniques. The pick is weighted on <c>chance</c>. -1 when there is no reaction.
     /// </summary>
     public static int ChooseReaction(
         IReadOnlyList<CombatTechnique> all,

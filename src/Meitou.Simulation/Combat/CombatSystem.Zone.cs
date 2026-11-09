@@ -278,10 +278,10 @@ public sealed partial class CombatSystem
         float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * medical.StatMultiplier(stat);
         float str = Eff(StatsEnumerated.Strength);
         var raw = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(
-                UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str, fighter.FistsItem, TargetKind.None, null, fighter.DamageOutput, _combat)
-            : DamageFormulas.Packet(
-                Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, TargetKind.None, null, fighter.DamageOutput, _combat);
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, cold, fighter), Eff(StatsEnumerated.Toughness), str, fighter.FistsItem, TargetKind.None,
+                null, fighter.DamageOutput, _combat)
+            : DamageFormulas.Packet(Eff(fighter.WeaponSkill), Eff(StatsEnumerated.Dexterity) * fighter.DexterityMult, str, fighter.Weapon!, TargetKind.None,
+                null, fighter.DamageOutput, _combat);
         var packet = Powered(raw, tech, blow);
         float f = 2 * packet.Blunt + 0.5f * packet.Cut;
 
@@ -297,8 +297,7 @@ public sealed partial class CombatSystem
             var (_, doorId, wall) = found[n];
             if (doorId is not null && world.Fixtures.Find(doorId) is { } door)
                 global::Meitou.Simulation.Locks.LockSystem.Strike(world, door, Math.Clamp(f, 20, 60));
-            else if (wall is not null)
-                StrikeWall(world, wall, f, a);
+            else if (wall is not null) StrikeWall(world, wall, f, a);
         }
 
         if ((e.Arg & 0x100) == 0 && aSlot.AttackSeq == (int)e.Amount && aSlot.AttackTech >= 0) aSlot.LastOutcome = BlowOutcome.Hit;
@@ -354,8 +353,7 @@ public sealed partial class CombatSystem
     /// <summary>
     /// A blow on a wall building (<c>WallBuilding</c> damage, docs/game/buildings-production.md): <paramref name="f"/> = 2 blunt + 0.5 cut of the
     /// attacker's packet; clamp(f / 2, 10, 60) x 0.003 off the progress of the wall line (an attached piece's parent), destroyed at 0 with the
-    /// wall-broken sound at
-    /// <paramref name="attacker"/>. Shared by the fight's blows and the bashers' swings (Smashing, 272).
+    /// wall-broken sound at <paramref name="attacker"/>. Shared by the fight's blows and the bashers' swings (Smashing, 272).
     /// </summary>
     internal static bool StrikeWall(World world, Construction.BuildSite wall, float f, int attacker)
     {

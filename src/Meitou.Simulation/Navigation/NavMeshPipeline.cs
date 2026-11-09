@@ -36,8 +36,7 @@ internal static class NavMeshPipeline
         var exterior = ZoneNavMeshBuilder.Build(geometry, settings, out times);
         exterior.Surfaces = new NavSurfaces(NavSurfaces.From(geometry, geometry.ZoneMin, geometry.ZoneMax));
         exterior.Terrain ??= geometry.Ground;
-        if (!interiors)
-            return exterior;
+        if (!interiors) return exterior;
 
         var watch = Stopwatch.StartNew();
 
@@ -149,8 +148,7 @@ internal static class NavMeshPipeline
         var stack = new Stack<int>();
         for (int p = 0; p < m.PolygonCount; p++)
         {
-            if (component[p] >= 0)
-                continue;
+            if (component[p] >= 0) continue;
 
             component[p] = next;
             stack.Push(p);

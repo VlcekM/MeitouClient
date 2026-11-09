@@ -21,11 +21,7 @@ public sealed class GoalClaims
 
     internal void Configure(float tickSeconds) => _ticks = (long)MathF.Ceiling(Seconds / tickSeconds);
 
-    internal long Now
-    {
-        get;
-        set;
-    }
+    internal long Now { get; set; }
 
     /// <summary>
     /// Gives the entry a full timer (made when absent).

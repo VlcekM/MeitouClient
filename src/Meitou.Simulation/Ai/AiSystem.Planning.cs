@@ -60,8 +60,8 @@ public sealed partial class AiSystem
         public int Category => _world.Characters.Cold(_slot) is { } c ? Repertoire.Of(_world, c) : Repertoire.Human;
 
         /// <summary>
-        /// Restricted rows are offered: the character's faction is not the player's (the name is the old reading, kept; see <see
-        /// cref="IPlanWorld.Squadless"/>).
+        /// Restricted rows are offered: the character's faction is not the player's (the name is the old reading, kept; see
+        /// <see cref="IPlanWorld.Squadless"/>).
         /// </summary>
         public bool Squadless => _restrictedOpen;
         bool _restrictedOpen;

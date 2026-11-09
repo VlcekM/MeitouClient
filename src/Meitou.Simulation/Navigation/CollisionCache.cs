@@ -53,8 +53,7 @@ internal sealed class CollisionCache(GameInstall install)
     /// </summary>
     public PreparedCollision? Get(string recordPath)
     {
-        if (string.IsNullOrWhiteSpace(recordPath))
-            return null;
+        if (string.IsNullOrWhiteSpace(recordPath)) return null;
 
         return _files.GetOrAdd(recordPath, Load);
     }
@@ -85,14 +84,12 @@ internal sealed class CollisionCache(GameInstall install)
             var v = new List<Vector3>();
             var i = new List<int>();
             CollisionTriangulator.Triangulate(s, v, i);
-            if (i.Count == 0)
-                continue;
+            if (i.Count == 0) continue;
 
             var world = v.Select(CollisionTriangulator.ToWorldAxes).ToArray();
             var indices = i.ToArray();
             bool convex = s.Kind is CollisionShapeKind.Box or CollisionShapeKind.Capsule or CollisionShapeKind.Convex;
-            if (s.Kind == CollisionShapeKind.TriangleMesh)
-                FixClosedWinding(world, indices);
+            if (s.Kind == CollisionShapeKind.TriangleMesh) FixClosedWinding(world, indices);
 
             shapes.Add(new PreparedShape(s.Kind, world, indices, convex));
         }
@@ -131,8 +128,7 @@ internal sealed class CollisionCache(GameInstall install)
         for (int t = 0; t < idx.Length; t += 3)
             volume += Vector3.Dot(v[idx[t]], Vector3.Cross(v[idx[t + 1]], v[idx[t + 2]]));
 
-        if (volume >= 0)
-            return Winding.Outward;
+        if (volume >= 0) return Winding.Outward;
 
         for (int t = 0; t < idx.Length; t += 3)
             (idx[t + 1], idx[t + 2]) = (idx[t + 2], idx[t + 1]);

@@ -7,10 +7,9 @@ namespace Meitou.Simulation.Saving;
 /// <summary>
 /// Beds, cages, sentences and building locks in a save (docs/formats/save.md "Locks, cages and sentences"; the key facts in docs/game/locks.md "Save
 /// keys" and economy.md 11.5). Character keys of GAMESTATE_CHARACTER: <c>in something</c> (int, <see cref="HeldState"/>), <c>in what</c> (a building
-/// handle),
-/// <c>sentence</c> (int, the sentence's start in game hours, day x 24 + hour, truncated) and <c>psts</c> (float, its length in hours); Meitou's own
-/// <c>meitou in something</c> / <c>meitou in what</c> (the <see cref="Fixture.Id"/>) carry what the original's handle cannot name (an interior cage, a bed).
-/// Building locks are read from and written into the zones' existing GAMESTATE_BUILDING records only.
+/// handle), <c>sentence</c> (int, the sentence's start in game hours, day x 24 + hour, truncated) and <c>psts</c> (float, its length in hours);
+/// Meitou's own <c>meitou in something</c> / <c>meitou in what</c> (the <see cref="Fixture.Id"/>) carry what the original's handle cannot name (an
+/// interior cage, a bed). Building locks are read from and written into the zones' existing GAMESTATE_BUILDING records only.
 /// </summary>
 public static class HeldSave
 {

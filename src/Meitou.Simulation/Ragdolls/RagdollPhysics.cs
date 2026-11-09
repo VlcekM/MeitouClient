@@ -465,8 +465,8 @@ public interface IRagdollEnvironment
     /// </summary>
     int Generation => 0;
     /// <summary>
-    /// Adds the triangles (three points each, world space, any winding) of the building collision between <paramref name="min"/> and <paramref
-    /// name="max"/> (X and Z).
+    /// Adds the triangles (three points each, world space, any winding) of the building collision between <paramref name="min"/> and
+    /// <paramref name="max"/> (X and Z).
     /// </summary>
     /// <returns>False while some of them are not known yet (being read): the tile asks again.</returns>
     bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles);

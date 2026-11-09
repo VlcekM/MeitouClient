@@ -12,8 +12,8 @@ public readonly record struct GoalTarget(CharacterId Body, string? Place)
 }
 
 /// <summary>
-/// A system that owns work on a target: it publishes the (worker, target) pairs it is acting out into the squads' goal list (<see
-/// cref="SquadGoals.Of"/>).
+/// A system that owns work on a target: it publishes the (worker, target) pairs it is acting out into the squads' goal list
+/// (<see cref="SquadGoals.Of"/>).
 /// </summary>
 public interface IGoalSource
 {
@@ -24,8 +24,8 @@ public interface IGoalSource
 /// The squads' goal list: the entries of each squad blackboard's list at +0x238 (worker, sub-target hand). Every finder that skips what a squad mate
 /// already works on asks it (<c>Blackboard::howManyGuysWorkingOnThisSubTarget</c>, <c>FUN_1402690e0</c>: the entries of the asker's squad whose
 /// worker is neither the asker nor the target and whose sub-target is the target; <c>isMySubTarget</c>, <c>FUN_140269190</c>: an entry of that worker
-/// with that target; <b>Verified</b>, docs/game/ai-tasks.md). Meitou keeps no stored list: each system that acts out work publishes its pairs (<see
-/// cref="IGoalSource"/>) when a finder takes a snapshot, and the finder adds what it starts itself (<see cref="Add"/>).
+/// with that target; <b>Verified</b>, docs/game/ai-tasks.md). Meitou keeps no stored list: each system that acts out work publishes its pairs
+/// (<see cref="IGoalSource"/>) when a finder takes a snapshot, and the finder adds what it starts itself (<see cref="Add"/>).
 /// </summary>
 public sealed class SquadGoals
 {

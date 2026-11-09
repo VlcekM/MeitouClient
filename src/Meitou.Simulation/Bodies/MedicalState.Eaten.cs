@@ -3,14 +3,10 @@ namespace Meitou.Simulation.Bodies;
 public sealed partial class MedicalState
 {
     /// <summary>
-    /// Passes of <see cref="BeingEaten"/> that found nothing left to eat (the original's medical <c>+0x15c</c>); past <see
-    /// cref="EatenPassesToDeath"/> the character dies. Not saved.
+    /// Passes of <see cref="BeingEaten"/> that found nothing left to eat (the original's medical <c>+0x15c</c>); past
+    /// <see cref="EatenPassesToDeath"/> the character dies. Not saved.
     /// </summary>
-    public int EatenPasses
-    {
-        get;
-        private set;
-    }
+    public int EatenPasses { get; private set; }
 
     /// <summary>
     /// The passes with nothing left to eat after which the character is eaten alive (<b>Observed</b>, <c>FUN_140650370</c>: more than 5).
@@ -22,11 +18,7 @@ public sealed partial class MedicalState
     /// (<c>FUN_1404356f0</c> sets it first), one less per <see cref="Tick"/> (the character update <c>FUN_1405d00b0</c>). Above 0 the HUD's health
     /// word reads BEING EATEN ALIVE!! and the portrait shows Eaten. Not saved.
     /// </summary>
-    public int EatenCountdown
-    {
-        get;
-        private set;
-    }
+    public int EatenCountdown { get; private set; }
 
     /// <summary>
     /// A vampiric meal (<c>FUN_140650370</c>, <b>Verified</b> literals): the step is rate x dt x 0.5; the hunger level loses 0.01 of it and the blood
@@ -48,10 +40,10 @@ public sealed partial class MedicalState
     /// prosthetic, a crushed one) is passed over (<c>FUN_1400cd450</c> must read 0, <b>Verified</b>); the first part with h - 1.1 s above -M loses
     /// <paramref name="rate"/> x <paramref name="dt"/> from both its flesh and its treated pool, is checked as the medical tick checks a part (a
     /// vital part destroyed kills), and the update ends. A limb with nothing left is cut off on the way when <paramref name="limbLoss"/> (the
-    /// original's global flag <c>DAT_142133504</c>, read as the dismemberment setting). When no part is left to eat the pass is counted; past <see
-    /// cref="EatenPassesToDeath"/> the character dies (<see cref="DeathCause.Eaten"/>, the original's death cause "eaten"). With <paramref
-    /// name="vampiric"/> (the eater's race) it is drunk from instead. True when the meal is over by this call: an eaten-alive death, or for a body
-    /// already dead the end of its parts (the original then destroys the character, reason "eaten").
+    /// original's global flag <c>DAT_142133504</c>, read as the dismemberment setting). When no part is left to eat the pass is counted; past
+    /// <see cref="EatenPassesToDeath"/> the character dies (<see cref="DeathCause.Eaten"/>, the original's death cause "eaten"). With
+    /// <paramref name="vampiric"/> (the eater's race) it is drunk from instead. True when the meal is over by this call: an eaten-alive death, or for
+    /// a body already dead the end of its parts (the original then destroys the character, reason "eaten").
     /// </summary>
     public bool BeingEaten(float rate, float dt, in MedicalContext ctx, bool limbLoss, List<MedicalEvent>? events = null, bool vampiric = false)
     {

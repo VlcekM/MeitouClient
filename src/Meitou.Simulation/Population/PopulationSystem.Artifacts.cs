@@ -145,8 +145,8 @@ public sealed partial class PopulationSystem
     /// The buildings of a town that take item and gear artifacts, the first worth most first: those Meitou housed a template in, that are furnished
     /// and not the player's.
     /// </summary>
-    (List<(uint Base, TownBuilding Building)> Items, List<(uint Base, TownBuilding Building)> Gear) ArtifactHomes(
-        World world, BuiltTown town, TownSite site, int player, string? playerId)
+    (List<(uint Base, TownBuilding Building)> Items, List<(uint Base, TownBuilding Building)> Gear) ArtifactHomes(World world, BuiltTown town,
+        TownSite site, int player, string? playerId)
     {
         var templateOf = new Dictionary<TownBuilding, SquadTemplate>(ReferenceEqualityComparer.Instance);
         foreach (var (b, t) in town.Homes) templateOf.TryAdd(b, t);
@@ -189,8 +189,8 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// Each artifact to a building drawn among the first ones worth at least as much; with none it is lost.
     /// </summary>
-    static void ShareOut(
-        List<MadeArtifact> made, List<(uint Base, TownBuilding Building)> homes, BoostRandom rng, Dictionary<TownBuilding, List<MadeArtifact>> given)
+    static void ShareOut(List<MadeArtifact> made, List<(uint Base, TownBuilding Building)> homes, BoostRandom rng,
+        Dictionary<TownBuilding, List<MadeArtifact>> given)
     {
         foreach (var entry in made.OrderByDescending(m => m.Value))
         {

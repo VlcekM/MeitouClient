@@ -130,8 +130,7 @@ public sealed class SenseBlock
         {
             int mid = (lo + hi) >> 1;
             int t = EntryList[mid].Target;
-            if (t == slot)
-                return EntryList[mid].Generation == generation ? mid : -1;
+            if (t == slot) return EntryList[mid].Generation == generation ? mid : -1;
 
             if (t < slot)
                 lo = mid + 1;

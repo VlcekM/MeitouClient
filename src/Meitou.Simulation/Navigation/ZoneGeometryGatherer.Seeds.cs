@@ -37,14 +37,12 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     void AddDoorSeeds(ZoneGeometry g, GameRecord door, PreparedShape shape, Matrix4x4 node)
     {
-        if (!DoorMarkers(door, shape, node, out var behind, out var ahead))
-            return;
+        if (!DoorMarkers(door, shape, node, out var behind, out var ahead)) return;
 
         float bottom = shape.Vertices.Min(v => Vector3.Transform(v, node).Y);
         foreach (var at in new[] { behind, ahead })
         {
-            if (at.X < g.ZoneMin.X || at.X > g.ZoneMax.X || at.Z < g.ZoneMin.Y || at.Z > g.ZoneMax.Y)
-                continue;
+            if (at.X < g.ZoneMin.X || at.X > g.ZoneMax.X || at.Z < g.ZoneMin.Y || at.Z > g.ZoneMax.Y) continue;
 
             g.DoorMarkers.Add((new Vector2(at.X, at.Z), bottom));
             g.Stats.DoorSeeds++;
@@ -73,15 +71,13 @@ internal sealed partial class ZoneGeometryGatherer
     static bool DoorMarkers(GameRecord door, PreparedShape shape, Matrix4x4 node, out Vector3 behind, out Vector3 ahead)
     {
         behind = ahead = default;
-        if (shape.Kind != Data.Physics.CollisionShapeKind.Box || shape.Vertices.Length != 8)
-            return false;
+        if (shape.Kind != Data.Physics.CollisionShapeKind.Box || shape.Vertices.Length != 8) return false;
 
         var v = shape.Vertices.Select(p => Vector3.Transform(p, node)).ToArray();
         int axis = Math.Clamp(door.GetInt("door navmesh axis"), 0, 2);
         var along = axis switch { 0 => v[1] - v[0], 1 => v[2] - v[0], _ => v[4] - v[0] };
         var normal = Vector3.Cross(along, Vector3.TransformNormal(Vector3.UnitY, node));
-        if (normal.LengthSquared() < 1e-6f)
-            return false;
+        if (normal.LengthSquared() < 1e-6f) return false;
 
         var dir = Vector3.Normalize(normal);
         var centre = Vector3.Zero;
@@ -132,8 +128,7 @@ internal sealed partial class ZoneGeometryGatherer
             g.Seeds.Add(new Vector3(s.X, y, s.Z));
         }
 
-        if (fileSeeds.Count == 0)
-            AddGroundGrid(g, HitsBuilding, water);
+        if (fileSeeds.Count == 0) AddGroundGrid(g, HitsBuilding, water);
 
         AddLinkedWallSeeds(g, HitsBuilding);
     }
@@ -149,8 +144,7 @@ internal sealed partial class ZoneGeometryGatherer
             {
                 float x = g.ZoneMin.X + WorldLayout.ZoneSize * (2 * i + 1) / 6f;
                 float z = g.ZoneMin.Y + WorldLayout.ZoneSize * (2 * j + 1) / 6f;
-                if (hitsBuilding(x, z, out _))
-                    continue;
+                if (hitsBuilding(x, z, out _)) continue;
 
                 g.Seeds.Add(new Vector3(x, Math.Max(_map.HeightAt(x, z), water), z));
             }
@@ -167,16 +161,14 @@ internal sealed partial class ZoneGeometryGatherer
         float water = WorldWater.Height;
         foreach (var (b, record, position, destroyed) in NearBuildings(g.Zone, g.ZoneMin, g.ZoneMax, 0))
         {
-            if (record.GetFloat("link length") <= 0)
-                continue;
+            if (record.GetFloat("link length") <= 0) continue;
 
             if (position.X < g.ZoneMin.X - WallReach || position.X > g.ZoneMax.X + WallReach
                 || position.Z < g.ZoneMin.Y - WallReach || position.Z > g.ZoneMax.Y + WallReach)
                 continue;
 
             var points = WallPoints(record, b, position, destroyed);
-            if (points.Count < 2)
-                continue;
+            if (points.Count < 2) continue;
 
             // The two farthest footprint points are the wall's ends.
             var hull = NavGeometry.Footprint(points, 0, 0, 0).Polygon;
@@ -198,8 +190,7 @@ internal sealed partial class ZoneGeometryGatherer
         foreach (var mesh in WorldObjectLayout.Building(_db, record, b.InstanceId, position, b.Rotation, new BuildingState(destroyed)))
         {
             string path = mesh.CollisionPath(destroyed);
-            if (path.Length == 0 || _collision.Get(path) is not { } prepared)
-                continue;
+            if (path.Length == 0 || _collision.Get(path) is not { } prepared) continue;
 
             foreach (var shape in prepared.Shapes)
             {
@@ -248,8 +239,7 @@ internal sealed partial class ZoneGeometryGatherer
             g.Stats.WallSeeds++;
         }
 
-        if (!leaves)
-            return;
+        if (!leaves) return;
 
         var clamped = Vector2.Clamp(at, g.ZoneMin, g.ZoneMax);
         if (!hits(clamped.X, clamped.Y, out _))

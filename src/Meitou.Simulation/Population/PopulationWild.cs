@@ -666,15 +666,12 @@ public sealed partial class PopulationSystem
         WildSite? own = null;
         foreach (var s in _wildSites!)
         {
-            if (s.Kind != WildKind.Nest || s.Spots.Count == 0)
-                continue;
+            if (s.Kind != WildKind.Nest || s.Spots.Count == 0) continue;
             float d = Vector2.Distance(centre, s.Spots[0]);
-            if (d < nearest)
-                (own, nearest) = (s, d);
+            if (d < nearest) (own, nearest) = (s, d);
         }
 
-        if (own is not null)
-            return own.Zone == sector.Zone ? own.Nest : null;
+        if (own is not null) return own.Zone == sector.Zone ? own.Nest : null;
         return town is { Town.Type: TownType.Nest } && town.Zone == sector.Zone ? town.Town : null;
     }
 
