@@ -67,36 +67,7 @@ static partial class WikiExport
         var placedTowns = new List<PlacedTown>();
         var townZones = new Dictionary<ZoneCoordinate, List<string>>();
         var townAt = new Dictionary<string, (float X, float Z)>(StringComparer.Ordinal);
-        foreach (var placement in world.Towns().OrderBy(p => p.TownId, StringComparer.Ordinal).ThenBy(p => p.InstanceId, StringComparer.Ordinal))
-        {
-            if (db.Find(placement.TownId) is not { Type: FcsRecordType.Town } record) continue;
-            var town = TownData.From(record);
-            if (town.Type is TownType.NestMarker or TownType.Null || town.Name.Length == 0) continue;
-            var zone = WorldLayout.ZoneOf(placement.Position.X, placement.Position.Z);
-            string zoneId = $"zone-{zone.X}-{zone.Y}";
-            var data = new SortedDictionary<string, object?>
-            {
-                ["townType"] = town.Type.ToString(),
-                ["isPublic"] = town.IsPublic,
-                ["radius"] = (int)town.Radius,
-                ["residents"] = Names(db, town.Residents.Select(l => l.Id)),
-                ["bar"] = Names(db, town.BarSquads.Select(l => l.Id)),
-                ["roaming"] = Names(db, town.RoamingSquads.Select(l => l.Id)),
-                ["record"] = placement.TownId,
-            };
-            string faction = FactionName(town.Faction);
-            var row = new Row(Id(town.Name, placement.TownId), town.Name,
-                town.Type switch { TownType.Ruins => "ruins", TownType.Nest => "nest",
-                TownType.Outpost or TownType.Military or TownType.Prison or TownType.SlaveCamp => "camp", TownType.PointOfInterest => "poi",
-                _ => "town" }, faction.Length == 0 ? null : faction, zoneId, placement.Position.X, placement.Position.Z, "Observed",
-                $"{town.Type} in {zoneId}" + (faction.Length == 0 ? "" : $", faction {faction}")
-                + ". Position as the level data places it; not checked in game.", placement.TownId, data);
-            towns.Add(row);
-            placedTowns.Add(new PlacedTown(placement, town, row));
-            townAt.TryAdd(placement.TownId, (placement.Position.X, placement.Position.Z));
-            if (!townZones.TryGetValue(zone, out var list)) townZones[zone] = list = [];
-            list.Add(town.Name);
-        }
+        TownRows(db, world, Id, FactionName, towns, placedTowns, townZones, townAt);
 
         // Zones: the grid cells that hold at least one town.
         var zones = new List<Row>();
@@ -105,8 +76,10 @@ static partial class WikiExport
             var (ox, oz) = WorldLayout.ZoneOrigin(zone);
             string zid = $"zone-{zone.X}-{zone.Y}";
             used.Add(zid);
-            zones.Add(new Row(zid, $"Zone {zone.X}.{zone.Y}", "zone", null, null, (float)(ox + WorldLayout.ZoneSize / 2.0), (float)(oz + WorldLayout.ZoneSize / 2.0), "Observed",
-                $"Grid cell zone.{zone.X}.{zone.Y}.zone, centre given; edge {WorldLayout.ZoneSize} units. Towns inside: {string.Join(", ", names.Distinct().Take(12))}.", null,
+            zones.Add(new Row(zid, $"Zone {zone.X}.{zone.Y}", "zone", null, null, (float)(ox + WorldLayout.ZoneSize / 2.0),
+                (float)(oz + WorldLayout.ZoneSize / 2.0), "Observed",
+                $"Grid cell zone.{zone.X}.{zone.Y}.zone, centre given; edge {WorldLayout.ZoneSize} units. "
+                + $"Towns inside: {string.Join(", ", names.Distinct().Take(12))}.", null,
                 new SortedDictionary<string, object?> { ["towns"] = names.Count, ["file"] = zone.FileName }));
         }
 
@@ -125,97 +98,22 @@ static partial class WikiExport
             if (t.X is { } tx && t.Z is { } tz && BiomeAt(tx, tz) is { Length: > 0 } tb) t.Data["biome"] = tb;
 
         // Factions.
-        var factions = new List<Row>();
-        var player = db.Find(FactionData.PlayerId);
-        foreach (var record in db.OfType(FcsRecordType.Faction).OrderBy(r => r.Name, StringComparer.Ordinal)
-                .ThenBy(r => r.StringId, StringComparer.Ordinal))
-        {
-            var f = FactionData.From(record);
-            if (f.Name.Length == 0) continue;
-            var relations = new SortedDictionary<string, object?>(StringComparer.Ordinal);
-            foreach (var (other, value) in f.Relations)
-                if (db.Find(other) is { Type: FcsRecordType.Faction } o && o.Name.Length > 0) relations[o.Name] = value;
-            var data = new SortedDictionary<string, object?>
-            {
-                ["fundamentalType"] = f.FundamentalType.ToString(),
-                ["defaultRelation"] = f.DefaultRelation,
-                ["relations"] = relations,
-                ["notReal"] = f.NotReal,
-                ["offersBounties"] = f.BooksBounties,
-                ["towns"] = towns.Count(t => t.Faction == f.Name),
-                ["record"] = record.StringId,
-            };
-            string toPlayer = relations.TryGetValue(player?.Name ?? "", out var rel) ? $" Explicit relation to your faction {rel}." : "";
-            factions.Add(new Row(Id(f.Name, record.StringId), f.Name, "faction", null, null, null, null, "Observed",
-                $"{f.FundamentalType} faction, default relation {f.DefaultRelation}.{toPlayer}" + (f.NotReal ? " Not a real faction (wildlife, ruins, slaves)." : ""), record.StringId, data));
-        }
+        var factions = FactionRows(db, towns, Id);
 
         // Town detail (buildings, shops, houses for sale), town overrides, unique and bounty characters (WikiExport.Detail.cs).
         var detail = Detail(db, world, placedTowns, Id);
         var characterRecords = detail.Characters.Select(c => c.Record ?? "").ToHashSet(StringComparer.Ordinal);
 
         // Squad templates and the unique characters that live in towns.
-        var squads = new List<Row>();
-        var npcs = new List<Row>();
-        var residentOf = new Dictionary<string, string>(StringComparer.Ordinal);   // squad id -> town record
-        foreach (var t in world.Towns())
-            if (db.Find(t.TownId) is { Type: FcsRecordType.Town } tr)
-                foreach (var l in TownData.From(tr).Residents.Concat(TownData.From(tr).BarSquads))
-                    residentOf.TryAdd(l.Id, t.TownId);
-        var allSquads = SquadTemplate.LoadAll(db);
-        var townFactionOf = new Dictionary<string, string>(StringComparer.Ordinal);   // town record -> faction name
-        foreach (var t in towns) if (t.Faction is { } tf && t.Record is { } trec) townFactionOf.TryAdd(trec, tf);
-        // A leader record that leads squads in several towns is a generic role (a shop trader): no position for it.
-        var leaderUse = allSquads.Where(q => q.Leader is not null && residentOf.ContainsKey(q.Id))
-            .GroupBy(q => q.Leader!.Value.Id)
-            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
-        foreach (var squad in allSquads.OrderBy(s => s.Name, StringComparer.Ordinal).ThenBy(s => s.Id, StringComparer.Ordinal))
-        {
-            if (squad.Name.Length == 0) continue;
-            string leader = squad.Leader is { } ll && db.Find(ll.Id) is { } lc ? lc.Name : "";
-            string faction = FactionName(squad.Faction);
-            string factionSource = faction.Length > 0 ? "squad template" : "";
-            if (faction.Length == 0 && residentOf.TryGetValue(squad.Id, out var ownerTown)
-                    && townFactionOf.TryGetValue(ownerTown, out var ownerFaction))
-            {
-                faction = ownerFaction;
-                factionSource = "the town that lists the squad (a template without a faction takes its town's)";
-            }
-            var data = new SortedDictionary<string, object?>
-            {
-                ["factionSource"] = factionSource,
-                ["unique"] = squad.IsUnique,
-                ["leader"] = leader,
-                ["trader"] = squad.HasShop,
-                ["members"] = Names(db, squad.Squad.Concat(squad.Squad2).Select(l => l.Id)),
-                ["record"] = squad.Id,
-            };
-            bool home = residentOf.TryGetValue(squad.Id, out var townRecord) && townAt.ContainsKey(townRecord);
-            float? x = home ? townAt[townRecord!].X : null, z = home ? townAt[townRecord!].Z : null;
-            string where = home ? $" Listed as a resident of {db.Find(townRecord!)?.Name}; the position is that town's, not where the squad stands." : "";
-            var row = new Row(Id(squad.Name, squad.Id), squad.Name, squad.IsUnique ? "unique-squad" : "squad", faction.Length == 0 ? null : faction,
-                null, x, z, home ? "Inferred" : "Observed",
-                (squad.IsUnique ? "Unique squad" : "Squad template") + (leader.Length > 0 ? $", leader {leader}" : "")
-                + (squad.HasShop ? ", runs a shop" : "") + "." + where, squad.Id, data);
-            squads.Add(row);
-            // A leader who leads exactly one resident squad is a person of that town: one npc entry with the town's position.
-            if (leader.Length > 0 && home && !characterRecords.Contains(squad.Leader!.Value.Id)
-                    && leaderUse.GetValueOrDefault(squad.Leader!.Value.Id) == 1)
-            {
-                var zone = WorldLayout.ZoneOf(x!.Value, z!.Value);
-                npcs.Add(new Row(Id(leader, squad.Leader!.Value.Id), leader, "npc", faction.Length == 0 ? null : faction, $"zone-{zone.X}-{zone.Y}", x, z, "Inferred",
-                    $"Leader of the squad {squad.Name}, a resident of {db.Find(townRecord!)?.Name}. Position is the town's; roaming people move.", squad.Leader.Value.Id,
-                    new SortedDictionary<string, object?> { ["squad"] = squad.Name, ["town"] = db.Find(townRecord!)?.Name,
-                        ["factionSource"] = factionSource, ["record"] = squad.Leader.Value.Id }));
-            }
-        }
+        var (squads, npcs) = SquadRows(db, world, towns, townAt, characterRecords, Id, FactionName);
 
         // Character types (humans and animals), without position.
         var seenCharacters = new HashSet<string>(npcs.Select(n => n.Record ?? ""), StringComparer.Ordinal);
         foreach (var record in db.OfType(FcsRecordType.Character).OrderBy(r => r.Name, StringComparer.Ordinal)
                 .ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
-            if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId) || characterRecords.Contains(record.StringId)) continue;
+            if (record.Name.Length == 0 || seenCharacters.Contains(record.StringId) || characterRecords.Contains(record.StringId))
+                continue;
             string faction = record.GetReferences("faction") is { Count: > 0 } fl ? FactionName(fl[0].TargetStringId) : "";
             bool animal = record.Type == FcsRecordType.AnimalCharacter;
             npcs.Add(new Row(Id(record.Name, record.StringId), record.Name, animal ? "animal" : "npc", faction.Length == 0 ? null : faction, null,
@@ -246,6 +144,160 @@ static partial class WikiExport
             ("npcs", npcs), ("items", items), ("buildings", buildings), ("shops", detail.Shops), ("vendors", detail.Vendors),
             ("overrides", detail.Overrides), ("characters", detail.Characters), ("research", research),
             ("animals", animals), ("spawns", spawn.Rows) };
+        WriteFiles(outDir, install, factsOnly, order, source, files);
+        return 0;
+    }
+
+    /// <summary>
+    /// Towns: every placed town record except nest markers and null towns, with the zones that hold them and where each town is.
+    /// </summary>
+    static void TownRows(GameDatabase db, WorldLevelData world, Func<string, string, string> id, Func<string?, string> factionName,
+        List<Row> towns, List<PlacedTown> placedTowns, Dictionary<ZoneCoordinate, List<string>> townZones,
+        Dictionary<string, (float X, float Z)> townAt)
+    {
+        foreach (var placement in world.Towns().OrderBy(p => p.TownId, StringComparer.Ordinal).ThenBy(p => p.InstanceId, StringComparer.Ordinal))
+        {
+            if (db.Find(placement.TownId) is not { Type: FcsRecordType.Town } record) continue;
+            var town = TownData.From(record);
+            if (town.Type is TownType.NestMarker or TownType.Null || town.Name.Length == 0) continue;
+            var zone = WorldLayout.ZoneOf(placement.Position.X, placement.Position.Z);
+            string zoneId = $"zone-{zone.X}-{zone.Y}";
+            var data = new SortedDictionary<string, object?>
+            {
+                ["townType"] = town.Type.ToString(),
+                ["isPublic"] = town.IsPublic,
+                ["radius"] = (int)town.Radius,
+                ["residents"] = Names(db, town.Residents.Select(l => l.Id)),
+                ["bar"] = Names(db, town.BarSquads.Select(l => l.Id)),
+                ["roaming"] = Names(db, town.RoamingSquads.Select(l => l.Id)),
+                ["record"] = placement.TownId,
+            };
+            string faction = factionName(town.Faction);
+            var row = new Row(id(town.Name, placement.TownId), town.Name,
+                town.Type switch { TownType.Ruins => "ruins", TownType.Nest => "nest",
+                TownType.Outpost or TownType.Military or TownType.Prison or TownType.SlaveCamp => "camp", TownType.PointOfInterest => "poi",
+                _ => "town" }, faction.Length == 0 ? null : faction, zoneId, placement.Position.X, placement.Position.Z, "Observed",
+                $"{town.Type} in {zoneId}" + (faction.Length == 0 ? "" : $", faction {faction}")
+                + ". Position as the level data places it; not checked in game.", placement.TownId, data);
+            towns.Add(row);
+            placedTowns.Add(new PlacedTown(placement, town, row));
+            townAt.TryAdd(placement.TownId, (placement.Position.X, placement.Position.Z));
+            if (!townZones.TryGetValue(zone, out var list)) townZones[zone] = list = [];
+            list.Add(town.Name);
+        }
+    }
+
+    /// <summary>
+    /// Factions: every named faction record with its relations and how many towns it holds.
+    /// </summary>
+    static List<Row> FactionRows(GameDatabase db, List<Row> towns, Func<string, string, string> id)
+    {
+        var factions = new List<Row>();
+        var player = db.Find(FactionData.PlayerId);
+        foreach (var record in db.OfType(FcsRecordType.Faction).OrderBy(r => r.Name, StringComparer.Ordinal)
+                .ThenBy(r => r.StringId, StringComparer.Ordinal))
+        {
+            var f = FactionData.From(record);
+            if (f.Name.Length == 0) continue;
+            var relations = new SortedDictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var (other, value) in f.Relations)
+                if (db.Find(other) is { Type: FcsRecordType.Faction } o && o.Name.Length > 0) relations[o.Name] = value;
+            var data = new SortedDictionary<string, object?>
+            {
+                ["fundamentalType"] = f.FundamentalType.ToString(),
+                ["defaultRelation"] = f.DefaultRelation,
+                ["relations"] = relations,
+                ["notReal"] = f.NotReal,
+                ["offersBounties"] = f.BooksBounties,
+                ["towns"] = towns.Count(t => t.Faction == f.Name),
+                ["record"] = record.StringId,
+            };
+            string toPlayer = relations.TryGetValue(player?.Name ?? "", out var rel) ? $" Explicit relation to your faction {rel}." : "";
+            factions.Add(new Row(id(f.Name, record.StringId), f.Name, "faction", null, null, null, null, "Observed",
+                $"{f.FundamentalType} faction, default relation {f.DefaultRelation}.{toPlayer}"
+                + (f.NotReal ? " Not a real faction (wildlife, ruins, slaves)." : ""), record.StringId, data));
+        }
+        return factions;
+    }
+
+    /// <summary>
+    /// Squad templates, and the leaders who lead exactly one resident squad (one npc entry each, at the town's position).
+    /// </summary>
+    static (List<Row> Squads, List<Row> Npcs) SquadRows(GameDatabase db, WorldLevelData world, List<Row> towns,
+        Dictionary<string, (float X, float Z)> townAt, HashSet<string> characterRecords, Func<string, string, string> id,
+        Func<string?, string> factionName)
+    {
+        var squads = new List<Row>();
+        var npcs = new List<Row>();
+        var residentOf = new Dictionary<string, string>(StringComparer.Ordinal);   // squad id -> town record
+        foreach (var t in world.Towns())
+        {
+            if (db.Find(t.TownId) is { Type: FcsRecordType.Town } tr)
+            {
+                foreach (var l in TownData.From(tr).Residents.Concat(TownData.From(tr).BarSquads))
+                    residentOf.TryAdd(l.Id, t.TownId);
+            }
+        }
+        var allSquads = SquadTemplate.LoadAll(db);
+        var townFactionOf = new Dictionary<string, string>(StringComparer.Ordinal);   // town record -> faction name
+        foreach (var t in towns) if (t.Faction is { } tf && t.Record is { } trec) townFactionOf.TryAdd(trec, tf);
+        // A leader record that leads squads in several towns is a generic role (a shop trader): no position for it.
+        var leaderUse = allSquads.Where(q => q.Leader is not null && residentOf.ContainsKey(q.Id))
+            .GroupBy(q => q.Leader!.Value.Id)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        foreach (var squad in allSquads.OrderBy(s => s.Name, StringComparer.Ordinal).ThenBy(s => s.Id, StringComparer.Ordinal))
+        {
+            if (squad.Name.Length == 0) continue;
+            string leader = squad.Leader is { } ll && db.Find(ll.Id) is { } lc ? lc.Name : "";
+            string faction = factionName(squad.Faction);
+            string factionSource = faction.Length > 0 ? "squad template" : "";
+            if (faction.Length == 0 && residentOf.TryGetValue(squad.Id, out var ownerTown)
+                    && townFactionOf.TryGetValue(ownerTown, out var ownerFaction))
+            {
+                faction = ownerFaction;
+                factionSource = "the town that lists the squad (a template without a faction takes its town's)";
+            }
+            var data = new SortedDictionary<string, object?>
+            {
+                ["factionSource"] = factionSource,
+                ["unique"] = squad.IsUnique,
+                ["leader"] = leader,
+                ["trader"] = squad.HasShop,
+                ["members"] = Names(db, squad.Squad.Concat(squad.Squad2).Select(l => l.Id)),
+                ["record"] = squad.Id,
+            };
+            bool home = residentOf.TryGetValue(squad.Id, out var townRecord) && townAt.ContainsKey(townRecord);
+            float? x = home ? townAt[townRecord!].X : null, z = home ? townAt[townRecord!].Z : null;
+            string where = home
+                ? $" Listed as a resident of {db.Find(townRecord!)?.Name}; the position is that town's, not where the squad stands."
+                : "";
+            var row = new Row(id(squad.Name, squad.Id), squad.Name, squad.IsUnique ? "unique-squad" : "squad", faction.Length == 0 ? null : faction,
+                null, x, z, home ? "Inferred" : "Observed",
+                (squad.IsUnique ? "Unique squad" : "Squad template") + (leader.Length > 0 ? $", leader {leader}" : "")
+                + (squad.HasShop ? ", runs a shop" : "") + "." + where, squad.Id, data);
+            squads.Add(row);
+            // A leader who leads exactly one resident squad is a person of that town: one npc entry with the town's position.
+            if (leader.Length > 0 && home && !characterRecords.Contains(squad.Leader!.Value.Id)
+                    && leaderUse.GetValueOrDefault(squad.Leader!.Value.Id) == 1)
+            {
+                var zone = WorldLayout.ZoneOf(x!.Value, z!.Value);
+                npcs.Add(new Row(id(leader, squad.Leader!.Value.Id), leader, "npc", faction.Length == 0 ? null : faction,
+                    $"zone-{zone.X}-{zone.Y}", x, z, "Inferred",
+                    $"Leader of the squad {squad.Name}, a resident of {db.Find(townRecord!)?.Name}. Position is the town's; roaming people move.",
+                        squad.Leader.Value.Id,
+                    new SortedDictionary<string, object?> { ["squad"] = squad.Name, ["town"] = db.Find(townRecord!)?.Name,
+                        ["factionSource"] = factionSource, ["record"] = squad.Leader.Value.Id }));
+            }
+        }
+        return (squads, npcs);
+    }
+
+    /// <summary>
+    /// Writes one JSON file per row list with the export's meta block (load order, mods, issues) and reports the counts.
+    /// </summary>
+    static void WriteFiles(string outDir, GameInstall install, bool factsOnly, LoadOrder order, string source,
+        (string Name, List<Row> Rows)[] files)
+    {
         var modNames = order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n)).ToList();
         // A facts-only export is shipped, so it names no local path: only the clean-install wording or the mod names.
         string dataDir = factsOnly
@@ -253,7 +305,9 @@ static partial class WikiExport
             : install.DataDirectory;
         string modsCfgPath = ModList.ModsCfgPath(install);
         var modsCfg = File.Exists(modsCfgPath) ? ModList.ParseModsCfg(File.ReadAllLines(modsCfgPath)).ToList() : [];
-        var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)), [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n))], modsCfg, order.Issues.Select(i => $"{i.File}: {i.Message}").ToList(), factsOnly);
+        var meta = new Meta(source, dataDir, string.Join(", ", order.Entries.Select(e => e.Name)),
+            [.. order.Entries.Select(e => e.Name).Where(n => !LoadOrder.BaseFiles.Contains(n) && !IsSeparator(n))], modsCfg,
+            order.Issues.Select(i => $"{i.File}: {i.Message}").ToList(), factsOnly);
         var counts = new List<string>();
         foreach (var (name, rows) in files)
         {
@@ -261,8 +315,8 @@ static partial class WikiExport
             counts.Add($"{name} {rows.Count}");
         }
         Console.WriteLine($"wiki-export: {string.Join(", ", counts)}");
-        Console.WriteLine($"wiki-export: data {dataDir}; {order.Entries.Count} data files; mods beyond the base game: {(meta.Mods.Count == 0 ? "none (clean install)" : string.Join(", ", meta.Mods))}; wrote {outDir}");
-        return 0;
+        Console.WriteLine($"wiki-export: data {dataDir}; {order.Entries.Count} data files; mods beyond the base "
+            + $"game: {(meta.Mods.Count == 0 ? "none (clean install)" : string.Join(", ", meta.Mods))}; wrote {outDir}");
     }
 
     #endregion
@@ -289,7 +343,9 @@ static partial class WikiExport
         w.WriteString("dataDir", meta.DataDir);
         w.WriteString("loadOrder", meta.LoadOrder);
         w.WriteBoolean("modded", meta.Mods.Count > 0);
-        w.WriteString("modsSummary", meta.Mods.Count == 0 ? "no mods beyond the base game (clean install)" : $"{meta.Mods.Count} mod file(s) beyond the base game, from mods.cfg");
+        w.WriteString("modsSummary", meta.Mods.Count == 0
+            ? "no mods beyond the base game (clean install)"
+            : $"{meta.Mods.Count} mod file(s) beyond the base game, from mods.cfg");
         w.WriteStartArray("mods");
         foreach (string m in meta.Mods) w.WriteStringValue(m);
         w.WriteEndArray();
@@ -343,7 +399,8 @@ static partial class WikiExport
 
     static void Nullable(Utf8JsonWriter w, string name, string? value)
     {
-        if (value is null) w.WriteNull(name); else w.WriteString(name, value);
+        if (value is null) w.WriteNull(name);
+        else w.WriteString(name, value);
     }
 
     static void WriteValue(Utf8JsonWriter w, object? v)

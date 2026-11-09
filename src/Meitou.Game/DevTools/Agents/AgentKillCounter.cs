@@ -24,12 +24,21 @@ sealed class AgentKillCounter(PlayerInterface player)
     /// </summary>
     public int ControlKills()
     {
-        if (!ReferenceEquals(_killsWorld, player.Session.World)) { _killsWorld = player.Session.World; _hostileSeen.Clear(); _hostileDead.Clear(); }
+        if (!ReferenceEquals(_killsWorld, player.Session.World))
+        {
+            _killsWorld = player.Session.World;
+            _hostileSeen.Clear();
+            _hostileDead.Clear();
+        }
+
         foreach (var c in player.Session.CurrentSnapshot.Characters)
         {
             if (c.IsPlayer || c.Animal) continue;
             bool hostile = c.HostileToPlayer || c.FightsPlayer;
-            if (c.Body is { Dead: true }) { if (hostile || _hostileSeen.Contains(c.Id)) _hostileDead.Add(c.Id); }
+            if (c.Body is { Dead: true })
+            {
+                if (hostile || _hostileSeen.Contains(c.Id)) _hostileDead.Add(c.Id);
+            }
             else if (hostile) _hostileSeen.Add(c.Id);
         }
         return _hostileDead.Count;

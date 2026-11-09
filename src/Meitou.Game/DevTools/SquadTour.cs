@@ -51,7 +51,8 @@ sealed class SquadTour
         _stops.AddRange(members);
         if (!Active) (_yaw, _pitch, _distance) = (camera.Yaw, camera.Pitch, camera.Distance);   // a new flight mid-flight keeps the view it left from
         _next = 0;
-        if (_stops.Count > 0 && position(_stops[0]) is { } first && Ground(first - camera.Target) < 0.25f * _distance) _next = 1;
+        if (_stops.Count > 0 && position(_stops[0]) is { } first && Ground(first - camera.Target) < 0.25f * _distance)
+            _next = 1;
         Active = _next < _stops.Count;
         if (Active) BeginHop(camera, position);
     }
@@ -79,7 +80,8 @@ sealed class SquadTour
     /// </summary>
     public void Finish(WorldCamera camera, Func<CharacterId, Vector3?> position)
     {
-        if (Current is { } id && position(id) is { } at) (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (at, _yaw, _pitch, _distance);
+        if (Current is { } id && position(id) is { } at)
+            (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (at, _yaw, _pitch, _distance);
         Active = false;
     }
 
@@ -121,7 +123,18 @@ sealed class SquadTour
         camera.Yaw = _yaw;
         camera.Pitch = _pitch + (MathF.Max(MathF.Min(_pitch + PitchLift, MaxPitch), _pitch) - _pitch) * lift;
         camera.Distance = MathF.Min(_distance + height * lift, camera.ViewDistance * 0.5f);
-        if (s >= 1) { _next++; _holding = true; _time = 0; if (_next >= _stops.Count) { Active = false; return false; } }
+        if (s >= 1)
+        {
+            _next++;
+            _holding = true;
+            _time = 0;
+            if (_next >= _stops.Count)
+            {
+                Active = false;
+                return false;
+            }
+        }
+
         return true;
     }
 
