@@ -436,7 +436,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// <summary>
     /// The world's renderers from the shared construction path.
     /// </summary>
-    WorldFrame.Gpu _worldGpu = null!;
+    WorldGpu _worldGpu = null!;
 
     /// <summary>
     /// The sky.
