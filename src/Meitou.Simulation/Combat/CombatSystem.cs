@@ -104,7 +104,11 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// Stuck bolts kept in the world per bolt mesh (the settings' <c>harpoonLimit</c>, <see cref="CombatOptions.StuckLimit"/>): past it the one that
     /// flew longest goes (<c>FUN_14043acf0</c>).
     /// </summary>
-    public int StuckLimit { get; set; }
+    public int StuckLimit
+    {
+        get => _projectiles.StuckLimit;
+        set => _projectiles.StuckLimit = value;
+    }
 
     /// <summary>
     /// A late but successfully rolled dodge or block still counts (<see cref="CombatOptions.LateDefences"/>); off is the game's rule.
@@ -225,7 +229,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         }
 
         hasher.Add(_log.Count);
-        HashRanged(ref hasher);
+        _projectiles.Hash(ref hasher);
         _turretManning.Hash(ref hasher);
     }
 
@@ -603,7 +607,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         Sync(world.Characters);
         Array.Copy(_read, _write, world.Characters.HighWater);
         _zones.Copy(world.Characters.HighWater);
-        FlyProjectiles(world);
+        _projectiles.Fly(world, this);
         TickTurrets(world);
         _index.Build(_read, world.Characters, world.Grid);
     }
