@@ -721,7 +721,8 @@ public sealed class AnimationSystem(
         a.HeldIndex = -1;
         lower.Clear();
         upper.Clear();
-        if (Library.Animal(cold.RecordId) is { } animal) return UpdateAnimal(a, cold, PlanOf(animal), speed, dt, seed, key, tick, lower, fight, ragdoll);
+        if (Library.Animal(cold.RecordId) is { } animal)
+            return UpdateAnimal(a, cold, _animalPlans.Of(animal), speed, dt, seed, key, tick, lower, fight, ragdoll);
 
         if (a.Rate == 0) a.Rate = cold.Appearance is { } look ? 2 - CharacterShape.MovementScaleOf(look) : 1;
 
@@ -1412,29 +1413,9 @@ public sealed class AnimationSystem(
     #region Animals
 
     /// <summary>
-    /// An animal's clips with those its skeleton lacks taken out, and the fall and lying clip chosen (<see cref="PlanOf"/>).
+    /// The plans of the animals' clip sets (<see cref="AnimalPlans.Of"/>).
     /// </summary>
-    sealed record AnimalPlan(int[] Movement, IReadOnlyList<(int Index, float Weight)> Idles, int Fall, int Lying, AnimationLengths Lengths);
-
-    /// <summary>
-    /// The plans made so far, by animal clip set (<see cref="PlanOf"/>).
-    /// </summary>
-    readonly System.Collections.Concurrent.ConcurrentDictionary<string, AnimalPlan> _animalPlans = new(StringComparer.Ordinal);
-
-    /// <summary>
-    /// The plan of an animal's clip set: the race's skeleton lengths (<see cref="AnimationLengths.For"/>), and when that skeleton was read, only the
-    /// clips it has (a record whose clip the skeleton lacks would pose nothing: the skimmer's <c>idle1</c>); the first fall and lying candidates it
-    /// has.
-    /// </summary>
-    AnimalPlan PlanOf(AnimalClips clips) => _animalPlans.GetOrAdd(clips.RecordId, static (_, s) =>
-    {
-        var (self, c) = s;
-        var lengths = self.Lengths.For(c.RaceId);
-        bool known = c.RaceId is { } race && self.Lengths.HasSpecies(race);
-        bool Has(int i) => !known || lengths.Has(self.Library.Definitions[i].Clip);
-        int First(int[] list) { foreach (int i in list) if (Has(i)) return i; return -1; }
-        return new AnimalPlan([.. c.Movement.Where(Has)], [.. c.Idles.Where(x => Has(x.Index))], First(c.Fall), First(c.Lying), lengths);
-    }, (this, clips));
+    readonly AnimalPlans _animalPlans = new(library, lengths);
 
     /// <summary>
     /// One tick of an animal's animation (docs/simulation.md "Animation", animals): its own clips only. Moving, the movement clips of its list by

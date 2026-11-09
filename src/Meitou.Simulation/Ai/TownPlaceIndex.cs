@@ -152,7 +152,7 @@ sealed class TownPlaceIndex(PopulationData data)
 
                 for (int i = 0; i < b.SeatCount; i++)
                 {
-                    if (AiSystem.Sittable(b.SeatAt(i).Kind, dummies: true))
+                    if (TownPlaceClaims.Sittable(b.SeatAt(i).Kind, dummies: true))
                     {
                         seats.Add(new SeatClaim(b, i));
                         if (!seatOwners.ContainsKey(b)) seatOwners[b] = ai.BuildingOwner(world, b, townFaction);
@@ -165,7 +165,7 @@ sealed class TownPlaceIndex(PopulationData data)
                 [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b) && b.Function is >= 0 and var fn && (WorkFunctions >> fn & 1) != 0)],
                 stock, seats, seatOwners,
                 [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))],
-                [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b)).SelectMany(AiSystem.GuardPosts)]);
+                [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b)).SelectMany(TownPlaceClaims.GuardPosts)]);
             _realWork[site] = [.. _places[site].Workplaces.Where(b => AiSystem.RealWork(world, b))];
         }
     }

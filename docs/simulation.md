@@ -276,7 +276,7 @@ system when the world has none), and between ticks for orders only (`ApplyPaused
      [precedence](game/ai-tasks.md#precedence)): the aggro looks' allies valued by their fight threat (`CombatSystem.FightThreat`), weighted by distance, a deferred defence, row 13, against `CombatSystem.BestAttackerOf`'s pick for the ally.
      The retaliation pass offers nothing to it; the step reaches it at the engine re-ask (idle or a job's task, every `JobCheckTicks`) or any replan, so a medic or worker on its job joins, one on an order does not.
      A player character woken by a failed kidnap (`CarrySystem.Kidnap`) or targeted by a failed stealth knock-out (`CarrySystem.StealthKo`) is told of the attacker (forced sense) and
-     replans (`CarrySystem.Engage`); `CarrySystem.EngagedDefence` (key 32, desire 1 within 40 else 0.7, a deferred defence, row 13) answers for 5 s unless an order runs first (**Engine**
+     replans (`EngagedDefence.Engage`); `EngagedDefence` (key 32, desire 1 within 40 else 0.7, a deferred defence, row 13) answers for 5 s unless an order runs first (**Engine**
      stand-in for the threats list, [carry-loot](game/carry-loot.md#kidnapping), [combat](game/combat.md#stealth-knock-out)). A sleeper's kidnap also clears its queue (order 116). NPC victims
      keep their deferred defensive attack (the AI is stage 9).
   5. Jobs: the job list in order (`IJobSource` contributors by type, `DecisionSystem.RegisterJob`; the original's keys N+8, N+7, ...): the jobs switch gates every type but 16, 31,
@@ -630,7 +630,7 @@ merged data), its yaw, tilted to the terrain slope under it (the heights round t
 5x5x5 lattice of points of its bounds is below the rendered terrain under it. A weapon, modelled along +Y, lies on the flat of its blade. Read items are drawn by their saved position and whole rotation. The host adds each as a runtime world-object
 placement of its record's `ground mesh` / `mesh` (else `steel1.mesh`, as the original; a bare weapon's `bare sword` not modelled; `GroundItemSync`, `WorldObjectLayout.Item`). A right click on one (on its collision where it is drawn,
 [collision](formats/collision.md#item-physics); pointer `pick_item`) gives `PickUpItemOrder`: the nearest able selected character walks to it and, within 15 units
-(`PlayerSystem.PickUpReach`), puts it in its inventory (`Inventory.Add`), or when it does not fit, wears it in its free equipment slot (`InventoryCommands.TryEquip`; a bag in a free `backpack_attach`, `TryWearBag`); what does not fit
+(`PickUps.PickUpReach`), puts it in its inventory (`Inventory.Add`), or when it does not fit, wears it in its free equipment slot (`InventoryCommands.TryEquip`; a bag in a free `backpack_attach`, `TryWearBag`); what does not fit
 stays on the ground ("Not enough room in my inventory"). Another order or a stop ends the walk. A picked-up read item keeps its ITEM record's keys in its inventory record. Engine choices.
 
 Town interiors' loose items (`Items/ItemSlots`, the original's rules in [loose items](game/factions-squads-towns.md#loose-items-in-buildings)): each ITEM_PLACEMENT_GROUP of a town
@@ -1335,7 +1335,7 @@ optional), `EdgeGap` (site, point -> gap to its footprint hull; the host's).
 - `Schedule`: a worker walks to the site like a medic to a patient (goal = site XZ, free speed, asked again after a wait
   when the path failed). It has arrived within the [work distance](game/buildings-production.md#work-distance) (`SiteReach`:
   40, walls 60, twice that once stopped, from the footprint hull). A fetcher walks to its source instead (a storage within its
-  `use range`; a ground item within `PlayerSystem.PickUpReach`, twice that once stopped; a source that is gone sends it back
+  `use range`; a ground item within `PickUps.PickUpReach`, twice that once stopped; a source that is gone sends it back
   to building). Work ends when the site is gone,
   no longer `NeedsWork` (building), the character is down, carried, carrying or caged, or another task replaced it (a fight
   too: its start ends the work, [task starts](#task-starts)).
@@ -1803,7 +1803,7 @@ the normal kind none, as the original; none free: the squad keeps its home and d
 at an outdoor table they stand at it. A home node goal takes a
 node of its kind, a guard post a general node next (as the original), then any node but a shopkeeper's
 (engine; only the shopkeeper goal falls back onto the counter). Static town guard (157) holds a guard post of its town
-instead (`AiMind.TownPost`, `AiSystem.ClaimTownPosts`, on the package cadence): the one it holds while its goal stays 157,
+instead (`AiMind.TownPost`, `TownPlaceClaims.ClaimTownPosts`, on the package cadence): the one it holds while its goal stays 157,
 else one drawn uniformly among the town's guard posts no other 157 member holds (the posts of 38 and 268 are not counted: engine
 choice), as the original ([ai-tasks](game/ai-tasks.md#town-goals)); none free, it stands where the home node goals do (engine choice). The post is
 not saved: a load draws again. Gates have no nodes in their layouts (the original's have 3 or 4 guard posts at run time,
@@ -1817,7 +1817,7 @@ Defensive Gates is inside the wall about 110 along it from the opening; headless
 are made at the origin and keep that post. Seats are the home's
 interior furniture with a CHAIR functionality (`HomeSpotKind.Chair`; never a standing node), free
 in that building this pass; relaxing falls back to a bar node, then a general node; staying home (43) draws a free chair, training dummy or work piece (mine, research, refinery, crafting) of the home and is not wanted without one ([ai-tasks](game/ai-tasks.md#town-goals); a given-up seat is tried again when the goal is renewed). Sitting around (275)
-claims on its own (`Blackboard.SitClaims`, `AiSystem.ClaimSitting`): the nearest free chair, throne (BF_THRONE, `HomeSpotKind.ThroneSeat`, sat on like a chair) or, for a character not on the
+claims on its own (`Blackboard.SitClaims`, `TownPlaceClaims.ClaimSitting`): the nearest free chair, throne (BF_THRONE, `HomeSpotKind.ThroneSeat`, sat on like a chair) or, for a character not on the
 player's side, training dummy (BF_TRAINING, `HomeSpotKind.Training`, stood at) in a building of the town it stands in, when that is its squad's home town or owned by the squad's faction and the
 building is owned by the character's faction or the squad's; the throne and dummy pieces, and free-standing chairs, are `TownBuilding.Furniture`. It is not wanted
 without one (nor outside a town), so a homeless squad does not sit where it stands. A seated character

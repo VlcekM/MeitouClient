@@ -919,7 +919,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
 
     /// <summary>
     /// Whether the worker is near enough its goal (<see cref="SiteReach.Within"/>): a site by its footprint, a ground item by its position (within
-    /// <see cref="PlayerSystem.PickUpReach"/>, twice that once stopped).
+    /// <see cref="PickUps.PickUpReach"/>, twice that once stopped).
     /// </summary>
     bool Arrived(World world, in CharacterHot n, (Vector3 At, BuildSite? Site, float Reach) goal) =>
         SiteReach.Within(n, goal.Site is { } site ? SiteReach.Gap(Settings.EdgeGap, site, n.Position) : Vector2.Distance(new(n.Position.X, n.Position.Z), new(goal.At.X, goal.At.Z)), goal.Reach)
@@ -932,7 +932,7 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     (Vector3 At, BuildSite? Site, float Reach)? Goal(World world, CharacterCold cold, byte task, BuildSite site)
     {
         if (task != (byte)CharacterTask.FetchMaterials) return (site.Position, site, ReachOf(site));
-        if (cold.FetchItem is { } item) return world.GroundItems.Find(item) is { } loose ? (loose.Position, null, PlayerSystem.PickUpReach) : null;
+        if (cold.FetchItem is { } item) return world.GroundItems.Find(item) is { } loose ? (loose.Position, null, PickUps.PickUpReach) : null;
         return cold.FetchSite is { } from && world.Buildings.Find(from) is { Complete: true } store && world.Machines.Find(from) is { } machine
             ? (store.Position, store, machine.Data.UseRange) : null;
     }

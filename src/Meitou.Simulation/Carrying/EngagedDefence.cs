@@ -11,10 +11,16 @@ namespace Meitou.Simulation.Carrying;
 /// list <c>FUN_1405cb0a0</c>, <c>Character::attackTarget</c> <c>FUN_140999f00</c>), a replan is asked (<c>FUN_14001a5b9</c>) and the chooser decides;
 /// a sleeper's kidnap also gives order 116 with the queue cleared (<c>FUN_1405d20d0</c>). So the victim's fight is a goal of the decision step
 /// (<see cref="EngagedFoe"/>, step 4 beside 32 Self preservation) that an order running at step 1 beats.
+/// <para>
+/// 32 Self preservation for the one a failed kidnap or knock-out engaged (priority 3, weight 1, key 32): it fights its attacker as row 13, a
+/// defence, unless the step's first source, an order, runs or can start (the original's chooser runs the queue first; a kidnap's order 116 clears
+/// it). Desire 1 within 40 of the attacker, else 0.7 as Self preservation's (<c>FUN_140599d20</c>). <b>Engine</b>: the attacker is offered here
+/// instead of through the threats list, which the original fills from its intended target (Unknown for these two tasks).
+/// </para>
 /// </summary>
-public sealed partial class CarrySystem
+sealed class EngagedDefence : IDecisionSource
 {
-    #region Engaged defence
+    #region Engagements
 
     /// <summary>
     /// The victims engaged now (<see cref="Engage"/>).
@@ -28,12 +34,13 @@ public sealed partial class CarrySystem
 
     /// <summary>
     /// Makes <paramref name="attacker"/> known to the player character <paramref name="victim"/> and asks the decision step to decide it again: the
-    /// forced sense (the attacker is a seen enemy of it at once) and the engagement its Self preservation goal reads. Serial phases only.
+    /// forced sense through <paramref name="aggro"/> (the attacker is a seen enemy of it at once) and the engagement its Self preservation goal reads.
+    /// Serial phases only.
     /// </summary>
-    void Engage(World world, int victim, int attacker)
+    public void Engage(World world, AggroSystem? aggro, int victim, int attacker)
     {
         var table = world.Characters;
-        Aggro?.Force(world, victim, attacker);
+        aggro?.Force(world, victim, attacker);
         var id = table.IdOf(victim);
         _engagements.RemoveAll(e => e.Victim == id || e.Until < world.Tick);
         _engagements.Add(new Engagement(id, table.IdOf(attacker), world.Tick + (long)MathF.Round(AggroSystem.AlarmSeconds / world.TickSeconds)));
@@ -54,42 +61,37 @@ public sealed partial class CarrySystem
         return -1;
     }
 
-    /// <summary>
-    /// 32 Self preservation for the one a failed kidnap or knock-out engaged (priority 3, weight 1, key 32): it fights its attacker as row 13, a
-    /// defence, unless the step's first source, an order, runs or can start (the original's chooser runs the queue first; a kidnap's order 116 clears
-    /// it). Desire 1 within 40 of the attacker, else 0.7 as Self preservation's (<c>FUN_140599d20</c>). <b>Engine</b>: the attacker is offered here
-    /// instead of through the threats list, which the original fills from its intended target (Unknown for these two tasks).
-    /// </summary>
-    sealed class EngagedDefence(CarrySystem owner) : IDecisionSource
+    #endregion
+
+    #region Decision source
+
+    public string Name => "32 Self preservation (engaged by a failed kidnap or knock-out)";
+    public DecisionStep Step => DecisionStep.Goals;
+    public int Key => 32;
+
+    public DecisionCheck CanRun(World world, int slot)
     {
-        public string Name => "32 Self preservation (engaged by a failed kidnap or knock-out)";
-        public DecisionStep Step => DecisionStep.Goals;
-        public int Key => 32;
+        var table = world.Characters;
+        var cold = table.Cold(slot)!;
+        if (cold is not { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true })
+            return DecisionCheck.No("cannot fight");
+        return EngagedFoe(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("not engaged");
+    }
 
-        public DecisionCheck CanRun(World world, int slot)
-        {
-            var table = world.Characters;
-            var cold = table.Cold(slot)!;
-            if (cold is not { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true })
-                return DecisionCheck.No("cannot fight");
-            return owner.EngagedFoe(world, slot) >= 0 ? DecisionCheck.Run : DecisionCheck.No("not engaged");
-        }
+    public float Desire(World world, int slot)
+    {
+        var table = world.Characters;
+        var d = table.Next[EngagedFoe(world, slot)].Position - table.Next[slot].Position;
+        return d.X * d.X + d.Z * d.Z <= RetaliationSystem.ImmediateReach * RetaliationSystem.ImmediateReach ? 1 : 0.7f;
+    }
 
-        public float Desire(World world, int slot)
-        {
-            var table = world.Characters;
-            var d = table.Next[owner.EngagedFoe(world, slot)].Position - table.Next[slot].Position;
-            return d.X * d.X + d.Z * d.Z <= RetaliationSystem.ImmediateReach * RetaliationSystem.ImmediateReach ? 1 : 0.7f;
-        }
-
-        public void Start(World world, int slot)
-        {
-            var table = world.Characters;
-            int a = owner.EngagedFoe(world, slot);
-            var id = table.IdOf(slot);
-            owner._engagements.RemoveAll(e => e.Victim == id);
-            world.Defer(new AttackOrder([id], table.IdOf(a)) { Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal });
-        }
+    public void Start(World world, int slot)
+    {
+        var table = world.Characters;
+        int a = EngagedFoe(world, slot);
+        var id = table.IdOf(slot);
+        _engagements.RemoveAll(e => e.Victim == id);
+        world.Defer(new AttackOrder([id], table.IdOf(a)) { Tick = world.Tick + 1, Defensive = true, Source = TaskSource.Goal });
     }
 
     #endregion

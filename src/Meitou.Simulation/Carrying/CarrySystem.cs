@@ -89,6 +89,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// moves as an item.
     /// </summary>
     internal PopulationData? Data { get; set; }
+
+    /// <summary>
+    /// The player characters a failed kidnap or knock-out engaged, and their defence as a decision source (<see cref="EngagedDefence.Engage"/>).
+    /// </summary>
+    readonly EngagedDefence _engaged = new();
     readonly BodyOptions _bodyOptions = options;
     readonly List<LootEntry> _loots = [];
 
@@ -1461,7 +1466,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var jobs = new CarryJobs(this);
         decisions.RegisterJob(TaskType.FindAndRescueIfTheresBeds, jobs);
         decisions.RegisterJob(TaskType.LootAnimalsJob, jobs);
-        decisions.Register(new EngagedDefence(this));
+        decisions.Register(_engaged);
     }
 
     sealed class CarryJobs(CarrySystem owner) : IJobSource

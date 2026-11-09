@@ -109,7 +109,7 @@ public sealed partial class CarrySystem
         world.Defer(new Dialogue.DialogueEvent(victimId, kidnapperId, 8) { Tick = world.Tick + 1 });
 
         // Every victim notices the kidnapper for 5 s: the forced sense with the alarm flag (FUN_14034ffa0:73 -> FUN_140858f40, entry seen flag set,
-        // timer +0x3c = 5), then the step decides what a player character does (CarrySystem.Engage).
+        // timer +0x3c = 5), then the step decides what a player character does (EngagedDefence.Engage).
         bool decides = DecisionSystem.Decides(victim);
         Aggro?.Alarm(world, victimId, kidnapperId);
         if (asleep)
@@ -119,7 +119,7 @@ public sealed partial class CarrySystem
             if (decides)
             {
                 victim.OrderQueue.Clear();   // order 116 Getting out of bed replaces the whole queue (FUN_1405d20d0, clear flag 1)
-                Engage(world, b, i);
+                _engaged.Engage(world, Aggro, b, i);
             }
             else world.Defer(new Combat.AttackOrder([victimId], kidnapperId) { Tick = world.Tick + 1, Source = TaskSource.Reaction });
         }

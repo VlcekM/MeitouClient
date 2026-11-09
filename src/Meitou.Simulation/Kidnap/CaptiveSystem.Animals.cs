@@ -104,7 +104,7 @@ public sealed partial class CaptiveSystem
     static void Fetch(World world, int slot, CharacterCold cold, Items.GroundItem limb)
     {
         cold.PickingUpItem = limb.Id;
-        if (Vector3.Distance(world.Characters.Next[slot].Position, limb.Position) > PlayerSystem.PickUpReach)
+        if (Vector3.Distance(world.Characters.Next[slot].Position, limb.Position) > Items.PickUps.PickUpReach)
             TaskStart.Walk(world, slot, limb.Position, SpeedMode.Run, TaskType.AnimalFetchALimb, TaskSource.Goal);
     }
 

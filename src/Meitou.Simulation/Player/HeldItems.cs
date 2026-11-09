@@ -198,10 +198,10 @@ sealed class HeldItems(PopulationData? data)
     {
         var t = lift.Item;
         string site = lift.From.Site;
-        if (PlayerSystem.ContainerFor(world, site, lift.Actor, out var opener) is { } container)
+        if (ContainerAccess.ContainerFor(world, site, lift.Actor, out var opener) is { } container)
         {
             if (opener is null || world.Player.OpenContainer != site) return;
-            var grid = PlayerSystem.GridOf(world, container, out var region);
+            var grid = ContainerAccess.GridOf(world, container, out var region);
             var item = grid.Items.ElementAtOrDefault(t.Index);
             if (!Matches(item, t with { X = t.X + region.X, Y = t.Y + region.Y }, section: false)
                     || !region.Holds(item!)) return;   // the window shows cells from the container's corner
@@ -390,10 +390,10 @@ sealed class HeldItems(PopulationData? data)
                     ? new(stock, stock, "main", stock.Width, stock.Height, null, null, null) : null;
             default:
                 if (place.Section != "main") return null;
-                if (PlayerSystem.ContainerFor(world, into.Site, held.Actor, out var opener) is { } container)
-                    return opener is not null && world.Player.OpenContainer == into.Site && PlayerSystem.ShopOf(world,
-                            container) is null ? new(PlayerSystem.GridOf(world, container), PlayerSystem.GridOf(world, container), "main",
-                                    PlayerSystem.GridOf(world, container).Width, PlayerSystem.GridOf(world, container).Height, null, container,
+                if (ContainerAccess.ContainerFor(world, into.Site, held.Actor, out var opener) is { } container)
+                    return opener is not null && world.Player.OpenContainer == into.Site && ContainerAccess.ShopOf(world,
+                            container) is null ? new(ContainerAccess.GridOf(world, container), ContainerAccess.GridOf(world, container), "main",
+                                    ContainerAccess.GridOf(world, container).Width, ContainerAccess.GridOf(world, container).Height, null, container,
                                     null) : null;
                 return world.SystemOf<Production.ProductionSystem>()?.Reach(world, held.Actor, into.Site, out _) is { Storage: { } storage,
                         Closed: false } m

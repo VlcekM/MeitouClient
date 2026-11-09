@@ -19,7 +19,7 @@ public sealed record RenameFactionCommand(string Name) : SimCommand;
 /// Applies the player's selection and stop commands (step 1 of the tick). Move orders are the movement system's. The item on the mouse is
 /// <see cref="HeldItems"/>, a right click in an own window <see cref="QuickMoves"/>.
 /// </summary>
-public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSystem
+public sealed class PlayerSystem(PopulationData? data = null) : ITickSystem, ITaskOwner
 {
     /// <summary>
     /// Dresses the characters the debug cheats and the character creation change (null without game data).
@@ -37,9 +37,28 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
     readonly QuickMoves _quickMoves = new(data);
 
     /// <summary>
+    /// The pick-ups of loose items and the walks to containers (row 3 "Collecting item").
+    /// </summary>
+    readonly PickUps _pickUps = new();
+
+    /// <summary>
     /// The game data the system was made with (null in data-free tests).
     /// </summary>
     internal PopulationData? Data => data;
+
+    /// <summary>
+    /// The owner of the pick-up and container orders (row 3) and their act-outs.
+    /// </summary>
+    internal PickUps PickUps => _pickUps;
+
+    /// <summary>
+    /// The player's animals take a pick-up order on a loose item into their bags (<see cref="PickUps.AnimalsPickUp"/>).
+    /// </summary>
+    public bool AnimalsPickUp
+    {
+        get => _pickUps.AnimalsPickUp;
+        set => _pickUps.AnimalsPickUp = value;
+    }
 
     #region Faction name
 
@@ -171,7 +190,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
                     player.InventoryShown.AddRange(show.Targets);
                     break;
                 case Items.OpenContainerOrder open:
-                    OpenContainerInput(world, open);
+                    ContainerAccess.OpenContainerInput(world, open, _pickUps);
                     break;
                 case Items.CloseContainer:
                     player.OpenContainer = player.OpeningContainer = null;
@@ -218,7 +237,7 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
                     player.InCreation = false;
                     break;
                 case Items.PickUpItemOrder pick:
-                    PickUpInput(world, pick);
+                    _pickUps.PickUpInput(world, pick);
                     break;
                 case Items.ArrangeInventory arrange:
                     if (table.TryResolveNext(arrange.Character, out int character)
@@ -290,6 +309,11 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
     #region Upkeep
 
     /// <summary>
+    /// Registers the act-out of row 3 "Collecting item" (<see cref="PickUps"/>).
+    /// </summary>
+    public void RegisterTasks(TaskHandlers tasks) => tasks.Register(Meitou.Data.Gameplay.Ai.TaskType.Pickup, _pickUps);
+
+    /// <summary>
     /// The serial upkeep: the debug cheats, burying the dead, the selection's and the active squad's upkeep, the pick-up and container walks and the
     /// held item's check.
     /// </summary>
@@ -300,8 +324,8 @@ public sealed partial class PlayerSystem(PopulationData? data = null) : ITickSys
         SquadManagement.BuryDead(world, data?.Db);
         world.Player.Prune(world.Characters);
         SquadManagement.KeepActive(world);
-        PickUpWorkers(world);
-        ContainerWorkers(world);
+        PickUps.PickUpWorkers(world, _assembly);
+        ContainerAccess.ContainerWorkers(world);
         _held.KeepHeld(world);
     }
 

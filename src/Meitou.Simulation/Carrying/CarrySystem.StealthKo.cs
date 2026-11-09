@@ -53,7 +53,7 @@ public sealed partial class CarrySystem
     /// <summary>
     /// This tick's stealth knock-out attempts (<see cref="Knockouts"/>).
     /// </summary>
-    readonly List<StealthKoEntry> _knockouts = [];
+    readonly KnockoutLog _knockouts = new();
 
     /// <summary>
     /// The XP service the knock-outs train with, found on first use.
@@ -74,14 +74,12 @@ public sealed partial class CarrySystem
     /// <summary>
     /// The swings rolled since the last <see cref="TakeKnockouts"/> (the host shows them as "*Thunk*" or "Failed!").
     /// </summary>
-    public IReadOnlyList<StealthKoEntry> Knockouts => _knockouts;
+    public IReadOnlyList<StealthKoEntry> Knockouts => _knockouts.Entries;
 
-    public StealthKoEntry[] TakeKnockouts()
-    {
-        StealthKoEntry[] all = [.. _knockouts];
-        _knockouts.Clear();
-        return all;
-    }
+    /// <summary>
+    /// The swings rolled since the last take, which empties <see cref="Knockouts"/>.
+    /// </summary>
+    public StealthKoEntry[] TakeKnockouts() => _knockouts.Take();
 
     /// <summary>
     /// A character that may be sent on a stealth knock-out: sneaking, awake, not carrying or carried (a fight it is in ends with the order's new
@@ -349,8 +347,8 @@ public sealed partial class CarrySystem
             talk.TagEnemy(world, i, t);
         }
 
-        // a player character: attackTarget's replan, the step decides (CarrySystem.Engage)
-        if (DecisionSystem.Decides(target)) Engage(world, t, i);
+        // a player character: attackTarget's replan, the step decides (EngagedDefence.Engage)
+        if (DecisionSystem.Decides(target)) _engaged.Engage(world, Aggro, t, i);
         else world.Defer(new AttackOrder([targetId], attackerId) { Tick = world.Tick + 1, Defensive = true });
     }
 

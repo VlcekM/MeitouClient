@@ -300,7 +300,7 @@ public sealed partial class World
     {
         if (Player.OpenContainer is not { } id || Fixtures.Find(id) is not { Contents: not null } f) return null;
 
-        var grid = PlayerSystem.GridOf(this, f, out var region);
+        var grid = Items.ContainerAccess.GridOf(this, f, out var region);
         var storage = new InventoryView(region.Width, region.Height, 0, 0,
             Array.AsReadOnly(grid.Items.Select((item, index) => (item, index)).Where(e => region.Holds(e.item)).Select(e => new InventoryItemView(e.index, e.item.Record,
                 e.item.Name, "main", e.item.X - region.X, e.item.Y - region.Y, e.item.Width, e.item.Height, e.item.Quantity, e.item.Weight, e.item.Quality)

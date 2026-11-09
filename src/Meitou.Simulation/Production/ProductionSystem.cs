@@ -1660,14 +1660,14 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     }
 
     /// <summary>
-    /// Put an item into a container's grid (<see cref="PlayerSystem.ContainerFor"/>): at a free cell, or with X below 0 where it first fits (<see cref="PutInMachine.Count"/> units); a bag or limb
+    /// Put an item into a container's grid (<see cref="ContainerAccess.ContainerFor"/>): at a free cell, or with X below 0 where it first fits (<see cref="PutInMachine.Count"/> units); a bag or limb
     /// item is refused like the machine's.
     /// </summary>
     static void PutInContainer(World world, Locks.Fixture container, CharacterCold cold, PutInMachine put)
     {
-        if (PlayerSystem.ShopOf(world, container) is not null) { world.Post("That stock is the shop's."); return; }   // engine choice: a shop's stock is not a place to leave things
+        if (ContainerAccess.ShopOf(world, container) is not null) { world.Post("That stock is the shop's."); return; }   // engine choice: a shop's stock is not a place to leave things
         var root = cold.Inventory!;
-        var storage = PlayerSystem.GridOf(world, container);
+        var storage = ContainerAccess.GridOf(world, container);
         var item = root.All().ElementAtOrDefault(put.Item.Index);
         var token = put.Item;
         if (item is null || item.Record != token.Record || item.Section != token.Section || item.X != token.X || item.Y != token.Y || item.Quantity != token.Quantity || item.LockedOn ||
@@ -1694,7 +1694,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// </summary>
     void TakeFromContainer(World world, Locks.Fixture container, CharacterCold cold, TakeFromMachine take)
     {
-        var storage = PlayerSystem.GridOf(world, container, out var region);
+        var storage = ContainerAccess.GridOf(world, container, out var region);
         if (take.Index < 0 || take.Index >= storage.Items.Count || !region.Holds(storage.Items[take.Index])) return;
         var item = storage.Items[take.Index];
         if (world.SystemOf<Crime.CrimeSystem>() is { } crimes && world.Characters.TryResolveNext(take.Character, out int thief)
@@ -1726,7 +1726,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// </summary>
     void Put(World world, PutInMachine put)
     {
-        if (PlayerSystem.ContainerFor(world, put.Site, put.Character, out var holder) is { } container)
+        if (ContainerAccess.ContainerFor(world, put.Site, put.Character, out var holder) is { } container)
         {
             if (holder is not null && put.Slot == -1) PutInContainer(world, container, holder, put);
             return;
@@ -1777,7 +1777,7 @@ public sealed partial class ProductionSystem : ITickSystem, ITaskOwner, ITaskHan
     /// </summary>
     void Take(World world, TakeFromMachine take)
     {
-        if (PlayerSystem.ContainerFor(world, take.Site, take.Character, out var holder) is { } container)
+        if (ContainerAccess.ContainerFor(world, take.Site, take.Character, out var holder) is { } container)
         {
             if (holder is not null && take.Slot == -1) TakeFromContainer(world, container, holder, take);
             return;
