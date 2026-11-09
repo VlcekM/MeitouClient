@@ -301,6 +301,11 @@ public sealed partial class FixtureRegistry
             });
             bed++;
         }
+        if (bed == 0 && !b.HasInterior && record is not null && !IsDestroyed(b) && BedDataOf(db, record) is { } outdoorBed)
+        {
+            var rotation = b.Resolved?.Placement.Rotation ?? Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw);
+            list.Add(BedOf(db, b.Key, record, site, owner, b.Position, rotation, outdoorBed));
+        }
         int dummy = 0;
         foreach (var piece in b.Furniture)
         {
@@ -748,8 +753,8 @@ public sealed partial class FixtureRegistry
     {
         if (_byId.TryGetValue(what, out var f)) return f;
 
-        // The original's `in what` of one lying in a bed the player built names that bed's building.
-        if (c.InSomething == HeldState.Bed && _byId.TryGetValue(what + "@bed0", out f) && f.Site < 0) return f;
+        // A standalone bed is a building in the original's save.
+        if (c.InSomething == HeldState.Bed && _byId.TryGetValue(what + "@bed0", out f) && !f.Indoors) return f;
         if (SavedSpots?.GetValueOrDefault(what) is not { } spot) return null;
         return c.InSomething switch
         {

@@ -297,6 +297,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
 
 ### Beds
 
+**Verified** (Stoat placements, zone 39.16): the outdoor Camp Beds are standalone buildings with BF_BED and `sleeponfloor`.
+Meitou registers them as outdoor fixtures using their level placement and bed marker, alongside beds from interior layouts.
+
 **Observed** (decompiled, kenshi_x64.exe 1.0.68) unless marked. Data: every bed has `max operators` 1 and `use range` 15; the clip is the functionality's
 `animation` (`sleepinbed` for Bed, Old Bed and the Skeleton Repair Bed, `sleeponfloor` for Camp and Fish Bed) (**Verified**, data probe).
 - **Enter / leave** (`FUN_14032e2f0(character, enter, bed)`): entering sets `+0x2f8 = 1` and the handle, and adds the character to the bed's occupant
