@@ -4,12 +4,19 @@ using Meitou.Simulation.Trading;
 
 namespace Meitou.Simulation.Ai;
 
-// Goal 118/119, the buying (docs/game/ai-tasks.md "Shopping"): the think starts the shopper's timer on arrival; this serial step buys, as it changes
-// the shops' stock and the squads' purses.
+/// <summary>
+/// Goal 118/119, the buying (docs/game/ai-tasks.md "Shopping"): the think starts the shopper's timer on arrival; this serial step buys, as it changes
+/// the shops' stock and the squads' purses.
+/// </summary>
 public sealed partial class AiSystem
 {
-    // Set by a think that started a shopper's timer (AiMind.NextBuyTick); the step runs while any shopper is waiting.
+    /// <summary>
+    /// Set by a think that started a shopper's timer (AiMind.NextBuyTick); the step runs while any shopper is waiting.
+    /// </summary>
     int _shopping;
+    /// <summary>
+    /// The trade system that does the buying, resolved on first use.
+    /// </summary>
     TradeSystem? _trade;
 
     /// <summary>

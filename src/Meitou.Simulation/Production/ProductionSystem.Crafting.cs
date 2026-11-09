@@ -5,8 +5,8 @@ using Meitou.Simulation.Items;
 namespace Meitou.Simulation.Production;
 
 /// <summary>
-/// Crafting benches (docs/game/buildings-production.md "Crafting", docs/simulation.md "Production"): a queue per bench, worked by its operators; each craft binds the bench's input sections
-/// to its ingredients, draws them as the work goes, and puts the finished item into the bench's output.
+/// Crafting benches (docs/game/buildings-production.md "Crafting", docs/simulation.md "Production"): a queue per bench, worked by its operators; each
+/// craft binds the bench's input sections to its ingredients, draws them as the work goes, and puts the finished item into the bench's output.
 /// </summary>
 public sealed partial class ProductionSystem
 {
@@ -15,6 +15,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     public const int MaxCraftQueue = 20;
 
+    /// <summary>
+    /// The cache of <see cref="EverEnabled"/>.
+    /// </summary>
     HashSet<(CraftKind, string)>? _everEnabled;
 
     /// <summary>
@@ -27,6 +30,9 @@ public sealed partial class ProductionSystem
         return _everEnabled = [.. _allResearch.SelectMany(r => r.EnableCrafts.Select(e => (e.Kind, e.Id)))];
     }
 
+    /// <summary>
+    /// Whether a craft is unlocked: a research unlocked it, or no research lists it.
+    /// </summary>
     bool Unlocked(World world, CraftKind kind, string id) => world.Research.UnlockedCrafts.Contains((kind, id)) || !EverEnabled().Contains((kind, id));
 
     /// <summary>
@@ -36,8 +42,15 @@ public sealed partial class ProductionSystem
         Unlocked(world, option.Kind, option.Item) && (option.Model is null || Unlocked(world, CraftKind.Weapon, option.Model))
             && option.Level <= bench.TechLevel;
 
+    /// <summary>
+    /// The recipe of a bench option on the machine.
+    /// </summary>
     CraftRecipe RecipeOf(Machine m, CraftOption option) => m.Data.Craft!.Recipe(_db, _constants, option, m.Data.Inputs);
 
+    /// <summary>
+    /// Queues a craft (its count, up to <see cref="MaxCraftQueue"/>) when the bench offers it and the player can craft it, and binds the sections to
+    /// the first job.
+    /// </summary>
     void QueueCraft(World world, QueueCraft order)
     {
         if (world.Machines.Find(order.Site) is not { Craft: { } state, Data.Craft: { } bench } m) return;
@@ -47,6 +60,9 @@ public sealed partial class ProductionSystem
         world.Machines.Touch();
     }
 
+    /// <summary>
+    /// Takes a craft off a bench's queue and binds the sections to the new first job.
+    /// </summary>
     void CancelCraft(World world, CancelCraft order)
     {
         if (world.Machines.Find(order.Site) is not { Craft: { } state } m || order.Index < 0 || order.Index >= state.Queue.Count) return;
@@ -61,10 +77,11 @@ public sealed partial class ProductionSystem
     static int Held(CraftState state, CraftOption option) => state.Done.Where(d => d.Record == option.Item).Sum(d => d.Quantity);
 
     /// <summary>
-    /// Sets the input sections for the first craft (<b>Observed</b>, <c>CraftingBuilding::vfunc_182</c> "setProductionItem"): section k takes ingredient k at its per-item amount;
-    /// sections it does not use draw nothing. Done when the first craft changes (queued, cancelled, finished). Items of another kind in a section fall on the ground (engine choice; the
-    /// original hands them back to the bench). Each section's level moves with its item (<b>Verified</b>, <c>FUN_1402bb470</c>): all sections store their level under their old item first, then a
-    /// section taking an item gets the level stored for it (0 when none), so switching to another recipe and back returns the partly drawn ingredient.
+    /// Sets the input sections for the first craft (<b>Observed</b>, <c>CraftingBuilding::vfunc_182</c> "setProductionItem"): section k takes
+    /// ingredient k at its per-item amount; sections it does not use draw nothing. Done when the first craft changes (queued, cancelled, finished).
+    /// Items of another kind in a section fall on the ground (engine choice; the original hands them back to the bench). Each section's level moves
+    /// with its item (<b>Verified</b>, <c>FUN_1402bb470</c>): all sections store their level under their old item first, then a section taking an
+    /// item gets the level stored for it (0 when none), so switching to another recipe and back returns the partly drawn ingredient.
     /// </summary>
     void Bind(World world, Machine m, CraftState state, CraftJob job)
     {
@@ -106,6 +123,9 @@ public sealed partial class ProductionSystem
         if (m.Craft is { } state && level > 0 && _items.Info(item) is not null) state.Partial[item] = level;
     }
 
+    /// <summary>
+    /// The item of section <paramref name="k"/> for a craft: the recipe's ingredient, else the section's own item.
+    /// </summary>
     static string ItemOf(Machine m, CraftJob job, int k) => k < job.Recipe.Inputs.Count ? job.Recipe.Inputs[k].Item : m.Inputs[k].Recipe.Item;
 
     /// <summary>
@@ -122,8 +142,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// One operator's work on a bench (<b>Observed</b>, <c>CraftingBuilding::vfunc_150</c>): <c>rate x s x option x P x dt / seconds</c> of the first craft, clamped to the inputs; the
-    /// critical is rolled when the craft first gets work; at 0.999 the item is made.
+    /// One operator's work on a bench (<b>Observed</b>, <c>CraftingBuilding::vfunc_150</c>): <c>rate x s x option x P x dt / seconds</c> of the first
+    /// craft, clamped to the inputs; the critical is rolled when the craft first gets work; at 0.999 the item is made.
     /// </summary>
     bool CraftStep(World world, Machine m, float skill, float s, float dt)
     {
@@ -175,9 +195,10 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A finished craft (<b>Observed</b>, <c>FUN_1402bcac0</c>): armour of the crafter's tier (one better on a critical), capped at the bench's tech level, and a robotic limb or crossbow of that grade as its level; a weapon of the queued model,
-    /// or when the crafter's skill is below its level and there was no critical, of the best model of the bench at or below the skill (engine reading of the model pick); other items as
-    /// they are. The craft leaves the queue, and with repeat on goes back to its end.
+    /// A finished craft (<b>Observed</b>, <c>FUN_1402bcac0</c>): armour of the crafter's tier (one better on a critical), capped at the bench's tech
+    /// level, and a robotic limb or crossbow of that grade as its level; a weapon of the queued model, or when the crafter's skill is below its level
+    /// and there was no critical, of the best model of the bench at or below the skill (engine reading of the model pick); other items as they are.
+    /// The craft leaves the queue, and with repeat on goes back to its end.
     /// </summary>
     void Finish(World world, Machine m, CraftState state, CraftJob job, float skill)
     {
@@ -237,12 +258,19 @@ public sealed partial class ProductionSystem
                 .FirstOrDefault()
                 ?? bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item).OrderBy(o => o.Level).First();
 
+    /// <summary>
+    /// The cache of the smiths' craft predictions (null: made again).
+    /// </summary>
     IReadOnlyDictionary<string, CraftSmithView>? _publishedSmiths;
+    /// <summary>
+    /// The machine registry version <see cref="_publishedSmiths"/> was made at (-1: never).
+    /// </summary>
     long _smithsVersion = -1;
 
     /// <summary>
-    /// The Craft tab's Current Smith per bench (<c>FUN_1402bcf60</c>): the bench's last operator (<see cref="Machine.Smith"/>) while it is alive with stats, his effective level of the bench's
-    /// stat and the penalty of its multiplier, and for each queued craft what that smith would make (<see cref="CraftPrediction"/>). Rebuilt when the machines changed.
+    /// The Craft tab's Current Smith per bench (<c>FUN_1402bcf60</c>): the bench's last operator (<see cref="Machine.Smith"/>) while it is alive with
+    /// stats, his effective level of the bench's stat and the penalty of its multiplier, and for each queued craft what that smith would make
+    /// (<see cref="CraftPrediction"/>). Rebuilt when the machines changed.
     /// </summary>
     public IReadOnlyDictionary<string, CraftSmithView> SmithsView(World world)
     {
@@ -291,8 +319,17 @@ public sealed partial class ProductionSystem
         return _publishedSmiths = map;
     }
 
+    /// <summary>
+    /// The cache of the benches' craft options (null: made again).
+    /// </summary>
     IReadOnlyDictionary<string, IReadOnlyList<CraftOptionView>>? _publishedCrafts;
+    /// <summary>
+    /// The research count <see cref="_publishedCrafts"/> was made at (-1: never).
+    /// </summary>
     long _craftsResearch = -1;
+    /// <summary>
+    /// The bench count <see cref="_publishedCrafts"/> was made at (-1: never).
+    /// </summary>
     int _craftsBenches = -1;
 
     /// <summary>

@@ -86,6 +86,9 @@ public static class ObedientSlave
             TaskStart.Stand(world.Characters, slot);
     }
 
+    /// <summary>
+    /// The slot of a living character (-1: not in the table).
+    /// </summary>
     static int SlotOf(World world, CharacterCold cold)
     {
         var table = world.Characters;
@@ -146,6 +149,8 @@ public static class ObedientSlave
 /// </summary>
 sealed class ObedientJobs : IJobSource, ITaskHandler
 {
+    #region The job
+
     /// <summary>
     /// The x1.25 of the goal running now (docs/game/ai-tasks.md "Desire and commitment").
     /// </summary>
@@ -155,26 +160,55 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     /// </summary>
     const int MaxFails = 3;
 
+    /// <summary>
+    /// The building a slave works at: its building, work clip and functionality, the reach, the pick's epoch and the walks that failed.
+    /// </summary>
     sealed class WorkSpot
     {
+        /// <summary>
+        /// The workplace.
+        /// </summary>
         public required TownBuilding Building;
+        /// <summary>
+        /// The work clip the slave stands at it with.
+        /// </summary>
         public required string Clip;
+        /// <summary>
+        /// The workplace's functionality (null: none).
+        /// </summary>
         public string? Functionality;
         /// <summary>
         /// How near it must come to the building (<see cref="AiSystem.WorkRangeOf"/>).
         /// </summary>
         public float Range = AiSystem.WorkReach;
+        /// <summary>
+        /// The epoch of the pick (<see cref="AiMind.WorkEpoch"/> numbering).
+        /// </summary>
         public int Epoch;
+        /// <summary>
+        /// The walks to it that ended short (<see cref="MaxFails"/> give it up).
+        /// </summary>
         public int Fails;
     }
 
-    // The building each slave works at and the picks it made (runtime only, never hashed: the pick is a roll of the character and the epoch).
+    /// <summary>
+    /// The building each slave works at and the picks it made (runtime only, never hashed: the pick is a roll of the character and the epoch).
+    /// </summary>
     readonly Dictionary<CharacterId, WorkSpot> _works = [];
 
+    /// <summary>
+    /// A goal of the master's Slave list and its score.
+    /// </summary>
     readonly record struct Choice(TaskType Type, float Score);
 
+    /// <summary>
+    /// Whether job <paramref name="k"/> is urgent: always while the character obeys as a slave.
+    /// </summary>
     public bool Urgent(World world, int slot, int k) => ObedientSlave.Obeys(world.Characters.Cold(slot)!);
 
+    /// <summary>
+    /// Whether the Obedient Slave job can run for the character: a slave that obeys with a goal of its master's Slave list to act out.
+    /// </summary>
     public DecisionCheck CanRun(World world, int slot, int k)
     {
         var cold = world.Characters.Cold(slot)!;
@@ -185,6 +219,9 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         return Continues(world, slot, cold, k, pick.Type) ? DecisionCheck.Runs : DecisionCheck.Run;
     }
 
+    /// <summary>
+    /// Starts the goal the job chose for the character: following the master, or working at a building of the town.
+    /// </summary>
     public void Start(World world, int slot, int k)
     {
         var table = world.Characters;
@@ -218,7 +255,9 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         TaskStart.End(world, slot, TaskEnd.Stopped);
     }
 
-    // ------------------------------------------------------------------ the pick
+    #endregion
+
+    #region The pick
 
     /// <summary>
     /// The best goal of the master's Slave list now (the scorer of <c>FUN_14050df10</c>: only the priorities 1 to 3 are loaded, <c>FUN_14026b790</c>
@@ -289,7 +328,9 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         return table.Next[slot].Position;
     }
 
-    // ------------------------------------------------------------------ acting out
+    #endregion
+
+    #region Acting out
 
     /// <summary>
     /// Whether the character's task is already this goal's act-out (the plan goes on): a follow of the target, a walk to the workplace or standing at
@@ -316,6 +357,9 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         }
     }
 
+    /// <summary>
+    /// Starts work goal <paramref name="type"/> for a slave: picks its workplace (kept while the pick stands) and walks there.
+    /// </summary>
     void StartWork(World world, int slot, CharacterCold cold, int k, TaskType type)
     {
         var table = world.Characters;
@@ -346,11 +390,17 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         else Walk(world, slot, k, type, found.Building);
     }
 
+    /// <summary>
+    /// Starts the walk to the workplace.
+    /// </summary>
     static void Walk(World world, int slot, int k, TaskType type, TownBuilding building) =>
         TaskStart.Start(world, slot,
                 new TaskRequest(CharacterTask.GoTo, type, TaskSource.Job) { Job = k, Goal = new Vector2(building.Position.X, building.Position.Z),
                         Mode = SpeedMode.Walk });
 
+    /// <summary>
+    /// Starts the standing at the workplace.
+    /// </summary>
     static void Work(World world, int slot, int k, TaskType type) =>
         TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Idle, type, TaskSource.Job) { Job = k });
 
@@ -390,4 +440,6 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
             cold.ActionWork = null;
         }
     }
+
+    #endregion
 }

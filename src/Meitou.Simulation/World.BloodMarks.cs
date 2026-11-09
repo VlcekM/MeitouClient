@@ -43,8 +43,14 @@ public enum BloodMarkKind : byte
 public readonly record struct BloodMark(
     BloodMarkKind Kind, CharacterId Who, Vector3 Position, Vector2 Direction, float Amount, uint Colour, string? Race = null);
 
+/// <summary>
+/// The world's blood marks for the host.
+/// </summary>
 public sealed partial class World
 {
+    /// <summary>
+    /// The blood marks' queue (see <see cref="BloodMarks"/>).
+    /// </summary>
     volatile System.Collections.Concurrent.ConcurrentQueue<BloodMark>? _bloodMarks;
 
     /// <summary>

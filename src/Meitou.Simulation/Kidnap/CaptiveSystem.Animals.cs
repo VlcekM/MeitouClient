@@ -9,21 +9,32 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Kidnap;
 
-// Fogman worship (237 / 236) and the dogs' limb play (277-279, from the races' AI Goals): docs/game/ai-tasks.md "Prisoner fate and slave rows",
-// docs/simulation.md "Captives".
+/// <summary>
+/// Fogman worship (237 / 236) and the dogs' limb play (277-279, from the races' AI Goals): docs/game/ai-tasks.md "Prisoner fate and slave rows",
+/// docs/simulation.md "Captives".
+/// </summary>
 public sealed partial class CaptiveSystem
 {
     /// <summary>
     /// How near a worshipper bows (<c>Task_WorshipTarget</c>, <b>Verified</b>), the range of its bark timer in game seconds, and event 53 (worship).
     /// </summary>
     public const float WorshipReach = 60, WorshipMin = 3, WorshipMax = 14;
+    /// <summary>
+    /// Event 53, the worshipper's bark (see <see cref="WorshipReach"/>).
+    /// </summary>
     const int WorshipEvent = 53;
+    /// <summary>
+    /// The clip a worshipper bows with.
+    /// </summary>
     public const string BowClip = "bowing";
     /// <summary>
     /// The limb fetch's reach (<c>AI::findLimbOnGround</c>, squared 40000), and the play run's legs (<c>Task_DogLimbRunningPlay</c>): 1000 + 400 x
     /// rand, a new one under 200 left.
     /// </summary>
     public const float FetchRange = 200, PlayLeg = 1000, PlayLegRandom = 400, PlayTurn = 200;
+    /// <summary>
+    /// The salt of the animals' play rolls.
+    /// </summary>
     const ulong AnimalSalt = 0x416E_696D_616C_506C;
 
     /// <summary>
@@ -61,6 +72,9 @@ public sealed partial class CaptiveSystem
         return null;
     }
 
+    /// <summary>
+    /// The cages of the buildings a nest stood up.
+    /// </summary>
     static IEnumerable<Fixture> NestCages(World world, int nest) =>
         world.NestBuildings.Of(nest).SelectMany(p => world.Fixtures.OfBuilding(p.Id)).Where(f => f.Kind == FixtureKind.Cage);
 
@@ -109,6 +123,9 @@ public sealed partial class CaptiveSystem
         if (LimbFor(world, slot, cold) is { } best) Fetch(world, slot, cold, best);
     }
 
+    /// <summary>
+    /// Has the animal pick up <paramref name="limb"/>, running to it first when it is out of reach.
+    /// </summary>
     static void Fetch(World world, int slot, CharacterCold cold, Items.GroundItem limb)
     {
         cold.PickingUpItem = limb.Id;
@@ -143,6 +160,9 @@ public sealed partial class CaptiveSystem
     static float PlayDesire(World world, CharacterCold c) =>
         c.Mouth is null || PlayerSquad(world, c) && c.Age > 0.95f ? 0 : PlayerSquad(world, c) && c.Age > 0.4f ? 0.3f : 1.1f;
 
+    /// <summary>
+    /// Whether 278's desire is above 0 (<see cref="PlayDesire"/>).
+    /// </summary>
     static bool Plays(World world, CharacterCold c) => PlayDesire(world, c) > 0;
 
     /// <summary>
@@ -151,8 +171,14 @@ public sealed partial class CaptiveSystem
     /// </summary>
     static float ChaseDesire(World world, CharacterCold c) => !PlayerSquad(world, c) ? 1.2f : c.Age > 0.95f ? 0 : c.Age > 0.2f ? 0.3f : 0.6f;
 
+    /// <summary>
+    /// Whether 279's desire is above 0 (<see cref="ChaseDesire"/>).
+    /// </summary>
     static bool Chases(World world, CharacterCold c) => ChaseDesire(world, c) > 0;
 
+    /// <summary>
+    /// Whether a character is of the player's side: a player character or of the player's faction.
+    /// </summary>
     static bool PlayerSquad(World world, CharacterCold c) => c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction;
 
     /// <summary>

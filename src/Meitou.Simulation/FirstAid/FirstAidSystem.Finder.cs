@@ -25,23 +25,41 @@ namespace Meitou.Simulation.FirstAid;
 /// </summary>
 public sealed partial class FirstAidSystem
 {
-    // Leave a full cell of slack for each actor: both the medic and candidate can move between
-    // the grid snapshot and the positions scored by this finder.
+    #region The sweep
+
+    /// <summary>
+    /// Leave a full cell of slack for each actor: both the medic and candidate can move between the grid snapshot and the positions scored by
+    /// this finder.
+    /// </summary>
     const float PatientGridMargin = 200;
     /// <summary>
     /// The most a character may have moved since the grid snapshot for the margin to hold (each of the medic and the patient: 50 + 50 inside the
     /// 200).
     /// </summary>
     const float PatientGridJump = 50;
+    /// <summary>
+    /// A scratch list of the grid's patient candidates.
+    /// </summary>
     readonly List<int> _patientCandidates = [];
 
     // What one automatic sweep (SlowWorld) works out once instead of for every medic: nothing it reads changes while the sweep runs (a treatment only
     // sets a task).
+    /// <summary>
+    /// Whether a sweep is running (<see cref="BeginSweep"/> to <see cref="EndSweep"/>).
+    /// </summary>
     bool _sweeping;
+    /// <summary>
+    /// The factions that own a cage, found once per sweep.
+    /// </summary>
     readonly HashSet<int> _sweepCageFactions = [];
 
-    // Every character's organic and robot need (AidNeed) by slot * 2 + robot, and the slots with either above 0 in slot order.
+    /// <summary>
+    /// Every character's organic and robot need (AidNeed) by slot * 2 + robot, and the slots with either above 0 in slot order.
+    /// </summary>
     float[] _sweepNeeds = [];
+    /// <summary>
+    /// The slots with a need above 0, in slot order (see <see cref="_sweepNeeds"/>).
+    /// </summary>
     readonly List<int> _sweepNeedy = [];
 
     /// <summary>
@@ -69,18 +87,29 @@ public sealed partial class FirstAidSystem
         _sweeping = true;
     }
 
+    /// <summary>
+    /// Ends the sweep: the needs are worked out per medic again.
+    /// </summary>
     internal void EndSweep() => _sweeping = false;
 
+    /// <summary>
+    /// Collects the slots a grid query finds.
+    /// </summary>
     struct CandidateCollector(List<int> slots)
     {
+        /// <summary>
+        /// The slots found.
+        /// </summary>
         public List<int> Slots = slots;
+        /// <summary>
+        /// Adds a found slot.
+        /// </summary>
         public static void Add(int slot, ref CandidateCollector collector) => collector.Slots.Add(slot);
     }
 
-    /// <summary>
-    /// The live relation table; null: no faction is allied, hostile or related to another (a patient of another faction scores the 0.05 minimum).
-    /// </summary>
-    public FactionRelations? Relations { get; set; }
+    #endregion
+
+    #region The pieces
 
     /// <summary>
     /// The square of the distance at which a patient weighs nothing (<c>FUN_140998b90</c>: 1 - d^2 / 3397386.5, about 1843 units, <b>Verified</b>
@@ -123,9 +152,15 @@ public sealed partial class FirstAidSystem
     /// </summary>
     const float SplintWeight = 0.1f;
 
-    static float Speed2(in CharacterHot a) => a.Velocity.X * a.Velocity.X + a.Velocity.Z * a.Velocity.Z;
+    /// <summary>
+    /// The live relation table; null: no faction is allied, hostile or related to another (a patient of another faction scores the 0.05 minimum).
+    /// </summary>
+    public FactionRelations? Relations { get; set; }
 
-    // ------------------------------------------------------------------ the pieces
+    /// <summary>
+    /// The squared speed of a character on the ground plane.
+    /// </summary>
+    static float Speed2(in CharacterHot a) => a.Velocity.X * a.Velocity.X + a.Velocity.Z * a.Velocity.Z;
 
     /// <summary>
     /// "A regards B as friendly" (Character slot 126, <c>isAlly</c> <c>FUN_1407923d0</c>): the dialogue system's rule (same faction, squad memory
@@ -215,6 +250,9 @@ public sealed partial class FirstAidSystem
                             Constants.ExtraBloodLossFromBodyparts)
             : (0, 0);
 
+    /// <summary>
+    /// A character's first-aid need for an organic or a robot kit (<paramref name="robotKit"/>); 0 without a medical state or race.
+    /// </summary>
     float AidNeed(CharacterCold c, bool robotKit) =>
         c.Medical is { } med && c.Race is { } race
             ? med.FirstAidNeed(race, robotKit,
@@ -256,6 +294,9 @@ public sealed partial class FirstAidSystem
         return need;
     }
 
+    /// <summary>
+    /// A character's need for the kit: the sweep's when a sweep is running, else worked out.
+    /// </summary>
     float SweepNeed(int slot, CharacterCold patient, bool robotKit)
     {
         return _sweeping ? _sweepNeeds[slot * 2 + (robotKit ? 1 : 0)] : AidNeed(patient, robotKit);
@@ -307,7 +348,9 @@ public sealed partial class FirstAidSystem
         }
     }
 
-    // ------------------------------------------------------------------ the finder
+    #endregion
+
+    #region The finder
 
     /// <summary>
     /// The Medic / Robotics finder (<c>FUN_14099f690</c>; 58 passes <paramref name="robotics"/> false, 57 true) and the Medic button's one look.
@@ -872,4 +915,5 @@ public sealed partial class FirstAidSystem
         return true;
     }
 
+    #endregion
 }

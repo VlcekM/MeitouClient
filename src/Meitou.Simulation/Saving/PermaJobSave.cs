@@ -9,13 +9,16 @@ using Meitou.Simulation.Production;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// A character's job list and jobs switch in its GAMESTATE_AI record <c>ai</c> (<b>Verified</b>, <c>OrdersReceiver</c> vfuncs 1 and 2 and 4122 sampled records;
-/// docs/game/ai-tasks.md "Perma-jobs"): bool <c>jobs</c>, and per job i from 0 the int <c>pjob&lt;i&gt;</c> (task type) and the handle <c>pjobT&lt;i&gt;</c>
-/// (target). Meitou's own string <c>meitou pjob&lt;i&gt;</c> (the <see cref="BuildSite.Id"/>) names a building the handle cannot (one without a saved state, or
-/// a rock's natural site) and wins on load.
+/// A character's job list and jobs switch in its GAMESTATE_AI record <c>ai</c> (<b>Verified</b>, <c>OrdersReceiver</c> vfuncs 1 and 2 and 4122
+/// sampled records; docs/game/ai-tasks.md "Perma-jobs"): bool <c>jobs</c>, and per job i from 0 the int <c>pjob&lt;i&gt;</c> (task type) and the
+/// handle <c>pjobT&lt;i&gt;</c> (target). Meitou's own string <c>meitou pjob&lt;i&gt;</c> (the <see cref="BuildSite.Id"/>) names a building the
+/// handle cannot (one without a saved state, or a rock's natural site) and wins on load.
 /// </summary>
 public static class PermaJobSave
 {
+    /// <summary>
+    /// The GAMESTATE_AI key prefixes of a job (task type, target handle, Meitou's site id) and the jobs switch key.
+    /// </summary>
     const string Type = "pjob", Target = "pjobT", MeitouSite = "meitou pjob", Switch = "jobs";
 
     /// <summary>

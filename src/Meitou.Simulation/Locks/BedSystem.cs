@@ -27,7 +27,13 @@ public sealed record PutInBedOrder(IReadOnlyList<CharacterId> Carriers, string? 
 /// </summary>
 public sealed class BedTrip
 {
+    /// <summary>
+    /// The character walking.
+    /// </summary>
     public required CharacterId Character { get; init; }
+    /// <summary>
+    /// The bed's fixture id.
+    /// </summary>
     public required string Bed { get; set; }
     /// <summary>
     /// The carried character to lay in the bed; <see cref="CharacterId.None"/>: the character lies in it itself.
@@ -42,6 +48,9 @@ public sealed class BedTrip
     /// </summary>
     public int Tries { get; set; }
 
+    /// <summary>
+    /// Adds the trip to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Character);
@@ -96,19 +105,29 @@ public sealed class BedSettings
 public sealed class BedSystem(PopulationData data, BedSettings? settings = null) : ITickSystem, IStateHashed, ITaskOwner, ITaskHandler, IOrderOwner,
         IDecisionOwner
 {
+    /// <summary>
+    /// The bed settings.
+    /// </summary>
     public BedSettings Settings { get; } = settings ?? new BedSettings();
     /// <summary>
     /// Lets a carrier put its body down (null: no carrying, so no laying in).
     /// </summary>
     public Carrying.CarrySystem? Carry { get; set; }
 
+    /// <summary>
+    /// The bed trips under way, in the order they started.
+    /// </summary>
     readonly List<BedTrip> _trips = [];
 
-    // Bed id -> the game hour the player's faction last paid its rent (the original's global map is keyed by a name string of the argument and is
-    // never saved, Verified by references;
-    // Meitou saves it as `meitou rent` keys on the CAMERA, engine choice).
+    /// <summary>
+    /// Bed id -&gt; the game hour the player's faction last paid its rent (the original's global map is keyed by a name string of the argument and is
+    /// never saved, Verified by references; Meitou saves it as `meitou rent` keys on the CAMERA, engine choice).
+    /// </summary>
     readonly SortedDictionary<string, double> _paid = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The bed trips under way.
+    /// </summary>
     public IReadOnlyList<BedTrip> Trips => _trips;
 
     /// <summary>
@@ -121,8 +140,14 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// </summary>
     public void SetRentPaid(string bed, double hours) => _paid[bed] = hours;
 
+    /// <summary>
+    /// The characters an order names, else the player's selection.
+    /// </summary>
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
+    /// <summary>
+    /// The bed orders: use a bed, put someone in a bed.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         var table = world.Characters;
@@ -185,6 +210,7 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             : OrderCheck.Blocked(c.IsPlayer ? $"{c.Name}: no free bed nearby" : null, posted: true);
     }
 
+    /// <inheritdoc/>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
         var c = world.Characters.Cold(slot)!;
@@ -206,10 +232,18 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// </summary>
     static readonly object Named = new();
 
-    // Saved: a put-in order that named its bed is kind 1.
+    /// <summary>
+    /// The order's save detail code. Saved: a put-in order that named its bed is kind 1.
+    /// </summary>
     int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is null ? 0 : order.Detail == Named ? 1 : -1;
+    /// <summary>
+    /// The order detail of a saved kind: kind 1 is a put-in that named its bed.
+    /// </summary>
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) => kind == 1 ? Named : null;
 
+    /// <summary>
+    /// Registers the bed's act-outs: sleeping and the put-in rows.
+    /// </summary>
     public void RegisterTasks(TaskHandlers tasks)
     {
         tasks.Register(CharacterTask.Sleep, this);
@@ -319,6 +353,9 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         (c.GoalHeight, c.GoalHeightAt) = (at.Y, flat);
     }
 
+    /// <summary>
+    /// The bed step: sleepers that are done get up, then each trip moves on (an ended one is dropped).
+    /// </summary>
     public void SlowWorld(World world)
     {
         GetUp(world);
@@ -442,8 +479,10 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         return false;
     }
 
-    // The editor's BuildingDesignation BD_BAR. The original tests the house's own designation, which the first squad to take it as home sets from its
-    // template.
+    /// <summary>
+    /// The editor's BuildingDesignation BD_BAR. The original tests the house's own designation, which the first squad to take it as home sets from
+    /// its template.
+    /// </summary>
     const int BarDesignation = 3;
 
     /// <summary>
@@ -511,6 +550,10 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         return world.Fixtures.PublicFlagOf(bed.Building) != false && !(faction < data.Factions.Count && data.Factions[faction].NotReal);
     }
 
+    /// <summary>
+    /// The panel data of a town bed: its name, town, cost and healing bonus; null for none or a player-built bed (a machine site keeps the
+    /// machine's panel).
+    /// </summary>
     internal BuildingDetail? DetailOf(World world, string? instance)
     {
         // Town beds only: a bed the player built is a machine site (Site -1) and keeps the machine's panel.
@@ -562,8 +605,14 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     /// </summary>
     public void RegisterSources(DecisionSystem decisions) => decisions.RegisterJob(TaskType.FindBedAndPutIn, new PutInJob(this));
 
+    /// <summary>
+    /// The put-in-bed job's contributor (<see cref="IJobSource"/>).
+    /// </summary>
     sealed class PutInJob(BedSystem owner) : IJobSource
     {
+        /// <summary>
+        /// Whether the put-in job can run (or runs already) for the character.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot, int k)
         {
             var table = world.Characters;
@@ -575,6 +624,9 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             return owner.BedFor(world, slot) is null ? DecisionCheck.No("no body to put in a bed, or no bed") : DecisionCheck.Run;
         }
 
+        /// <summary>
+        /// Starts the put-in job with the bed the bed search finds.
+        /// </summary>
         public void Start(World world, int slot, int k)
         {
             if (owner.BedFor(world, slot) is { } bed)
@@ -622,6 +674,9 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         return !(world.SystemOf<Crime.CrimeSystem>()?.IsPoliceLike(world, c) == true && bc.Bounties?.AmountFor(c.Faction) > 0);
     }
 
+    /// <summary>
+    /// Adds the trips and the paid rents to the world's state hash, while there are any.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         if (_trips.Count == 0 && _paid.Count == 0) return;

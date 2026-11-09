@@ -39,6 +39,8 @@ namespace Meitou.Simulation.Kidnap;
 /// </summary>
 public sealed partial class CaptiveSystem
 {
+    #region Give-up waits and tests
+
     /// <summary>
     /// The downed and cuffed or carried: the AI's give-up list entries (hashed while any exist).
     /// </summary>
@@ -50,12 +52,6 @@ public sealed partial class CaptiveSystem
     public KidnapSystem? Kidnap { get; set; }
 
     /// <summary>
-    /// Weapon sections <c>Task_StripWeapons</c> empties (<c>FUN_140747ff0</c> reads the target's <c>hip</c> and <c>back</c> sections,
-    /// <b>Observed</b>).
-    /// </summary>
-    static bool IsWeaponSection(string section) => section is "hip" or "back";
-
-    /// <summary>
     /// The stock shackles (ARMOUR <c>SHACKLES</c>, "Prisoner Shackles"; docs/game/locks.md "Data") a capturer puts on a captive (engine choice).
     /// </summary>
     public const string ShacklesRecord = "SHACKLES";
@@ -65,6 +61,15 @@ public sealed partial class CaptiveSystem
     /// </summary>
     public const int ShoutAtSlaveWorker = 38;
 
+    /// <summary>
+    /// Weapon sections <c>Task_StripWeapons</c> empties (<c>FUN_140747ff0</c> reads the target's <c>hip</c> and <c>back</c> sections,
+    /// <b>Observed</b>).
+    /// </summary>
+    static bool IsWeaponSection(string section) => section is "hip" or "back";
+
+    /// <summary>
+    /// Whether <paramref name="who"/> is in <paramref name="list"/> with a wait that runs past <paramref name="now"/>.
+    /// </summary>
     bool Waiting(List<(CharacterId Who, double Until)> list, CharacterId who, double now)
     {
         for (int k = 0; k < list.Count; k++)
@@ -72,6 +77,9 @@ public sealed partial class CaptiveSystem
         return false;
     }
 
+    /// <summary>
+    /// Sets <paramref name="who"/>'s wait in <paramref name="list"/> to <paramref name="until"/>, adding it when absent.
+    /// </summary>
     void SetWait(List<(CharacterId Who, double Until)> list, CharacterId who, double until)
     {
         for (int k = 0; k < list.Count; k++)
@@ -86,6 +94,9 @@ public sealed partial class CaptiveSystem
         list.Add((who, until));
     }
 
+    /// <summary>
+    /// Drops the given-up waits that ran out by <paramref name="now"/>.
+    /// </summary>
     void ExpireWaits(double now)
     {
         _givenUp.RemoveAll(e => e.Until <= now);
@@ -113,17 +124,47 @@ public sealed partial class CaptiveSystem
         return arms >= 2;
     }
 
-    // ------------------------------------------------------------------ finders
+    #endregion
 
+    #region Finders
+
+    /// <summary>
+    /// The state of one scan for a downed character to capture or carry (<see cref="NearestDown"/>): who looks, its senses, and the nearest eligible
+    /// one so far.
+    /// </summary>
     struct DownScan
     {
+        /// <summary>
+        /// The captive system scanning.
+        /// </summary>
         public CaptiveSystem System;
+        /// <summary>
+        /// The world scanned.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// The looker's sense entries (null: none; the grid query covers whoever within its sight they lack).
+        /// </summary>
         public SenseBlock? Senses;
+        /// <summary>
+        /// The looker's slot.
+        /// </summary>
         public int Self;
+        /// <summary>
+        /// The looker.
+        /// </summary>
         public CharacterCold Me;
+        /// <summary>
+        /// Whether the scan is for a capture (else for a carry).
+        /// </summary>
         public bool Capture;
+        /// <summary>
+        /// The nearest eligible character so far (-1: none).
+        /// </summary>
         public int Best;
+        /// <summary>
+        /// The squared distance of <see cref="Best"/>.
+        /// </summary>
         public float BestD2;
     }
 
@@ -173,6 +214,9 @@ public sealed partial class CaptiveSystem
         }
     }
 
+    /// <summary>
+    /// Keeps character <paramref name="v"/> as the scan's best when it is eligible and nearer than the best so far.
+    /// </summary>
     static void Consider(ref DownScan st, int v)
     {
         if (!st.System.Eligible(st.World, st.Self, st.Me, v, st.Capture)) return;
@@ -181,6 +225,10 @@ public sealed partial class CaptiveSystem
         if (d2 < st.BestD2) (st.Best, st.BestD2) = (v, d2);
     }
 
+    /// <summary>
+    /// Whether character <paramref name="v"/> may be taken by the looker (see <see cref="NearestDown"/>): down, not carried, held or imprisoned, a
+    /// person, and the further tests of a capture or a carry.
+    /// </summary>
     bool Eligible(World world, int self, CharacterCold me, int v, bool capture)
     {
         var table = world.Characters;
@@ -283,9 +331,19 @@ public sealed partial class CaptiveSystem
         return null;
     }
 
+    #endregion
+
+    #region One job
+
+    /// <summary>
+    /// The salt of the shout rolls.
+    /// </summary>
     const ulong ShoutSalt = 0x53686F7574536C76;
 
-    // ------------------------------------------------------------------ one job
+    /// <summary>
+    /// The dialogue a Shout job asks whether its worker said a line (null until first asked, or without one).
+    /// </summary>
+    Dialogue.DialogueSystem? _talk;
 
     /// <summary>
     /// One tick of a Shout job (188, <c>Task_TalktoPlayer</c>): event 38 as it starts, as the task fires it, and again every
@@ -337,9 +395,9 @@ public sealed partial class CaptiveSystem
         }
     }
 
-    // The dialogue a Shout job asks whether its worker said a line (null until first asked, or without one).
-    Dialogue.DialogueSystem? _talk;
-
+    /// <summary>
+    /// One tick of a slave worker job: walking to the slave, then working on it; false when it is over.
+    /// </summary>
     bool StepSlaveWork(World world, CaptiveJob j, int w, CharacterCold wc)
     {
         var table = world.Characters;
@@ -534,6 +592,9 @@ public sealed partial class CaptiveSystem
         _assembly.RefreshEquipment(cc);
     }
 
+    /// <summary>
+    /// Adds the given-up waits to the world's state hash.
+    /// </summary>
     void HashWaits(ref StateHasher hasher)
     {
         hasher.Add(_givenUp.Count);
@@ -543,4 +604,6 @@ public sealed partial class CaptiveSystem
             hasher.Add(until);
         }
     }
+
+    #endregion
 }

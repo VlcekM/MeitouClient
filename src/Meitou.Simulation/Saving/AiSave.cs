@@ -5,12 +5,16 @@ using Meitou.Simulation.Ai;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The AI dialogue gave a squad, on its PLATOON record (docs/formats/save.md "NPC platoons"): <c>contractjob</c> (the contract package id, "" for none),
-/// <c>jobhr</c> (a float: the game hours it ends at) and <c>replacementAI</c> (the <c>change AI</c> package id, "" for the template's packages). The
-/// contract's mission target is not kept: the original loads it with an empty target too.
+/// The AI dialogue gave a squad, on its PLATOON record (docs/formats/save.md "NPC platoons"): <c>contractjob</c> (the contract package id, "" for
+/// none), <c>jobhr</c> (a float: the game hours it ends at) and <c>replacementAI</c> (the <c>change AI</c> package id, "" for the template's
+/// packages). The contract's mission target is not kept: the original loads it with an empty target too.
 /// </summary>
 public sealed record AiSave(string? Contract, double ContractEnd, string? Replacement)
 {
+    /// <summary>
+    /// The PLATOON keys: <c>contractjob</c> (the contract package id), <c>jobhr</c> (the game hour it ends at) and <c>replacementAI</c> (the
+    /// <c>change AI</c> package id).
+    /// </summary>
     public const string ContractKey = "contractjob", EndKey = "jobhr", ReplacementKey = "replacementAI";
 
     /// <summary>
@@ -29,6 +33,9 @@ public sealed record AiSave(string? Contract, double ContractEnd, string? Replac
         if (ai?.Contract is not null) platoon.Floats[EndKey] = (float)ai.ContractEnd;
     }
 
+    /// <summary>
+    /// The AI the platoon record holds; null when it has neither a contract nor a replacement package.
+    /// </summary>
     public static AiSave? Read(FcsRecord platoon)
     {
         string? contract = platoon.Strings.GetValueOrDefault(ContractKey) is { Length: > 0 } c ? c : null;

@@ -3,6 +3,9 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's loading step: the nearby population prepared without a tick.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>

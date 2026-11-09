@@ -10,7 +10,21 @@ namespace Meitou.Simulation.Locks;
 /// How a fixture's lock is forced by the player's context-menu verbs: Use Tools (285, cut with a tool), Use Strength (286, break) and Smash (226,
 /// bash a door).
 /// </summary>
-public enum LockForce : byte { Tools, Strength, Smash }
+public enum LockForce : byte
+{
+    /// <summary>
+    /// Use Tools (285): cut with a tool.
+    /// </summary>
+    Tools,
+    /// <summary>
+    /// Use Strength (286): break it.
+    /// </summary>
+    Strength,
+    /// <summary>
+    /// Smash (226): bash a door.
+    /// </summary>
+    Smash
+}
 
 /// <summary>
 /// Force the lock of a door or container (<see cref="Fixture.Id"/>): the nearest of the characters (the selection when empty) who may walks to it and
@@ -25,6 +39,9 @@ public sealed record ForceLockOrder(IReadOnlyList<CharacterId> Characters, strin
 /// </summary>
 public sealed partial class LockSystem
 {
+    /// <summary>
+    /// The force-lock order: the nearest player character able to forces the locked fixture's lock (a smash only on a door that stands).
+    /// </summary>
     void ForceInput(World world, ForceLockOrder order)
     {
         if (world.Fixtures.Find(order.Fixture) is not { } fixture || fixture.Lock is not { EffectivelyLocked: true } || order.Force == LockForce.Smash

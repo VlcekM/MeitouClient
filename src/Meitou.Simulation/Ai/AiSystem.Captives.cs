@@ -46,6 +46,9 @@ public sealed partial class AiSystem
         return (site, site >= 0 && site < data.SiteFactions.Count ? data.SiteFactions[site] : -1);
     }
 
+    /// <summary>
+    /// Whether a member of the squad carries someone.
+    /// </summary>
     static bool AnyCarrying(World world, Squad squad)
     {
         var table = world.Characters;
@@ -94,6 +97,9 @@ public sealed partial class AiSystem
         return -1;
     }
 
+    /// <summary>
+    /// The captive package classes' start test (cannibals, prisoner gathering, slaver shipping), by the package-class slot 12 each comment names.
+    /// </summary>
     internal bool CaptiveCanStart(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind) => kind switch
     {
         // CannibalRetreatFromRaid slot 12 (FUN_140288630): not while the leader is in a town of its faction; then when a member carries someone.
@@ -114,6 +120,9 @@ public sealed partial class AiSystem
         _ => false,
     };
 
+    /// <summary>
+    /// The captive package classes' finish test, by the package-class slot 13 each comment names.
+    /// </summary>
     internal bool CaptiveFinished(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind) => kind switch
     {
         // Slot 13 (FUN_140288740): the leader is in a town of its faction.

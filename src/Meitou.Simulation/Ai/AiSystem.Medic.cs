@@ -4,12 +4,19 @@ using Meitou.Simulation.FirstAid;
 
 namespace Meitou.Simulation.Ai;
 
+/// <summary>
+/// The AI's Medic goal: the treatments a think asks for, started by the <see cref="FirstAidSystem"/> in the serial step.
+/// </summary>
 public sealed partial class AiSystem
 {
-    // Resolved in the serial step; starts the treatments the think asked for.
+    /// <summary>
+    /// Resolved in the serial step; starts the treatments the think asked for.
+    /// </summary>
     FirstAidSystem? _firstAid;
 
-    // Set by a think that chose the Medic goal (<see cref="AiMind.MedicAsk"/>).
+    /// <summary>
+    /// Set by a think that chose the Medic goal (<see cref="AiMind.MedicAsk"/>).
+    /// </summary>
     int _treating;
 
     /// <summary>

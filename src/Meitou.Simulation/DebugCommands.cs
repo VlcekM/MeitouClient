@@ -69,7 +69,13 @@ public sealed record DebugExplode(Vector2 At, float Radius = 40, float Force = 1
 /// </summary>
 public static class ExplodeLevels
 {
+    /// <summary>
+    /// The level the console's explode uses by default.
+    /// </summary>
     public const int Normal = 3;
+    /// <summary>
+    /// The levels' names, level 1 first.
+    /// </summary>
     public static readonly string[] Names = ["underkill", "light", "normal", "overkill", "ridiculous"];
 
     /// <summary>
@@ -102,6 +108,9 @@ public static class ExplodeLevels
         return at >= 0;
     }
 
+    /// <summary>
+    /// The level's label for the console: its number and name.
+    /// </summary>
     public static string Label(int level) => $"level {level} ({Names[Math.Clamp(level, 1, 5) - 1]})";
 }
 
@@ -111,6 +120,9 @@ public static class ExplodeLevels
 /// </summary>
 public static class DebugKillArea
 {
+    /// <summary>
+    /// Whether a radius kill hits a character (see the class remarks).
+    /// </summary>
     public static bool Hits(bool isPlayer, int faction, int playerFaction, bool animal, bool dead, bool includeAnimals) =>
         !(isPlayer || (playerFaction >= 0 && faction == playerFaction) || (animal && !includeAnimals) || dead);
 }
@@ -247,6 +259,9 @@ public sealed record DebugPutItem(string Container, string Record, int Quantity)
 /// </summary>
 public sealed record DebugClearBuilding(string Key) : DebugCommand;
 
+/// <summary>
+/// The debug commands' work: god mode, explosions, kills, damage and the level editor's buildings.
+/// </summary>
 static class DebugCheats
 {
     /// <summary>
@@ -390,6 +405,9 @@ static class DebugCheats
     /// </summary>
     const float ExplodeMinThrow = 30;
 
+    /// <summary>
+    /// Sets off <paramref name="blast"/> (<see cref="DebugExplode"/>); non-finite numbers do nothing.
+    /// </summary>
     static void Explode(World world, PopulationData data, DebugExplode blast)
     {
         // non-finite input would poison positions and health: no-op
@@ -479,6 +497,9 @@ static class DebugCheats
         }
     }
 
+    /// <summary>
+    /// Kills each of <paramref name="characters"/> with a medical state and race; one that died stops where it is.
+    /// </summary>
     static void Kill(World world, PopulationData data, IEnumerable<CharacterId> characters)
     {
         var table = world.Characters;
@@ -810,6 +831,9 @@ static class DebugCheats
             if (table.Next[s].Alive && table.Cold(s) is { IsPlayer: true } c) yield return c;
     }
 
+    /// <summary>
+    /// The part a debug cut lands on: the one named, else one chosen as a blow's is (-1: the character has no such part).
+    /// </summary>
     static int DamagePart(MedicalState medical, in MedicalContext ctx, string? part)
     {
         if (part is null) return medical.ChoosePart(ctx);
@@ -818,6 +842,9 @@ static class DebugCheats
         return -1;
     }
 
+    /// <summary>
+    /// A character's medical state and the context its damage is worked out in; null without a medical state and race.
+    /// </summary>
     static (MedicalState, MedicalContext)? Body(World world, PopulationData data, CharacterId id)
     {
         var table = world.Characters;

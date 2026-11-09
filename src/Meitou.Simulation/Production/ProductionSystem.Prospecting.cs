@@ -7,6 +7,9 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Production;
 
+/// <summary>
+/// The production's prospecting.
+/// </summary>
 public sealed partial class ProductionSystem
 {
     /// <summary>
@@ -53,8 +56,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Once a tick (serial): each prospector adds the tick's game seconds; at <see cref="ProspectSeconds"/> the task ends and the results are published (<see cref="World.Prospected"/>). Another
-    /// order (a changed task) or a downed, carried or caged character ends it without a result.
+    /// Once a tick (serial): each prospector adds the tick's game seconds; at <see cref="ProspectSeconds"/> the task ends and the results are
+    /// published (<see cref="World.Prospected"/>). Another order (a changed task) or a downed, carried or caged character ends it without a result.
     /// </summary>
     void ProspectStep(World world)
     {
@@ -88,8 +91,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The window's content for a finished prospecting (<b>Verified</b>/<b>Observed</b> per docs/game/ui-screens.md "Prospecting"), read from the ground at the prospector's feet; the wind is
-    /// the spot's weather region's at this moment (<c>FUN_140785f50</c>, read once when the window fills).
+    /// The window's content for a finished prospecting (<b>Verified</b>/<b>Observed</b> per docs/game/ui-screens.md "Prospecting"), read from
+    /// the ground at the prospector's feet; the wind is the spot's weather region's at this moment (<c>FUN_140785f50</c>, read once when the
+    /// window fills).
     /// </summary>
     void PublishProspect(World world, CharacterCold prospector, System.Numerics.Vector3 at)
     {
@@ -108,8 +112,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The map's samples (<b>Verified</b>, <c>FUN_14049d850</c>): <c>int(s x 246 + 6)</c> cells a side over the square of half-side <c>s x 6000 + 2000</c> round the spot, s = science / 100. The field resources
-    /// are read at every cell's centre by the spot's resources record (<c>uses_resources</c>), the rock ones list the rocks in range (<c>FUN_14049cd60</c>).
+    /// The map's samples (<b>Verified</b>, <c>FUN_14049d850</c>): <c>int(s x 246 + 6)</c> cells a side over the square of half-side <c>s x 6000 +
+    /// 2000</c> round the spot, s = science / 100. The field resources are read at every cell's centre by the spot's resources record
+    /// (<c>uses_resources</c>), the rock ones list the rocks in range (<c>FUN_14049cd60</c>).
     /// </summary>
     ProspectMap SampleProspectMap(World world, System.Numerics.Vector3 at, float s)
     {

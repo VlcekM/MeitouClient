@@ -22,8 +22,8 @@ public readonly record struct FarmView(float Growth, float Death, int Harvested,
 }
 
 /// <summary>
-/// The resource richness of the building the HUD shows (docs/game/ui-screens.md "Selected building"): a mine's or rock's <c>world resource mining</c> and its yield, for the stats
-/// panel's first line. Display only.
+/// The resource richness of the building the HUD shows (docs/game/ui-screens.md "Selected building"): a mine's or rock's <c>world resource mining</c>
+/// and its yield, for the stats panel's first line. Display only.
 /// </summary>
 public readonly record struct RichnessView(string Instance, int Resource, float Yield)
 {
@@ -43,9 +43,9 @@ public readonly record struct RichnessView(string Instance, int Resource, float 
 }
 
 /// <summary>
-/// The inputs of a building's Workers and Efficiency lines (slots 155 / 154, docs/game/ui-screens.md "Selected building", Production building): its operators over the raw
-/// <c>max operators</c>, health (progress / target), the power factor (granted / demand, 1 without demand), whether it draws power, and the rate (<c>output rate</c> x the research
-/// production multiplier) and the yield (1 without a resource).
+/// The inputs of a building's Workers and Efficiency lines (slots 155 / 154, docs/game/ui-screens.md "Selected building", Production building): its
+/// operators over the raw <c>max operators</c>, health (progress / target), the power factor (granted / demand, 1 without demand), whether it draws
+/// power, and the rate (<c>output rate</c> x the research production multiplier) and the yield (1 without a resource).
 /// </summary>
 public readonly record struct EfficiencyView(int Operators, int MaxOperators, float Health, float Power, bool Consumer, float Rate, float Yield)
 {
@@ -54,6 +54,9 @@ public readonly record struct EfficiencyView(int Operators, int MaxOperators, fl
     /// row.
     /// </summary>
     public bool Starved { get; init; }
+    /// <summary>
+    /// The farm's <c>drought multiplier</c>, the Efficiency's factor while <see cref="Starved"/>.
+    /// </summary>
     public float Drought { get; init; } = 1;
     /// <summary>
     /// A rain collector's <c>Rain strength:</c> (its slot 156 <c>FUN_14030b460</c>): the <c>wetness</c> of its region's weather, 0 under acid rain or
@@ -67,11 +70,34 @@ public readonly record struct EfficiencyView(int Operators, int MaxOperators, fl
 }
 
 /// <summary>
-/// Which Workers and Efficiency lines a building's stats panels draw (each class's slot 40, docs/game/ui-screens.md "Selected building", Production building): Workers, Efficiency and Max
-/// efficiency in Stats 1; a farm its own Workers and, hydroponic only, one Efficiency line; a bed (BF_BED) <c>Healing bonus</c> instead; a training dummy (BF_TRAINING) Workers and
-/// <c>Max Skill Level</c>; a turret Efficiency in Stats 1 and Workers and Efficiency in Stats 2; a furnace (its slot 40 hands every section but its own 0xf to the production one) the Production lines.
+/// Which Workers and Efficiency lines a building's stats panels draw (each class's slot 40, docs/game/ui-screens.md "Selected building", Production
+/// building): Workers, Efficiency and Max efficiency in Stats 1; a farm its own Workers and, hydroponic only, one Efficiency line; a bed (BF_BED)
+/// <c>Healing bonus</c> instead; a training dummy (BF_TRAINING) Workers and <c>Max Skill Level</c>; a turret Efficiency in Stats 1 and Workers and
+/// Efficiency in Stats 2; a furnace (its slot 40 hands every section but its own 0xf to the production one) the Production lines.
 /// </summary>
-public enum MachinePanel : byte { Production, Farm, Bed, Training, Turret }
+public enum MachinePanel : byte
+{
+    /// <summary>
+    /// The Production lines (a production building or a furnace).
+    /// </summary>
+    Production,
+    /// <summary>
+    /// A farm's Workers and, hydroponic only, one Efficiency line.
+    /// </summary>
+    Farm,
+    /// <summary>
+    /// A bed's <c>Healing bonus</c>.
+    /// </summary>
+    Bed,
+    /// <summary>
+    /// A training dummy's Workers and <c>Max Skill Level</c>.
+    /// </summary>
+    Training,
+    /// <summary>
+    /// A turret's Efficiency in Stats 1 and Workers and Efficiency in Stats 2.
+    /// </summary>
+    Turret
+}
 
 /// <summary>
 /// A crafting bench as the host shows it: the queue (the first is being made), the repeat toggle and the finished items waiting in its output.
@@ -86,9 +112,10 @@ public sealed record CraftOptionView(string Key, string Name, CraftKind Kind, in
     IReadOnlyList<(string Name, float PerItem)> Inputs, bool Unlocked);
 
 /// <summary>
-/// What a bench's current smith would make of one queued craft (<c>FUN_1402bcf60</c>): <paramref name="Quality"/> the armour or crossbow quality (5 to 95; -1 for the other kinds); for a
-/// weapon <paramref name="Model"/> the predicted model's name (null for the other kinds), <paramref name="ModelChanged"/> when it differs from the queued one and
-/// <paramref name="MaterialCost"/> the weapon's <c>material cost</c>; <paramref name="Critical"/> the shown critical chance in percent (-1: no row).
+/// What a bench's current smith would make of one queued craft (<c>FUN_1402bcf60</c>): <paramref name="Quality"/> the armour or crossbow quality (5
+/// to 95; -1 for the other kinds); for a weapon <paramref name="Model"/> the predicted model's name (null for the other kinds),
+/// <paramref name="ModelChanged"/> when it differs from the queued one and <paramref name="MaterialCost"/> the weapon's <c>material cost</c>;
+/// <paramref name="Critical"/> the shown critical chance in percent (-1: no row).
 /// </summary>
 public readonly record struct CraftPrediction(int Quality, string? Model, bool ModelChanged, int MaterialCost, int Critical);
 
@@ -99,11 +126,29 @@ public readonly record struct CraftPrediction(int Quality, string? Model, bool M
 public sealed record CraftSmithView(string Name, int Skill, int Penalty, IReadOnlyList<CraftPrediction> Entries);
 
 /// <summary>
-/// A machine's power as the host shows it: a consumer's demand and grant, a generator's output and load, a battery's flow and store
+/// What a <see cref="PowerView"/> shows: a consumer's demand and grant, a generator's output and load, a battery's flow and store
 /// (docs/game/buildings-production.md "Power").
 /// </summary>
-public enum PowerKind : byte { Consumer, Generator, Battery }
+public enum PowerKind : byte
+{
+    /// <summary>
+    /// A consumer: its demand and grant.
+    /// </summary>
+    Consumer,
+    /// <summary>
+    /// A generator: its output and load.
+    /// </summary>
+    Generator,
+    /// <summary>
+    /// A battery: its flow and store.
+    /// </summary>
+    Battery
+}
 
+/// <summary>
+/// A machine's power as the host shows it: its kind, a consumer's demand and grant, a generator's load, a battery's charge and store, whether it has
+/// fuel, and its <c>power on</c> and <c>gets battery</c> switches.
+/// </summary>
 public readonly record struct PowerView(PowerKind Kind, float Demand, float Granted, float Usage, float Charge, float Store, bool Fueled,
     bool PowerOn = true, bool GetsBattery = true)
 {
@@ -111,7 +156,13 @@ public readonly record struct PowerView(PowerKind Kind, float Demand, float Gran
     /// A battery's town grid: whether it has one and whether its batteries charged or drained this tick (<see cref="Machine.GridCharging"/>).
     /// </summary>
     public bool OnGrid { get; init; }
+    /// <summary>
+    /// Whether the battery's town grid charged its batteries this tick (see <see cref="OnGrid"/>).
+    /// </summary>
     public bool GridCharging { get; init; }
+    /// <summary>
+    /// Whether the battery's town grid drained its batteries this tick (see <see cref="OnGrid"/>).
+    /// </summary>
     public bool GridDraining { get; init; }
 }
 
@@ -122,8 +173,9 @@ public readonly record struct PowerView(PowerKind Kind, float Demand, float Gran
 public readonly record struct MachineSound(float Efficiency, bool Powered);
 
 /// <summary>
-/// A wind generator as its panel shows it (docs/game/buildings-production.md "Wind generators"): its blades' wind share, the wind speed at the site (units/s), the blades' operating range
-/// (null without a ROTATION_WIND_SPEED part), its rated output (data + research) and whether it is switched on.
+/// A wind generator as its panel shows it (docs/game/buildings-production.md "Wind generators"): its blades' wind share, the wind speed at the
+/// site (units/s), the blades' operating range (null without a ROTATION_WIND_SPEED part), its rated output (data + research) and whether it is
+/// switched on.
 /// </summary>
 public readonly record struct WindView(float Share, float Speed, (float Min, float Max)? Range, float Rated, bool PowerOn);
 
@@ -239,6 +291,9 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         _ => MachinePanel.Production,
     };
 
+    /// <summary>
+    /// The host's view of a machine: its slots with their items, its storage, farm, crafting, power and efficiency.
+    /// </summary>
     internal static MachineSnapshot Of(Machine m, ItemFactory items)
     {
         string Name(string record) => items.Info(record)?.Name ?? record;
@@ -306,6 +361,9 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         }
         : null;
 
+    /// <summary>
+    /// The crafting bench's view: its queue with each craft's progress, the repeat flag and the finished items; null when it is not a bench.
+    /// </summary>
     static CraftView? Crafting(Machine m, ItemFactory items) => m.Craft is { } c
         ? new CraftView([.. c.Queue.Select(j => (j.Option.Key, j.Recipe.Name, Math.Clamp(j.Progress, 0, 1), j.Recipe.Hours))], c.Repeat,
             [.. c.Done.Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "out", 0, 0, item.Width, item.Height,
@@ -319,6 +377,9 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
 public readonly record struct ResearchOption(string Id, string Name, string Category, int Level, float Hours, bool Affordable, bool BenchTooLow,
     float Progress)
 {
+    /// <summary>
+    /// The research's description.
+    /// </summary>
     public string Description { get; init; } = "";
     /// <summary>
     /// The items paid at queue time (empty once paid), each with whether the research benches hold enough of it.
@@ -353,13 +414,20 @@ public sealed record ResearchSnapshot(int TechLevel, int BenchLevel, IReadOnlyLi
     /// <c>FUN_1407ab430</c>).
     /// </summary>
     public IReadOnlySet<string> Known { get; init; } = new HashSet<string>();
+    /// <summary>
+    /// The researches whose requirements are met strictly (see <see cref="Known"/>).
+    /// </summary>
     public IReadOnlySet<string> RequirementsMet { get; init; } = new HashSet<string>();
+    /// <summary>
+    /// The state before any research: tech level 1, no bench, nothing queued or available.
+    /// </summary>
     public static ResearchSnapshot Empty { get; } = new(1, 0, [], 0, []);
 }
 
 /// <summary>
-/// A town grid's totals after a tick (docs/game/buildings-production.md "Power"): the generators' output and the consumers' demand (the original's Town +0x474, +0x47c), what charged the
-/// batteries and what was drawn from them (+0x488, +0x484), and the batteries' charge and capacity (+0x48c, +0x490).
+/// A town grid's totals after a tick (docs/game/buildings-production.md "Power"): the generators' output and the consumers' demand (the
+/// original's Town +0x474, +0x47c), what charged the batteries and what was drawn from them (+0x488, +0x484), and the batteries' charge and
+/// capacity (+0x48c, +0x490).
 /// </summary>
 public readonly record struct TownPower(float Generated, float Demand, float Charging, float Draining, float Charge, float Capacity);
 

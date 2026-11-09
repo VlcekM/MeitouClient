@@ -5,11 +5,29 @@ namespace Meitou.Simulation;
 /// </summary>
 public enum FactionInfoKind : byte
 {
+    /// <summary>
+    /// A heading: a faction at war with the player.
+    /// </summary>
     Heading,
+    /// <summary>
+    /// A name row: a contract's title or a campaign.
+    /// </summary>
     Name,
+    /// <summary>
+    /// A detail row of the name above it.
+    /// </summary>
     Detail,
+    /// <summary>
+    /// An empty row between entries.
+    /// </summary>
     Spacer,
+    /// <summary>
+    /// A queued campaign that has not started.
+    /// </summary>
     Queued,
+    /// <summary>
+    /// A rule line between contracts.
+    /// </summary>
     Rule,
 }
 
@@ -19,10 +37,14 @@ public enum FactionInfoKind : byte
 /// </summary>
 public readonly record struct FactionInfoLine(FactionInfoKind Kind, string Label, string Value = "", double Hours = double.NaN);
 
+/// <summary>
+/// The world's Faction tab: the contracts and events it lists.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>
-    /// The AI signals of the contracts the Faction tab lists: <c>Contract_HiredAlly</c> (bodyguards) and <c>Contract_DefendPlayerBase</c> (base defenders).
+    /// The AI signals of the contracts the Faction tab lists: <c>Contract_HiredAlly</c> (bodyguards) and <c>Contract_DefendPlayerBase</c>
+    /// (base defenders).
     /// </summary>
     const int HiredAllySignal = 12, DefendBaseSignal = 15;
 

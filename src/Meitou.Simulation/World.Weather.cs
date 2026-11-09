@@ -27,6 +27,9 @@ public interface IWeatherSource
     IReadOnlyList<WeatherAffectZone> Zones { get; }
 }
 
+/// <summary>
+/// The world's weather.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>

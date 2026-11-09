@@ -9,7 +9,13 @@ namespace Meitou.Simulation.Construction;
 /// </summary>
 public sealed class ResearchItem(string id, float seconds)
 {
+    /// <summary>
+    /// The RESEARCH id.
+    /// </summary>
     public string Id { get; } = id;
+    /// <summary>
+    /// The game seconds put into it.
+    /// </summary>
     public float Seconds { get; set; } = seconds;
 }
 
@@ -21,11 +27,26 @@ public sealed class ResearchItem(string id, float seconds)
 /// </summary>
 public sealed class ResearchState
 {
+    /// <summary>
+    /// The empty set <see cref="Unlocked"/> starts as.
+    /// </summary>
     static readonly IReadOnlySet<string> Nothing = new HashSet<string>(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The finished RESEARCH ids in finishing order, a repeated one once per finish.
+    /// </summary>
     readonly List<string> _completed = [];
+    /// <summary>
+    /// The research queue, worked first to last.
+    /// </summary>
     readonly List<ResearchItem> _queue = [];
+    /// <summary>
+    /// The ids already paid for.
+    /// </summary>
     readonly List<string> _paid = [];
+    /// <summary>
+    /// The game seconds of researches taken off the queue, by id.
+    /// </summary>
     readonly Dictionary<string, float> _partial = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -71,6 +92,9 @@ public sealed class ResearchState
     /// </summary>
     public long Version { get; private set; }
 
+    /// <summary>
+    /// Notes a change: bumps <see cref="Version"/> and marks the state changed in play.
+    /// </summary>
     internal void Touch()
     {
         Version++;
@@ -112,6 +136,9 @@ public sealed class ResearchState
         Changed = false;
     }
 
+    /// <summary>
+    /// Works out from the finished ids what they unlock: the buildings, the crafts (by repetition) and the buildings' improvements.
+    /// </summary>
     void Refresh(GameDatabase db)
     {
         Unlocked = ResearchGate.Unlocked(db, _completed);
@@ -195,7 +222,13 @@ public sealed class ResearchState
         return n;
     }
 
+    /// <summary>
+    /// Whether a research unlocked <paramref name="building"/>.
+    /// </summary>
     public bool IsUnlocked(string building) => Unlocked.Contains(building);
+    /// <summary>
+    /// Whether research <paramref name="id"/> was finished at least once.
+    /// </summary>
     public bool IsDone(string id) => _completed.Contains(id, StringComparer.Ordinal);
     /// <summary>
     /// How many times a research was finished.
@@ -215,6 +248,9 @@ public sealed class ResearchState
     /// The finished research's <c>improve buildings</c> by BUILDING record.
     /// </summary>
     public IReadOnlyDictionary<string, BuildingUpgrade> Upgrades { get; private set; } = new Dictionary<string, BuildingUpgrade>();
+    /// <summary>
+    /// The research improvements of <paramref name="building"/> (<see cref="BuildingUpgrade.None"/> without any).
+    /// </summary>
     public BuildingUpgrade Upgrade(string building) => Upgrades.GetValueOrDefault(building, BuildingUpgrade.None);
     /// <summary>
     /// The upgrade of a building owned by <paramref name="owner"/>: only the player's buildings have one, others the default (<b>Verified</b>,
@@ -232,8 +268,14 @@ public sealed class ResearchState
     /// How many times a research can be finished in all: its <c>repeats</c>, at least 1 (<b>Verified</b>, <c>FUN_140834b70</c>).
     /// </summary>
     static int RepetitionsOf(GameDatabase db, string id) => db.Find(id) is { Type: FcsRecordType.Research } r ? Math.Max(1, r.GetInt("repeats")) : 1;
+    /// <summary>
+    /// Whether research <paramref name="id"/> is queued.
+    /// </summary>
     public bool IsQueued(string id) => _queue.Exists(q => q.Id == id);
 
+    /// <summary>
+    /// Queues research <paramref name="id"/> with the seconds it had when taken off, and marks it paid.
+    /// </summary>
     internal void Enqueue(string id)
     {
         _queue.Add(new ResearchItem(id, _partial.Remove(id, out float s) ? s : 0));
@@ -241,6 +283,9 @@ public sealed class ResearchState
         Touch();
     }
 
+    /// <summary>
+    /// Takes research <paramref name="id"/> off the queue, keeping its seconds; false when it is not queued.
+    /// </summary>
     internal bool Dequeue(string id)
     {
         int i = _queue.FindIndex(q => q.Id == id);
@@ -251,6 +296,9 @@ public sealed class ResearchState
         return true;
     }
 
+    /// <summary>
+    /// Adds the finished, queued, paid and partial researches to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x52657365);
@@ -270,5 +318,8 @@ public sealed class ResearchState
 /// </summary>
 public readonly record struct BuildingUpgrade(float ProductionMult, float PowerIncrease, float CapacityIncrease)
 {
+    /// <summary>
+    /// No improvement: multiplier 1, no increases.
+    /// </summary>
     public static BuildingUpgrade None { get; } = new(1, 0, 0);
 }

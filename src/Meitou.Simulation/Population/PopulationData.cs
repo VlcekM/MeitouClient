@@ -14,6 +14,9 @@ using Meitou.Simulation.Towns;
 
 namespace Meitou.Simulation.Population;
 
+/// <summary>
+/// Rolls and builds the characters' looks for the population (<see cref="PopulationData.Appearances"/>); null when the host gives none.
+/// </summary>
 public interface IAppearanceSource
 {
     /// <summary>
@@ -49,11 +52,21 @@ public interface IAppearanceSource
 /// </summary>
 public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : IAppearanceSource
 {
-    // One look per ANIMAL_CHARACTER (nothing of an animal's is rolled): every animal of a record shares it, so the renderer builds one asset per species.
+    /// <summary>
+    /// One look per ANIMAL_CHARACTER (nothing of an animal's is rolled): every animal of a record shares it, so the renderer builds one asset
+    /// per species.
+    /// </summary>
     readonly ConcurrentDictionary<string, CharacterAppearance?> _animals = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The look of a CHARACTER or ANIMAL_CHARACTER record rolled from <paramref name="seed"/>, with no squad template.
+    /// </summary>
     public CharacterAppearance? Create(string recordId, string? factionId, int seed) => Create(recordId, factionId, seed, null);
 
+    /// <summary>
+    /// The look of a CHARACTER record rolled from <paramref name="seed"/> (<paramref name="templateId"/>: the squad template it is made for); an
+    /// animal's is its species' one look. Null, with a warning once per record, when the look cannot be built.
+    /// </summary>
     public CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId)
     {
         try
@@ -88,20 +101,38 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
         }
     }
 
-    // A record whose look fails is drawn as a marker; say so once per record, not per character.
+    /// <summary>
+    /// A record whose look fails is drawn as a marker; say so once per record, not per character.
+    /// </summary>
     readonly ConcurrentDictionary<string, byte> _warned = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Writes the warning for a record whose look failed, once per record.
+    /// </summary>
     void Warn(string recordId, Exception e)
     {
         if (_warned.TryAdd(recordId, 0)) Console.Error.WriteLine($"warning   no appearance for {recordId}: {e.Message}");
     }
 
+    /// <summary>
+    /// The proposed appearance made valid for the race with the install's editor limits (<see cref="CharacterDraft.Sanitize"/>).
+    /// </summary>
     public FcsRecord? Sanitize(FcsRecord proposed, GameRecord race) => CharacterDraft.Sanitize(db, installRoot, proposed, race);
 
+    /// <summary>
+    /// The install's name pool, read on first use.
+    /// </summary>
     readonly Lazy<NamePool> _names = new(() => NamePool.Load(installRoot));
 
+    /// <summary>
+    /// A random name of the pool by <paramref name="roll"/>; null when the pool has none.
+    /// </summary>
     public string? RandomName(bool female, ulong roll) => _names.Value.Pick(female, roll);
 
+    /// <summary>
+    /// The look of a CHARACTER record dressed in <paramref name="loadout"/> (an animal's: its species' look); null, with a warning, when it cannot
+    /// be built.
+    /// </summary>
     public CharacterAppearance? Create(string recordId, Loadout loadout)
     {
         try
@@ -131,10 +162,14 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     public TownData Town { get; private set; } = Record;
 
     /// <summary>
-    /// The <c>override town</c> that took the town's place (docs/game/factions-squads-towns.md "Town overrides"; saved as <c>replacementTown</c>); null: none.
+    /// The <c>override town</c> that took the town's place (docs/game/factions-squads-towns.md "Town overrides"; saved as <c>replacementTown</c>);
+    /// null: none.
     /// </summary>
     public TownData? Replacement { get; private set; }
 
+    /// <summary>
+    /// Puts <paramref name="replacement"/> in the town's place (null: back to its own record) and keeps it as <see cref="Replacement"/>.
+    /// </summary>
     internal void Replace(TownData? replacement)
     {
         Town = replacement is null
@@ -150,14 +185,19 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     public string InstanceId { get; init; } = "";
 
     /// <summary>
-    /// The town's placed buildings with their beds and nodes (<see cref="TownBuildings"/>), the AI's homes; empty when the host gave none. A building laid out
-    /// afresh (<see cref="PopulationData.Relay"/>) takes its old one's place.
+    /// The town's placed buildings with their beds and nodes (<see cref="TownBuildings"/>), the AI's homes; empty when the host gave none. A building
+    /// laid out afresh (<see cref="PopulationData.Relay"/>) takes its old one's place.
     /// </summary>
     public IReadOnlyList<TownBuilding> Buildings { get => Volatile.Read(ref _buildings); init => _buildings = value; }
 
+    /// <summary>
+    /// The list behind <see cref="Buildings"/>, swapped whole by <see cref="SetBuildings"/>.
+    /// </summary>
     IReadOnlyList<TownBuilding> _buildings = [];
 
-    // The buildings as the boot laid them out, by key, of those laid out afresh since.
+    /// <summary>
+    /// The buildings as the boot laid them out, by key, of those laid out afresh since.
+    /// </summary>
     readonly Dictionary<string, TownBuilding> _booted = [];
 
     /// <summary>
@@ -166,6 +206,10 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     /// </summary>
     internal void SetBuildings(IReadOnlyList<TownBuilding> list) => Volatile.Write(ref _buildings, list);
 
+    /// <summary>
+    /// Puts <paramref name="relaid"/> in <paramref name="old"/>'s place in the list, keeping the booted one by its key; nothing when the old one is
+    /// not listed.
+    /// </summary>
     internal void Relay(TownBuilding old, TownBuilding relaid)
     {
         var list = _buildings.ToList();
@@ -200,12 +244,19 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
 /// </summary>
 public sealed class PopulationData
 {
+    /// <summary>
+    /// The game data.
+    /// </summary>
     public required GameDatabase Db { get; init; }
 
+    /// <summary>
+    /// The count behind <see cref="BuildingsRevision"/>.
+    /// </summary>
     int _buildingsRevision;
 
     /// <summary>
-    /// Counts the changes of the towns' building lists after the world was made (<see cref="TownEdits"/>); the host's caches of them are rebuilt when it moves.
+    /// Counts the changes of the towns' building lists after the world was made (<see cref="TownEdits"/>); the host's caches of them are rebuilt when
+    /// it moves.
     /// </summary>
     public int BuildingsRevision => Volatile.Read(ref _buildingsRevision);
 
@@ -240,8 +291,14 @@ public sealed class PopulationData
         return (-1, null);
     }
 
+    /// <summary>
+    /// The placed towns, by site index.
+    /// </summary>
     public required IReadOnlyList<TownSite> Sites { get; init; }
 
+    /// <summary>
+    /// The factions, by faction index.
+    /// </summary>
     public required IReadOnlyList<FactionData> Factions { get; init; }
 
     /// <summary>
@@ -249,6 +306,9 @@ public sealed class PopulationData
     /// </summary>
     public IAppearanceSource? Appearances { get; init; }
 
+    /// <summary>
+    /// The world event states the squads' conditions read (<see cref="IWorldStates.None"/>: none answered).
+    /// </summary>
     public IWorldStates States { get; init; } = IWorldStates.None;
 
     /// <summary>
@@ -268,6 +328,9 @@ public sealed class PopulationData
     /// </summary>
     public IReadOnlyList<int> SiteFactions { get => _siteFactions; init => _siteFactions = [.. value]; }
 
+    /// <summary>
+    /// The list behind <see cref="SiteFactions"/>.
+    /// </summary>
     int[] _siteFactions = [];
 
     /// <summary>
@@ -368,6 +431,9 @@ public sealed class PopulationData
     /// </summary>
     public BodyOptions BodyOptions { get => _bodyOptions; init => _bodyOptions = value; }
 
+    /// <summary>
+    /// The options behind <see cref="BodyOptions"/>.
+    /// </summary>
     BodyOptions _bodyOptions = BodyOptions.Default;
 
     /// <summary>
@@ -384,9 +450,18 @@ public sealed class PopulationData
         return copy;
     }
 
+    /// <summary>
+    /// The faction index of each faction string id, made on first use.
+    /// </summary>
     Dictionary<string, int>? _factionIndex;
+    /// <summary>
+    /// A faction cache by squad template id; nothing fills or reads it.
+    /// </summary>
     Dictionary<string, int>? _templateFaction;
 
+    /// <summary>
+    /// The turret buildings of each site, cached by <see cref="Turrets"/> (locked: the AI asks from worker threads).
+    /// </summary>
     readonly Dictionary<int, IReadOnlyList<TownBuilding>> _turrets = [];
 
     /// <summary>
@@ -421,9 +496,9 @@ public sealed class PopulationData
     /// The trader's next town (the town chooser <c>FUN_14092c5e0</c> as <c>Package_WanderingTrader</c> calls it, docs/game/ai.md "Package classes",
     /// Verified by code): towns other than <paramref name="exclude"/> of type town, village, slave camp or military (mask 0x6c) or any player town
     /// (<paramref name="outposts"/>), public or of <paramref name="faction"/>, not hostile to it and not in its <c>no-go zones</c>; the 4 nearest to
-    /// <paramref name="at"/> (X/Z), one drawn uniformly by <paramref name="roll"/>. None when there is none. Placed towns come before the outposts in a tie
-    /// (engine choice: the original's order over its two lists is <b>Unknown</b>). Unread here: the town faction's flags +0x1d0 and type +0x34 (8
-    /// only for 8) and a faction test <c>FUN_1406b26d0</c> (<b>Unknown</b>).
+    /// <paramref name="at"/> (X/Z), one drawn uniformly by <paramref name="roll"/>. None when there is none. Placed towns come before the outposts in
+    /// a tie (engine choice: the original's order over its two lists is <b>Unknown</b>). Unread here: the town faction's flags +0x1d0 and type +0x34
+    /// (8 only for 8) and a faction test <c>FUN_1406b26d0</c> (<b>Unknown</b>).
     /// </summary>
     public CampaignTown TraderTown(int faction, Vector2 at, CampaignTown exclude, IReadOnlyList<Construction.PlayerTown> outposts, ulong roll)
     {
@@ -501,12 +576,14 @@ public sealed class PopulationData
     }
 
     /// <summary>
-    /// The faction <c>Wildlife</c> (<c>3943-gamedata.base</c>): a spawned squad's faction when nothing else gives one (<c>FUN_1408fe6b0</c>); -1 when absent.
+    /// The faction <c>Wildlife</c> (<c>3943-gamedata.base</c>): a spawned squad's faction when nothing else gives one (<c>FUN_1408fe6b0</c>); -1
+    /// when absent.
     /// </summary>
     public int WildlifeFaction => FactionIndex("3943-gamedata.base");
 
     /// <summary>
-    /// The first faction, in load order, whose <c>squads</c> or <c>squad default</c> lists the squad template (<c>FUN_1402e7d10</c>), or -1. The map is built once.
+    /// The first faction, in load order, whose <c>squads</c> or <c>squad default</c> lists the squad template (<c>FUN_1402e7d10</c>), or -1. The map
+    /// is built once.
     /// </summary>
     public int FactionOfTemplate(string templateId)
     {
@@ -540,13 +617,20 @@ public sealed class PopulationData
     public HashSet<int> KnownAtSetup() => PlayerFaction < 0 ? [] : [.. Factions[PlayerFaction].Relations.Keys.Select(FactionIndex).Where(f => f >= 0)];
 
     /// <summary>
-    /// The factions a new game's player knows before the start-off's are added (<c>FUN_1409ef230</c>; docs/game/factions-squads-towns.md "Factions met"): the
-    /// <c>known</c> list of the level data's GAMESTATE_FACTION of the player faction (the last when several name it), else <see cref="KnownAtSetup"/>.
+    /// The factions a new game's player knows before the start-off's are added (<c>FUN_1409ef230</c>; docs/game/factions-squads-towns.md
+    /// "Factions met"): the <c>known</c> list of the level data's GAMESTATE_FACTION of the player faction (the last when several name it),
+    /// else <see cref="KnownAtSetup"/>.
     /// </summary>
     public HashSet<int> KnownAtNewGame() => _levelKnown is { } level ? [.. level] : KnownAtSetup();
 
+    /// <summary>
+    /// The level data's <c>known</c> factions of the player faction (null: none, see <see cref="KnownAtNewGame"/>).
+    /// </summary>
     IReadOnlyList<int>? _levelKnown;
 
+    /// <summary>
+    /// The index of each faction id (the first when two share one).
+    /// </summary>
     static Dictionary<string, int> BuildFactionIndex(IReadOnlyList<FactionData> factions)
     {
         var index = new Dictionary<string, int>(factions.Count, StringComparer.Ordinal);
@@ -554,6 +638,9 @@ public sealed class PopulationData
         return index;
     }
 
+    /// <summary>
+    /// The factory behind <see cref="Bodies"/>, made on first use.
+    /// </summary>
     BodyFactory? _bodies;
 
     /// <summary>
@@ -561,6 +648,9 @@ public sealed class PopulationData
     /// </summary>
     public BodyFactory Bodies => LazyInitializer.EnsureInitialized(ref _bodies, () => new BodyFactory(Db) { Options = BodyOptions });
 
+    /// <summary>
+    /// The data behind <see cref="Combat"/>, made on first use.
+    /// </summary>
     Meitou.Data.Gameplay.Combat.CombatDatabase? _combat;
 
     /// <summary>
@@ -569,6 +659,9 @@ public sealed class PopulationData
     public Meitou.Data.Gameplay.Combat.CombatDatabase Combat =>
         LazyInitializer.EnsureInitialized(ref _combat, () => Data.Gameplay.Combat.CombatDatabase.From(Db));
 
+    /// <summary>
+    /// The factory behind <see cref="Items"/>, made on first use.
+    /// </summary>
     ItemFactory? _items;
 
     /// <summary>
@@ -576,6 +669,9 @@ public sealed class PopulationData
     /// </summary>
     public ItemFactory Items => LazyInitializer.EnsureInitialized(ref _items, () => new ItemFactory(Db, Bodies.Constants, () => Combat));
 
+    /// <summary>
+    /// The data behind <see cref="Ai"/>, made on first use.
+    /// </summary>
     Meitou.Data.Gameplay.Ai.AiDatabase? _ai;
 
     /// <summary>
@@ -583,6 +679,9 @@ public sealed class PopulationData
     /// </summary>
     public Meitou.Data.Gameplay.Ai.AiDatabase Ai => LazyInitializer.EnsureInitialized(ref _ai, () => new Meitou.Data.Gameplay.Ai.AiDatabase(Db));
 
+    /// <summary>
+    /// The data behind <see cref="Surgeons"/>, made on first use.
+    /// </summary>
     SurgeonDialogues? _surgeons;
 
     /// <summary>
@@ -590,6 +689,9 @@ public sealed class PopulationData
     /// </summary>
     public SurgeonDialogues Surgeons => LazyInitializer.EnsureInitialized(ref _surgeons, () => new SurgeonDialogues(Db));
 
+    /// <summary>
+    /// The data behind <see cref="Dialogue"/>, made on first use.
+    /// </summary>
     Meitou.Data.Gameplay.Dialogue.DialogueDatabase? _dialogue;
 
     /// <summary>
@@ -598,10 +700,15 @@ public sealed class PopulationData
     public Meitou.Data.Gameplay.Dialogue.DialogueDatabase Dialogue =>
         LazyInitializer.EnsureInitialized(ref _dialogue, () => new Meitou.Data.Gameplay.Dialogue.DialogueDatabase(Db));
 
+    /// <summary>
+    /// Makes the population data of <paramref name="db"/> for the towns of <paramref name="placements"/>.
+    /// </summary>
     /// <param name="buildings">The towns' buildings by placement id (<see cref="TownBuildings.Build"/>), for the AI's homes; null: none.</param>
-    /// <param name="townZones">The zones each town's level state lists, by placement id (<see cref="WorldLevelData.TownZones"/>), for discovery; null: none.</param>
+    /// <param name="townZones">The zones each town's level state lists, by placement id (<see cref="WorldLevelData.TownZones"/>), for discovery;
+    /// null: none.</param>
     /// <param name="level">
-    /// The merged level files (<see cref="WorldLevelData.Level"/>), for the player faction's state a new game starts from (<see cref="KnownAtNewGame"/>); null: none.
+    /// The merged level files (<see cref="WorldLevelData.Level"/>), for the player faction's state a new game starts from
+    /// (<see cref="KnownAtNewGame"/>); null: none.
     /// </param>
     public static PopulationData Create(
         GameDatabase db, IEnumerable<TownPlacement> placements, IAppearanceSource? appearances = null, BodyOptions? bodyOptions = null,
@@ -679,6 +786,9 @@ public sealed class PopulationData
     }
 }
 
+/// <summary>
+/// The population's settings: the new-game multipliers and the engine's choices of the residents, roaming squads, stand-ins and wild squads.
+/// </summary>
 public sealed class PopulationSettings
 {
     /// <summary>
@@ -687,8 +797,8 @@ public sealed class PopulationSettings
     public float SquadSizeMultiplier { get; set; } = 1;
 
     /// <summary>
-    /// The <c>Fast zone hopping</c> setting: a ring of one more zone round each box the player's characters ask for (<c>FUN_140a0f640</c>'s flag, <b>Verified</b>;
-    /// the camera's block is not ringed).
+    /// The <c>Fast zone hopping</c> setting: a ring of one more zone round each box the player's characters ask for (<c>FUN_140a0f640</c>'s flag,
+    /// <b>Verified</b>; the camera's block is not ringed).
     /// </summary>
     public bool FastZoneHopping { get; set; }
 
@@ -727,7 +837,8 @@ public sealed class PopulationSettings
     public int RoamCheckTicks { get; init; } = 60;
 
     /// <summary>
-    /// Share of a faction's <c>roaming population</c> a town's roaming pool may hold (0.7 is the nests' floor, 6.3; for towns the cap is <b>Unknown</b>).
+    /// Share of a faction's <c>roaming population</c> a town's roaming pool may hold (0.7 is the nests' floor, 6.3; for towns the cap
+    /// is <b>Unknown</b>).
     /// </summary>
     public float RoamingShare { get; init; } = 0.7f;
 
@@ -752,6 +863,9 @@ public sealed class PopulationSettings
     /// </summary>
     public float RoamWaitMin { get; init; } = 30;
 
+    /// <summary>
+    /// The most seconds a roaming squad stays at a town it reached (see <see cref="RoamWaitMin"/>).
+    /// </summary>
     public float RoamWaitMax { get; init; } = 120;
 
     /// <summary>
@@ -760,8 +874,14 @@ public sealed class PopulationSettings
     /// </summary>
     public float StandInSpeed { get; init; } = 25;
 
+    /// <summary>
+    /// The stand-in speed when the way exceeds <see cref="StandInFarDistance"/> (see <see cref="StandInSpeed"/>).
+    /// </summary>
     public float StandInFarSpeed { get; init; } = 90;
 
+    /// <summary>
+    /// The way, in units, past which a stand-in goes at <see cref="StandInFarSpeed"/>.
+    /// </summary>
     public float StandInFarDistance { get; init; } = 25000;
 
     // ---- the off-screen tier's Faithful / Meitou switches (docs/simulation.md "Off-screen tier"; the live values are the population system's) ----
@@ -782,7 +902,8 @@ public sealed class PopulationSettings
     public bool OffscreenHealing { get; init; } = true;
 
     /// <summary>
-    /// Meitou: a campaign's <c>inherits from</c> ancestors count once. Faithful: twice, as the original applies them (doubled squad weights and follow-up chances).
+    /// Meitou: a campaign's <c>inherits from</c> ancestors count once. Faithful: twice, as the original applies them (doubled squad weights and
+    /// follow-up chances).
     /// </summary>
     public bool CampaignAncestorsOnce { get; init; } = true;
 
@@ -842,4 +963,18 @@ public sealed class PopulationSettings
 /// <summary>
 /// Where a town's residents are in their life.
 /// </summary>
-public enum SiteStatus { Unloaded, Loading, Loaded }
+public enum SiteStatus
+{
+    /// <summary>
+    /// Its residents are not in the world.
+    /// </summary>
+    Unloaded,
+    /// <summary>
+    /// Its residents are being made (on the background thread when enabled).
+    /// </summary>
+    Loading,
+    /// <summary>
+    /// Its residents are in the world.
+    /// </summary>
+    Loaded
+}

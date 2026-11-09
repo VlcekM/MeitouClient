@@ -5,13 +5,14 @@ using Meitou.Simulation.Crime;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// A character's bounty ledger in its GAMESTATE_CHARACTER record (docs/formats/save.md, docs/game/economy.md 11.1): for each entry k from 0 the string
-/// <c>bountyfac&lt;k&gt;</c> (the FACTION's string id) and the ints <c>bountyexp&lt;k&gt;</c> (the game hour of the last raise, truncated), <c>amount&lt;k&gt;</c>,
-/// <c>crimes&lt;k&gt;</c> (the crime mask) and <c>claim&lt;k&gt;</c> (<b>Verified</b>: the writer <c>FUN_1406262b0</c> and the three sample saves agree on the
-/// names and types). The game hour is read as day x 24 + hour of the save's clock (<b>Observed</b>: every <c>bountyexp</c> in the three sample saves
-/// is at most that, and the largest is one hour below it); the world keeps ticks, converted here with the save's clock. The save's clock is floored
-/// to the minute, so the hour is written with a minute and a tick of slack (<b>engine</b>: a raise up to a minute before the hour is written as that
-/// hour); without it each save and load would truncate an entry read at a whole hour one hour lower and bounties would expire early.
+/// A character's bounty ledger in its GAMESTATE_CHARACTER record (docs/formats/save.md, docs/game/economy.md 11.1): for each entry k from 0 the
+/// string <c>bountyfac&lt;k&gt;</c> (the FACTION's string id) and the ints <c>bountyexp&lt;k&gt;</c> (the game hour of the last raise, truncated),
+/// <c>amount&lt;k&gt;</c>, <c>crimes&lt;k&gt;</c> (the crime mask) and <c>claim&lt;k&gt;</c> (<b>Verified</b>: the writer <c>FUN_1406262b0</c> and
+/// the three sample saves agree on the names and types). The game hour is read as day x 24 + hour of the save's clock (<b>Observed</b>: every
+/// <c>bountyexp</c> in the three sample saves is at most that, and the largest is one hour below it); the world keeps ticks, converted here with the
+/// save's clock. The save's clock is floored to the minute, so the hour is written with a minute and a tick of slack (<b>engine</b>: a raise up to a
+/// minute before the hour is written as that hour); without it each save and load would truncate an entry read at a whole hour one hour lower and
+/// bounties would expire early.
 /// </summary>
 public static class BountySave
 {

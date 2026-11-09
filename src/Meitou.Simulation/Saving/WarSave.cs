@@ -15,11 +15,23 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 internal static class WarSave
 {
+    /// <summary>
+    /// The original's keys of an active campaign <c>i</c> (each followed by its number), by kind: strings, ints, bools and handles.
+    /// </summary>
     static readonly string[] ActiveStrings = ["dat c", "enemy c"], ActiveInts = ["phase c", "id c"], ActiveBools = ["rd c", "trig c"],
         ActiveHands = ["target c", "leader c", "home c"];
+    /// <summary>
+    /// Meitou's timer keys of a campaign <c>i</c> (absolute game hours) and the per-platoon carry start.
+    /// </summary>
     const string PhaseStartKey = "meitou phase start c", FightStartKey = "meitou fight start c", ArrivedKey = "meitou arrived c",
         AnnouncedKey = "meitou announced c", CarryStartKey = "meitou carry start c", CarryPlatoonKey = "meitou carry start p";
+    /// <summary>
+    /// The campaign timer keys.
+    /// </summary>
     static readonly string[] Timers = [PhaseStartKey, FightStartKey, ArrivedKey, AnnouncedKey, CarryStartKey];
+    /// <summary>
+    /// The five int parts of a handle key.
+    /// </summary>
     static readonly string[] HandParts = ["TYPE", "C", "CS", "I", "S"];
 
     /// <summary>
@@ -175,16 +187,28 @@ internal static class WarSave
         }
     }
 
+    /// <summary>
+    /// The game hour under <paramref name="key"/>; null when it is missing or not finite.
+    /// </summary>
     static double? Hour(FcsRecord war, string key) => war.Floats.TryGetValue(key, out float h) && float.IsFinite(h) ? h : null;
 
+    /// <summary>
+    /// Writes a game hour under <paramref name="key"/>; a negative hour (not started) removes it.
+    /// </summary>
     static void Hour(FcsRecord war, string key, double hour)
     {
         if (hour >= 0) war.Floats[key] = (float)hour;
         else war.Floats.Remove(key);
     }
 
+    /// <summary>
+    /// The world platoon of a saved platoon handle; null when the handle names none made.
+    /// </summary>
     static int? Platoon(SavedPopulation saved, Hand h) => !h.IsNull && saved.PlatoonIds.TryGetValue((h.C, h.Cs), out int id) ? id : null;
 
+    /// <summary>
+    /// The campaign town a saved town handle names: a town site, else a player town; none when it names neither.
+    /// </summary>
     static CampaignTown Town(World world, SavedPopulation saved, Hand h)
     {
         if (h.IsNull) return CampaignTown.None;
@@ -344,6 +368,9 @@ internal static class WarSave
         string FactionId(int f) => f >= 0 && f < data.Factions.Count ? data.Factions[f].Id : "";
     }
 
+    /// <summary>
+    /// Removes the keys of campaign <paramref name="i"/> of every kind.
+    /// </summary>
     static void Remove(FcsRecord r, int i, string[] strings, string[] ints, string[] bools, string[] hands, string[] floats)
     {
         foreach (var s in strings) r.Strings.Remove(s + i);

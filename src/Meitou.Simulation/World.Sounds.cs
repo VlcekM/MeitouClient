@@ -94,8 +94,14 @@ public enum SoundKind : byte
 public readonly record struct SoundEvent(SoundKind Kind, CharacterId Subject, CharacterId Other, Vector3 Position,
     bool Heavy = false, bool AttackerUnarmed = false, bool AttackerRobot = false, bool Armoured = false, bool Fatal = false, string? Item = null);
 
+/// <summary>
+/// The world's sound events for the host.
+/// </summary>
 public sealed partial class World
 {
+    /// <summary>
+    /// The sound events' queue (see <see cref="Sounds"/>).
+    /// </summary>
     volatile System.Collections.Concurrent.ConcurrentQueue<SoundEvent>? _sounds;
 
     /// <summary>

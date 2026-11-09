@@ -117,6 +117,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// </summary>
     Slot[] _slots = [];
 
+    /// <summary>
+    /// The slots in use: one past the highest character slot seen, which the state hash covers.
+    /// </summary>
     int _size;
 
     /// <summary>
@@ -585,6 +588,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// </summary>
     readonly record struct Sighting(int Target, int Generation, float Seconds);
 
+    /// <summary>
+    /// The worker thread's list of the sneaking targets a look sees (made on its first use).
+    /// </summary>
     [ThreadStatic] static List<Sighting>? s_sightings;
 
     /// <summary>
@@ -2410,6 +2416,9 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
     /// </summary>
     readonly HashSet<int> _taken = [];
 
+    /// <summary>
+    /// The tick <see cref="_taken"/> was last cleared on (-1: never).
+    /// </summary>
     long _takenTick = -1;
 
     /// <summary>

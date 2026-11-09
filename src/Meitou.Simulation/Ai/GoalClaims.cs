@@ -15,12 +15,27 @@ public sealed class GoalClaims
     /// </summary>
     public const float Seconds = 3;
 
+    /// <summary>
+    /// The entries by (worker, target): the squad and the tick at which the timer runs out.
+    /// </summary>
     readonly Dictionary<(CharacterId Worker, GoalTarget Target), (int Squad, long Expires)> _map = [];
+    /// <summary>
+    /// A scratch list of the expired keys of <see cref="Live"/>.
+    /// </summary>
     readonly List<(CharacterId Worker, GoalTarget Target)> _expired = [];
+    /// <summary>
+    /// The timer in ticks (<see cref="Seconds"/> at the tick length, set by <see cref="Configure"/>; 90 until then).
+    /// </summary>
     long _ticks = 90;
 
+    /// <summary>
+    /// Sets the timer in ticks from the tick length in seconds.
+    /// </summary>
     internal void Configure(float tickSeconds) => _ticks = (long)MathF.Ceiling(Seconds / tickSeconds);
 
+    /// <summary>
+    /// The current tick, set by the world before the sources refresh the entries.
+    /// </summary>
     internal long Now { get; set; }
 
     /// <summary>
@@ -40,5 +55,8 @@ public sealed class GoalClaims
         foreach (var (key, value) in _map) yield return (value.Squad, key.Worker, key.Target);
     }
 
+    /// <summary>
+    /// The entries kept.
+    /// </summary>
     public int Count => _map.Count;
 }

@@ -10,10 +10,22 @@ namespace Meitou.Simulation;
 /// </summary>
 public sealed class SpatialGrid
 {
+    /// <summary>
+    /// The edge of a cell.
+    /// </summary>
     readonly float _cellSize;
+    /// <summary>
+    /// The (cell, slot) pairs of the living characters, sorted.
+    /// </summary>
     (long Cell, int Slot)[] _entries = [];
+    /// <summary>
+    /// The number of entries in use.
+    /// </summary>
     int _count;
 
+    /// <summary>
+    /// A grid of cells <paramref name="cellSize"/> on a side.
+    /// </summary>
     public SpatialGrid(float cellSize)
     {
         if (!(cellSize > 0)) throw new ArgumentOutOfRangeException(nameof(cellSize));
@@ -21,8 +33,14 @@ public sealed class SpatialGrid
         this._cellSize = cellSize;
     }
 
+    /// <summary>
+    /// The edge of a cell.
+    /// </summary>
     public float CellSize => _cellSize;
 
+    /// <summary>
+    /// Sorts the living characters of <paramref name="state"/> into their cells.
+    /// </summary>
     internal void Build(ReadOnlySpan<CharacterHot> state)
     {
         if (_entries.Length < state.Length) _entries = new (long, int)[Math.Max(state.Length, _entries.Length * 2)];
@@ -40,6 +58,9 @@ public sealed class SpatialGrid
         Array.Sort(_entries, 0, _count);
     }
 
+    /// <summary>
+    /// The packed cell of a point.
+    /// </summary>
     long CellOf(float x, float z) => Pack((int)MathF.Floor(x / _cellSize), (int)MathF.Floor(z / _cellSize));
 
     /// <summary>
@@ -54,11 +75,20 @@ public sealed class SpatialGrid
         new((int)MathF.Floor((x - radius) / _cellSize), (int)MathF.Floor((x + radius) / _cellSize), (int)MathF.Floor((z - radius) / _cellSize),
             (int)MathF.Floor((z + radius) / _cellSize));
 
+    /// <summary>
+    /// A rectangle of cells, the ends included.
+    /// </summary>
     internal readonly record struct CellRange(int X0, int X1, int Z0, int Z1)
     {
+        /// <summary>
+        /// Whether <paramref name="cell"/> lies in the range.
+        /// </summary>
         public bool Holds((int X, int Z) cell) => cell.X >= X0 && cell.X <= X1 && cell.Z >= Z0 && cell.Z <= Z1;
     }
 
+    /// <summary>
+    /// Packs a cell's column and row into one sort key (the row unsigned).
+    /// </summary>
     static long Pack(int cx, int cz) => ((long)cx << 32) | (uint)cz;
 
     /// <summary>
@@ -85,13 +115,22 @@ public sealed class SpatialGrid
         }
     }
 
+    /// <summary>
+    /// Visits the entries from the cell <paramref name="first"/> to <paramref name="last"/> in order.
+    /// </summary>
     void Run<TState>(long first, long last, ref TState state, QueryVisitor<TState> visit)
     {
         for (int i = FirstOf(first); i < _count && _entries[i].Cell <= last; i++) visit(_entries[i].Slot, ref state);
     }
 
+    /// <summary>
+    /// Visits one found slot with the caller's state.
+    /// </summary>
     public delegate void QueryVisitor<TState>(int slot, ref TState state);
 
+    /// <summary>
+    /// The index of the first entry of cell <paramref name="key"/> or after it.
+    /// </summary>
     int FirstOf(long key)
     {
         int lo = 0, hi = _count;

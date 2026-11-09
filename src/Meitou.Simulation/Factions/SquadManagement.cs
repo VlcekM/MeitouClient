@@ -137,6 +137,9 @@ public static class SquadManagement
         if (next is not null || active is null) world.Player.Squad = (next ?? squads.FirstOrDefault())?.Id ?? -1;
     }
 
+    /// <summary>
+    /// Applies a player's squad command: new, rename, remove, move to, reorder, make active, or dismiss.
+    /// </summary>
     internal static void Apply(World world, PopulationData? data, SquadCommand command)
     {
         if (!world.Player.Exists) return;
@@ -197,8 +200,14 @@ public static class SquadManagement
         }
     }
 
+    /// <summary>
+    /// The player's squad of id <paramref name="id"/>; null when there is none.
+    /// </summary>
     static Squad? Own(World world, int id) => world.Squads.Find(id) is { } s && Mine(world, s) ? s : null;
 
+    /// <summary>
+    /// Whether a squad is the player's: of the player's faction, no platoon's and not the squad of the dead.
+    /// </summary>
     static bool Mine(World world, Squad s) => s.Faction == world.Player.Faction && s.PlatoonId < 0 && !s.Dead;
 
     /// <summary>
@@ -229,6 +238,9 @@ public static class SquadManagement
         }
     }
 
+    /// <summary>
+    /// The player faction's squad of the dead, made at <paramref name="at"/> the first time.
+    /// </summary>
     static Squad DeadSquad(World world, GameDatabase? db, Vector3 at)
     {
         foreach (var s in world.Squads.All)
@@ -249,9 +261,15 @@ public static class SquadManagement
         return squad;
     }
 
+    /// <summary>
+    /// The player faction's name; <c>Nameless</c> when it has none.
+    /// </summary>
     static string FactionName(World world, PopulationData data) =>
         world.Player.Faction < data.Factions.Count && data.Factions[world.Player.Faction].Name is { Length: > 0 } name ? name : "Nameless";
 
+    /// <summary>
+    /// Numbers the squads' <see cref="Squad.Index"/> in the list's order.
+    /// </summary>
     static void Renumber(List<Squad> order)
     {
         for (int i = 0; i < order.Count; i++) order[i].Index = i;

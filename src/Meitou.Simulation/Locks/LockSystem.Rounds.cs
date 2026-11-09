@@ -12,21 +12,66 @@ namespace Meitou.Simulation.Locks;
 /// What a <see cref="Round"/> does: free a served prisoner (goal 211), lock a home's doors at night (155, 197), unlock them when that is over, lock a
 /// faction's cages (195).
 /// </summary>
-public enum RoundKind : byte { Release, LockDoors, UnlockDoors, LockCages }
+public enum RoundKind : byte
+{
+    /// <summary>
+    /// Free a served prisoner (goal 211).
+    /// </summary>
+    Release,
+    /// <summary>
+    /// Lock a home's doors at night (155, 197).
+    /// </summary>
+    LockDoors,
+    /// <summary>
+    /// Unlock them when that is over (86).
+    /// </summary>
+    UnlockDoors,
+    /// <summary>
+    /// Lock a faction's cages (195).
+    /// </summary>
+    LockCages
+}
 
 /// <summary>
 /// Where a round is: unlocking its own shut building to get in, walking to the next target, working the lock (the owner's 3.3 s), or (a lock-up from
 /// outside) leaving the home first.
 /// </summary>
-public enum RoundPhase : byte { Keys, Walk, Work, Leave }
+public enum RoundPhase : byte
+{
+    /// <summary>
+    /// Unlocking its own shut building to get in.
+    /// </summary>
+    Keys,
+    /// <summary>
+    /// Walking to the next target.
+    /// </summary>
+    Walk,
+    /// <summary>
+    /// Working the lock.
+    /// </summary>
+    Work,
+    /// <summary>
+    /// Leaving the home first (a lock-up from outside).
+    /// </summary>
+    Leave
+}
 
 /// <summary>
 /// One NPC's round of lock work (serial state of the <see cref="LockSystem"/>): the fixtures it works, in order.
 /// </summary>
 public sealed class Round
 {
+    /// <summary>
+    /// What the round does.
+    /// </summary>
     public required RoundKind Kind { get; init; }
+    /// <summary>
+    /// The worker.
+    /// </summary>
     public required CharacterId Worker { get; init; }
+    /// <summary>
+    /// The worker's faction.
+    /// </summary>
     public required int Faction { get; init; }
     /// <summary>
     /// Fixture ids: the cage (release, cages) or the home's doors.
@@ -36,6 +81,9 @@ public sealed class Round
     /// The building of the doors (door rounds), and the prisoner (release).
     /// </summary>
     public string? Building { get; init; }
+    /// <summary>
+    /// The prisoner a release frees (none for door and cage rounds).
+    /// </summary>
     public CharacterId Prisoner { get; init; } = CharacterId.None;
     /// <summary>
     /// Within this of a target the worker works it (a cage's <c>use range</c> + <see cref="LockSystem.Reach"/>; for doors the home's extent).
@@ -46,16 +94,34 @@ public sealed class Round
     /// <see cref="LockSystem.DoorReach"/> of it; <see cref="Extent"/> is the home's.
     /// </summary>
     public bool FromOutside { get; init; }
+    /// <summary>
+    /// The home's extent (see <see cref="FromOutside"/>).
+    /// </summary>
     public float Extent { get; init; }
+    /// <summary>
+    /// The index in <see cref="Targets"/> of the target worked next.
+    /// </summary>
     public int Index { get; set; }
+    /// <summary>
+    /// Where the round is.
+    /// </summary>
     public RoundPhase Phase { get; set; }
     /// <summary>
     /// Game seconds in the phase, of the whole round, and walks that ended away from the target.
     /// </summary>
     public float Time { get; set; }
+    /// <summary>
+    /// Game seconds of the whole round (see <see cref="Time"/>).
+    /// </summary>
     public float Age { get; set; }
+    /// <summary>
+    /// Walks that ended away from the target (see <see cref="Time"/>).
+    /// </summary>
     public int Walks { get; set; }
 
+    /// <summary>
+    /// Adds the round to the world's state hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add((int)Kind);
@@ -104,6 +170,8 @@ public sealed class Round
 /// </summary>
 public sealed partial class LockSystem : IStateHashed
 {
+    #region The rounds step
+
     /// <summary>
     /// The owner's lock and unlock tasks progress 0.3 per game second (docs/game/locks.md "Doors", <b>Verified</b>).
     /// </summary>
@@ -112,33 +180,52 @@ public sealed partial class LockSystem : IStateHashed
     /// Engine choices of the rounds (see the class remarks).
     /// </summary>
     public const int RoundEveryTicks = 30, MaxRounds = 8, MaxNewRounds = 4, RoundWalks = 3;
+    /// <summary>
+    /// The game seconds after which a release round's prisoner is freed by the jail faction anyway, and the walk slack of a round.
+    /// </summary>
     public const float ReleaseTimeout = 120, WalkSlack = 200;
     /// <summary>
     /// The reach of state 126 AT_LOCATION_BUILDING_DOOR_OUTSIDE for a door (<c>FUN_140596e90</c> against the door's reach range, 45,
     /// <b>Observed</b>); a lock-up from outside works a door within it.
     /// </summary>
     public const float DoorReach = 45;
-    /// <summary>
-    /// A door's two points lie 15 either side of the leaf (<c>FUN_14029cc90</c>); state 126 extends the outer one away from the other by 1.1 times
-    /// their distance (<c>FUN_140596e90</c>, <b>Verified</b>).
-    /// </summary>
 
+    /// <summary>
+    /// The rounds running, in the order they started.
+    /// </summary>
     readonly List<Round> _rounds = [];
 
-    // Homes a lock-up round locked (the squad's "house locked" flag), by building instance id; sorted so the hash has a fixed order.
+    /// <summary>
+    /// Homes a lock-up round locked (the squad's "house locked" flag), by building instance id; sorted so the hash has a fixed order.
+    /// </summary>
     readonly SortedSet<string> _houseLocked = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Each home's extent, by building instance id (cached).
+    /// </summary>
     readonly Dictionary<string, float> _extents = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The arrest system, looked up once (null: none).
+    /// </summary>
     Crime.ArrestSystem? _arrests;
+    /// <summary>
+    /// Whether <see cref="_arrests"/> was looked up.
+    /// </summary>
     bool _arrestsLooked;
-
-    public IReadOnlyList<Round> ActiveRounds => _rounds;
 
     /// <summary>
     /// Meitou's save key (bool, on the building's GAMESTATE_BUILDING) of a home a lock-up round locked: without it a loaded night's locked homes
     /// would never be unlocked in the morning.
     /// </summary>
     public const string HouseLockedKey = "meitou house locked";
+    /// <summary>
+    /// Whether the loaded save's locked homes were read (<see cref="ReadSaved"/>).
+    /// </summary>
     bool _savedRead;
+
+    /// <summary>
+    /// The rounds running.
+    /// </summary>
+    public IReadOnlyList<Round> ActiveRounds => _rounds;
 
     /// <summary>
     /// Takes the homes a loaded save had locked up from the zones' building records (<see cref="FixtureRegistry.Saved"/>), once.
@@ -162,6 +249,9 @@ public sealed partial class LockSystem : IStateHashed
         return _houseLocked.Contains(building);
     }
 
+    /// <summary>
+    /// The rounds' step: the saved locked homes read once, ways opened for arrests, then each round moves on (an ended one is dropped).
+    /// </summary>
     void Rounds(World world)
     {
         ReadSaved(world);
@@ -175,6 +265,9 @@ public sealed partial class LockSystem : IStateHashed
         if (world.Tick % RoundEveryTicks == 0) Sweep(world);
     }
 
+    /// <summary>
+    /// The arrest system, looked up on first use; null without one.
+    /// </summary>
     Crime.ArrestSystem? Arrests(World world)
     {
         if (!_arrestsLooked)
@@ -186,6 +279,9 @@ public sealed partial class LockSystem : IStateHashed
         return _arrests;
     }
 
+    /// <summary>
+    /// Whether <paramref name="id"/> is an arrest's guard or target.
+    /// </summary>
     bool InArrest(World world, CharacterId id)
     {
         if (Arrests(world) is not { } a) return false;
@@ -208,8 +304,13 @@ public sealed partial class LockSystem : IStateHashed
         }
     }
 
-    // ------------------------------------------------------------------ the sweep
+    #endregion
 
+    #region The sweep
+
+    /// <summary>
+    /// Whether <paramref name="id"/> is a round's worker or prisoner.
+    /// </summary>
     bool Busy(CharacterId id)
     {
         foreach (var r in _rounds)
@@ -217,6 +318,9 @@ public sealed partial class LockSystem : IStateHashed
         return false;
     }
 
+    /// <summary>
+    /// Whether a round works fixture or building <paramref name="id"/>.
+    /// </summary>
     bool Targeted(string id)
     {
         foreach (var r in _rounds)
@@ -251,6 +355,9 @@ public sealed partial class LockSystem : IStateHashed
         return false;
     }
 
+    /// <summary>
+    /// Starts new rounds, up to the caps: releases first, then lock-ups.
+    /// </summary>
     void Sweep(World world)
     {
         int started = 0;
@@ -332,6 +439,9 @@ public sealed partial class LockSystem : IStateHashed
         return null;
     }
 
+    /// <summary>
+    /// Starts the squads' lock-up rounds: locking a home's doors at night, unlocking them when that is over, and the wardens' cages.
+    /// </summary>
     void LockUpSweep(World world, ref int started)
     {
         var table = world.Characters;
@@ -404,6 +514,9 @@ public sealed partial class LockSystem : IStateHashed
         }
     }
 
+    /// <summary>
+    /// Starts a warden's round over the occupied, unlocked cages of its faction in its town that no round works yet.
+    /// </summary>
     void LockCages(World world, Squad squad, Blackboard board, int warden, ref int started)
     {
         var table = world.Characters;
@@ -434,6 +547,9 @@ public sealed partial class LockSystem : IStateHashed
         }, first)) started++;
     }
 
+    /// <summary>
+    /// Starts a door round on a building's doors (a lock-up skips a smashed door); false when it has none.
+    /// </summary>
     bool StartDoors(World world, int worker, RoundKind kind, string building, float extent, bool fromOutside = false)
     {
         var doors = new List<string>();
@@ -473,6 +589,9 @@ public sealed partial class LockSystem : IStateHashed
         return _extents[b.Key] = MathF.Max(30, r + 10);
     }
 
+    /// <summary>
+    /// Whether the character stands within <paramref name="extent"/> of the building's position.
+    /// </summary>
     static bool Within(in CharacterHot n, TownBuilding b, float extent) =>
         Vector2.DistanceSquared(new Vector2(n.Position.X, n.Position.Z), new Vector2(b.Position.X, b.Position.Z)) <= extent * extent;
 
@@ -510,7 +629,9 @@ public sealed partial class LockSystem : IStateHashed
         return false;
     }
 
-    // ------------------------------------------------------------------ a round
+    #endregion
+
+    #region A round
 
     /// <summary>
     /// Starts a round through <see cref="TaskStart.Start"/> (an NPC's start of row 110 for a release, 77 to lock doors or cages, 78 to unlock doors);
@@ -567,6 +688,9 @@ public sealed partial class LockSystem : IStateHashed
     static bool NeedsKeys(World world, Round round, CharacterCold c, Fixture f) =>
         world.Fixtures.IsShut(f.Building) && (world.Fixtures.DoorOwner(f.Building) == round.Faction || c.Ai?.Squad.Ai?.OwnHome?.Key == f.Building);
 
+    /// <summary>
+    /// Sends the worker to the round's next target, unless it is within reach already.
+    /// </summary>
     static void Walk(World world, int worker, Round round, Fixture f)
     {
         round.Phase = RoundPhase.Walk;
@@ -679,6 +803,9 @@ public sealed partial class LockSystem : IStateHashed
         return true;
     }
 
+    /// <summary>
+    /// Works the lock of a round's target: frees the prisoner, locks or unlocks the door, or locks the cage.
+    /// </summary>
     void Apply(World world, Round r, Fixture f, CharacterCold worker)
     {
         switch (r.Kind)
@@ -737,6 +864,9 @@ public sealed partial class LockSystem : IStateHashed
         return false;
     }
 
+    /// <summary>
+    /// Adds the rounds and the locked homes to the world's state hash, while there are any.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         // only while a round runs or a home is locked up, so worlds without them hash as before
@@ -747,4 +877,6 @@ public sealed partial class LockSystem : IStateHashed
         hasher.Add(_houseLocked.Count);
         foreach (var b in _houseLocked) hasher.Add(Rng.StableHash(b));
     }
+
+    #endregion
 }

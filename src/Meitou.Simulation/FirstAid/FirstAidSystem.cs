@@ -43,6 +43,8 @@ namespace Meitou.Simulation.FirstAid;
 public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions options, ItemFactory items, FirstAidSettings? settings = null)
         : ITickSystem, ITaskOwner, ITaskHandler, IOrderOwner, IDecisionOwner, IGoalSource
 {
+    #region State
+
     /// <summary>
     /// The effect kind: one tick of treatment from the source (medic) on the target (patient).
     /// </summary>
@@ -56,18 +58,51 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// </summary>
     const float KitlessQuality = 5;
 
+    /// <summary>
+    /// The first-aid settings.
+    /// </summary>
     public FirstAidSettings Settings { get; } = settings ?? new FirstAidSettings();
+    /// <summary>
+    /// The game constants.
+    /// </summary>
     public GameConstants Constants { get; } = constants;
+    /// <summary>
+    /// The item factory.
+    /// </summary>
     public ItemFactory Items { get; } = items;
     /// <summary>
     /// The relation event of bandaging an unconscious patient of another faction (<see cref="FactionDeeds.FirstAid"/>); null: none.
     /// </summary>
     public FactionDeeds? Deeds { get; set; }
+    /// <summary>
+    /// The XP of the treatments.
+    /// </summary>
     readonly XpService _xp = new(constants, options);
+    /// <summary>
+    /// The body options.
+    /// </summary>
     readonly BodyOptions _bodyOptions = options;
 
-    // ------------------------------------------------------------------ orders
+    #endregion
 
+    #region Orders
+
+    /// <summary>
+    /// The <see cref="OrderEntry.Detail"/> of the Medic button's one-shot order (the job's finder looked at once, then a First aid 25).
+    /// </summary>
+    static readonly object MedicButton = new();
+    /// <summary>
+    /// The same with Robotics 57 given too: the look takes robots as well.
+    /// </summary>
+    static readonly object RoboticsButton = new();
+    /// <summary>
+    /// Dialogue events 18-22 (EV_HEALING_OTHER_START ... EV_FIRSTAID_KIT_EMPTY).
+    /// </summary>
+    const int HealingOtherStart = 18, BeingHealedStart = 19, HealingOtherFinished = 20, BeingHealedFinished = 21, KitEmpty = 22;
+
+    /// <summary>
+    /// The first-aid orders: treat, splint, rest and the medic job commands.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         var table = world.Characters;
@@ -160,15 +195,6 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// The <see cref="OrderEntry.Detail"/> of the Medic button's one-shot order (the job's finder looked at once, then a First aid 25).
-    /// </summary>
-    static readonly object MedicButton = new();
-    /// <summary>
-    /// The same with Robotics 57 given too: the look takes robots as well.
-    /// </summary>
-    static readonly object RoboticsButton = new();
-
-    /// <summary>
     /// First aid 25 and Splint 249 need the patient alive (else the order leaves the queue) and an able medic with a kit (a medkit or a robot kit
     /// anyone of its squad near it carries; its own splint kit), Rest an able character; the Medic button an able player character. The failure texts
     /// are the orders' refusals.
@@ -196,6 +222,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             : OrderCheck.Run;
     }
 
+    /// <inheritdoc/>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
         if (order.Detail == MedicButton || order.Detail == RoboticsButton)
@@ -217,6 +244,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         });
     }
 
+    /// <summary>
+    /// The characters an order names, else the player's selection.
+    /// </summary>
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
 
     /// <summary>
@@ -226,6 +256,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     /// </summary>
     static bool CanAct(CharacterCold cold) => cold.Medical is { Incapacitated: false } && cold.CarriedBy.IsNone;
 
+    /// <summary>
+    /// Registers the treat and rest tasks.
+    /// </summary>
     public void RegisterTasks(TaskHandlers tasks)
     {
         tasks.Register(CharacterTask.Treat, this);
@@ -283,11 +316,6 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// Dialogue events 18-22 (EV_HEALING_OTHER_START ... EV_FIRSTAID_KIT_EMPTY).
-    /// </summary>
-    const int HealingOtherStart = 18, BeingHealedStart = 19, HealingOtherFinished = 20, BeingHealedFinished = 21, KitEmpty = 22;
-
-    /// <summary>
     /// The treatment's dialogue events (<c>Task_FirstAid</c> start and finish, <c>FUN_14034ecf0</c> / <c>FUN_1403563a0</c>): the medic fires
     /// <paramref name="medicEvent"/> at the patient and a patient that is awake fires <paramref name="patientEvent"/> back (-1: none); nothing for a
     /// medic treating itself. Said from the next tick.
@@ -311,6 +339,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         else LetGo(world.Characters.Cold(slot)!);
     }
 
+    /// <summary>
+    /// Clears a character's treatment fields: kneeling, target, splint and kit.
+    /// </summary>
     static void LetGo(CharacterCold cold)
     {
         cold.TreatKneels = false;
@@ -339,8 +370,18 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         return dx * dx + dz * dz <= Settings.Reach * Settings.Reach && MathF.Abs(medic.Position.Y - spot.Y) <= Settings.ReachHeight;
     }
 
-    // ------------------------------------------------------------------ walking to the patient
+    #endregion
 
+    #region Walking to the patient
+
+    /// <summary>
+    /// How long a medic's ask to stand still lasts after its last renewal: the request's time to live (3 s, <c>FUN_140269ff0</c>).
+    /// </summary>
+    const float StandStillSeconds = 3;
+
+    /// <summary>
+    /// The walk to the patient: each medic on a treatment walks to the treatment spot, or stands still in reach; a hopeless way ends the treatment.
+    /// </summary>
     public void Schedule(World world)
     {
         var table = world.Characters;
@@ -412,11 +453,6 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// How long a medic's ask to stand still lasts after its last renewal: the request's time to live (3 s, <c>FUN_140269ff0</c>).
-    /// </summary>
-    const float StandStillSeconds = 3;
-
-    /// <summary>
     /// The first aid task's every update asks the patient to stand still (<c>Task_FirstAid</c> / <c>Task_FirstAidRig</c> call <c>FUN_1403346d0</c>,
     /// docs/game/ai-tasks.md "Medic jobs"): a crawling or walking patient stops, so the treatment can run (<see cref="Act"/> treats only a patient
     /// standing still). Without it a medic knelt, stood to follow, knelt again (issue #232).
@@ -438,8 +474,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     bool EndsShort(Vector3 end, Vector2 goal, float spotHeight) =>
         Vector2.Distance(new Vector2(end.X, end.Z), goal) > Settings.Reach || MathF.Abs(end.Y - spotHeight) > Settings.ReachHeight;
 
-    // ------------------------------------------------------------------ the treatment
+    #endregion
 
+    #region The treatment
+
+    /// <summary>
+    /// The treatment step: each medic standing still with its patient in reach treats it (<see cref="EffectTreat"/>).
+    /// </summary>
     public void Act(World world, Partition part, EffectBuffer effects)
     {
         var table = world.Characters;
@@ -471,6 +512,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         }
     }
 
+    /// <summary>
+    /// The squared speed on the ground plane.
+    /// </summary>
     static float Speed2(Vector3 v) => v.X * v.X + v.Z * v.Z;
 
     /// <summary>
@@ -643,7 +687,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         _xp.Medic(stats, race, medicRace, dt, StatsEnumerated.Medic);
     }
 
-    // ------------------------------------------------------------------ kits
+    #endregion
+
+    #region Kits
 
     /// <summary>
     /// Uses <paramref name="times"/> drains of a kit (<see cref="MedicalState.KitDrain"/>); a used-up kit is gone.
@@ -661,6 +707,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     internal static bool HasFunction(Inventory? inventory, int function) => inventory is not null
             && inventory.All().Any(item => item.ItemFunction == function);
 
+    /// <summary>
+    /// The item function of a robot kit or a first-aid kit.
+    /// </summary>
     static int FunctionOf(bool robot) => robot ? ItemInfo.RobotKitFunction : ItemInfo.FirstAidKitFunction;
 
     /// <summary>
@@ -750,11 +799,18 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         return cold.TreatKit = FindKit(world, slot, cold, function);
     }
 
-    // ------------------------------------------------------------------ treating by themselves
+    #endregion
 
-    // Resolved on the first sweep: whose goal lists hold the Medic goal.
+    #region Treating by themselves
+
+    /// <summary>
+    /// Resolved on the first sweep: whose goal lists hold the Medic goal.
+    /// </summary>
     AiSystem? _ai;
 
+    /// <summary>
+    /// The NPCs' automatic medic looks, each on its turn.
+    /// </summary>
     public void SlowWorld(World world)
     {
         // Each NPC looks every AutoEveryTicks ticks, a slot's turn falling on its own tick (slot mod the period), so the looks spread over the ticks
@@ -868,10 +924,19 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             decisions.RegisterJob(type, jobs);
     }
 
+    /// <summary>
+    /// The first aid jobs' contributor (<see cref="IJobSource"/>).
+    /// </summary>
     sealed class MedicJobs(FirstAidSystem owner) : IJobSource
     {
+        /// <summary>
+        /// What the last <see cref="CanRun"/> found: the tick, the slot and job, and the patient (tick -1: nothing).
+        /// </summary>
         (long Tick, int Slot, int K, int Patient) _found = (-1, -1, -1, -1);
 
+        /// <summary>
+        /// Whether medic job <paramref name="k"/> can run (or runs already): its finder must find a patient.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot, int k)
         {
             var table = world.Characters;
@@ -889,6 +954,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             return DecisionCheck.Run;
         }
 
+        /// <summary>
+        /// Starts the treatment of the patient <see cref="CanRun"/> found this tick.
+        /// </summary>
         public void Start(World world, int slot, int k)
         {
             if (_found.Tick != world.Tick || _found.Slot != slot || _found.K != k) return;
@@ -900,4 +968,5 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         }
     }
 
+    #endregion
 }

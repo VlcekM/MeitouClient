@@ -5,6 +5,9 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's order checks: whether an order could start, and the system that owns its row.
+/// </summary>
 public sealed partial class World
 {
     /// <summary>

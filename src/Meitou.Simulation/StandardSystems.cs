@@ -18,15 +18,45 @@ namespace Meitou.Simulation;
 [Flags]
 public enum StandardParts
 {
+    /// <summary>
+    /// No system.
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// The population (<see cref="PopulationSystem"/>).
+    /// </summary>
     Population = 1,
+    /// <summary>
+    /// The player's commands (<see cref="PlayerSystem"/>).
+    /// </summary>
     Player = 2,
+    /// <summary>
+    /// Attackers closing in on their targets (<see cref="PursuitSystem"/>).
+    /// </summary>
     Pursuit = 4,
+    /// <summary>
+    /// Movement and the path service (<see cref="MovementSystem"/>).
+    /// </summary>
     Movement = 8,
+    /// <summary>
+    /// The body and the weather (<see cref="BodySystem"/>, <see cref="WeatherSystem"/>).
+    /// </summary>
     Body = 16,
+    /// <summary>
+    /// Combat (<see cref="CombatSystem"/>).
+    /// </summary>
     Combat = 32,
+    /// <summary>
+    /// Animation (<see cref="AnimationSystem"/>).
+    /// </summary>
     Animation = 64,
+    /// <summary>
+    /// Eating (<see cref="FeedSystem"/>).
+    /// </summary>
     Feed = 128,
+    /// <summary>
+    /// Striking back (<see cref="RetaliationSystem"/>).
+    /// </summary>
     Retaliation = 256,
     /// <summary>
     /// First aid and resting (<see cref="Meitou.Simulation.FirstAid.FirstAidSystem"/>).
@@ -89,6 +119,9 @@ public sealed class StandardSystemOptions
     /// The systems to build; a test that needs a few of them asks for those and gets them in the game's relative order.
     /// </summary>
     public StandardParts Parts { get; init; } = StandardParts.All;
+    /// <summary>
+    /// The population settings (null: the system's default).
+    /// </summary>
     public PopulationSettings? Population { get; init; }
     /// <summary>
     /// True answers path requests inside the tick (tests); false on the path service's own thread (the interactive game).
@@ -114,12 +147,33 @@ public sealed class StandardSystemOptions
     /// Null: the animation system's default; the game passes the CONSTANTS value.
     /// </summary>
     public float? AnimationBlendRate { get; init; }
+    /// <summary>
+    /// The feeding settings (null: the system's default).
+    /// </summary>
     public FeedSettings? Feed { get; init; }
+    /// <summary>
+    /// The dialogue settings (null: the system's default).
+    /// </summary>
     public Dialogue.DialogueSettings? Dialogue { get; init; }
+    /// <summary>
+    /// The first aid settings (null: the system's default).
+    /// </summary>
     public FirstAid.FirstAidSettings? FirstAid { get; init; }
+    /// <summary>
+    /// The aggro settings (null: the system's default).
+    /// </summary>
     public AggroSettings? Aggro { get; init; }
+    /// <summary>
+    /// The carrying settings (null: the system's default).
+    /// </summary>
     public Carrying.CarrySettings? Carry { get; init; }
+    /// <summary>
+    /// The crime settings (null: the system's default).
+    /// </summary>
     public Crime.CrimeSettings? Crime { get; init; }
+    /// <summary>
+    /// The arrest settings (null: the system's default).
+    /// </summary>
     public Crime.ArrestSettings? Arrest { get; init; }
     /// <summary>
     /// Meitou (on; Faithful off): doors walkers opened close behind them (<see cref="Meitou.Simulation.Locks.LockSystem.DoorsCloseBehind"/>).
@@ -129,15 +183,33 @@ public sealed class StandardSystemOptions
     /// The player's animals pick up loose items into their bags (<see cref="PlayerSystem.AnimalsPickUp"/>; off by default).
     /// </summary>
     public bool AnimalsPickUp { get; init; }
+    /// <summary>
+    /// The kidnapping settings (null: the system's default).
+    /// </summary>
     public Kidnap.KidnapSettings? Kidnap { get; init; }
+    /// <summary>
+    /// The captive settings (null: the system's default).
+    /// </summary>
     public Kidnap.CaptiveSettings? Captives { get; init; }
+    /// <summary>
+    /// The trade settings (null: the system's default).
+    /// </summary>
     public Trading.TradeSettings? Trade { get; init; }
+    /// <summary>
+    /// The AI settings (null: the system's default).
+    /// </summary>
     public Ai.AiSettings? Ai { get; init; }
     /// <summary>
     /// Squads in a fight run when they are not intact (<see cref="FleeSystem.SquadBreak"/>; off, as the game does).
     /// </summary>
     public bool SquadBreak { get; init; }
+    /// <summary>
+    /// The construction settings (null: the system's default).
+    /// </summary>
     public Construction.ConstructionSettings? Construction { get; init; }
+    /// <summary>
+    /// The production settings (null: the system's default).
+    /// </summary>
     public Production.ProductionSettings? Production { get; init; }
     /// <summary>
     /// The rigs the characters are drawn with: given, the physics ragdolls run (after the animation); null, the fall and lying clips stand in for
@@ -159,32 +231,77 @@ public sealed class StandardSystemOptions
 /// </summary>
 public sealed class StandardSystemSet
 {
+    /// <summary>
+    /// The systems in tick order.
+    /// </summary>
     public required IReadOnlyList<ITickSystem> Systems { get; init; }
+    /// <summary>
+    /// The population (null: not built).
+    /// </summary>
     public PopulationSystem? Population { get; init; }
+    /// <summary>
+    /// The movement (null: not built).
+    /// </summary>
     public MovementSystem? Movement { get; init; }
     /// <summary>
     /// Built when combat, pursuit or retaliation is asked for.
     /// </summary>
     public CombatSystem? Combat { get; init; }
+    /// <summary>
+    /// The aggro (null: not built).
+    /// </summary>
     public AggroSystem? Aggro { get; init; }
+    /// <summary>
+    /// The carrying (null: not built).
+    /// </summary>
     public Carrying.CarrySystem? Carry { get; init; }
+    /// <summary>
+    /// The crimes (null: not built).
+    /// </summary>
     public Crime.CrimeSystem? Crime { get; init; }
+    /// <summary>
+    /// The arrests (null: not built).
+    /// </summary>
     public Crime.ArrestSystem? Arrest { get; init; }
+    /// <summary>
+    /// The kidnapping (null: not built).
+    /// </summary>
     public Kidnap.KidnapSystem? Kidnap { get; init; }
     /// <summary>
     /// What captors do with their captives (kill, eat, enslave, gather, deliver); with the population.
     /// </summary>
     public Kidnap.CaptiveSystem? Captives { get; init; }
+    /// <summary>
+    /// The locks (null: not built).
+    /// </summary>
     public Locks.LockSystem? Locks { get; init; }
     /// <summary>
     /// Built with first aid.
     /// </summary>
     public Locks.BedSystem? Beds { get; init; }
+    /// <summary>
+    /// The trade (null: not built).
+    /// </summary>
     public Trading.TradeSystem? Trade { get; init; }
+    /// <summary>
+    /// The AI (null: not built).
+    /// </summary>
     public Ai.AiSystem? Ai { get; init; }
+    /// <summary>
+    /// The construction (null: not built).
+    /// </summary>
     public Construction.ConstructionSystem? Construction { get; init; }
+    /// <summary>
+    /// The production (null: not built).
+    /// </summary>
     public Production.ProductionSystem? Production { get; init; }
+    /// <summary>
+    /// The ragdolls (null: not built).
+    /// </summary>
     public Ragdolls.RagdollSystem? Ragdolls { get; init; }
+    /// <summary>
+    /// The dialogue (null: not built).
+    /// </summary>
     public Dialogue.DialogueSystem? Dialogue { get; init; }
 }
 
@@ -719,10 +836,19 @@ public static class StandardSystems
     /// </summary>
     sealed class Wiring
     {
+        /// <summary>
+        /// The part each system came with, by index.
+        /// </summary>
         readonly List<StandardParts> _parts = [];
 
+        /// <summary>
+        /// The systems in order.
+        /// </summary>
         public List<ITickSystem> Systems { get; } = [];
 
+        /// <summary>
+        /// Adds a system with the part it came with.
+        /// </summary>
         public void Add(StandardParts part, ITickSystem system)
         {
             Systems.Add(system);

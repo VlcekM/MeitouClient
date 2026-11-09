@@ -15,8 +15,14 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public static class SlaveSave
 {
+    /// <summary>
+    /// The GAMESTATE_CHARACTER keys of the slave state (see the class remarks).
+    /// </summary>
     public const string StateKey = "slavestate", SinceKey = "ssct", OwnerKey = "meitou slave owner", SlaverKey = "slaver", ShavedKey = "shaved";
 
+    /// <summary>
+    /// Reads the slave state, its start, the owner faction and character and the shaved flag (nothing when there is no record).
+    /// </summary>
     public static void Read(FcsRecord? state, CharacterCold cold, PopulationData data)
     {
         if (state is null) return;
@@ -35,6 +41,9 @@ public static class SlaveSave
         if (Hand.Read(state, SlaverKey) is { RecordType: FcsRecordType.Character } slaver) link.Slaver = slaver;
     }
 
+    /// <summary>
+    /// Writes the slave state, its start and the shaved flag; the owner faction only while set, the <c>slaver</c> handle as null once stale.
+    /// </summary>
     public static void Write(FcsRecord state, CharacterCold cold, PopulationData data)
     {
         state.Ints[StateKey] = cold.SlaveState;

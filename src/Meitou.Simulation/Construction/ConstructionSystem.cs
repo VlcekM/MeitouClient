@@ -1783,7 +1783,8 @@ public sealed class ConstructionSystem : ITickSystem, ITaskOwner, ITaskHandler, 
     }
 
     /// <summary>
-    /// One dismantler's step: a complete building first drops below its target, then the progress falls; at nothing the materials are refunded and the building goes with its mounted turrets.
+    /// One dismantler's step: a complete building first drops below its target, then the progress falls; at nothing the materials are refunded and
+    /// the building goes with its mounted turrets.
     /// </summary>
     void DismantleStep(World world, int slot, CharacterCold cold, BuildSite site, float dt)
     {

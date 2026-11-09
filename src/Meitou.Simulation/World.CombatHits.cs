@@ -2,12 +2,27 @@ using Meitou.Simulation.Combat;
 
 namespace Meitou.Simulation;
 
+/// <summary>
+/// The world's combat hits: the systems that observe them and the host's feed.
+/// </summary>
 public sealed partial class World
 {
+    /// <summary>
+    /// The systems that observe the hits, each with its index and whether it still receives them.
+    /// </summary>
     List<(ICombatHitObserver Observer, int SystemIndex, bool Enabled)>? _combatHitObservers;
+    /// <summary>
+    /// The observers that receive hits, and the ones disabled after a failure.
+    /// </summary>
     int _activeCombatHitObservers, _faultedCombatHitObservers;
+    /// <summary>
+    /// The host's hit feed (see <see cref="CombatHitFeed"/>).
+    /// </summary>
     volatile System.Collections.Concurrent.ConcurrentQueue<CombatHit>? _combatHitFeed;
 
+    /// <summary>
+    /// Whether a system observes the hits.
+    /// </summary>
     internal bool HasCombatHitObservers => _activeCombatHitObservers > 0;
 
     /// <summary>
@@ -25,6 +40,9 @@ public sealed partial class World
         set => _combatHitFeed = value;
     }
 
+    /// <summary>
+    /// Registers <paramref name="system"/> as a hit observer when it is one.
+    /// </summary>
     void RegisterCombatHitObserver(ITickSystem system, int systemIndex)
     {
         if (system is not ICombatHitObserver observer) return;
@@ -32,7 +50,10 @@ public sealed partial class World
         _activeCombatHitObservers++;
     }
 
-    // A failed observer no longer receives hits, so its disabled state belongs in determinism checks. Successful observers add nothing.
+    /// <summary>
+    /// Adds the disabled observers to the world's state hash. A failed observer no longer receives hits, so its disabled state belongs in determinism
+    /// checks. Successful observers add nothing.
+    /// </summary>
     internal void HashCombatHitObserverFaults(ref StateHasher hash)
     {
         if (_faultedCombatHitObservers == 0) return;

@@ -19,11 +19,26 @@ public sealed record SeatSpot(string Id, string Building, string Record, Vector3
     public float FaithfulYaw { get; init; } = Yaw;
 }
 
+/// <summary>
+/// The registry's town seats: the chairs and thrones of the town buildings.
+/// </summary>
 public sealed partial class FixtureRegistry
 {
+    /// <summary>
+    /// The town seats by id.
+    /// </summary>
     readonly Dictionary<string, SeatSpot> _seatSpots = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The cache of <see cref="SeatSpots"/> (null: made again).
+    /// </summary>
     IReadOnlyList<SeatSpot>? _publishedSeats;
+    /// <summary>
+    /// The town seats.
+    /// </summary>
     public IReadOnlyList<SeatSpot> SeatSpots => _publishedSeats ??= [.. _seatSpots.Values];
+    /// <summary>
+    /// The town seat with id <paramref name="id"/>; null when none has it.
+    /// </summary>
     public SeatSpot? FindSeat(string id) => _seatSpots.GetValueOrDefault(id);
 
     /// <summary>
@@ -32,6 +47,9 @@ public sealed partial class FixtureRegistry
     public IReadOnlyList<Vector3> TablesOfBuilding(string building) => _properties.TryGetValue(building, out var p) && !p.Purchased
             ? p.Building.Tables : [];
 
+    /// <summary>
+    /// Registers a town building's chairs and thrones as seats, numbered in the building's order.
+    /// </summary>
     void RegisterSeats(TownBuilding building, int owner)
     {
         int index = 0;
@@ -46,6 +64,9 @@ public sealed partial class FixtureRegistry
         _publishedSeats = null;
     }
 
+    /// <summary>
+    /// Removes a town building's seats.
+    /// </summary>
     void RemoveSeats(string building)
     {
         foreach (var id in _seatSpots.Values.Where(s => s.Building == building).Select(s => s.Id).ToArray())

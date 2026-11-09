@@ -7,7 +7,8 @@ using Meitou.Simulation.Ragdolls;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// A whole-body ragdoll as saved: settled (<see cref="Frozen"/>) or not, its age in seconds and every body's world pose in the ragdoll definition's order.
+/// A whole-body ragdoll as saved: settled (<see cref="Frozen"/>) or not, its age in seconds and every body's world pose in the ragdoll
+/// definition's order.
 /// </summary>
 public sealed record SavedRagdoll(bool Frozen, float Age, RigidTransform[] Pose);
 
@@ -19,8 +20,14 @@ public sealed record SavedRagdoll(bool Frozen, float Age, RigidTransform[] Pose)
 /// </summary>
 public static class RagdollSave
 {
+    /// <summary>
+    /// The GAMESTATE_CHARACTER key of the ragdoll.
+    /// </summary>
     public const string Key = "meitou ragdoll";
 
+    /// <summary>
+    /// Writes the ragdoll into a character's state record; null removes the key.
+    /// </summary>
     public static void Write(FcsRecord state, SavedRagdoll? ragdoll)
     {
         if (ragdoll is null)
@@ -65,7 +72,13 @@ public static class RagdollSave
         return new SavedRagdoll(parts[0] == "1", age, pose);
     }
 
+    /// <summary>
+    /// A float as a round-trip invariant string.
+    /// </summary>
     static string F(float v) => v.ToString("R", CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// Parses an invariant float; false when it is not one or not finite.
+    /// </summary>
     static bool TryF(string s, out float v) => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v) && float.IsFinite(v);
 }

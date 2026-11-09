@@ -25,6 +25,9 @@ public enum PlatoonJob : byte
     /// Modes 5 and 6: travels to its target (here the travel stand-in's towns; the fast one runs).
     /// </summary>
     TravelTarget = 5,
+    /// <summary>
+    /// Mode 6: travels to its target, running (see <see cref="TravelTarget"/>).
+    /// </summary>
     TravelTargetFast = 6,
 }
 
@@ -45,6 +48,10 @@ public static class PlatoonJobs
     /// </summary>
     public const float PatrolArrive = 500;
 
+    /// <summary>
+    /// The AI package and unloaded-squad job of a new or loaded platoon: the template's package named <paramref name="savedPackage"/>, else the one a
+    /// fresh blackboard of the template's packages starts with.
+    /// </summary>
     public static (AiPackage? Package, PlatoonJob Job) For(AiDatabase ai, SquadTemplate template, string? savedPackage = null)
     {
         var packages = ai.Packages(template);
@@ -68,6 +75,9 @@ public static class PlatoonJobs
         return (package, JobOf(package?.Unloaded ?? 0));
     }
 
+    /// <summary>
+    /// The unloaded job of a package's <c>unloaded</c> mode (none for an unknown mode).
+    /// </summary>
     public static PlatoonJob JobOf(int unloaded) => unloaded switch
     {
         2 => PlatoonJob.PatrolShortRange,

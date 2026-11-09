@@ -2056,7 +2056,13 @@ public sealed partial class FixtureRegistry
             bool> Bools,
         IReadOnlyDictionary<string, string> Strings)
     {
+        /// <summary>
+        /// The keys of a save's record.
+        /// </summary>
         public static StateKeys Of(FcsRecord r) => new(r.Ints, r.Floats, r.Bools, r.Strings);
+        /// <summary>
+        /// The keys of a level-data record.
+        /// </summary>
         public static StateKeys Of(GameRecord r) => new(r.Ints, r.Floats, r.Bools, r.Strings);
     }
 

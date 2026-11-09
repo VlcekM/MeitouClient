@@ -77,6 +77,9 @@ public static class SelfPreservation
         return fight <= 0 || Value(level, run) > Value(level, fight);
     }
 
+    /// <summary>
+    /// The value of the goal at a threat <paramref name="level"/>: the smaller of the level and the desire, plus the desire.
+    /// </summary>
     static float Value(float level, float desire) => MathF.Min(level, desire) + desire;
 
     /// <summary>

@@ -26,7 +26,8 @@ public sealed record BuildOrder(IReadOnlyList<CharacterId> Characters, string Si
 public sealed record DismantleOrder(IReadOnlyList<CharacterId> Characters, string Site) : OrderCommand;
 
 /// <summary>
-/// The selection panel's Dismantle once confirmed (<c>Building::confirmDismantle</c>): the player's site is dismantled at once, its furniture destroyed.
+/// The selection panel's Dismantle once confirmed (<c>Building::confirmDismantle</c>): the player's site is dismantled at once, its
+/// furniture destroyed.
 /// </summary>
 public sealed record ConfirmDismantle(string Site) : SimCommand;
 
@@ -51,7 +52,8 @@ public sealed record UpgradeSite(string Site) : SimCommand;
 public sealed record DowngradeSite(string Site) : SimCommand;
 
 /// <summary>
-/// The panel's Open to public toggle on a building of the player's: a site's <see cref="BuildSite.Public"/>, else an owned town building's flag in the fixtures.
+/// The panel's Open to public toggle on a building of the player's: a site's <see cref="BuildSite.Public"/>, else an owned town building's flag in
+/// the fixtures.
 /// </summary>
 public sealed record SetBuildingPublic(string Building, bool Public) : SimCommand;
 

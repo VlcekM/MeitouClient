@@ -6,25 +6,38 @@ using Meitou.Simulation.Construction;
 
 namespace Meitou.Simulation.Production;
 
-// Natural sites (docs/simulation.md "Production"; the original's rocks are ProductionBuildings with "is foliage", docs/game/buildings-production.md "Resources"): a rock the foliage
-// system places is worked like a player's mine. It is no BuildSite of the registry: its site is made from its id, a pure function of the rock's BUILDING and position, so orders and
-// perma-jobs name it and a saved job finds it again. Its machine lives in World.Machines like any other and is not saved (the original saves no rock either, Observed).
+/// <summary>
+/// Natural sites (docs/simulation.md "Production"; the original's rocks are ProductionBuildings with "is foliage", docs/game/buildings-production.md
+/// "Resources"): a rock the foliage system places is worked like a player's mine. It is no BuildSite of the registry: its site is made from its id, a
+/// pure function of the rock's BUILDING and position, so orders and perma-jobs name it and a saved job finds it again. Its machine lives in
+/// World.Machines like any other and is not saved (the original saves no rock either, Observed).
+/// </summary>
 public sealed partial class ProductionSystem
 {
+    /// <summary>
+    /// The prefix of a rock's site id.
+    /// </summary>
     const string NaturalPrefix = "natural:";
 
+    /// <summary>
+    /// The rocks' sites by id, made on first use (null: the id names no rock).
+    /// </summary>
     readonly Dictionary<string, BuildSite?> _naturalSites = new(StringComparer.Ordinal);
     /// <summary>
-    /// A rock site's centre and bounds radius from the host's rock source, with its mesh's shape (footprint and bounds box) and the instance's transform when the source has the mesh: an operator inside
-    /// them has reached the rock.
+    /// A rock site's centre and bounds radius from the host's rock source, with its mesh's shape (footprint and bounds box) and the instance's
+    /// transform when the source has the mesh: an operator inside them has reached the rock.
     /// </summary>
     readonly record struct RockBounds(Vector3 Centre, float Radius, RockShape? Shape, Matrix4x4 Transform)
     {
+        /// <summary>
+        /// The rock's centre on the ground plane (X, Z).
+        /// </summary>
         public Vector2 Flat => new(Centre.X, Centre.Z);
 
         /// <summary>
-        /// The X/Z gap from <paramref name="from"/> to the rock: to its mesh's footprint (<see cref="RockShape.Outline"/>) where the instance places it (taken at the box's height), else
-        /// to its bounds circle. The footprint, not the bounds box: a long or scattered rock's box reached far past the stone, and miners mined from 20 m off (#332).
+        /// The X/Z gap from <paramref name="from"/> to the rock: to its mesh's footprint (<see cref="RockShape.Outline"/>) where the instance places
+        /// it (taken at the box's height), else to its bounds circle. The footprint, not the bounds box: a long or scattered rock's box reached far
+        /// past the stone, and miners mined from 20 m off (#332).
         /// </summary>
         public float Gap(Vector3 from)
         {
@@ -51,6 +64,9 @@ public sealed partial class ProductionSystem
         }
     }
 
+    /// <summary>
+    /// The rocks' bounds by site id, from the host's rock source.
+    /// </summary>
     readonly Dictionary<string, RockBounds> _naturalBounds = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -69,11 +85,15 @@ public sealed partial class ProductionSystem
     /// </summary>
     BuildSite? Site(World world, string id) => world.Buildings.Find(id) ?? Seat(world, id) ?? Natural(id) ?? TownDummy(world, id) ?? TownWorkSite(id);
 
+    /// <summary>
+    /// The training dummies' sites by id, made on first use.
+    /// </summary>
     readonly Dictionary<string, BuildSite> _dummySites = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// A town training dummy (<see cref="Locks.FixtureKind.Training"/>, docs/simulation.md "Production"): like a rock, no BuildSite of the registry, so it is neither drawn, saved nor built
-    /// again; a complete site of the town building's owner, made from the fixture once its town has registered. Its machine lives in World.Machines and is not saved.
+    /// A town training dummy (<see cref="Locks.FixtureKind.Training"/>, docs/simulation.md "Production"): like a rock, no BuildSite of the registry,
+    /// so it is neither drawn, saved nor built again; a complete site of the town building's owner, made from the fixture once its town has
+    /// registered. Its machine lives in World.Machines and is not saved.
     /// </summary>
     BuildSite? TownDummy(World world, string id)
     {
@@ -96,8 +116,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// The rock a natural id names: a BUILDING with <c>is foliage</c> whose machine is an operable mine of a <c>world resource mining</c>; with a rock source, one of that BUILDING must
-    /// stand within a unit of the position. Owned by no faction (-1: the original's <c>nofac</c> of its town NO_TOWN) until a player character works it; complete.
+    /// The rock a natural id names: a BUILDING with <c>is foliage</c> whose machine is an operable mine of a <c>world resource mining</c>; with a
+    /// rock source, one of that BUILDING must stand within a unit of the position. Owned by no faction (-1: the original's <c>nofac</c> of its town
+    /// NO_TOWN) until a player character works it; complete.
     /// </summary>
     BuildSite? Natural(string id)
     {
@@ -130,11 +151,14 @@ public sealed partial class ProductionSystem
         return _naturalSites[id] = site;
     }
 
+    /// <summary>
+    /// The rocks' resource yields by building instance, read from the resource map on first use.
+    /// </summary>
     readonly Dictionary<string, float> _naturalYields = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The richness line of the building <paramref name="instance"/> names (<c>ProductionBuilding::getGUIFertility</c>, function 1 or 27 with a resource): a machine's yield, or a rock's
-    /// before it has been mined (no machine yet); null for anything else.
+    /// The richness line of the building <paramref name="instance"/> names (<c>ProductionBuilding::getGUIFertility</c>, function 1 or 27 with a
+    /// resource): a machine's yield, or a rock's before it has been mined (no machine yet); null for anything else.
     /// </summary>
     public RichnessView? RichnessOf(World world, string? instance)
     {
@@ -149,7 +173,8 @@ public sealed partial class ProductionSystem
         if (Natural(instance) is not { } site || Data(site.Record) is not { Resource: not 0 and var resource } data) return null;
         if (!_naturalYields.TryGetValue(instance, out float y)) _naturalYields[instance] = y = _resources.NodeYield(resource, site.Position);
 
-        // A rock nobody has mined yet: no machine, so nobody works it; whole, no power draw; research counts only for the player's buildings (FUN_14082ec70).
+        // A rock nobody has mined yet: no machine, so nobody works it; whole, no power draw; research counts only for the player's
+        // buildings (FUN_14082ec70).
         return new(instance, resource, y)
         {
             Owner = site.Owner,

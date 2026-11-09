@@ -19,11 +19,19 @@ public sealed class FixedStepClock
     /// Default most ticks one <see cref="Advance"/> returns (engine choice).
     /// </summary>
     public const int DefaultMaxCatchUp = 10;
-    // Float noise from summing many frame times: a total that is a whole number of ticks within this counts as reached.
+    /// <summary>
+    /// Float noise from summing many frame times: a total that is a whole number of ticks within this counts as reached.
+    /// </summary>
     const double Epsilon = 1e-9;
 
+    /// <summary>
+    /// The time accumulated and not yet run, in ticks (see the class remarks).
+    /// </summary>
     double _accumulated;
 
+    /// <summary>
+    /// A clock at <paramref name="tickRate"/> ticks per second that returns at most <paramref name="maxCatchUp"/> ticks a call.
+    /// </summary>
     public FixedStepClock(double tickRate = DefaultTickRate, int maxCatchUp = DefaultMaxCatchUp)
     {
         if (!(tickRate > 0) || double.IsInfinity(tickRate)) throw new ArgumentOutOfRangeException(nameof(tickRate));

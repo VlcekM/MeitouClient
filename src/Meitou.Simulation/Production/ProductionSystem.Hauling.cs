@@ -3,9 +3,12 @@ using Meitou.Simulation.Items;
 
 namespace Meitou.Simulation.Production;
 
-// Hauling (docs/simulation.md "Production"; the original's Task_EmptyMachine / Task_FillMachine in docs/game/buildings-production.md "Hauling"): with Settings.AutoHaul an operator at its
-// machine fills empty inputs with what it carries, takes a full output, carries the output to the nearest storage that takes it and fetches an empty input's item from the nearest storage
-// or producer output holding it (NearestSource). The trip is CharacterCold.HaulSite / HaulFetch; Schedule walks there, and the operator walks back to its machine once the items have moved.
+/// <summary>
+/// Hauling (docs/simulation.md "Production"; the original's Task_EmptyMachine / Task_FillMachine in docs/game/buildings-production.md "Hauling"):
+/// with Settings.AutoHaul an operator at its machine fills empty inputs with what it carries, takes a full output, carries the output to the nearest
+/// storage that takes it and fetches an empty input's item from the nearest storage or producer output holding it (NearestSource). The trip is
+/// CharacterCold.HaulSite / HaulFetch; Schedule walks there, and the operator walks back to its machine once the items have moved.
+/// </summary>
 public sealed partial class ProductionSystem
 {
     /// <summary>
@@ -69,6 +72,9 @@ public sealed partial class ProductionSystem
         return false;
     }
 
+    /// <summary>
+    /// Starts a haul trip to <paramref name="storage"/>, fetching <paramref name="fetch"/> (null: delivering); always true.
+    /// </summary>
     static bool Go(CharacterCold cold, string storage, string? fetch)
     {
         cold.HaulSite = storage;
@@ -164,9 +170,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// Where an input's item is fetched from: the player's nearest complete storage holding it in its main grid, or machine whose output holds it (a well's water), within
-    /// <see cref="ProductionSettings.HaulRange"/> of the machine (ties: the lower site id). A producer <paramref name="by"/> operates counts once its output is full, so it fills
-    /// the well before it leaves with the water.
+    /// Where an input's item is fetched from: the player's nearest complete storage holding it in its main grid, or machine whose output holds it (a
+    /// well's water), within <see cref="ProductionSettings.HaulRange"/> of the machine (ties: the lower site id). A producer <paramref name="by"/>
+    /// operates counts once its output is full, so it fills the well before it leaves with the water.
     /// </summary>
     string? NearestSource(World world, BuildSite from, string record, CharacterCold? by = null) =>
         NearestSite(world, from.Position, Settings.HaulRange, (s, m) => s.Id != from.Id && (m.Data.IsStorage

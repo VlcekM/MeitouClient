@@ -20,6 +20,9 @@ namespace Meitou.Simulation.Saving;
 /// </summary>
 public static class BuildingSave
 {
+    /// <summary>
+    /// Meitou's GAMESTATE_BUILDING key naming the parent's instance id (wins over the original's handle on load).
+    /// </summary>
     public const string MeitouParent = "meitou parent";
 
     #region Shared
@@ -34,8 +37,17 @@ public static class BuildingSave
     /// </summary>
     const int StateVersion = 270;
 
+    /// <summary>
+    /// The suffix of a building's GAMESTATE_BUILDING state id.
+    /// </summary>
     const string StateSuffix = "-S23";   // the hex of GAMESTATE_BUILDING (35)
+    /// <summary>
+    /// The name prefix of a player town's GAMESTATE_TOWN state (the rest is the town's name).
+    /// </summary>
     const string TownStatePrefix = "Town state ";
+    /// <summary>
+    /// The suffix of a player town's GAMESTATE_TOWN state id.
+    /// </summary>
     const string TownStateSuffix = "-S5e";   // the hex of GAMESTATE_TOWN (94)
 
     /// <summary>
@@ -43,6 +55,9 @@ public static class BuildingSave
     /// </summary>
     const string DefaultTownMaterial = "742-gamedata.base";
 
+    /// <summary>
+    /// Whether a building instance is the player's: a registry id, a state that is not a town's construction and the player faction as its owner.
+    /// </summary>
     static bool IsPlayerBuilt(string instanceId, FcsRecord? state, string playerFactionId) =>
         BuildingRegistry.TryParseId(instanceId, out _, out _) && state is not null && !state.Bools.GetValueOrDefault("meitou town construction")
         && state.Strings.GetValueOrDefault("owner faction ID") == playerFactionId;
@@ -402,11 +417,12 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Writes the player's outposts into <c>quick.save</c> (docs/formats/save.md "Player outposts"; the original's town-list writer <c>FUN_14092a6c0</c> and
-    /// <c>Town::vfunc_17/85</c>, <b>Verified</b> by code, no sample save has one): an entry of the GAMESTATE_TOWN_INSTANCE_LIST (made when the save has none)
-    /// with id <c>&lt;n&gt;-quick.save-INGAME</c>, target <see cref="PlayerTown.Template"/>, the absolute position and a zero quaternion, and its GAMESTATE_TOWN
-    /// <c>&lt;id&gt;-S5e</c> named "Town state &lt;name&gt;". An outpost read from a save keeps its entry, state and handle; a new one gets the next town
-    /// container. Returns each outpost's handle by number, for the buildings' <c>town</c>.
+    /// Writes the player's outposts into <c>quick.save</c> (docs/formats/save.md "Player outposts"; the original's town-list writer
+    /// <c>FUN_14092a6c0</c> and <c>Town::vfunc_17/85</c>, <b>Verified</b> by code, no sample save has one): an entry of the
+    /// GAMESTATE_TOWN_INSTANCE_LIST (made when the save has none) with id <c>&lt;n&gt;-quick.save-INGAME</c>, target
+    /// <see cref="PlayerTown.Template"/>, the absolute position and a zero quaternion, and its GAMESTATE_TOWN <c>&lt;id&gt;-S5e</c> named "Town state
+    /// &lt;name&gt;". An outpost read from a save keeps its entry, state and handle; a new one gets the next town container. Returns each outpost's
+    /// handle by number, for the buildings' <c>town</c>.
     /// </summary>
     static Dictionary<int, Hand> WriteTowns(SaveGame game, World world, string playerFactionId, ulong seed)
     {
@@ -500,6 +516,9 @@ public static class BuildingSave
         return list;
     }
 
+    /// <summary>
+    /// The id of number <paramref name="n"/> in <c>quick.save</c>.
+    /// </summary>
     static string QuickId(int n) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{n}-{SaveFolder.QuickSaveName}-INGAME");
 
     /// <summary>

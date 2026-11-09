@@ -43,8 +43,17 @@ public enum DecisionStep : byte
 /// </summary>
 public readonly record struct DecisionCheck(bool Can, bool Running = false, string? Why = null)
 {
+    /// <summary>
+    /// It can run and is not running yet.
+    /// </summary>
     public static DecisionCheck Run => new(true);
+    /// <summary>
+    /// It runs the character's task already: the plan goes on, nothing is started.
+    /// </summary>
     public static DecisionCheck Runs => new(true, true);
+    /// <summary>
+    /// It cannot run, for <paramref name="why"/> (null: nothing to show).
+    /// </summary>
     public static DecisionCheck No(string? why) => new(false, false, why);
 }
 
@@ -60,6 +69,9 @@ public interface IDecisionSource
     /// A short name for the trace ("32 Self preservation").
     /// </summary>
     string Name { get; }
+    /// <summary>
+    /// The step of the decision it belongs to (the original's step order).
+    /// </summary>
     DecisionStep Step { get; }
 
     /// <summary>
@@ -71,6 +83,9 @@ public interface IDecisionSource
     /// The goal's weight (step 4 scores desire x weight; the current goal x1.25).
     /// </summary>
     float Weight => 1;
+    /// <summary>
+    /// Whether it can run for the character at <paramref name="slot"/> now (a pure read of the world).
+    /// </summary>
     DecisionCheck CanRun(World world, int slot);
 
     /// <summary>
@@ -94,6 +109,9 @@ public interface IDecisionSource
 /// </summary>
 public interface IDecisionOwner
 {
+    /// <summary>
+    /// Registers its decision sources and job contributors with <paramref name="decisions"/>.
+    /// </summary>
     void RegisterSources(DecisionSystem decisions);
 }
 
@@ -146,11 +164,26 @@ public sealed record DecisionTrace(long Tick, string Winner, IReadOnlyList<strin
 /// </summary>
 public sealed class DecisionSystem
 {
+    /// <summary>
+    /// The decision sources in the order they are asked (by step, then key).
+    /// </summary>
     readonly List<IDecisionSource> _sources = [];
+    /// <summary>
+    /// The job contributor of each job type.
+    /// </summary>
     readonly Dictionary<TaskType, IJobSource> _jobs = [];
+    /// <summary>
+    /// The tick + 1 at which each slot was claimed by an engine start (<see cref="Claim"/>), by slot.
+    /// </summary>
     long[] _claimed = [];
+    /// <summary>
+    /// The trace lines of the decision being made (kept only while <see cref="Tracing"/> is on).
+    /// </summary>
     readonly List<string> _lines = [];
 
+    /// <summary>
+    /// Makes the step with its own sources: the order queue, the urgent jobs, the jobs and 14 Idleness.
+    /// </summary>
     public DecisionSystem()
     {
         Register(new OrderSource());
@@ -205,6 +238,9 @@ public sealed class DecisionSystem
         if (Decides(cold)) cold.Replan = true;
     }
 
+    /// <summary>
+    /// <see cref="Request(CharacterCold)"/> for the character at <paramref name="slot"/>, if any.
+    /// </summary>
     public static void Request(World world, int slot)
     {
         if (world.Characters.Cold(slot) is { } cold) Request(cold);
@@ -220,6 +256,9 @@ public sealed class DecisionSystem
         _claimed[slot] = world.Tick + 1;
     }
 
+    /// <summary>
+    /// Whether an engine start claimed the slot this tick (<see cref="Claim"/>).
+    /// </summary>
     bool Claimed(World world, int slot) => slot < _claimed.Length && _claimed[slot] == world.Tick + 1;
 
     /// <summary>
@@ -295,6 +334,10 @@ public sealed class DecisionSystem
         else if (cold.Decision is not null) cold.Decision = null;
     }
 
+    /// <summary>
+    /// Asks the sources <paramref name="from"/> to <paramref name="end"/> in order and starts the first that can run (one already running only ends
+    /// the step); true when one answered, its name in <paramref name="winner"/>.
+    /// </summary>
     bool PickFirst(World world, int slot, int from, int end, ref string winner)
     {
         for (int k = from; k < end; k++)
@@ -347,6 +390,9 @@ public sealed class DecisionSystem
         return true;
     }
 
+    /// <summary>
+    /// Adds a line on a source to the trace while <see cref="Tracing"/> is on.
+    /// </summary>
     void Note(IDecisionSource source, string what)
     {
         if (Tracing) _lines.Add($"{(int)source.Step} {source.Name}: {what}");
@@ -361,12 +407,27 @@ public sealed class DecisionSystem
     /// </summary>
     sealed class JobSource(DecisionSystem owner, bool urgent) : IDecisionSource
     {
+        /// <summary>
+        /// The job index of the character's list that the last <see cref="CanRun"/> found can run (-1: none).
+        /// </summary>
         int _picked = -1;
 
+        /// <summary>
+        /// The trace name ("Urgent jobs" or "Jobs").
+        /// </summary>
         public string Name => urgent ? "Urgent jobs" : "Jobs";
+        /// <summary>
+        /// Step 3 for the urgent pass, else step 5.
+        /// </summary>
         public DecisionStep Step => urgent ? DecisionStep.UrgentJobs : DecisionStep.Jobs;
+        /// <summary>
+        /// One source per step: no order within it.
+        /// </summary>
         public int Key => 0;
 
+        /// <summary>
+        /// Walks the character's job list for the first job that can run (or runs already) and keeps its index for <see cref="Start"/>.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             _picked = -1;
@@ -394,6 +455,9 @@ public sealed class DecisionSystem
             return DecisionCheck.No(urgent ? "no urgent job" : "no job can run");
         }
 
+        /// <summary>
+        /// Starts the job <see cref="CanRun"/> picked through its type's contributor.
+        /// </summary>
         public void Start(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
@@ -427,10 +491,22 @@ public sealed class DecisionSystem
     /// </summary>
     sealed class OrderSource : IDecisionSource
     {
+        /// <summary>
+        /// The trace name.
+        /// </summary>
         public string Name => "Orders";
+        /// <summary>
+        /// Step 1, the order queue.
+        /// </summary>
         public DecisionStep Step => DecisionStep.Orders;
+        /// <summary>
+        /// One source per step: no order within it.
+        /// </summary>
         public int Key => 0;
 
+        /// <summary>
+        /// Whether the front order can run (or runs its task already); else why not.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             if (world.Characters.Cold(slot)!.OrderQueue.Front is not { } front) return DecisionCheck.No("no order");
@@ -439,8 +515,14 @@ public sealed class DecisionSystem
             return check.CanRun ? DecisionCheck.Run : DecisionCheck.No(check.Why ?? $"{front.Row} cannot run");
         }
 
+        /// <summary>
+        /// Starts the front order (<see cref="PlayerOrders.StartFront"/>).
+        /// </summary>
         public void Start(World world, int slot) => PlayerOrders.StartFront(world, slot);
 
+        /// <summary>
+        /// The front order could not run: it is refused (<see cref="PlayerOrders.Refused"/>).
+        /// </summary>
         public void Passed(World world, int slot, in DecisionCheck check) => PlayerOrders.Refused(world, slot);
     }
 
@@ -453,7 +535,13 @@ public sealed class DecisionSystem
     /// </summary>
     sealed class Idleness : IDecisionSource
     {
+        /// <summary>
+        /// The trace name.
+        /// </summary>
         public string Name => "14 Idleness";
+        /// <summary>
+        /// Step 6, the fallback.
+        /// </summary>
         public DecisionStep Step => DecisionStep.Fallback;
 
         /// <summary>
@@ -461,6 +549,9 @@ public sealed class DecisionSystem
         /// </summary>
         public int Key => 2000 + (int)TaskType.Idle;
 
+        /// <summary>
+        /// It always answers: it starts over a wander or follow no plan runs, out of a fight; else it counts as running what the character does.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
@@ -469,6 +560,9 @@ public sealed class DecisionSystem
             return task is CharacterTask.Wander or CharacterTask.Follow && !planned && !cold.InCombat ? DecisionCheck.Run : DecisionCheck.Runs;
         }
 
+        /// <summary>
+        /// Sets the character idle as goal 14 Idleness.
+        /// </summary>
         public void Start(World world, int slot) => TaskStart.Become(world, slot, CharacterTask.Idle, TaskType.Idle, TaskSource.Goal);
     }
 }

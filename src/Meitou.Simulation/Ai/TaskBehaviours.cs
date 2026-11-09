@@ -147,6 +147,9 @@ public enum AiBehaviour : byte
 /// </summary>
 public static class TaskBehaviours
 {
+    /// <summary>
+    /// The behaviour and the game's display text of every goal type the engine acts out.
+    /// </summary>
     static readonly Dictionary<TaskType, (AiBehaviour Behaviour, string Text)> Table = new()
     {
         [TaskType.Idle] = (AiBehaviour.Mill, "Idleness"),
@@ -216,10 +219,19 @@ public static class TaskBehaviours
         [TaskType.JobMedic] = (AiBehaviour.Medic, "Medic"),
     };
 
-    // Flat tables by type number for the think's hot loop (a dictionary lookup per goal was a third of the think).
+    /// <summary>
+    /// The number of task types the flat tables hold (type numbers below it). Flat tables by type number for the think's hot loop (a dictionary
+    /// lookup per goal was a third of the think).
+    /// </summary>
     internal const int TypeCount = 291;
+    /// <summary>
+    /// The behaviour of each type by type number (<see cref="AiBehaviour.None"/> for types the engine does not act out).
+    /// </summary>
     static readonly AiBehaviour[] Behaviours = BuildBehaviours();
 
+    /// <summary>
+    /// Builds <see cref="Behaviours"/> from <see cref="Table"/> and the captive goals.
+    /// </summary>
     static AiBehaviour[] BuildBehaviours()
     {
         var a = new AiBehaviour[TypeCount];
@@ -230,6 +242,9 @@ public static class TaskBehaviours
         return a;
     }
 
+    /// <summary>
+    /// The behaviour the engine acts a goal type out with (<see cref="AiBehaviour.None"/>: not acted out).
+    /// </summary>
     public static AiBehaviour Of(TaskType type) => (uint)type < TypeCount ? Behaviours[(int)type] : AiBehaviour.None;
 
     /// <summary>

@@ -4,7 +4,10 @@ using Meitou.Simulation.Items;
 
 namespace Meitou.Simulation.Production;
 
-// The item furnace (docs/game/buildings-production.md "Item furnace"): FurnaceBuilding burns whatever lies in its input grid into its output (Raw Iron), by the metal the items hold.
+/// <summary>
+/// The item furnace (docs/game/buildings-production.md "Item furnace"): FurnaceBuilding burns whatever lies in its input grid into its output (Raw
+/// Iron), by the metal the items hold.
+/// </summary>
 public sealed partial class ProductionSystem
 {
     /// <summary>
@@ -28,8 +31,9 @@ public sealed partial class ProductionSystem
     static Inventory FurnaceGrid() => new(FurnaceWidth, FurnaceHeight) { StackBonusMinimum = FurnaceStackMinimum };
 
     /// <summary>
-    /// The Active button (<c>FurnaceBuilding::incinerate</c> <c>FUN_140299790</c>, <b>Observed</b>): an idle furnace with something in its grid starts burning (level 1, progress 0) and its
-    /// grid is closed; a burning one stops (level and progress 0, the items stay) and its grid opens again.
+    /// The Active button (<c>FurnaceBuilding::incinerate</c> <c>FUN_140299790</c>, <b>Observed</b>): an idle furnace with something in its grid
+    /// starts burning (level 1, progress 0) and its grid is closed; a burning one stops (level and progress 0, the items stay) and its grid
+    /// opens again.
     /// </summary>
     static void Incinerate(Machine m)
     {
@@ -42,10 +46,11 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// A burning furnace's step (<c>FurnaceBuilding::operate</c> <c>FUN_140299fa0</c>, <b>Observed</b>; it needs no operator, so it runs with skill factor 1 like any automatic machine): the
-    /// work amount of <see cref="ProduceStep"/> comes off the level and onto the output's progress; at level 0.001 or progress 0.999 the output gets (int) the grid's metal
-    /// (<see cref="FurnaceMetal"/>) Raw Iron, the grid is emptied and the furnace stops (<see cref="Incinerate"/>). Engine choice (the original's <c>operate</c> has no such test): while
-    /// the output cannot take the load's iron it holds, status 1 (output full), and goes on once there is room.
+    /// A burning furnace's step (<c>FurnaceBuilding::operate</c> <c>FUN_140299fa0</c>, <b>Observed</b>; it needs no operator, so it runs with skill
+    /// factor 1 like any automatic machine): the work amount of <see cref="ProduceStep"/> comes off the level and onto the output's progress; at
+    /// level 0.001 or progress 0.999 the output gets (int) the grid's metal (<see cref="FurnaceMetal"/>) Raw Iron, the grid is emptied and the
+    /// furnace stops (<see cref="Incinerate"/>). Engine choice (the original's <c>operate</c> has no such test): while the output cannot take the
+    /// load's iron it holds, status 1 (output full), and goes on once there is room.
     /// </summary>
     void FurnaceStep(World world, Machine m, float dt)
     {
@@ -80,8 +85,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// <c>FurnaceBuilding::getInputValue</c> (<c>FUN_1402a5f40</c>, <b>Verified</b> constants by disassembly): an ITEM with <c>ingredients</c> its iron (<see cref="IronIn"/>) x quantity x 0.5;
-    /// an ARMOUR of <c>material type</c> 2 or 3 (chain, plate) total coverage x 0.01 x (1 - <c>fabrics amount</c>) x 2; a WEAPON its unit weight x 0.2, kept within 0.5..5; anything else 0.
+    /// <c>FurnaceBuilding::getInputValue</c> (<c>FUN_1402a5f40</c>, <b>Verified</b> constants by disassembly): an ITEM with <c>ingredients</c> its
+    /// iron (<see cref="IronIn"/>) x quantity x 0.5; an ARMOUR of <c>material type</c> 2 or 3 (chain, plate) total coverage x 0.01 x (1 - <c>fabrics
+    /// amount</c>) x 2; a WEAPON its unit weight x 0.2, kept within 0.5..5; anything else 0.
     /// </summary>
     float MetalOf(ItemInstance item)
     {
@@ -101,8 +107,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// <c>FurnaceBuilding::getIronAmountInItem</c> (<c>FUN_1402a5750</c>, <b>Verified</b> by disassembly): over the record's <c>ingredients</c>, a Raw Iron entry adds its first value x 0.01,
-    /// any other ingredient adds its own iron (whatever its amount). <paramref name="depth"/> guards against a looped list in mod data (engine choice).
+    /// <c>FurnaceBuilding::getIronAmountInItem</c> (<c>FUN_1402a5750</c>, <b>Verified</b> by disassembly): over the record's <c>ingredients</c>, a
+    /// Raw Iron entry adds its first value x 0.01, any other ingredient adds its own iron (whatever its amount). <paramref name="depth"/> guards
+    /// against a looped list in mod data (engine choice).
     /// </summary>
     float IronIn(GameRecord record, int depth)
     {
@@ -118,8 +125,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// An armour's <c>total coverage</c> (<c>FUN_14082fd80</c>, <b>Observed</b>; stored in the record's int table at run time): the sum of its <c>part coverage</c> percentages, the
-    /// <see cref="WeightedPart"/> entry's x 1.5 (truncated), 100 when that sums to 0.
+    /// An armour's <c>total coverage</c> (<c>FUN_14082fd80</c>, <b>Observed</b>; stored in the record's int table at run time): the sum of its
+    /// <c>part coverage</c> percentages, the <see cref="WeightedPart"/> entry's x 1.5 (truncated), 100 when that sums to 0.
     /// </summary>
     static int TotalCoverage(GameRecord armour)
     {

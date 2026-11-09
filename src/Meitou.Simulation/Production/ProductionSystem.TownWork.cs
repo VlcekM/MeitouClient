@@ -7,9 +7,12 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Production;
 
-// The machines of NPC towns (docs/game/buildings-production.md "NPC town machines"): a town building an NPC worker (goals 189 / 190, AiSystem Work) stands at is a machine like a rock or a
-// training dummy is: no registry site, so neither drawn, saved nor built; a complete virtual site of the town's faction, made when the first worker arrives. The workers are the AI's: the
-// decision step keeps AiMind.WorkOperate (Task_OperateMachine, row 87) or AiMind.CollectFrom (Task_EmptyMachine, row 92) while they are at the building, and this system applies them.
+/// <summary>
+/// The machines of NPC towns (docs/game/buildings-production.md "NPC town machines"): a town building an NPC worker (goals 189 / 190, AiSystem Work)
+/// stands at is a machine like a rock or a training dummy is: no registry site, so neither drawn, saved nor built; a complete virtual site of the
+/// town's faction, made when the first worker arrives. The workers are the AI's: the decision step keeps AiMind.WorkOperate (Task_OperateMachine, row
+/// 87) or AiMind.CollectFrom (Task_EmptyMachine, row 92) while they are at the building, and this system applies them.
+/// </summary>
 public sealed partial class ProductionSystem
 {
     /// <summary>
@@ -17,6 +20,9 @@ public sealed partial class ProductionSystem
     /// </summary>
     public const string TownWorkPrefix = "townwork:";
 
+    /// <summary>
+    /// The town buildings' machine sites by id, made when the first worker arrives.
+    /// </summary>
     readonly Dictionary<string, BuildSite> _townWorkSites = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -35,8 +41,8 @@ public sealed partial class ProductionSystem
     BuildSite? TownWorkSite(string id) => _townWorkSites.GetValueOrDefault(id);
 
     /// <summary>
-    /// The machine of a town building (made on the first call: empty, owned by the town's faction <paramref name="owner"/>), null for a building that neither works nor stores. Serial
-    /// phases only.
+    /// The machine of a town building (made on the first call: empty, owned by the town's faction <paramref name="owner"/>), null for a building that
+    /// neither works nor stores. Serial phases only.
     /// </summary>
     public Machine? TownWork(World world, TownBuilding building, int owner)
     {
@@ -70,13 +76,17 @@ public sealed partial class ProductionSystem
     /// </summary>
     public static bool CarriesInputOf(CharacterCold cold, Machine m) => m.Inputs.Any(input => input.Rate > 0 && Carries(cold, input.Item));
 
+    /// <summary>
+    /// Whether the character carries <paramref name="item"/> (in its inventory or its backpack's).
+    /// </summary>
     static bool Carries(CharacterCold cold, string item) =>
         cold.Inventory is { } inv && (inv.All().Any(i => i.Record == item) || inv.Backpack?.Contents?.All().Any(i => i.Record == item) == true);
 
     /// <summary>
-    /// The finder of row 94 (<c>FUN_14059d9b0</c>, scored by <c>FUN_14059d000</c>, <b>Verified</b>): for each item type the target machine's inputs take, in list order, the nearest other machine whose output holds that item and
-    /// has some; the first item with one decides. <b>Not modelled</b>: the cached earlier pick, loose items on the ground (searched first by the original), and the split of buildings by the owner test of vfunc <c>0x3b0</c>
-    /// (<b>Unknown</b>); the candidates are the town's workplaces (the original's building mask is not decoded).
+    /// The finder of row 94 (<c>FUN_14059d9b0</c>, scored by <c>FUN_14059d000</c>, <b>Verified</b>): for each item type the target machine's inputs
+    /// take, in list order, the nearest other machine whose output holds that item and has some; the first item with one decides. <b>Not
+    /// modelled</b>: the cached earlier pick, loose items on the ground (searched first by the original), and the split of buildings by the owner
+    /// test of vfunc <c>0x3b0</c> (<b>Unknown</b>); the candidates are the town's workplaces (the original's building mask is not decoded).
     /// </summary>
     public static TownBuilding? InputSource(World world, Machine target, IEnumerable<TownBuilding> candidates, Vector3 from)
     {
@@ -100,8 +110,8 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// <c>Task_FillMachine</c> (row 93, <c>FUN_140344510</c>, <b>Verified</b>) at a machine with a production component: the carried items (inventory and worn backpack) its inputs accept go into them up to
-    /// each input's capacity, a unit at a time.
+    /// <c>Task_FillMachine</c> (row 93, <c>FUN_140344510</c>, <b>Verified</b>) at a machine with a production component: the carried items (inventory
+    /// and worn backpack) its inputs accept go into them up to each input's capacity, a unit at a time.
     /// </summary>
     void FillInputs(World world, CharacterCold cold, Machine m)
     {
@@ -130,9 +140,9 @@ public sealed partial class ProductionSystem
     public static Machine? TownWorkOf(World world, TownBuilding building) => world.Machines.Find(TownWorkId(building));
 
     /// <summary>
-    /// The workers of town machines at their building this tick (serial, before the players' operators): the AI's workers that stand at their building doing row 87 operate it (a producer
-    /// only: a research bench counts for the player's research alone, and a crafting bench with no queue refuses an operator, <c>dontNeedWorkRightNow</c>, so both are pretence), those
-    /// doing row 92 empty its output into their inventory.
+    /// The workers of town machines at their building this tick (serial, before the players' operators): the AI's workers that stand at their
+    /// building doing row 87 operate it (a producer only: a research bench counts for the player's research alone, and a crafting bench with no queue
+    /// refuses an operator, <c>dontNeedWorkRightNow</c>, so both are pretence), those doing row 92 empty its output into their inventory.
     /// </summary>
     void TownWorkers(World world, float dt)
     {
@@ -154,6 +164,9 @@ public sealed partial class ProductionSystem
         }
     }
 
+    /// <summary>
+    /// Whether a worker stands at the town building within <paramref name="reach"/>, idle or resting.
+    /// </summary>
     static bool AtTownWork(in CharacterHot n, TownBuilding building, float reach) =>
         Ai.AiSystem.AtWork(in n, building.Position, reach) && (CharacterTask)n.Task is CharacterTask.Idle or CharacterTask.Rest;
 
@@ -173,8 +186,9 @@ public sealed partial class ProductionSystem
     }
 
     /// <summary>
-    /// <c>Task_EmptyMachine</c> (rows 92 and 284, <c>FUN_14033cd10</c>, <b>Verified</b>) at a machine with an output: the output's items go into the character's inventory (the worn backpack
-    /// when the main grid is full) while there is room, a unit at a time; a producer whose status was 1 (output full) then goes back to 2.
+    /// <c>Task_EmptyMachine</c> (rows 92 and 284, <c>FUN_14033cd10</c>, <b>Verified</b>) at a machine with an output: the output's items go into the
+    /// character's inventory (the worn backpack when the main grid is full) while there is room, a unit at a time; a producer whose status was 1
+    /// (output full) then goes back to 2.
     /// </summary>
     void TakeOutput(World world, CharacterCold cold, Machine m)
     {

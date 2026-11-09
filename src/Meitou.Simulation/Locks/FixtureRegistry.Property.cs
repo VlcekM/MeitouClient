@@ -13,22 +13,58 @@ namespace Meitou.Simulation.Locks;
 /// </summary>
 public sealed record BuyBuilding(string Building, long Price) : SimCommand;
 
+/// <summary>
+/// The registry's town properties: the houses the player can buy, own and rebuild.
+/// </summary>
 public sealed partial class FixtureRegistry
 {
+    /// <summary>
+    /// A town house a faction can own: its data, site, building, owner, whether the player bought it and its rebuild site.
+    /// </summary>
     sealed class Property(PopulationData data, int site, TownBuilding building, int owner)
     {
+        /// <summary>
+        /// The population data the house came from.
+        /// </summary>
         public PopulationData Data { get; } = data;
+        /// <summary>
+        /// The town site of the house.
+        /// </summary>
         public int Site { get; } = site;
+        /// <summary>
+        /// The house's building.
+        /// </summary>
         public TownBuilding Building { get; } = building;
+        /// <summary>
+        /// The owner faction (-1: none).
+        /// </summary>
         public int Owner { get; set; } = owner;
+        /// <summary>
+        /// Whether the player bought it.
+        /// </summary>
         public bool Purchased { get; set; }
+        /// <summary>
+        /// The construction site the player rebuilds it through (null: none).
+        /// </summary>
         public BuildSite? Construction { get; set; }
     }
 
+    /// <summary>
+    /// The town properties by building key.
+    /// </summary>
     readonly Dictionary<string, Property> _properties = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The cache of <see cref="OwnedProperties"/> (null: made again).
+    /// </summary>
     IReadOnlySet<string>? _ownedProperties;
+    /// <summary>
+    /// The faction <see cref="_ownedProperties"/> was made for.
+    /// </summary>
     int _ownedFaction = -1;
 
+    /// <summary>
+    /// Registers a town building as a property when it is a house (function 19, or no function and an interior) that is not a gate or linked wall.
+    /// </summary>
     void RegisterProperty(World world, PopulationData data, int site, TownBuilding building, int owner, bool purchased)
     {
         var record = data.Db.Find(building.BuildingId);
@@ -40,8 +76,14 @@ public sealed partial class FixtureRegistry
         RegisterTownConstruction(world, _properties[building.Key]);
     }
 
+    /// <summary>
+    /// The owner faction of property <paramref name="building"/>; null when it is no property.
+    /// </summary>
     public int? PropertyOwner(string building) => _properties.TryGetValue(building, out var p) ? p.Owner : null;
 
+    /// <summary>
+    /// Where property <paramref name="building"/> stands; null when it is no property.
+    /// </summary>
     internal Vector3? PropertyPosition(string building) => _properties.TryGetValue(building, out var p) ? p.Building.Position : null;
 
     /// <summary>
@@ -55,9 +97,15 @@ public sealed partial class FixtureRegistry
         return false;
     }
 
+    /// <summary>
+    /// Whether <paramref name="faction"/> owns the building: as its property's owner, else as owner of one of its fixtures.
+    /// </summary>
     public bool OwnsBuilding(string building, int faction) => faction >= 0 &&
         (_properties.TryGetValue(building, out var p) ? p.Owner == faction : OfBuilding(building).Any(f => f.Owner == faction));
 
+    /// <summary>
+    /// The building keys of the properties <paramref name="faction"/> owns (cached).
+    /// </summary>
     public IReadOnlySet<string> OwnedProperties(int faction)
     {
         if (_ownedProperties is null || _ownedFaction != faction)
@@ -69,6 +117,10 @@ public sealed partial class FixtureRegistry
         return _ownedProperties;
     }
 
+    /// <summary>
+    /// The price of a property for the player; null when it is not for sale to the player (unowned, the player's, bought, in a town of the player's
+    /// or hostile owner, or of a type that sells none).
+    /// </summary>
     public long? SalePrice(string building, int player)
     {
         if (player < 0 || !_properties.TryGetValue(building, out var p) || p.Owner < 0 || p.Owner == player || p.Purchased)
@@ -186,8 +238,10 @@ public sealed partial class FixtureRegistry
         _dummySpots = null;
     }
 
-    // The buildings a town override reset to the level, with their level owner then: their saved record (patched, not rewritten, by a save) must not
-    // bring the old state back. A building the player buys afterwards leaves it.
+    /// <summary>
+    /// The buildings a town override reset to the level, with their level owner then: their saved record (patched, not rewritten, by a save) must not
+    /// bring the old state back. A building the player buys afterwards leaves it.
+    /// </summary>
     readonly Dictionary<string, (TownBuilding Building, PopulationData Data, int Owner)> _resetBuildings = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -222,6 +276,9 @@ public sealed partial class FixtureRegistry
     public bool SavedDestroyed(TownBuilding b) => Saved?.GetValueOrDefault(b.Key) is not { } saved ? b.Destroyed
         : saved.Bools.GetValueOrDefault("destroyed", b.Destroyed) || b.Destroyed && !saved.Bools.GetValueOrDefault("meitou town construction");
 
+    /// <summary>
+    /// Writes a property's Meitou keys into its building state: its rebuild site's state when it has one.
+    /// </summary>
     void WriteProperty(string building, FcsRecord state)
     {
         if (!_properties.TryGetValue(building, out var p)) return;
@@ -241,6 +298,9 @@ public sealed partial class FixtureRegistry
         state.Bools["is public night"] = false;
     }
 
+    /// <summary>
+    /// Registers the player's property as a town construction site, its state from the save, else the level's.
+    /// </summary>
     void RegisterTownConstruction(World world, Property p, bool? ruin = null)
     {
         if (p.Owner != world.Player.Faction || p.Owner < 0 || p.Construction is not null) return;
@@ -307,12 +367,18 @@ public sealed partial class FixtureRegistry
         SyncDoors(site.Id);
     }
 
+    /// <summary>
+    /// The building with its destroyed flag set for the host's sight.
+    /// </summary>
     static TownBuilding SightBuilding(TownBuilding b, bool destroyed) => b with
     {
         Destroyed = destroyed,
         Resolved = b.Resolved is { } r ? r with { Destroyed = destroyed } : null,
     };
 
+    /// <summary>
+    /// Adds the player's and bought properties' owners to the world's state hash, in key order.
+    /// </summary>
     void HashProperties(ref StateHasher h)
     {
         foreach (var (key, p) in _properties.Where(p => p.Value.Purchased || p.Value.Owner == p.Value.Data.PlayerFaction).OrderBy(p => p.Key,
