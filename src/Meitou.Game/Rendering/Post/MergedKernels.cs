@@ -34,16 +34,42 @@ sealed unsafe class MergedKernels(PostProcess post)
     [StructLayout(LayoutKind.Sequential)]
     struct VelocityParams
     {
+        /// <summary>
+        /// The reprojection to last frame's clip space.
+        /// </summary>
         public Matrix4x4 ToPrev;
-        public Vector4 Planes;     // the scene's near and far (zw unused)
-        public Vector4 Full;       // the upscalers' planes, the jitter in NDC
-        public Vector4 TanEye;     // tan x, tan y, eye height, water height
-        public Vector4 Right;      // xyz, the water's reactivity
-        public Vector4 Up;         // xyz (w unused)
-        public Vector4 Back;       // xyz, the outputs: bit 0 the upscalers' depth, bit 1 the reactivity
-        // the direction to the sun, cos of the angle within which the sky takes all of its motion (PostProcess.SunMotion.cs)
+        /// <summary>
+        /// The scene's near and far planes (zw unused).
+        /// </summary>
+        public Vector4 Planes;
+        /// <summary>
+        /// The upscalers' depth planes, then the jitter in NDC.
+        /// </summary>
+        public Vector4 Full;
+        /// <summary>
+        /// Tan x, tan y, the eye's height and the water's height.
+        /// </summary>
+        public Vector4 TanEye;
+        /// <summary>
+        /// The view's right axis (xyz) and the water's reactivity.
+        /// </summary>
+        public Vector4 Right;
+        /// <summary>
+        /// The view's up axis (w unused).
+        /// </summary>
+        public Vector4 Up;
+        /// <summary>
+        /// The view's back axis (xyz) and the outputs: bit 0 the upscalers' depth, bit 1 the reactivity.
+        /// </summary>
+        public Vector4 Back;
+        /// <summary>
+        /// The direction to the sun (xyz) and the cos of the angle within which the sky takes all of its motion (PostProcess.SunMotion.cs).
+        /// </summary>
         public Vector4 Sun;
-        public Vector4 SunMotion;  // the sun's motion in the motion target's units, cos of the angle past which none, 1 when on
+        /// <summary>
+        /// The sun's motion in the motion target's units, the cos of the angle past which there is none, and 1 when on.
+        /// </summary>
+        public Vector4 SunMotion;
     }
 
     /// <summary>
@@ -126,6 +152,9 @@ sealed unsafe class MergedKernels(PostProcess post)
     [StructLayout(LayoutKind.Sequential)]
     struct ExposurePush
     {
+        /// <summary>
+        /// The adaptation's blend and the band's minimum and maximum.
+        /// </summary>
         public float Blend, BandMin, BandMax;
     }
 

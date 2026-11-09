@@ -40,8 +40,19 @@ public sealed unsafe partial class PostProcess
     /// </summary>
     class LayerPass : FullscreenProgram
     {
+        /// <summary>
+        /// The program's samplers <c>uNearDepth</c>, <c>uShaftInjected</c>, <c>uShaftLight</c>, <c>uShaftScatter</c>.
+        /// </summary>
         public readonly SamplerSlot NearDepth, ShaftInjected, Light, Scatter;
+        /// <summary>
+        /// The program's uniforms <c>uNearPlanes</c>, <c>uWaterY</c>, <c>uFullSize</c>, the shafts' <c>uShaftGrid</c>, <c>uShaftRange</c>,
+        /// <c>uShaftEye</c>, <c>uShaftRight</c>, <c>uShaftUp</c>, <c>uShaftBack</c>, <c>uShaftTan</c>, <c>uShaftFog</c>, <c>uShaftAtlas</c>,
+        /// <c>uShaftParams</c>, <c>uShaftAir</c>, and <c>uLayers</c>.
+        /// </summary>
         public readonly UniformHandle NearPlanes, WaterY, FullSize, Grid, Range, Eye, Right, Up, Back, Tan, ShaftFog, Atlas, Params, Air, Layers;
+        /// <summary>
+        /// Compiles the shared vertex shader with <paramref name="fragment"/> and resolves the shared handles.
+        /// </summary>
         public LayerPass(GpuContext gpu, string fragment, string name) : base(gpu, fragment, name)
         {
             (NearDepth, ShaftInjected) = (P.Sampler("uNearDepth"), P.Sampler("uShaftInjected"));
@@ -54,10 +65,22 @@ public sealed unsafe partial class PostProcess
         }
     }
 
+    /// <summary>
+    /// The merged pass over the scene colour: the pending layers, the half-size texture's upsample and the occlusion.
+    /// </summary>
     sealed class SceneLayersPass : LayerPass
     {
+        /// <summary>
+        /// The program's samplers <c>uLayerHalf</c>, <c>uAo</c>.
+        /// </summary>
         public readonly SamplerSlot LayerHalfTexture, Ao;
+        /// <summary>
+        /// The program's uniform <c>uHalf</c>.
+        /// </summary>
         public readonly UniformHandle Half;
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public SceneLayersPass(GpuContext gpu, string fragment, string name) : base(gpu, fragment, name)
         {
             (LayerHalfTexture, Ao) = (P.Sampler("uLayerHalf"), P.Sampler("uAo"));
@@ -65,13 +88,28 @@ public sealed unsafe partial class PostProcess
         }
     }
 
+    /// <summary>
+    /// The half-size layers pass (<see cref="PostProcessShaders.LayersHalf"/>), made with its first use.
+    /// </summary>
     LayerPass? _layersHalfPass;
+    /// <summary>
+    /// The merged pass, full and lean, each made with its first use.
+    /// </summary>
     SceneLayersPass? _sceneLayers, _sceneLayersLean;
+    /// <summary>
+    /// The half-size layers texture, and the lean pass's mask (a depth target at the render size).
+    /// </summary>
     Target2D? _layerHalf, _layerMask;
 
     // What is pending for the merged pass this frame besides the shafts' apply (LightShafts.Pending): the fog volumes, which of them the
     // half-size texture holds (this frame), and the shafts' grid the fog's shadow reads.
+    /// <summary>
+    /// The fog volumes are pending; the half-size texture holds the shafts, the fog.
+    /// </summary>
     bool _fogPending, _halfHoldsShafts, _halfHoldsFog;
+    /// <summary>
+    /// This frame's shafts' grid for the fog's shadow, taken before <see cref="RunFogVolumes"/> resets the frame's.
+    /// </summary>
     (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) _fogShadow;
 
     /// <summary>
@@ -204,6 +242,9 @@ public sealed unsafe partial class PostProcess
     /// </summary>
     static readonly DrawState FallbackState = FogState with { DepthTest = true, DepthWrite = false, Compare = DepthFunction.Less };
 
+    /// <summary>
+    /// Frees the layer passes' programs and targets.
+    /// </summary>
     void DisposeSceneLayers()
     {
         _layersHalfPass?.P.Dispose();

@@ -24,6 +24,9 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
         /// </summary>
         public readonly SamplerSlot Scene;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public SsaoMaskPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoMask, "post ssao mask") => Scene = P.Sampler("uScene");
     }
 
@@ -42,6 +45,9 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
         /// </summary>
         public readonly UniformHandle Step, CharacterAo;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public BlurPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoBlur, "post ssao blur") =>
             (Ao, Mask, Step, CharacterAo) = (P.Sampler("uAo"), P.Sampler("uMask"), P.Uniform("uStep"), P.Uniform("uCharacterAo"));
     }
@@ -62,6 +68,9 @@ sealed class AmbientOcclusion(PostProcess post, AmbientOcclusion.SsaoPass ssao, 
         /// </summary>
         public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public SsaoPass(GpuContext gpu) : base(gpu, PostProcessShaders.Ssao, "post ssao")
         {
             (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"),

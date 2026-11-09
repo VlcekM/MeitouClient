@@ -8,7 +8,21 @@ namespace Meitou.Game.Rendering.Foliage;
 /// <see cref="Meshes"/>: every mesh layer, and, with the Meitou <c>range</c> switch, only the large meshes (the zone is farther than the medium
 /// and small ranges and the grass, so nothing else can be drawn there). <see cref="Whole"/>: every layer and the grass.
 /// </summary>
-enum FoliageZoneTier { Far, Meshes, Whole }
+enum FoliageZoneTier
+{
+    /// <summary>
+    /// The FAR layers only.
+    /// </summary>
+    Far,
+    /// <summary>
+    /// Every mesh layer (with the Meitou <c>range</c> switch: only the large meshes), no grass.
+    /// </summary>
+    Meshes,
+    /// <summary>
+    /// Every layer and the grass.
+    /// </summary>
+    Whole
+}
 
 /// <summary>
 /// One zone of <see cref="FoliageRenderer"/>'s streaming: its layout (the job, the groups, the grass patches) and its grass pages.

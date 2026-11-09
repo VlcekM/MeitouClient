@@ -5,13 +5,14 @@ using Meitou.Game.Rendering.Terrain;
 
 namespace Meitou.Game.Rendering.Foliage;
 
+/// <summary>
+/// Card trimming (docs/render-foliage.md, "Card trimming"): The alpha-tested cards of a mesh (leaf quads, fern fronds) are cut down to the outline of
+/// what the cut-out lets through, so the rasteriser spends no fragments on the transparent corners. The mesh is trimmed when it is decoded (on the
+/// worker, with the masks read from FoliageCardMask's disk cache); the trimmed triangles follow the original ones in the part's index buffer, and a
+/// draw picks one range or the other, so the Meitou switch can flip it.
+/// </summary>
 public sealed unsafe partial class FoliageRenderer
 {
-    // ---- card trimming (docs/render-foliage.md, "Card trimming") ---- The alpha-tested cards of a mesh (leaf quads, fern fronds) are cut down to
-    // the outline of what the cut-out lets through, so the rasteriser spends no fragments on the transparent corners. The mesh is trimmed when it is
-    // decoded (on the worker, with the masks read from FoliageCardMask's disk cache); the trimmed triangles follow the original ones in the part's
-    // index buffer, and a draw picks one range or the other, so the Meitou switch can flip it.
-
     /// <summary>
     /// The Meitou <c>card-trim</c> switch: the alpha-tested cards of FOLIAGE-mode meshes and leaves are drawn cut to the opaque outline of their
     /// texture. Faithful draws the whole cards.
@@ -27,6 +28,9 @@ public sealed unsafe partial class FoliageRenderer
     /// The first index and the index count a draw of <paramref name="part"/> uses.
     /// </summary>
     uint DrawFirst(FoliageGpuPart part) => CardTrim && part.TrimCount > 0 ? (uint)part.Count : 0;
+    /// <summary>
+    /// As <see cref="DrawFirst"/>: the index count.
+    /// </summary>
     uint DrawCount(FoliageGpuPart part) => CardTrim && part.TrimCount > 0 ? (uint)part.TrimCount : (uint)part.Count;
 
     /// <summary>

@@ -15,12 +15,21 @@ namespace Meitou.Game.Rendering.Characters;
 /// </summary>
 internal sealed class MeshMorphs
 {
+    /// <summary>
+    /// How many vertices the poses move: the slots are 1 to this.
+    /// </summary>
     public required int SlotCount;
     /// <summary>
     /// The submesh the poses move (all of them target one).
     /// </summary>
     public required int SubMeshIndex;
+    /// <summary>
+    /// Each pose by name: the slots it moves and their offsets, in the mesh's space.
+    /// </summary>
     public required Dictionary<string, (int[] Slots, Vector3[] Offsets)> Poses;
+    /// <summary>
+    /// Whether the mesh has the <c>bone_horns_top_short</c> pose, which a shaved character's horns are cut with.
+    /// </summary>
     public bool HasCuttableHorns => Poses.ContainsKey("bone_horns_top_short");
 
     /// <summary>
@@ -97,12 +106,30 @@ internal sealed class MeshMorphs
 /// </summary>
 internal sealed class MorphArena : IDisposable
 {
+    /// <summary>
+    /// The device the buffer lives on.
+    /// </summary>
     readonly IGpuContext _gpu;
+    /// <summary>
+    /// The storage buffer of the offsets, <see cref="_host"/>'s size; remade when the arena grows.
+    /// </summary>
     DeviceBuffer _buffer;
+    /// <summary>
+    /// The host copy of every entry (a vec4 each), grown as needed.
+    /// </summary>
     Vector4[] _host;
-    int _used = 2;   // entries 0 and 1 are never a set's base, so a base of 0 can mean "no morph"
+    /// <summary>
+    /// How many entries are used: entries 0 and 1 are never a set's base, so a base of 0 can mean "no morph".
+    /// </summary>
+    int _used = 2;
+    /// <summary>
+    /// The base of each set already stored, by its key (weights, mesh and shave), so identical sets are stored once.
+    /// </summary>
     readonly Dictionary<string, uint> _known = [];
 
+    /// <summary>
+    /// Makes the buffer for 4096 entries.
+    /// </summary>
     public MorphArena(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -110,7 +137,13 @@ internal sealed class MorphArena : IDisposable
         _buffer = DeviceBuffer.Create(gpu, (ulong)_host.Length * 16, BufferUse.Storage, "character morphs");
     }
 
+    /// <summary>
+    /// How many entries are used, for the statistics.
+    /// </summary>
     public int Entries => _used;
+    /// <summary>
+    /// The buffer's size in bytes, for the statistics.
+    /// </summary>
     public long Bytes => (long)_host.Length * 16;
 
     /// <summary>
@@ -166,12 +199,18 @@ internal sealed class MorphArena : IDisposable
         return first;
     }
 
+    /// <summary>
+    /// Copies <paramref name="deltas"/> into the host copy at <paramref name="first"/> and uploads them.
+    /// </summary>
     void Write(int first, Vector4[] deltas)
     {
         deltas.CopyTo(_host, first);
         Upload((ulong)first * 16, MemoryMarshal.AsBytes(deltas.AsSpan()));
     }
 
+    /// <summary>
+    /// Uploads <paramref name="data"/> into the buffer at byte <paramref name="offset"/> (opens a frame if needed).
+    /// </summary>
     void Upload(ulong offset, ReadOnlySpan<byte> data)
     {
         _gpu.EnsureFrame();
@@ -179,7 +218,13 @@ internal sealed class MorphArena : IDisposable
         batch.Write(_buffer, offset, data);
     }
 
+    /// <summary>
+    /// The buffer's binding for <paramref name="frame"/>.
+    /// </summary>
     public GpuBufferBinding Binding(IGpuFrame frame) => _buffer.Binding(frame);
 
+    /// <summary>
+    /// Frees the buffer.
+    /// </summary>
     public void Dispose() => _buffer.Dispose();
 }

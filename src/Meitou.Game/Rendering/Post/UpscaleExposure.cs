@@ -41,6 +41,9 @@ sealed unsafe class UpscaleExposure(PostProcess post)
     [StructLayout(LayoutKind.Sequential)]
     struct UpscaleExposurePush
     {
+        /// <summary>
+        /// The user's exposure, the key, and 1 when the adaptation is on.
+        /// </summary>
         public float Exposure, Key, Auto;
     }
 

@@ -5,6 +5,9 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game.Rendering.Characters;
 
+/// <summary>
+/// The characters' statistics: the drawn characters' screen boxes, the CPU and GPU cost samples and the statistics line.
+/// </summary>
 internal sealed unsafe partial class CharacterRenderer
 {
     /// <summary>
@@ -12,11 +15,23 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     sealed class SampleRing
     {
+        /// <summary>
+        /// How many samples the ring keeps.
+        /// </summary>
         public const int Capacity = 64;
+        /// <summary>
+        /// The samples, written round the ring.
+        /// </summary>
         readonly double[] _values = new double[Capacity];
 
+        /// <summary>
+        /// How many samples were added in all.
+        /// </summary>
         public int Count { get; private set; }
 
+        /// <summary>
+        /// Adds a sample, overwriting the oldest once the ring is full.
+        /// </summary>
         public void Add(double value) => _values[Count++ % Capacity] = value;
 
         /// <summary>
@@ -32,8 +47,13 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
-    // The last colour view's culling, which DrawnCharacters counts by (CountedBoxes).
+    /// <summary>
+    /// The last colour view's frustum, which <see cref="DrawnCharacters"/> counts by (<see cref="CountedBoxes"/>).
+    /// </summary>
     Vector4[]? _countedFrustum;
+    /// <summary>
+    /// The last colour view's fog cull (see <see cref="_countedFrustum"/>).
+    /// </summary>
     FogVolumes? _countedFog;
 
     /// <summary>
@@ -72,8 +92,18 @@ internal sealed unsafe partial class CharacterRenderer
         return box;
     }
 
+    /// <summary>
+    /// The cost samples: the colour and shadow passes' GPU times, the update's, posing's, the draw recording's and the gathering's CPU times, in
+    /// milliseconds.
+    /// </summary>
     readonly SampleRing _colourGpu = new(), _depthGpu = new(), _updateCpu = new(), _poseCpu = new(), _drawCpu = new(), _gatherCpu = new();
+    /// <summary>
+    /// Scratch: the GPU times a timer's completed frames returned.
+    /// </summary>
     readonly List<double> _polled = [];
+    /// <summary>
+    /// How many updates ran (the statistics are printed at <see cref="Dispose"/> when any did).
+    /// </summary>
     int _updateCount;
 
     /// <summary>

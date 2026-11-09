@@ -80,6 +80,10 @@ internal sealed unsafe partial class CharacterRenderer
         Colours = [.. asset.Parts.Select(p => (p.Material.SkinTone, p.Material.HairColour))],
     };
 
+    /// <summary>
+    /// The body shape between <paramref name="a"/> and <paramref name="b"/> at <paramref name="t"/> (bone and positional sizes and the movement
+    /// scale); <paramref name="b"/> when either is null or their bone counts differ.
+    /// </summary>
     static BodyShapeData? Lerp(BodyShapeData? a, BodyShapeData? b, float t)
     {
         if (a is null || b is null || a.BoneSize.Length != b.BoneSize.Length || a.PositionalSize.Length != b.PositionalSize.Length)

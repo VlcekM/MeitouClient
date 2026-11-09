@@ -29,6 +29,9 @@ sealed class Bloom(PostProcess post)
         /// </summary>
         public readonly UniformHandle DestSize, Firefly;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public BloomPrefilterPass(GpuContext gpu) : base(gpu, PostProcessShaders.BloomPrefilter, "post bloom prefilter") =>
             (Scene, DestSize, Firefly) = (P.Sampler("uScene"), P.Uniform("uDestSize"), P.Uniform("uFirefly"));
     }
@@ -48,6 +51,9 @@ sealed class Bloom(PostProcess post)
         /// </summary>
         public readonly UniformHandle Texel;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public BloomDownPass(GpuContext gpu) : base(gpu, PostProcessShaders.BloomDown, "post bloom down") => (Source, Texel) = (P.Sampler("uSource"),
             P.Uniform("uTexel"));
     }
@@ -67,6 +73,9 @@ sealed class Bloom(PostProcess post)
         /// </summary>
         public readonly UniformHandle Params;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public BloomUpPass(GpuContext gpu) : base(gpu, PostProcessShaders.BloomUp, "post bloom up") =>
             (Level, Coarse, Params) = (P.Sampler("uLevel"), P.Sampler("uCoarse"), P.Uniform("uParams"));
     }

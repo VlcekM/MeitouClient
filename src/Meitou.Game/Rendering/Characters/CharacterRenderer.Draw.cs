@@ -13,18 +13,43 @@ using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Game.Rendering.Characters;
 
+/// <summary>
+/// The characters' drawing: batches by (mesh part, level, sidedness), each view's batches gathered in chunks of characters on workers, the parts
+/// placed once a frame for all views, and the jobs that record a view's draws.
+/// </summary>
 internal sealed unsafe partial class CharacterRenderer
 {
     // ------------------------------------------------------------------ drawing
 
+    /// <summary>
+    /// One view's instances of one (mesh part, level, sidedness), drawn with one instanced draw.
+    /// </summary>
     internal sealed class Batch
     {
+        /// <summary>
+        /// The mesh part drawn.
+        /// </summary>
         public required GpuObjectPart Part;
+        /// <summary>
+        /// The mesh LOD level drawn (an index into the part's offsets and counts).
+        /// </summary>
         public int Level;
+        /// <summary>
+        /// Drawn without back-face culling.
+        /// </summary>
         public bool DoubleSided;
+        /// <summary>
+        /// The instances gathered this frame (the first <see cref="Count"/>), grown as needed.
+        /// </summary>
         public CharInstance[] Data = new CharInstance[16];
+        /// <summary>
+        /// How many instances are gathered, and where the batch's first sits among the view's instance rows (its draw's first instance).
+        /// </summary>
         public int Count, Offset;
 
+        /// <summary>
+        /// Appends an instance, growing <see cref="Data"/> as needed.
+        /// </summary>
         public void Add(in CharInstance i)
         {
             if (Count == Data.Length) Array.Resize(ref Data, Count * 2);
@@ -33,7 +58,13 @@ internal sealed unsafe partial class CharacterRenderer
     }
 
     // A batch is named by an id per (mesh part, level, sidedness), the same in every view; each view keeps its own Batch per id (ViewBatches).
+    /// <summary>
+    /// The batch id of each (mesh part, level, sidedness), assigned in first-seen order; locked when a worker adds one.
+    /// </summary>
     readonly Dictionary<(GpuObjectPart, int, bool), int> _batchIds = [];
+    /// <summary>
+    /// The (mesh part, level, sidedness) of each batch id, the inverse of <see cref="_batchIds"/>.
+    /// </summary>
     readonly List<(GpuObjectPart Part, int Level, bool TwoSided)> _batchKeys = [];
 
     /// <summary>
@@ -41,17 +72,38 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     sealed class ViewBatches
     {
+        /// <summary>
+        /// The view's batch by id (null: not made yet), grown as needed.
+        /// </summary>
         public Batch?[] ById = new Batch?[256];
+        /// <summary>
+        /// The batches that have instances in this frame's gathering.
+        /// </summary>
         public readonly List<Batch> Active = [];
+        /// <summary>
+        /// The chunks of gathered instances, one per <see cref="ChunkCharacters"/> characters.
+        /// </summary>
         public readonly List<Chunk> Chunks = [];
+        /// <summary>
+        /// The view's instance rows in this frame's host-visible memory, every batch contiguous.
+        /// </summary>
         public Transient Instances;
+        /// <summary>
+        /// The characters and part instances gathered, and how many chunks hold them.
+        /// </summary>
         public int Characters, Parts, ChunkCount;
         /// <summary>
         /// A shadow cascade's (<see cref="PrepareDepth"/>): the update, GPU frame and frustum it was gathered for.
         /// </summary>
         public long Stamp = -1, Frame = -1;
+        /// <summary>
+        /// The frustum a shadow cascade's batches were gathered for (see <see cref="Stamp"/>).
+        /// </summary>
         public Vector4[]? Frustum;
 
+        /// <summary>
+        /// Empties the active batches and the counts for a new gathering (the batches are kept for their ids).
+        /// </summary>
         public void Begin()
         {
             foreach (var b in Active) b.Count = 0;
@@ -59,6 +111,9 @@ internal sealed unsafe partial class CharacterRenderer
             Characters = Parts = ChunkCount = 0;
         }
 
+        /// <summary>
+        /// The batch of <paramref name="id"/>, made by <paramref name="owner"/> on first use.
+        /// </summary>
         public Batch Get(int id, CharacterRenderer owner)
         {
             if (id >= ById.Length) Array.Resize(ref ById, Math.Max(id + 1, ById.Length * 2));
@@ -66,6 +121,9 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// A new batch for the key of <paramref name="id"/> (under the ids' lock: workers add ids).
+    /// </summary>
     Batch NewBatch(int id)
     {
         lock (_batchIds)
@@ -75,10 +133,18 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// The batches of the colour and motion views (and of any view not prepared ahead).
+    /// </summary>
     readonly ViewBatches _mainView = new();
 
-    // The shadow cascades' views by cascade index (PrepareDepth).
+    /// <summary>
+    /// The shadow cascades' views by cascade index (<see cref="PrepareDepth"/>).
+    /// </summary>
     ViewBatches?[] _cascadeViews = [];
+    /// <summary>
+    /// The pass being drawn: depth only (shadows, prepass) or motion vectors; neither is the colour pass.
+    /// </summary>
     bool _depthPass, _motionPass;
 
     /// <summary>
@@ -86,12 +152,27 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     struct GatherView
     {
+        /// <summary>
+        /// The view's frustum planes.
+        /// </summary>
         public Vector4[] Frustum;
+        /// <summary>
+        /// The view's shadow LOD floor and the smallest caster radius it draws (0 for a colour view).
+        /// </summary>
         public float LodFloor, MinRadius;
+        /// <summary>
+        /// The batches the view's instances are gathered into.
+        /// </summary>
         public ViewBatches Batches;
     }
 
+    /// <summary>
+    /// Scratch for gathering a single view.
+    /// </summary>
     readonly GatherView[] _oneView = new GatherView[1];
+    /// <summary>
+    /// Scratch for gathering the shadow cascades' views together, grown as needed and cleared after use.
+    /// </summary>
     GatherView[] _depthViews = [];
 
     /// <summary>
@@ -176,6 +257,11 @@ internal sealed unsafe partial class CharacterRenderer
         for (int k = 0; k < views; k++) _depthViews[k] = default;
     }
 
+    /// <summary>
+    /// Draws the characters of one view in the current pass (colour, depth or motion), positions relative to <paramref name="worldView"/>'s eye:
+    /// gathers them unless <paramref name="prepared"/> holds a gathered view, then records one draw per batch (<see cref="RecordDraws"/>). Sets the
+    /// draw statistics.
+    /// </summary>
     void DrawView(in ViewConstants worldView, Vector3 eye, Vector4[] frustum, float lodFloor = 0, float minRadius = 0, ViewBatches? prepared = null,
         Matrix4x4? relative = null, Matrix4x4? previousRelative = null)
     {
@@ -430,6 +516,9 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     struct PartFrame
     {
+        /// <summary>
+        /// The part's model matrix relative to the eye, and last frame's (with motion only).
+        /// </summary>
         public Matrix4x4 Model, PreviousModel;
         /// <summary>
         /// The model's largest axis scale.
@@ -445,9 +534,21 @@ internal sealed unsafe partial class CharacterRenderer
         public bool Shows;
     }
 
+    /// <summary>
+    /// The parts placed this update (by <see cref="Live.PartBase"/>), grown as needed.
+    /// </summary>
     PartFrame[] _partFrames = new PartFrame[1024];
+    /// <summary>
+    /// The update the parts were placed in (-1: never); a view of another update or eye places them itself.
+    /// </summary>
     long _partStamp = -1;
+    /// <summary>
+    /// The eye the parts were placed relative to.
+    /// </summary>
     Vector3 _partOrigin;
+    /// <summary>
+    /// Whether last frame's matrices were placed too.
+    /// </summary>
     bool _partMotion;
 
     /// <summary>
@@ -481,8 +582,17 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     struct Gathered
     {
+        /// <summary>
+        /// The batch's id.
+        /// </summary>
         public int Batch;
+        /// <summary>
+        /// Its place among the batch's instances (set in character order).
+        /// </summary>
         public int Slot;
+        /// <summary>
+        /// The instance row.
+        /// </summary>
         public CharInstance Instance;
     }
 
@@ -491,9 +601,18 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     sealed class Chunk
     {
+        /// <summary>
+        /// The gathered instances (the first <see cref="Count"/>), grown as needed.
+        /// </summary>
         public Gathered[] Items = new Gathered[256];
+        /// <summary>
+        /// How many instances, characters and part instances the chunk gathered.
+        /// </summary>
         public int Count, Characters, Parts;
 
+        /// <summary>
+        /// Appends an instance of batch <paramref name="batch"/> (its slot is set later).
+        /// </summary>
         public void Add(int batch, in CharInstance instance)
         {
             if (Count == Items.Length) Array.Resize(ref Items, Count * 2);
@@ -502,6 +621,9 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// How many characters one chunk gathers.
+    /// </summary>
     const int ChunkCharacters = 16;
     /// <summary>
     /// The mesh levels a part's batch cache holds (<see cref="AssetPart.Batches"/>); deeper ones are looked up.
@@ -715,8 +837,24 @@ internal sealed unsafe partial class CharacterRenderer
         return r;
     }
 
+    /// <summary>
+    /// Each part's native state for the motion program, made on first use.
+    /// </summary>
     readonly Dictionary<GpuObjectPart, MotionHolder> _motionNatives = [];
-    sealed class MotionHolder { public ObjectNativeMesh Native; }
+    /// <summary>
+    /// A box for a part's motion native state, so it can be returned by reference.
+    /// </summary>
+    sealed class MotionHolder
+    {
+        /// <summary>
+        /// The part's native state for the motion program.
+        /// </summary>
+        public ObjectNativeMesh Native;
+    }
+
+    /// <summary>
+    /// The motion program's native state of <paramref name="part"/> by reference, its holder made on first use.
+    /// </summary>
     ref ObjectNativeMesh MotionNative(GpuObjectPart part)
     {
         if (!_motionNatives.TryGetValue(part, out var h)) _motionNatives[part] = h = new MotionHolder();
@@ -759,6 +897,9 @@ internal sealed unsafe partial class CharacterRenderer
         return m;
     }
 
+    /// <summary>
+    /// The pool of draw jobs, each returned after recording.
+    /// </summary>
     readonly JobPool<DrawJob> _drawJobs = new();
 
     /// <summary>
@@ -766,26 +907,78 @@ internal sealed unsafe partial class CharacterRenderer
     /// </summary>
     sealed class DrawJob : RecordJob
     {
+        /// <summary>
+        /// One instanced draw of a batch.
+        /// </summary>
         public struct Draw
         {
+            /// <summary>
+            /// The pipeline it is drawn with.
+            /// </summary>
             public GpuPipeline Pipeline;
+            /// <summary>
+            /// The part's vertex buffers.
+            /// </summary>
             public GpuBufferBinding[] Vertices;
+            /// <summary>
+            /// The index buffer at the level's first index.
+            /// </summary>
             public GpuBufferBinding Elements;
+            /// <summary>
+            /// The level's index count, the batch's instance count and its first instance among the rows.
+            /// </summary>
             public uint IndexCount, Instances, FirstInstance;
+            /// <summary>
+            /// Drawn without back-face culling.
+            /// </summary>
             public bool TwoSided;
         }
 
+        /// <summary>
+        /// The renderer whose pool the job returns to.
+        /// </summary>
         public CharacterRenderer Owner = null!;
+        /// <summary>
+        /// The pass targets (viewport and scissor).
+        /// </summary>
         public PassTargets Targets = null!;
+        /// <summary>
+        /// The pass's depth, bias and raster state.
+        /// </summary>
         public DrawState State = null!;
+        /// <summary>
+        /// The pass's program.
+        /// </summary>
         public GpuProgram Program = default;
+        /// <summary>
+        /// The native frame sets of the segment.
+        /// </summary>
         public FrameBinding Frame;
+        /// <summary>
+        /// The face culling of single-sided draws (none for the depth passes).
+        /// </summary>
         public CullMode Cull;
+        /// <summary>
+        /// The instance row bindings, one per 16-byte column of an instance.
+        /// </summary>
         public readonly GpuBufferBinding[] Rows = new GpuBufferBinding[9];
+        /// <summary>
+        /// How many of <see cref="Rows"/> are bound: 9 for the motion pass (with last frame's), else 5.
+        /// </summary>
         public int RowCount;
+        /// <summary>
+        /// The push constants: the motion depth, the fill light and the skin table.
+        /// </summary>
         public CharacterPush Push;
+        /// <summary>
+        /// The draws (the first <see cref="Count"/>), grown as needed.
+        /// </summary>
         public Draw[] Draws = new Draw[64];
+        /// <summary>
+        /// How many draws are recorded.
+        /// </summary>
         public int Count;
+        /// <inheritdoc/>
         public override int Size => Count;
 
         public override void Record(IGpuCommandList cmd)
@@ -824,6 +1017,9 @@ internal sealed unsafe partial class CharacterRenderer
     }
 }
 
+/// <summary>
+/// Helpers on <see cref="Matrix4x4"/> for the characters' drawing.
+/// </summary>
 static class MatrixExtensions
 {
     /// <summary>

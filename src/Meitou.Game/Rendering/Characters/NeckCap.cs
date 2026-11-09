@@ -182,8 +182,14 @@ internal static class NeckCap
         vertices[centreIndex] = vertices[centreIndex] with { Bones = bones, Weights = new Vector4(wv[0], wv[1], wv[2], wv[3]) };
     }
 
+    /// <summary>
+    /// Whether a body vertex is the head's (<see cref="CharacterContent.HeadBit"/> in its colour's Y, as <c>CharacterContent.MarkBody</c> wrote it).
+    /// </summary>
     static bool IsHead(in Vertex v) => ((int)(v.Colour.Y + 0.5f) & CharacterContent.HeadBit) != 0;
 
+    /// <summary>
+    /// A position rounded to 3 decimals, so vertices split at a UV or normal seam meet as one rim point.
+    /// </summary>
     static Vector3 Round(Vector3 p) => new(MathF.Round(p.X, 3), MathF.Round(p.Y, 3), MathF.Round(p.Z, 3));
 
     /// <summary>

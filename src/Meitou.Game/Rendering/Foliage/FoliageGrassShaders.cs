@@ -29,6 +29,9 @@ public static partial class FoliageGrassShaders
     /// </summary>
     public const int RowShift = 4;
 
+    /// <summary>
+    /// The kernels' shared head: the slot, zone, patch and draw records and the view's, slots', prefixes' and tables' buffers.
+    /// </summary>
     const string Common = """
         #version 450
         layout(local_size_x = 256) in;
@@ -141,16 +144,31 @@ public static partial class FoliageGrassShaders
     /// </summary>
     public const int Binding = 6;
 
+    /// <summary>
+    /// The patch table's declaration in the blade programs (set 0, binding <see cref="Binding"/>).
+    /// </summary>
     const string PatchBlock = """
         struct GrassPatch { vec4 size; vec4 colourBounds; float sway; float range; float frequency; uint flags; uint sprite; uint colourMap; uint nearDepth; uint vertexCount; };
         layout(std430, set = 0, binding = 6) readonly buffer GrassPatches { GrassPatch rows[]; } grassPatches;
 
         """;
 
+    /// <summary>
+    /// The GLSL expression for <paramref name="member"/> of the draw's patch row.
+    /// </summary>
     static string Row(string member) => $"grassPatches.rows[GRASS_ROW].{member}";
+    /// <summary>
+    /// The GLSL test of flag <paramref name="bit"/> in the draw's patch row.
+    /// </summary>
     static string Flag(uint bit) => $"((grassPatches.rows[GRASS_ROW].flags & {bit}u) != 0u)";
+    /// <summary>
+    /// The GLSL texture of the bindless index <paramref name="member"/> of the draw's patch row.
+    /// </summary>
     static string Tex(string member) => $"textures2D[nonuniformEXT(grassPatches.rows[GRASS_ROW].{member})]";
 
+    /// <summary>
+    /// The blade programs' uniforms mapped onto the patch row (<see cref="FoliageShaders.GrassPushMembers"/>'s, read per draw).
+    /// </summary>
     static readonly Dictionary<string, string> Map = new()
     {
         ["uSize"] = Row("size"),
@@ -167,6 +185,9 @@ public static partial class FoliageGrassShaders
         ["uNearDepth"] = Tex("nearDepth"),
     };
 
+    /// <summary>
+    /// The last line of the native prelude, after which the patch block goes.
+    /// </summary>
     const string PreludeEnd = "#define gl_VertexID gl_VertexIndex\n";
 
     /// <summary>
@@ -185,6 +206,9 @@ public static partial class FoliageGrassShaders
         return text.Insert(main.Index + main.Length, "\n    vRow = GRASS_ROW;");
     }
 
+    /// <summary>
+    /// A fragment program ported with the patch row from the vertex stage's flat <c>vRow</c>.
+    /// </summary>
     static string Fragment(string legacy)
     {
         string text = NativeShaders.Port(legacy, NativeShaders.Map(Map), PushMembers);
@@ -193,15 +217,27 @@ public static partial class FoliageGrassShaders
         return text.Replace(PreludeEnd, $"{PreludeEnd}flat in uint vRow;\n#define GRASS_ROW vRow\n{PatchBlock}");
     }
 
+    /// <summary>
+    /// <see cref="FoliageShaders.GrassVertex"/> reading its patch row.
+    /// </summary>
     public static string GrassVertexGpu() => Vertex(FoliageShaders.GrassVertex);
     /// <summary>
     /// The blades' colour program, with the interior cut and the GI resolve's surface output, as <see cref="FoliageShaders.GrassFragmentNative"/>.
     /// </summary>
     public static string GrassFragmentGpu() => Gi.GiResolveShaders.WithAlbedo(Fragment(InteriorMaskRenderer.WithCut(FoliageShaders.GrassFragment)),
         inShader: true);
+    /// <summary>
+    /// <see cref="FoliageShaders.GrassMotionVertex"/> reading its patch row.
+    /// </summary>
     public static string GrassMotionVertexGpu() => Vertex(FoliageShaders.GrassMotionVertex);
+    /// <summary>
+    /// <see cref="FoliageShaders.GrassMotionFragment"/> reading its patch row.
+    /// </summary>
     public static string GrassMotionFragmentGpu() => Fragment(FoliageShaders.GrassMotionFragment);
 
+    /// <summary>
+    /// Matches the opening of <c>main()</c>.
+    /// </summary>
     [GeneratedRegex(@"void\s+main\s*\(\s*\)\s*\{")]
     private static partial Regex MainRegex();
 }
@@ -215,9 +251,18 @@ public static partial class FoliageGrassShaders
 [StructLayout(LayoutKind.Sequential)]
 public struct GrassSlot
 {
+    /// <summary>
+    /// The page's corner (x, z) and the ground height at its centre.
+    /// </summary>
     public float X0, Z0, Y;
+    /// <summary>
+    /// The first blade in the arena, the blade count, the zone, the patch within it and the tie order.
+    /// </summary>
     public uint FirstBlade, Count, Zone, Local, Tie;
 
+    /// <summary>
+    /// The slot's size in bytes.
+    /// </summary>
     public const int Size = 32;
 }
 
@@ -227,6 +272,9 @@ public struct GrassSlot
 [StructLayout(LayoutKind.Sequential)]
 public struct GrassZoneRow
 {
+    /// <summary>
+    /// The zone's first row and patch count.
+    /// </summary>
     public uint PatchBase, PatchCount;
 }
 
@@ -238,9 +286,21 @@ public struct GrassZoneRow
 [StructLayout(LayoutKind.Sequential)]
 public struct GrassPatchRow
 {
+    /// <summary>
+    /// As <see cref="GrassPush.Size"/> and <see cref="GrassPush.ColourBounds"/>.
+    /// </summary>
     public Vector4 Size, ColourBounds;
+    /// <summary>
+    /// As <see cref="GrassPush.Sway"/>, <see cref="GrassPush.Range"/> and <see cref="GrassPush.Frequency"/>.
+    /// </summary>
     public float Sway, Range, Frequency;
+    /// <summary>
+    /// The flags, the sprite's, colour map's and near depth's bindless indices, and the vertices per blade (12 for crossed quads, else 6).
+    /// </summary>
     public uint Flags, Sprite, ColourMap, NearDepth, VertexCount;
 
+    /// <summary>
+    /// The row's size in bytes.
+    /// </summary>
     public const int Size64 = 64;
 }

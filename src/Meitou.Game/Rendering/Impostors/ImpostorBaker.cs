@@ -20,12 +20,21 @@ namespace Meitou.Game.Rendering.Impostors;
 /// </summary>
 public sealed class ImpostorMeshes
 {
+    /// <summary>
+    /// The main mesh, decoded.
+    /// </summary>
     public required Model Main { get; init; }
+    /// <summary>
+    /// The leaves mesh, decoded (null: none).
+    /// </summary>
     public Model? Leaves { get; init; }
     /// <summary>
     /// The bounding sphere in object space: the bounding box's centre and the farthest vertex from it.
     /// </summary>
     public required Vector3 Centre { get; init; }
+    /// <summary>
+    /// The bounding sphere's radius (see <see cref="Centre"/>), grown by 1 % and at least 0.001.
+    /// </summary>
     public required float Radius { get; init; }
 
     /// <summary>
@@ -144,6 +153,9 @@ public sealed class ImpostorMeshes
 /// </summary>
 public readonly record struct ImpostorBakeTimes(double Upload, double Render, double Filter, double Encode)
 {
+    /// <summary>
+    /// The four steps summed, in milliseconds.
+    /// </summary>
     public double Total => Upload + Render + Filter + Encode;
 }
 
@@ -160,13 +172,34 @@ public sealed unsafe class ImpostorBaker : IDisposable
 {
     #region Baking
 
+    /// <summary>
+    /// The device the bake renders on.
+    /// </summary>
     readonly IGpuContext _gpu;
+    /// <summary>
+    /// The cache the materials' textures come from (the baker's own or the foliage's).
+    /// </summary>
     readonly WorldTextureCache _textures;
+    /// <summary>
+    /// Whether <see cref="_textures"/> is the baker's own, freed with it.
+    /// </summary>
     readonly bool _ownsTextures;
+    /// <summary>
+    /// The native sets the bake program is made with (one extra storage buffer).
+    /// </summary>
     readonly NativeFrame _frame;
+    /// <summary>
+    /// The bake program (<see cref="ImpostorShaders.BakeVertexNative"/>, <see cref="ImpostorShaders.BakeFragmentNative"/>).
+    /// </summary>
     readonly NativeProg _program;
+    /// <summary>
+    /// The stand-in texture's bindless index (<see cref="StandIn"/>; 0: not made yet).
+    /// </summary>
     uint _standIn;
 
+    /// <summary>
+    /// A baker with its own world texture cache over <paramref name="assets"/> (never trimmed while it lives).
+    /// </summary>
     /// <param name="assets">Where texture names are looked up; null only when no source names a texture (tests).</param>
     public ImpostorBaker(IGpuContext gpu, AssetLocator? assets)
         : this(gpu, new WorldTextureCache(gpu, assets!, "impostor textures") { IdleSeconds = double.MaxValue, HighWaterMb = double.MaxValue },
@@ -181,6 +214,9 @@ public sealed unsafe class ImpostorBaker : IDisposable
     {
     }
 
+    /// <summary>
+    /// Makes the native sets and the bake program; <paramref name="owns"/>: <paramref name="textures"/> is freed with the baker.
+    /// </summary>
     ImpostorBaker(IGpuContext gpu, WorldTextureCache textures, bool owns)
     {
         this._gpu = gpu;
@@ -196,9 +232,21 @@ public sealed unsafe class ImpostorBaker : IDisposable
     /// </summary>
     public TerrainRenderer? RockTerrain { get; set; }
 
+    /// <summary>
+    /// Problems met loading the materials' textures.
+    /// </summary>
     public List<string> Messages => _textures.Messages;
+    /// <summary>
+    /// The texture cache the materials resolve through.
+    /// </summary>
     internal WorldTextureCache Textures => _textures;
+    /// <summary>
+    /// The device the bake renders on.
+    /// </summary>
     internal IGpuContext Gpu => _gpu;
+    /// <summary>
+    /// How long the last finished bake took, by step (set by its job).
+    /// </summary>
     public ImpostorBakeTimes LastTimes { get; internal set; }
     /// <summary>
     /// Encode the maps (BC3 / BC5); false keeps them RGBA8 (debugging).
@@ -249,21 +297,48 @@ public sealed unsafe class ImpostorBaker : IDisposable
 
     #region Recording (ImpostorBakeJob)
 
+    /// <summary>
+    /// One mesh part uploaded for the bake: its buffers, vertex bindings and layout for the program.
+    /// </summary>
     internal struct Part
     {
+        /// <summary>
+        /// The part's vertex and index buffers.
+        /// </summary>
         public DeviceBuffer Vertices, Indices;
+        /// <summary>
+        /// The vertex buffer bindings for the program's layout.
+        /// </summary>
         public GpuBufferBinding[] Bindings;
+        /// <summary>
+        /// The program's vertex layout with the instance rows.
+        /// </summary>
         public VertexLayout Layout;
+        /// <summary>
+        /// The part's index count.
+        /// </summary>
         public int Count;
+        /// <summary>
+        /// Whether the mesh has vertex colours.
+        /// </summary>
         public bool HasColours;
     }
 
+    /// <summary>
+    /// A mesh's textures, resolved through the cache, and its settings.
+    /// </summary>
     internal sealed record Material(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2,
         ImpostorMaterial Settings)
     {
+        /// <summary>
+        /// The four textures (null for those not named).
+        /// </summary>
         public IEnumerable<WorldTexture?> All => [Diffuse, Normal, Diffuse2, Normal2];
     }
 
+    /// <summary>
+    /// <paramref name="m"/>'s textures from the cache (loaded unless deferred: <see cref="WorldTextureCache.Get"/>).
+    /// </summary>
     internal Material Resolve(ImpostorMaterial m) =>
         new(_textures.Get(m.Diffuse, false), _textures.Get(m.Normal, false), _textures.Get(m.Diffuse2, false), _textures.Get(m.Normal2, false), m);
 
@@ -315,6 +390,9 @@ public sealed unsafe class ImpostorBaker : IDisposable
         return [.. parts];
     }
 
+    /// <summary>
+    /// The bake's draw state: back faces culled, depth tested and written, no blending.
+    /// </summary>
     static readonly DrawState BakeState = new(CullMode.Back, FrontFaceDirection.Ccw, true, true, DepthFunction.Less, false, 0, 0, BlendState.Off,
         ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A, PolygonKind.Fill, false, false);
 
@@ -329,6 +407,9 @@ public sealed unsafe class ImpostorBaker : IDisposable
         return _standIn;
     }
 
+    /// <summary>
+    /// Whether the frame globals have been evaluated for this run (see <see cref="PrepareFrameGlobals"/>).
+    /// </summary>
     bool _globalsPrepared;
 
     /// <summary>
@@ -474,8 +555,14 @@ public sealed unsafe class ImpostorBaker : IDisposable
 
     // A row's three pictures, reused from row to row and bake to bake (render thread, except ReturnReadback).
 
+    /// <summary>
+    /// The idle readback buffers by size.
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, System.Collections.Concurrent.ConcurrentBag<IGpuReadback>> _readbacks = new();
 
+    /// <summary>
+    /// An idle readback buffer of <paramref name="size"/> bytes, or a new one.
+    /// </summary>
     internal IGpuReadback RentReadback(ulong size)
     {
         var bag = _readbacks.GetOrAdd(size, _ => new());
@@ -501,6 +588,9 @@ public sealed unsafe class ImpostorBaker : IDisposable
     /// </summary>
     const int KeptTargetSets = 3;
 
+    /// <summary>
+    /// The idle target sets by (grid, frame): the double-size picture, its depth and the halved picture.
+    /// </summary>
     readonly List<((int Grid, int Frame) Key, GpuTexture Large, GpuTexture Depth, GpuTexture Small)> _targets = [];
 
     /// <summary>
@@ -588,24 +678,78 @@ public sealed unsafe class ImpostorBaker : IDisposable
 /// </summary>
 public sealed class ImpostorBakeJob : IDisposable
 {
+    /// <summary>
+    /// The baker that records the rows.
+    /// </summary>
     readonly ImpostorBaker _baker;
+    /// <summary>
+    /// What is being baked.
+    /// </summary>
     readonly ImpostorSource _source;
+    /// <summary>
+    /// The source's decoded meshes.
+    /// </summary>
     readonly ImpostorMeshes _meshes;
+    /// <summary>
+    /// The size class baked at.
+    /// </summary>
     readonly ImpostorClass _size;
+    /// <summary>
+    /// The main mesh's material.
+    /// </summary>
     readonly ImpostorBaker.Material _main;
+    /// <summary>
+    /// The leaves mesh's material (null: none).
+    /// </summary>
     readonly ImpostorBaker.Material? _leaves;
+    /// <summary>
+    /// The CPU filtering and encoding of the rows.
+    /// </summary>
     readonly ImpostorAssembler _assembler;
+    /// <summary>
+    /// The bake's wall clock, for the step times.
+    /// </summary>
     readonly Stopwatch _watch = Stopwatch.StartNew();
+    /// <summary>
+    /// The meshes' uploaded parts (empty before <see cref="Step"/> starts the bake).
+    /// </summary>
     ImpostorBaker.Part[] _mainParts = [], _leavesParts = [];
+    /// <summary>
+    /// The target set: the double-size picture, its depth and the halved picture (null before the start and after release).
+    /// </summary>
     GpuTexture? _large, _depth, _small;
+    /// <summary>
+    /// The rows recorded and not yet read back, with their GPU frame and readback buffer.
+    /// </summary>
     readonly List<(int Row, long Frame, IGpuReadback Buffer)> _rows = [];
+    /// <summary>
+    /// How many rows are recorded, and how many have been handed to the assembler.
+    /// </summary>
     int _recorded, _assembled;
+    /// <summary>
+    /// The last row's filtering on a worker; each row's waits for the one before.
+    /// </summary>
     Task? _chain;
+    /// <summary>
+    /// The encoding of the atlas on a worker, once every row is assembled.
+    /// </summary>
     Task<ImpostorAtlas>? _finish;
+    /// <summary>
+    /// Time spent uploading, recording, filtering and encoding, in milliseconds (<see cref="ImpostorBakeTimes"/>).
+    /// </summary>
     double _upload, _render, _filter, _encode;
+    /// <summary>
+    /// <c>_started</c>: the meshes are uploaded and the targets made; <c>_disposed</c>: the job is disposed.
+    /// </summary>
     bool _started, _disposed;
+    /// <summary>
+    /// <see cref="Environment.TickCount64"/> since a rock has waited for its biome to be resident (0: not waiting); it gives up after 3 s.
+    /// </summary>
     long _rockWaitSince;
 
+    /// <summary>
+    /// A job for <paramref name="source"/> at <paramref name="size"/>: resolves the materials and makes the assembler.
+    /// </summary>
     internal ImpostorBakeJob(ImpostorBaker baker, ImpostorSource source, ImpostorMeshes meshes, ImpostorClass size)
     {
         (this._baker, this._source, this._meshes, this._size) = (baker, source, meshes, size);
@@ -619,13 +763,22 @@ public sealed class ImpostorBakeJob : IDisposable
     /// The texture LOD bias the bake draws with (<see cref="ImpostorClass.LodBias"/>).
     /// </summary>
     public float LodBias => _lodBias;
+    /// <summary>
+    /// Backing field of <see cref="LodBias"/>.
+    /// </summary>
     readonly float _lodBias;
 
     /// <summary>
     /// Rows recorded per <see cref="Step"/> (frame): 1 in the viewer (a few milliseconds of GPU time a frame), all of them offline.
     /// </summary>
     public int RowsPerStep { get; set; } = 1;
+    /// <summary>
+    /// What is being baked.
+    /// </summary>
     public ImpostorSource Source => _source;
+    /// <summary>
+    /// The size class baked at.
+    /// </summary>
     public ImpostorClass Size => _size;
     /// <summary>
     /// The atlas, once <see cref="Step"/> returned true.
@@ -867,6 +1020,9 @@ public sealed class ImpostorBakeJob : IDisposable
         (_large, _depth, _small) = (null, null, null);
     }
 
+    /// <summary>
+    /// Releases the targets and the pending readbacks, then waits for the workers.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;

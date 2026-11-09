@@ -40,10 +40,23 @@ public sealed class ImpostorCache
     /// </summary>
     const int SavesPerPass = 16;
 
+    /// <summary>
+    /// Serialises <see cref="Maintain"/>, <see cref="Measure"/> and <see cref="Clear"/>.
+    /// </summary>
     readonly object _gate = new();
+    /// <summary>
+    /// Saves so far; every <see cref="SavesPerPass"/>th starts a maintenance pass.
+    /// </summary>
     int _saves;
+    /// <summary>
+    /// 1 while a background maintenance pass runs, so no second one starts.
+    /// </summary>
     int _running;
 
+    /// <summary>
+    /// A cache in <paramref name="root"/> (null: <c>MEITOU_IMPOSTOR_CACHE</c>, else the local application data folder) capped at
+    /// <paramref name="maxBytes"/> (null: <see cref="DefaultMaxBytes"/>).
+    /// </summary>
     public ImpostorCache(string? root = null, long? maxBytes = null)
     {
         Root = root ?? Environment.GetEnvironmentVariable("MEITOU_IMPOSTOR_CACHE")
@@ -51,6 +64,9 @@ public sealed class ImpostorCache
         MaxBytes = maxBytes ?? DefaultMaxBytes;
     }
 
+    /// <summary>
+    /// The folder the atlas files are in.
+    /// </summary>
     public string Root { get; }
 
     /// <summary>
@@ -59,6 +75,10 @@ public sealed class ImpostorCache
     /// </summary>
     public long MaxBytes { get; set; }
 
+    /// <summary>
+    /// The file of <paramref name="source"/>'s atlas: its name (letters, digits, <c>-</c> and <c>_</c>, at most 40) and the first 24 characters of
+    /// its key.
+    /// </summary>
     public string PathFor(ImpostorSource source)
     {
         var name = new string(source.Name.Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
@@ -94,6 +114,10 @@ public sealed class ImpostorCache
         return atlas;
     }
 
+    /// <summary>
+    /// Writes <paramref name="atlas"/> as <paramref name="source"/>'s file (to a temporary name, then moved into place) and every
+    /// <see cref="SavesPerPass"/> saves starts a maintenance pass.
+    /// </summary>
     public void Save(ImpostorSource source, ImpostorAtlas atlas)
     {
         var path = PathFor(source);
@@ -106,6 +130,9 @@ public sealed class ImpostorCache
         if (Interlocked.Increment(ref _saves) % SavesPerPass == 0) MaintainInBackground();
     }
 
+    /// <summary>
+    /// Marks a file used now (its last write time); a file it cannot touch is left as it is.
+    /// </summary>
     static void Touch(string path)
     {
         try
@@ -273,6 +300,9 @@ public sealed class ImpostorCache
         }
     }
 
+    /// <summary>
+    /// Deletes a file; false when it is held or not allowed.
+    /// </summary>
     static bool Delete(FileInfo info)
     {
         try
