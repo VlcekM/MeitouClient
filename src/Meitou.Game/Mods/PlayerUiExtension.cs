@@ -27,7 +27,7 @@ sealed class PlayerUiExtension(Action<string, string> command) : IUiExtension
         {
             "inventory", "stats", "squad", "stop", "medic", "rescue", "member", "context", "extendedstats", "floor-up", "floor-down", "build",
             "job-remove", "prospect", "building-buy", "building-dismantle", "building-pause", "building-doors", "building-locks", "building-public",
-            "building-upgrade", "building-downgrade", "machine-power", "machine-battery", "tutorial",
+            "building-upgrade", "building-downgrade", "machine-power", "machine-battery", "tutorial", "help",
         };
         foreach (string name in names)
             r.RegisterAction(name, c => command(name, c.Argument));
