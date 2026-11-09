@@ -624,7 +624,7 @@ Keep `RecordsSecondaries` false: Metal records inline into one list.
    (`uFogVolumeData`, `uFogVolumeEye` and `uFogVolumeInfo` are published by `FogVolumes`). SSAO, FXAA, the heat haze
    and the light shafts (`LightShaftShaders` inject/integrate/scatter/apply) run there too. The shafts use the
    fragment integrate/scatter path; the compute scan is Vulkan-only. Still to do: the fog-rate target
-   (`PostProcess.FogRate`), which the shafts and the volumetric fog read. Metal has no fragment-shading-rate
+   (`FogRateImage`), which the shafts and the volumetric fog read. Metal has no fragment-shading-rate
    attachment, so the FogRate path stays Vulkan-only unless a non-VRS fallback is added.
 3. **The HiZ pyramid and the GPU culls** (`HizPyramid`, `FoliageGpuCull`, `FoliageGrassGpu`): `FoliageGpuCull`
    now works on Metal through `IGpuContext`, argument buffers and a separate pre-frame command buffer, and is live

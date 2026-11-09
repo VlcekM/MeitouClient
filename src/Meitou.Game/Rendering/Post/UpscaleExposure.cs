@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
 using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
+using Target2D = Meitou.Game.Rendering.Post.PostProcess.Target2D;
 
 namespace Meitou.Game.Rendering.Post;
 
@@ -10,17 +11,33 @@ namespace Meitou.Game.Rendering.Post;
 /// ahead of the upscaler. The adaptation runs after the upscaler, so it is last frame's adapted luminance (it moves at 0.5 / s); DLSS's own measure
 /// is the fallback.
 /// </summary>
-public sealed unsafe partial class PostProcess
+sealed unsafe class UpscaleExposure(PostProcess post)
 {
+    #region Exposure
+
     /// <summary>
     /// The composite's key over the adapted luminance (hdr.material's EXPOSURE_KEY, PostProcessShaders.Composite).
     /// </summary>
     const float ExposureKey = 0.55f;
 
+    /// <summary>
+    /// The 1 x 1 exposure (made with the first write).
+    /// </summary>
     Target2D? _upscaleExposure;
+
+    /// <summary>
+    /// The kernel's program (made with the first write).
+    /// </summary>
     GpuProgram? _upscaleExposureProgram;
+
+    /// <summary>
+    /// The kernel's pipeline (made with the first write).
+    /// </summary>
     GpuComputePipeline? _upscaleExposurePipeline;
 
+    /// <summary>
+    /// The kernel's push constants: the user's exposure, the key and whether the adaptation is on.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct UpscaleExposurePush
     {
@@ -28,30 +45,30 @@ public sealed unsafe partial class PostProcess
     }
 
     /// <summary>
-    /// The 1 x 1 exposure for the vendor upscaler, written in this frame's post segment; null where R32F cannot be a storage image (DLSS then
-    /// measures its own).
+    /// The 1 x 1 exposure for the vendor upscaler from the adapted luminance <paramref name="adapted"/> (<paramref name="auto"/>: the adaptation is
+    /// on and valid), written in this frame's post segment; null where R32F cannot be a storage image (DLSS then measures its own) or before the
+    /// adaptation target exists.
     /// </summary>
-    Target2D? WriteUpscaleExposure()
+    public Target2D? Write(Target2D? adapted, bool auto)
     {
-        if (!SupportsStorage(InternalFormat.R32F) || _adaptB is null) return null;
+        if (!post.SupportsStorage(InternalFormat.R32F) || adapted is null) return null;
         if (_upscaleExposure is null)
         {
-            using var batch = Gpu.Uploads.Begin();
-            _upscaleExposure = Make(batch, 1, 1, InternalFormat.R32F, TextureMinFilter.Nearest, "post upscale exposure");
+            using var batch = post.Gpu.Uploads.Begin();
+            _upscaleExposure = post.Make(batch, 1, 1, InternalFormat.R32F, TextureMinFilter.Nearest, "post upscale exposure");
         }
         if (_upscaleExposureProgram is null)
         {
-            _upscaleExposureProgram = Gpu.Shaders.Compute(UpscaleExposureShader, "post upscale exposure");
-            _upscaleExposurePipeline = Gpu.Pipelines.Get(new ComputePipelineDesc(_upscaleExposureProgram!.Value, "post upscale exposure"));
+            _upscaleExposureProgram = post.Gpu.Shaders.Compute(UpscaleExposureShader, "post upscale exposure");
+            _upscaleExposurePipeline = post.Gpu.Pipelines.Get(new ComputePipelineDesc(_upscaleExposureProgram!.Value, "post upscale exposure"));
         }
 
-        var cmd = Segment();
-        var adapted = Sampled(_adaptB);
+        var cmd = post.Segment();
+        var sampled = post.Sampled(adapted);
         var bindings = stackalloc GpuBinding[2];
-        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(Point(), adapted.View));
+        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(post.Point(), sampled.View));
         bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, _upscaleExposure.Texture.View()));
-        bool auto = AutoExposure is not null && _adaptedValid;
-        var push = new UpscaleExposurePush { Exposure = Options.Exposure, Key = ExposureKey, Auto = auto ? 1 : 0 };
+        var push = new UpscaleExposurePush { Exposure = post.Options.Exposure, Key = ExposureKey, Auto = auto ? 1 : 0 };
         cmd.Order();
         cmd.BindPipeline(_upscaleExposurePipeline!.Value);
         cmd.BindProgramResources(_upscaleExposureProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 2));
@@ -61,13 +78,27 @@ public sealed unsafe partial class PostProcess
         return _upscaleExposure;
     }
 
-    void DisposeUpscaleExposure()
+    #endregion
+
+    #region Lifetime
+
+    /// <summary>
+    /// Disposes the target and the program.
+    /// </summary>
+    public void Dispose()
     {
         _upscaleExposure?.Texture.Dispose();
         _upscaleExposure = null;
-        if (_upscaleExposureProgram is { } p) Gpu.Shaders.Dispose(p);
+        if (_upscaleExposureProgram is { } p) post.Gpu.Shaders.Dispose(p);
     }
 
+    #endregion
+
+    #region Shader
+
+    /// <summary>
+    /// The kernel: the user's exposure, times the key over the adapted luminance when the adaptation is on.
+    /// </summary>
     const string UpscaleExposureShader = """
         #version 450
         layout(local_size_x = 1) in;
@@ -82,4 +113,6 @@ public sealed unsafe partial class PostProcess
             imageStore(uExposure, ivec2(0), vec4(e));
         }
         """;
+
+    #endregion
 }

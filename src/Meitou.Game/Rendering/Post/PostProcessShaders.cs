@@ -580,7 +580,7 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The low-resolution particles over the vendor upscaler's output (<c>PostProcess.CompositeLateParticlesFiltered</c>): both sizes (uHas: their
+    /// The low-resolution particles over the vendor upscaler's output (<c>LateParticles.CompositeFiltered</c>): both sizes (uHas: their
     /// divisors, 0 for none; each as <see cref="ParticleUpsample"/>, the quarter size over the half), at the surfaces of the four render pixels round
     /// the display pixel (the jitter undone: render pixel i shows the unjittered picture at i + 0.5 - jitter), weighted bilinearly; then the temporal
     /// filter: last frame's (uHistory, reprojected by the closest of the four's motion) kept within the four values and blended in. Off an outline

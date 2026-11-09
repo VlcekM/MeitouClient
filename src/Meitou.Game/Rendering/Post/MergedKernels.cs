@@ -2,9 +2,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
-using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
-using Vk = Silk.NET.Vulkan;
-
+using Target2D = Meitou.Game.Rendering.Post.PostProcess.Target2D;
 
 namespace Meitou.Game.Rendering.Post;
 
@@ -13,43 +11,26 @@ namespace Meitou.Game.Rendering.Post;
 /// colour and write a small target are each a render pass with its own barrier; compute kernels do several of them in one dispatch. The velocity
 /// kernel makes the motion, the upscalers' depth and the water's reactivity in one pass over the depth buffers (three full-screen passes before), the
 /// exposure kernel measures the luminance, reduces it and adapts in one dispatch (a 256 x 256 pass, eight mip blits with their barriers and the
-/// adaptation pass before). Both are on the same arithmetic as the passes they replace.
+/// adaptation pass before). Both are on the same arithmetic as the passes they replace. <see cref="PostProcess"/> keeps the switches and decides
+/// when they run; this keeps the kernels' programs and the exposure's state.
 /// </summary>
-public sealed unsafe partial class PostProcess
+sealed unsafe class MergedKernels(PostProcess post)
 {
-    /// <summary>
-    /// The merged velocity and exposure kernels (Meitou default); off runs the separate full-screen passes (<c>--ab post-merge</c>).
-    /// </summary>
-    public bool MergePasses
-    {
-        get => MergeVelocity && MergeExposure;
-        set => MergeVelocity = MergeExposure = value;
-    }
-    /// <summary>
-    /// The velocity kernel alone.
-    /// </summary>
-    public bool MergeVelocity { get; set; } = true;
-    /// <summary>
-    /// The exposure kernel alone.
-    /// </summary>
-    public bool MergeExposure { get; set; } = true;
-
-    GpuProgram? _velocityProgram, _exposureProgram;
-    GpuComputePipeline? _velocityPipeline, _exposurePipeline;
-    DeviceBuffer? _exposureState;
-    bool _exposureStateZeroed;
-    GpuSampler _pointSampler;
-
-    internal GpuSampler Point() => _pointSampler.Index != 0
-        ? _pointSampler
-        : _pointSampler = Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
+    #region Velocity
 
     /// <summary>
-    /// Whether the kernels can run: they write storage images (the formats of the motion, depth, reactivity and adaptation targets).
+    /// The velocity kernel's program (made with its first run).
     /// </summary>
-    public bool MergeSupported => SupportsStorage(InternalFormat.Rgba16F) && SupportsStorage(InternalFormat.R32F) && SupportsStorage(InternalFormat.Rg32F);
+    GpuProgram? _velocityProgram;
 
+    /// <summary>
+    /// The velocity kernel's pipeline (made with its first run).
+    /// </summary>
+    GpuComputePipeline? _velocityPipeline;
+
+    /// <summary>
+    /// The velocity kernel's parameters (a storage buffer in the frame's constants).
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct VelocityParams
     {
@@ -67,52 +48,81 @@ public sealed unsafe partial class PostProcess
 
     /// <summary>
     /// The motion target (RG motion, B the upscalers' depth, A the reactivity), and where asked the upscalers' depth image and the reactivity image,
-    /// in one pass over the depth buffers: <see cref="Velocity"/> with its three modes in one dispatch. <paramref name="depthOut"/> and
+    /// in one pass over the depth buffers: <see cref="MergedShaders.Velocity"/> with its three modes in one dispatch. <paramref name="depthOut"/> and
     /// <paramref name="reactiveOut"/> may be null. With
     /// <paramref name="cleanColour"/> the scene colour's NaN and Inf become 0 in place, for the vendor upscalers (TAA cleans its own taps; FSR keeps
     /// a NaN in its history).
     /// </summary>
-    void VelocityMerged(Target2D motionOut, Target2D? depthOut, Target2D? reactiveOut, bool cleanColour = false)
+    public void Velocity(Target2D motionOut, Target2D? depthOut, Target2D? reactiveOut, bool cleanColour = false)
     {
         if (_velocityProgram is null)
         {
-            _velocityProgram = Gpu.Shaders.Compute(MergedShaders.Velocity, "post velocity merged");
-            _velocityPipeline = Gpu.Pipelines.Get(new ComputePipelineDesc(_velocityProgram!.Value, "post velocity merged"));
+            _velocityProgram = post.Gpu.Shaders.Compute(MergedShaders.Velocity, "post velocity merged");
+            _velocityPipeline = post.Gpu.Pipelines.Get(new ComputePipelineDesc(_velocityProgram!.Value, "post velocity merged"));
         }
-        float tanY = MathF.Tan(_fovNow * 0.5f);
-        var r = _viewRotation;
+        float tanY = MathF.Tan(post.FovNow * 0.5f);
+        var (planes, jitter, sunMotion) = (post.Planes, post.JitterPixels, post.SunMotionNow);
+        var (width, height) = (post.RenderWidth, post.RenderHeight);
+        var r = post.ViewRotation;
         var p = new VelocityParams
         {
-            ToPrev = _toPrevious,
-            Planes = new Vector4(_planes.X, _planes.Y, 0, 0),
-            Full = new Vector4(UpscaleNear, UpscaleFar, 2 * JitterPixels.X / _width, 2 * JitterPixels.Y / _height),
-            TanEye = new Vector4(ViewWindow.Tan(tanY * _aspectNow, tanY), _eyeNow.Y, WaterHeight ?? float.MinValue),
-            Right = new Vector4(r.M11, r.M21, r.M31, WaterReactive),
+            ToPrev = post.PreviousReprojection,
+            Planes = new Vector4(planes.X, planes.Y, 0, 0),
+            Full = new Vector4(PostProcess.UpscaleNear, PostProcess.UpscaleFar, 2 * jitter.X / width, 2 * jitter.Y / height),
+            TanEye = new Vector4(ViewWindow.Tan(tanY * post.AspectNow, tanY), post.EyeNow.Y, post.WaterHeight ?? float.MinValue),
+            Right = new Vector4(r.M11, r.M21, r.M31, PostProcess.WaterReactive),
             Up = new Vector4(r.M12, r.M22, r.M32, 0),
-            Back = new Vector4(ViewWindow.BackFor(r, _fovNow, _aspectNow),
+            Back = new Vector4(ViewWindow.BackFor(r, post.FovNow, post.AspectNow),
                     (depthOut is not null ? 1 : 0) | (reactiveOut is not null ? 2 : 0) | (cleanColour ? 4 : 0)),
-            Sun = _sunMotion.Sun,
-            SunMotion = _sunMotion.Motion,
+            Sun = sunMotion.Sun,
+            SunMotion = sunMotion.Motion,
         };
-        var data = Gpu.Frame.Constants.Write(new ReadOnlySpan<VelocityParams>(in p), 256);
-        var cmd = Segment();
-        var depth = Sampled(_sceneDepth!);
+        var data = post.Gpu.Frame.Constants.Write(new ReadOnlySpan<VelocityParams>(in p), 256);
+        var cmd = post.Segment();
+        var depth = post.Sampled(post.SceneDepthTarget!);
         var bindings = stackalloc GpuBinding[6];
-        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(Point(), depth.View));
+        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(post.Point(), depth.View));
         bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, motionOut.Texture.View()));
         bindings[2] = GpuBinding.StorageImage(2, new SampledTexture(default, (depthOut ?? motionOut).Texture.View()));
         bindings[3] = GpuBinding.StorageImage(3, new SampledTexture(default, (reactiveOut ?? motionOut).Texture.View()));
         bindings[4] = GpuBinding.Storage(4, new GpuBufferBinding(data.Handle, data.Offset, (ulong)sizeof(VelocityParams)));
-        bindings[5] = GpuBinding.StorageImage(5, new SampledTexture(default, (cleanColour ? _sceneColour! : motionOut).Texture.View()));
+        bindings[5] = GpuBinding.StorageImage(5, new SampledTexture(default, (cleanColour ? post.SceneColourTarget! : motionOut).Texture.View()));
         cmd.Order();
         cmd.BindPipeline(_velocityPipeline!.Value);
         cmd.BindProgramResources(_velocityProgram!.Value, 0, new ReadOnlySpan<GpuBinding>(bindings, 6));
-        var size = new Vector2(_width, _height);
+        var size = new Vector2(width, height);
         cmd.PushConstants(_velocityProgram!.Value, GpuStage.Compute, in size);
-        cmd.Dispatch((uint)((_width + 15) / 16), (uint)((_height + 15) / 16));
+        cmd.Dispatch((uint)((width + 15) / 16), (uint)((height + 15) / 16));
         cmd.Order();
     }
 
+    #endregion
+
+    #region Exposure
+
+    /// <summary>
+    /// The exposure kernel's program (made with its first run).
+    /// </summary>
+    GpuProgram? _exposureProgram;
+
+    /// <summary>
+    /// The exposure kernel's pipeline (made with its first run).
+    /// </summary>
+    GpuComputePipeline? _exposurePipeline;
+
+    /// <summary>
+    /// The kernel's state across its workgroups (cleared once, then kept by the kernel).
+    /// </summary>
+    DeviceBuffer? _exposureState;
+
+    /// <summary>
+    /// Whether <see cref="_exposureState"/> was cleared.
+    /// </summary>
+    bool _exposureStateZeroed;
+
+    /// <summary>
+    /// The exposure kernel's push constants: the adaptation's blend and the band it is clamped to.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct ExposurePush
     {
@@ -120,29 +130,30 @@ public sealed unsafe partial class PostProcess
     }
 
     /// <summary>
-    /// The game's exposure measure and adaptation in one dispatch: <see cref="RunExposure"/>'s luminance pass, mip chain and adaptation pass. 256
+    /// The game's exposure measure and adaptation in one dispatch: the post chain's luminance pass, mip chain and adaptation pass. 256
     /// workgroups of 16 x 16 make one cell of the 256 x 256 luminance each (the same 16 taps), reduce their tile by the mip chain's 2 x 2 means, and
-    /// the last to finish reduces the 256 tiles and adapts.
+    /// the last to finish reduces the 256 tiles and adapts. <paramref name="scene"/>: the picture measured; <paramref name="adaptA"/>: last
+    /// frame's adaptation, <paramref name="adaptB"/>: this frame's.
     /// </summary>
-    void ExposureMerged(float blend, (float Min, float Max) band)
+    public void Exposure(float blend, (float Min, float Max) band, Target2D scene, Target2D adaptA, Target2D adaptB)
     {
         if (_exposureProgram is null)
         {
-            _exposureProgram = Gpu.Shaders.Compute(MergedShaders.Exposure, "post exposure merged");
-            _exposurePipeline = Gpu.Pipelines.Get(new ComputePipelineDesc(_exposureProgram!.Value, "post exposure merged"));
+            _exposureProgram = post.Gpu.Shaders.Compute(MergedShaders.Exposure, "post exposure merged");
+            _exposurePipeline = post.Gpu.Pipelines.Get(new ComputePipelineDesc(_exposureProgram!.Value, "post exposure merged"));
         }
-        _exposureState ??= DeviceBuffer.Create(Gpu, 16 + 256 * 4, BufferUse.Storage | BufferUse.TransferDst, "post exposure state");
-        var cmd = Segment();
+        _exposureState ??= DeviceBuffer.Create(post.Gpu, 16 + 256 * 4, BufferUse.Storage | BufferUse.TransferDst, "post exposure state");
+        var cmd = post.Segment();
         if (!_exposureStateZeroed)
         {
             cmd.FillBuffer(_exposureState.Handle, 0, _exposureState.Size, 0);
             _exposureStateZeroed = true;
         }
-        var scene = Sampled(_postColour);
+        var sampled = post.Sampled(scene);
         var bindings = stackalloc GpuBinding[4];
-        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(scene.Sampler, scene.View));
-        bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, _adaptA!.Texture.View()));
-        bindings[2] = GpuBinding.StorageImage(2, new SampledTexture(default, _adaptB!.Texture.View()));
+        bindings[0] = GpuBinding.Sampled(0, new SampledTexture(sampled.Sampler, sampled.View));
+        bindings[1] = GpuBinding.StorageImage(1, new SampledTexture(default, adaptA.Texture.View()));
+        bindings[2] = GpuBinding.StorageImage(2, new SampledTexture(default, adaptB.Texture.View()));
         bindings[3] = GpuBinding.Storage(3, new GpuBufferBinding(_exposureState.Handle, 0, _exposureState.Size));
         cmd.Order();
         cmd.BindPipeline(_exposurePipeline!.Value);
@@ -153,12 +164,21 @@ public sealed unsafe partial class PostProcess
         cmd.Order();
     }
 
-    void DisposeMerged()
+    #endregion
+
+    #region Lifetime
+
+    /// <summary>
+    /// Disposes the exposure state and the programs.
+    /// </summary>
+    public void Dispose()
     {
         _exposureState?.Dispose();
-        if (_velocityProgram is { } vp) Gpu.Shaders.Dispose(vp);
-        if (_exposureProgram is { } ep) Gpu.Shaders.Dispose(ep);
+        if (_velocityProgram is { } vp) post.Gpu.Shaders.Dispose(vp);
+        if (_exposureProgram is { } ep) post.Gpu.Shaders.Dispose(ep);
     }
+
+    #endregion
 }
 
 /// <summary>

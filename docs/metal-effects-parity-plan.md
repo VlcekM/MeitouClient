@@ -80,7 +80,7 @@ Work items:
 - **SMAA decision.** Vulkan has three SMAA passes (`PostProcess.SmaaPasses`); `PostComposite` has no SMAA and the Metal
   UI does not expose it. Either port SMAA to `PostComposite`, or explicitly keep it Vulkan-only and document that the
   Metal anti-aliasing choices are FXAA/MetalFX/TAA. Do not add a visible setting that does nothing.
-- **FogRate decision.** Vulkan uses a shading-rate target for fog/shafts (`PostProcess.FogRate`); Metal has no
+- **FogRate decision.** Vulkan uses a shading-rate target for fog/shafts (`FogRateImage`); Metal has no
   equivalent VRS attachment and `MetalPostChain.BuildShadingRate` is a no-op. Treat this as a **performance/quality
   difference**, not a missing visual pass: Metal renders the fog at full rate. Document it and do not claim parity for
   the VRS path. If a non-VRS fallback is added later, keep it behind a measured quality gate.
