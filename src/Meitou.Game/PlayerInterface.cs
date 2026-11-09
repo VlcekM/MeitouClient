@@ -117,16 +117,18 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     internal void MessageBox(string title, string text)
     {
         Frontend.PendingConfirmation = new(TitleMenu.UpperTr(title), Loc.Tr(text), () => { },
-                TitleMenu.UpperTr("Ok")) { OkOnly = true }; FaithfulScreens.Open("message");
+            TitleMenu.UpperTr("Ok")) { OkOnly = true };
+        FaithfulScreens.Open("message");
     }
 
     public bool TitleOpen => FaithfulScreens.IsOpen("title");
 
-    internal void Confirm(string title, string text, Action action, string yes = "YES", (string Caption, Action Act)? middle = null,
-            string cancel = "CANCEL")
+    internal void Confirm(string title, string text, Action action, string yes = "YES",
+        (string Caption, Action Act)? middle = null, string cancel = "CANCEL")
     {
         Frontend.PendingConfirmation = new(TitleMenu.UpperTr(title), Loc.Tr(text), action, TitleMenu.UpperTr(yes),
-                middle is { } m ? (TitleMenu.UpperTr(m.Caption), m.Act) : null, TitleMenu.UpperTr(cancel)); FaithfulScreens.Open("message");
+            middle is { } m ? (TitleMenu.UpperTr(m.Caption), m.Act) : null, TitleMenu.UpperTr(cancel));
+        FaithfulScreens.Open("message");
     }
 
     /// <summary>
@@ -165,8 +167,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <paramref name="distance"/>: what lies inside, behind or below it is not pointed at.
     /// </summary>
     internal bool Hidden((Vector3 Origin, Vector3 Direction) ray, float distance) =>
-        Picking.ClosedBuildingHit?.Invoke(ray.Origin, ray.Direction, distance) is not null || Picking.ShownInteriorHit?.Invoke(ray.Origin,
-                ray.Direction, distance) is not null;
+        Picking.ClosedBuildingHit?.Invoke(ray.Origin, ray.Direction, distance) is not null
+            || Picking.ShownInteriorHit?.Invoke(ray.Origin, ray.Direction, distance) is not null;
 
     /// <summary>
     /// The original's <c>Show names</c> option (<c>FUN_1406e2fd0</c>): off, the name tag keeps only its icons.
@@ -279,8 +281,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (OverHud(p)) return true;
 
             // Debug "Explode on click": the host takes the press on the ground (the point under the cursor, if any) instead of the selection.
-            if (Picking.WorldClick is { } worldClick && !WorldMap.MapTabShown && worldClick(Ray(p) is { } wr ? Picking.MoveHit(wr.Origin,
-                    wr.Direction) : null))
+            if (Picking.WorldClick is { } worldClick && !WorldMap.MapTabShown
+                    && worldClick(Ray(p) is { } wr ? Picking.MoveHit(wr.Origin, wr.Direction) : null))
                 return true;
 
             // A ground item's name label (shown while Highlight is held) takes the left press; its release over it is the item's pick-up (FUN_1401638f0).
@@ -300,7 +302,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         {
             if (Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == member) is { } shown
                 && ContextMenuWindow.ContextPressOn(p, at => ContextMenuWindow.Menu(shown.Name, at, ContextMenuWindow.Verbs(shown)),
-                        () => FocusMember(member, shift), ContextMenuWindow.PortraitHoldSeconds)) return true;
+                    () => FocusMember(member, shift), ContextMenuWindow.PortraitHoldSeconds)) return true;
             _memberPress = member;
             return true;
         }
@@ -351,8 +353,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// </summary>
     internal (string Pointer, CharacterId Target, Action? Do)? QuickOrder(Vector2 p)
     {
-        if (Picking.PickWhereAt(p,
-                _ => true) is not { } hit || Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == hit.Id) is not { } target)
+        if (Picking.PickWhereAt(p, _ => true) is not { } hit
+                || Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == hit.Id) is not { } target)
             return null;
         return QuickOrderFor(target, SelectedIds());
     }
@@ -401,8 +403,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             {
                 bool robot = c.Body is { NeedsRobotAid: true };
                 return ("med", id,
-                        Do(() => SquadWindows.OrderOrJob(robot ? Data.Gameplay.Ai.TaskType.FirstAidRobot : Data.Gameplay.Ai.TaskType.FirstAidOrder,
-                        id,
+                    Do(() => SquadWindows.OrderOrJob(robot ? Data.Gameplay.Ai.TaskType.FirstAidRobot : Data.Gameplay.Ai.TaskType.FirstAidOrder, id,
                     () => Say(new Simulation.FirstAid.TreatOrder(selection, id) { Tick = tick }))));
             }
             if (!down) return null;
@@ -414,8 +415,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         {
             if (down) return ("search", id, loot);
             if (sneaking)
-                return c.Slave is { State: 1 } ? ("scavenge", id, loot) : ("knockout", id,
-                        Do(() => Say(new Simulation.Carrying.StealthKoOrder([lead.Id], id) { Tick = tick })));
+                return c.Slave is { State: 1 } ? ("scavenge", id, loot)
+                    : ("knockout", id, Do(() => Say(new Simulation.Carrying.StealthKoOrder([lead.Id], id) { Tick = tick })));
             if (c.Prison is not null) return ("search", id, loot);
             if (c.InCombat || !(c.WarParty || c.Slave is { State: 1 }) || !world.CanTalk(id, lead.Id))
             {
@@ -424,8 +425,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 return ("attk", id, Do(() =>
                 {
                     if (lead.Turret is not null) Say(new Simulation.Combat.ShootAtOrder(selection, id) { Tick = tick });
-                    else SquadWindows.OrderOrJob(Data.Gameplay.Ai.TaskType.MeleeAttack, id, () => Say(new Simulation.Combat.AttackOrder(selection,
-                            id) { Tick = tick, Picked = true, Defensive = defence }));
+                    else SquadWindows.OrderOrJob(Data.Gameplay.Ai.TaskType.MeleeAttack, id,
+                        () => Say(new Simulation.Combat.AttackOrder(selection, id) { Tick = tick, Picked = true, Defensive = defence }));
                 }));
             }
             return (TalkPointer(c), id, Do(() => Say(new Simulation.Dialogue.TalkOrder(lead.Id, id) { Tick = tick })));
@@ -434,18 +435,20 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (sneaking)
         {
             if (c.Prison is not null)
-                return ("lockpick", id, Do(() => { Say(new Simulation.Locks.PickLockOrder([lead.Id],
-                        id) { Tick = tick }); Say(new Simulation.Locks.ShackleOrder([lead.Id], id,
-                        Simulation.Locks.ShackleWork.Pick) { Tick = tick }); }));
-            return c.Slave is { State: 1 } ? ("scavenge", id, loot) : ("knockout", id, Do(() => Say(new Simulation.Carrying.StealthKoOrder([lead.Id],
-                    id) { Tick = tick })));
+                return ("lockpick", id, Do(() =>
+                {
+                    Say(new Simulation.Locks.PickLockOrder([lead.Id], id) { Tick = tick });
+                    Say(new Simulation.Locks.ShackleOrder([lead.Id], id, Simulation.Locks.ShackleWork.Pick) { Tick = tick });
+                }));
+            return c.Slave is { State: 1 } ? ("scavenge", id, loot)
+                : ("knockout", id, Do(() => Say(new Simulation.Carrying.StealthKoOrder([lead.Id], id) { Tick = tick })));
         }
 
         // Order 12 (Task_PlayerTalkto) walks over and starts the conversation, a trader's included: its trade window is a reply of that conversation
         // (DA_TRADE).
         if (world.CanTalk(id, lead.Id)) return (TalkPointer(c), id, Do(() => Say(new Simulation.Dialogue.TalkOrder(lead.Id, id) { Tick = tick })));
-        if (c.IsTrader) return ("talk", id, Do(() => Say(new Simulation.Trading.OpenTrade(lead.Id,
-                id) { Tick = tick })));   // engine: a shop whose keeper has no line to say
+        // engine: a shop whose keeper has no line to say
+        if (c.IsTrader) return ("talk", id, Do(() => Say(new Simulation.Trading.OpenTrade(lead.Id, id) { Tick = tick })));
         return world.RegardsFriendly(id, lead.Id) ? ("green", id, null) : null;   // slot 126: the target regards the lead as friendly
     }
 
@@ -706,8 +709,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (Dragging && _dragFrom is { } from)
         {
             var edge = new Vector4(0.6f, 1f, 0.6f, 1);
-            o.Rect(MathF.Min(from.X, Mouse.X), MathF.Min(from.Y, Mouse.Y), MathF.Max(from.X, Mouse.X), MathF.Max(from.Y, Mouse.Y), new Vector4(0.4f,
-                    1f, 0.5f, 0.12f));
+            o.Rect(MathF.Min(from.X, Mouse.X), MathF.Min(from.Y, Mouse.Y), MathF.Max(from.X, Mouse.X), MathF.Max(from.Y, Mouse.Y),
+                new Vector4(0.4f, 1f, 0.5f, 0.12f));
             o.Line(from.X, from.Y, Mouse.X, from.Y, 1, edge);
             o.Line(Mouse.X, from.Y, Mouse.X, Mouse.Y, 1, edge);
             o.Line(Mouse.X, Mouse.Y, from.X, Mouse.Y, 1, edge);
@@ -747,8 +750,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <c>lektor&lt;StringPair&gt;</c> lists, each text with an optional leading colour tag) in place of <paramref name="Tooltip"/>.
     /// </summary>
     internal readonly record struct HudLine(string Label, string Value, string? LabelColour = null, string? ValueColour = null,
-            string? Tooltip = null, string? Action = null,
-        float ButtonWidth = 0.5f, IReadOnlyList<(string Key, string Value)>? TooltipRows = null)
+        string? Tooltip = null, string? Action = null, float ButtonWidth = 0.5f, IReadOnlyList<(string Key, string Value)>? TooltipRows = null)
     {
         /// <summary>
         /// The line's tooltip user strings (the HUD's Fixed tooltip), null for none; a text tooltip wins over rows.
@@ -761,8 +763,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// A medical panel row: its name, the green, yellow and red layers' fractions, the number, the arrows, the robot layer and the row's tooltip (the
     /// <c>LifeBarNTooltip</c> widget).
     /// </summary>
-    internal readonly record struct MedicalRow(string Name, float Green, float Yellow, float Red, string Value, string Arrows, bool Robot,
-            string? Tooltip = null)
+    internal readonly record struct MedicalRow(string Name, float Green, float Yellow, float Red, string Value, string Arrows,
+        bool Robot, string? Tooltip = null)
     {
         /// <summary>
         /// The splint layer's fraction (the green plus the splint, at most 1); shown only where it is beyond the green.
@@ -792,8 +794,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// <paramref name="valuePixels"/> when given.
     /// </summary>
     internal void AddLines(List<UiControl> controls, string panel, IReadOnlyList<HudLine> lines, float rowHeight, float? fontPixels = null,
-            string font = "Kenshi_StandardFont_Medium",
-        string? valueFont = null, float? valuePixels = null, float top = 0)
+        string font = "Kenshi_StandardFont_Medium", string? valueFont = null, float? valuePixels = null, float top = 0)
     {
         if (controls.FirstOrDefault(c => c.Name == panel) is not { } host) return;
         var area = host.Bounds;
@@ -809,22 +810,24 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 float width = Math.Clamp(lines[i].ButtonWidth, 0.1f, 1);
                 var button = lines[i].Label.Length == 0 ? row : row with { X = row.X + row.Width * (1 - width), Width = row.Width * width };
                 var buttonProperties = new Dictionary<string, string>(valueProperties) { ["TextAlign"] = "Center",
-                        ["TextColour"] = lines[i].ValueColour ?? MyGuiColours.InkText };
+                    ["TextColour"] = lines[i].ValueColour ?? MyGuiColours.InkText };
                 if (lines[i].TipProperties is { } buttonTip) foreach (var pair in buttonTip) buttonProperties[pair.Key] = pair.Value;
 
                 // Kenshi_Button2 is a template (kenshi_templates.xml) whose root widget has the Kenshi_Button1Skin skin.
                 controls.Add(new($"{panel}-button-{i}", "Button", button with { Y = button.Y + 1, Height = button.Height - 2 },
-                        Loc.Tr(lines[i].Value), action, "Kenshi_Button1Skin", true,
-                    buttonProperties, Vector4.Zero, Clip: host.Clip));
+                    Loc.Tr(lines[i].Value), action, "Kenshi_Button1Skin", true, buttonProperties, Vector4.Zero, Clip: host.Clip));
                 if (lines[i].Label.Length == 0) continue;
             }
-            foreach (var (part, text, colour, align, properties) in new[] { ("label", lines[i].Label, lines[i].LabelColour, "Left Top",
-                    labelProperties),
-                ("value", lines[i].Action is null ? lines[i].Value : "", lines[i].ValueColour, "Right Top", valueProperties) })
+            var columns = new[]
+            {
+                ("label", lines[i].Label, lines[i].LabelColour, "Left Top", labelProperties),
+                ("value", lines[i].Action is null ? lines[i].Value : "", lines[i].ValueColour, "Right Top", valueProperties),
+            };
+            foreach (var (part, text, colour, align, properties) in columns)
                 if (text.Length > 0)
                 {
                     var textProperties = new Dictionary<string, string>(properties) { ["TextAlign"] = align,
-                            ["TextColour"] = colour ?? MyGuiColours.TemplateInk(UiResources, "Kenshi_TextboxStandardText") };
+                        ["TextColour"] = colour ?? MyGuiColours.TemplateInk(UiResources, "Kenshi_TextboxStandardText") };
 
                     // A line with a tooltip is a mouse target (the HUD's own tooltip, anchored on its panel).
                     if (tipProperties is not null) foreach (var pair in tipProperties) textProperties[pair.Key] = pair.Value;

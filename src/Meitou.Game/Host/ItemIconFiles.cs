@@ -58,8 +58,8 @@ sealed class ItemIconFiles(GameHost host)
         if (host.Scene.Database is not { } db) return null;
         string own = IconSaveDirectory(enhanced);
         ClearOldIcons(own);
-        return new(db, name => host.Assets.FindInGroup(name, "Icons"), enhanced ? new ItemIconCache(own)
-                : new ItemIconCache(Path.Combine(host.Install.DataDirectory, "icons"), own));
+        return new(db, name => host.Assets.FindInGroup(name, "Icons"),
+            enhanced ? new ItemIconCache(own) : new ItemIconCache(Path.Combine(host.Install.DataDirectory, "icons"), own));
     }
 
     /// <summary>
@@ -86,7 +86,7 @@ sealed class ItemIconFiles(GameHost host)
         {
             if (UiPainter.TryParseRenderedIcon(name, out string record, out string material, out string colour))
                 return host.ActiveCharacters is { } characters && characters.TryGetIcon(new IconKey(record, material, colour), out var icon) ? icon
-                        : null;
+                    : null;
             if (UiPainter.TryParseRenderedBuildingIcon(name, out string building) && host.ActiveObjects is { } objects
                     && host.Player.Build.BuildHost is { } buildHost)
                 return objects.TryGetBuildingIcon(building, buildHost.Parts(building), out var picture) ? picture : null;

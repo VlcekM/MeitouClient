@@ -291,9 +291,7 @@ sealed class ScreenRouter(PlayerInterface player)
         }
 
         if (id is "inventory" or "loot") player.InventoryLayout.AddInventorySummary(controls, lead, animal: TradeWindows.IsAnimal(lead));
-        foreach (var item in grid.Items.Where(i => bagWindow ? i.Section == "backpack_content"
-            : id == "limbs" ? i.Section.EndsWith("_replace", StringComparison.Ordinal)
-            : i.Section != "backpack_content"))
+        foreach (var item in grid.Items.Where(i => ShownInWindow(i, bagWindow, id)))
         {
             if (player.InventoryWindows.Lifted(Simulation.Items.ItemOwner.Of(lead.Id), item.Index)) continue;
             if (controls.FirstOrDefault(c => c.Name == item.Section) is not { } slot) continue;
@@ -314,4 +312,12 @@ sealed class ScreenRouter(PlayerInterface player)
                 item.Index, clip, charge: item.Charge, colour: item.Colour);
         }
     }
+
+    /// <summary>
+    /// Whether an item shows in a window: a bag window its backpack's contents, the limbs window the limb slots, the others the rest.
+    /// </summary>
+    static bool ShownInWindow(InventoryItemView i, bool bagWindow, string id) =>
+        bagWindow ? i.Section == "backpack_content"
+        : id == "limbs" ? i.Section.EndsWith("_replace", StringComparison.Ordinal)
+        : i.Section != "backpack_content";
 }

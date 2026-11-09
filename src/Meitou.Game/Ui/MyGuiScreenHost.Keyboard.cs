@@ -50,8 +50,8 @@ public sealed partial class MyGuiScreenHost
     public Action<string>? ClipboardWriter { get; set; }
 
     /// <summary>
-    /// A box's mode from its layout properties: <c>MaxTextLength</c>, <c>MultiLine</c> (not with <c>Password</c>), <c>WordWrap</c>, <c>Password</c> and
-    /// <c>ReadOnly</c>.
+    /// A box's mode from its layout properties: <c>MaxTextLength</c>, <c>MultiLine</c> (not with <c>Password</c>), <c>WordWrap</c>, <c>Password</c>
+    /// and <c>ReadOnly</c>.
     /// </summary>
     static UiTextBuffer NewBuffer(UiControl c, string text)
     {
@@ -259,8 +259,8 @@ public sealed partial class MyGuiScreenHost
         if (button is null) return;
 
         var b = button.Bounds;
-        void Bar(string part, float x, float y, float w, float h) => controls.Add(new(
-            "KeyFocusRing." + part, "Widget", new(x, y, w, h), "", "", "", true, NoMouse, RingColour, Pickable: false));
+        void Bar(string part, float x, float y, float w, float h) =>
+            controls.Add(new("KeyFocusRing." + part, "Widget", new(x, y, w, h), "", "", "", true, NoMouse, RingColour, Pickable: false));
         Bar("top", b.X - 4, b.Y - 4, b.Width + 8, 2);
         Bar("bottom", b.X - 4, b.Y + b.Height + 2, b.Width + 8, 2);
         Bar("left", b.X - 4, b.Y - 2, 2, b.Height + 4);

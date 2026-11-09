@@ -164,9 +164,9 @@ sealed class StatsWindow(PlayerInterface player)
         {
             var readout = readouts.FirstOrDefault(r => Loc.Tr(r.Label) == help.Affected[i]);
             string ink = readout.Main ? PlayerInterface.MainColour : statInk;
+            var valueBox = new UiRect(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, row);
             if (readout.Value is { Length: > 0 } number)
-                Text($"stat-affected-value-{i}", new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, row), number, ink, 14, leftClip,
-                    "Right Top");
+                Text($"stat-affected-value-{i}", valueBox, number, ink, 14, leftClip, "Right Top");
             Line($"stat-affected-{i}", "-" + help.Affected[i].TrimEnd(':'), ink);
         }
 
@@ -186,8 +186,8 @@ sealed class StatsWindow(PlayerInterface player)
             new Dictionary<string, string>(), Vector4.Zero, Pickable: false, Clip: rightClip));
         var barText = new UiRect(bar.X + 10 * scale, bar.Y - 4 * scale, bar.Width - 20 * scale, row);
         Text("stat-next-level-label", barText, StatHelp.TextAt(220), PlayerInterface.MainColour, 14, rightClip);
-        Text("stat-next-level-percent", barText, ((int)(progress * 100)).ToString(CultureInfo.InvariantCulture) + "%", PlayerInterface.MainColour, 14,
-            rightClip, "Right Top");
+        string percent = ((int)(progress * 100)).ToString(CultureInfo.InvariantCulture) + "%";
+        Text("stat-next-level-percent", barText, percent, PlayerInterface.MainColour, 14, rightClip, "Right Top");
         Text("stat-description-heading", new(bar.X + 10 * scale, bar.Y + 12 * scale, bar.Width - 20 * scale, row),
             StatHelp.TextAt(440), PlayerInterface.MainColour, 14, rightClip);
 

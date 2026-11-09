@@ -22,8 +22,13 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
     /// </summary>
     public static long MaxBytes(string kind) => kind == "save" ? 95_000_000 : 16 << 20;
 
-    public static string FileName(string kind) => kind switch { "screenshot" => "screenshot.png", "navmesh" => "navmesh.png", "save" => "save.zip",
-            _ => "log.txt" };
+    public static string FileName(string kind) => kind switch
+    {
+        "screenshot" => "screenshot.png",
+        "navmesh" => "navmesh.png",
+        "save" => "save.zip",
+        _ => "log.txt",
+    };
 
     /// <summary>
     /// Starts a form; returns its token (what the uploads, the send and the file links name), or why it was refused.
@@ -39,8 +44,7 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         string? discord = Clean(b.Discord, 64, lines: false);
         string[] mods = [.. (b.Mods ?? []).Select(m => Clean(m, 200, lines: false)).OfType<string>().Take(ModsMax)];
         string? location = Clean(b.Location, LocationMax, lines: false);
-        string[] wants = [.. Kinds.Where(k => k switch { "screenshot" => b.Screenshot == true, "navmesh" => b.Navmesh == true,
-                "save" => b.Save == true, _ => b.Log == true })];
+        string[] wants = [.. Kinds.Where(k => Wanted(b, k))];
         if (await store.FeedbackCountBy(reporter, DateTimeOffset.UtcNow.AddDays(-1)) >= PerDay)
             return (null, "too many feedback reports today, try again tomorrow");
         foreach (string stale in await store.DeleteFeedbackDrafts(DateTimeOffset.UtcNow.AddDays(-1))) DeleteFiles(stale);
@@ -146,6 +150,28 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
     }
 
+    /// <summary>
+    /// Whether the report asked to attach a file of <paramref name="kind"/>.
+    /// </summary>
+    static bool Wanted(FeedbackBody b, string kind) => kind switch
+    {
+        "screenshot" => b.Screenshot == true,
+        "navmesh" => b.Navmesh == true,
+        "save" => b.Save == true,
+        _ => b.Log == true,
+    };
+
+    /// <summary>
+    /// Whether a wanted file of <paramref name="kind"/> never arrived.
+    /// </summary>
+    static bool Missing(FeedbackRow row, string kind) => kind switch
+    {
+        "screenshot" => row.ScreenshotSize is null,
+        "navmesh" => row.NavmeshSize is null,
+        "save" => row.SaveSize is null,
+        _ => row.LogSize is null,
+    };
+
     string IssueBody(FeedbackRow row)
     {
         string Link(string kind) => new Uri(config.PublicUrl, $"feedback/{row.Token}/{FileName(kind)}").AbsoluteUri;
@@ -179,8 +205,7 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         Picture("navmesh", "Navmesh", row.NavmeshSize);
         if (row.SaveSize is { } save) s.AppendLine($"- [Save]({Link("save")}) (zip, {Mb(save)})");
         if (row.LogSize is not null) s.AppendLine($"- [log.txt]({Link("log")})");
-        foreach (string missing in row.Wants.Where(k => k switch { "screenshot" => row.ScreenshotSize is null, "navmesh" => row.NavmeshSize is null,
-                "save" => row.SaveSize is null, _ => row.LogSize is null }))
+        foreach (string missing in row.Wants.Where(k => Missing(row, k)))
             s.AppendLine($"- The {missing} did not upload.");
         s.AppendLine().AppendLine("<sub>Sent with the in-game feedback button.</sub>");
         return s.ToString();

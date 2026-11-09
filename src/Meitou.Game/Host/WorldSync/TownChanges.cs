@@ -35,10 +35,10 @@ sealed class TownChanges(GameHost host)
         var placement = resolved.Placement with { DestroyedOverride = false, WithoutInterior = true };
         host.ActiveObjects?.AddRuntime(placement);
         if (host.Nav is not null && host.BuildingSync.BuildData().TryGetValue(resolved.Record.StringId, out var data) && data.PathMode != 0)
-                host.Nav.AddRuntimeBuilding(placement);
+            host.Nav.AddRuntimeBuilding(placement);
         if (host.ActiveLamps is { } lamps && host.Scene.Database is { } db && host.Scene.Objects is { } objects)
             lamps.SetRuntime(building.Key,
-                    WorldLights.ForBuilding(db, objects.Levels, resolved with { Placement = placement, Destroyed = false }, objects.Layouts));
+                WorldLights.ForBuilding(db, objects.Levels, resolved with { Placement = placement, Destroyed = false }, objects.Layouts));
         _shownEmptied.Add(building.Key);
     }
 
@@ -88,7 +88,7 @@ sealed class TownChanges(GameHost host)
         foreach (var r in current.Values)
         {
             bool same = ShownRuins.TryGetValue(r.Building.Key, out var shown) && shown.Destroyed == r.Destroyed
-                    && ReferenceEquals(shown.Building, r.Building);
+                && ReferenceEquals(shown.Building, r.Building);
             if (!same) ShowRuin(r);
         }
     }
@@ -101,11 +101,10 @@ sealed class TownChanges(GameHost host)
         var placement = resolved.Placement with { DestroyedOverride = ruin.Destroyed };
         host.ActiveObjects?.AddRuntime(placement);
         if (host.Nav is not null && host.BuildingSync.BuildData().TryGetValue(resolved.Record.StringId, out var data) && data.PathMode != 0)
-                host.Nav.AddRuntimeBuilding(placement);
+            host.Nav.AddRuntimeBuilding(placement);
         if (host.ActiveLamps is { } lamps && host.Scene.Database is { } db && host.Scene.Objects is { } objects)
             lamps.SetRuntime(key,
-                    WorldLights.ForBuilding(db, objects.Levels, resolved with { Placement = placement, Destroyed = ruin.Destroyed },
-                    objects.Layouts));
+                WorldLights.ForBuilding(db, objects.Levels, resolved with { Placement = placement, Destroyed = ruin.Destroyed }, objects.Layouts));
         RuinEffects(ruin.Building, ruin.Destroyed);
         ShownRuins[key] = ruin;
     }
@@ -114,7 +113,7 @@ sealed class TownChanges(GameHost host)
     {
         if (!ShownRuins.Remove(key, out var ruin)) return;
         if (host.BuildingSync.ShownBuildings.ContainsKey(key) || _shownEmptied.Contains(key))
-                return;   // the player's site or bought house now: its placement is its own
+            return;   // the player's site or bought house now: its placement is its own
         RuinEffects(ruin.Building, ruin.Building.Destroyed);   // as the level data has it
         host.ActiveObjects?.RemoveRuntime(key);
         host.Nav?.RemoveRuntimeBuilding(key);
@@ -129,10 +128,10 @@ sealed class TownChanges(GameHost host)
     {
         if (host.Gpu?.Particles is not { } particles || building.Resolved is not { } resolved || host.Scene.Database is not { } db
                 || host.Scene.Objects is not { } objects)
-                return;
+            return;
         if (host.Gpu.BuildingEffects is not null) _ruinEffectsPending = true;
         var standing = BuildingEffects.ForBuilding(db, objects.Levels,
-                resolved with { Placement = resolved.Placement with { DestroyedOverride = false }, Destroyed = false }, objects.Layouts);
+            resolved with { Placement = resolved.Placement with { DestroyedOverride = false }, Destroyed = false }, objects.Layouts);
         foreach (string id in standing.Select(e => e.PlacementId).Append(building.Key).Distinct()) particles.RemoveBuildingEffects(id);
         if (destroyed) return;
         foreach (var group in standing.GroupBy(e => e.PlacementId)) particles.SetBuildingEffects(group.Key, [.. group]);
@@ -153,5 +152,5 @@ sealed class TownChanges(GameHost host)
     /// </summary>
     internal bool LevelDestroyed(BuildingPlacement placement) =>
         host.Scene.Objects?.Levels is { } levels && placement.StateId is { } id && levels.Zones.TryGetValue(placement.Zone, out var zone)
-                && zone.Find(id)?.GetBool("destroyed") == true;
+            && zone.Find(id)?.GetBool("destroyed") == true;
 }

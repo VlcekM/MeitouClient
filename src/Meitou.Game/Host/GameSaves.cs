@@ -96,7 +96,7 @@ sealed class GameSaves(GameHost host)
     {
         var gameplay = Gameplay;
         if (host.PopData is { } data) (data.BodyOptions.Dismemberment, data.BodyOptions.Decapitation,
-                data.BodyOptions.AdvancedRagdolls) = (gameplay.Dismemberment, host.Config.Decapitation, host.Config.AdvancedRagdolls);
+            data.BodyOptions.AdvancedRagdolls) = (gameplay.Dismemberment, host.Config.Decapitation, host.Config.AdvancedRagdolls);
         foreach (var population in host.Session.World.Systems.OfType<PopulationSystem>())
             (population.Settings.SquadSizeMultiplier, population.Settings.PopulationMultiplier, population.Settings.RaidSizeMult, population.Settings.RaidFrequencyMult) =
                 (gameplay.SquadSize, gameplay.Population, gameplay.RaidSize, gameplay.RaidFrequency);
@@ -118,7 +118,7 @@ sealed class GameSaves(GameHost host)
             // NPCs that see a player character say a line as a speech bubble (docs/game/dialogue.md "Ambient conversations"); the sandbox, the duel
             // and the battle stay silent.
             Dialogue = new Simulation.Dialogue.DialogueSettings { AmbientEvents = !host.Sandbox.IsSandbox && !host.Duel.IsDuel
-                    && !host.Battle.IsBattle, Censored = () => host.Config.Censorship },
+                && !host.Battle.IsBattle, Censored = () => host.Config.Censorship },
             Population = new PopulationSettings
             {
                 Background = interactive && !host.Duel.IsDuel && !host.Battle.IsBattle,
@@ -138,13 +138,13 @@ sealed class GameSaves(GameHost host)
             Ai = new Simulation.Ai.AiSettings { TownAttacks = Gameplay.TownAttacks },
             Construction = new Simulation.Construction.ConstructionSettings { BuildingSpeed = (settings ?? Difficulty)[5], EdgeGap = SiteEdgeGap },
             Production = new Simulation.Production.ProductionSettings { ProductionOption = (settings ?? Difficulty)[3],
-                    ResearchOption = (settings ?? Difficulty)[4], EdgeGap = SiteEdgeGap, UnloadedProduction = host.Config.UnloadedProduction },
+                ResearchOption = (settings ?? Difficulty)[4], EdgeGap = SiteEdgeGap, UnloadedProduction = host.Config.UnloadedProduction },
             // The duel replays exactly: its paths are answered inside the tick, never on a thread whose timing differs from lap to lap.
             SynchronousPaths = !interactive || host.Duel.IsDuel,
             // The duel prints what its measured lap holds (MeasureLap).
             Combat = new Simulation.Combat.CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = host.Duel.IsDuel,
-                    AttackSlots = host.Config.AttackSlotsOption, StuckLimit = Gameplay.HarpoonLimit, LateDefences = host.Config.LateDefences,
-                    GunnerFacesBarrel = host.Config.FixGunnerFacing, PunchReachFix = host.Config.FixPunchReach },
+                AttackSlots = host.Config.AttackSlotsOption, StuckLimit = Gameplay.HarpoonLimit, LateDefences = host.Config.LateDefences,
+                GunnerFacesBarrel = host.Config.FixGunnerFacing, PunchReachFix = host.Config.FixPunchReach },
             DoorsCloseBehind = host.Config.DoorsCloseBehind,
             AnimalsPickUp = host.Config.AnimalsPickUp,
             AnimationLengths = host.AnimationLengths,
@@ -202,7 +202,7 @@ sealed class GameSaves(GameHost host)
             return;
         }
         if (!Gameplay.AutoSave || host.Covered || host.Session.Simulation.IsPaused || !host.Session.World.Player.Exists || !SavesAvailable(out _))
-                return;
+            return;
         _autosaveSeconds += realDt;
         if (_autosaveSeconds < Gameplay.AutoSaveMinutes * 60 || Busy()) return;
         _autosaveSeconds = 0;
@@ -215,8 +215,8 @@ sealed class GameSaves(GameHost host)
     /// </summary>
     internal bool SavesAvailable(out string reason)
     {
-        reason = host.PopData is null || host.Population is null || host.Battle.IsFlat ? "No game to save or load here (needs the town population)"
-                : "";
+        reason = host.PopData is null || host.Population is null || host.Battle.IsFlat
+            ? "No game to save or load here (needs the town population)" : "";
         return reason.Length == 0;
     }
 
@@ -253,8 +253,8 @@ sealed class GameSaves(GameHost host)
             var clock = host.Session.Clock;
             var prepared = ahead ? PreparedBase!.Result : null;
             PreparedBase = null;   // used, or stale
-            game = SaveCapture.Capture(world, host.PopData!, new SaveClock((int)clock.Day, clock.Hour, clock.Minute), LoadedSave, CaptureOptions(),
-                    prepared);
+            game = SaveCapture.Capture(world, host.PopData!, new SaveClock((int)clock.Day, clock.Hour, clock.Minute),
+                LoadedSave, CaptureOptions(), prepared);
             Difficulty.Write(game.Camera);
             WriteWeather(game, (int)clock.Day, clock.HourOfDay);
             host.BloodDecals.WriteDecals(game);
@@ -333,7 +333,10 @@ sealed class GameSaves(GameHost host)
         }
         string folder = source ?? QuickSave.Folder();
         if (!File.Exists(Path.Combine(folder, SaveFolder.QuickSaveName)))
-                { host.Player.Notice(source is null ? "No quicksave yet (F5 saves)" : "Save is no longer available", true); return; }
+        {
+            host.Player.Notice(source is null ? "No quicksave yet (F5 saves)" : "Save is no longer available", true);
+            return;
+        }
         ReadingFolder = folder;
         Task<SaveGame>? read = null;
         string summary = "";
@@ -363,7 +366,10 @@ sealed class GameSaves(GameHost host)
             return;
         }
         if (!File.Exists(Path.Combine(folder, SaveFolder.QuickSaveName)))
-                { host.Player.Notice("Failed to import game: the save is no longer available", true); return; }
+        {
+            host.Player.Notice("Failed to import game: the save is no longer available", true);
+            return;
+        }
         ReadingFolder = folder;
         var settings = host.Player.AdvancedOptions.NewGameOptions;
         var data = host.PopData!;
@@ -383,18 +389,24 @@ sealed class GameSaves(GameHost host)
             })),
             GameHost.Stage("systems", () => { prepared = PrepareSystems(read!, interactive: true); return null; }, duringAscent: true),
             // The squads moved to the reset place stand on its ground, whose navmesh is waited for.
-            GameHost.Stage("navmesh", () => (options & ImportOptions.ResetPositions) != 0 && read!.IsCompletedSuccessfully
-                    ? NavmeshAround(SaveImport.ResetPosition) : null),
+            GameHost.Stage("navmesh",
+                () => (options & ImportOptions.ResetPositions) != 0 && read!.IsCompletedSuccessfully
+                ? NavmeshAround(SaveImport.ResetPosition) : null),
             GameHost.Stage("build", () =>
             {
                 if ((options & ImportOptions.ResetPositions) != 0 && host.Nav is not null && read!.IsCompletedSuccessfully)
-                        SaveImport.PlaceOnGround(read.Result, host.Nav.Walkability.GroundHeight);
+                    SaveImport.PlaceOnGround(read.Result, host.Nav.Walkability.GroundHeight);
                 return SwapInSave(read!, interactive: true, out summary,
-                        new SaveLoadOptions { Appearances = data.Appearances, ResetRelations = (options & ImportOptions.Relations) == 0 }, prepared);
+                    new SaveLoadOptions { Appearances = data.Appearances, ResetRelations = (options & ImportOptions.Relations) == 0 }, prepared);
             }),
-            GameHost.Stage("finishing",
-                    () => { host.SettleNewWorld(); host.Player.FollowSelected(); FinishLoadNotice(summary,
-                    imported: true); PauseAfterLoad(); return null; }));
+            GameHost.Stage("finishing", () =>
+            {
+                host.SettleNewWorld();
+                host.Player.FollowSelected();
+                FinishLoadNotice(summary, imported: true);
+                PauseAfterLoad();
+                return null;
+            }));
     }
 
     internal sealed record PreparedSystems(StandardSystemSet Built, PopulationData Data, NewGameSettings Difficulty);
@@ -434,7 +446,7 @@ sealed class GameSaves(GameHost host)
     /// throws <see cref="GameHost.SceneLoadFailed"/> when the save does not load (the old world stays).
     /// </summary>
     internal Task SwapInSave(Task<SaveGame> read, bool interactive, out string summary, SaveLoadOptions? loadOptions = null,
-            PreparedSystems? prepared = null)
+        PreparedSystems? prepared = null)
     {
         var watch = Stopwatch.StartNew();
         LoadedSave? loaded = null;
@@ -493,7 +505,7 @@ sealed class GameSaves(GameHost host)
         {
             var (yaw, pitch, distance) = KenshiCamera.FromSaved(saved.Rotation, saved.Zoom);
             var pivot = KenshiCamera.SavedPivotInBounds(saved.Position) ? new Vector2(saved.Position.X, saved.Position.Z)
-                    : KenshiCamera.SavedPivotFallback;
+                : KenshiCamera.SavedPivotFallback;
             host.Session.Camera.Place(pivot, yaw, pitch, distance);
         }
         if (host.PlayerSquad is { } squad && !squad.Leader.IsNone)

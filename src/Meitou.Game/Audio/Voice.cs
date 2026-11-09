@@ -152,14 +152,7 @@ sealed class Voice : IDisposable
     /// inside the block). <paramref name="rate"/> is source frames per output frame; <paramref name="lowPass"/> the one-pole coefficient (1 = no
     /// filtering). Each of <paramref name="sends"/> receives the voice with its own gains (an auxiliary bus's input), ramped like the main ones.
     /// </summary>
-    public void Mix(
-        float[] mix,
-        int frames,
-        double rate,
-        float left,
-        float right,
-        float lowPass,
-        int first = 0,
+    public void Mix(float[] mix, int frames, double rate, float left, float right, float lowPass, int first = 0,
         ReadOnlySpan<VoiceSend> sends = default)
     {
         if (_ended) return;

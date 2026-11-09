@@ -32,8 +32,8 @@ sealed class ItemCells(PlayerInterface player)
     }
 
     /// <summary>
-    /// An item icon filling <paramref name="area"/> with its quantity in the corner, or a name while the icon loads. <paramref name="tip"/> is what its
-    /// hover tooltip lists (the name only when null). The transparent text control handles picking and carries <paramref name="property"/>;
+    /// An item icon filling <paramref name="area"/> with its quantity in the corner, or a name while the icon loads. <paramref name="tip"/> is what
+    /// its hover tooltip lists (the name only when null). The transparent text control handles picking and carries <paramref name="property"/>;
     /// <paramref name="colour"/> is the item's <c>color sid</c>.
     /// </summary>
     internal void AddItemCell(List<UiControl> controls, string name, UiRect area, string record, string material, string itemName, int quantity,
@@ -70,9 +70,8 @@ sealed class ItemCells(PlayerInterface player)
             [TooltipRuntime.ItemTipKey] = name,
             [property] = index.ToString(CultureInfo.InvariantCulture),
         };
-        controls.Add(new(name, "TextBox", area, caption, "", "", true, properties,
-            System.Numerics.Vector4.Zero, TextColour: System.Numerics.Vector4.One, Pickable: pickable,
-            TextScale: 0.9f * player.InventoryScale, Clip: clip));
+        controls.Add(new(name, "TextBox", area, caption, "", "", true, properties, System.Numerics.Vector4.Zero, TextColour: System.Numerics.Vector4.One,
+            Pickable: pickable, TextScale: 0.9f * player.InventoryScale, Clip: clip));
     }
 
     /// <summary>

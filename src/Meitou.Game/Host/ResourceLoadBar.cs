@@ -54,14 +54,14 @@ sealed class ResourceLoadBar
         if (_layout is null) return [];
         var controls = MyGuiPresentation.Arrange(_layout, width, height, new UiBindings(), resources.Layers).ToList();
         int place = controls.FindIndex(c => c.Properties.GetValueOrDefault("TemplateOwner") == "LoadBar"
-                && c.Properties.GetValueOrDefault("TemplatePart") == "TrackPlace");
+            && c.Properties.GetValueOrDefault("TemplatePart") == "TrackPlace");
         if (place >= 0 && _trackSkin is not null && _total > 0)
         {
             // TrackFill: the track runs from the start of TrackPlace to the position (MyGUI ProgressBar), drawn under the frame that follows it.
             var bounds = controls[place].Bounds;
             float fraction = Math.Clamp(_done / (float)_total, 0, 1);
             controls.Insert(place + 1,
-                    new UiControl("LoadBar@track", "Widget", bounds with { Width = MathF.Round(bounds.Width * fraction) }, "", "", _trackSkin, true,
+                new UiControl("LoadBar@track", "Widget", bounds with { Width = MathF.Round(bounds.Width * fraction) }, "", "", _trackSkin, true,
                 new Dictionary<string, string>(), Vector4.Zero, Pickable: false));
         }
         return controls;

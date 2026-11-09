@@ -70,8 +70,8 @@ public enum InputAction
     /// <summary>
     /// The game's <c>select_0</c> .. <c>select_9</c> (events 100..109, keys 1..9 and 0): the active squad's members by position.
     /// </summary>
-    SelectMember1, SelectMember2, SelectMember3, SelectMember4, SelectMember5, SelectMember6, SelectMember7, SelectMember8, SelectMember9,
-            SelectMember10,
+    SelectMember1, SelectMember2, SelectMember3, SelectMember4, SelectMember5, SelectMember6, SelectMember7, SelectMember8,
+    SelectMember9, SelectMember10,
     /// <summary>
     /// The game's <c>stop_movement</c> (0x16) and <c>toggle_build</c> (10).
     /// </summary>
@@ -196,8 +196,8 @@ public sealed class InputBindings
         Set(InputAction.Rest, Key.L);
         Set(InputAction.PutDown, Key.K);
         Set(InputAction.Orbit, MouseButton.Middle, Key.LeftControl);
-        Set(InputAction.Select,
-                MouseButton.Left);   // the game's buttons, rebindable: orbit with the right button and select with the middle one, say
+        // the game's buttons, rebindable: orbit with the right button and select with the middle one, say
+        Set(InputAction.Select, MouseButton.Left);
         Set(InputAction.Command, MouseButton.Right);
         Set(InputAction.ToggleFreeCamera, Key.Semicolon);
         Set(InputAction.Pause, Key.Space);

@@ -64,7 +64,9 @@ sealed class GameSound(GameHost host)
         var (made, error) = _audioStart.GetAwaiter().GetResult();
         _audioStart = null;
         Audio = made;
-        Console.WriteLine(made is not null ? $"audio     {made.DeviceName}, ambience and music from the Wwise banks{GainText()} (--no-audio turns it off)" : $"audio     off: {error}");
+        Console.WriteLine(made is not null
+            ? $"audio     {made.DeviceName}, ambience and music from the Wwise banks{GainText()} (--no-audio turns it off)"
+            : $"audio     off: {error}");
         if (Audio is not null && host.Player is not null && host.Player.TitleOpen) Audio.Music.StartMainTheme();
         AttachUiSounds();
     }
@@ -775,8 +777,8 @@ sealed class GameSound(GameHost host)
 
     /// <summary>
     /// The point the gunner aims at: the simulation's aim (<see cref="MannedTurret.Aim"/>, docs/game/combat.md "Turrets"); without one (a world
-    /// without the combat system's turrets) the nearest living, free hostile character within the gun's range, 5 units above its place (<b>engine
-    /// choice</b>). Null: none (the turret keeps its last aim).
+    /// without the combat system's turrets) the nearest living, free hostile character within the gun's range, 5 units above its place
+    /// (<b>engine choice</b>). Null: none (the turret keeps its last aim).
     /// </summary>
     Vector3? TargetOf(CharacterSnapshot gunner, Vector3 turret, float range, IReadOnlyList<CharacterSnapshot> characters)
     {

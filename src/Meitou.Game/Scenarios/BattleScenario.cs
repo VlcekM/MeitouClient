@@ -37,8 +37,8 @@ sealed class BattleScenario(GameHost host)
     public const float BattleHour = 15;
 
     /// <summary>
-    /// <c>--battle-map fog</c>: a spot in the Fog Islands picked in the game view, about 460 units from the plateau first used (-71170, -40200: about 880
-    /// high, level to 13 units over 800 x 800, in its fog volumes, 10k from any building).
+    /// <c>--battle-map fog</c>: a spot in the Fog Islands picked in the game view, about 460 units from the plateau first used (-71170, -40200: about
+    /// 880 high, level to 13 units over 800 x 800, in its fog volumes, 10k from any building).
     /// </summary>
     public static readonly Vector2 FogBattleSpot = new(-71560, -39953);
 
@@ -63,7 +63,6 @@ sealed class BattleScenario(GameHost host)
     readonly (int Standing, int Alive)[] _battleCounts = new (int, int)[2];
     long _battleCountedAt = -1;
     World? _battleCountedIn;
-
 
     /// <summary>
     /// Finds the two records and their factions and fills the session's world; returns where the camera starts.
@@ -102,6 +101,9 @@ sealed class BattleScenario(GameHost host)
         if (wet > 0) Console.Error.WriteLine($"battle    {wet} fighter(s) start under water: pick another spot with --battle-map x,z");
     }
 
+    /// <summary>
+    /// Whether the character's previous position is on walkable ground.
+    /// </summary>
     bool IsWalkableAt(World world, CharacterId id)
     {
         var position = world.Characters.Previous[id.Slot].Position;
@@ -126,8 +128,8 @@ sealed class BattleScenario(GameHost host)
             int foe = _battleSides[1 - side].Faction ?? player;
             for (int f = 0; f < relations.Count; f++)
             {
-                bool enemies = AggroSystem.IsEnemy(relations, f, foe) && AggroSystem.IsEnemy(relations, foe, f);
-                if (f == player || f == foe || !enemies) continue;
+                if (f == player || f == foe) continue;
+                if (!AggroSystem.IsEnemy(relations, f, foe) || !AggroSystem.IsEnemy(relations, foe, f)) continue;
                 _battleSides[side] = _battleSides[side] with { Faction = f };
                 break;
             }

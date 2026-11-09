@@ -9,8 +9,8 @@ namespace Meitou.Game.Ui;
 /// Conversations (docs/game/dialogue.md "UI", docs/simulation.md "Dialogue"), the same in both UI modes: while the world publishes a conversation the
 /// original's conversation panel (<c>Kenshi_ConversationPanel</c>) is open, modal, so the game is paused as the original pauses it. The NPC panel
 /// shows the speaker's name and line, the player panel the talker's name, the money and the choices (colours <c>DialogueTextOption</c> #b3b3b3,
-/// <c>DialogueTextOptionHover</c> #00ff00 from <c>kenshi_colours.xml</c>); a click on a choice says it, Esc or closing leaves the conversation. The portraits
-/// are the speaker's and the player character's, drawn into the last two cells of the portrait atlas.
+/// <c>DialogueTextOptionHover</c> #00ff00 from <c>kenshi_colours.xml</c>); a click on a choice says it, Esc or closing leaves the conversation. The
+/// portraits are the speaker's and the player character's, drawn into the last two cells of the portrait atlas.
 /// </summary>
 sealed class DialogueWindow(PlayerInterface player)
 {
@@ -93,8 +93,7 @@ sealed class DialogueWindow(PlayerInterface player)
     internal void AddDialogueChoices(List<UiControl> controls)
     {
         player.PortraitBar.AddDialoguePortraits(controls);
-        if (player.Session.CurrentSnapshot.Conversation is not { } talk
-            || controls.FirstOrDefault(c => c.Name == "PlayerDialog") is not { } area)
+        if (player.Session.CurrentSnapshot.Conversation is not { } talk || controls.FirstOrDefault(c => c.Name == "PlayerDialog") is not { } area)
             return;
 
         float line = MathF.Max(16, area.Bounds.Height / 7);
@@ -120,9 +119,7 @@ sealed class DialogueWindow(PlayerInterface player)
     /// </summary>
     internal bool DialogueKey(Host.Input.Key key)
     {
-        if (!player.FaithfulScreens.IsOpen("dialogue")
-            || player.Session.CurrentSnapshot.Conversation is not { } talk)
-            return false;
+        if (!player.FaithfulScreens.IsOpen("dialogue") || player.Session.CurrentSnapshot.Conversation is not { } talk) return false;
 
         int index = key - Host.Input.Key.D1;
         if (index < 0 || index > 8) return false;

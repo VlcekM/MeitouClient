@@ -85,8 +85,8 @@ sealed partial class GameHost
         // whole device allocation under a conservative share of what Metal recommends. The guard pauses/evicts caches
         // and shortens the ranges as the ceiling approaches, exactly as it does on Vulkan.
         ulong memoryBudget = ctx.VideoMemoryBudget > 0 ? Math.Min(ctx.VideoMemoryBudget, 5UL << 30) : 5UL << 30;
-        if (ulong.TryParse(Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_BUDGET_MB"), NumberStyles.None,
-                CultureInfo.InvariantCulture, out ulong budgetMb) && budgetMb > 0)
+        if (ulong.TryParse(Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_BUDGET_MB"), NumberStyles.None, CultureInfo.InvariantCulture,
+                out ulong budgetMb) && budgetMb > 0)
             memoryBudget = budgetMb << 20;
         bool guardEnabled = Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0";
         VramGuard? memoryGuard = null;
@@ -367,15 +367,15 @@ sealed partial class GameHost
         }
         Session = new WorldSession(Scene.Focus, (Scene.X0, Scene.Z0, Scene.X1, Scene.Z1), heights.HeightAt, WorldOptions.Hour, Config.TickRate,
             clock: GameClockFor(constants ??= Scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null,
-                    WorldOptions.Hour, WorldOptions.Day ?? GameClock.DefaultStartDay),
+                WorldOptions.Hour, WorldOptions.Day ?? GameClock.DefaultStartDay),
             simulation: Duel.WorldSettings = new Meitou.Simulation.WorldSettings { Seed = GameOptions.Seed, MinPartitionSize = 128,
-                    Threads = Math.Max(1, Config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)), FarTickPeriod = FarTickPeriod },
+                Threads = Math.Max(1, Config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)), FarTickPeriod = FarTickPeriod },
             systems: systems, walkability: walkability);
         Session.World.BenchFacingFix = Config.FixBenchFacing;
         Session.Simulation.SetFastSpeeds(Config.FastSpeed, Config.FastestSpeed);
         Render.Grid = Sandbox.IsSandbox;
         Session.Camera.Place(new Vector2((float)(WorldOptions.X ?? Scene.Focus.X), (float)(WorldOptions.Z ?? Scene.Focus.Z)),
-                (float)(WorldOptions.Yaw ?? 30) * MathF.PI / 180,
+            (float)(WorldOptions.Yaw ?? 30) * MathF.PI / 180,
             (float)(WorldOptions.Pitch ?? Meitou.Data.World.KenshiCamera.InitialPitchDegrees) * MathF.PI / 180,
             (float)(WorldOptions.Distance ?? Meitou.Data.World.KenshiCamera.InitialDistance));
         var startTarget = Session.Camera.Current.Target;
@@ -393,7 +393,7 @@ sealed partial class GameHost
                 // --new-game is a shortcut past the menus: the rolled characters are kept (the menu's New game opens the editor);
                 // a still keeps creation open for the showcase's editor pictures.
                 if (WorldOptions.Screenshot is null)
-                        Session.World.Commands.Enqueue(new Meitou.Simulation.Editing.FinishCreation { Tick = Session.World.Tick });
+                    Session.World.Commands.Enqueue(new Meitou.Simulation.Editing.FinishCreation { Tick = Session.World.Tick });
             }
             catch (InvalidOperationException e) { Console.WriteLine($"metal     player squad skipped: {e.Message}"); }
         }
@@ -418,9 +418,9 @@ sealed partial class GameHost
         else if (Scene.Database is { } characterDb && !GameOptions.NoPopulation)
         {
             characters = new CharacterRenderer(ctx, Install, characterDb, Assets, CharacterRigs) { DrawDistance = GameplaySettings.NpcRange(Install),
-                    Source = FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = WorldOptions.CharacterLod,
-                    SkinShading = WorldOptions.SkinShading, SkinRaces = Config.SkinRaces, EnhancedIcons = WorldOptions.MeitouIcons,
-                    PoseClock = () => RealTime.Elapsed.TotalSeconds };
+                Source = FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = WorldOptions.CharacterLod,
+                SkinShading = WorldOptions.SkinShading, SkinRaces = Config.SkinRaces, EnhancedIcons = WorldOptions.MeitouIcons,
+                PoseClock = () => RealTime.Elapsed.TotalSeconds };
             worldGpu.Characters = characters;
             Console.WriteLine("metal     characters ready (population draw list)");
         }
@@ -453,7 +453,7 @@ sealed partial class GameHost
         if (overlay is not null)
         {
             hud = new PlayerInterface(Session, heights.HeightAt, DrawnPosition) { SpeedUnit = Config.SpeedUnit, Floaters = Config.Floaters,
-                    FeedbackButtonInPlay = Config.FeedbackButton };
+                FeedbackButtonInPlay = Config.FeedbackButton };
             Player = hud;
             hud.LoadUi(GameOptions.UiMode ?? Config.UiMode, Assets.Find);
             hud.CreateUiPainter(overlay, Assets.Find);
@@ -678,14 +678,13 @@ sealed partial class GameHost
                 Text: v => (1 << (int)MathF.Round(v)) + "x"));
             sliders.Add(new Slider(WorldFrame.TextureQualitySlider, 0, TextureQuality.Maximum, () => TextureQuality.Level,
                 v => TextureQuality.Level = (int)MathF.Round(v), "0",
-                        Text: v => TextureQuality.Labels[Math.Clamp((int)MathF.Round(v), 0, TextureQuality.Maximum)]));
+                    Text: v => TextureQuality.Labels[Math.Clamp((int)MathF.Round(v), 0, TextureQuality.Maximum)]));
 
             // World: the distances the Metal renderers actually read every frame.
             if (objects is not null)
             {
                 sliders.Add(new Slider("Object draw distance", 1000, 400000, () => objects.ObjectDistance, v => objects.ObjectDistance = v, "0",
-                        Logarithmic: true,
-                    Faithful: Enhancements.FaithfulObjectDistance, Meitou: Enhancements.MeitouObjectDistance));
+                    Logarithmic: true, Faithful: Enhancements.FaithfulObjectDistance, Meitou: Enhancements.MeitouObjectDistance));
                 if (objects.HasLandmarks)
                     sliders.Add(new Slider("Landmark distance (Meitou)", 1000, 400000, () => objects.LandmarkDistance,
                         v => objects.LandmarkDistance = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
@@ -749,8 +748,8 @@ sealed partial class GameHost
             sliders.Add(new Slider("Planetshine strength (x physical)", 0, 200, () => sky.PlanetshineStrength,
                 v => sky.PlanetshineStrength = MathF.Round(v), "0"));
             sliders.Add(new Slider(WorldFrame.CloudHeightSlider, Meitou.Data.World.VolumetricClouds.MinBottom,
-                    Meitou.Data.World.VolumetricClouds.MaxBottom,
-                () => sky.CloudHeight, v => sky.CloudHeight = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
+                Meitou.Data.World.VolumetricClouds.MaxBottom, () => sky.CloudHeight,
+                v => sky.CloudHeight = MathF.Round(v / 100) * 100, "0", Logarithmic: true));
             sliders.Add(new Slider("Ambient light strength (1 = game)", 0, 3, () => sky.AmbientStrength,
                 v => sky.AmbientStrength = MathF.Round(v * 20) / 20, "0.00"));
             sliders.Add(new Slider("Night ambient light strength (1 = game)", 0, 5, () => sky.NightAmbientStrength,
@@ -790,8 +789,8 @@ sealed partial class GameHost
             {
                 sliders.Add(new Slider(WorldFrame.WaterReflectionSlider, 0, 4, () => reflection.Level,
                     v => reflection.Level = (int)MathF.Round(v), "0",
-                    Text: v => (int)MathF.Round(v) switch { 0 => "0 off", 1 => "1 landscape", 2 => "2 characters", 3 => "3 buildings",
-                            _ => "4 everything" }));
+                    Text: v => (int)MathF.Round(v) switch { 0 => "0 off", 1 => "1 landscape", 2 => "2 characters",
+                        3 => "3 buildings", _ => "4 everything" }));
                 sliders.Add(new Slider("Reflection range x (game 0.6)", 0.1f, 50, () => reflection.Range,
                     v => reflection.Range = v, "0.00", Logarithmic: true));
             }
@@ -824,15 +823,15 @@ sealed partial class GameHost
                 Text: v => v >= 0.5f ? $"saturation {PostOptions.Saturation:0.00}, contrast {PostOptions.Contrast:0.00}" : "off (as the game)"));
             sliders.Add(new Slider("Heat haze strength (1 = game)", 0, 3, () => WorldOptions.Post.HeatHazeStrength,
                 v => WorldOptions.Post.HeatHazeStrength = MathF.Round(v * 20) / 20, "0.00", Faithful: 1,
-                        Meitou: Enhancements.MeitouHeatHazeStrength));
+                    Meitou: Enhancements.MeitouHeatHazeStrength));
             sliders.Add(new Slider(WorldFrame.ParticleSliders[0], 0, 4,
                 () => WorldFrame.WeatherParticlesSlider(worldGpu.WeatherParticles, WorldOptions.Post), v =>
                 {
                     int i = (int)MathF.Round(v);
                     worldGpu.WeatherParticles = i > 0;
                     if (i > 0)
-                            (WorldOptions.Post.LowResParticles, WorldOptions.Post.ParticleDivisor) = i switch { 1 => (true, 4), 2 => (true, 2),
-                                    3 => (true, 0), _ => (false, 0) };
+                        (WorldOptions.Post.LowResParticles, WorldOptions.Post.ParticleDivisor) = i switch { 1 => (true, 4), 2 => (true, 2),
+                            3 => (true, 0), _ => (false, 0) };
                 }, "0"));
             sliders.Add(new Slider(WorldFrame.ParticleSliders[1], 0.1f, 1, () => worldGpu.ParticleDensity,
                 v => worldGpu.ParticleDensity = MathF.Round(v * 20) / 20, "0.00"));
@@ -1170,8 +1169,9 @@ sealed partial class GameHost
             {
                 if (Player is null || !ScreenshotScenes.ShowcaseTrade()) return false;
                 // The trade picture shows a stock item's tooltip: the pointer rests on the first item.
-                if (Player.UiFrame.FirstOrDefault(c => c.Name.StartsWith("trade-item-", StringComparison.Ordinal) &&
-                        !c.Name.EndsWith("-background", StringComparison.Ordinal) && !c.Name.EndsWith("-icon", StringComparison.Ordinal)) is { } item)
+                if (Player.UiFrame.FirstOrDefault(c => c.Name.StartsWith("trade-item-", StringComparison.Ordinal)
+                        && !c.Name.EndsWith("-background", StringComparison.Ordinal)
+                        && !c.Name.EndsWith("-icon", StringComparison.Ordinal)) is { } item)
                     Player.MouseMove(new Vector2(item.Bounds.X + item.Bounds.Width / 2, item.Bounds.Y + item.Bounds.Height / 2));
                 return true;
             }
@@ -1301,7 +1301,7 @@ sealed partial class GameHost
                 Gpu.Ahead = tour.ArrivalEye(TourPosition);
                 if (hud is not null)
                     Gpu.Kept = Config.KeepTexturesAtCharacters
-                            ? [.. hud.PortraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()] : [];
+                        ? [.. hud.PortraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()] : [];
                 if (!tourHolds && hud is not null)
                 {
                     Sandbox.SandboxFollowCamera();
@@ -1357,7 +1357,7 @@ sealed partial class GameHost
                 Interiors.UpdateInteriorView();
                 // The next world tick may run on its own thread while the frame is drawn, as in the Vulkan loop (docs/simulation.md "Tick ahead").
                 TickAhead = !Covered && SkyArrival is null && !Duel.IsDuel && !TitleScreen.TitleVisible && !Player.CharacterEditor.EditorOpen
-                        && GameOptions.PlayBench is null && TickAheadWanted();
+                    && GameOptions.PlayBench is null && TickAheadWanted();
             }
             else
             {
@@ -1469,8 +1469,8 @@ sealed partial class GameHost
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
             bool titleLook = hud is not null && TitleScreen.TitleVisible;
-            float hour = editorBarFrame is not null ? CharacterEditorHost.EditorBarHour : PresentationHour
-                    ?? (titleLook ? TitleScreen.TitleHour : (float)Session.Clock.HourOfDay);
+            float hour = editorBarFrame is not null ? CharacterEditorHost.EditorBarHour
+                : PresentationHour ?? (titleLook ? TitleScreen.TitleHour : (float)Session.Clock.HourOfDay);
             var aspect = size.X / (float)Math.Max(size.Y, 1);
             var eye = Camera.Eye;
             var view = Camera.View;
@@ -1572,8 +1572,8 @@ sealed partial class GameHost
                     statsLines.Add($"camera {Camera.Target.X:0}, {Camera.Target.Y:0}, {Camera.Target.Z:0}  yaw {Camera.Yaw * 180 / MathF.PI:0}  pitch {Camera.Pitch * 180 / MathF.PI:0}  boom {Camera.Distance:0}");
                     if (characters is not null) statsLines.Add(characters.Statistics());
                     if (foliage is not null) statsLines.Add($"foliage {foliage.DrawnInstances} instances, {foliage.DrawnBlades} blades, {foliage.DrawCalls} calls");
-                    overlay.Panel(size.X, size.Y, "Metal frame (F11 hides this)", statsLines, (hud is { UiVisible: true } ? hud.HudBottom : 0) + 8,
-                            textScale);
+                    overlay.Panel(size.X, size.Y, "Metal frame (F11 hides this)", statsLines,
+                        (hud is { UiVisible: true } ? hud.HudBottom : 0) + 8, textScale);
                     wrote = true;
                 }
                 if (frameStatsVisible && !feedbackShot)
@@ -1605,7 +1605,7 @@ sealed partial class GameHost
                     string pointerName = pointerWorld ? hud.PointerPanel.PointerName : "arrow";
                     bool enhanced = Config.HardwareMouse && Config.EnhancedHardwareMouse && !freeLook;
                     bool hand = enhanced
-                            && (pointerWorld ? hud.PointerPanel.PointsAtClickable(pointerName) : settings?.OverClickable(pointerAt) == true);
+                        && (pointerWorld ? hud.PointerPanel.PointsAtClickable(pointerName) : settings?.OverClickable(pointerAt) == true);
                     systemPointer.Standard(pointerMouse.Cursor, hand ? Silk.NET.Input.StandardCursor.Hand : Silk.NET.Input.StandardCursor.Default);
                     if (!Config.HardwareMouse && !freeLook)
                     {
@@ -1726,7 +1726,7 @@ sealed partial class GameHost
             Config.MetalUpscaler = mode;
             Config.MetalRenderScale = ctx.RenderScale;
             if (hud is not null && (!GameOptions.LowEnd || hud.UiMode != Meitou.Data.Ui.UiMode.Faithful))
-                    Config.UiMode = hud.UiMode;   // --low-end's Faithful UI is for the run
+                Config.UiMode = hud.UiMode;   // --low-end's Faithful UI is for the run
             Config.Bindings = Session.Bindings.ToDictionary();
             if (settingsValues is not null)
             {
@@ -1739,7 +1739,7 @@ sealed partial class GameHost
                 }
                 foreach (var toggle in settingsValues.Toggles)
                     if (!RunOnlyKeys().Contains(SettingsMenu.SwitchKeyPrefix + toggle.Label))
-                            Config.Graphics[SettingsMenu.SwitchKeyPrefix + toggle.Label] = toggle.Get() ? 1 : 0;
+                        Config.Graphics[SettingsMenu.SwitchKeyPrefix + toggle.Label] = toggle.Get() ? 1 : 0;
                 settings?.Tiers.SavePreset();
             }
             Config.Save();

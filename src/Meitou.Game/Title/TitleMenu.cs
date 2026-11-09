@@ -38,8 +38,8 @@ sealed class TitleMenu(PlayerInterface player)
     /// <summary>
     /// The kit's numbers at 1600×900.
     /// </summary>
-    const float MenuLeft = 56, MenuBottom = 36, MenuWidth = 320, MenuButton = 38, MenuGap = 6, MenuExitGap = 4, MenuCardGap = 8, MenuCardHeight = 78,
-        MenuShadow = 22;
+    const float MenuLeft = 56, MenuBottom = 36, MenuWidth = 320, MenuButton = 38, MenuGap = 6, MenuExitGap = 4,
+        MenuCardGap = 8, MenuCardHeight = 78, MenuShadow = 22;
 
     /// <summary>
     /// The title's buttons and the catalog messages their captions are (FUN_140918ef0, upper-cased).

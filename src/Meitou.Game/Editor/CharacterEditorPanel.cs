@@ -21,8 +21,8 @@ sealed class CharacterEditorPanel(PlayerInterface player)
 {
     #region Editor session
 
-    internal sealed class EditorSession(EditKind kind, IReadOnlyList<CharacterId> characters, IReadOnlySet<CharacterId> animals, CharacterId surgeon,
-            bool paid = false)
+    internal sealed class EditorSession(EditKind kind, IReadOnlyList<CharacterId> characters, IReadOnlySet<CharacterId> animals,
+        CharacterId surgeon, bool paid = false)
     {
         /// <summary>
         /// A surgeon's dialogue took the money already (<see cref="EditCharacter.Paid"/>).
@@ -126,7 +126,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         if (Editor.Drafts.TryGetValue(id, out var draft)) return draft;
         if (player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { Appearance: { } look } snapshot
                 || RecordOf(look) is not { } record)
-                return null;
+            return null;
         draft = new CharacterDraft(data.Db, data.InstallRoot, record, snapshot.Name);
         Editor.Drafts[id] = draft;
         Editor.StartNames[id] = snapshot.Name;
@@ -170,7 +170,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// the shown one replaced since when (the glide).
     /// </summary>
     internal sealed record Preview(int Version, bool Clothes, CharacterAppearance? Shown, CharacterAppearance? Pending,
-            CharacterAppearance? From = null, double Started = 0);
+        CharacterAppearance? From = null, double Started = 0);
 
     internal readonly Dictionary<CharacterId, Preview> Previews = [];
 
@@ -227,7 +227,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         var entry = Previews.TryGetValue(id, out var found) ? found : new Preview(-1, true, own, null);
         double now = _previewClock.Elapsed.TotalSeconds;
         if (entry.Pending is { } pending && (PreviewReady?.Invoke(pending) ?? true))
-                entry = entry with { Shown = pending, Pending = null, From = entry.Shown ?? own, Started = now };
+            entry = entry with { Shown = pending, Pending = null, From = entry.Shown ?? own, Started = now };
         if ((entry.Version != draft.Version || entry.Clothes != clothes) && now - _lastPreviewBuild >= 0.12)
         {
             _lastPreviewBuild = now;
@@ -309,7 +309,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// </summary>
     public string? EditorIdle(CharacterId id) =>
         EditorOpen && !Editor!.Animals.Contains(id) && Editor.Drafts.TryGetValue(id, out var draft)
-                && draft.Record.Strings.GetValueOrDefault("idle stance") is { Length: > 0 } stance ? stance : null;
+            && draft.Record.Strings.GetValueOrDefault("idle stance") is { Length: > 0 } stance ? stance : null;
 
     /// <summary>
     /// The preview look being prepared for a character (the host lists it hidden, so the renderer builds it), or null.
@@ -339,15 +339,15 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         _groundFile ??= FindAsset?.Invoke("SandyGround.dds") ?? "";
         var all = new UiRect(0, 0, player.Width, player.Height);
         // A sand colour first, so the window is covered before the ground texture is decoded.
-        backdrop.Add(new("editor-base", "Widget", all, "", "", "", true, new Dictionary<string, string>(), new Vector4(0.42f, 0.40f, 0.34f, 1),
-                Pickable: false));
+        backdrop.Add(new("editor-base", "Widget", all, "", "", "", true, new Dictionary<string, string>(),
+            new Vector4(0.42f, 0.40f, 0.34f, 1), Pickable: false));
         if (_groundFile.Length > 0 && painter.IconReady(_groundFile))
             backdrop.Add(new("editor-ground", "ImageBox", all, "", "", "", true,
-                    new Dictionary<string, string> { ["ImageTexture"] = Rendering.Ui.UiPainter.IconTexture(_groundFile) }, Vector4.Zero,
-                    Pickable: false));
+                new Dictionary<string, string> { ["ImageTexture"] = Rendering.Ui.UiPainter.IconTexture(_groundFile) },
+                Vector4.Zero, Pickable: false));
         if (painter.HasTexture(StageTexture))
             backdrop.Add(new("editor-stage", "ImageBox", all, "", "", "", true,
-                    new Dictionary<string, string> { ["ImageTexture"] = StageTexture, ["ImageFlipV"] = "true" }, Vector4.Zero, Pickable: false));
+                new Dictionary<string, string> { ["ImageTexture"] = StageTexture, ["ImageFlipV"] = "true" }, Vector4.Zero, Pickable: false));
         return backdrop;
     }
 
@@ -388,7 +388,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// what no widget of it covers counts as the scene).
     /// </summary>
     bool OverEditorScene(Vector2 p) => player.FaithfulScreens.OpenScreens[^1] == "editor"
-            && player.FaithfulScreens.HitTest(p) is { Control.Name: "modal" };
+        && player.FaithfulScreens.HitTest(p) is { Control.Name: "modal" };
 
     /// <summary>
     /// A mouse button pressed away from the editor's panels starts turning the camera; false when the press belongs to a panel.
@@ -555,15 +555,15 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         if (Editor is not { } s) return;
         if (!asked && s.Shown.Count < s.Characters.Count)
         {
-            player.Confirm("CONFIRM", "There are other characters whose appearance haven't been changed. Are you sure you want to continue?",
-                    () => ConfirmEditor(true));
+            player.Confirm("CONFIRM",
+                "There are other characters whose appearance haven't been changed. Are you sure you want to continue?", () => ConfirmEditor(true));
             return;
         }
         long tick = player.Session.World.Tick;
         foreach (var (id, draft) in s.Drafts)
             if (s.Kind == EditKind.Surgery || draft.Version > 0 || draft.Name != s.StartNames[id])
-                player.Say(new EditCharacter(id, CharacterDraft.Copy(draft.Record), draft.Name, s.Kind) { Tick = tick, Surgeon = s.Surgeon,
-                        Paid = s.Paid });
+                player.Say(new EditCharacter(id, CharacterDraft.Copy(draft.Record), draft.Name, s.Kind) { Tick = tick,
+                    Surgeon = s.Surgeon, Paid = s.Paid });
         // An animal's page changes its name only (FUN_1405e9410 renames whichever character is shown).
         foreach (var (id, name) in s.AnimalNames)
             if (name != s.StartNames.GetValueOrDefault(id))
@@ -634,8 +634,8 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         {
             foreach (string name in new[] { ".." }.Concat(Directory.EnumerateDirectories(full).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal)))
                 entries.Add(new(FolderEntry + folder + "/" + name, "[" + name + "]"));
-            foreach (string name in Directory.EnumerateFiles(full,
-                    "*" + BodyExtension).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal))
+            foreach (string name in Directory.EnumerateFiles(full, "*" + BodyExtension).Select(Path.GetFileName).OfType<string>()
+                    .Order(StringComparer.Ordinal))
                 entries.Add(new(folder + "/" + name, name));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -677,7 +677,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         if (EditorData is not { } data) return;
         if (e.Widget == "ButtonCancel") player.FaithfulScreens.Close("file");
         else if (e.Widget == "ButtonUp" && _importFolder.LastIndexOfAny(['/', '\\']) is var cut and > 0)
-                ShowImportFolder(_importFolder[..cut], data.InstallRoot);
+            ShowImportFolder(_importFolder[..cut], data.InstallRoot);
         else if (e.Widget == "ListFiles" && e.Action == "select") _importChoice = e.Text;
         else if (e.Widget == "ListFiles" && e.Action == "accept" || e.Widget == "ButtonOpenSave")
         {
@@ -716,8 +716,8 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// </summary>
     static readonly string[] AnimalHidden =
     [
-        "BodyTabButton", "FaceTabButton", "HairTabButton", "TabsPanelContent", "RandomiseButton", "RandomiseAllButton", "ResetButton", "ImportButton",
-                "ExportButton",
+        "BodyTabButton", "FaceTabButton", "HairTabButton", "TabsPanelContent", "RandomiseButton", "RandomiseAllButton", "ResetButton",
+        "ImportButton", "ExportButton",
         "RaceLeftButton", "RaceRightButton", "SubRaceLeftButton", "SubRaceRightButton", "GenderLeftButton", "GenderRightButton",
     ];
 
@@ -726,12 +726,12 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// </summary>
     static readonly (string Widget, string Key)[] EditorCaptions =
     [
-        ("RandomiseButton", "Randomise"), ("ResetButton", "Reset"), ("RandomiseAllButton", "Randomise All"), ("BodyTabButton", "Body"),
-                ("FaceTabButton", "Face"),
-        ("HairTabButton", "Hair"), ("ImportButton", "Import"), ("ExportButton", "Export"), ("ClothesButton", "Clothes"), ("ConfirmButton", "Confirm"),
-                ("lbRace", "Race"),
+        ("RandomiseButton", "Randomise"), ("ResetButton", "Reset"), ("RandomiseAllButton", "Randomise All"),
+        ("BodyTabButton", "Body"), ("FaceTabButton", "Face"),
+        ("HairTabButton", "Hair"), ("ImportButton", "Import"), ("ExportButton", "Export"), ("ClothesButton", "Clothes"),
+        ("ConfirmButton", "Confirm"), ("lbRace", "Race"),
         ("lbSubRace", "Subrace"), ("lbGender", "Gender"), ("lbChangeCharacter", "Change Character"), ("lbRaceDescription", "Race Description"),
-                ("lbRaceStats", "Race Stats"),
+        ("lbRaceStats", "Race Stats"),
     ];
 
     internal void BindEditor(UiBindings b)
@@ -743,9 +743,16 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         }
         if (Editor is not { } s || Draft(s.Current) is not { } draft || EditorData is not { } data) return;
         bool creation = s.Kind == EditKind.Creation;
-        foreach (string name in new[] { "BodyTabButton", "FaceTabButton", "HairTabButton", "RandomiseButton", "RandomiseAllButton", "ResetButton",
-                "ClothesButton", "ConfirmButton" })
-        { b.Disabled.Remove(name); b.Actions[name] = name; }
+        string[] buttons =
+        [
+            "BodyTabButton", "FaceTabButton", "HairTabButton", "RandomiseButton", "RandomiseAllButton", "ResetButton", "ClothesButton", "ConfirmButton",
+        ];
+        foreach (string name in buttons)
+        {
+            b.Disabled.Remove(name);
+            b.Actions[name] = name;
+        }
+
         // Race, subrace and gender arrows: only at creation, and only where there is a choice (FUN_1405ee0c0); hidden otherwise.
         var groups = EditorRaces(data.Db);
         int g = IndexOf(groups, draft.Race);
@@ -772,8 +779,8 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         foreach (var (name, key) in EditorCaptions) b.Text[name] = Loc.Tr(key).ToUpperInvariant();
         string tabButton = s.Tab switch { EditorTab.Face => "FaceTabButton", EditorTab.Hair => "HairTabButton", _ => "BodyTabButton" };
         b.Properties[tabButton] = new Dictionary<string, string> { ["Checked"] = "true" };
-        b.Properties["ClothesButton"] = new Dictionary<string, string> { ["Checked"] = s.Clothes ? "true" : "false", ["StateSelected"] = s.Clothes
-                ? "true" : "false" };
+        b.Properties["ClothesButton"] = new Dictionary<string, string> { ["Checked"] = s.Clothes ? "true" : "false",
+            ["StateSelected"] = s.Clothes ? "true" : "false" };
         var everyRace = CharacterDraft.PlayableRaces(data.Db);
         int shown = IndexOf(everyRace, draft.Race);
         b.Text["RaceText"] = shown >= 0 ? everyRace[shown].Group.Name : draft.Race.Name;
@@ -783,7 +790,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         b.Text["CharIndexText"] = $"{s.Index + 1}/{s.Characters.Count}";
         b.Text["DescriptionPanelText"] = draft.Race.GetString("description");
         b.Properties["DescriptionPanelText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true",
-                ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_WordWrap") };
+            ["TextAlign"] = "Left Top", ["TextColour"] = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_WordWrap") };
         b.Properties["NameText"] = new Dictionary<string, string> { ["DefaultAction"] = "false" };
         b.Properties["ConfirmButton"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
         BindEditorRows(b, draft, s.Tab);
@@ -823,7 +830,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         b.Text["DescriptionPanelText"] = look.Race.GetString("description");
         string ink = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_WordWrap");
         b.Properties["DescriptionPanelText"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true",
-                ["TextAlign"] = "Left Top", ["TextColour"] = ink };
+            ["TextAlign"] = "Left Top", ["TextColour"] = ink };
         b.Properties["NameText"] = new Dictionary<string, string> { ["DefaultAction"] = "false" };
         b.Properties["ConfirmButton"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
     }
@@ -870,24 +877,24 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         for (int i = 0; i < controls.Count; i++)
         {
             string name = "EditorRow" + i.ToString(CultureInfo.InvariantCulture);
-            string template = controls[i].Kind == EditorControlKind.HairHue ? "Kenshi_MultiSlider" : controls[i].IsPicker ? "Kenshi_ListSlider"
-                    : "Kenshi_Slider";
+            string template = controls[i].Kind == EditorControlKind.HairHue ? "Kenshi_MultiSlider" : controls[i].IsPicker
+                ? "Kenshi_ListSlider" : "Kenshi_Slider";
             float height = player.UiResources.Templates.TryGetValue(template, out var resource)
-                    ? MyGuiReader.ReadResourceLayout(resource).Roots[0].Position.Height : 55;
+                ? MyGuiReader.ReadResourceLayout(resource).Roots[0].Position.Height : 55;
             rows.Add(new("Widget", name, template, "", "Left Top", new(0, 0, 455, height), false, new Dictionary<string, string>(),
-                    new Dictionary<string, string>(), []));
+                new Dictionary<string, string>(), []));
             _editorRowWidgets.Add((name, height));
             if (template == "Kenshi_MultiSlider")
             {
-                for (int k = 0; k < 3
-                        && i + k < controls.Count; k++) parts.Add((name, "Slider" + (k + 1).ToString(CultureInfo.InvariantCulture), i + k));
+                for (int k = 0; k < 3 && i + k < controls.Count; k++)
+                    parts.Add((name, "Slider" + (k + 1).ToString(CultureInfo.InvariantCulture), i + k));
                 i += 2;
             }
             else parts.Add((name, null, i));
         }
         var view = new MyGuiWidget("ScrollView", EditorRowsView, "Kenshi_ScrollViewEmptyLight", "", "Stretch", new(0, 0, 1, 1), true,
             new Dictionary<string, string> { ["VisibleHScroll"] = "false", ["VisibleVScroll"] = "true", ["CanvasAlign"] = "Left Top" },
-                    new Dictionary<string, string>(), rows);
+                new Dictionary<string, string>(), rows);
         static MyGuiWidget Fill(MyGuiWidget w, MyGuiWidget view) =>
             w.Name == "TabsPanelContent" ? w with { Children = [view] } : w with { Children = [.. w.Children.Select(c => Fill(c, view))] };
         player.FaithfulScreens.Replace("editor", EditorLayout with { Roots = [.. EditorLayout.Roots.Select(r => Fill(r, view))] });
@@ -975,8 +982,8 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     {
         if (Editor is not { } s) return;
         // An animal's page shows its race's stats too (FUN_1405ee0c0 fills them for any character).
-        var race = s.Animals.Contains(s.Current) ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current)?.Appearance?.Race
-                : Draft(s.Current)?.Race;
+        var race = s.Animals.Contains(s.Current)
+            ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current)?.Appearance?.Race : Draft(s.Current)?.Race;
         if (race is not null && controls.FirstOrDefault(c => c.Name == "StatsPanelText") is { } stats) AddRaceStats(controls, race, stats);
     }
 
@@ -1009,8 +1016,8 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         // CONFIRM).
         float? hitPoints = null;
         if (Editor is { } s && player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == s.Current) is { } shown)
-            hitPoints = shown.Appearance?.Race.StringId == race.StringId && shown.HealthParts is [var first, ..] ? first.Maximum
-                    : RaceHitPoints(race);
+            hitPoints = shown.Appearance?.Race.StringId == race.StringId && shown.HealthParts is [var first, ..]
+                ? first.Maximum : RaceHitPoints(race);
         if (hitPoints is { } hp) lines.Add((Loc.Tr("Hit Points:"), ((int)(hp + 0.01f)).ToString(CultureInfo.InvariantCulture), null));
         lines.AddRange(RaceStatLines(race).Select(l => (l.Label, l.Value, (bool?)l.Good)));
         float scale = player.Height / 1080f, row = 19.2f * scale;
@@ -1035,24 +1042,29 @@ sealed class CharacterEditorPanel(PlayerInterface player)
             var (label, value, good) = lines[i];
             var bounds = new UiRect(area.X + inset + width * 0.03f, area.Y + inset - textLift + i * row - scroll, width * 0.93f, row);
             controls.Add(new($"editor-stat-{i}", "TextBox", bounds, label, "", "Kenshi_TextboxStandardText", true,
-                new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextColour"] = PlayerInterface.MainColour,
-                        ["TextAlign"] = "Left Top" },
+                new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium",
+                    ["TextColour"] = PlayerInterface.MainColour, ["TextAlign"] = "Left Top" },
                 Vector4.Zero, Pickable: false, Clip: clip));
             controls.Add(new($"editor-stat-value-{i}", "TextBox", bounds, value, "", "Kenshi_TextboxStandardText", true,
                 new Dictionary<string, string>
                 {
                     ["FontName"] = "Kenshi_StandardFont_Medium",
                     ["TextAlign"] = "Right Top",
-                    ["TextColour"] = good is null ? PlayerInterface.MainColour : good.Value ? PlayerInterface.GoodColour
-                            : PlayerInterface.BadBrightColour
+                    ["TextColour"] = good is null ? PlayerInterface.MainColour
+                        : good.Value ? PlayerInterface.GoodColour
+                        : PlayerInterface.BadBrightColour
                 }, Vector4.Zero, Pickable: false, Clip: clip));
         }
         if (maximum <= 0)
-                { player.ScrollBars.InventoryViews.Remove(EditorStatsScroll); player.ScrollBars.InventoryTracks.Remove(EditorStatsScroll); return; }
+        {
+            player.ScrollBars.InventoryViews.Remove(EditorStatsScroll);
+            player.ScrollBars.InventoryTracks.Remove(EditorStatsScroll);
+            return;
+        }
         player.ScrollBars.InventoryScroll[EditorStatsScroll] = scroll;
         player.ScrollBars.InventoryViews[EditorStatsScroll] = (area, maximum);
-        player.ScrollBars.AddScrollBar(EditorStatsScroll, controls, new(area.X + width, area.Y, bar, area.Height), area.Height, lines.Count * row,
-                scroll, maximum, host.Clip);
+        player.ScrollBars.AddScrollBar(EditorStatsScroll, controls, new(area.X + width, area.Y, bar, area.Height), area.Height,
+            lines.Count * row, scroll, maximum, host.Clip);
     }
 
     /// <summary>

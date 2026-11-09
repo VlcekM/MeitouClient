@@ -20,11 +20,11 @@ sealed partial class GameHost
     static readonly (string Step, string Label, double Seconds)[] StartSteps =
     [
         ("scene", "the world", 0.5), ("terrain", "terrain", 0.3), ("colourmap", "terrain colour map (first start only)", 0.3),
-                ("biomes", "terrain textures", 2.0), ("sky", "sky", 0.25), ("weather", "weather", 0.15),
-        ("particles", "weather effects", 0.2), ("water", "water", 0.6), ("reflections", "water", 0.1), ("objects", "buildings", 0.4),
-                ("foliage", "foliage", 0.35),
+        ("biomes", "terrain textures", 2.0), ("sky", "sky", 0.25), ("weather", "weather", 0.15),
+        ("particles", "weather effects", 0.2), ("water", "water", 0.6), ("reflections", "water", 0.1),
+        ("objects", "buildings", 0.4), ("foliage", "foliage", 0.35),
         ("shadows", "lighting", 0.3), ("gi", "lighting", 0.15), ("people", "people", 0.3), ("world", "the world", 0.1),
-                ("interface", "the interface", 0.3),
+        ("interface", "the interface", 0.3),
         ("navmesh", "paths", 0.5), ("characters", "characters", 0.2), ("finishing", "finishing", 0.4), ("view", "the view", 1.2),
     ];
     // The steps of a load between scenes (GameHost.Transition.cs).
@@ -54,8 +54,8 @@ sealed partial class GameHost
         _loadingDisplay = display;
         LoadingOverlay = DebugOverlay.TryCreate(display.Context, Assets.Find);
         if (LoadingOverlay is not null)
-                Loading = LoadingScreen.Create(LoadingOverlay, Assets.Find, Install.DataDirectory,
-                        (GameOptions.UiMode ?? Config.UiMode) == Data.Ui.UiMode.Faithful);
+            Loading = LoadingScreen.Create(LoadingOverlay, Assets.Find, Install.DataDirectory,
+                (GameOptions.UiMode ?? Config.UiMode) == Data.Ui.UiMode.Faithful);
         LoadingSteps = StartSteps;
     }
 
@@ -105,8 +105,8 @@ sealed partial class GameHost
         if (_loadingDisplay?.Window is not { } window || Loading is null || LoadingOverlay is null) return true;
         // The longest time the window went without a frame (the measure of a frozen screen), and the step it was in.
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        if (_lastLoadingFrame != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(_lastLoadingFrame, now).TotalMilliseconds is var gap
-                && gap > _longestGap.Ms)
+        if (_lastLoadingFrame != 0
+                && System.Diagnostics.Stopwatch.GetElapsedTime(_lastLoadingFrame, now).TotalMilliseconds is var gap && gap > _longestGap.Ms)
             _longestGap = (gap, _lastFrameStep);
         if (_lastLoadingFrame != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(_lastLoadingFrame, now).TotalMilliseconds is var held && held > 250)
             Console.WriteLine($"loading   no frame for {held:0} ms in the step {_lastFrameStep}");

@@ -62,7 +62,7 @@ sealed class GroundItemSync(GameHost host)
     /// </summary>
     internal void ShowGround(GroundItemSnapshot g, Quaternion rotation, float y) =>
         host.ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(g.Position.X, g.Position.Z), GroundId(g.Id), g.Record, g.Position,
-                rotation, null, y) { Key = GroundId(g.Id) });
+            rotation, null, y) { Key = GroundId(g.Id) });
 
     /// <summary>
     /// The ground items above the shown floor of a building in the interior view (game: <c>FUN_1409fb540</c>, as a character there): not picked and
@@ -120,7 +120,7 @@ sealed class GroundItemSync(GameHost host)
         {
             mesh = file ? host.Player.Build.BuildHost?.Placement.CollisionFile(collision.Xml!) ?? [] : [];
             if (mesh.Count == 0 && BoundsOf(g.Record) is { } box)
-                    mesh = Box(box.Min, box.Max);   // engine choice: a collision file missing from the install falls back to the box
+                mesh = Box(box.Min, box.Max);   // engine choice: a collision file missing from the install falls back to the box
             _groundShapes[(g.Record, file)] = mesh;
         }
         return mesh.Count == 0 ? null : (mesh, pose.At, pose.Rotation);
@@ -138,7 +138,7 @@ sealed class GroundItemSync(GameHost host)
         if (host.Scene.Database?.Find(record) is not { } item) return null;   // not kept: the database may not be loaded yet
         string physics = item.GetPath("physics file");
         return _groundCollision[record] = item.GetBool("has collision")
-                ? (item.Type == Data.Fcs.FcsRecordType.Weapon, physics.Contains(".xml") ? physics : null) : null;
+            ? (item.Type == Data.Fcs.FcsRecordType.Weapon, physics.Contains(".xml") ? physics : null) : null;
     }
 
     /// <summary>
@@ -194,11 +194,11 @@ sealed class GroundItemSync(GameHost host)
         float Ground(float x, float z) => onTerrain ? host.ActiveGround(x, z) : at.Y;
         float reach = MathF.Max(MathF.Max(size.X, size.Z) * 0.5f, 1);
         var slope = Vector3.Normalize(new Vector3(Ground(at.X - reach, at.Z) - Ground(at.X + reach, at.Z), 2 * reach,
-                Ground(at.X, at.Z - reach) - Ground(at.X, at.Z + reach)));
+            Ground(at.X, at.Z - reach) - Ground(at.X, at.Z + reach)));
         float tilt = MathF.Acos(Math.Clamp(slope.Y, -1, 1));
         if (tilt > 1e-3f)
             rotation = Quaternion.Normalize(Quaternion.Concatenate(rotation,
-                    Quaternion.CreateFromAxisAngle(Vector3.Normalize(Vector3.Cross(Vector3.UnitY, slope)), tilt)));
+                Quaternion.CreateFromAxisAngle(Vector3.Normalize(Vector3.Cross(Vector3.UnitY, slope)), tilt)));
         // Every point of a lattice over its bounds must be at or above the ground below it (a limb on a crest touches the crest, not only the dips
         // round it).
         float y = float.MinValue;
@@ -223,7 +223,7 @@ sealed class GroundItemSync(GameHost host)
     {
         if (host.Scene.Database?.Find(g.Record) is not { } record || WorldObjectLayout.ItemMesh(record) is not { Length: > 0 } mesh) return false;
         if (host.Gpu.Debris?.Extent(mesh, null, host.Debris.LimbLookOf(g.Record)) is null)
-                return false;   // the debris renderer draws only meshes it has loaded
+            return false;   // the debris renderer draws only meshes it has loaded
         // Hanging: the mesh's long axis down, turned by the item's yaw (the same yaw the rest pose keeps).
         var yaw = new Quaternion(0, g.Rotation.Y, 0, g.Rotation.W);
         var hang = BoundsOf(g.Record) is { } box ? Debris.Turn(LongAxis(box.Max - box.Min), -Vector3.UnitY) : Quaternion.Identity;

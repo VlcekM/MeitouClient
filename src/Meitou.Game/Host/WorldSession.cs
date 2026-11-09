@@ -327,8 +327,8 @@ public sealed class WorldSession : IDisposable
     {
         World.GameHours = Clock.TotalHours;
         World.Daytime = Clock.IsDaytime;
-        World.PhysicsSpeed = (float)(Simulation.Speed > 0 ? Simulation.Speed
-                : Simulation.LastNonZeroSpeed);   // the ragdoll physics steps in real time
+        // the ragdoll physics steps in real time
+        World.PhysicsSpeed = (float)(Simulation.Speed > 0 ? Simulation.Speed : Simulation.LastNonZeroSpeed);
         World.ViewPosition = ViewEye ?? Camera.Current.Eye;
         long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
         World.RunTick(publish);

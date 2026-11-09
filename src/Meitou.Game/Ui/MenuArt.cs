@@ -10,8 +10,9 @@ namespace Meitou.Game.Ui;
 static class MenuArt
 {
     /// <summary>
-    /// The paper card (kit .mt-save): the paper crop stretched whole, brightened by <paramref name="bright"/>, with its edge drawn inside (2px dark line,
-    /// 1px faint line, 10px wear), corners rounded to 10, over a drop shadow (6 down, ~14 soft, 55% black) in a margin of <paramref name="margin"/> pixels.
+    /// The paper card (kit .mt-save): the paper crop stretched whole, brightened by <paramref name="bright"/>, with its edge drawn inside (2px dark
+    /// line, 1px faint line, 10px wear), corners rounded to 10, over a drop shadow (6 down, ~14 soft, 55% black) in a margin of
+    /// <paramref name="margin"/> pixels.
     /// </summary>
     public static RgbaImage Card(RgbaImage atlas, UiRect paper, int width, int height, float s, float margin, float bright)
     {
@@ -45,7 +46,8 @@ static class MenuArt
     }
 
     /// <summary>
-    /// A plate button (kit .mt-btn): the 9-slice skin (6-pixel slices) stretched to size at <paramref name="bright"/> brightness, corners rounded to 7.
+    /// A plate button (kit .mt-btn): the 9-slice skin (6-pixel slices) stretched to size at <paramref name="bright"/> brightness, corners rounded to
+    /// 7.
     /// </summary>
     public static RgbaImage Plate(RgbaImage atlas, UiRect skin, int width, int height, float s, float bright)
     {
@@ -56,7 +58,9 @@ static class MenuArt
             {
                 float px = x + 0.5f, py = y + 0.5f;
                 float cover = Math.Clamp(0.5f - RoundedDistance(px, py, width, height, radius), 0, 1);
-                var sample = SampleAlpha(atlas, skin.X + NineSliceMap(px, width, slice, skin.Width), skin.Y + NineSliceMap(py, height, slice, skin.Height));
+                float sx = skin.X + NineSliceMap(px, width, slice, skin.Width);
+                float sy = skin.Y + NineSliceMap(py, height, slice, skin.Height);
+                var sample = SampleAlpha(atlas, sx, sy);
                 Put(image, x, y, new(new Vector3(sample.X, sample.Y, sample.Z) * bright, sample.W * cover));
             }
 

@@ -136,7 +136,8 @@ sealed class SkyArrival(WorldCamera source, float hour, float speed = 1, bool im
     }
 
     /// <summary>
-    /// The descent: orbit round the view's target onto its heading while coming down from above it, the look tipping from the sky to the view's pitch.
+    /// The descent: orbit round the view's target onto its heading while coming down from above it, the look tipping from the sky to the view's
+    /// pitch.
     /// </summary>
     void ApplyDescent(WorldCamera camera)
     {

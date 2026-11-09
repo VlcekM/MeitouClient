@@ -73,8 +73,9 @@ sealed class BuildMode(PlayerInterface player)
     /// The widgets the HUD gives way to while the build window is open (it covers the same lower edge of the screen).
     /// </summary>
     internal static readonly string[] BuildHiddenHud =
-        ["InformationPanel", "MedicalPanel", "SquadPanel", "OrdersPanel", "FloorPanel", "ShortcutsPanel", "SpeedButtonsPanel", "TimeMoneyPanel",
-            "BuildPanel"];
+    [
+        "InformationPanel", "MedicalPanel", "SquadPanel", "OrdersPanel", "FloorPanel", "ShortcutsPanel", "SpeedButtonsPanel", "TimeMoneyPanel", "BuildPanel",
+    ];
 
     /// <summary>
     /// How far round the cursor the level's walls are read for a snap: the snap radius times sqrt 2, plus the longest wall (so the joins at the ends
@@ -86,9 +87,6 @@ sealed class BuildMode(PlayerInterface player)
 
     #region Mode
 
-    /// <summary>
-    /// What build mode needs from the host (null: no build mode, B does nothing).
-    /// </summary>
     /// <summary>
     /// What build mode needs from the host (null: no build mode, B does nothing).
     /// </summary>

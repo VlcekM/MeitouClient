@@ -10,8 +10,9 @@ using Meitou.Simulation;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The squad bar's portraits (both UI modes; docs/game/ui-screens.md): a cell per member as the original's <c>Kenshi_PortraitCharacter</c> lays it out (the
-/// background, the portrait the renderer draws into its atlas, the name along the bottom, the frame that is the button), left to right on the squad tab's page.
+/// The squad bar's portraits (both UI modes; docs/game/ui-screens.md): a cell per member as the original's <c>Kenshi_PortraitCharacter</c> lays it
+/// out (the background, the portrait the renderer draws into its atlas, the name along the bottom, the frame that is the button), left to right on
+/// the squad tab's page.
 /// </summary>
 sealed class PortraitBar(PlayerInterface player)
 {
@@ -30,12 +31,12 @@ sealed class PortraitBar(PlayerInterface player)
     const float PortraitLayoutSize = 136;
 
     /// <summary>
-    /// The atlas cells after the squad's: the conversation window's speaker.
+    /// The first atlas cell after the squad's: the conversation window's speaker.
     /// </summary>
     public const int DialogueNpcCell = PortraitCells - 2;
 
     /// <summary>
-    /// The atlas cells after the squad's: the conversation window's player character.
+    /// The second atlas cell after the squad's: the conversation window's player character.
     /// </summary>
     public const int DialoguePlayerCell = PortraitCells - 1;
 
@@ -54,7 +55,14 @@ sealed class PortraitBar(PlayerInterface player)
     /// </summary>
     UiRect _squadBarPage;
 
+    /// <summary>
+    /// The squad bar's row height (<see cref="_squadBarPage"/>).
+    /// </summary>
     internal float SquadBarRow;
+
+    /// <summary>
+    /// How far the squad bar's rows are scrolled (<see cref="_squadBarPage"/>).
+    /// </summary>
     internal float SquadBarScroll;
 
     /// <summary>
@@ -73,8 +81,8 @@ sealed class PortraitBar(PlayerInterface player)
         $"{cell % CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell} {cell / CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell} {PortraitSize} {PortraitSize}");
 
     /// <summary>
-    /// The player's characters posed every frame however far (<see cref="CharacterInstance.FullRateAnimation"/>) into <paramref name="into"/>: the first
-    /// <see cref="FullRateCount"/> of the squad bar and then the other squads in order, and the first selected one.
+    /// The player's characters posed every frame however far (<see cref="CharacterInstance.FullRateAnimation"/>) into <paramref name="into"/>: the
+    /// first <see cref="FullRateCount"/> of the squad bar and then the other squads in order, and the first selected one.
     /// </summary>
     public void FullRateCharacters(HashSet<CharacterId> into)
     {
@@ -199,7 +207,8 @@ sealed class PortraitBar(PlayerInterface player)
             player.ScrollBars.InventoryScroll["SquadPanel"] = SquadBarScroll;
             player.ScrollBars.InventoryViews["SquadPanel"] = (page, grid.Maximum);
             var track = new UiRect(page.X + page.Width, page.Y, barWidth, page.Height);
-            player.ScrollBars.AddScrollBar("SquadPanel", controls, track, page.Height, page.Height + grid.Maximum, SquadBarScroll, grid.Maximum, panel, "hud-squad");
+            float content = page.Height + grid.Maximum;
+            player.ScrollBars.AddScrollBar("SquadPanel", controls, track, page.Height, content, SquadBarScroll, grid.Maximum, panel, "hud-squad");
         }
         else
         {
@@ -230,6 +239,10 @@ sealed class PortraitBar(PlayerInterface player)
         return (size, columns, rows, maximum);
     }
 
+    /// <summary>
+    /// The squad bar's cells on <paramref name="page"/>, <paramref name="columns"/> to a row of <paramref name="size"/>; rows scrolled off the page
+    /// are left out.
+    /// </summary>
     void AddSquadCells(List<UiControl> controls, IReadOnlyList<CharacterSnapshot> members, UiRect page, float size, int columns)
     {
         float k = size / PortraitLayoutSize;
@@ -246,7 +259,8 @@ sealed class PortraitBar(PlayerInterface player)
             // The layout's depths, back to front: background, back overlay, portrait, front overlay, name, frame.
             var state = PortraitStateOf(m, camera.Eye, camera.Target);
             string background = (state & PortraitState.Hurt) != 0 ? "Hurt" : "Normal";
-            controls.Add(PortraitImage($"portrait-back-{i}", At(0, 0, 135, 135), "Background", background, PortraitFlash(m.Id, state)) with { Clip = page });
+            float flash = PortraitFlash(m.Id, state);
+            controls.Add(PortraitImage($"portrait-back-{i}", At(0, 0, 135, 135), "Background", background, flash) with { Clip = page });
             if (BackOverlayName(state) is { Length: > 0 } back)
                 controls.Add(PortraitImage($"portrait-back-overlay-{i}", At(6, 5, 124, 124), "BackOverlay", back) with { Clip = page });
 
@@ -303,8 +317,7 @@ sealed class PortraitBar(PlayerInterface player)
     /// <summary>
     /// The original's flags (<c>FUN_140414dc0</c>). Its danger test reads a float of the character's AI that is not decoded (eating also waits while
     /// it is above 0); Meitou takes "in a fight" for it. Being eaten (<c>+0x279 &amp; 7</c>, <see cref="BodyStatus.BeingEaten"/>) also flashes, and
-    /// sets
-    /// <c>Eaten</c>.
+    /// sets <c>Eaten</c>.
     /// </summary>
     PortraitState PortraitStateOf(CharacterSnapshot m, Vector3 eye, Vector3 focus)
     {

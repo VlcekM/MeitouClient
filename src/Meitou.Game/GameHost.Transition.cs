@@ -64,7 +64,7 @@ sealed partial class GameHost
     internal bool Covered => ActiveSceneLoad is not null || Warming || SkyArrival is not null || Loading is { Exiting: true };
 
     internal static (string Step, Func<Task?> Run, bool DuringAscent) Stage(string step, Func<Task?> run, bool duringAscent = false) => (step, run,
-            duringAscent || step == "read");
+        duringAscent || step == "read");
 
     internal void StartSceneLoad(bool mainMenuTransition, float? destinationHour, params (string Step, Func<Task?> Run, bool DuringAscent)[] stages)
     {
@@ -198,7 +198,7 @@ sealed partial class GameHost
                 _nextWarmReport = _warmSeconds + 5;
                 int pendingLooks = Gpu.Characters is { } characterRenderer
                     ? TitleScreen.TitleVisible ? characterRenderer.PendingLoads
-                            : Session.CurrentSnapshot.Characters.Count(c => AwaitsLook(c, characterRenderer))
+                        : Session.CurrentSnapshot.Characters.Count(c => AwaitsLook(c, characterRenderer))
                     : 0;
                 Console.WriteLine($"loading   {(TitleScreen.TitleVisible ? "menu" : "game")} still preparing: terrain {(Gpu.Streamer?.Idle == false ? "pending" : "ready")}, objects {Gpu.Objects?.Pending ?? 0}{(Gpu.Objects is { Pending: > 0 } po ? $" ({po.PendingDetail})" : "")}, foliage {Gpu.Foliage?.LoadingPending ?? 0}{(Gpu.Foliage is { LoadingPending: > 0 } pf ? $" ({pf.PendingDetail})" : "")}, population {(populationReady ? "ready" : "pending")}, characters {((TitleScreen.TitleVisible ? TitleScreen.TitleCharactersReady : charactersReady) ? "ready" : $"pending ({pendingLooks} looks; {Gpu.Characters?.PendingLoads ?? 0} assets/textures)")}");
             }

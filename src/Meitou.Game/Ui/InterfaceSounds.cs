@@ -186,7 +186,8 @@ sealed class InterfaceSounds(PlayerInterface player)
     }
 
     /// <summary>
-    /// The orders panel (1407214e0 and neighbours): Block, Hold, Passive and Ranged make Blocks_Only on and off; Sneak makes Stealth on and a click off.
+    /// The orders panel (1407214e0 and neighbours): Block, Hold, Passive and Ranged make Blocks_Only on and off; Sneak makes Stealth on and a click
+    /// off.
     /// </summary>
     void SoundForOrder(CharacterOrders order)
     {
@@ -223,7 +224,6 @@ sealed class InterfaceSounds(PlayerInterface player)
             case "editor":
                 if (e.Widget == "ConfirmButton") Sound("Create_Character");
                 else if (e.Widget is "BodyTabButton" or "FaceTabButton" or "HairTabButton") Sound("Tab");
-
                 // Slider: the first event of each drag (a row's bar, named by its row). A list row's arrows click.
                 else if (e.Action == "scroll")
                 {
@@ -239,7 +239,8 @@ sealed class InterfaceSounds(PlayerInterface player)
     }
 
     /// <summary>
-    /// A command the player is about to send: orders sound as the exe's order dispatcher (1407f9e20), item moves and trades as the inventory handlers.
+    /// A command the player is about to send: orders sound as the exe's order dispatcher (1407f9e20), item moves and trades as the inventory
+    /// handlers.
     /// </summary>
     internal void SoundForCommand(SimCommand command)
     {
@@ -268,7 +269,6 @@ sealed class InterfaceSounds(PlayerInterface player)
 
         string name = command.GetType().Name;
         if (name == "DialogueChoice") Sound("Dialogue_Choice", "Dialogue_Choice", "Continue_Conversation");
-
         // The exe skips the click for a move order given while steering.
         else if (OrderCommands.Contains(name) && !(player.Steering && name == "MoveOrder")) Sound("Right_Click");
     }

@@ -21,7 +21,8 @@ sealed class GroundItemPicks(PlayerInterface player)
         (IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh, Vector3 At, Quaternion Rotation)?>? GroundItemShape { get; set; }
 
     /// <summary>
-    /// Whether a ground item is not drawn, being above the shown floor of its building (the host sets it; null: none): it has no label and is not picked.
+    /// Whether a ground item is not drawn, being above the shown floor of its building (the host sets it; null: none): it has no label and is not
+    /// picked.
     /// </summary>
     public Func<int, bool>? GroundItemHidden { get; set; }
 
@@ -177,11 +178,11 @@ sealed class GroundItemPicks(PlayerInterface player)
     }
 
     /// <summary>
-    /// The name label over each ground item within <see cref="PointerView.HighlightRadius"/> of the focus while the Highlight key is held: the original's
-    /// <c>Kenshi_ItemDropLabel</c> (<b>Verified</b>), a <c>Kenshi_GenericTextBoxFlatSmallSkin</c> 0.0259 of the screen high and fitted to the name, centred in
-    /// Kenshi_StandardFont_Medium; plate and text in the item's <see cref="ItemLabelColour"/>, both green (<c>...Selected</c>, #66ff66) for the one
-    /// the pointer picks, the plate red for a stolen one. Labels that would overlap the nearer one's are lifted above it, and hidden ones are skipped
-    /// (engine choices).
+    /// The name label over each ground item within <see cref="PointerView.HighlightRadius"/> of the focus while the Highlight key is held: the
+    /// original's <c>Kenshi_ItemDropLabel</c> (<b>Verified</b>), a <c>Kenshi_GenericTextBoxFlatSmallSkin</c> 0.0259 of the screen high and fitted to
+    /// the name, centred in Kenshi_StandardFont_Medium; plate and text in the item's <see cref="ItemLabelColour"/>, both green (<c>...Selected</c>,
+    /// #66ff66) for the one the pointer picks, the plate red for a stolen one. Labels that would overlap the nearer one's are lifted above it, and
+    /// hidden ones are skipped (engine choices).
     /// </summary>
     internal void AddItemLabels(List<UiControl> controls)
     {
@@ -242,9 +243,7 @@ sealed class GroundItemPicks(PlayerInterface player)
     /// <summary>
     /// Adds the plate and the text of each placed label, drawn far to near so the nearer labels lie on top.
     /// </summary>
-    void AddLabelControls(
-        List<UiControl> controls,
-        List<(Simulation.Items.GroundItemSnapshot Item, float Distance, Vector2 At)> near,
+    void AddLabelControls(List<UiControl> controls, List<(Simulation.Items.GroundItemSnapshot Item, float Distance, Vector2 At)> near,
         List<(int Id, UiRect Rect)> placed)
     {
         int? hovered = PickGroundItem(player.Mouse);
@@ -277,11 +276,15 @@ sealed class GroundItemPicks(PlayerInterface player)
         {
             FcsRecordType.Item => TooltipRuntime.TipHex(ArtifactOf?.Invoke(g.Record) == true ? "0dfceb" : "e0cccc"),
             FcsRecordType.Weapon or FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.NestItem or FcsRecordType.MapItem
-                or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement => TooltipRuntime.TipHex(
-                    level < 16 ? "666666" : level < 36 ? "d9ccbf" : level < 51 ? "4099b3" : level < 66 ? "66fc80" : "fceb0d"),
+                or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement => TooltipRuntime.TipHex(GradeHex(level)),
             _ => "1 1 1",
         };
     }
+
+    /// <summary>
+    /// The <c>ItemGrade</c> colour of a gear level: below 16/36/51/66, else the yellow grades 4 and 5 share.
+    /// </summary>
+    static string GradeHex(int level) => level < 16 ? "666666" : level < 36 ? "d9ccbf" : level < 51 ? "4099b3" : level < 66 ? "66fc80" : "fceb0d";
 
     #endregion
 }

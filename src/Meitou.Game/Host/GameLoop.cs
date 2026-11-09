@@ -189,6 +189,8 @@ sealed class GameLoop(GameHost host)
         _sceneRead = host.LoadScene is { } readScene ? Task.Run(readScene) : null;
         host.Sound.BeginAudio();
         _frameGenerationAtStart = host.Config.FrameGenerationMethod;
+
+        // Load before the device so the settings panel can switch to DLSS without restarting.
         _display = new VulkanDisplay(_headless ? null : WindowOptions.Default with
         {
             Size = new Vector2D<int>(host.WorldOptions.Width, host.WorldOptions.Height),
@@ -197,8 +199,7 @@ sealed class GameLoop(GameHost host)
             IsVisible = false,
             FramesPerSecond = 0,
             UpdatesPerSecond = 0,
-        }, _vsync, dlss: true, frameGeneration: _headless ? FrameGenerationMethod.Off
-                : _frameGenerationAtStart);   // Load before the device so the settings panel can switch to DLSS without restarting.
+        }, _vsync, dlss: true, frameGeneration: _headless ? FrameGenerationMethod.Off : _frameGenerationAtStart);
         host.Streamline = _display.Streamline;
         host.Ngx = _display.Ngx;
         _window = _headless ? null : _display.Window!;
@@ -221,12 +222,12 @@ sealed class GameLoop(GameHost host)
         if (_window is null) { }
         else if (fullScreen) BorderlessFullScreen.Toggle(_window);
         else if (!host.WorldOptions.SizeGiven && !host.WorldOptions.HiddenWindow)
-                _window.WindowState = WindowState.Maximized;   // maximising would show a hidden window
+            _window.WindowState = WindowState.Maximized;   // maximising would show a hidden window
         host.BeginLoadingScreen(_display);   // its textures and fonts are made before the window shows
         // The Faithful start shows the original's splash, as the game does before its title, instead of the loading screen (unless the Interface
         // setting turns it off).
         if (host.Loading is { Faithful: true } && host.Config.SplashScreens && host.OpensOnTitle(interactive: true) && !_headless)
-                host.Loading.StartSplash();
+            host.Loading.StartSplash();
         // The first loading frame is in the swapchain when the window shows, and on screen before the splash closes. Not on Wayland: a window gets
         // its shell role when it shows, and a buffer attached to the surface before that makes the compositor drop the client ("attached a buffer
         // before configure event"), so there the window shows first and takes the compositor's configure before anything is drawn. --hidden-window:
@@ -290,7 +291,10 @@ sealed class GameLoop(GameHost host)
             host.ItemIconFiles.ConnectItemIcons();
         }
         if (host.Gpu.Characters is { } portraits)
-                { var (atlas, sampled) = portraits.PortraitAtlas; host.Player.SetUiTexture(PortraitBar.PortraitTexture, atlas, sampled); }
+        {
+            var (atlas, sampled) = portraits.PortraitAtlas;
+            host.Player.SetUiTexture(PortraitBar.PortraitTexture, atlas, sampled);
+        }
         host.DebugMenu.DebugToolsOn = true;
         host.DebugMenu.Profiler = _overlay is null ? null : new FrameProfiler(_display.Context, () => _display.Context.GpuFrameMs);
     }
@@ -308,14 +312,14 @@ sealed class GameLoop(GameHost host)
         if (_overlay is null) return;
         var values = WorldFrame.CreateSettingsPanel(_overlay, host.Gpu, host.Render,
             getHour: () => (float)host.Session.Clock.HourOfDay,
-                    setHour: v => { host.Session.Clock.SetHourOfDay(v); if (host.Duel.IsDuel) host.Duel.HeldHour = v; },
+            setHour: v => { host.Session.Clock.SetHourOfDay(v); if (host.Duel.IsDuel) host.Duel.HeldHour = v; },
             getVSync: () => _display.VSync, setVSync: v => _display.VSync = v, switches: _switches,
             getFullScreen: FullScreenOn, setFullScreen: _ => ToggleFullScreen(),
             extraChoices: [new PanelChoice(() => $"UI mode: {host.Player.UiMode}", () => ["Faithful", "Meitou"], () => (int)host.Player.UiMode,
                 index =>
                 {
                     host.Player.SetUiMode(index switch { 0 => Data.Ui.UiMode.Faithful, 1 => Data.Ui.UiMode.Meitou,
-                            _ => throw new ArgumentOutOfRangeException(nameof(index)) });
+                        _ => throw new ArgumentOutOfRangeException(nameof(index)) });
                     return $"UI mode: {host.Player.UiMode}";
                 })]);
         var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0", Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps");
@@ -324,7 +328,7 @@ sealed class GameLoop(GameHost host)
             UpscalerStatus = () => host.Gpu.Post?.ActiveUpscaler ?? "Off",
             // The loaded frame generation's state; a change it cannot follow shows as pending until the restart.
             FrameGenerationStatus = () => FrameGenerationSetup.FrameGenerationState(_display, _frameGenerationAtStart,
-                    host.Config.FrameGenerationMethod),
+                host.Config.FrameGenerationMethod),
             ModSettings = () => host.Modding.Mods?.Settings ?? [],
             AudioChanged = host.Sound.AudioSettingsChanged,
             GameplayChanged = host.Saves.ApplyGameplay,
@@ -396,9 +400,10 @@ sealed class GameLoop(GameHost host)
     {
         if (_panel is not null && !_lowEnd)
             foreach (var slider in _panel.Sliders)
+                // the saved one was applied before the boot (Program)
                 if (!_runOnly.Contains(slider.Label) && host.Config.Graphics.TryGetValue(slider.Label, out float v)
                         && !(host.WorldOptions.Post.Upscale.Explicit && WorldFrame.UpscalerSliders.Contains(slider.Label))
-                    && !(slider.Label == WorldFrame.TextureQualitySlider && Environment.GetCommandLineArgs().Contains("--texture-quality")))   // the saved one was applied before the boot (Program)
+                        && !(slider.Label == WorldFrame.TextureQualitySlider && Environment.GetCommandLineArgs().Contains("--texture-quality")))
                     slider.Set(Math.Clamp(v, slider.Min, slider.Max));
         // The look as the command line chose it: Faithful or Meitou for "all", else read from the switches (not saved).
         if (CommandLineLook() is var (given, faithfulLook) && given) host.Config.FaithfulLook = faithfulLook;
@@ -409,7 +414,7 @@ sealed class GameLoop(GameHost host)
             foreach (var toggle in _panel.Toggles)
                 if (!LookPresets.HiddenSwitch(toggle.Label) && !_runOnly.Contains(SwitchKey(toggle.Label))
                         && host.Config.Graphics.TryGetValue(SwitchKey(toggle.Label), out float v) && (v >= 0.5f) != toggle.Get())
-                        toggle.Set(v >= 0.5f);
+                    toggle.Set(v >= 0.5f);
             _panel.Tiers.ApplySavedPreset();
         }
         if (host.GameOptions.BenchmarkBaseline) _panel?.Tiers.ApplyBenchmarkBaseline();
@@ -440,7 +445,7 @@ sealed class GameLoop(GameHost host)
         {
             if (!host.Config.CharacterFlights || host.Duel.IsDuel || host.Session.Camera.IsFree || _cinema.Playing || _cinema.Recording
                     || TourPosition(id) is not { } at)
-                    return false;
+                return false;
             if (new Vector2(at.X - host.Camera.Target.X, at.Z - host.Camera.Target.Z).Length() <= UserConfig.FlightDistance) return false;
             host.Player.Follow = null;
             _tour.HopSeconds = host.Config.CharacterFlightSeconds;
@@ -457,15 +462,15 @@ sealed class GameLoop(GameHost host)
         };
     }
 
-    Vector3? TourPosition(CharacterId id) => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c ? host.DrawnPosition(c)
-            : null;
+    Vector3? TourPosition(CharacterId id) => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } c
+        ? host.DrawnPosition(c) : null;
 
     void EndTour()
     {
         _tour.Stop();
         _cinemaHolds = false;
         host.Session.Camera.TakeOver(new CameraState(host.Camera.Eye, host.Camera.Forward, Vector3.UnitY, host.Camera.Target, host.Camera.Yaw,
-                host.Camera.Pitch, host.Camera.Distance, true), strategy: true);
+            host.Camera.Pitch, host.Camera.Distance, true), strategy: true);
         if (_tourFollows) host.Player.Follow = _tour.Current;   // a double-clicked member is followed, as a cut to it would be
     }
 
@@ -530,8 +535,7 @@ sealed class GameLoop(GameHost host)
         else if (actions.Pressed(InputAction.Quit) && !host.Duel.IsDuel) _quit = true;
         // Panning (or leaving for the free camera) lets go of the character the camera follows; turning and zooming keep it.
         if (actions.Held(InputAction.MoveForward) || actions.Held(InputAction.MoveBack) || actions.Held(InputAction.MoveLeft)
-                || actions.Held(InputAction.MoveRight) ||
-            actions.Pressed(InputAction.ToggleFreeCamera)) host.Player.Follow = null;
+            || actions.Held(InputAction.MoveRight) || actions.Pressed(InputAction.ToggleFreeCamera)) host.Player.Follow = null;
         if (actions.Pressed(InputAction.ToggleSettings) && _panel is not null) _panel.Visible = !_panel.Visible;
         if (actions.Pressed(InputAction.Screenshot)) host.ScreenshotRequested = true;
         // the foliage triangles are read from its GPU cull while shown
@@ -547,7 +551,7 @@ sealed class GameLoop(GameHost host)
         if (actions.Pressed(InputAction.FloorUp)) host.Interiors.StepFloor(1);
         if (actions.Pressed(InputAction.FloorDown)) host.Interiors.StepFloor(-1);
         if (actions.Pressed(InputAction.CycleProfiler) && host.DebugMenu.Profiler is not null)
-                host.DebugMenu.Profiler.Showing = (FrameProfiler.Mode)(((int)host.DebugMenu.Profiler.Showing + 1) % 3);
+            host.DebugMenu.Profiler.Showing = (FrameProfiler.Mode)(((int)host.DebugMenu.Profiler.Showing + 1) % 3);
         // The camera the cinema left (a cut, a scrub, the end of a flight) goes back to the rig at the first camera input: the free camera at
         // that eye (only it can stand anywhere), or with ; the strategy camera where the view meets the ground. A flight in progress keeps it.
         if (_tour.Active && GameHost.CameraInput(actions)) EndTour();
@@ -555,15 +559,14 @@ sealed class GameLoop(GameHost host)
         {
             _cinemaHolds = false;
             host.Session.Camera.TakeOver(new CameraState(host.Camera.Eye, host.Camera.Forward, Vector3.UnitY, host.Camera.Target, host.Camera.Yaw,
-                    host.Camera.Pitch, host.Camera.Distance, true),
-                strategy: actions.Pressed(InputAction.ToggleFreeCamera));
+                host.Camera.Pitch, host.Camera.Distance, true), strategy: actions.Pressed(InputAction.ToggleFreeCamera));
         }
     }
 
     // ---- the window and the pointer ----
 
-    Vector2D<int> FramebufferSizeNow() => _window is null ? new Vector2D<int>(host.WorldOptions.Width, host.WorldOptions.Height)
-            : _window.FramebufferSize;
+    Vector2D<int> FramebufferSizeNow() => _window is null
+        ? new Vector2D<int>(host.WorldOptions.Width, host.WorldOptions.Height) : _window.FramebufferSize;
 
     bool FullScreenOn() => _window is not null && BorderlessFullScreen.IsOn(_window);
 
@@ -574,7 +577,7 @@ sealed class GameLoop(GameHost host)
 
     Vector2 Pixels(Vector2 p) => _window is null ? p
         : p * new Vector2(_window.FramebufferSize.X / (float)Math.Max(_window.Size.X, 1),
-                _window.FramebufferSize.Y / (float)Math.Max(_window.Size.Y, 1));
+            _window.FramebufferSize.Y / (float)Math.Max(_window.Size.Y, 1));
 
     /// <summary>
     /// The settings panel takes the mouse only while it is drawn (F7 and the cinema's clean picture hide it).
@@ -584,7 +587,7 @@ sealed class GameLoop(GameHost host)
     bool Held(SilkKey a, SilkKey b) => _keyboards.Any(k => k.IsKeyPressed(a) || k.IsKeyPressed(b));
 
     static bool CtrlDown(Silk.NET.Input.IKeyboard keyboard) => keyboard.IsKeyPressed(SilkKey.ControlLeft)
-            || keyboard.IsKeyPressed(SilkKey.ControlRight);
+        || keyboard.IsKeyPressed(SilkKey.ControlRight);
 
     /// <summary>
     /// The key a modal window takes: the keypad's Enter as Enter.
@@ -612,7 +615,7 @@ sealed class GameLoop(GameHost host)
         kb.KeyDown += (keyboard, k, _) =>
         {
             _heldEditKey = k is SilkKey.Backspace or SilkKey.Delete or SilkKey.Left or SilkKey.Right or SilkKey.Up or SilkKey.Down
-                    && TextFieldFocused()
+                && TextFieldFocused()
                 ? (keyboard, k, Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2) : null;
             OnKeyDown(keyboard, k);
         };
@@ -700,7 +703,11 @@ sealed class GameLoop(GameHost host)
         }
         // F10 (rebindable) opens the debug menu, which then takes every key until it closes.
         if (KeyMap.Map(k) is { } mapped && host.Session.Bindings.Get(InputAction.ToggleDebugMenu).Contains(Binding.Of(mapped)))
-                { host.DebugMenu.DebugMenuOpen = !host.DebugMenu.DebugMenuOpen; host.DebugMenu.DebugParts = null; return true; }
+        {
+            host.DebugMenu.DebugMenuOpen = !host.DebugMenu.DebugMenuOpen;
+            host.DebugMenu.DebugParts = null;
+            return true;
+        }
         if (host.DebugMenu.DebugMenuOpen)
         {
             if (ModalKeyOf(k) is { } menuKey) host.DebugMenu.DebugMenuKey(menuKey);
@@ -753,7 +760,11 @@ sealed class GameLoop(GameHost host)
         if (k == SilkKey.Escape && !host.GameOptions.NoPopulation && !host.Player.UiVisible)
         {
             if (host.AgentChannel.InterfaceHidden && !_cinema.Clean)
-                    { host.AgentChannel.InterfaceHidden = false; host.Player.UiVisible = true; host.Player.UiKey(EngineKey.Escape); }
+            {
+                host.AgentChannel.InterfaceHidden = false;
+                host.Player.UiVisible = true;
+                host.Player.UiKey(EngineKey.Escape);
+            }
             return true;
         }
         return false;
@@ -776,7 +787,7 @@ sealed class GameLoop(GameHost host)
             // The code's orbit (target, yaw, pitch, distance) as the free camera's eye and look direction.
             Vector3 back = new(MathF.Cos(pose.Pitch) * MathF.Sin(pose.Yaw), MathF.Sin(pose.Pitch), MathF.Cos(pose.Pitch) * MathF.Cos(pose.Yaw));
             host.Session.Camera.TakeOver(new CameraState(pose.Target + back * pose.Distance, -back, Vector3.UnitY, pose.Target, pose.Yaw, pose.Pitch,
-                    pose.Distance, true), strategy: false);
+                pose.Distance, true), strategy: false);
             host.Player.Follow = null;
             Console.WriteLine("camera    moved to the clipboard's camera code");
         }
@@ -797,7 +808,7 @@ sealed class GameLoop(GameHost host)
         // A numpad key bound to a game hotkey (the orders, NUM0..NUM8 by default) is the game's, except with Ctrl (saving a shot) or the cinema's
         // editor open (F6).
         bool hotkey = !host.Duel.IsDuel && !ctrl && !_cinema.EditorVisible && KeyMap.Map(k) is { } gameKey
-                && (host.Player.GameHotkeys.IsHotkey(gameKey) || host.Player.Build.OwnsBuildNumpad(gameKey));
+            && (host.Player.GameHotkeys.IsHotkey(gameKey) || host.Player.Build.OwnsBuildNumpad(gameKey));
         if (!hotkey && Enum.TryParse(k.ToString(), out CinemaKey cinemaKey) && _cinema.OnKey(cinemaKey, ctrl, _shiftDown)) return;
         // F9 is the game's quickload; the fps counter is on Ctrl+F9 (a modifier, so the key never reaches the input bindings).
         if (k == SilkKey.F9 && ctrl)
@@ -885,7 +896,7 @@ sealed class GameLoop(GameHost host)
             if (PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.Scroll(wheel.Y) == true) return;
             var at = Pixels(_orbitAnchor ?? m.Position);
             if (!_cinema.Contains(at) && !host.Player.UiScroll(at, wheel.Y) && !(PanelLive() && host.Player.ContainsUi(at)))
-                    host.Session.Input.AddWheel(wheel.Y);
+                host.Session.Input.AddWheel(wheel.Y);
         };
     }
 
@@ -910,7 +921,7 @@ sealed class GameLoop(GameHost host)
             // Ctrl and Alt with the right button: pick up / put down and loot (docs/game/ui-input.md, Meitou's carry bindings).
             if (host.Player.MouseDown(host.PlayerButton(button), at, _shiftDown, Held(SilkKey.ControlLeft, SilkKey.ControlRight),
                     Held(SilkKey.AltLeft, SilkKey.AltRight)))
-                    return;
+                return;
             host.Session.Input.SetMouseButton(button, true);
         }
     }
@@ -922,7 +933,7 @@ sealed class GameLoop(GameHost host)
     {
         bool cinemaDrag = _cinema.MouseUp();
         if (!host.Covered && !cinemaDrag && !_panelDrag && !_profilerClick && _panel?.Visible != true && physical is { } released)
-                host.Player.MouseUp(host.PlayerButton(released), at, _shiftDown);
+            host.Player.MouseUp(host.PlayerButton(released), at, _shiftDown);
         _profilerClick = false;
         _panel?.MouseUp();
         _panelDrag = false;
@@ -935,7 +946,7 @@ sealed class GameLoop(GameHost host)
         {
             // Locked: p is GLFW's virtual position, only its movement counts, and not under a loading screen or the interface (as below).
             if (_lastMouse is { } prev && !host.Covered && !host.Player.UiCapturesPointer && !host.Player.ModalOpen)
-                    host.Session.Input.AddMouseDelta(p.X - prev.X, p.Y - prev.Y);
+                host.Session.Input.AddMouseDelta(p.X - prev.X, p.Y - prev.Y);
             _lastMouse = p;
             return;
         }
@@ -1028,7 +1039,7 @@ sealed class GameLoop(GameHost host)
         host.PlayBench.BenchLap(5);
         if (_display.BeginFrame(size.X, size.Y)) DrawFrame(size, pointer, takeFile);
         else if (host.ScreenshotRequested && host.AgentChannel.ShotPath is not null && ++host.ShotNoFrame >= 30)
-                host.AgentChannel.ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
+            host.AgentChannel.ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
         UpdateStats(dt);
         _totalFrames++;
         if (host.GameOptions.QuitAfter is { } quitAfter && now >= quitAfter) { PrintRunSummary(now); _quit = true; }
@@ -1090,11 +1101,11 @@ sealed class GameLoop(GameHost host)
         }
         // Edge scrolling (the game's default): the pointer at the edge of the window pans the camera, unless something else has the pointer.
         host.Session.Camera.Settings.EdgeScroll = host.Config.EdgeScroll != false;
-        bool edgeOff = host.Covered || host.TitleScreen.TitleVisible || _panel?.Visible == true || host.AgentChannel.InterfaceHidden || _cinemaHolds
-                || _cinema.EditorVisible;
+        bool edgeOff = host.Covered || host.TitleScreen.TitleVisible || _panel?.Visible == true || host.AgentChannel.InterfaceHidden
+            || _cinemaHolds || _cinema.EditorVisible;
         host.Session.Camera.Strategy.EdgePointer = edgeOff ? null : _window is null ? null : WindowPointer.InWindow(_window);
         host.Session.World.Profile.Enabled = host.DebugMenu.Profiler is { Showing: not FrameProfiler.Mode.Off }
-                || host.GameOptions.PlayBench is not null || SpikeLog.Enabled;
+            || host.GameOptions.PlayBench is not null || SpikeLog.Enabled;
         if (!host.Covered) host.Session.Advance(frameDt);   // loading and arrival preserve the loaded world's exact time
         host.Duel.DuelHoldClock();
         double advanceMs = Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
@@ -1130,7 +1141,7 @@ sealed class GameLoop(GameHost host)
         host.Gpu.CameraFlying = _tour.Moving;   // the far shadow cascades wait for the landing (docs/render-shadows.md "Flights")
         host.Gpu.Kept = !host.Config.KeepTexturesAtCharacters ? []
             : host.Config.KeepTexturesAtAllSquads
-                    ? [.. host.Session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Select(TourPosition).OfType<Vector3>()]
+                ? [.. host.Session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).Select(TourPosition).OfType<Vector3>()]
             : [.. host.Player.PortraitBar.SquadBarMembers().Select(c => TourPosition(c.Id)).OfType<Vector3>()];
         host.ViewAspect = FramebufferSizeNow().X / (float)Math.Max(FramebufferSizeNow().Y, 1);   // headless: no window, the size asked for
     }
@@ -1141,8 +1152,8 @@ sealed class GameLoop(GameHost host)
     void PlaceSceneCameras()
     {
         // A flight puts the focus on where it lands from the first frame (the towns there populate during the flight), not on the arc.
-        host.SendFocus(_tour.Active && _tour.Current is { } landing && TourPosition(landing) is { } landingAt ? landingAt : _cinemaHolds
-                ? host.Camera.Target : null);
+        host.SendFocus(_tour.Active && _tour.Current is { } landing && TourPosition(landing) is { } landingAt ? landingAt
+            : _cinemaHolds ? host.Camera.Target : null);
         if (!_cinemaHolds) host.Sandbox.SandboxFollowCamera();
         if (!_cinemaHolds) host.Sandbox.FollowCamera();
         if (!_cinemaHolds) host.CharacterEditor.EditorCamera();
@@ -1196,14 +1207,14 @@ sealed class GameLoop(GameHost host)
             if (pointerMouse is not null) pointerMouse.Cursor.CursorMode = _windowCursor = _cursorBeforeOrbit;
         }
         var pointerAt = _headless ? host.DevConsoleHost.HeadlessMouse ?? Vector2.Zero : pointerMouse is null ? Vector2.Zero
-                : Pixels(_orbitAnchor ?? pointerMouse.Position);
+            : Pixels(_orbitAnchor ?? pointerMouse.Position);
         host.DevConsoleHost.ConsolePointer = pointerAt;
         host.Player.CtrlHeld = Held(SilkKey.ControlLeft, SilkKey.ControlRight);
         host.Player.AltHeld = Held(SilkKey.AltLeft, SilkKey.AltRight);
         host.ScreenshotRequested = host.Player.GateScreenshot(host.ScreenshotRequested);
         bool highlighting = Highlight(takeFile);
         bool pointerWorld = (pointerMouse is not null || _headless && host.DevConsoleHost.HeadlessMouse is not null) && !host.Covered
-                && !host.GameOptions.NoPopulation
+            && !host.GameOptions.NoPopulation
             && !(PanelLive() && _panel?.Visible == true) && !_cinema.Contains(pointerAt);
         bool freeLook = pointerWorld && host.Session.Camera.IsFree && !host.Player.ModalOpen;
         Outline(takeFile, highlighting, pointerWorld);
@@ -1260,17 +1271,17 @@ sealed class GameLoop(GameHost host)
     /// </summary>
     void Outline(string? takeFile, bool highlighting, bool pointerWorld)
     {
-        bool outlines = !host.Session.Camera.IsFree && !host.AgentChannel.InterfaceHidden && !_cinema.Clean && !host.ScreenshotRequested
-                && takeFile is null;
+        bool outlines = !host.Session.Camera.IsFree && !host.AgentChannel.InterfaceHidden && !_cinema.Clean
+            && !host.ScreenshotRequested && takeFile is null;
         bool outlining = host.Config.HoverOutline && outlines;
         if (outlining && highlighting)
-            host.Gpu.HoverKeys = [.. host.Player.PointerPanel.HighlightTargets(host.Camera.Target,
-                    PointerView.HighlightRadius).Select(t => (host.DrawKey(t.Id), t.Colour))];
+            host.Gpu.HoverKeys = [.. host.Player.PointerPanel.HighlightTargets(host.Camera.Target, PointerView.HighlightRadius)
+                .Select(t => (host.DrawKey(t.Id), t.Colour))];
         else
             host.Gpu.HoverKeys = outlining && pointerWorld && host.Player.PointerPanel.HoverTarget is { } hover
-                    ? [(host.DrawKey(hover.Id), hover.Colour)] : [];
-        host.Gpu.OutlinedBuildings = outlines && host.Config.BuildingOutline ? host.Player.BuildingSelection.OutlinedBuildings(hover: pointerWorld)
-                : [];
+                ? [(host.DrawKey(hover.Id), hover.Colour)] : [];
+        host.Gpu.OutlinedBuildings = outlines && host.Config.BuildingOutline
+            ? host.Player.BuildingSelection.OutlinedBuildings(hover: pointerWorld) : [];
     }
 
     // ---- drawing ----
@@ -1326,7 +1337,7 @@ sealed class GameLoop(GameHost host)
     {
         // The chain and the panel draw into the window's backbuffer (made again when the size changes).
         var backbuffer = _display.Backbuffer
-                ?? (_headlessTarget ??= _display.Context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.X, size.Y,
+            ?? (_headlessTarget ??= _display.Context.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.X, size.Y,
             Use: TextureUse.ColourTarget | TextureUse.TransferSrc | TextureUse.Sampled, Name: "headless backbuffer")));
         host.Gpu.Post!.Target = backbuffer;
         // Frame generation (the one loaded at start-up): made on the first frame; wanted except under the loading screen and for saved pictures.
@@ -1367,13 +1378,13 @@ sealed class GameLoop(GameHost host)
         if (host.Loading is not null) (host.Loading.LoadBar, host.Loading.Faithful) = (host.LoadBar, faithfulUi);
         if (sceneLoading && host.SkyArrival is { AtStars: true })
             WorldFrame.DrawLoadingSky(host.Gpu, host.Scene, host.Camera, size.X, size.Y, host.PresentationHour ?? 0, (float)host.AnimSeconds,
-                    host.WorldOptions.FogDistance);
+                host.WorldOptions.FogDistance);
         else if (!sceneLoading || host.SkyArrival is not null)
         {
             // The duel's laps and recorded flights replay exactly, and the play benchmark is deterministic from its save: their ticks stay in step
             // with the frame.
-            host.TickAhead = !covered && host.SkyArrival is null && !host.Duel.IsDuel && !_cinema.Recording && host.GameOptions.PlayBench is null
-                    && host.TickAheadWanted();
+            host.TickAhead = !covered && host.SkyArrival is null && !host.Duel.IsDuel && !_cinema.Recording
+                && host.GameOptions.PlayBench is null && host.TickAheadWanted();
             host.DrawWorld(size.X, size.Y);
             host.TickAhead = false;
         }
@@ -1400,14 +1411,14 @@ sealed class GameLoop(GameHost host)
         StageClock.UiPart(StageClock.UiSettings);
         // Over everything: the letterbox and the cinema's editor (F6, also with F7); the game hides its status line.
         if (_overlay is not null && !covered)
-                _cinema.Draw(_overlay, size.X, size.Y, shot || take || feedbackShot || (host.AgentChannel.InterfaceHidden && !_cinema.EditorVisible),
-                        showStatus: false);
+            _cinema.Draw(_overlay, size.X, size.Y,
+                shot || take || feedbackShot || (host.AgentChannel.InterfaceHidden && !_cinema.EditorVisible), showStatus: false);
         // The character boxes and paths (F11's tickboxes, also F10's Overlays rows), on top of everything; both stay once ticked, with the statistics
         // hidden too.
         if (ui && _overlay is not null && !covered && !shot && !feedbackShot)
         {
             if (host.DebugOverlays.CharacterBoxes && host.Gpu.Characters is { } boxed)
-                    host.DebugOverlays.DrawCharacterBoxes(_overlay, boxed, host.Camera, size.X, size.Y);
+                host.DebugOverlays.DrawCharacterBoxes(_overlay, boxed, host.Camera, size.X, size.Y);
             if (host.DebugOverlays.WalkPaths) host.DebugOverlays.DrawWalkPaths(_overlay, host.Session.CurrentSnapshot, host.Camera, size.X, size.Y);
         }
         StageClock.UiPart(StageClock.UiCinema);
@@ -1424,7 +1435,7 @@ sealed class GameLoop(GameHost host)
         StageClock.UiPart(StageClock.UiSteer);
         if (ui && _overlay is not null && !host.GameOptions.NoPopulation) host.Player.Draw(_overlay, size.X, size.Y);
         else if (host.AgentChannel.InterfaceHidden && !_cinema.Clean && !take && !covered && _overlay is not null && !host.GameOptions.NoPopulation)
-                host.Player.DrawSpeechOnly(_overlay, size.X, size.Y);
+            host.Player.DrawSpeechOnly(_overlay, size.X, size.Y);
         if (ui && _overlay is not null && host.Sandbox.IsSandbox) host.Sandbox.DrawSandbox(_overlay, size.X, size.Y);
         if (ui && _overlay is not null && host.Battle.IsBattle) host.Battle.DrawBattleCounter(_overlay, size.X, size.Y);
         StageClock.UiPart(StageClock.UiHud);
@@ -1440,9 +1451,9 @@ sealed class GameLoop(GameHost host)
         if (host.DebugMenu.FpsVisible && _fpsText.Length > 0) panelsBottom = DrawLabel(overlay, size, _fpsText, panelsBottom);
         // The terrain sandbox: the texture field's tile under the camera.
         if (GroundRelief.FieldCentre is not null && host.Gpu.Terrain.FieldLabelAt(host.Camera.Target.X, host.Camera.Target.Z) is { } tileLabel)
-                panelsBottom = DrawLabel(overlay, size, tileLabel, panelsBottom);
+            panelsBottom = DrawLabel(overlay, size, tileLabel, panelsBottom);
         if (host.DebugOverlays.WalkPaths && !covered)
-                panelsBottom = DebugOverlays.DrawWalkPathsLabel(overlay, host.Session.CurrentSnapshot, size.X, size.Y, panelsBottom);
+            panelsBottom = DebugOverlays.DrawWalkPathsLabel(overlay, host.Session.CurrentSnapshot, size.X, size.Y, panelsBottom);
         host.DebugOverlays.CharacterBoxesToggle = host.DebugOverlays.WalkPathsToggle = null;
         float menuTop = panelsBottom;   // the debug menu stands at the right beside the statistics, else below the panels
         if (host.DebugMenu.StatsVisible && _stats.Count > 0)
@@ -1452,8 +1463,8 @@ sealed class GameLoop(GameHost host)
             host.DebugOverlays.FindStatsToggles(overlay.CharWidth);
         }
         if (host.DebugMenu.DebugMenuOpen)
-                host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.DebugMenu.StatsVisible ? menuTop : panelsBottom,
-                        atRight: host.DebugMenu.StatsVisible);
+            host.DebugMenu.DrawDebugMenu(overlay, size.X, size.Y, host.DebugMenu.StatsVisible ? menuTop : panelsBottom,
+                atRight: host.DebugMenu.StatsVisible);
         if (host.Player.WorldMap.MapPick is not null && host.Player.WorldMap.MapTabShown) host.DebugMenu.DrawMapPickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.ExplodeClickOn) host.DebugMenu.DrawExplodeClickHint(overlay, size.X, size.Y);
         if (host.DebugMenu.InspectorMenuOpen) host.DebugMenu.DrawInspectorMenu(overlay, size.X, size.Y, panelsBottom);
@@ -1481,8 +1492,8 @@ sealed class GameLoop(GameHost host)
         {
             host.LoadingOverlay.Target = uiTarget;
             if (host.SkyArrival is null) host.Loading.Draw(size.X, size.Y);
-            else if (host.Loading.Exiting || host.SkyArrival is { AtStars: true, Arriving: false }
-                    && host.ActiveSceneLoad?.Clock.Elapsed.TotalSeconds >= 2)
+            else if (host.Loading.Exiting
+                    || host.SkyArrival is { AtStars: true, Arriving: false } && host.ActiveSceneLoad?.Clock.Elapsed.TotalSeconds >= 2)
                 host.Loading.Draw(size.X, size.Y, background: false);
         }
         else host.Loading?.ReleaseWhenGone();
@@ -1505,7 +1516,7 @@ sealed class GameLoop(GameHost host)
         string pointerName = pointer.OverWorld ? host.Player.PointerPanel.PointerName : "arrow";
         bool enhanced = host.Config.HardwareMouse && host.Config.EnhancedHardwareMouse && !freeLook;
         bool hand = enhanced
-                && (pointer.OverWorld ? host.Player.PointerPanel.PointsAtClickable(pointerName) : _panel?.OverClickable(pointer.At) == true);
+            && (pointer.OverWorld ? host.Player.PointerPanel.PointsAtClickable(pointerName) : _panel?.OverClickable(pointer.At) == true);
         if (byWindow)
         {
             _systemPointer.Show(pointerMouse.Cursor, host.Player, pointerName);
@@ -1580,18 +1591,21 @@ sealed class GameLoop(GameHost host)
     void SavePictures(Vector2D<int> size, string? takeFile, bool shot, bool feedbackShot, GpuTexture picture, bool topDown)
     {
         if (takeFile is not null)
-                { FramebufferCapture.SavePng(_display.Context, picture, takeFile, size.X, size.Y, topDown: topDown); _cinema.FrameDone(); }
+        {
+            FramebufferCapture.SavePng(_display.Context, picture, takeFile, size.X, size.Y, topDown: topDown);
+            _cinema.FrameDone();
+        }
         else if (shot && host.AgentChannel.ShotPath is not null)
-                host.AgentChannel.SaveControlShot(_display.Context, picture, size.X, size.Y, topDown: topDown);
+            host.AgentChannel.SaveControlShot(_display.Context, picture, size.X, size.Y, topDown: topDown);
         else if (shot && GameScreenshots.Multiplier(host.Install.Root) is >= 2 and var multiplier)
-                SaveSupersampled(_display.Context, multiplier, size.X, size.Y);
+            SaveSupersampled(_display.Context, multiplier, size.X, size.Y);
         else if (shot) SaveScreenshot(_display.Context, picture, size.X, size.Y, topDown: topDown);
         if (shot) host.Player.EndScreenshot();
         if (feedbackShot)
         {
             host.Player.FeedbackPanel.ShotWithoutMenus = false;
-            host.FeedbackCapture.FeedbackCaptured(FramebufferCapture.ReadPicture(_display.Context, picture, size.X, size.Y, topDown: topDown), size.X,
-                    size.Y);
+            var captured = FramebufferCapture.ReadPicture(_display.Context, picture, size.X, size.Y, topDown: topDown);
+            host.FeedbackCapture.FeedbackCaptured(captured, size.X, size.Y);
         }
     }
 
@@ -1613,7 +1627,7 @@ sealed class GameLoop(GameHost host)
         long objectTris = host.Gpu.Objects?.Totals[0, 1] ?? 0;
         int frames = Math.Max(_statsFrames, 1);
         var triangles = new WorldStats.Triangles(_terrainTris / frames, (objectTris - _objectTris0) / (double)frames,
-                host.Gpu.Foliage?.ColourTrianglesPerFrame, _characterTris / frames, _grassBlades / frames);
+            host.Gpu.Foliage?.ColourTrianglesPerFrame, _characterTris / frames, _grassBlades / frames);
         WorldStats.Add(_stats, _display.Context, host.Gpu, host.Camera.Eye, triangles, characterBoxes: true);
         host.Gpu.Foliage?.ResetDrawTally();
         _objectTris0 = objectTris;
@@ -1677,7 +1691,7 @@ sealed class GameLoop(GameHost host)
     /// rate.
     /// </summary>
     void SaveSupersampled(GpuContext context, int n, int width, int height) => SaveTiles(context, n, width, height,
-            GameScreenshots.Next(host.Install.Root));
+        GameScreenshots.Next(host.Install.Root));
 
     void SaveTiles(GpuContext context, int n, int width, int height, string file)
     {
@@ -1703,8 +1717,8 @@ sealed class GameLoop(GameHost host)
                         context.EndFrame();   // headless frames: the window's own frame was presented already
                     }
                     context.Finish();
-                    BlitTile(FramebufferCapture.ReadPicture(context, tile, tw, th), tw, guard, picture, n * width, column * width, row * height,
-                            width, height);
+                    BlitTile(FramebufferCapture.ReadPicture(context, tile, tw, th), tw, guard, picture, n * width,
+                        column * width, row * height, width, height);
                 }
         }
         finally { ViewWindow.Current = ViewWindow.Whole; post.Target = live; post.ResetHistory(); }
@@ -1777,10 +1791,14 @@ sealed class GameLoop(GameHost host)
         if (_simNamesFor != world || _simNames.Length != parts + profile.Parts.Count + 1)
         {
             _simNamesFor = world;
-            _simNames = [.. TickProfile.PhaseNames, "outside ticks",
-                    .. world.Systems.Select(s => s.GetType().Name is var n && n.EndsWith("System", StringComparison.Ordinal) && n.Length > 6 ? n[..^6]
-                    : n),
-                .. profile.Parts.Select(p => p.Name), "tick ahead"];
+            _simNames =
+            [
+                .. TickProfile.PhaseNames,
+                "outside ticks",
+                .. world.Systems.Select(s => s.GetType().Name is var n && n.EndsWith("System", StringComparison.Ordinal) && n.Length > 6 ? n[..^6] : n),
+                .. profile.Parts.Select(p => p.Name),
+                "tick ahead",
+            ];
             _simMs = new double[_simNames.Length];
         }
         Array.Clear(_simMs);
@@ -1816,8 +1834,8 @@ sealed class GameLoop(GameHost host)
         void Add(string key, double ms) => _simWindowMs[key] = _simWindowMs.GetValueOrDefault(key) + ms;
         for (int p = 0; p < firstSystem - 1; p++) Add("#" + _simNames[p], _simMs[p]);
         for (int k = firstSystem; k < _simMs.Length - 1; k++) Add((k >= firstPart ? "." : "") + _simNames[k], _simMs[k]);
-        for (int k = 0; k < profile.SystemMs.Length && firstSystem + k < firstPart; k++) Add("~" + _simNames[firstSystem + k],
-                profile.Ms(TickProfile.SlowWorld, k));
+        for (int k = 0; k < profile.SystemMs.Length && firstSystem + k < firstPart; k++)
+            Add("~" + _simNames[firstSystem + k], profile.Ms(TickProfile.SlowWorld, k));
         if (host.Session.World.Systems.OfType<Simulation.Ragdolls.RagdollSystem>().FirstOrDefault() is { } rag)
         {
             (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping) = (_simWindowRagdolls + rag.Count, _simWindowMoving + rag.Moving, _simWindowAwake + rag.AwakeBodies, _simWindowStepping + (rag.Moving > 0 ? 1 : 0));
@@ -1829,8 +1847,9 @@ sealed class GameLoop(GameHost host)
         {
             var inv = CultureInfo.InvariantCulture;
             string Top(char kind, int count) => string.Join(", ",
-                    _simWindowMs.Where(p => (p.Key[0] is '#' or '~' or '.' ? p.Key[0] : ' ') == kind && p.Value / _simWindowTicks >= 0.01)
-                .OrderByDescending(p => p.Value).Take(count).Select(p => string.Create(inv, $"{p.Key.TrimStart('#', '~', '.')} {p.Value / _simWindowTicks:0.00}")));
+                _simWindowMs.Where(p => (p.Key[0] is '#' or '~' or '.' ? p.Key[0] : ' ') == kind && p.Value / _simWindowTicks >= 0.01)
+                .OrderByDescending(p => p.Value).Take(count)
+                .Select(p => string.Create(inv, $"{p.Key.TrimStart('#', '~', '.')} {p.Value / _simWindowTicks:0.00}")));
             double tickMs = _simWindowMs.Where(p => p.Key[0] == '#').Sum(p => p.Value) / _simWindowTicks;
             Console.WriteLine(string.Create(inv, $"simprof   {host.Session.Simulation.Speed:0}x {_simWindowFrames / seconds:0} fps, {_simWindowTicks / seconds:0} ticks/s, {host.Session.World.Snapshot.Characters.Count} characters; ") +
                 string.Create(inv, $"ms a frame: in frame {_simWindowMain / _simWindowFrames:0.00}, ahead {_simWindowAhead / _simWindowFrames:0.00}; ms a tick {tickMs:0.00}: ") +
@@ -1905,7 +1924,7 @@ sealed class GameLoop(GameHost host)
         }
         host.Config.Bindings = host.Session.Bindings.ToDictionary();
         if (!host.GameOptions.LowEnd || host.Player.UiMode != Data.Ui.UiMode.Faithful)
-                host.Config.UiMode = host.Player.UiMode;   // --low-end's Faithful UI is for the run
+            host.Config.UiMode = host.Player.UiMode;   // --low-end's Faithful UI is for the run
         host.Config.Save();
     }
 

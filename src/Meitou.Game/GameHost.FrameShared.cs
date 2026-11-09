@@ -30,7 +30,10 @@ sealed partial class GameHost
     {
         var keys = new HashSet<string>(SessionSliders);
         if (Environment.GetCommandLineArgs().Contains("--bloom"))
-                { keys.Add(WorldFrame.BloomStrengthSlider); keys.Add(SettingsMenu.SwitchKeyPrefix + WorldFrame.BloomSwitch); }
+        {
+            keys.Add(WorldFrame.BloomStrengthSlider);
+            keys.Add(SettingsMenu.SwitchKeyPrefix + WorldFrame.BloomSwitch);
+        }
         return keys;
     }
 
@@ -117,10 +120,13 @@ sealed partial class GameHost
             Console.WriteLine($"relations {message}");
             Player.Notice(message);
             if (DevConsoleHost.ExplodeAsker is { } asker && message.StartsWith("Explode at ", StringComparison.Ordinal))
-                    { asker.Print(message); DevConsoleHost.ExplodeAsker = null; }
+            {
+                asker.Print(message);
+                DevConsoleHost.ExplodeAsker = null;
+            }
         }
-        foreach (var line in world.TakeSaid()) Player.MessageRoller.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player
-                : MessageTone.Normal);
+        foreach (var line in world.TakeSaid())
+            Player.MessageRoller.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.
         if (world.Systems.OfType<Simulation.Carrying.CarrySystem>().FirstOrDefault() is { Knockouts.Count: > 0 } carry)
             foreach (var k in carry.TakeKnockouts())

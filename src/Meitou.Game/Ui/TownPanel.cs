@@ -44,13 +44,7 @@ sealed class TownPanel(PlayerInterface player)
     {
         var outposts = player.Session.CurrentSnapshot.Outposts;
         var pivot = player.Session.Camera.Current.Target;
-        static bool Within(OutpostSnapshot t, Vector3 p) =>
-            (t.Position.X - p.X) * (t.Position.X - p.X) + (t.Position.Z - p.Z) * (t.Position.Z - p.Z) <= t.Radius * t.Radius;
-
-        var town = outposts.FirstOrDefault(t => t.Number == ShownTown) is { } kept && Within(kept, pivot) ? kept
-            : outposts.Where(t => t.Owner == player.Session.World.Player.Faction)
-                .MinBy(t => (t.Position.X - pivot.X) * (t.Position.X - pivot.X) + (t.Position.Z - pivot.Z) * (t.Position.Z - pivot.Z))
-                is { } nearest && Within(nearest, pivot) ? nearest : null;
+        var town = outposts.FirstOrDefault(t => t.Number == ShownTown) is { } kept && Within(kept, pivot) ? kept : NearestOwnOutpost(outposts, pivot);
         if (!hud) town = null;
 
         ShownTown = town?.Number ?? 0;
@@ -94,6 +88,22 @@ sealed class TownPanel(PlayerInterface player)
         b.Text["BatteryProgressBarCaption"] = p.Charging > 0 ? battery + " >>" : p.Draining > 0 ? "<< " + battery : battery;
         b.Progress["BatteryProgressBar"] = p.Capacity > 0 ? Percent(p.Charge / p.Capacity) : 0;
     }
+
+    /// <summary>
+    /// The player's faction's outpost nearest <paramref name="pivot"/> (X/Z) when the pivot is within its radius, else null.
+    /// </summary>
+    OutpostSnapshot? NearestOwnOutpost(IReadOnlyList<OutpostSnapshot> outposts, Vector3 pivot)
+    {
+        var nearest = outposts.Where(t => t.Owner == player.Session.World.Player.Faction)
+            .MinBy(t => (t.Position.X - pivot.X) * (t.Position.X - pivot.X) + (t.Position.Z - pivot.Z) * (t.Position.Z - pivot.Z));
+        return nearest is not null && Within(nearest, pivot) ? nearest : null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="p"/> is within the outpost's radius (X/Z).
+    /// </summary>
+    static bool Within(OutpostSnapshot t, Vector3 p) =>
+        (t.Position.X - p.X) * (t.Position.X - p.X) + (t.Position.Z - p.Z) * (t.Position.Z - p.Z) <= t.Radius * t.Radius;
 
     /// <summary>
     /// A bar's position as the panel sets it: whole percent of its range of 100.

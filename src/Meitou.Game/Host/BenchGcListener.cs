@@ -37,8 +37,8 @@ sealed class BenchGcListener : EventListener
                 case "GCAllocationTick_V4" or "GCAllocationTick_V3" or "GCAllocationTick_V2":
                     var names = e.PayloadNames;
                     string type = names is not null && names.IndexOf("TypeName") is var t and >= 0 ? e.Payload![t] as string ?? "?" : "?";
-                    long amount = names is not null && names.IndexOf("AllocationAmount64") is var a and >= 0 ? Convert.ToInt64(e.Payload![a])
-                            : 100_000;
+                    long amount = names is not null && names.IndexOf("AllocationAmount64") is var a and >= 0
+                        ? Convert.ToInt64(e.Payload![a]) : 100_000;
                     _allocated[type] = _allocated.GetValueOrDefault(type) + amount;
                     break;
                 case "GCSuspendEEBegin_V1":

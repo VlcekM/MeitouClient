@@ -280,8 +280,12 @@ sealed class GameOptions
                 g.SeedGiven = true;
                 break;
                 case "--ui":
-                    g.UiMode = Next().ToLowerInvariant() switch { "faithful" => Data.Ui.UiMode.Faithful, "meitou" => Data.Ui.UiMode.Meitou,
-                            _ => throw new ArgumentException("--ui must be faithful or meitou") };
+                    g.UiMode = Next().ToLowerInvariant() switch
+                    {
+                        "faithful" => Data.Ui.UiMode.Faithful,
+                        "meitou" => Data.Ui.UiMode.Meitou,
+                        _ => throw new ArgumentException("--ui must be faithful or meitou"),
+                    };
                     break;
                 case "--vsync": g.VSync = true;
                 break;
@@ -308,7 +312,7 @@ sealed class GameOptions
                 break;
                 case "--sandbox":
                     g.Sandbox = i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out int count)
-                            ? Math.Clamp(count, 1, 1000) : 1;
+                        ? Math.Clamp(count, 1, 1000) : 1;
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], NumberStyles.None, CultureInfo.InvariantCulture, out _)) i++;
                     break;
                 case "--sandbox-character": g.SandboxCharacter = Next();
@@ -320,10 +324,10 @@ sealed class GameOptions
                 case "--terrain-sandbox":
                     g.TerrainSandbox = TerrainSandboxSpot;
                     if (i + 1 < args.Length && args[i + 1] == "cliffs")
-                            (g.TerrainSandbox, g.TerrainSandboxCliffs, i) = (CliffSandboxSpot, true, i + 1);
+                        (g.TerrainSandbox, g.TerrainSandboxCliffs, i) = (CliffSandboxSpot, true, i + 1);
                     if (i + 1 < args.Length && args[i + 1].Split(',') is [var tx, var tz]
                             && float.TryParse(tx, NumberStyles.Float, CultureInfo.InvariantCulture, out float fx)
-                        && float.TryParse(tz, NumberStyles.Float, CultureInfo.InvariantCulture, out float fz))
+                            && float.TryParse(tz, NumberStyles.Float, CultureInfo.InvariantCulture, out float fz))
                     {
                         g.TerrainSandbox = (fx, fz);
                         i++;
@@ -370,8 +374,12 @@ sealed class GameOptions
                 break;
                 case "--battle-width":
                     var widths = Next().Split(',').Select(w => (int?)Math.Max(int.Parse(w, CultureInfo.InvariantCulture), 1)).ToArray();
-                    g.BattleWidth = widths switch { [var both] => [both, both], [var first, var second] => [first, second],
-                            _ => throw new ArgumentException("--battle-width takes one or two counts, a,b") };
+                    g.BattleWidth = widths switch
+                    {
+                        [var both] => [both, both],
+                        [var first, var second] => [first, second],
+                        _ => throw new ArgumentException("--battle-width takes one or two counts, a,b"),
+                    };
                     break;
                 case "--move-to": g.MoveTo = (float.Parse(Next(), CultureInfo.InvariantCulture), float.Parse(Next(), CultureInfo.InvariantCulture));
                 break;

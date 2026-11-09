@@ -26,7 +26,7 @@ sealed class BuildingSync(GameHost host)
     internal readonly Dictionary<string, BuildingSnapshot> ShownBuildings = new(StringComparer.Ordinal);
     readonly HashSet<string> _shownNestMeshes = new(StringComparer.Ordinal);
     readonly HashSet<string> _navBuildings = new(StringComparer.Ordinal), _litBuildings = new(StringComparer.Ordinal),
-            _effectBuildings = new(StringComparer.Ordinal);
+        _effectBuildings = new(StringComparer.Ordinal);
     readonly Dictionary<string, float> _constructionLook = new(StringComparer.Ordinal);
     Dictionary<string, BuildingBuildData>? _buildData;
 
@@ -35,8 +35,8 @@ sealed class BuildingSync(GameHost host)
     /// </summary>
     internal Dictionary<string, BuildingBuildData> BuildData() =>
         _buildData ??= host.Scene.Database is { } db ? BuildingBuildData.LoadAll(db)
-                .GroupBy(b => b.Id, StringComparer.Ordinal)
-                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal) : [];
+            .GroupBy(b => b.Id, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal) : [];
 
     /// <summary>
     /// Once a frame, before the world is drawn.
@@ -98,7 +98,7 @@ sealed class BuildingSync(GameHost host)
         var current = new Dictionary<string, BuildingSnapshot>(StringComparer.Ordinal);
         foreach (var site in snapshot.Buildings)
             if (site.LevelPlacement is not { } level || !site.Destroyed || !host.TownChanges.LevelDestroyed(level))
-                    current[site.Id] = site;   // a ruin the level already draws as one needs no overlay
+                current[site.Id] = site;   // a ruin the level already draws as one needs no overlay
         foreach (var site in snapshot.NestBuildings) current[site.Id] = site;   // the loaded nests' buildings, complete
         foreach (string id in ShownBuildings.Keys.Where(id => !current.ContainsKey(id)).ToArray())
         {
@@ -121,7 +121,7 @@ sealed class BuildingSync(GameHost host)
                 continue;
             }
             if (shown is not null && _navBuildings.Remove(site.Id))
-                    host.Nav?.RemoveRuntimeBuilding(site.Id);   // moved or changed: out, then in again
+                host.Nav?.RemoveRuntimeBuilding(site.Id);   // moved or changed: out, then in again
             if (shown is not null && _litBuildings.Remove(site.Id)) host.ActiveLamps?.RemoveRuntime(site.Id);
             if (shown is not null && _effectBuildings.Remove(site.Id)) host.Gpu?.Particles?.RemoveBuildingEffects(site.Id);
             host.ActiveObjects?.AddRuntime(placement);
@@ -150,8 +150,10 @@ sealed class BuildingSync(GameHost host)
             if (!_shownNestMeshes.Add(id)) continue;
             var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, m.Yaw);
             host.ActiveObjects?.AddRuntime(new BuildingPlacement(WorldLayout.ZoneOf(m.Position.X, m.Position.Z), id, m.Record, m.Position, rotation,
-                    null, m.Position.Y)
-            { Key = id, ItemMesh = m.Mesh, ItemScale = m.Scale });
+                null, m.Position.Y)
+            {
+                Key = id, ItemMesh = m.Mesh, ItemScale = m.Scale,
+            });
         }
     }
 
@@ -179,7 +181,7 @@ sealed class BuildingSync(GameHost host)
         if (site.LevelPlacement is not null && host.Scene.Objects is { } objects)
         {
             lamps.SetRuntime(site.Id,
-                    WorldLights.ForBuilding(db, objects.Levels, new(Placement(site), record, site.Position, site.Destroyed), objects.Layouts));
+                WorldLights.ForBuilding(db, objects.Levels, new(Placement(site), record, site.Position, site.Destroyed), objects.Layouts));
             return;
         }
         var placed = new List<PlacedLight>();
@@ -214,7 +216,7 @@ sealed class BuildingSync(GameHost host)
         site.LevelPlacement is { } level
             ? level with { Key = site.Id, WorldY = site.Position.Y, DestroyedOverride = site.Destroyed }
             : new(WorldLayout.ZoneOf(site.Position.X, site.Position.Z), site.Id, site.Record, site.Position, site.Rotation, null,
-                    site.Position.Y) { Key = site.Id, Contained = site.Parent is not null, ContainerId = site.Parent };
+                site.Position.Y) { Key = site.Id, Contained = site.Parent is not null, ContainerId = site.Parent };
 
     /// <summary>
     /// Navmesh membership (engine reading of the Observed rebuild on placing): <c>path mode</c> not 0 and the building complete or without a <c>build
@@ -257,8 +259,8 @@ sealed class BuildingSync(GameHost host)
     internal Building.BuildServices? MakeBuildServices()
     {
         if (host.Scene.Database is not { } db) return null;
-        var footprints = new Simulation.Navigation.BuildingFootprints(host.Install, db, host.Sandbox.IsSandbox || host.Duel.IsDuel
-                || host.Battle.IsBattle ? null : host.Scene.Objects?.Levels);
+        var footprints = new Simulation.Navigation.BuildingFootprints(host.Install, db,
+            host.Sandbox.IsSandbox || host.Duel.IsDuel || host.Battle.IsBattle ? null : host.Scene.Objects?.Levels);
         var parts = new Dictionary<string, IReadOnlyList<PlacedMesh>>(StringComparer.Ordinal);
         var icons = new BuildingIcons(Path.Combine(host.Install.DataDirectory, "icons", "buildings"));
         IReadOnlyList<PlacementTown>? towns = null;
@@ -312,8 +314,8 @@ sealed class BuildingSync(GameHost host)
                 StaticPlacementsAround = (centre, radius) => footprints.PlacementsAround(centre, radius).Where(b => Pickable(b.BuildingId)),
                 StaticAlong = (origin, direction, length) => footprints.Along(origin, direction, length).Where(b => Pickable(b.Placement.BuildingId)),
                 // The movement pick's floors up to the viewed one: the build window's floor arrows choose the floor the ghost stands on.
-                FloorAlong = (origin, direction, length) => host.Gpu.Objects?.FloorHit(origin, direction, host.Interiors.ViewedFloorValue,
-                        length) is { } hit
+                FloorAlong = (origin, direction, length) => host.Gpu.Objects?.FloorHit(origin, direction,
+                    host.Interiors.ViewedFloorValue, length) is { } hit
                     ? (hit.Position, GhostFloorOf(hit.Room, hit.Room.FloorAt(hit.Position)) with { Ceiling = hit.Room.CeilingAbove(hit.Position), Normal = hit.Room.FloorNormal(hit.Position, host.Interiors.ViewedFloorValue, FloorSurfaces.RayStart) }) : null,
                 Readout = Readout,
             },
@@ -328,34 +330,34 @@ sealed class BuildingSync(GameHost host)
                     {
                         // A building whose state names no owner belongs to its town's faction (the original re-owns a town's buildings to it).
                         string? townOwner = site.Index < d.SiteFactions.Count && d.SiteFactions[site.Index] is >= 0 and var townFaction
-                                && townFaction < d.Factions.Count ? d.Factions[townFaction].Name : null;
+                            && townFaction < d.Factions.Count ? d.Factions[townFaction].Name : null;
                         for (int i = 0; i < site.Buildings.Count; i++)
                         {
                             var b = site.Buildings[i];
-                            string? buildingOwner = b.OwnerFactionId is { } id ? d.Factions.FirstOrDefault(f => f.Id == id)?.Name ?? townOwner
-                                    : townOwner;
+                            string? buildingOwner = b.OwnerFactionId is { } id
+                                ? d.Factions.FirstOrDefault(f => f.Id == id)?.Name ?? townOwner : townOwner;
                             townOf[(b.Zone, b.InstanceId)] = (site.Town.Name, buildingOwner, site.Index, i);
                         }
                     }
                 }
                 var levels = host.Scene.Objects?.Levels;
                 var state = levels is not null && placement.StateId is { } stateId && levels.Zones.TryGetValue(zone, out var zoneDb)
-                        ? zoneDb.Find(stateId) : null;
+                    ? zoneDb.Find(stateId) : null;
                 var info = townOf is not null && townOf.TryGetValue((zone, instance), out var found) ? found
-                        : default((string Town, string? Owner, int Site, int Index)?);
+                    : default((string Town, string? Owner, int Site, int Index)?);
                 var building = info is { } at && host.PopData is { } live && at.Site < live.Sites.Count
-                        && at.Index < live.Sites[at.Site].Buildings.Count
+                    && at.Index < live.Sites[at.Site].Buildings.Count
                     ? live.Sites[at.Site].Buildings[at.Index] : null;
                 var saved = host.Session.World.Fixtures.Saved?.GetValueOrDefault(placement.Key);
                 var (name, type) = WorldBuildingName(db, placement, state, saved, building?.Key == placement.Key ? building : null);
                 var (town, owner) = info is { } t ? (t.Town, t.Owner) : (null, null);
                 return new(name, type, town, owner, state?.GetBool("is public day") ?? false, state?.GetBool("is public night") ?? false,
-                    host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed : placement.DestroyedOverride
-                            ?? state?.GetBool("destroyed") ?? false);
+                    host.TownChanges.ShownRuins.TryGetValue(placement.Key, out var ruin) ? ruin.Destroyed
+                        : placement.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
             },
             Towns = () => towns ??= host.PopData is { } d ? [.. d.Sites.Select(s => new PlacementTown(s.Town, new(s.Position.X, s.Position.Z)))] : [],
             PlayerFactionId = () => host.PopData is { } d && d.PlayerFaction is >= 0 and var mine && mine < d.Factions.Count ? d.Factions[mine].Id
-                    : "",
+                : "",
             DrawGhosts = draws => host.ActiveObjects?.SetGhosts(draws),
         };
     }
@@ -394,16 +396,16 @@ sealed class BuildingSync(GameHost host)
     Building.GhostFloor GhostFloorOf(InteriorVolume room, int floor)
     {
         if (ShownBuildings.TryGetValue(room.PlacementId, out var shown) && shown.LevelPlacement is null)
-                return new(room.PlacementId, room.Footprint, floor);
+            return new(room.PlacementId, room.Footprint, floor);
         if (LevelOwners()?.TryGetValue(room.PlacementId, out var level) != true)
-                return new(room.PlacementId, room.Footprint, floor, room.PlacementId) { OwnerNotReal = true };
+            return new(room.PlacementId, room.Footprint, floor, room.PlacementId) { OwnerNotReal = true };
 
         string player = host.PopData is { } p && p.PlayerFaction is >= 0 and var mine && mine < p.Factions.Count ? p.Factions[mine].Id : "";
         bool owned = host.Session.CurrentSnapshot.OwnedTownBuildings.Contains(room.PlacementId) || player.Length > 0 && level.Owner == player;
         return new(room.PlacementId, room.Footprint, floor, level.Instance, owned)
         {
             Destroyed = host.TownChanges.ShownRuins.TryGetValue(room.PlacementId, out var ruin) ? ruin.Destroyed
-                    : host.Session.World.Fixtures.SavedDestroyed(level.Building),
+                : host.Session.World.Fixtures.SavedDestroyed(level.Building),
             OwnerNotReal = level.Owner is not { } owner || host.PopData?.Factions.FirstOrDefault(f => f.Id == owner) is not { NotReal: false },
         };
     }
@@ -417,7 +419,7 @@ sealed class BuildingSync(GameHost host)
         foreach (var site in d.Sites)
         {
             string? townOwner = site.Index < d.SiteFactions.Count && d.SiteFactions[site.Index] is >= 0 and var f && f < d.Factions.Count
-                    ? d.Factions[f].Id : null;
+                ? d.Factions[f].Id : null;
             foreach (var b in site.Buildings) _levelOwners[b.Key] = (b.InstanceId, b.OwnerFactionId ?? townOwner, b);
         }
         return _levelOwners;
@@ -525,7 +527,10 @@ sealed class BuildingSync(GameHost host)
             if (!_turretPoses.TryGetValue(post.Key, out var pose))
             {
                 if (db.Find(post.BuildingId) is not { } building || TurretGun.From(db, building) is not { } gun)
-                        { _turretPoseMissing.Add(post.Key); continue; }
+                {
+                    _turretPoseMissing.Add(post.Key);
+                    continue;
+                }
                 _turretPoses[post.Key] = pose = new TurretPose([.. gun.Parts.Select(p => p.Id)]);
                 added = true;
             }

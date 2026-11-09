@@ -29,7 +29,9 @@ sealed class FactionWindow(PlayerInterface player)
             FactionInfoKind.Heading or FactionInfoKind.Detail => PlayerInterface.MainColour,
             _ => null,
         };
-        string? tint = l.Kind == FactionInfoKind.Name ? colour : l.Kind == FactionInfoKind.Queued ? PlayerInterface.GreyColour : PlayerInterface.MainColour;
+        string? tint = l.Kind == FactionInfoKind.Name ? colour
+            : l.Kind == FactionInfoKind.Queued ? PlayerInterface.GreyColour
+            : PlayerInterface.MainColour;
         return new(Loc.Tr(l.Label), value, colour, tint);
     }
 
@@ -63,9 +65,9 @@ sealed class FactionWindow(PlayerInterface player)
     bool FactionShown => player.FaithfulScreens.IsOpen("overview") && player.FaithfulScreens.GetTab("overview", "TabsMain") == FactionTab;
 
     /// <summary>
-    /// The relations list (<c>FUN_140499960</c> / <c>FUN_140499630</c>): the lines sorted by faction name, each the panel's width less the scroll bar and stacked
-    /// with 3 px (at 1080 lines) between them; the number in BadBright below -30, Good above 60, else Main; a negative relation fills the left bar leftwards from
-    /// the middle, a positive one the right bar rightwards, |relation| % of their width.
+    /// The relations list (<c>FUN_140499960</c> / <c>FUN_140499630</c>): the lines sorted by faction name, each the panel's width less the scroll bar
+    /// and stacked with 3 px (at 1080 lines) between them; the number in BadBright below -30, Good above 60, else Main; a negative relation fills the
+    /// left bar leftwards from the middle, a positive one the right bar rightwards, |relation| % of their width.
     /// </summary>
     internal void AddFactionContent(List<UiControl> controls)
     {
@@ -78,6 +80,9 @@ sealed class FactionWindow(PlayerInterface player)
         AddRelationsLines(controls, panel, layout, scale);
     }
 
+    /// <summary>
+    /// The faction tab's info panel: the contracts, then the upcoming events.
+    /// </summary>
     void AddFactionInfo(List<UiControl> controls, UiControl info, float scale)
     {
         // The contracts clear the panel before their rows (FUN_1404927f0), so the Active Contracts heading written before them never shows.
@@ -89,11 +94,15 @@ sealed class FactionWindow(PlayerInterface player)
         player.AddLines(controls, "FactionInfoPanel", lines, 20 * scale, player.StandardPixels, top: 0.03f * info.Bounds.Height);
     }
 
+    /// <summary>
+    /// The relations list: a line per faction, by name, on the scroll view's client.
+    /// </summary>
     void AddRelationsLines(List<UiControl> controls, UiControl panel, MyGuiLayout layout, float scale)
     {
         var factions = (FactionRelations?.Invoke() ?? []).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
         // The lines go on the scroll view's client (Kenshi_ScrollView: 10 px inside the frame at the template's scale), not on its frame.
-        var client = controls.FirstOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == panel.Name && c.Properties.GetValueOrDefault("TemplatePart") == "Client");
+        var client = controls.FirstOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == panel.Name
+            && c.Properties.GetValueOrDefault("TemplatePart") == "Client");
         var area = client?.Bounds ?? panel.Bounds;
         var clip = panel.Clip is { } outer ? area.Intersect(outer) : area;
         var root = layout.Roots.FirstOrDefault();
@@ -111,7 +120,9 @@ sealed class FactionWindow(PlayerInterface player)
             if (root is not null) b.Positions[root.Name] = new(0, 0, lineWidth, lineHeight);
             b.Text["FactionName"] = name;
             b.Text["FactionValue"] = ((int)relation).ToString(CultureInfo.InvariantCulture);
-            string valueColour = relation < -30 ? PlayerInterface.BadBrightColour : relation > 60 ? PlayerInterface.GoodColour : PlayerInterface.MainColour;
+            string valueColour = relation < -30 ? PlayerInterface.BadBrightColour
+                : relation > 60 ? PlayerInterface.GoodColour
+                : PlayerInterface.MainColour;
             b.Properties["FactionValue"] = new Dictionary<string, string> { ["TextColour"] = valueColour };
             SetBarPositions(b, layout, relation, lineWidth, lineHeight);
             int shownWidth = (int)MathF.Round(lineWidth);
@@ -130,6 +141,9 @@ sealed class FactionWindow(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// Sizes a relations line's bars: the left one for a negative relation, the right one for a positive.
+    /// </summary>
     static void SetBarPositions(UiBindings b, MyGuiLayout layout, float relation, float lineWidth, float lineHeight)
     {
         foreach (var (bar, negative) in new[] { ("LeftBar", true), ("RightBar", false) })

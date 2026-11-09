@@ -32,7 +32,8 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     public event Action<MyGuiEvent>? Activated;
 
     /// <summary>
-    /// Modal screens whose empty surroundings let a click through to the screens under them (the title's windows: another title button replaces them).
+    /// Modal screens whose empty surroundings let a click through to the screens under them (the title's windows: another title button replaces
+    /// them).
     /// </summary>
     public Func<string, bool>? PassThrough { get; set; }
 
@@ -257,10 +258,7 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
             if (MyGuiPresentation.HitTest(screen.Controls, p.X, p.Y) is { } hit) return (screen.Id, hit);
 
             if (_screens[screen.Id].Modal && PassThrough?.Invoke(screen.Id) != true)
-            {
-                return (screen.Id, new UiControl(
-                    "modal", "Widget", default, "", "", "", false, new Dictionary<string, string>(), default));
-            }
+                return (screen.Id, new UiControl("modal", "Widget", default, "", "", "", false, new Dictionary<string, string>(), default));
         }
 
         return null;
@@ -367,6 +365,9 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         _lastListClick = (id, list, selected, now);
     }
 
+    /// <summary>
+    /// Whether a list click is the second on the same line of the same list within the double-click time.
+    /// </summary>
     bool IsDoubleClick(string id, string list, int selected, long now) =>
         _lastListClick is { } last && last.Screen == id && last.List == list && last.Line == selected
         && System.Diagnostics.Stopwatch.GetElapsedTime(last.At, now).TotalSeconds < DoubleClickSeconds;

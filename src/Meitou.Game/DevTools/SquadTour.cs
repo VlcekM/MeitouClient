@@ -88,8 +88,8 @@ sealed class SquadTour
     /// </summary>
     public Vector3? ArrivalEye(Func<CharacterId, Vector3?> position) =>
         Active && Current is { } id && position(id) is { } at
-            ? at + new Vector3(MathF.Cos(_pitch) * MathF.Sin(_yaw), MathF.Sin(_pitch),
-                    MathF.Cos(_pitch) * MathF.Cos(_yaw)) * _distance   // WorldCamera.Eye's boom
+            // WorldCamera.Eye's boom
+            ? at + new Vector3(MathF.Cos(_pitch) * MathF.Sin(_yaw), MathF.Sin(_pitch), MathF.Cos(_pitch) * MathF.Cos(_yaw)) * _distance
             : null;
 
     public void Stop() => Active = false;

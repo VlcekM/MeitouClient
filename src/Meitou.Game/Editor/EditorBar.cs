@@ -107,7 +107,7 @@ sealed class EditorBar
         Origin = origin;
         Rotation = level.Rotation;
         Placement = level with { Zone = WorldLayout.ZoneOf(origin.X, origin.Z), Position = origin with { Y = 0 }, WorldY = origin.Y,
-                StateZone = level.Zone, Key = Key, DestroyedOverride = null };
+            StateZone = level.Zone, Key = Key, DestroyedOverride = null };
         Stand = origin + Vector3.Transform(StandLocal, Rotation);
         var facing = Vector3.Transform(FacingLocal, Rotation);
         StandYaw = MathF.Atan2(facing.X, facing.Z);
@@ -117,14 +117,13 @@ sealed class EditorBar
         var focus = origin + Vector3.Transform(SeatFocusLocal, Rotation);
         IEnumerable<HomeSpot> Spots(Func<HomeSpot, bool> which) => source.Spots.Where(which)
             .Select(s => s with { Position = s.Position - resolved.Position + origin })
-            .Where(s => new Vector2(s.Position.X - Stand.X, s.Position.Z - Stand.Z).Length() > SeatClearance
-                    && s.Position.Y < origin.Y + 20)   // the ground floor only
+            // The ground floor only.
+            .Where(s => new Vector2(s.Position.X - Stand.X, s.Position.Z - Stand.Z).Length() > SeatClearance && s.Position.Y < origin.Y + 20)
             .OrderBy(s => Vector3.DistanceSquared(s.Position, focus));
         var seats = Spots(s => s.Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat && s.SitClip is not null).ToList();
         Seats = [.. seats.Take(MaxSeated).Select(s => (s.Position, s.Yaw, s.SitClip!))];
         Crowd = MakeCrowd(db, site, source, seats.Skip(MaxSeated), Spots(s => s.Kind == HomeSpotKind.Shopkeeper),
-                Spots(s => s.Kind == HomeSpotKind.Guard),
-            Spots(s => s.Kind == HomeSpotKind.General));
+            Spots(s => s.Kind == HomeSpotKind.Guard), Spots(s => s.Kind == HomeSpotKind.General));
         Ground = MakeGround(install, db, origin);
     }
 
@@ -134,8 +133,7 @@ sealed class EditorBar
     /// each time (fixed seeds).
     /// </summary>
     static List<(string, string?, Vector3, float, string, int)> MakeCrowd(GameDatabase db, TownSite site, TownBuilding source,
-            IEnumerable<HomeSpot> seats,
-        IEnumerable<HomeSpot> counter, IEnumerable<HomeSpot> posts, IEnumerable<HomeSpot> nodes)
+        IEnumerable<HomeSpot> seats, IEnumerable<HomeSpot> counter, IEnumerable<HomeSpot> posts, IEnumerable<HomeSpot> nodes)
     {
         var crowd = new List<(string, string?, Vector3, float, string, int)>();
         bool IsCharacter(string id) => db.Find(id)?.Type == Data.Fcs.FcsRecordType.Character;
@@ -150,8 +148,8 @@ sealed class EditorBar
         var patrons = new List<(string Id, string? Faction)>();
         foreach (var link in site.Town.BarSquads)
             if (db.Find(link.Id) is { } record && SquadTemplate.From(record) is var squad)
-                foreach (var m in (squad.Leader is { } leader ? [leader]
-                        : Array.Empty<RecordLink>()).Concat(squad.Squad).Concat(squad.Squad2).Concat(squad.ChooseFrom))
+                foreach (var m in (squad.Leader is { } leader ? [leader] : Array.Empty<RecordLink>()).Concat(squad.Squad)
+                        .Concat(squad.Squad2).Concat(squad.ChooseFrom))
                     if (IsCharacter(m.Id) && !patrons.Exists(p => p.Id == m.Id)) patrons.Add((m.Id, squad.Faction));
         if (patrons.Count == 0) return crowd;
         var random = new Random(173);
@@ -196,9 +194,9 @@ sealed class EditorBar
         float scale = GroundHalfWidth / MathF.Max(MathF.Min(halfX, halfZ), 1);
         // The top: the highest vertices near the middle, so a rim or a spike does not lift the whole block.
         float top = points.Where(p => Vector2.Distance(new(p.X, p.Z), centre) < MathF.Min(halfX, halfZ) * 0.5f)
-                .Select(p => p.Y)
-                .DefaultIfEmpty(points.Max(p => p.Y))
-                .Max();
+            .Select(p => p.Y)
+            .DefaultIfEmpty(points.Max(p => p.Y))
+            .Max();
         var at = new Vector3(origin.X - centre.X * scale, origin.Y - top * scale, origin.Z - centre.Y * scale);
         placed.Add(new PlacedMesh(meshPath,
             WorldObjectLayout.InstanceTransform(at, Quaternion.Identity, new Vector3(scale)), look, look, $"{Key}/ground", PlacedKind.MapFeature));
@@ -210,7 +208,7 @@ sealed class EditorBar
             float angle = random.NextSingle() * MathF.Tau, distance = ShrubNear + random.NextSingle() * (ShrubFar - ShrubNear);
             var spot = origin + new Vector3(MathF.Sin(angle), 0, MathF.Cos(angle)) * distance;
             var transform = WorldObjectLayout.InstanceTransform(spot, Quaternion.CreateFromAxisAngle(Vector3.UnitY, random.NextSingle() * MathF.Tau),
-                    new Vector3(0.8f + random.NextSingle() * 0.8f));
+                new Vector3(0.8f + random.NextSingle() * 0.8f));
             placed.Add(new PlacedMesh(shrub.GetPath("mesh"), transform, shrub, shrub, $"{Key}/shrub {i}", PlacedKind.MapFeature));
         }
         return placed;

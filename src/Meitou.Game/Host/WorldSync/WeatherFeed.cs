@@ -27,8 +27,8 @@ sealed class WeatherFeed(GameHost host)
             if (Forced is { } forced) return forced;
             if (weather()?.World is not { } world) return null;
             var region = world.RegionAt(x, z);
-            return new WeatherHere(region.Weather.AffectType, region.Strength, region.Def.AcidicGround, region.Def.AcidicWater, region.WindSpeed,
-                    region.Weather.Wetness);
+            return new WeatherHere(region.Weather.AffectType, region.Strength, region.Def.AcidicGround, region.Def.AcidicWater,
+                region.WindSpeed, region.Weather.Wetness);
         }
     }
 

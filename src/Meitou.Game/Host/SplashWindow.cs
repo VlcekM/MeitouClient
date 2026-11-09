@@ -56,8 +56,8 @@ sealed unsafe partial class SplashWindow : IDisposable
     {
         s_started = Environment.TickCount64;
         if (fontPath is not null && AddFontResourceExW(fontPath, 0x10 /* FR_PRIVATE */, 0) > 0)
-            fixed (char* face = "Mailart Rubberstamp") s_font = CreateFontW(-40, 0, 0, 0, 400, 0, 0, 0, 0, 0, 0, 4 /* ANTIALIASED_QUALITY */, 0,
-                    face);
+            fixed (char* face = "Mailart Rubberstamp")
+                s_font = CreateFontW(-40, 0, 0, 0, 400, 0, 0, 0, 0, 0, 0, 4 /* ANTIALIASED_QUALITY */, 0, face);
         var instance = GetModuleHandleW(null);
         fixed (char* className = "MeitouSplash")
         fixed (char* title = "Meitou")
@@ -72,8 +72,8 @@ sealed unsafe partial class SplashWindow : IDisposable
             };
             RegisterClassExW(&wc);
             int x = (GetSystemMetrics(0) - Width) / 2, y = (GetSystemMetrics(1) - Height) / 2;
-            s_window = CreateWindowExW(0x00040000 /* WS_EX_APPWINDOW */, className, title, 0x80000000u | 0x10000000u /* WS_POPUP | WS_VISIBLE */, x,
-                    y, Width, Height, 0, 0, instance, null);
+            s_window = CreateWindowExW(0x00040000 /* WS_EX_APPWINDOW */, className, title, 0x80000000u | 0x10000000u /* WS_POPUP | WS_VISIBLE */,
+                x, y, Width, Height, 0, 0, instance, null);
         }
         _created.Set();
         if (s_window == 0) return;
@@ -133,7 +133,7 @@ sealed unsafe partial class SplashWindow : IDisposable
         if (s_picture is { } pixels)
         {
             var info = new Bitmapinfoheader { biSize = (uint)sizeof(Bitmapinfoheader), biWidth = s_pictureWidth, biHeight = -s_pictureHeight,
-                    biPlanes = 1, biBitCount = 32 };
+                biPlanes = 1, biBitCount = 32 };
             SetStretchBltMode(memory, 4);   // HALFTONE
             fixed (byte* bits = pixels) StretchDIBits(memory, 0, 0, Width, Height, 0, 0, s_pictureWidth, s_pictureHeight, bits, &info, 0, 0x00CC0020);
         }
@@ -220,18 +220,31 @@ sealed unsafe partial class SplashWindow : IDisposable
     struct Rect { public int left, top, right, bottom; }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct Paintstruct { public nint hdc; public int fErase; public Rect rcPaint; public int fRestore,
-            fIncUpdate; public fixed byte rgbReserved[32]; }
+    struct Paintstruct
+    {
+        public nint hdc;
+        public int fErase;
+        public Rect rcPaint;
+        public int fRestore, fIncUpdate;
+        public fixed byte rgbReserved[32];
+    }
 
     [StructLayout(LayoutKind.Sequential)]
-    struct Bitmapinfoheader { public uint biSize; public int biWidth, biHeight; public ushort biPlanes, biBitCount; public uint biCompression,
-            biSizeImage; public int biXPelsPerMeter, biYPelsPerMeter; public uint biClrUsed, biClrImportant; }
+    struct Bitmapinfoheader
+    {
+        public uint biSize;
+        public int biWidth, biHeight;
+        public ushort biPlanes, biBitCount;
+        public uint biCompression, biSizeImage;
+        public int biXPelsPerMeter, biYPelsPerMeter;
+        public uint biClrUsed, biClrImportant;
+    }
 #pragma warning restore IDE1006
 
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial nint GetModuleHandleW(string? name);
     [LibraryImport("user32.dll")] private static partial ushort RegisterClassExW(Wndclassexw* wc);
     [LibraryImport("user32.dll")] private static partial nint CreateWindowExW(uint exStyle, char* className, char* title, uint style, int x, int y,
-            int w, int h, nint parent, nint menu, nint instance, void* param);
+        int w, int h, nint parent, nint menu, nint instance, void* param);
     [LibraryImport("user32.dll")] private static partial nint DefWindowProcW(nint hwnd, uint message, nint wParam, nint lParam);
     [LibraryImport("user32.dll")] private static partial int GetMessageW(Msg* msg, nint hwnd, uint min, uint max);
     [LibraryImport("user32.dll")] private static partial int TranslateMessage(Msg* msg);
@@ -260,11 +273,11 @@ sealed unsafe partial class SplashWindow : IDisposable
     [LibraryImport("gdi32.dll")] private static partial int TextOutW(nint dc, int x, int y, char* text, int length);
     [LibraryImport("gdi32.dll")] private static partial int SetStretchBltMode(nint dc, int mode);
     [LibraryImport("gdi32.dll")] private static partial int StretchDIBits(nint dc, int x, int y, int w, int h, int sx, int sy, int sw, int sh,
-            void* bits, Bitmapinfoheader* info, uint usage, uint rop);
+        void* bits, Bitmapinfoheader* info, uint usage, uint rop);
     [LibraryImport("gdi32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial int AddFontResourceExW(string path, uint flags,
-            nint reserved);
+        nint reserved);
     [LibraryImport("gdi32.dll")] private static partial nint CreateFontW(int height, int width, int escapement, int orientation, int weight,
-            uint italic, uint underline, uint strikeOut, uint charSet, uint outPrecision, uint clipPrecision, uint quality, uint pitchAndFamily,
+        uint italic, uint underline, uint strikeOut, uint charSet, uint outPrecision, uint clipPrecision, uint quality, uint pitchAndFamily,
             char* face);
     [LibraryImport("gdi32.dll")] private static partial int BitBlt(nint dc, int x, int y, int w, int h, nint source, int sx, int sy, uint rop);
 }

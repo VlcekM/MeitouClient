@@ -159,9 +159,8 @@ sealed class TitleScreen(GameHost host)
             if (record.Type is not (Data.Fcs.FcsRecordType.SquadTemplate or Data.Fcs.FcsRecordType.UniqueSquadTemplate)) return;
             var template = Data.Gameplay.SquadTemplate.From(record);
             if (template.Leader is { } leader) Add(leader.Id);
-            foreach (var member in template.Squad.Concat(template.Squad2).Concat(template.ChooseFrom).Concat(template.Animals)
-                .Concat(template.Animals2))
-                Add(member.Id);
+            var members = template.Squad.Concat(template.Squad2).Concat(template.ChooseFrom).Concat(template.Animals).Concat(template.Animals2);
+            foreach (var member in members) Add(member.Id);
         }
         Add(startOrTemplateId);
         return characters;
@@ -237,8 +236,7 @@ sealed class TitleScreen(GameHost host)
         // Clear sky with a few clouds whatever the region's weather, no placed fog volumes, the sun turned into the right of the view, the moons lit
         // full face so they read by day, and thicker morning air so the hill the sun peeks over casts rays through it.
         var sky = host.Gpu.Sky;
-        var (weather, coverage, regions, clock, wind) =
-            (sky.Weather, sky.CloudCoverage, host.Gpu.Weather, host.Scene.Clock, sky.CloudWind);
+        var (weather, coverage, regions, clock, wind) = (sky.Weather, sky.CloudCoverage, host.Gpu.Weather, host.Scene.Clock, sky.CloudWind);
         float hour = host.PresentationHour ?? TitleHour;
         // Fade the staged fill with the sun, reaching zero at the horizon.
         float fill = Math.Clamp(clock.SunDirection(hour).Y / MathF.Max(clock.SunDirection(TitleHour).Y, 1e-3f), 0, 1);

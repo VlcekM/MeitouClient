@@ -25,8 +25,8 @@ public readonly record struct TooltipLine(string Key, string Value = "", Tooltip
 }
 
 /// <summary>
-/// Where a tooltip sits (docs/game/ui-screens.md "Tooltips"): <c>ToolTip</c>/<c>ToolTipDynamic</c> at the pointer, <c>ToolTipFixed</c> on an anchor panel,
-/// <c>ToolTipInventory</c> beside the window holding the item.
+/// Where a tooltip sits (docs/game/ui-screens.md "Tooltips"): <c>ToolTip</c>/<c>ToolTipDynamic</c> at the pointer, <c>ToolTipFixed</c> on an anchor
+/// panel, <c>ToolTipInventory</c> beside the window holding the item.
 /// </summary>
 public enum TooltipKind { Floating, Fixed, Inventory, Static }
 

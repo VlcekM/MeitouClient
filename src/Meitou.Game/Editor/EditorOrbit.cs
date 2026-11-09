@@ -53,7 +53,7 @@ sealed class EditorOrbit
     {
         Yaw -= dx * RadiansPerPixel;
         Elevation = Head ? Math.Clamp(Elevation + dy * RadiansPerPixel, HeadMinElevation, HeadMaxElevation)
-                : Math.Clamp(Elevation + dy * RadiansPerPixel, MinElevation, MaxElevation);
+            : Math.Clamp(Elevation + dy * RadiansPerPixel, MinElevation, MaxElevation);
     }
 
     /// <summary>

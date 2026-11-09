@@ -54,8 +54,8 @@ public sealed class Releases(HttpClient http)
     public static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = Timeout.InfiniteTimeSpan }; // a big download may take minutes; callers cancel instead
-        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("meitou-launcher",
-                typeof(Releases).Assembly.GetName().Version?.ToString(3) ?? "0"));
+        string version = typeof(Releases).Assembly.GetName().Version?.ToString(3) ?? "0";
+        client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("meitou-launcher", version));
         return client;
     }
 
@@ -78,8 +78,8 @@ public sealed class Releases(HttpClient http)
             string? etag = null;
             for (int page = 1; page <= MaxPages; page++)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get,
-                        $"https://api.github.com/repos/{Repository}/releases?per_page={PageSize}&page={page}");
+                string url = $"https://api.github.com/repos/{Repository}/releases?per_page={PageSize}&page={page}";
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
                 if (page == 1 && cached?.ETag is { } cachedTag)
                     request.Headers.TryAddWithoutValidation("If-None-Match", cachedTag);
@@ -106,8 +106,8 @@ public sealed class Releases(HttpClient http)
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
         {
-            problem = LauncherText.Translate("GitHub not reachable ({1})",
-                    e.Message) + (body is null ? "" : LauncherText.Translate("; showing the last list"));
+            problem = LauncherText.Translate("GitHub not reachable ({1})", e.Message)
+                + (body is null ? "" : LauncherText.Translate("; showing the last list"));
         }
         return (body is null ? [] : Parse(body), problem);
     }
@@ -176,8 +176,8 @@ public sealed class Releases(HttpClient http)
         int at = version.IndexOf("-nightly.", StringComparison.Ordinal);
         if (at < 0) return (version, null, 0);
         var stamp = version[(at + "-nightly.".Length)..].Split('.');
-        int build = stamp.Length > 1 && int.TryParse(stamp[1], System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture, out int n) ? n : 1;
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        int build = stamp.Length > 1 && int.TryParse(stamp[1], System.Globalization.NumberStyles.None, invariant, out int n) ? n : 1;
         return (version[..at], DateOnly.TryParseExact(stamp[0], "yyyyMMdd", out var date) ? date : null, build);
     }
 

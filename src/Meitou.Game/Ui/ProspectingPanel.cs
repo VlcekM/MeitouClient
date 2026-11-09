@@ -136,7 +136,8 @@ sealed class ProspectingPanel(PlayerInterface player)
     static string N(int v) => v.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// The resource rows of the results: each a radio row with the resource's name (checked when it is the map's), and its percentage in the value colour.
+    /// The resource rows of the results: each a radio row with the resource's name (checked when it is the map's), and its percentage in the value
+    /// colour.
     /// </summary>
     void AddResourceRows(List<UiControl> controls, ProspectReport r, UiControl list, string valueInk)
     {

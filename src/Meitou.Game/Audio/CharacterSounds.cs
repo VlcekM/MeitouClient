@@ -71,15 +71,7 @@ public sealed class CharacterSoundProfile
         if (look.Animal is not null)
         {
             string creature = CharacterSounds.CreatureName(sounds);
-            return new CharacterSoundProfile
-            {
-                Animal = true,
-                Voice = creature,
-                Weapons = creature,
-                Barefoot = false,
-                ArmourMaterial = 0,
-                Ambient = ambient,
-            };
+            return new CharacterSoundProfile { Animal = true, Voice = creature, Weapons = creature, Barefoot = false, ArmourMaterial = 0, Ambient = ambient };
         }
         string race = CharacterSounds.PersonName(sounds);
         return new CharacterSoundProfile
@@ -149,7 +141,7 @@ public sealed class CharacterSounds
 
     static readonly string[] Persons = ["Human", "Shek", "Hive", "Robot"];
     static readonly string[] Creatures =
-    ["Beak", "Bull", "Cage", "Dog", "Duck", "Gar", "Goat", "Gorillo", "IronSpider", "Leviathan", "Pack", "Spider", "Turtle",];
+        ["Beak", "Bull", "Cage", "Dog", "Duck", "Gar", "Goat", "Gorillo", "IronSpider", "Leviathan", "Pack", "Spider", "Turtle"];
     static readonly string[] Weapons = ["Katanas", "Sabres", "Blunt", "Heavy", "Hackers", "", "Bow", "Turret", "Blunt"];
     static readonly string[] Armours = ["Cloth", "Leather", "Chain", "Plate"];
     static readonly string[] Shoes = ["Sand", "Grass", "Concrete", "Wood", "Metal", "Water", "Mud", "Snow", "Dirt"];
@@ -282,16 +274,8 @@ public sealed class CharacterSounds
     /// drop radius are forgotten; the first update inside the track radius makes the object, with the voice and weapon switches (<c>uses_sounds</c>,
     /// <c>uses_bare_sword</c>).
     /// </summary>
-    public void Update(
-        ulong key,
-        CharacterSoundProfile profile,
-        Vector3 position,
-        float yaw,
-        float speed,
-        ReadOnlySpan<SoundLayer> layers,
-        CharacterLoop loop = CharacterLoop.None,
-        bool down = false,
-        bool combat = false)
+    public void Update(ulong key, CharacterSoundProfile profile, Vector3 position, float yaw, float speed, ReadOnlySpan<SoundLayer> layers,
+        CharacterLoop loop = CharacterLoop.None, bool down = false, bool combat = false)
     {
         float d2 = _player.HeardDistanceSquared(position, _camera);
         _entries.TryGetValue(key, out var e);
@@ -347,9 +331,10 @@ public sealed class CharacterSounds
 
     /// <summary>
     /// The race's looping sound (docs/audio.md "Point emitters"; <c>uses_ambient_sound</c>, updated by <c>FUN_1405cfd90</c> every frame):
-    /// <c>Start_Emitter</c> on the character's own object while the eye is within the sound's range (the squared distance not beyond <c>cutoff² ×
-    /// 100</c>), <c>Stop_Emitter</c> beyond it, none for a body that is down (the exe makes it for a living character only). The sound needs no
-    /// power; its base intensity is 0 for the robot spiders, so <c>Intensity</c> is not set on the object and the global one (the wind's) is heard.
+    /// <c>Start_Emitter</c> on the character's own object while the eye is within the sound's range (the squared distance not beyond
+    /// <c>cutoff² × 100</c>), <c>Stop_Emitter</c> beyond it, none for a body that is down (the exe makes it for a living character only). The sound
+    /// needs no power; its base intensity is 0 for the robot spiders, so <c>Intensity</c> is not set on the object and the global one (the wind's) is
+    /// heard.
     /// </summary>
     void UpdateAmbient(Entry e, AmbientSound sound, float d2)
     {
@@ -733,6 +718,7 @@ public sealed class CharacterSounds
             e.Down = true;
             if (e.Profile?.Animal == true && Post(key, "VO_Creature_Die")) Voices++;
         }
+
         if (attacker == 0 || !_entries.TryGetValue(attacker, out var a) || a.Profile?.Animal != true) return;
         if (Post(attacker, "VO_Creature_Victory")) Voices++;
     }

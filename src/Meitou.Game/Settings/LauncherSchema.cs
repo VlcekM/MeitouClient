@@ -179,6 +179,9 @@ static class LauncherSchema
         },
     ];
 
+    /// <summary>
+    /// The launcher's Display section: full screen, VSync, the frame limit, the world tick and the Display ones of the given sliders.
+    /// </summary>
     static SettingsSection DisplaySection(UserConfig defaults, List<SettingDescription> sliders) => new()
     {
         Name = "Display",

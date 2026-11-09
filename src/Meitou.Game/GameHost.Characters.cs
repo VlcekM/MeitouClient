@@ -42,7 +42,7 @@ sealed partial class GameHost
     {
         if (Battle.IsBattle) return;
         Session.World.Commands.Enqueue(new Simulation.Bodies.CameraViewCommand(Camera.Eye, Camera.Forward, Camera.FieldOfView, ViewAspect,
-                NpcRange) { Tick = Session.World.Tick });
+            NpcRange) { Tick = Session.World.Tick });
     }
 
     /// <summary>
@@ -54,7 +54,7 @@ sealed partial class GameHost
         SendView();
         var current = Session.Camera.Current;
         if (at is null && _sentFocus && current.IsFree && current.Eye.Y - Session.Camera.EyeGroundAt(current.Eye.X, current.Eye.Z) > FocusCeiling)
-                return;
+            return;
         var target = at ?? current.Target;   // the cinema's camera while it holds the view
         if (_sentFocus && Vector3.DistanceSquared(target, _lastFocus) < 50 * 50) return;
         Session.World.Commands.Enqueue(new FocusCommand(target) { Tick = Session.World.Tick });
@@ -117,8 +117,8 @@ sealed partial class GameHost
         foreach (var k in now.Characters)
         {
             if (k.Id != body.CarriedBy) continue;
-            return PreviousById.TryGetValue(k.Id, out var before) ? Simulation.Session.Interp.LerpAngle(DrawnYaw(before), DrawnYaw(k), alpha)
-                    : DrawnYaw(k);
+            return PreviousById.TryGetValue(k.Id, out var before)
+                ? Simulation.Session.Interp.LerpAngle(DrawnYaw(before), DrawnYaw(k), alpha) : DrawnYaw(k);
         }
         return fallback;
     }
@@ -133,8 +133,8 @@ sealed partial class GameHost
     /// <summary>
     /// A carried body has its carrier's position; it is drawn at <see cref="CharacterSnapshot.Carry"/> from it, where its ragdoll is posed too.
     /// </summary>
-    internal static Vector3 CarriedOffset(CharacterSnapshot c, float yaw) => c.Carry is { } carry ? carry.World(Vector3.Zero, yaw).Position
-            : Vector3.Zero;
+    internal static Vector3 CarriedOffset(CharacterSnapshot c, float yaw) => c.Carry is { } carry
+        ? carry.World(Vector3.Zero, yaw).Position : Vector3.Zero;
 
     #endregion
 
@@ -215,7 +215,7 @@ sealed partial class GameHost
                 poses[i] = new CharacterPose(layer.Name, time, weight);
             }
             var bones = Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha,
-                    ref Slot(ref _ragdollsBySlot, c.Id.Slot), ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
+                ref Slot(ref _ragdollsBySlot, c.Id.Slot), ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
             list.Add(Drawn(c, c.Appearance, position, yaw, poses, rotation, bones, Interiors.HiddenIndoors.Contains(c.Id), c.IsPlayer));
         }
     }
@@ -227,8 +227,7 @@ sealed partial class GameHost
     /// limb in an animal's mouth, the weapon stance, the build, the blood).
     /// </summary>
     CharacterInstance Drawn(CharacterSnapshot c, Data.Characters.CharacterAppearance look, Vector3 position, float yaw,
-            IReadOnlyList<CharacterPose> poses, Quaternion? rotation,
-        Data.Characters.BonePose? bones, bool hidden, bool fullRate) =>
+        IReadOnlyList<CharacterPose> poses, Quaternion? rotation, Data.Characters.BonePose? bones, bool hidden, bool fullRate) =>
         new(DrawKey(c.Id), look, position, yaw, poses)
         {
             WeaponDrawn = c.WeaponDrawn,
@@ -273,11 +272,11 @@ sealed partial class GameHost
         if (Player.PortraitBar.DialoguePortraitCharacters() is var (npc, talker))
         {
             if (!npc.IsNone)
-                    characters.PortraitRequests.Add(new PortraitRequest(DrawKey(npc), PortraitBar.DialogueNpcCell,
-                            Player.PortraitBar.PortraitSerial(npc)));
+                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(npc), PortraitBar.DialogueNpcCell,
+                    Player.PortraitBar.PortraitSerial(npc)));
             if (!talker.IsNone)
-                    characters.PortraitRequests.Add(new PortraitRequest(DrawKey(talker), PortraitBar.DialoguePlayerCell,
-                            Player.PortraitBar.PortraitSerial(talker)));
+                characters.PortraitRequests.Add(new PortraitRequest(DrawKey(talker), PortraitBar.DialoguePlayerCell,
+                    Player.PortraitBar.PortraitSerial(talker)));
         }
     }
 
@@ -289,10 +288,10 @@ sealed partial class GameHost
         var look = HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
         Decapitation.CutHead(c, look);
         bool hidden = Interiors.HiddenIndoors.Contains(c.Id);
-        list.Distant.Add(new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale, Hidden = hidden,
-                Build = c.Build });
+        list.Distant.Add(new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale,
+            Hidden = hidden, Build = c.Build });
         if (heldPending is not null)
-                list.Distant.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, c.Position, DrawnYaw(c), []) { Hidden = true });
+            list.Distant.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, c.Position, DrawnYaw(c), []) { Hidden = true });
     }
     /// <summary>
     /// <paramref name="slots"/>[<paramref name="slot"/>], the array grown to hold it.
@@ -355,7 +354,7 @@ sealed partial class GameHost
             // either.
             bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || _portraitKeys.Contains(DrawKey(c.Id));
             var poses = !posed ? [] : Slot(ref _posesBySlot, c.Id.Slot) is { } kept && kept.Length == c.Animations.Count ? kept
-                    : _posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
+                : _posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
             for (int i = 0; i < poses.Length; i++)
             {
                 var layer = c.Animations[i];
@@ -375,27 +374,26 @@ sealed partial class GameHost
             if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
             // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
             else if (Player.CharacterEditor.IsEditorAnimal(c.Id))
-                    poses = [.. poses.Select(p => p with { Time = CharacterEditor.EditorClipTime(p.Animation,
-                            (float)RealTime.Elapsed.TotalSeconds) })];
+                poses = [.. poses.Select(p => p with { Time = CharacterEditor.EditorClipTime(p.Animation, (float)RealTime.Elapsed.TotalSeconds) })];
             // The Meitou editor's bar (CharacterEditorHost): the shown character stands in it, the others sit on its seats.
             if (inBar is { } place)
             {
                 (position, yaw, rotation) = (place.Position, place.Yaw, null);
                 if (place.Clip is { } clip)
-                        poses = [new CharacterPose(clip, CharacterEditor.EditorClipTime(clip, (float)RealTime.Elapsed.TotalSeconds), 1)];
+                    poses = [new CharacterPose(clip, CharacterEditor.EditorClipTime(clip, (float)RealTime.Elapsed.TotalSeconds), 1)];
             }
             if (c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Pose() is { } forced)
-                    poses = forced;   // the sandbox drop-down loops a picked clip on the hero
+                poses = forced;   // the sandbox drop-down loops a picked clip on the hero
             var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
             var look = Player.CharacterEditor.EditorPreview(c.Id, c.Appearance) ?? held;
             if (editing is null) Decapitation.CutHead(c, look);
             var glide = Player.CharacterEditor.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             var bones = !posed ? null
-                    : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha,
-                    ref Slot(ref _ragdollsBySlot, c.Id.Slot), ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
+                : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref _ragdollsBySlot, c.Id.Slot),
+                ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
             bool hidden = inBar is null && Interiors.HiddenIndoors.Contains(c.Id);
-            bool fullRated = editing is not null || _fullRate.Contains(c.Id) || c.Id == Sandbox.SandboxHero
-                    && Sandbox.SandboxPicker?.Current is not null;
+            bool fullRated = editing is not null || _fullRate.Contains(c.Id)
+                || c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Current is not null;
             var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated);
             if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
             list.Add(instance);
@@ -457,7 +455,7 @@ sealed partial class GameHost
     /// prepared it the plain look is drawn and the tool's look is <paramref name="pending"/>, to be listed hidden so it gets prepared.
     /// </summary>
     Data.Characters.CharacterAppearance HeldLook(Data.Characters.CharacterAppearance look, string? tool,
-            out Data.Characters.CharacterAppearance? pending)
+        out Data.Characters.CharacterAppearance? pending)
     {
         pending = null;
         if (tool is null || Scene.Database is not { } db) return look;
@@ -488,8 +486,7 @@ sealed partial class GameHost
     /// frozen ragdoll's (the same bones in both) as it is.
     /// </summary>
     static Data.Characters.BonePose? Blend(Data.Characters.BonePose? from, Data.Characters.BonePose? to, float alpha,
-            ref Data.Characters.BonePose? kept,
-        ref Data.Characters.BonePose? spare)
+        ref Data.Characters.BonePose? kept, ref Data.Characters.BonePose? spare)
     {
         if (to is null || from is null || ReferenceEquals(from, to) || from.Set.Length != to.Set.Length) return to;
         (kept, spare) = (spare, kept);
@@ -537,7 +534,7 @@ sealed partial class GameHost
             if (x < -10 || y < -10 || x > width + 10 || y > height + 10) continue;
             float hue = c.Faction < 0 ? 0 : (c.Faction * 0.618034f) % 1f;
             var colour = new Vector4(0.5f + 0.5f * MathF.Sin(hue * MathF.Tau), 0.5f + 0.5f * MathF.Sin(hue * MathF.Tau + 2.1f),
-                    0.5f + 0.5f * MathF.Sin(hue * MathF.Tau + 4.2f), 1);
+                0.5f + 0.5f * MathF.Sin(hue * MathF.Tau + 4.2f), 1);
             overlay.Rect(x - 3, y - 3, x + 3, y + 3, colour);
         }
         overlay.Flush(width, height);

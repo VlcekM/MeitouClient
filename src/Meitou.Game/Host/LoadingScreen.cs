@@ -57,8 +57,8 @@ sealed class LoadingScreen : IDisposable
         if (_drawn) _exitStart ??= _clock.Elapsed.TotalSeconds - (Faithful ? ExitSeconds : 0);
     }
 
-    LoadingScreen(DebugOverlay overlay, UiPainter? painter, MyGuiResources? resources, MyGuiLayout? layout, string[] tips, string[] pictures,
-            string[] groups)
+    LoadingScreen(DebugOverlay overlay, UiPainter? painter, MyGuiResources? resources, MyGuiLayout? layout, string[] tips,
+        string[] pictures, string[] groups)
     {
         (this._overlay, this._painter, this._resources, this._layout,
             this._tips, this._pictures, this._groups) = (overlay, painter, resources, layout, tips, pictures, groups);
@@ -97,7 +97,7 @@ sealed class LoadingScreen : IDisposable
             // repeats kept.
             var pictures = Enumerable.Range(0, 16).Select(i => $"loading_screen{i}.dds").Where(n => resolve(n) is not null).ToArray();
             string[] groups = resources.Resources.TryGetValue(ImageSet, out var set)
-                    ? [.. set.Elements("Group").Select(g => (string?)g.Attribute("name")).OfType<string>()] : [];
+                ? [.. set.Elements("Group").Select(g => (string?)g.Attribute("name")).OfType<string>()] : [];
             var painter = new UiPainter(overlay, resources, resolve);
             var stamp = resolve("MailartRubberstamp-Regular.ttf") is { } stampFile ? DebugOverlay.FromFont(overlay.Gpu, stampFile, 64) : null;
             return new(overlay, painter, resources, layout, tips, pictures, groups) { _stamp = stamp, Faithful = faithful };
@@ -122,7 +122,7 @@ sealed class LoadingScreen : IDisposable
         try
         {
             using var reader = new StreamReader(new MemoryStream(bytes), new System.Text.UTF8Encoding(false, true),
-                    detectEncodingFromByteOrderMarks: true);
+                detectEncodingFromByteOrderMarks: true);
             text = reader.ReadToEnd();
         }
         catch (System.Text.DecoderFallbackException)
@@ -181,7 +181,7 @@ sealed class LoadingScreen : IDisposable
     /// <c>Kenshi_UI.png</c>, set by <c>FUN_1406e3c30</c>) × the slide's factor, capped at the screen height.
     /// </summary>
     internal static int SplashSlideHeight(float imageHeight, int screenWidth, int screenHeight,
-            float factor) => (int)Math.Min(imageHeight * (screenWidth / 1920f) * factor, screenHeight);
+        float factor) => (int)Math.Min(imageHeight * (screenWidth / 1920f) * factor, screenHeight);
 
     /// <summary>
     /// Plays the splash from its first picture (the Faithful start, which opens on the title); the loading screen shows once it is over.
@@ -217,7 +217,7 @@ sealed class LoadingScreen : IDisposable
         if (!ended && _resources!.Resources.TryGetValue(SplashSlides[_splashSlide].ImageSet, out var set)
             && set.Element("Group")?.Attribute("size")?.Value.Split(' ') is [var w, var h]
             && float.TryParse(w, CultureInfo.InvariantCulture, out float imageWidth)
-                    && float.TryParse(h, CultureInfo.InvariantCulture, out float imageHeight) && imageHeight > 0)
+                && float.TryParse(h, CultureInfo.InvariantCulture, out float imageHeight) && imageHeight > 0)
         {
             int shownHeight = SplashSlideHeight(imageHeight, width, height, SplashSlides[_splashSlide].Scale);
             int shownWidth = (int)(imageWidth / imageHeight * shownHeight);
@@ -230,8 +230,8 @@ sealed class LoadingScreen : IDisposable
                 ["Alpha"] = alpha.ToString(CultureInfo.InvariantCulture),
             };
             _painter!.Mode = UiMode.Faithful;
-            _painter.Draw([new UiControl("Splash", "ImageBox", bounds, "", "", "", true, properties, Vector4.Zero)], width, height,
-                    new Vector2(-1, -1), null);
+            _painter.Draw([new UiControl("Splash", "ImageBox", bounds, "", "", "", true, properties, Vector4.Zero)], width,
+                height, new Vector2(-1, -1), null);
         }
         if (ended) (_splashSlide, _fullFrames, _skipSlide, _slideStart) = (_splashSlide + 1, 0, false, _clock.Elapsed.TotalSeconds);
     }
@@ -308,8 +308,8 @@ sealed class LoadingScreen : IDisposable
             };
             var controls = MyGuiPresentation.Arrange(_layout, width, height, b, _resources.Layers).ToList();
             // The loading panel in the tip panel's frame (Kenshi_FloatingPanelSkin, the layout's LoadingPanel skin).
-            controls.Add(new UiControl("LoadingBox", "Widget", box, "", "", "Kenshi_FloatingPanelSkin", true, new Dictionary<string, string>(),
-                    Vector4.Zero));
+            controls.Add(new UiControl("LoadingBox", "Widget", box, "", "", "Kenshi_FloatingPanelSkin", true,
+                new Dictionary<string, string>(), Vector4.Zero));
             _painter.Draw(controls, width, height, new Vector2(-1, -1), null);
         }
         else _overlay.Rect(box.X, box.Y, box.X + box.Width, box.Y + box.Height, new Vector4(0.08f, 0.07f, 0.06f, 0.85f));
@@ -338,8 +338,8 @@ sealed class LoadingScreen : IDisposable
             float a = i * MathF.Tau / spokes;
             float behind = (float)(((turn * spokes - i) % spokes + spokes) % spokes) / spokes;   // 0 at the head, towards 1 behind it
             var colour = new Vector4(0.9f, 0.84f, 0.7f, 0.15f + 0.85f * (1 - behind));
-            _overlay.Line(cx + MathF.Sin(a) * inner, cy - MathF.Cos(a) * inner, cx + MathF.Sin(a) * outer, cy - MathF.Cos(a) * outer,
-                    Math.Max(2, 3 * s), colour);
+            _overlay.Line(cx + MathF.Sin(a) * inner, cy - MathF.Cos(a) * inner, cx + MathF.Sin(a) * outer,
+                cy - MathF.Cos(a) * outer, Math.Max(2, 3 * s), colour);
         }
         if (_label.Length > 0 && textEnd + 12 * s + _label.Length * _overlay.CharWidth <= cx - outer - 12 * s)
             _overlay.Text(_label, textEnd + 12 * s, cy - _overlay.LineHeight / 2, new Vector4(0.62f, 0.6f, 0.52f, 1));
@@ -362,7 +362,7 @@ sealed class LoadingScreen : IDisposable
         if (!background) b.Hidden.Add("BackgroundImage");
         if (_group is not null)
             b.Properties["BackgroundImage"] = new Dictionary<string, string> { ["ImageResource"] = ImageSet, ["ImageGroup"] = _group,
-                    ["ImageName"] = "Background" };
+                ["ImageName"] = "Background" };
         string word = Loc.Tr("Loading").ToUpperInvariant();
         int dots = (int)Math.Floor(_clock.Elapsed.TotalSeconds - _shownAt) % 4;
         b.Text["LoadingText"] = word + new string('.', dots);

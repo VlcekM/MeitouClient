@@ -55,7 +55,7 @@ static class Program
         }
         // Booting to the Meitou title: the world is loaded round the title's view, which it shows first (docs/engine.md).
         bool toTitle = game.TitlePreview || world.Screenshot is null && !game.NewGame && game.Load is null && !game.Continue && game.Sandbox == 0
-                && !game.Duel && game.Battle is null && !game.NoPopulation;
+            && !game.Duel && game.Battle is null && !game.NoPopulation;
         if (world.X is null && world.Zone is null && world.Town is null && toTitle) (world.X, world.Z) = TitleComposition.Focus;
         if (world.X is null && world.Zone is null && world.Town is null) world.Town = "The Hub";
         var install = GameInstall.Locate();
@@ -97,14 +97,14 @@ static class Program
         // listing: those must not count as Kenshi play time or get the overlay.
         using var steam = world.Screenshot is null && !game.ListStarts && !world.Headless ? SteamSession.TryStart(install) : null;
         // A native splash at once, until the game window draws (docs/engine.md "Loading"); not for pictures, a listing or a hidden window.
-        using var splash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow && !world.Headless
-                ? SplashWindow.Show(install.DataDirectory) : null;
+        bool showSplash = world.Screenshot is null && !game.ListStarts && !world.HiddenWindow && !world.Headless;
+        using var splash = showSplash ? SplashWindow.Show(install.DataDirectory) : null;
         var config = UserConfig.Load();
         Loc.Use(install);   // the language of settings.cfg: texts from locale/<code>/LC_MESSAGES/main.mo (docs/formats/localisation.md)
         // The saved texture quality before the world loads: the terrain's layer arrays are sized from it once (the Tab panel's restore after
         // the boot reaches only the other textures). --texture-quality, --low-end and --benchmark-baseline choose it for this run instead.
         if (!args.Contains("--texture-quality") && !args.Contains("--low-end") && !game.BenchmarkBaseline
-                && config.Graphics.TryGetValue(WorldFrame.TextureQualitySlider, out float savedQuality))
+            && config.Graphics.TryGetValue(WorldFrame.TextureQualitySlider, out float savedQuality))
             world.TextureQuality = Math.Clamp((int)MathF.Round(savedQuality), 0, Data.Textures.TextureQuality.Maximum);
         Data.GameDatabase? db = null;
         Data.Gameplay.NewGameStart? start = null;
@@ -231,8 +231,13 @@ static class Program
         }
         // Interactive: the host reads the world behind its loading screen (docs/engine.md "Loading"); a picture reads it first.
         if (world.Screenshot is null)
-            return new GameHost(install, null!, new AssetLocator(install), world, game, config, start) { StartSave = save, Splash = splash,
-                    LoadScene = () => WorldFrame.Load(install, world, db) }.Run();
+        {
+            var sceneHost = new GameHost(install, null!, new AssetLocator(install), world, game, config, start)
+            {
+                StartSave = save, Splash = splash, LoadScene = () => WorldFrame.Load(install, world, db),
+            };
+            return sceneHost.Run();
+        }
         using var scene = WorldFrame.Load(install, world, db);
         if (scene is null) return 1;
         return new GameHost(install, scene, new AssetLocator(install), world, game, config, start) { StartSave = save }.Run();
