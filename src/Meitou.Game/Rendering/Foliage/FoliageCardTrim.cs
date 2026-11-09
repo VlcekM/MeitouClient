@@ -38,6 +38,9 @@ public sealed record FoliageCardTrimOptions
 public readonly record struct FoliageCardTrimStats(int Units, int Trimmed, int Removed, int TrianglesBefore, int TrianglesAfter,
     double UvAreaBefore, double UvAreaAfter, double WorldAreaBefore, double WorldAreaAfter, int OutsideUv = 0, int TinyCards = 0)
 {
+    /// <summary>
+    /// The two stats summed field by field.
+    /// </summary>
     public static FoliageCardTrimStats operator +(FoliageCardTrimStats a, FoliageCardTrimStats b) => new(a.Units + b.Units, a.Trimmed + b.Trimmed,
         a.Removed + b.Removed,
         a.TrianglesBefore + b.TrianglesBefore, a.TrianglesAfter + b.TrianglesAfter, a.UvAreaBefore + b.UvAreaBefore, a.UvAreaAfter + b.UvAreaAfter,
@@ -352,13 +355,22 @@ public static class FoliageCardTrimmer
         };
     }
 
+    /// <summary>
+    /// The world-space area of the triangle (<paramref name="a"/>, <paramref name="b"/>, <paramref name="c"/>).
+    /// </summary>
     static double WorldArea(Vertex[] v, int a, int b, int c) => 0.5 * Vector3.Cross(v[b].Position - v[a].Position,
         v[c].Position - v[a].Position).Length();
 
     // ---- outlines ----
 
+    /// <summary>
+    /// The memo key of a card outline: the card's polygon and the mask level.
+    /// </summary>
     readonly record struct Key(Vector2[] Points, int Level)
     {
+        /// <summary>
+        /// Equal when the level and every point match.
+        /// </summary>
         public bool Equals(Key other)
         {
             if (Level != other.Level || Points.Length != other.Points.Length) return false;
@@ -493,6 +505,9 @@ public static class FoliageCardTrimmer
         }
     }
 
+    /// <summary>
+    /// The z of the cross product of (<paramref name="a"/> - <paramref name="o"/>) and (<paramref name="b"/> - <paramref name="o"/>).
+    /// </summary>
     static float Cross(Vector2 o, Vector2 a, Vector2 b) => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
 
     /// <summary>

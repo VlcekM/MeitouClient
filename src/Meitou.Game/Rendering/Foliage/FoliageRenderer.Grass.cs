@@ -36,7 +36,13 @@ public sealed unsafe partial class FoliageRenderer
 
     // ---- the GPU path ----
 
+    /// <summary>
+    /// The view's patch rows (<see cref="BuildGrassRows"/>), reused.
+    /// </summary>
     readonly List<GrassPatchRow> _grassPatchRows = [];
+    /// <summary>
+    /// The view's zone rows, by zone, grown as needed.
+    /// </summary>
     GrassZoneRow[] _grassZoneRows = new GrassZoneRow[16];
 
     /// <summary>
@@ -140,6 +146,9 @@ public sealed unsafe partial class FoliageRenderer
         return true;
     }
 
+    /// <summary>
+    /// The pool of <see cref="GrassGpuJob"/>s.
+    /// </summary>
     readonly JobPool<GrassGpuJob> _grassGpuJobs = new();
 
     /// <summary>
@@ -147,13 +156,37 @@ public sealed unsafe partial class FoliageRenderer
     /// </summary>
     sealed class GrassGpuJob : RecordJob
     {
+        /// <summary>
+        /// The renderer whose pool the job returns to.
+        /// </summary>
         public FoliageRenderer Owner = null!;
+        /// <summary>
+        /// The pass targets (viewport and scissor).
+        /// </summary>
         public PassTargets Targets = null!;
+        /// <summary>
+        /// The pass's raster, depth and bias state.
+        /// </summary>
         public DrawState State = null!;
+        /// <summary>
+        /// The grass program.
+        /// </summary>
         public GpuProgram Program = default;
+        /// <summary>
+        /// The native frame sets of the segment.
+        /// </summary>
         public FrameBinding Frame;
+        /// <summary>
+        /// The grass pipeline (null: nothing is drawn).
+        /// </summary>
         public GpuPipeline? Pipeline;
+        /// <summary>
+        /// The blade mesh's vertex buffers.
+        /// </summary>
         public GpuBufferBinding[] Vertices = [];
+        /// <summary>
+        /// The view's cull result, whose draws and count the indirect draw reads.
+        /// </summary>
         public GrassResult Result;
 
         public override void Record(IGpuCommandList cmd)

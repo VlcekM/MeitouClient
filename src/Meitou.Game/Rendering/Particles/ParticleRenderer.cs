@@ -25,6 +25,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
 {
     #region Shaders
 
+    /// <summary>
+    /// The billboards' vertex stage: each instance's quad placed by its billboard type and anchor, camera-relative, with the Meitou lighting and haze
+    /// per vertex.
+    /// </summary>
     static readonly string Vertex ="#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
 
         layout(location = 0) in vec2 aCorner;       // the quad's corner, -0.5 .. 0.5, in triangle-strip order
@@ -133,6 +137,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The billboards' fragment stage: the textured colour (lit with the Meitou fog switch), the Meitou soft fade against the scene depth, and the
+    /// coverage outputs for the reactive mask and the low-resolution target.
+    /// </summary>
     static readonly string Fragment = """
         #version 330 core
         in vec2 vUv;
@@ -190,24 +198,51 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
     #region Setup
 
+    /// <summary>
+    /// The size of an instance row (four vec4 attributes), in bytes.
+    /// </summary>
     const int InstanceBytes = 64;
     /// <summary>
     /// The farthest a unit is drawn.
     /// </summary>
     public const float DrawRange = 20400;
 
+    /// <summary>
+    /// The device the particles are drawn on.
+    /// </summary>
     readonly IGpuContext _gpu;
     /// <summary>
     /// A material's texture name to its file: Ogre's lookup by bare name, mods' folders included (<see cref="AssetLocator"/>).
     /// </summary>
     readonly Func<string, string?> _findTexture;
+    /// <summary>
+    /// The billboard program.
+    /// </summary>
     readonly LegacyProgram _program;
+    /// <summary>
+    /// The native segment the draws are recorded through.
+    /// </summary>
     readonly NativeSegment _segment;
+    /// <summary>
+    /// The quad's four corners (a triangle strip).
+    /// </summary>
     readonly DeviceBuffer _quad;
+    /// <summary>
+    /// The vertex bindings: the quad corner and the four instance rows.
+    /// </summary>
     readonly VertexArrayBindings _vertexSource;
+    /// <summary>
+    /// Scratch for the draws' vertex buffer bindings.
+    /// </summary>
     readonly GpuBufferBinding[] _bindings = new GpuBufferBinding[5];
+    /// <summary>
+    /// The program's camera, billboard and coverage uniforms.
+    /// </summary>
     readonly UniformHandle _viewProjection, _cameraRight, _cameraUp, _mode, _anchor, _commonDirection, _commonUp, _colourScale, _coverageMode,
         _coverageLimit, _coverageGain, _soft;
+    /// <summary>
+    /// The program's uniforms for the Meitou lighting.
+    /// </summary>
     readonly UniformHandle _litVertex, _litFragment, _particleEye;
     /// <summary>
     /// Meitou (the <c>fog</c> switch): alpha sprites lit as the scene is, darker where the sun is shadowed (by <see cref="SunShade"/>), brighter seen
@@ -223,9 +258,21 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// How much brighter a sprite seen straight towards the sun is (forward scattering; falls off as the eighth power of the cosine).
     /// </summary>
     public const float SunGlow = 0.5f;
+    /// <summary>
+    /// This frame's eye (<see cref="StoreFrame"/>).
+    /// </summary>
     Vector3 _frameEye;
+    /// <summary>
+    /// The program's texture and soft-depth samplers.
+    /// </summary>
     readonly SamplerSlot _textureSlot, _softDepthSlot;
+    /// <summary>
+    /// The 1 × 1 white stand-in for a missing texture.
+    /// </summary>
     readonly SampledImage _white;
+    /// <summary>
+    /// The uploaded textures by name (null: missing or failed).
+    /// </summary>
     readonly Dictionary<string, SampledImage?> _textures = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// A texture's name to the pixels across its sprites need to keep their detail (<see cref="ParticleTextureDetail"/>; missing: 1).
@@ -236,13 +283,37 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// The weather's groups, the map's placers, the bursts and the buildings' effects.
     /// </summary>
     readonly EffectGroupSet _groups;
+    /// <summary>
+    /// Runs the units' simulation on the thread pool.
+    /// </summary>
     readonly EffectSimulator _simulator = new();
+    /// <summary>
+    /// Scratch: the units to simulate this frame.
+    /// </summary>
     readonly List<EffectUnit> _simulationWork = [];
+    /// <summary>
+    /// Scratch: the units drawn this frame, with whether each is rain and whether it is placed.
+    /// </summary>
     readonly List<(EffectUnit Unit, bool Rain, bool Placed)> _drawUnits = [];
+    /// <summary>
+    /// This frame's draws (<see cref="Prepare"/>).
+    /// </summary>
     readonly List<DrawItem> _draws = [];
+    /// <summary>
+    /// The frame clock at the last <see cref="Update"/> (NaN before the first).
+    /// </summary>
     double _lastSeconds = double.NaN;
+    /// <summary>
+    /// Particles and units drawn in the last frame, and the units active.
+    /// </summary>
     int _drawnParticles, _drawnUnits, _activeUnits;
+    /// <summary>
+    /// The simulation running (null: none).
+    /// </summary>
     EffectSimulator.Job? _simulation;
+    /// <summary>
+    /// The last frame's simulation and wait ticks, their totals, and the frames simulated.
+    /// </summary>
     long _simulationTicks, _waitTicks, _simulationTotal, _waitTotal, _simulationFrames;
     /// <summary>
     /// Mean simulation and main-thread wait per simulated frame since the start (for the benchmarks).
@@ -250,6 +321,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     public (double Simulation, double Wait) MeanMilliseconds => _simulationFrames == 0 ? (0,
         0) : (_simulationTotal * 1000.0 / Stopwatch.Frequency / _simulationFrames, _waitTotal * 1000.0 / Stopwatch.Frequency / _simulationFrames);
 
+    /// <summary>
+    /// The particle systems and materials the groups are made from.
+    /// </summary>
     public ParticleLibrary Library { get; }
     /// <summary>
     /// What the groups need of the world: the ground height, the area effects are placed in. The viewer fills it once; the scheduler's hookup can
@@ -276,6 +350,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <see cref="MaxAutoPrewarm"/>; 0 starts empty.
     /// </summary>
     public float? PrewarmSeconds { get => _groups.Weather.PrewarmSeconds; set => _groups.Weather.PrewarmSeconds = value; }
+    /// <summary>
+    /// The longest automatic prewarm, in seconds (<see cref="WeatherGroups.MaxAutoPrewarm"/>).
+    /// </summary>
     public const float MaxAutoPrewarm = WeatherGroups.MaxAutoPrewarm;
     /// <summary>
     /// The seed of the groups' random numbers (a group takes the seed plus its place in the list).
@@ -295,19 +372,34 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// Particles drawn in the last frame, for the statistics.
     /// </summary>
     public int DrawnParticles => _drawnParticles;
+    /// <summary>
+    /// Units drawn in the last frame.
+    /// </summary>
     public int DrawnUnits => _drawnUnits;
+    /// <summary>
+    /// Units simulated in the last frame.
+    /// </summary>
     public int ActiveUnits => _activeUnits;
     /// <summary>
     /// The last frame's simulation time (summed over its threads' work: the wall time of the background task) and how long the main thread waited for
     /// it, in milliseconds.
     /// </summary>
     public double SimulationMilliseconds => _simulationTicks * 1000.0 / Stopwatch.Frequency;
+    /// <summary>
+    /// See <see cref="SimulationMilliseconds"/>.
+    /// </summary>
     public double WaitMilliseconds => _waitTicks * 1000.0 / Stopwatch.Frequency;
+    /// <summary>
+    /// The particles alive in the weather's groups and the placers (waits for the simulation).
+    /// </summary>
     public int ParticleCount { get { Sync(); return _groups.Weather.Groups.Concat(_groups.Placers).Sum(g => g.ParticleCount); } }
     /// <summary>
     /// The weather's groups (not the map placers').
     /// </summary>
     public IReadOnlyList<EffectGroup> Groups => _groups.Weather.Groups;
+    /// <summary>
+    /// The map placers' groups.
+    /// </summary>
     public IReadOnlyList<EffectGroup> PlacerGroups => _groups.Placers;
     /// <summary>
     /// The entries of the weather's effect list that have no group (a type that is not a weather effect, or an unknown particle system).
@@ -331,12 +423,30 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     public List<Tracer> Tracers { get; } = [];
 
+    /// <summary>
+    /// One technique's draw: its instances in the frame's constants, its material, texture and target size.
+    /// </summary>
     struct DrawItem
     {
+        /// <summary>
+        /// The instance rows.
+        /// </summary>
         public Transient Instances;
+        /// <summary>
+        /// How many instances, and how many of the first are nearer than the near plane.
+        /// </summary>
         public int Count, Close;
+        /// <summary>
+        /// The technique drawn.
+        /// </summary>
         public PuTechniqueDef Technique;
+        /// <summary>
+        /// Its material.
+        /// </summary>
         public ParticleMaterial Material;
+        /// <summary>
+        /// Its texture.
+        /// </summary>
         public SampledImage Texture;
         /// <summary>
         /// 1: drawn into the scene at full size; 2 or 4: into the low-resolution accumulation target of 1/2 or 1/4 the render size (Meitou).
@@ -357,6 +467,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
         public bool Tracer;
     }
 
+    /// <summary>
+    /// Compiles the program, resolves its handles and makes the quad, the white stand-in and the tracers' texture.
+    /// </summary>
     ParticleRenderer(IGpuContext gpu, Func<string, string?> findTexture, ParticleLibrary library)
     {
         this._gpu = gpu;
@@ -394,15 +507,27 @@ public sealed unsafe class ParticleRenderer : IDisposable
             mipmaps: true, "particle tracer");
     }
 
+    /// <summary>
+    /// The tracers' texture size in pixels.
+    /// </summary>
     const int TracerTextureWidth = 16, TracerTextureHeight = 64;
+    /// <summary>
+    /// The tracers' technique: an oriented_self billboard.
+    /// </summary>
     static readonly PuTechniqueDef TracerTechnique = new()
     {
         Name = "meitou tracer",
         Renderer = new PuRendererDef { TypeName = "Billboard", BillboardType = "oriented_self" },
         Source = new PuNode("technique", [], 0),
     };
+    /// <summary>
+    /// The tracers' material: alpha blended, depth tested and not written, unlit, clamped.
+    /// </summary>
     static readonly ParticleMaterial TracerMaterial = new("meitou tracer", null, ParticleBlend.Alpha, DepthCheck: true, DepthWrite: false,
         Ambient: false, Vector4.One, Clamp: true);
+    /// <summary>
+    /// The tracers' streak (<see cref="TracerPixels"/>).
+    /// </summary>
     readonly SampledImage _tracerTexture;
 
     /// <summary>
@@ -445,6 +570,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     public void SetWeather(WeatherEffectInput weather) => _groups.Weather.Want(weather, Now());
 
+    /// <summary>
+    /// The time in seconds on the high-resolution clock.
+    /// </summary>
     static double Now() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency;
 
     /// <summary>
@@ -515,11 +643,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
     }
 
     /// <summary>
-    /// Steps the groups to <paramref name="seconds"/> on the frame clock (the first call only sets the clock, so a held-still frame advances nothing)
-    /// and, once after a weather change, runs the start-up so particles are present at the first picture. The simulation of the units (the particles)
-    /// then runs on the thread pool, one unit per task, while the caller does the rest of its frame; <see cref="Draw"/> waits for it.
-    /// </summary>
-    /// <summary>
     /// The effects' fog volumes as they stand after the last <see cref="Update"/> (main thread), into <paramref name="into"/> (cleared first): one
     /// per EFFECT_FOG_VOLUME of each unit, at the unit's position plus the record's offset, with the unit's fade. <see cref="FogVolumes"/> draws them
     /// with the placed volumes (the game's <c>FogSphere</c> / <c>FogCylinder</c>, docs/formats/weather.md "Fog volumes").
@@ -558,6 +681,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     const float MaxDrawAhead = 0.1f;
 
+    /// <summary>
+    /// Steps the groups to <paramref name="seconds"/> on the frame clock (the first call only sets the clock, so a held-still frame advances nothing)
+    /// and, once after a weather change, runs the start-up so particles are present at the first picture. The simulation of the units (the particles)
+    /// then runs on the thread pool, one unit per task, while the caller does the rest of its frame; <see cref="Prepare"/> waits for it.
+    /// </summary>
     public void Update(double seconds, WorldCamera camera)
     {
         long start = Stopwatch.GetTimestamp();
@@ -566,6 +694,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _updateFrames++;
     }
 
+    /// <summary>
+    /// The update without its timing.
+    /// </summary>
     void UpdateInner(double seconds, WorldCamera camera)
     {
         Sync();
@@ -598,8 +729,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
         StartSimulation();
     }
 
+    /// <summary>
+    /// The groups whose textures were last preloaded.
+    /// </summary>
     IReadOnlyList<EffectGroup>? _preloaded;
 
+    /// <summary>
+    /// Starts the simulation of the active units on the thread pool.
+    /// </summary>
     void StartSimulation()
     {
         var work = _simulationWork;
@@ -715,9 +852,6 @@ public sealed unsafe class ParticleRenderer : IDisposable
     }
 
     /// <summary>
-    /// Draws prepared this frame for the scene target (full size) and for the low-resolution target.
-    /// </summary>
-    /// <summary>
     /// Mean screen size (the square root of the mean sprite area, in render pixels) from which a draw goes to the half-size and to the quarter-size
     /// target.
     /// </summary>
@@ -727,12 +861,21 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// blending.
     /// </summary>
     public const float MinLayers = 6;
+    /// <summary>
+    /// The draws prepared for each size, by divisor.
+    /// </summary>
     readonly int[] _divisorCounts = new int[5];
     /// <summary>
     /// The draws prepared for each size: 1 the scene's, 2 and 4 the low-resolution targets'.
     /// </summary>
     public int CountFor(int divisor) => _divisorCounts[divisor];
+    /// <summary>
+    /// Draws prepared this frame for the scene target (full size).
+    /// </summary>
     public int FullCount => _divisorCounts[1];
+    /// <summary>
+    /// Draws prepared this frame for the low-resolution targets.
+    /// </summary>
     public int LowCount => _divisorCounts[2] + _divisorCounts[4];
 
     /// <summary>
@@ -757,7 +900,13 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _gpu.EndGuest(cmd);
     }
 
+    /// <summary>
+    /// Scratch for a technique's instances, grown as needed.
+    /// </summary>
     ParticleInstance[] _scratch = new ParticleInstance[4096];
+    /// <summary>
+    /// The draw, update and collection ticks summed and their frame counts (for the means).
+    /// </summary>
     long _drawTotal, _drawFrames, _updateTotal, _updateFrames, _collectTotal;
     /// <summary>
     /// Mean per-frame cost of filling the instance buffers (inside Draw), in ms.
@@ -770,6 +919,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
         double Draw) MeanMainThreadMilliseconds => (_updateFrames == 0 ? 0 : _updateTotal * 1000.0 / Stopwatch.Frequency / _updateFrames,
         _drawFrames == 0 ? 0 : _drawTotal * 1000.0 / Stopwatch.Frequency / _drawFrames);
 
+    /// <summary>
+    /// The prepare without its timing.
+    /// </summary>
     void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye,
         Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor, bool late)
     {
@@ -942,9 +1094,21 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _drawnParticles += n;
     }
 
+    /// <summary>
+    /// This frame's camera-relative view-projections: the scene's, the close one, and the low-resolution draws' pair.
+    /// </summary>
     Matrix4x4 _frameVp, _frameCloseVp, _frameLowVp, _frameLowCloseVp;
+    /// <summary>
+    /// The camera's right and up axes.
+    /// </summary>
     Vector3 _frameRight, _frameUp;
+    /// <summary>
+    /// The sprites' ambient light from the sun's height.
+    /// </summary>
     float _frameAmbient;
+    /// <summary>
+    /// Whether this frame's draws have not yet been written into the reactive mask.
+    /// </summary>
     bool _coveragePending;
 
     /// <summary>
@@ -978,7 +1142,21 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <summary>
     /// What a draw records: colour into the scene, coverage for the upscalers' reactive mask, or into the low-resolution accumulation target.
     /// </summary>
-    enum Kind { Colour, Coverage, Low }
+    enum Kind
+    {
+        /// <summary>
+        /// Colour into the scene.
+        /// </summary>
+        Colour,
+        /// <summary>
+        /// Coverage for the upscalers' reactive mask.
+        /// </summary>
+        Coverage,
+        /// <summary>
+        /// Premultiplied into the low-resolution accumulation target.
+        /// </summary>
+        Low
+    }
 
     /// <summary>
     /// The scene's depth for the Meitou <c>fog</c> switch's soft fade (docs/render-post.md "Fog"): a colour copy at the pass's size (the depth
@@ -997,6 +1175,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// quarter) was in use last frame.
     /// </summary>
     Dictionary<(EffectUnit, int), int> _lastDivisors = [], _nextDivisors = [];
+    /// <summary>
+    /// See <see cref="_lastDivisors"/>: whether each low-resolution size (half, quarter) was in use last frame.
+    /// </summary>
     readonly bool[] _sizeInUse = new bool[2];
 
     /// <summary>
@@ -1029,6 +1210,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
         return (divisor, fill);
     }
 
+    /// <summary>
+    /// Records the prepared draws of <paramref name="divisor"/> for <paramref name="kind"/>: per draw the far particles depth tested, then the ones
+    /// nearer than the near plane without the test.
+    /// </summary>
     void RecordDraws(IGpuCommandList cmd, in DrawState baseState, in PassTargets targets, bool hasDepth, bool hasColour,
         ColorMask rgb, Kind kind, SoftDepth? softDepth, int divisor = 1)
     {
@@ -1144,6 +1329,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
         cmd.Draw(4, (uint)count, 0, (uint)first);
     }
 
+    /// <summary>
+    /// Whether the sphere at <paramref name="centre"/> of <paramref name="radius"/> is not wholly outside any of <paramref name="planes"/>.
+    /// </summary>
     static bool InFrustum(Vector4[] planes, Vector3 centre, float radius)
     {
         foreach (var p in planes)
@@ -1167,6 +1355,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
         return front;
     }
 
+    /// <summary>
+    /// The blend of a material's <paramref name="blend"/> mode.
+    /// </summary>
     static BlendState BlendFor(ParticleBlend blend) => blend switch
     {
         ParticleBlend.Add => new BlendState(true, BlendingFactor.One, BlendingFactor.One),
@@ -1176,6 +1367,10 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _ => new BlendState(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha),
     };
 
+    /// <summary>
+    /// The shader's billboard mode: 0 point (and any other), 1 oriented_common, 2 oriented_self (and oriented_shape), 3 perpendicular_common, 4
+    /// perpendicular_self.
+    /// </summary>
     static int ModeOf(string billboardType) => billboardType switch
     {
         "oriented_common" => 1,
@@ -1216,6 +1411,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// </summary>
     const long PreloadKeepMilliseconds = 30_000;
 
+    /// <summary>
+    /// Starts reading and decoding a texture on a worker, with the pixels it needs (<see cref="ParticleTextureDetail"/>); null on failure.
+    /// </summary>
     Task<(RgbaImage Image, float PixelsNeeded)?> StartDecode(string name)
     {
         string? path = _findTexture(name);
@@ -1292,6 +1490,9 @@ public sealed unsafe class ParticleRenderer : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// Waits for the simulation, then frees the groups, the simulator, the textures, the quad and the program.
+    /// </summary>
     public void Dispose()
     {
         Sync();

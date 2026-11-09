@@ -54,8 +54,14 @@ public enum ImpostorEncoding
 /// </summary>
 public sealed class ImpostorTexture
 {
+    /// <summary>
+    /// Which map this is.
+    /// </summary>
     public required ImpostorMap Map { get; init; }
 
+    /// <summary>
+    /// How its levels are encoded.
+    /// </summary>
     public required ImpostorEncoding Encoding { get; init; }
 
     /// <summary>
@@ -63,6 +69,9 @@ public sealed class ImpostorTexture
     /// </summary>
     public required ReadOnlyMemory<byte>[] Levels { get; init; }
 
+    /// <summary>
+    /// The byte size of a <paramref name="size"/> × <paramref name="size"/> level in <paramref name="encoding"/>.
+    /// </summary>
     public static int LevelBytes(ImpostorEncoding encoding, int size) => encoding switch
     {
         ImpostorEncoding.Rgba8 => size * size * 4,
@@ -80,8 +89,14 @@ public sealed class ImpostorTexture
 /// </summary>
 public sealed class ImpostorAtlas : IDisposable
 {
-    public const uint Magic = 0x504D494D;   // "MIMP"
+    /// <summary>
+    /// The file's magic number, "MIMP".
+    /// </summary>
+    public const uint Magic = 0x504D494D;
 
+    /// <summary>
+    /// The file format's version: a file of another version is not read (and is deleted by the cache's maintenance).
+    /// </summary>
     public const int FormatVersion = 2;
 
     /// <summary>
@@ -94,8 +109,14 @@ public sealed class ImpostorAtlas : IDisposable
     /// </summary>
     NativeBuffer? _block;
 
+    /// <summary>
+    /// Frames per atlas side.
+    /// </summary>
     public required int Grid { get; init; }
 
+    /// <summary>
+    /// A frame's size at level 0, in pixels.
+    /// </summary>
     public required int FramePixels { get; init; }
 
     /// <summary>
@@ -103,6 +124,9 @@ public sealed class ImpostorAtlas : IDisposable
     /// </summary>
     public required Vector3 Centre { get; init; }
 
+    /// <summary>
+    /// The bounding sphere's radius (see <see cref="Centre"/>).
+    /// </summary>
     public required float Radius { get; init; }
 
     /// <summary>
@@ -115,6 +139,9 @@ public sealed class ImpostorAtlas : IDisposable
     /// </summary>
     public string Name { get; init; } = "";
 
+    /// <summary>
+    /// The maps (albedo and normal).
+    /// </summary>
     public required ImpostorTexture[] Textures { get; init; }
 
     /// <summary>
@@ -123,12 +150,24 @@ public sealed class ImpostorAtlas : IDisposable
     /// </summary>
     public int FirstLevel { get; init; }
 
+    /// <summary>
+    /// The levels per map (0 without maps).
+    /// </summary>
     public int Levels => Textures.Length == 0 ? 0 : Textures[0].Levels.Length;
 
+    /// <summary>
+    /// The atlas's side at level 0, in pixels.
+    /// </summary>
     public int AtlasPixels => Grid * FramePixels;
 
+    /// <summary>
+    /// The level data's size in bytes, all maps.
+    /// </summary>
     public long Bytes => Textures.Sum(t => t.Levels.Sum(l => (long)l.Length));
 
+    /// <summary>
+    /// The map <paramref name="map"/>, null when the atlas has none.
+    /// </summary>
     public ImpostorTexture? this[ImpostorMap map] => Textures.FirstOrDefault(t => t.Map == map);
 
     /// <summary>
@@ -151,6 +190,9 @@ public sealed class ImpostorAtlas : IDisposable
         Textures = [],
     };
 
+    /// <summary>
+    /// Writes the atlas in the <c>.mimp</c> format; an atlas read without its top levels cannot be written.
+    /// </summary>
     public void Write(Stream stream)
     {
         if (FirstLevel != 0) throw new InvalidOperationException("an atlas read without its top levels cannot be written");
@@ -326,12 +368,24 @@ public sealed class ImpostorAtlas : IDisposable
         }
     }
 
+    /// <summary>
+    /// The 64-bit FNV-1a hash of the file's checksum.
+    /// </summary>
     static class Fnv
     {
+        /// <summary>
+        /// The hash's starting value.
+        /// </summary>
         public const ulong Offset = 14695981039346656037;
 
+        /// <summary>
+        /// The hash's multiplier.
+        /// </summary>
         const ulong Prime = 1099511628211;
 
+        /// <summary>
+        /// <paramref name="h"/> continued over <paramref name="data"/>.
+        /// </summary>
         public static ulong Hash(ulong h, ReadOnlySpan<byte> data)
         {
             foreach (byte b in data) h = (h ^ b) * Prime;

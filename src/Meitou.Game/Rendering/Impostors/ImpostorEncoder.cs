@@ -9,6 +9,10 @@ namespace Meitou.Game.Rendering.Impostors;
 /// </summary>
 public static class ImpostorEncoder
 {
+    /// <summary>
+    /// <paramref name="rgba"/> (a <paramref name="size"/> × <paramref name="size"/> level) in <paramref name="encoding"/>: as it is for RGBA8, else
+    /// block compressed.
+    /// </summary>
     public static byte[] Encode(ImpostorEncoding encoding, byte[] rgba, int size) => encoding switch
     {
         ImpostorEncoding.Rgba8 => rgba,
@@ -394,15 +398,24 @@ public static class ImpostorEncoder
         return indices;
     }
 
+    /// <summary>
+    /// An RGB colour (0 to 255 per channel) in the 5:6:5 bits of a BC colour endpoint, rounded.
+    /// </summary>
     static ushort Pack565(Vector3 c) =>
         (ushort)((int)MathF.Round(c.X * 31 / 255) << 11 | (int)MathF.Round(c.Y * 63 / 255) << 5 | (int)MathF.Round(c.Z * 31 / 255));
 
+    /// <summary>
+    /// A 5:6:5 endpoint back to 0 to 255 per channel, the top bits repeated into the low ones.
+    /// </summary>
     static Vector3 Expand565(ushort c)
     {
         int r = c >> 11, g = c >> 5 & 63, b = c & 31;
         return new Vector3(r << 3 | r >> 2, g << 2 | g >> 4, b << 3 | b >> 2);
     }
 
+    /// <summary>
+    /// <see cref="Expand565"/> into three integers.
+    /// </summary>
     static void Expand(ushort c, Span<int> rgb)
     {
         int r = c >> 11, g = c >> 5 & 63, b = c & 31;

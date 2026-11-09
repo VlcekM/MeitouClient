@@ -36,6 +36,9 @@ public sealed class FoliageCardMask
     /// </summary>
     public const float Slack = 0.1f;
 
+    /// <summary>
+    /// A mask of <paramref name="width"/> × <paramref name="height"/> cells; throws when a level has another cell count.
+    /// </summary>
     /// <param name="levels">Per level the cells, row-major, row 0 at v = 0 (the top row of the decoded image); each level contains the one
     /// before.</param>
     public FoliageCardMask(int width, int height, bool[][] levels)
@@ -47,9 +50,21 @@ public sealed class FoliageCardMask
         Levels = levels;
     }
 
+    /// <summary>
+    /// The grid's width in cells.
+    /// </summary>
     public int Width { get; }
+    /// <summary>
+    /// The grid's height in cells.
+    /// </summary>
     public int Height { get; }
+    /// <summary>
+    /// Per level the cells, row-major (see the constructor).
+    /// </summary>
     public bool[][] Levels { get; }
+    /// <summary>
+    /// How many levels the mask has.
+    /// </summary>
     public int LevelCount => Levels.Length;
 
     /// <summary>
@@ -150,9 +165,21 @@ public sealed class FoliageCardMask
     public static string CacheRoot { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
         "cardtrim");
 
-    const uint Magic = 0x4D52544D;   // "MTRM"
+    /// <summary>
+    /// The cache file's magic, "MTRM".
+    /// </summary>
+    const uint Magic = 0x4D52544D;
+    /// <summary>
+    /// The masks obtained in this process, by lower-case path and cut-off, each loaded once.
+    /// </summary>
     static readonly ConcurrentDictionary<(string Path, byte Cutoff), Lazy<FoliageCardMask?>> Memo = new();
+    /// <summary>
+    /// Masks built, read from the cache, and the cache bytes written (<see cref="Summary"/>).
+    /// </summary>
     static long s_built, s_hits, s_bytesWritten;
+    /// <summary>
+    /// The time spent building and reading masks, in milliseconds.
+    /// </summary>
     static double s_buildMs, s_loadMs;
 
     /// <summary>
@@ -171,6 +198,9 @@ public sealed class FoliageCardMask
         return Memo.GetOrAdd((path.ToLowerInvariant(), cutoff), _ => new Lazy<FoliageCardMask?>(() => Load(path, cutoff))).Value;
     }
 
+    /// <summary>
+    /// The mask from the disk cache, else decoded, built and written to it; null when the file cannot be read or decoded.
+    /// </summary>
     static FoliageCardMask? Load(string path, byte cutoff)
     {
         var watch = System.Diagnostics.Stopwatch.StartNew();
@@ -205,6 +235,10 @@ public sealed class FoliageCardMask
         }
     }
 
+    /// <summary>
+    /// The cache file of a texture: its name made safe and cut to 40 characters, a hash of its bytes, the cut-off, the coarsest size and
+    /// <see cref="Version"/>.
+    /// </summary>
     public static string PathFor(string name, byte[] fileBytes, byte cutoff)
     {
         var hash = Convert.ToHexString(SHA256.HashData(fileBytes))[..24].ToLowerInvariant();

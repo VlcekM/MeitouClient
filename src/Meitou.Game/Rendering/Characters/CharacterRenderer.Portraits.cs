@@ -43,14 +43,35 @@ internal sealed unsafe partial class CharacterRenderer
     /// range).
     /// </summary>
     public List<PortraitRequest> PortraitRequests { get; } = [];
+    /// <summary>
+    /// The characters this update poses even out of range: the portrait requests' and the stage's (<see cref="GatherPortraitKeys"/>).
+    /// </summary>
     readonly HashSet<long> _portraitKeys = [];
+    /// <summary>
+    /// This frame's live index of each character, by key, for the portrait requests.
+    /// </summary>
     readonly Dictionary<long, int> _liveByKey = [];
+    /// <summary>
+    /// The live index drawn alone into a portrait, icon, stage or hover mask (-1: the world's views are drawn).
+    /// </summary>
     int _portraitLive = -1;
+    /// <summary>
+    /// The portrait atlas (sRGB, <see cref="PortraitColumns"/> × <see cref="PortraitRows"/> cells) and its depth, made on first use.
+    /// </summary>
     GpuTexture? _portraitColour, _portraitDepth;
+    /// <summary>
+    /// <see cref="_portraitColour"/> with a clamped bilinear sampler.
+    /// </summary>
     SampledTexture? _portraitSampled;
 
     // The enhanced portraits (Look): each drawn into this half-float square, then resolved into its cell of the atlas above.
+    /// <summary>
+    /// The enhanced portraits' half-float square and its depth (<see cref="PortraitSupersample"/> times a cell's size).
+    /// </summary>
     GpuTexture? _portraitHdr, _portraitHdrDepth;
+    /// <summary>
+    /// <see cref="_portraitHdr"/> sampled for the resolve.
+    /// </summary>
     SampledTexture _portraitHdrSampled;
 
     /// <summary>
@@ -76,6 +97,9 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// Whether the atlas has been cleared since it was made.
+    /// </summary>
     bool _cleared;
 
     /// <summary>
@@ -88,13 +112,23 @@ internal sealed unsafe partial class CharacterRenderer
         if (StageRequest is { } stage) _portraitKeys.Add(stage.Key);
     }
 
+    /// <summary>
+    /// What a cell last showed: the character's key and the serial of its look, its asset, its radius and its textures' images, so an unchanged cell
+    /// is not drawn again.
+    /// </summary>
     sealed record ShownPortrait(long Key, uint Serial, CharacterAsset Asset, float Radius,
         (GpuTexture? Image, bool Swizzled)[] Textures);
     /// <summary>
     /// The character, appearance and streamed texture images each cell last showed.
     /// </summary>
     readonly Dictionary<int, ShownPortrait> _portraitShown = [];
+    /// <summary>
+    /// The still pose's bone palette and attach matrices (<see cref="PosePortrait"/>), grown as needed.
+    /// </summary>
     Matrix4x4[] _portraitBones = [], _portraitAttach = [];
+    /// <summary>
+    /// Scratch: the still pose's layers (the idle at time 0 and the posture layers).
+    /// </summary>
     readonly List<ActiveLayer> _portraitLayers = [];
 
     /// <summary>
@@ -243,6 +277,9 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
+    /// <summary>
+    /// Frees the enhanced portraits' square and its depth.
+    /// </summary>
     void DisposePortraitHdr()
     {
         _portraitHdr?.Dispose();
@@ -326,6 +363,9 @@ internal sealed unsafe partial class CharacterRenderer
         return (target + direction, target);
     }
 
+    /// <summary>
+    /// Frees the atlas, its depth and the enhanced square.
+    /// </summary>
     void DisposePortraits()
     {
         _portraitColour?.Dispose();

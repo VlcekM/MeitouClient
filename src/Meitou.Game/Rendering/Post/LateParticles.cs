@@ -33,6 +33,9 @@ sealed class LateParticles(PostProcess post)
         /// </summary>
         public readonly UniformHandle LowSizeH, LowSizeQ, Has, NearPlanes, Late, Target;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public LateParticlesPass(GpuContext gpu) : base(gpu, PostProcessShaders.ParticleLate, "post late particles")
         {
             (AccumH, LowDepthH, AccumFarH, LowDepthFarH) = (P.Sampler("uAccumH"), P.Sampler("uLowDepthH"), P.Sampler("uAccumFarH"),
@@ -56,6 +59,9 @@ sealed class LateParticles(PostProcess post)
         /// </summary>
         public readonly SamplerSlot Layer;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public LateParticlesApplyPass(GpuContext gpu) : base(gpu,
             PostProcessShaders.ParticleLateApply, "post late particles apply") => Layer = P.Sampler("uLayer");
     }

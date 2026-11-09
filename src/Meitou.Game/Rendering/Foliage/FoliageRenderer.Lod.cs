@@ -6,12 +6,13 @@ using Meitou.Game.Rendering.Shadows;
 
 namespace Meitou.Game.Rendering.Foliage;
 
+/// <summary>
+/// Generated levels for TERRAIN-mode meshes (docs/formats/foliage.md, "Generated levels"). The game ships no levels for these meshes. When a mesh has
+/// become resident a worker works the levels out (or reads them from the disk cache, FoliageLodCache), the render thread uploads them next to the
+/// mesh's own buffers, and from then on the GPU cull picks a level per instance.
+/// </summary>
 public sealed unsafe partial class FoliageRenderer
 {
-    // ---- generated levels for TERRAIN-mode meshes (docs/formats/foliage.md, "Generated levels") ----
-    // The game ships no levels for these meshes. When a mesh has become resident a worker works the levels out (or reads them from the disk cache,
-    // FoliageLodCache), the render thread uploads them next to the mesh's own buffers, and from then on the GPU cull picks a level per instance.
-
     /// <summary>
     /// The Meitou <c>lod</c> switch: TERRAIN-mode meshes are drawn with generated coarser levels where the difference would show less than
     /// <see cref="LodTolerance"/> pixels. Faithful draws every instance at full detail. Needs the GPU cull.
@@ -41,6 +42,9 @@ public sealed unsafe partial class FoliageRenderer
     /// </summary>
     public float LodFarDistance { get; set; } = DefaultLodFarDistance;
 
+    /// <summary>
+    /// The default <see cref="LodFarDistance"/>, in world units.
+    /// </summary>
     public const float DefaultLodFarDistance = 2500f;
 
     /// <summary>
@@ -87,6 +91,10 @@ public sealed unsafe partial class FoliageRenderer
     float[] LevelErrors(FoliageRockLod lod) => ScreenLod && _lodActive && !_lodView.Ortho ? lod.Effective(LodTolerance, ScreenLodTriPixels,
         ScreenLodMultiple) : lod.Relative;
 
+    /// <summary>
+    /// Each level's deviation relative to <paramref name="radius"/>: the larger of its geometric error over the radius and
+    /// <see cref="LodNormalWeight"/> times its normal angle, never less than the level before's (0 for level 0).
+    /// </summary>
     float[] RelativeErrors(FoliageLodSet set, float radius)
     {
         var result = new float[set.Levels];
@@ -262,6 +270,9 @@ public sealed unsafe partial class FoliageRenderer
         return Allowed(e.Level) && !Surpassed(e.Level);
     }
 
+    /// <summary>
+    /// Whether <paramref name="batch"/> is one of the TERRAIN-mode rock batches (they follow the mesh batches in the GPU order).
+    /// </summary>
     bool IsRockBatch(int batch) => batch >= _gpuOrder.Count && batch < _gpuOrder.Count + _gpuRockOrder.Count;
 
     /// <summary>

@@ -20,18 +20,48 @@ namespace Meitou.Game.Rendering.Impostors;
 /// </summary>
 internal sealed class ImpostorPreview : IDisposable
 {
+    /// <summary>
+    /// The meshes' draw state: back faces culled, depth tested and written, no blending.
+    /// </summary>
     static readonly DrawState MeshState = new(CullMode.Back, FrontFaceDirection.Ccw, true, true, DepthFunction.Less, false, 0, 0, BlendState.Off,
         ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A, PolygonKind.Fill, false, false);
 
+    /// <summary>
+    /// The device the preview draws on.
+    /// </summary>
     readonly GpuContext _gpu;
+    /// <summary>
+    /// The meshes' textures, never unloaded while the preview lives.
+    /// </summary>
     readonly WorldTextureCache _textures;
+    /// <summary>
+    /// The native sets both programs are made with.
+    /// </summary>
     readonly NativeFrame _frame;
+    /// <summary>
+    /// The world's foliage mesh program.
+    /// </summary>
     readonly NativeProg _meshProgram;
+    /// <summary>
+    /// The impostor programs.
+    /// </summary>
     readonly ImpostorDraw _impostors;
+    /// <summary>
+    /// The uploaded mesh parts (main and leaves) with their materials.
+    /// </summary>
     readonly List<(ImpostorBaker.Part[] Parts, Material Material)> _meshes = [];
+    /// <summary>
+    /// The atlas on the GPU (<see cref="SetAtlas"/>); null before.
+    /// </summary>
     ImpostorTextures? _atlas;
+    /// <summary>
+    /// The bindless index of the stand-in texture, made on first use (0: not yet).
+    /// </summary>
     uint _standIn;
 
+    /// <summary>
+    /// Makes the texture cache, the native sets and both programs.
+    /// </summary>
     public ImpostorPreview(GpuContext gpu, AssetLocator assets)
     {
         this._gpu = gpu;
@@ -41,6 +71,9 @@ internal sealed class ImpostorPreview : IDisposable
         _impostors = new ImpostorDraw(gpu, _frame);
     }
 
+    /// <summary>
+    /// A mesh part's textures and settings.
+    /// </summary>
     sealed record Material(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2, ImpostorMaterial Settings);
 
     /// <summary>
@@ -66,6 +99,9 @@ internal sealed class ImpostorPreview : IDisposable
         while (_textures.PendingCount > 0) _textures.Pump(wait: true, max: 64);
     }
 
+    /// <summary>
+    /// Uploads <paramref name="baked"/> (all its levels at once), replacing the atlas shown before.
+    /// </summary>
     public void SetAtlas(ImpostorAtlas baked)
     {
         _atlas?.Dispose();
@@ -128,6 +164,9 @@ internal sealed class ImpostorPreview : IDisposable
         cmd.DrawIndexed(6, (uint)instances.Length);
     }
 
+    /// <summary>
+    /// Frees the atlas, the mesh buffers, the stand-in, the programs, the sets and the texture cache.
+    /// </summary>
     public void Dispose()
     {
         _atlas?.Dispose();
@@ -147,12 +186,18 @@ internal sealed class ImpostorPreview : IDisposable
         _textures.Dispose();
     }
 
+    /// <summary>
+    /// The stand-in texture's bindless index, registered on first use.
+    /// </summary>
     uint StandIn()
     {
         if (_standIn == 0) _standIn = _gpu.Bindless.Register(BindlessKind.Texture2D, _gpu.Dummy(FrameGlobals.Sampler2D("impostor stand-in")));
         return _standIn;
     }
 
+    /// <summary>
+    /// Uploads a model's non-empty parts with their vertex layout for the mesh program (instance rows at locations 7 to 10).
+    /// </summary>
     ImpostorBaker.Part[] Upload(Model model)
     {
         var parts = new List<ImpostorBaker.Part>();
@@ -193,6 +238,9 @@ internal sealed class ImpostorPreview : IDisposable
         return [.. Enumerable.Range(0, 4).Select(a => new GpuBufferBinding(data.Handle, data.Offset + (ulong)(16 * a)))];
     }
 
+    /// <summary>
+    /// Draws <paramref name="count"/> instances of one mesh's parts with its material (alpha to coverage when <paramref name="coverage"/>).
+    /// </summary>
     void DrawMesh(IGpuCommandList cmd, AttachmentFormats formats, ImpostorBaker.Part[] parts, Material m, uint stand, bool coverage, int count)
     {
         var state = MeshState with { Cull = m.Settings.DoubleSided ? CullMode.None : CullMode.Back, AlphaToCoverage = coverage };
@@ -248,5 +296,8 @@ internal sealed class ImpostorPreview : IDisposable
         };
     }
 
+    /// <summary>
+    /// A texture key's bindless index (no LOD bias), the stand-in for no key.
+    /// </summary>
     uint IndexOf(uint key, uint stand) => key == 0 ? stand : _textures.Index(key, 0, stand);
 }

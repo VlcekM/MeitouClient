@@ -6,7 +6,29 @@ namespace Meitou.Game.Rendering.Foliage;
 /// <summary>
 /// Where a mesh's impostor atlas is: read from the cache (or its source made), baking, uploading, drawable, or none (refused or unloaded).
 /// </summary>
-enum FoliageImpostorStage { Loading, Baking, Uploading, Ready, None }
+enum FoliageImpostorStage
+{
+    /// <summary>
+    /// Being read from the disk cache (or its source made).
+    /// </summary>
+    Loading,
+    /// <summary>
+    /// Waiting for or in its bake.
+    /// </summary>
+    Baking,
+    /// <summary>
+    /// Its textures uploading.
+    /// </summary>
+    Uploading,
+    /// <summary>
+    /// Resident and drawable.
+    /// </summary>
+    Ready,
+    /// <summary>
+    /// No atlas: never one (<c>RetryAt</c> 0), or refused or unloaded.
+    /// </summary>
+    None
+}
 
 /// <summary>
 /// A mesh's impostor (<see cref="FoliageMeshAsset.Impostor"/>): its atlas through loading, baking, uploading and refining, and the residency plan's

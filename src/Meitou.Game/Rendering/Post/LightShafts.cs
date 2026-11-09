@@ -28,6 +28,9 @@ sealed unsafe class LightShafts(PostProcess post)
         /// </summary>
         public readonly UniformHandle Grid, Range, Eye, Right, Up, Back, Tan;
 
+        /// <summary>
+        /// Compiles the shared vertex shader with <paramref name="fragment"/> and resolves the grid's shared uniforms.
+        /// </summary>
         protected ShaftPass(GpuContext gpu, string fragment, string name) : base(gpu, fragment, name)
         {
             (Grid, Range, Eye, Tan) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftEye"), P.Uniform("uShaftTan"));
@@ -45,6 +48,9 @@ sealed unsafe class LightShafts(PostProcess post)
         /// </summary>
         public readonly UniformHandle Samples;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftInjectPass(GpuContext gpu) : base(gpu, LightShaftShaders.Inject, "post shafts inject") => Samples = P.Uniform("uShaftSamples");
     }
 
@@ -63,6 +69,9 @@ sealed unsafe class LightShafts(PostProcess post)
         /// </summary>
         public readonly UniformHandle PrevRange, PrevEye, PrevRight, PrevUp, PrevBack, PrevTan, Blend;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftResolvePass(GpuContext gpu) : base(gpu, LightShaftShaders.Resolve, "post shafts resolve")
         {
             (Current, History) = (P.Sampler("uShaftCurrent"), P.Sampler("uShaftHistory"));
@@ -82,6 +91,9 @@ sealed unsafe class LightShafts(PostProcess post)
         /// </summary>
         public readonly SamplerSlot Injected;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftIntegratePass(GpuContext gpu) : base(gpu,
             LightShaftShaders.Integrate, "post shafts integrate") => Injected = P.Sampler("uShaftInjected");
     }
@@ -101,6 +113,9 @@ sealed unsafe class LightShafts(PostProcess post)
         /// </summary>
         public readonly UniformHandle NearPlanes, WaterY, Atlas, Params, Air;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftApplyPass(GpuContext gpu) : base(gpu, LightShaftShaders.Apply, "post shafts apply")
         {
             (NearDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
@@ -125,6 +140,9 @@ sealed unsafe class LightShafts(PostProcess post)
         /// </summary>
         public readonly UniformHandle Air;
 
+        /// <summary>
+        /// Compiles the program and resolves its handles.
+        /// </summary>
         public ShaftScatterPass(GpuContext gpu) : base(gpu, LightShaftShaders.Scatter, "post shafts scatter") => (Injected,
             Air) = (P.Sampler("uShaftInjected"), P.Uniform("uShaftAir"));
     }
@@ -499,6 +517,9 @@ sealed unsafe class LightShafts(PostProcess post)
     [StructLayout(LayoutKind.Sequential)]
     struct ShaftScanParams
     {
+        /// <summary>
+        /// The block's members in order, each a vec4.
+        /// </summary>
         public Vector4 Grid, Range, Eye, Right, Up, Back, Tan, Air, AtmoParams, AtmoSimple, AtmoHaze, AtmoAltitude, AtmoFog, AtmoSun, SunLight,
             AtmoMaps;
     }

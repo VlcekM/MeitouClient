@@ -12,7 +12,13 @@ namespace Meitou.Game.Rendering.Characters;
 /// </summary>
 internal sealed unsafe partial class CharacterRenderer
 {
+    /// <summary>
+    /// The mask targets (colour and depth) by group index, kept between frames and remade when the size changes.
+    /// </summary>
     readonly List<(GpuTexture Colour, GpuTexture Depth)> _hoverTargets = [];
+    /// <summary>
+    /// This frame's masks, one per outline colour (<see cref="HoverMasks"/>).
+    /// </summary>
     readonly List<HoverMask> _hoverMasks = [];
 
     /// <summary>
@@ -138,6 +144,9 @@ internal sealed unsafe partial class CharacterRenderer
         Gpu.EndNative(cmd);
     }
 
+    /// <summary>
+    /// Frees the mask targets and forgets the masks.
+    /// </summary>
     void DisposeHover()
     {
         foreach (var (colour, depth) in _hoverTargets)

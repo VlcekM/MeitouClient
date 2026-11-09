@@ -45,15 +45,27 @@ interface IWorldPostChain
     /// </summary>
     PassTargets SceneTargetsForParticles { get; }
 
+    /// <summary>
+    /// The scene's colour target at the render size.
+    /// </summary>
     GpuTexture SceneColour { get; }
 
+    /// <summary>
+    /// The scene's depth target at the render size.
+    /// </summary>
     GpuTexture SceneDepth { get; }
 
     /// <summary>
     /// The scene render size after the upscaler's render scale, and the jitter the scene projection uses this frame.
     /// </summary>
     int RenderWidth { get; }
+    /// <summary>
+    /// See <see cref="RenderWidth"/>.
+    /// </summary>
     int RenderHeight { get; }
+    /// <summary>
+    /// See <see cref="RenderWidth"/>.
+    /// </summary>
     Vector2 JitterPixels { get; }
 
     /// <summary>
@@ -90,7 +102,13 @@ interface IWorldPostChain
     /// The game's heat haze this frame: its amount, animation hour and far clip.
     /// </summary>
     float HeatHazeAmount { get; set; }
+    /// <summary>
+    /// See <see cref="HeatHazeAmount"/>.
+    /// </summary>
     double HeatHazeHours { get; set; }
+    /// <summary>
+    /// See <see cref="HeatHazeAmount"/>.
+    /// </summary>
     float HeatHazeFarClip { get; set; }
 
     /// <summary>
@@ -179,8 +197,14 @@ interface IWorldPostChain
     /// </summary>
     ParticleRenderer.SoftDepth? SoftParticleDepthFar(int divisor) => null;
 
+    /// <summary>
+    /// Binds one low-resolution particle size's targets before its draws.
+    /// </summary>
     void BeginParticlesLow(int divisor);
 
+    /// <summary>
+    /// Blends one low-resolution particle size over the scene (or keeps it for after the upscaler).
+    /// </summary>
     void CompositeParticlesLow(int divisor);
     /// <summary>
     /// Whether the low-resolution particles are blended after the upscaler (their draws then unjittered); a chain without it blends them into the
@@ -199,8 +223,14 @@ interface IWorldPostChain
     /// The scene's depth for one particle size's soft fade, or null (Faithful, or a chain without it: the sprites stay hard-edged).
     /// </summary>
     ParticleRenderer.SoftDepth? SoftParticleDepth(int divisor) => null;
+    /// <summary>
+    /// Stamps the end of the low-resolution particles' own draws.
+    /// </summary>
     void MarkParticleDraws();
 
+    /// <summary>
+    /// Stamps the end of the particles drawn after the fog volumes.
+    /// </summary>
     void MarkParticles();
 
     /// <summary>

@@ -9,5 +9,8 @@ namespace Meitou.Game.Rendering.Foliage;
 /// </summary>
 public static class FoliagePrepass
 {
+    /// <summary>
+    /// The A/B <c>foliage-prepass</c> switch: off draws the colour once, with the cut-out's <c>discard</c>.
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 }

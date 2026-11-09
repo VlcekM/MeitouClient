@@ -520,6 +520,9 @@ internal static class MeshSimplifier
         return diff;
     }
 
+    /// <summary>
+    /// Component <paramref name="i"/> (0 to 3) of a vertex's bone weights.
+    /// </summary>
     static float Weight(Vector4 w, int i) => i switch { 0 => w.X, 1 => w.Y, 2 => w.Z, _ => w.W };
 
     /// <summary>
@@ -527,8 +530,15 @@ internal static class MeshSimplifier
     /// </summary>
     struct Quadric
     {
+        /// <summary>
+        /// The matrix's ten distinct entries, row by row of its upper triangle: <c>_a</c> to <c>_d</c> the first row (xx, xy, xz, x·offset), then yy,
+        /// yz, y·offset, zz, z·offset and offset·offset.
+        /// </summary>
         double _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
 
+        /// <summary>
+        /// The quadric of the plane n·p + <paramref name="offset"/> = 0, scaled by <paramref name="weight"/>.
+        /// </summary>
         public static Quadric Plane(Vector3 n, float offset, float weight)
         {
             double x = n.X, y = n.Y, z = n.Z, o = offset, w = weight;
@@ -536,6 +546,9 @@ internal static class MeshSimplifier
                 _h = w * z * z, _i = w * z * o, _j = w * o * o };
         }
 
+        /// <summary>
+        /// Adds another quadric's entries (the sum is the error of both sets of planes).
+        /// </summary>
         public void Add(in Quadric o)
         {
             _a += o._a;
@@ -550,6 +563,9 @@ internal static class MeshSimplifier
             _j += o._j;
         }
 
+        /// <summary>
+        /// The weighted sum of the squared distances from <paramref name="p"/> to the planes.
+        /// </summary>
         public readonly double Evaluate(Vector3 p)
         {
             double x = p.X, y = p.Y, z = p.Z;
