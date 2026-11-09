@@ -106,14 +106,17 @@ public sealed partial class LockSystem
                             else FixtureRegistry.CloseDoor(d);
                             continue;
                         }
+
                         if (d.Lock is { EffectivelyLocked: true } l)
                         {
                             l.Locked = false;
                             fixtures.Touch(d);
                         }
+
                         if (d.Motion == DoorMotion.Closing) d.Motion = DoorMotion.Opening;
                         else FixtureRegistry.OpenDoor(d);
                     }
+
                     break;
                 }
             case ToggleDoorLocksOrder lockToggle:
@@ -129,12 +132,14 @@ public sealed partial class LockSystem
                         else if (!wants && l.EffectivelyLocked) l.Locked = false;
                         fixtures.Touch(d);
                     }
+
                     break;
                 }
             case Construction.SetBuildingPublic open when world.Buildings.Find(open.Building) is null or { LevelPlacement: not null }:
                 // A town building the player owns (a site's flag is the construction system's).
                 if (world.Fixtures.OwnsBuilding(open.Building, world.Player.Faction))
                     fixtures.SetPublic(open.Building, open.Public);
+
                 break;
         }
     }
@@ -147,6 +152,7 @@ public sealed partial class LockSystem
     {
         if (f.Kind != FixtureKind.Door || world.Fixtures.DoorSpotOf(f) is not { } spot)
             return (Flat(f.Position), f.UseRange + Reach);
+
         var outside = StandSpot(f, spot);
         var centre = new Vector2(spot.Centre.X, spot.Centre.Z);
         var inside = 2 * centre - outside;
@@ -169,9 +175,11 @@ public sealed partial class LockSystem
             if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, IsImprisoned: false } c
                     || !c.CarriedBy.IsNone || !TaskStart.Eligible(world, c, row))
                 continue;
+
             float d = Vector2.Distance(Flat(table.Next[s].Position), WorkSpot(world, door, Flat(table.Next[s].Position)).At);
             if (d < bestDistance) (best, bestDistance) = (s, d);
         }
+
         if (best < 0) return;
         if (barred && !order.PickLock) world.Post("Hold down the ALT key to pick the lock.");
         StartWork(world, best, CharacterTask.GoTo, row, door.Id, queued: order.Queued);
@@ -195,9 +203,11 @@ public sealed partial class LockSystem
             if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, IsImprisoned: false } c
                     || !c.CarriedBy.IsNone || !TaskStart.Eligible(world, c, row))
                 continue;
+
             float d = Vector2.Distance(Flat(table.Next[s].Position), WorkSpot(world, door, Flat(table.Next[s].Position)).At);
             if (d < bestDistance) (best, bestDistance) = (s, d);
         }
+
         if (best >= 0) StartWork(world, best, CharacterTask.GoTo, row, door.Id, queued: order.Queued);
     }
 
@@ -223,6 +233,7 @@ public sealed partial class LockSystem
                 c.DoorJob = null;
                 continue;
             }
+
             var (at, reach) = WorkSpot(world, door, Flat(n.Position));
             if (Vector2.Distance(Flat(n.Position), at) > reach)
             {
@@ -230,6 +241,7 @@ public sealed partial class LockSystem
                 if (job.Work > 0 || Redirected(n, at, reach)) c.DoorJob = null;
                 continue;
             }
+
             if (n.Task == (byte)CharacterTask.GoTo)
             {
                 // Arrived: stand and start. A move order given since the arrival is a new goal, not this walk.
@@ -238,8 +250,10 @@ public sealed partial class LockSystem
                     c.DoorJob = null;
                     continue;
                 }
+
                 AtWork(world, s);
             }
+
             if (c.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the work
             job.Work += world.TickSeconds;
             if (job.Work < LockWorkSeconds) continue;
@@ -251,6 +265,7 @@ public sealed partial class LockSystem
                 else FixtureRegistry.CloseDoor(door);
                 door.AutoOpened = false;
             }
+
             world.Fixtures.SetLocked(door, job.Lock);
             world.EmitSound(job.Lock ? SoundKind.Locked : SoundKind.Unlocked, s, n.Position);
         }
@@ -270,6 +285,7 @@ public sealed partial class LockSystem
             player.DoorTarget = null;
             return;
         }
+
         ref var n = ref table.Next[s];
         var (at, reach) = WorkSpot(world, door, Flat(n.Position));
         if (Vector2.Distance(Flat(n.Position), at) > reach)
@@ -277,6 +293,7 @@ public sealed partial class LockSystem
             if (Redirected(n, at, reach)) player.DoorTarget = null;
             return;
         }
+
         if (n.Task == (byte)CharacterTask.GoTo) AtWork(world, s);
         player.DoorTarget = null;
         if (door.Motion is DoorMotion.Open or DoorMotion.Opening)
@@ -294,8 +311,11 @@ public sealed partial class LockSystem
     {
         var list = new List<Fixture>();
         foreach (var f in world.Fixtures.OfBuilding(building))
+        {
             if (f.Kind == FixtureKind.Door && !f.DoorBroken && f.Owner >= 0 && f.Owner == world.Player.Faction)
                 list.Add(f);
+        }
+
         return list;
     }
 
@@ -324,21 +344,27 @@ public sealed partial class LockSystem
         // An upgraded or downgraded building keeps its doors while it is built, and gets the new record's: their state carries over by door index.
         var carried = new Dictionary<string, Fixture[]>(StringComparer.Ordinal);
         foreach (var b in fixtures.Buildings.ToArray())
+        {
             if (fixtures.OfBuilding(b) is [{ Site: -1 } first, ..] list)
             {
                 var site = reg.Find(b);
                 if (site is { Destroyed: false } && Standing(site) && first.HostRecordId == site.Record) continue;
                 if (site is { Destroyed: false, Upgrading: true } or { Destroyed: false, Complete: true })
                     carried[b] = [.. list];
+
                 fixtures.Unregister(b);
             }
+        }
+
         if (reg.Count == 0 || world.Systems.OfType<PopulationSystem>().FirstOrDefault()?.Data is not { } data) return;
         foreach (var site in reg.All)
+        {
             if (Standing(site) && !site.Destroyed)
             {
                 fixtures.RegisterPlayerBuilding(world, data, site);
                 if (carried.Remove(site.Id, out var old)) fixtures.CarryDoors(site.Id, old);
             }
+        }
     }
 
     struct WalkerScan
@@ -386,6 +412,7 @@ public sealed partial class LockSystem
                             && Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 2);
                     return;
                 }
+
                 if (((MoveFlags)n.Flags & MoveFlags.HasPath) == 0 || c.Medical is { Incapacitated: true }) return;
                 float away = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(s.Spot.Centre.X, s.Spot.Centre.Z));
                 if (away > OpenReach) return;
@@ -398,6 +425,7 @@ public sealed partial class LockSystem
                     if (c.IsPlayer) Say(s.World, c, "It's locked.");
                     return;
                 }
+
                 if (!Crosses(n.Position, c.Path, n.PathCursor, s.Spot, legs: 2)) return;
                 s.Opened = FixtureRegistry.OpenDoor(s.Door) || s.Door.Motion == DoorMotion.Opening;
                 if (s.Opened) s.OpenerFaction = c.Faction;
@@ -450,6 +478,7 @@ public sealed partial class LockSystem
         {
             if (f.Kind != FixtureKind.Door || f.DoorBroken || f.OpenAmount >= PassableOpen || fixtures.DoorSpotOf(f) is not { } spot)
                 continue;
+
             var scan = new LeafScan { World = world, Spot = spot };
             world.Grid.Query(spot.Centre.X, spot.Centre.Z, spot.HalfWidth + DoorDepth, ref scan, static (int slot, ref LeafScan s) =>
             {
@@ -457,6 +486,7 @@ public sealed partial class LockSystem
                 ref var n = ref table.Next[slot];
                 if (!n.Alive || table.Cold(slot) is not { } c || !c.CarriedBy.IsNone || MathF.Abs(n.Position.Y - s.Spot.Foot) > DoorHeight)
                     return;
+
                 var c2 = new Vector2(s.Spot.Centre.X, s.Spot.Centre.Z);
                 var normal = new Vector2(s.Spot.Normal.X, s.Spot.Normal.Z);
                 var was = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
@@ -501,8 +531,10 @@ public sealed partial class LockSystem
             float da = Vector2.Dot(a - c, normal), db = Vector2.Dot(b - c, normal);
             if ((da <= 0) != (db <= 0) && Vector2.Distance(a + (b - a) * (da / (da - db)), c) <= door.HalfWidth + DoorSlack)
                 return true;
+
             a = b;
         }
+
         return false;
     }
 }

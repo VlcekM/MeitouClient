@@ -238,8 +238,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         mind.LeaveFight = true;
                         Interlocked.Exchange(ref _leaving, 1);
                     }
+
                     continue;
                 }
+
                 var goal = Choose(world, i, id, mind, squad, board, roles, hour)!;
                 if (cold.InCombat) InFight(mind, goal, board);
                 else Act(world, i, mind, goal, board);
@@ -271,6 +273,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             Interlocked.Exchange(ref _leaving, 1);
             return;
         }
+
         mind.Goal = goal;
         mind.Behaviour = behaviour;
         mind.Version = board.Version;
@@ -311,6 +314,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (cold.Ai is not { } mind || cold.IsPlayer || cold.Fleeing || cold.IsImprisoned || !cold.CarriedBy.IsNone
             || cold.Medical is { Incapacitated: true })
             return Restrict.None;
+
         if (cold.InCombat) return cold.Gunning is null && cold.Carrying.IsNone ? Restrict.Self : Restrict.None;
         if (cold.Engaged) return Restrict.Self;
         if (mind.Engine && EngineRoutine(n, cold)) return Restrict.Combat;
@@ -359,6 +363,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (cold.Ai is not { } mind || cold.IsPlayer || cold.Fleeing || cold.Engaged || cold.IsImprisoned || !cold.CarriedBy.IsNone
             || !cold.Carrying.IsNone || cold.Medical is { Incapacitated: true })
             return false;
+
         if (cold.InCombat) return n.Task == (byte)CharacterTask.Attack && OwnsFight(cold, mind);
         if (mind.Engine) return false;
         return (CharacterTask)n.Task switch
@@ -469,6 +474,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             for (int k = 0; k < candidates.Count; k++)
                 if (plans.TryPlan(candidates[k].Goal, candidates[k].Desire)) return candidates[k].Goal;
         }
+
         if (only != Restrict.None) return null;
         if (committed is not null) return committed;
 
@@ -476,6 +482,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (plans.TryPlan(Idle, Desire(world, TaskBehaviours.Of(Idle.Task.Type), Idle.Task.Type, TaskProfiles.Of(Idle.Task.Type), squad, board,
             mind, id, Idle.Task.Target)))
             return Idle;
+
         mind.Plan.Clear();
         return Idle;
     }
@@ -697,6 +704,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             float r = site.Town.Radius, d = Vector2.DistanceSquared(at, Flat(site.Position));
             if (d <= r * r && d < bestD) (best, bestD) = (s, d);
         }
+
         return best;
     }
 
@@ -754,6 +762,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         foreach (var s in b.Spots)
                             if (accept(s) && pick-- == 0) return s.Position;
                     }
+
                     return b.Position;
                 }
             case AiBehaviour.ToTown:
@@ -769,9 +778,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         float d = Vector2.DistanceSquared(at, Flat(data.Sites[s].Position));
                         if (d < bestD) (best, bestD) = (s, d);
                     }
+
                     return best < 0 ? null : data.Sites[best].Position;
                 }
         }
+
         return null;
     }
 
@@ -811,6 +822,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 if (places.Stock.TryGetValue(shop, out ulong mask) && ShoppingList.Stocks(mask, function)) selling.Add(shop);
             if (selling.Count > 0) return selling[Rng.Int(roll, selling.Count)];
         }
+
         return randomAllowed && places.Public.Count > 0 ? places.Public[Rng.Int(roll, places.Public.Count)] : null;
     }
 
@@ -860,11 +872,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             var (centre, scatter) = PatrolArea(world, board, world.Characters.Previous[slot].Position);
             mind.Target = PatrolPoint(world, self, centre, scatter);
         }
+
         if (mind.Target is not { } point)
         {
             Become(world, slot, CharacterTask.Idle);
             return;
         }
+
         if (!GoToSpot(world, slot, mind, Flat(point), GiveUp.Target, SpeedMode.Walk, height: float.IsNaN(point.Y) ? null : point.Y)) return;
         Become(world, slot, CharacterTask.Idle);
         mind.Target = null;
@@ -883,10 +897,12 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             var site = data.Sites[town.Site];
             return (Flat(site.Position), MathF.Max(PatrolScatterMin, site.Town.Radius * 0.5f));
         }
+
         if (town.PlayerTown > 0 && world.Buildings.FindTown(town.PlayerTown) is { } player)
         {
             return (Flat(player.Position), MathF.Max(PatrolScatterMin, player.Radius * 0.5f));
         }
+
         return (Flat(from), PatrolScatter);
     }
 
@@ -906,6 +922,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             float z = centre.Y + (Rng.Float(roll) - 0.5f) * scatter;
             if (world.Walkability.IsWalkable(x, z)) return new Vector3(x, float.NaN, z);
         }
+
         return null;
     }
 
@@ -1013,9 +1030,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     void ReserveWork(World world)
     {
         foreach (var squad in world.Squads.All)
+        {
             foreach (var id in squad.Members)
+            {
                 if (world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.Ai?.WorkPost is { } post)
                     _workTaken[post] = _workTaken.GetValueOrDefault(post) + 1;
+            }
+        }
     }
 
     /// <summary>
@@ -1345,11 +1366,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 ActPatrol(world, slot, mind, board);
                 break;
             case AiBehaviour.Sleep when table.Cold(slot)!.InSomething == Locks.HeldState.Bed:
-                // Lying in its bed. One loaded there, or laid in by the walk's end, sleeps by no start of this goal: the goal takes the sleep as its
-                // own (the original's sleeper runs its plan's 98 Task_UseBed).
-                if (table.Cold(slot)!.Running is not { Source: TaskSource.Goal } own || !own.Runs(CharacterTask.Sleep))
-                    TaskStart.StartOwn(world, slot, new TaskRequest(CharacterTask.Sleep, type, TaskSource.Goal));
-
+                SleepInBed(world, slot, type);
                 break;
             case AiBehaviour.Post:
             case AiBehaviour.Sleep:
@@ -1371,17 +1388,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 Investigate(world, slot, mind, board, type);
                 break;
             case AiBehaviour.Assault:
-                // Stands until the serial step sends the attack on the member picked (the combat system walks it there).
-                Become(world, slot, CharacterTask.Idle);
-                mind.AssaultTarget = AssaultTargetFor(world, slot, board);
-                if (!mind.AssaultTarget.IsNone) Interlocked.Exchange(ref _assaulting, 1);
-
+                ActAssault(world, slot, mind, board);
                 break;
             case AiBehaviour.Medic:
-                // Stands while the serial step starts the treatment of the patient its finder gives then (FirstAidSystem.SendGoalTreatments).
-                Become(world, slot, CharacterTask.Idle);
-                mind.MedicAsk = true;
-                Interlocked.Exchange(ref _treating, 1);
+                ActMedic(world, slot, mind);
                 break;
             case AiBehaviour.Captive:
                 AskCaptiveJob(world, slot, mind);
@@ -1400,11 +1410,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 mind.FleeRequest = behaviour == AiBehaviour.SelfPreserve ? FleeAsk.Threat : FleeAsk.Enemies;
                 break;
             case AiBehaviour.Travel:
-                // To the mission town's centre; the goal is no longer wanted once inside the town (Desire), long before the centre.
-                if (DestinationCentre(world, board) is not { } town) Become(world, slot, CharacterTask.Idle);
-                else if (GoToSpot(world, slot, mind, town, GiveUp.Target, type == TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk))
-                    Become(world, slot, CharacterTask.Idle);
-
+                ActTravel(world, slot, mind, board, type);
                 break;
             case AiBehaviour.Relax:
             case AiBehaviour.Sit:
@@ -1420,6 +1426,52 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 ActTurret(world, slot, mind, board);
                 break;
         }
+    }
+
+    /// <summary>
+    /// A sleeper already in its bed: the goal takes the sleep as its own.
+    /// </summary>
+    static void SleepInBed(World world, int slot, TaskType type)
+    {
+        var table = world.Characters;
+
+        // Lying in its bed. One loaded there, or laid in by the walk's end, sleeps by no start of this goal: the goal takes the sleep as its
+        // own (the original's sleeper runs its plan's 98 Task_UseBed).
+        if (table.Cold(slot)!.Running is not { Source: TaskSource.Goal } own || !own.Runs(CharacterTask.Sleep))
+            TaskStart.StartOwn(world, slot, new TaskRequest(CharacterTask.Sleep, type, TaskSource.Goal));
+    }
+
+    /// <summary>
+    /// An assault: it stands, the member to attack picked for the serial step.
+    /// </summary>
+    void ActAssault(World world, int slot, AiMind mind, Blackboard board)
+    {
+        // Stands until the serial step sends the attack on the member picked (the combat system walks it there).
+        Become(world, slot, CharacterTask.Idle);
+        mind.AssaultTarget = AssaultTargetFor(world, slot, board);
+        if (!mind.AssaultTarget.IsNone) Interlocked.Exchange(ref _assaulting, 1);
+    }
+
+    /// <summary>
+    /// A medic: it stands, asking the serial step for a patient.
+    /// </summary>
+    void ActMedic(World world, int slot, AiMind mind)
+    {
+        // Stands while the serial step starts the treatment of the patient its finder gives then (FirstAidSystem.SendGoalTreatments).
+        Become(world, slot, CharacterTask.Idle);
+        mind.MedicAsk = true;
+        Interlocked.Exchange(ref _treating, 1);
+    }
+
+    /// <summary>
+    /// A trip to the mission town's centre.
+    /// </summary>
+    void ActTravel(World world, int slot, AiMind mind, Blackboard board, TaskType type)
+    {
+        // To the mission town's centre; the goal is no longer wanted once inside the town (Desire), long before the centre.
+        if (DestinationCentre(world, board) is not { } town) Become(world, slot, CharacterTask.Idle);
+        else if (GoToSpot(world, slot, mind, town, GiveUp.Target, type == TaskType.TravelToTargetTownFast ? SpeedMode.Run : SpeedMode.Walk))
+            Become(world, slot, CharacterTask.Idle);
     }
 
     /// <summary>
@@ -1690,6 +1742,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             // to a building.
             if (type is TaskType.RetreatHometown or TaskType.RunAwayHometown && RetreatPoint(mind.Squad) is { } waypoint)
                 return (waypoint, true, null, null);
+
             if (board.Home is { } h && !mind.HomeUnreachable) return (Flat(h.Position), true, null, null);
             if (board.Town >= 0) return (Flat(data.Sites[board.Town].Position), true, null, null);
             return (mind.Squad.HomeCentre, true, null, null);
@@ -1698,9 +1751,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         // 157 Static town guard: the post of its town it holds (ClaimTownPosts).
         if (type == TaskType.StandAtGuardNodeHometownOutside && !mind.HomeUnreachable && mind.TownPost is { Spot: var post })
             return (Flat(post.Position), true, post.Position.Y, post.Yaw);
+
         if (!mind.HomeUnreachable && GateSpot(board, mind, type) is { } guard) return (Flat(guard), true, guard.Y, null);
         if (board.Home is not { } home || mind.HomeUnreachable || type is TaskType.HoldPosition or TaskType.ManTheGate)
             return (mind.Post, false, null, null);
+
         HomeSpotKind kind = behaviour == AiBehaviour.Sleep ? HomeSpotKind.Bed : type switch
         {
             TaskType.StandAtShopkeeperNode => HomeSpotKind.Shopkeeper,
@@ -1711,6 +1766,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         ulong roll = kind == HomeSpotKind.Bed ? 0 : mind.NodeRoll;   // beds stay round robin (the bed search is not the node finders')
         if (kind == HomeSpotKind.Guard && mind.GuardVisitorAt is { } visitor && Nearest(home, kind, visitor) is { } beside)
             return (Flat(beside.Position), true, beside.Position.Y, beside.Yaw);
+
         if (Pick(home, kind, mind.MemberIndex, roll) is { } spot) return (Flat(spot.Position), true, spot.Position.Y, spot.IsNode ? spot.Yaw : null);
 
         // Guard posts fall back to general nodes (docs/game/ai-tasks.md "Town goals"); the counter is the shopkeeper's, so only its goal falls back
@@ -1755,6 +1811,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (!IsNodeGoal(type) || type == TaskType.StandAtGuardNodeHometownOutside || board.Home is not { } home
             || mind.HomeUnreachable || GateSpot(board, mind, type) is not null)
             return false;
+
         var kind = type switch
         {
             TaskType.StandAtShopkeeperNode => HomeSpotKind.Shopkeeper,
@@ -1863,6 +1920,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             return DoorExit(new Vector2(s.Centre.X, s.Centre.Z), new Vector2(s.Normal.X, s.Normal.Z),
                 new Vector2(building.Position.X, building.Position.Z));
         }
+
         return null;
     }
 
@@ -1884,6 +1942,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         var table = world.Characters;
         if (height is { } spotY && walk.FloorNear(target.X, target.Y, spotY, FloorSlack) is { } onFloor)
             (target, height) = (Flat(onFloor), onFloor.Y);
+
         ref var n = ref table.Next[slot];
         var here = new Vector2(n.Position.X, n.Position.Z);
         float within = slack > 0 ? slack : Settings.PostSlack;
@@ -1914,9 +1973,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                         mind.SeatUnreachable = true;
                         break;
                 }
+
                 return false;   // the next think picks the new spot
             }
         }
+
         if (away && mind.ArrivedThere(target, here)) return true;   // its path ended there and it has not been moved off since: arrived
         if (away)
         {
@@ -1928,9 +1989,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 var cold = table.Cold(slot)!;
                 (cold.GoalHeight, cold.GoalHeightAt, cold.ArriveWithin) = (floor, target, MovementSystem.SpotArrive);
             }
+
             mind.Walking = true;
             return false;
         }
+
         return n.Task != (byte)CharacterTask.GoTo;   // arriving: the movement system ends the walk
     }
 
@@ -1947,6 +2010,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             mind.FailedWalks = 0;
             return;
         }
+
         var cold = table.Cold(slot)!;
         bool fought = cold.InCombat || cold.Fleeing;
         if (!fought && cold.WalkEnd == WalkEnd.None) return;
@@ -1957,6 +2021,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             mind.FailedWalks = 0;
             return;
         }
+
         mind.FailedWalks++;
     }
 
@@ -1991,6 +2056,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             n.Mode = mode;
             return;
         }
+
         TaskStart.StartOwn(world, slot, new TaskRequest(CharacterTask.GoTo, GoalRow(world, slot), TaskSource.Goal) { Goal = to, Mode = mode });
     }
 
@@ -2049,6 +2115,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (!n.Alive || mind.Behaviour != AiBehaviour.Sleep || n.Task != (byte)CharacterTask.Rest
                 || world.Fixtures.Find(id) is not { } bed)
                 continue;
+
             var here = new Vector2(n.Position.X, n.Position.Z);
             bool Near(Locks.Fixture f) => Vector2.DistanceSquared(here, Flat(f.Position)) <= BedReach * BedReach;
             if (!Locks.FixtureRegistry.IsFree(table, bed) || !Near(bed))
@@ -2061,9 +2128,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     float d = Vector2.DistanceSquared(here, Flat(f.Position));
                     if (d < bestD) (best, bestD) = (f, d);
                 }
+
                 if (best is null) continue;
                 bed = best;
             }
+
             if (cold.InSomething == Locks.HeldState.None) world.Fixtures.EnterBed(world, table.IdOf(s), bed);
         }
     }
@@ -2096,6 +2165,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 if (IsPlayers(world, squad)) continue;
                 Attach(world, squad);
             }
+
             _rules.Bind(this, world, squad);
             if (command is StartContract c) squad.Ai!.StartContract(package, world.GameHours, c.Hours, _rules, c.Target);
             else squad.Ai!.Replace(package, _rules);
@@ -2284,11 +2354,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 if (b.IsGate && d < best) (gate, best) = (b, d);
             }
         }
+
         if (gate is null)
         {
             board.Gate = null;
             return;
         }
+
         if (board.Gate?.Building == gate) return;
         board.Gate = PostOf(world, gate, board.Town >= 0 ? Flat(data.Sites[board.Town].Position) : Flat(gate.Position));
     }
@@ -2329,6 +2401,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (type is not (TaskType.StandAtGuardNodeHomebuilding or TaskType.StandAtGuardNodeHomebuildingIndoorsOnly
             or TaskType.StandAtGuardNodeHometownOutside or TaskType.StandAtGeneralNode) || board.Home != gate.Building)
             return null;
+
         foreach (var s in gate.Building.Spots) if (s.IsNode) return null;
         int step = mind.MemberIndex / 2;
         float side = (mind.MemberIndex & 1) == 0 ? 1 : -1;
@@ -2464,6 +2537,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             squad.Ai.InTown = there;
             OccupyResumed(world, squad, squad.Ai);
         }
+
         squad.LeftPackage = null;
     }
 
@@ -2494,6 +2568,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (!table.TryResolveNext(squad.Members[k], out int s) || table.Cold(s) is not { IsPlayer: false } cold
                 || cold.Ai is { Engine: false } && board is null)
                 continue;
+
             if (cold.Ai is { Engine: false }) cold.Ai = null;
             if (cold.Ai is null || !ReferenceEquals(cold.Ai.Squad, squad))
             {
@@ -2508,6 +2583,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                     RaceGoals = cold.Race is { } race ? data.Ai.RaceGoals(race.StringId) : [],
                 };
             }
+
             cold.Ai.EngineGoals = package is null ? [] : CombatGoalsOf(package, RoleOf(squad, squad.Members[k], cold));
         }
     }
@@ -2546,6 +2622,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             board.Update();
             first = board.Current;
         }
+
         return _firstPackages[templateId] = first;
     }
 
@@ -2582,8 +2659,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         if (board.Destination.IsNone && board.MissionTown < 0 && board.RefugeeTarget < 0) return false;
         foreach (var role in board.Roles)
+        {
             foreach (var goal in role)
                 if (TaskBehaviours.Of(goal.Task.Type) == AiBehaviour.Travel) return true;
+        }
+
         return false;
     }
 
@@ -2624,6 +2704,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             if (players || !world.Fixtures.OwnsBuilding(given.Key, player)) return given;
             return squad.HomeBuilding = HouseForSale(world, squad);   // a save from before a bought house's squads moved out (Evict)
         }
+
         if (squad.Town < 0 || data.Sites[squad.Town].Buildings is not { Count: > 0 } buildings) return null;
         var taken = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
         foreach (var other in world.Squads.All)
@@ -2639,8 +2720,10 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 float d = Vector2.DistanceSquared(at, Flat(b.Position));
                 if (d < bestD) (best, bestD) = (b, d);
             }
+
             return best;
         }
+
         if (template?.Building is { } wanted && Nearest(b => b.BuildingId == wanted.Id) is { } own) return own;
         if (template?.BuildingDesignation == 1 && Nearest(b => b.IsShop) is { } shop) return shop;
         if ((template?.BuildingDesignation == 3 || IsBarSquad(squad)) && Nearest(b => b.IsBar, shared: true) is { } bar) return bar;
@@ -2670,11 +2753,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         if (board.Home == old) board.Home = home;
         board.Touch();
         foreach (var id in squad.Members)
+        {
             if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot)?.Ai is { } mind)
             {
                 mind.HomeUnreachable = false;
                 mind.Replan = true;
             }
+        }
     }
 
     /// <summary>
@@ -2779,6 +2864,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 return !(_squad.Faction >= 0 && theirs >= 0 && _system.Data.Relations.IsHostile(_squad.Faction, theirs))
                     && _system.Places(t.Site).Bars.Count > 0;
             }
+
             return board.Town < 0 || _system.Data.Sites[board.Town].Buildings.Count == 0
                 || _system.Places(board.Town) is { } p && (p.Bars.Count > 0 || p.OutdoorTables.Count > 0);
         }
@@ -2872,15 +2958,19 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             && data.Relations.Contains(owner) && data.Relations.IsHostile(squad.Faction, owner);
         var held = new HashSet<(TownBuilding, int)>();
         foreach (var other in world.Squads.All)
+        {
             if (other != squad && other.Ai is { BarTable: >= 0, Home: { } at } b
                 && b.CurrentClass is PackageClass.Bar or PackageClass.BarOutdoors)
                 held.Add((at, b.BarTable));
+        }
+
         if (outdoors)
         {
             foreach (var table in places.OutdoorTables)
                 if (!held.Contains((table, 0)) && !Hostile(table)) return (table, 0);
             return null;
         }
+
         if (places.Bars.Count == 0) return null;
         int start = Rng.Int(Rng.Hash(world.Seed, (ulong)squad.Id << 32 ^ (ulong)world.Tick, RngPurpose.Think, SeedSalts.BarPick), places.Bars.Count);
         for (int k = 0; k < places.Bars.Count; k++)
@@ -2889,6 +2979,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             for (int t = 0; t < bar.Tables.Count; t++)
                 if (!held.Contains((bar, t)) && !Hostile(bar)) return (bar, t);
         }
+
         return null;
     }
 
@@ -2910,6 +3001,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             board.Route = [];
             return;
         }
+
         var site = data.Sites[board.Town];
         var centre = Flat(site.Position);
         float r = MathF.Max(site.Town.SizeRadius * site.Town.TownRadiusMult, 100);
@@ -2929,6 +3021,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
                 break;
             }
         }
+
         route.Add(board.OwnHome is { } home ? Flat(home.Position) : centre);
         board.Route = [.. route];
         board.RouteIndex = 0;

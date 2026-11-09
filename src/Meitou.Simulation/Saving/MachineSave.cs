@@ -69,11 +69,13 @@ public static class MachineSave
 
         if (inventory is null)
         {
-            inventory = new FcsRecord { Type = (int)FcsRecordType.InventoryState, Id = SaveBuilder.NextNumber(file), Name = "0", StringId = inventoryId };
+            inventory = new FcsRecord { Type = (int)FcsRecordType.InventoryState, Id = SaveBuilder.NextNumber(file), Name = "0",
+                StringId = inventoryId };
             file.Records.Add(inventory);
         }
 
-        SaveInventory.Replace(file, inventory, saveItems, n => string.Create(CultureInfo.InvariantCulture, $"{n}-zone{site.Zone.X}.{site.Zone.Y}-INGAME"));
+        SaveInventory.Replace(file, inventory, saveItems,
+            n => string.Create(CultureInfo.InvariantCulture, $"{n}-zone{site.Zone.X}.{site.Zone.Y}-INGAME"));
         instance.States.Insert(0, inventoryId);
     }
 
@@ -169,8 +171,13 @@ public static class MachineSave
     {
         var list = new List<SaveItem>();
         for (int k = 0; k < m.Inputs.Length; k++)
+        {
             if (m.Inputs[k].Count > 0)
-                list.Add(new SaveItem { BaseId = m.Inputs[k].Item, Section = "in" + k.ToString(CultureInfo.InvariantCulture), Quantity = m.Inputs[k].Count });
+            {
+                list.Add(new SaveItem { BaseId = m.Inputs[k].Item, Section = "in" + k.ToString(CultureInfo.InvariantCulture),
+                    Quantity = m.Inputs[k].Count });
+            }
+        }
 
         if (m.Output is { Count: > 0 } o) list.Add(new SaveItem { BaseId = o.Recipe.Item, Section = "out", Quantity = o.Count });
         if (m.Craft is { } c) list.AddRange(c.Done.Select(SavedKit.FromItem));
@@ -232,7 +239,8 @@ public static class MachineSave
             {
                 o.Count = Math.Min(o.Recipe.Capacity, o.Count + item.Quantity);
             }
-            else if (item.Section.StartsWith("in", StringComparison.Ordinal) && int.TryParse(item.Section.AsSpan(2), CultureInfo.InvariantCulture, out int k)
+            else if (item.Section.StartsWith("in", StringComparison.Ordinal)
+                && int.TryParse(item.Section.AsSpan(2), CultureInfo.InvariantCulture, out int k)
                 && k < m.Inputs.Length && (m.Inputs[k].Item == item.BaseId || m.Craft is not null && m.Inputs[k].Count == 0))
             {
                 // A crafting bench's sections hold its last craft's ingredients, also with nothing queued.
@@ -268,7 +276,8 @@ public static class MachineSave
         for (int k = 0, size = state.Ints.GetValueOrDefault("craft partial item size"); k < size; k++)
         {
             string p = k.ToString(CultureInfo.InvariantCulture);
-            if (state.Strings.TryGetValue(PartialSid + p, out var sid)) production.RestorePartial(m, sid, state.Floats.GetValueOrDefault(PartialVal + p));
+            if (state.Strings.TryGetValue(PartialSid + p, out var sid))
+                production.RestorePartial(m, sid, state.Floats.GetValueOrDefault(PartialVal + p));
         }
 
         int count = (int)state.Floats.GetValueOrDefault("num crafts");

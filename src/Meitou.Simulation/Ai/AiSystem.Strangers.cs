@@ -18,6 +18,7 @@ public sealed partial class AiSystem
     bool StrangersInHouseP(World world, Blackboard board, int slot)
     {
         if (board.OwnHome is not { } home) return false;   // no home: the finder returns 0 (and with nothing to test the building counts as public)
+
         // The player's Open to public toggle, else the residents' template (the original writes its `public day` over the home's flag), else public.
         if (world.Fixtures.PublicOf(home.Key) ?? board.HomePublic) return false;
         return StrangerInHome(world, home, slot);
@@ -81,7 +82,6 @@ public sealed partial class AiSystem
             if (c.Medical is { Incapacitated: true } || !c.CarriedBy.IsNone || c.IsImprisoned
                 || FirstAid.FirstAidSystem.OwnedChained(st.Me, c))
                 return;
-
 
             // The sense tag NEUTRAL; the tag mask also leaves out the law enforcement and military classes (bit 7) and the dead (bit 4).
             bool neutral = c.NpcClass is not (FundamentalType.LawEnforcement or FundamentalType.Military) && st.Relations.Contains(c.Faction)

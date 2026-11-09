@@ -26,7 +26,8 @@ public sealed record PermaJob(TaskType Type, string? Site, Hand Saved)
     /// <summary>
     /// A job on a character.
     /// </summary>
-    public static PermaJob OfCharacter(TaskType type, CharacterId target, Hand? saved = null) => new(type, null, saved ?? Hand.Null) { Character = target };
+    public static PermaJob OfCharacter(TaskType type, CharacterId target, Hand? saved = null) =>
+        new(type, null, saved ?? Hand.Null) { Character = target };
 
     /// <summary>
     /// A job without a target (the medic and rescue jobs).
@@ -92,14 +93,19 @@ public static class PermaJobs
     /// disposal 137 / 138, intruders 223 / 273 with 224 / 274) production, medic 58, robotics 57 and splinting 250 <see cref="FirstAid.FirstAidSystem"/>, rescue 148 and foraging 238
     /// <see cref="Carrying.CarrySystem"/>, put in bed 106 <see cref="Locks.BedSystem"/>, attacking enemies 16 <see cref="AggroSystem"/>, Obedient Slave 187 <see cref="Kidnap.CaptiveSystem"/>. The rest are kept, shown and saved but never started.
     /// </summary>
-    public static bool Runs(TaskType type) => type is TaskType.OperateMachinery or TaskType.OperateAutomaticMachinery or TaskType.OperateStorage or TaskType.JobBuilder or TaskType.ManATurretPlayerJob or TaskType.UseTrainingDummy;
+    public static bool Runs(TaskType type) =>
+        type is TaskType.OperateMachinery or TaskType.OperateAutomaticMachinery or TaskType.OperateStorage or TaskType.JobBuilder
+            or TaskType.ManATurretPlayerJob or TaskType.UseTrainingDummy;
 
     /// <summary>
     /// The provenance of the production pick's job the character's <paramref name="task"/> runs: a list job it carries out (<see cref="Runs"/>, the follow jobs <see cref="Follows"/>; its
     /// index <see cref="RunningTask.Job"/>) or an implicit job (<see cref="RunningTask.Implicit"/>), not a fight that is a step of a follow row; null for any other task.
     /// </summary>
     public static RunningTask? ListJob(CharacterCold cold, CharacterTask task) =>
-        task != CharacterTask.Attack && cold.Running is { Source: TaskSource.Job } run && run.Runs(task) && (run.Implicit || run.Job >= 0 && (Runs(run.Row) || Follows(run.Row))) ? run : null;
+        task != CharacterTask.Attack && cold.Running is { Source: TaskSource.Job } run && run.Runs(task)
+            && (run.Implicit || run.Job >= 0 && (Runs(run.Row) || Follows(run.Row)))
+                ? run
+                : null;
 
     /// <summary>
     /// The index of the first job of <paramref name="type"/> in the list, -1 when none.
@@ -128,9 +134,15 @@ public static class PermaJobs
         foreach (var job in cold.Jobs)
             if (job.Type == type && (!rule.PerTarget || SameTarget(job, target))) return false;
         cold.Jobs.Add(target with { Type = type });
+
         // The companion's own row decides nothing here; 31 becomes 289 for an animal receiver (vfunc +0x248, asAnimal: FUN_1405e1f50 returns the animal itself, FUN_1405e5950 of a person 0).
         if (rule.Companion != 0)
-            cold.Jobs.Add(target with { Type = rule.Companion == TaskType.StayCloseToTarget && SquadRegistry.IsAnimal(cold) ? TaskType.Unnamed289 : rule.Companion });
+        {
+            cold.Jobs.Add(target with { Type = rule.Companion == TaskType.StayCloseToTarget && SquadRegistry.IsAnimal(cold)
+                ? TaskType.Unnamed289
+                : rule.Companion });
+        }
+
         cold.Orders |= CharacterOrders.Jobs;
         DecisionSystem.Request(cold);   // the job list changed: decided again
         return true;
@@ -142,10 +154,13 @@ public static class PermaJobs
     /// (<c>FUN_1407f5a90</c>) shows no such test (<b>Observed</b>).
     /// </summary>
     public static bool Give(CharacterCold cold, TaskType ordered, PermaJob target) =>
-        (!SquadRegistry.IsAnimal(cold) || JobOf(ordered) is TaskType.AttackEnemies or TaskType.Bodyguard or TaskType.StayCloseToTarget) && Add(cold, ordered, target);
+        (!SquadRegistry.IsAnimal(cold) || JobOf(ordered) is TaskType.AttackEnemies or TaskType.Bodyguard or TaskType.StayCloseToTarget)
+            && Add(cold, ordered, target);
 
     static bool SameTarget(PermaJob a, PermaJob b) =>
-        !a.Character.IsNone || !b.Character.IsNone ? a.Character == b.Character : a.Site is not null || b.Site is not null ? a.Site == b.Site : a.Saved == b.Saved;
+        !a.Character.IsNone || !b.Character.IsNone
+            ? a.Character == b.Character
+            : a.Site is not null || b.Site is not null ? a.Site == b.Site : a.Saved == b.Saved;
 
     /// <summary>
     /// The jobs that follow their character: Bodyguard 45, Staying close 31 and its animal form 289 (<c>FUN_14032ebd0</c> builds the same
@@ -158,7 +173,8 @@ public static class PermaJobs
     /// repair, medic, splinting. Not 289, the animals' staying close.
     /// </summary>
     public static bool IgnoresSwitch(TaskType type) =>
-        type is TaskType.AttackEnemies or TaskType.StayCloseToTarget or TaskType.Bodyguard or TaskType.JobRepairRobot or TaskType.JobMedic or TaskType.SplintJob;
+        type is TaskType.AttackEnemies or TaskType.StayCloseToTarget or TaskType.Bodyguard or TaskType.JobRepairRobot or TaskType.JobMedic
+            or TaskType.SplintJob;
 
     /// <summary>
     /// The row's display text (TaskData +0x138, <c>FUN_140319a60</c>) for the jobs list; null when Meitou does not know it.

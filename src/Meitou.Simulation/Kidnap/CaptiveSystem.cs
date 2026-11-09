@@ -397,6 +397,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             {
                 if (j.PlayerSide && table.TryResolveNext(j.Worker, out int w))
                     (j.LastTask, j.LastGoal) = (table.Next[w].Task, table.Next[w].Goal);
+
                 k++;
             }
             else
@@ -432,6 +433,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             hasher.Add(site);
             hasher.Add(at);
         }
+
         hasher.Add(_timerRolls);
         if (_givenUp.Count > 0) HashWaits(ref hasher);
     }
@@ -457,6 +459,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (!table.Next[s].Alive || !world.Turn(s, every) || table.Next[s].Task != (byte)CharacterTask.Idle
                     || table.Cold(s) is not { Fighter.IsAnimal: true } c || !PlayerSquad(world, c) || DecisionSystem.Decides(c))
                 continue;
+
             if (!FreeForRaceGoal(world, s, c)) continue;
             if (PickRaceGoal(world, s, c, null, firstInList: true) is { } pick) StartRaceGoal(world, s, c, pick);
         }
@@ -508,11 +511,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                     (desire, target) = (1, meal);
                     break;
             }
+
             if (!(desire > 0)) continue;
             var pick = new RaceGoal(goal.Task.Type, desire * goal.Weight, target, limb);
             if (firstInList) return pick;
             if (best is null || pick.Score >= best.Value.Score) best = pick;
         }
+
         return best;
     }
 
@@ -534,6 +539,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (pick.Limb is { } limb) Fetch(world, s, c, limb);
             return;
         }
+
         var job = new CaptiveJob { Kind = k, Worker = table.IdOf(s), Captive = pick.Target >= 0 ? table.IdOf(pick.Target) : CharacterId.None,
                 Cage = "", Faction = c.Faction, PlayerSide = true };
         (job.LastTask, job.LastGoal) = (table.Next[s].Task, table.Next[s].Goal);
@@ -576,9 +582,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (cold is not { Fighter.IsAnimal: true, Race: not null }) return DecisionCheck.No("not an animal");
             if (Running(world, slot, cold) is { } type)
                 return PriorityOf(cold, type) == priority ? DecisionCheck.Runs : DecisionCheck.No("another race goal runs");
+
             if (!owner.FreeForRaceGoal(world, slot, cold)) return DecisionCheck.No("busy");
             if (owner.PickRaceGoal(world, slot, cold, priority, firstInList: false) is not { } pick)
                 return DecisionCheck.No("none holds");
+
             _picked = (world.Tick, slot, pick);
             return DecisionCheck.Run;
         }
@@ -589,8 +597,9 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         public float Desire(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
-            if (Running(world, slot, cold) is { } type) return owner.PickRaceGoal(world, slot, cold, priority, firstInList: false) is { } now
-                    && now.Type == type ? now.Score : 1;
+            if (Running(world, slot, cold) is { } type)
+                return owner.PickRaceGoal(world, slot, cold, priority, firstInList: false) is { } now && now.Type == type ? now.Score : 1;
+
             return _picked.Tick == world.Tick && _picked.Slot == slot ? _picked.Goal.Score : 0;
         }
 
@@ -610,13 +619,18 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         {
             var id = world.Characters.IdOf(slot);
             foreach (var j in owner._jobs)
+            {
                 if (j.Worker == id && j.PlayerSide)
+                {
                     return j.Kind switch
                     {
                         CaptiveJobKind.DogPlay => TaskType.PlayBecauseIHaveALimbInMouth,
                         CaptiveJobKind.DogChase => TaskType.ChaseAllyDogsWithMouthLimbs,
                         _ => TaskType.EatARandomKoBody,
                     };
+                }
+            }
+
             return cold.PickingUpItem is not null && cold.Running is { Row: TaskType.AnimalFetchALimb } ? TaskType.AnimalFetchALimb : null;
         }
 
@@ -642,6 +656,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             wc.Engaged = false;
             wc.ActionClip = null;
         }
+
         return true;
     }
 
@@ -918,6 +933,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     {
         if (FateTarget(world, slot, cold, board.OwnHome?.Key, out bool fresh, remember: !probe) is not { } cage)
             return null;
+
         if (kind == CaptiveJobKind.Kill && !(probe ? HasWeaponToDraw(cold) : DrawWeapon(cold))) return null;
         var table = world.Characters;
         var worker = table.IdOf(slot);
@@ -952,6 +968,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 else owner.Items.Insert(at, packed);   // no free weapon slot: left where it was
             }
         }
+
         if (cold.Fighter is not { Unarmed: false } armed) return false;
         cold.DrawnWeapon = CombatSystem.MeleeDrawn(armed);
         return true;
@@ -1017,6 +1034,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         var table = world.Characters;
         if (FixtureRegistry.IsFree(table, f) || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { Medical: { Dead: false } })
             return -1;
+
         return s;
     }
 
@@ -1048,8 +1066,10 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         {
             if (world.Fixtures.Find(id) is { } kept && OccupantSlot(world, kept) is >= 0 and var held)
                 return Taken(kept.Id) || Busy(table.IdOf(held)) ? null : kept;
+
             if (remember) mind.FateCage = null;
         }
+
         var candidate = world.Fixtures.CageCandidates(world, data, cold, table.Next[slot].Position);
         var best = world.Fixtures.FindCage(world, cold, table.Next[slot].Position, home,
             f => !candidate(f) || Taken(f.Id) || OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s)), occupied: true);
@@ -1074,12 +1094,15 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         int home = world.Squads.Find(who.SquadId)?.Town ?? -1;
         bool any = false;
         foreach (int town in home >= 0 && home != site ? new[] { site, home } : [site])
+        {
             foreach (var f in CagesOf(world, data, town))
             {
                 if (!world.Fixtures.CanUse(world, who, f)) continue;
                 if (OccupantSlot(world, f) < 0) return false;
                 any = true;
             }
+        }
+
         return any;
     }
 
@@ -1116,6 +1139,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         {
             if (f.Owner < 0 || f.Owner == world.Player.Faction || !world.Fixtures.CanUse(world, cold, f) || Taken(f.Id))
                 continue;
+
             if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
             var c = table.Cold(s)!;
             if (watching)
@@ -1132,6 +1156,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             else if (c.SlaveState != 0 || c.Medical is { Incapacitated: true }) continue;
             return f;
         }
+
         return null;
     }
 
@@ -1153,6 +1178,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             var id = table.IdOf(v);
             if (st.System.Busy(id) || st.System.Waiting(st.System._givenUp, id, st.World.GameHours) || !st.System.NeedsProcessing(st.Me, c))
                 return;
+
             float d2 = Vector3.DistanceSquared(table.Next[st.Self].Position, table.Next[v].Position);
             if (d2 < st.BestD2 || d2 == st.BestD2 && v < st.Best) (st.Best, st.BestD2) = (v, d2);
         });
@@ -1218,6 +1244,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         var armour = c.Inventory?.Items.Find(i => i.Section == "armour");
         if (!SlaveWear(armour, clothing) || !SlaveWear(c.Inventory?.Items.Find(i => i.Section == "legs"), clothing))
             return false;
+
         return c.Inventory?.Items.Find(i => i.Section == "boots") is { } boots ? boots.LockedOn : armour is { LockedOn: true } && c.Shaved;
     }
 
@@ -1246,9 +1273,11 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (OccupantSlot(world, f) is not (>= 0 and var s) || Busy(table.IdOf(s))) continue;
             if (data.Relations.Contains(cold.Faction) && AggroSystem.IsEnemy(data.Relations, cold.Faction, table.Cold(s)!.Faction))
                 continue;
+
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
+
         return best;
     }
 
@@ -1315,8 +1344,10 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
     {
         if (j.Kind is CaptiveJobKind.Gather or CaptiveJobKind.Deliver or CaptiveJobKind.CageSelf)
             return StepLogistics(world, j, w, wc);
+
         if (j.Kind is CaptiveJobKind.Capture or CaptiveJobKind.Carry or CaptiveJobKind.Shout)
             return StepSlaveWork(world, j, w, wc);
+
         if (j.Kind == CaptiveJobKind.EatBody) return StepEatBody(world, j, w, wc);
         if (j.Kind == CaptiveJobKind.EatCrops) return StepEatCrops(world, j, w, wc);
         if (j.Kind == CaptiveJobKind.Worship) return StepWorship(world, j, w, wc);
@@ -1390,6 +1421,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                         world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, EatingSounds) { Tick = world.Tick + 1 });
                         world.Defer(new Dialogue.DialogueEvent(j.Captive, j.Worker, ScreamingTorture) { Tick = world.Tick + 1 });
                     }
+
                     return Eat(world, j, c, cc, dt) ? Over(world, j, true) : true;
                 }
             case CaptiveJobKind.Liberate:
@@ -1422,11 +1454,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (!table.TryResolveNext(j.Captive, out int c) || table.Cold(c) is not { Medical: { Dead: false }, SlaveState: not 0 } cc
                 || !cc.CarriedBy.IsNone || cc.InSomething != HeldState.None)
             return End(world, j, CaptiveEventKind.GaveUp);
+
         ref var n = ref table.Next[w];
         var to = new Vector2(table.Next[c].Position.X, table.Next[c].Position.Z);
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to);
         if (j.Phase == CaptivePhase.Work && d > Settings.Reach * 2)
             (j.Phase, wc.ActionClip) = (CaptivePhase.Walk, null);
+
         if (j.Phase == CaptivePhase.Walk)
         {
             bool walking = n.Task == (byte)CharacterTask.GoTo;
@@ -1438,14 +1472,17 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                     SetWait(_givenUp, j.Captive, world.GameHours + Settings.GiveUpHours);
                     return End(world, j, CaptiveEventKind.GaveUp);
                 }
+
                 TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
                 return true;
             }
+
             TaskStart.Stand(table, w);
             j.Phase = CaptivePhase.Work;
             j.Time = 0;
             wc.ActionClip = ProcessClip;
         }
+
         var face = table.Next[c].Position - n.Position;
         if (face.X * face.X + face.Z * face.Z > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Z);
         if (j.Time < Settings.ProcessSeconds) return true;
@@ -1472,8 +1509,10 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             world.Fixtures.MarkUnreachable(world, cage, j.Faction);
             return false;
         }
+
         if (world.Fixtures.IsShut(cage.Building) && world.Fixtures.DoorOwner(cage.Building) == j.Faction)
             world.Fixtures.SetDoorsLocked(cage.Building, false);
+
         TaskStart.Walk(world, w, new Vector2(cage.Position.X, cage.Position.Z), SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
         return true;
     }
@@ -1513,6 +1552,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             wc.ActionClip = null;
             if (table.Next[w].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, w);
         }
+
         if (kind is { } k) Note(world, k, j);
         return false;
     }
@@ -1560,6 +1600,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (s == slot || !next[s].Alive || table.Cold(s) is not { Medical: { } m, Race: { } race } body || !body.CarriedBy.IsNone
                     || body.InSomething != HeldState.None)
                 continue;
+
             float d2 = Vector3.DistanceSquared(at, next[s].Position);
             if (d2 > best) continue;
             if (dead)
@@ -1572,6 +1613,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             if (IsJobCaptive(table.IdOf(s))) continue;
             (found, best) = (s, d2);
         }
+
         return found;
     }
 
@@ -1587,6 +1629,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 || cc.InSomething != HeldState.None
             || !m.Dead && !m.Incapacitated)
             return End(world, j, CaptiveEventKind.GaveUp);
+
         ref var n = ref table.Next[w];
         var body = table.Next[c].Position;
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(body.X, body.Z));
@@ -1600,12 +1643,14 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 TaskStart.Walk(world, w, new Vector2(body.X, body.Z), SpeedMode.Run, RowOf(j.Kind), TaskSource.Goal);
                 return true;
             }
+
             TaskStart.Stand(table, w);
             j.Phase = CaptivePhase.Work;
             j.Time = 0;
             wc.DrawnWeapon = WeaponKinds.None;   // 220's B list: !hasWeaponEquipped
             wc.ActionClip = EatClip;
         }
+
         var to = body - n.Position;
         if (to.X * to.X + to.Z * to.Z > 1e-4f) n.Yaw = MathF.Atan2(to.X, to.Z);
         if (j.Time >= j.NextBark)
@@ -1613,6 +1658,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             j.NextBark = j.Time + Settings.BarkSeconds;
             world.Defer(new Dialogue.DialogueEvent(j.Worker, j.Captive, EatingSounds) { Tick = world.Tick + 1 });
         }
+
         bool corpse = m.Dead;
         if (!Eat(world, j, c, cc, world.TickSeconds)) return true;
         bool over = End(world, j, CaptiveEventKind.Eaten);
@@ -1625,6 +1671,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
             world.Uniques.Left(id);
             table.Remove(id);
         }
+
         return over;
     }
 
@@ -1640,12 +1687,16 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (town.PlayerTown <= 0 || world.Player.Faction < 0 || !data.Relations.Contains(cold.Faction)
                 || !AggroSystem.IsEnemy(data.Relations, cold.Faction, world.Player.Faction))
             return null;
+
         List<string>? farms = null;
         foreach (var m in world.Machines.All)
+        {
             if (m.Farm is { } f && Production.ProductionSystem.HasFood(f) && world.Buildings.Find(m.Site) is { Complete: true } site
                     && site.Town == town.PlayerTown
                 && !_jobs.Any(o => o.Kind == CaptiveJobKind.EatCrops && o.Cage == m.Site))
                 (farms ??= []).Add(m.Site);
+        }
+
         if (farms is null) return null;
         return farms[Rng.Int(Rng.Hash(world.Seed, (ulong)Rng.Key(world.Characters.IdOf(slot)) ^ (ulong)world.Tick, RngPurpose.Slow, CropSalt),
                 farms.Count)];
@@ -1662,6 +1713,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (world.Machines.Find(j.Cage) is not { Farm: { } farm } || !Production.ProductionSystem.HasFood(farm)
                 || world.Buildings.Find(j.Cage) is not { } site)
             return End(world, j, null);
+
         ref var n = ref table.Next[w];
         float d = Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), new Vector2(site.Position.X, site.Position.Z));
         if (j.Phase == CaptivePhase.Walk)
@@ -1674,11 +1726,13 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 TaskStart.Walk(world, w, new Vector2(site.Position.X, site.Position.Z), SpeedMode.Run, RowOf(j.Kind), TaskSource.Goal);
                 return true;
             }
+
             TaskStart.Stand(table, w);
             j.Phase = CaptivePhase.Work;
             j.Time = 0;
             wc.ActionClip = EatClip;
         }
+
         world.SystemOf<Crime.CrimeSystem>()?.SetPending(world, w, Crime.CrimeCode.CropTheft, world.Player.Faction, CharacterId.None,
                 Crime.CrimeSystem.MinTimer);
         if (!Production.ProductionSystem.EatCrop(farm, world.TickSeconds)) return End(world, j, null);
@@ -1732,15 +1786,16 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         // original's unnamed conscious test (vfunc 0x358).
         if (cc.Stats is { } stats && !medical.Incapacitated)
             _xp.Continuous(stats, cc.Race!, StatsEnumerated.Toughness, dt, EatToughnessXp);
+
         float rate = MedicalState.EatRate(cc.Stats?.Toughness ?? 0, cc.Stats?.Scale ?? 1);
         bool vampiric = table.TryResolveNext(j.Worker, out int w) && table.Cold(w)?.Race is { Vampiric: true };
         bool eaten = medical.BeingEaten(rate, dt, ctx, data.BodyOptions.Dismemberment != Dismemberment.Never, events, vampiric);
         ApplyBodyEvents(world, j.Captive, c, medical, events);
 
         // "{1} has been eaten alive." for the player's own (FUN_140856bc0: of the player's faction, or of a squad that is).
-        if (eaten
-                && (cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction)) world.Post(Loc.Tr("{1} has been eaten alive.",
-                        cc.Name));
+        if (eaten && (cc.IsPlayer || world.Player.Faction >= 0 && cc.Faction == world.Player.Faction))
+            world.Post(Loc.Tr("{1} has been eaten alive.", cc.Name));
+
         return wasDead ? eaten : medical.Dead;
     }
 
@@ -1773,27 +1828,36 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         if (cc.Inventory is { } inv)
         {
             foreach (var type in Stripped)
+            {
                 foreach (var item in inv.Items.ToList())
                 {
                     if (item.Type != type || item.LockedOn || type == FcsRecordType.Armour
                             && data.Db.Find(item.Record)?.GetInt("stigma", 0) == SlaveStigma)
                         continue;
+
                     inv.Items.Remove(item);
                     item.Section = "main";
                     if (wc.Inventory is not { } into || !into.Add(item))
                         world.GroundItems.Drop(item, table.Next[c].Position, 0);
                 }
+            }
+
             if (!inv.Items.Any(i => i.Section == "legs") && data.Factions is { } factions && (uint)wc.Faction < (uint)factions.Count
                     && data.Db.Find(factions[wc.Faction].Id) is { } faction)
+            {
                 foreach (var link in faction.GetReferences("slave clothing"))
                 {
                     if (inv.Items.Any(i => i.Record == link.TargetStringId && InventoryCommands.IsEquipmentSection(i.Section)))
                         continue;
+
                     if (data.Items.Create(link.TargetStringId, 1) is { } clothing)
                         InventoryCommands.TryEquip(inv, clothing, cc);
                 }
+            }
+
             _assembly.RefreshEquipment(cc);
         }
+
         _assembly.RefreshEquipment(wc);
 
         // Event 37 for a captive whose head is shaven already, a slave processed before, else 35 (FUN_14035aa20, Verified: Character vslot 124

@@ -30,6 +30,7 @@ public sealed partial class LockSystem
         if (world.Fixtures.Find(order.Fixture) is not { } fixture || fixture.Lock is not { EffectivelyLocked: true } || order.Force == LockForce.Smash
                 && fixture.Kind != FixtureKind.Door)
             return;
+
         if (fixture.Kind == FixtureKind.Door && fixture.DoorBroken) return;
         var table = world.Characters;
         int best = -1;
@@ -39,9 +40,11 @@ public sealed partial class LockSystem
             if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false, IsImprisoned: false } c
                     || !c.CarriedBy.IsNone || !TaskStart.Eligible(world, c, RowOf(order.Force)))
                 continue;
+
             float d = Vector2.Distance(Flat(table.Next[s].Position), Flat(fixture.Position));
             if (d < bestDistance) (best, bestDistance) = (s, d);
         }
+
         if (best < 0) return;
         var walker = table.Cold(best)!;
         switch (order.Force)
@@ -56,9 +59,11 @@ public sealed partial class LockSystem
                     world.Post($"{walker.Name}: I need a weapon to smash that");
                     return;
                 }
+
                 if (world.Fixtures.DoorSpotOf(fixture) is null || SmashRefused(walker, fixture)) return;
                 break;
         }
+
         StartWork(world, best, CharacterTask.GoTo, RowOf(order.Force), fixture.Id, detail: order.Force, queued: order.Queued);
     }
 
@@ -85,6 +90,7 @@ public sealed partial class LockSystem
                 c.ForcingLock = null;
                 continue;
             }
+
             var (at, reach) = WorkSpot(world, f, Flat(next[s].Position));
             if (Vector2.Distance(Flat(next[s].Position), at) > reach)
             {
@@ -92,6 +98,7 @@ public sealed partial class LockSystem
                 if (Redirected(next[s], at, reach)) c.ForcingLock = null;
                 continue;
             }
+
             if (next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
             if (c.Force == LockForce.Strength)
             {
@@ -101,12 +108,14 @@ public sealed partial class LockSystem
                 else if (c.IsPlayer) Say(world, c, "I'm not strong enough to do that");
                 continue;
             }
+
             if (Lockpicking.BestTool(c) is null)
             {
                 c.ForcingLock = null;
                 if (c.IsPlayer) Say(world, c, "I don't have any tools");
                 continue;
             }
+
             if (Picking.CutLock(world, s, f, world.TickSeconds, Crimes))
             {
                 c.ForcingLock = null;

@@ -116,6 +116,7 @@ public sealed class TaskPlanner
             Expand(at, world);
             if (_count >= MaxNodes) break;
         }
+
         return 0;
     }
 
@@ -125,6 +126,7 @@ public sealed class TaskPlanner
     {
         if (_count >= MaxNodes) return -1;
         if (desire <= 0) return -1;   // a dead end: never expanded
+
         // A row without a finder wants its effect for its own target (engine reading: the original reads the task's effect hand).
         _nodes[_count] = new Node
         {
@@ -147,11 +149,14 @@ public sealed class TaskPlanner
     {
         ref var n = ref _nodes[i];
         foreach (var c in n.Row.Needs)
+        {
             if (!world.Holds(c, n.Target))
             {
                 unmet = c;
                 return false;
             }
+        }
+
         unmet = null;
         if (n.Row.Effect is not { } effect) return true;
         if (n.EffectTarget.IsNone) return false;
@@ -171,16 +176,20 @@ public sealed class TaskPlanner
         TaskCondition? follow = null;
         var target = n.Target;
         foreach (var c in n.Row.Needs)
+        {
             if (!world.Holds(c, n.Target))
             {
                 follow = c;
                 break;
             }
+        }
+
         if (follow is null && n.Row.Effect is { } effect)
         {
             if (n.EffectTarget.IsNone) return;   // the finder found nothing: no way to the effect
             (follow, target) = (effect, n.EffectTarget);
         }
+
         if (follow is not { } state) return;
         foreach (var row in TaskDataTable.Providers(world.Category, state))
         {
@@ -193,6 +202,7 @@ public sealed class TaskPlanner
                 if (_count >= MaxNodes) return;
                 continue;
             }
+
             _open.Add(child);
         }
     }
@@ -238,6 +248,7 @@ public sealed class TaskPlanner
             plan.Add(new PlanStep(_nodes[p].Row.Type, _nodes[p].Target));
             value = MathF.Min(value, _nodes[p].H);
         }
+
         return value;
     }
 }

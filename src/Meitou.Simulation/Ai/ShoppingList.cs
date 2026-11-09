@@ -65,13 +65,17 @@ public sealed class ShoppingList
         if (links is not { Count: > 0 })
         {
             for (int k = 0; k < DefaultFunctions.Length; k++)
+            {
                 if (Rng.Float(Rng.Hash(seed, key, RngPurpose.Spawn, DefaultRoll + (ulong)k)) > 0.5f)
                 {
                     functions.Add(DefaultFunctions[k]);
                     counts.Add(1);
                 }
+            }
+
             return new ShoppingList([.. functions], [.. counts]);
         }
+
         for (int pass = 0; ; pass++)
         {
             bool any = false;
@@ -87,8 +91,10 @@ public sealed class ShoppingList
                 functions.Add(item.GetInt("item function"));
                 counts.Add(values.Value0);
             }
+
             if (!any) break;
         }
+
         return new ShoppingList([.. functions], [.. counts]);
     }
 

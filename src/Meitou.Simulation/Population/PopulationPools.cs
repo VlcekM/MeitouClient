@@ -145,7 +145,8 @@ public sealed partial class PopulationSystem
         foreach (var site in _data.Sites)
         {
             if (site.InstanceId.Length > 0 && saved.TownStates.TryGetValue(site.InstanceId, out var state)
-                && (state.Bools.GetValueOrDefault("started") || state.Floats.GetValueOrDefault("popd") > 0 || state.Floats.GetValueOrDefault("popd2") > 0))
+                && (state.Bools.GetValueOrDefault("started") || state.Floats.GetValueOrDefault("popd") > 0
+                    || state.Floats.GetValueOrDefault("popd2") > 0))
                 _townPools[site.Index] = SitePools.Read(state, now);
         }
     }
@@ -227,7 +228,8 @@ public sealed partial class PopulationSystem
             var zone = Meitou.Data.World.WorldLayout.ZoneOf(_data.Sites[s].Position.X, _data.Sites[s].Position.Z);
             if (world.LoadedZones is { } loaded && !loaded.Contains(zone)) continue;
 
-            if (_townPools[s] is not { Started: true, Ded: false } pools || resident[s] || pools.Roaming.Current > WipeRoamingPool || roamers[s] > WipeRoamingLiving)
+            if (_townPools[s] is not { Started: true, Ded: false } pools || resident[s] || pools.Roaming.Current > WipeRoamingPool
+                || roamers[s] > WipeRoamingLiving)
                 continue;
 
             pools.Ded = true;
@@ -287,7 +289,8 @@ public sealed partial class PopulationSystem
             if (p.Origin != site || !p.Pinned || p.State != PlatoonState.Unloaded || p.Unmade) continue;
 
             // Residents only: the pool counts them (base saves: <c>pop</c> = the resident platoons' size, not the bar squads').
-            if (p.Faction != _data.SiteFactions[site]) continue;   // and of the town's faction (save 2: Squin's 36 = its Shek residents, without a Tech Hunters shop)
+            // and of the town's faction (save 2: Squin's 36 = its Shek residents, without a Tech Hunters shop)
+            if (p.Faction != _data.SiteFactions[site]) continue;
             if (p.Stored is { HomeBuilding: null } || p.Saved is { } r && !r.Source.Record.Bools.GetValueOrDefault("is resident")) continue;
 
             int size, living;
@@ -298,7 +301,8 @@ public sealed partial class PopulationSystem
             else if (p.Saved is { } saved)
             {
                 (size, living) = (saved.Members.Count,
-                    saved.Members.Count(m => !m.Dead && !m.Gone && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true)));
+                    saved.Members.Count(m => !m.Dead && !m.Gone
+                        && (m.Position is not null || m.Source.Medical?.Bools.GetValueOrDefault("dead") != true)));
             }
             else
             {
@@ -359,7 +363,9 @@ public sealed partial class PopulationSystem
 
         // The old squad's building shop (kept when it left the world, else a save's) leaves its artifacts in its containers for the fresh one's.
         var oldShop = p.Stored?.Shop ?? (p.Saved is { } saved
-            ? saved.Shop ?? Saving.ShopSave.Read(world, new Squad { Id = -1, TemplateId = p.TemplateId, Faction = p.Faction, Town = p.Origin, HomeBuilding = home }, saved.Source.Record, _data)
+            ? saved.Shop ?? Saving.ShopSave.Read(world,
+                new Squad { Id = -1, TemplateId = p.TemplateId, Faction = p.Faction, Town = p.Origin, HomeBuilding = home }, saved.Source.Record,
+                _data)
             : null);
         if (oldShop is not null)
         {
@@ -555,7 +561,8 @@ public sealed partial class PopulationSystem
         }
 
         var budget = new NestBudget(
-            (int)MathF.Floor(pools.Roaming.Current), NestLiving(world, i, state), TemplateCounts(world, site, state), state.Made, 4, 1, !guarded, centre);
+            (int)MathF.Floor(pools.Roaming.Current), NestLiving(world, i, state), TemplateCounts(world, site, state), state.Made, 4, 1, !guarded,
+            centre);
         if (budget.Members >= budget.Cap)
         {
             // Full: nothing to make. A pool spent below one member with no one left alive can make nothing again: wiped out.

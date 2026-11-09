@@ -27,7 +27,8 @@ public sealed partial class ProductionSystem
             foreach (var other in world.Buildings.All)
             {
                 if (other.Complete && !other.Destroyed && other.Parent == site.Parent && (site.Parent is not null || other.Town == site.Town)
-                    && Data(other.Record)?.Function is TownBuildings.TableFunction or TownBuildings.CorpseDisposalFunction or TownBuildings.RefineryFunction)
+                    && Data(other.Record)?.Function is TownBuildings.TableFunction or TownBuildings.CorpseDisposalFunction
+                        or TownBuildings.RefineryFunction)
                 {
                     yield return other.Position;
                 }

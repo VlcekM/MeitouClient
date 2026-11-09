@@ -150,6 +150,7 @@ internal static class SeedSalts
     /// Faction campaigns (<c>PopulationCampaigns.cs</c>): counters of a roll's pass test and its draw, a follow-up's pick and delay, a request's
     /// delay and retry; the salt XORed into a campaign squad's key, and counter base of its placement tries.
     /// </summary>
-    public const ulong CampaignPass = 0xCA01UL, CampaignDraw = 0xCA02UL, CampaignFollowUp = 0xCA03UL, CampaignDelay = 0xCA04UL, CampaignRetry = 0xCA05UL,
+    public const ulong CampaignPass = 0xCA01UL, CampaignDraw = 0xCA02UL, CampaignFollowUp = 0xCA03UL, CampaignDelay = 0xCA04UL,
+        CampaignRetry = 0xCA05UL,
         CampaignSquad = 0xCA5DUL, CampaignPlace = 0xCA90UL, CampaignTemplate = 0xCA70UL, CampaignDialogue = 0xCAD0UL, CampaignTrail = 0xCA7A0UL;
 }

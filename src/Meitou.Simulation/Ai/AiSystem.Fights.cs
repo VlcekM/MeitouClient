@@ -422,6 +422,7 @@ public sealed partial class AiSystem
             world.Defer(new AttackOrder([table.IdOf(s)], foe) { Tick = world.Tick + 1, Source = TaskSource.Goal, Defensive = protects });
             mind.FightFrom = world.Tick + 1;
             _pendingFights[f] = _pendingFights.GetValueOrDefault(f) + 1;
+
             // A self-defence is no combat goal's fight: not in the aggro log.
             if (!self) _aggro?.GoalFight(world, s, f, voice: !protects);
             foreach (var m in mind.Squad.Members)

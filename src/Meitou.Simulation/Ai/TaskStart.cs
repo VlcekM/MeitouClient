@@ -260,6 +260,7 @@ public static class TaskStart
         if (current != CharacterTask.Attack && world.Tasks.Of(cold, current) is { } before
             && (current != request.Task || before != handler))
             before.End(world, slot, current, TaskEnd.Replaced);
+
         cold.Running = step && cold.Running is { } running
             ? running with { Task = request.Task, Tick = world.Tick }
             : new RunningTask(request.Task, request.Row, request.Source, request.Job, request.Target, request.Site, world.Tick)
@@ -274,6 +275,7 @@ public static class TaskStart
             n.Task = (byte)request.Task;
             n.TaskTime = 0;
         }
+
         Stamp(table, slot);
         return StartResult.Started;
     }
@@ -325,6 +327,7 @@ public static class TaskStart
             n.Task = (byte)request.Task;
             n.TaskTime = 0;
         }
+
         Stamp(table, slot);
     }
 
@@ -421,6 +424,7 @@ public static class TaskStart
             if (!next[i].Alive || !prev[i].Alive || prev[i].Generation != next[i].Generation || next[i].Task == prev[i].Task) continue;
             var cold = table.Cold(i)!;
             if (cold.TaskSetTick == table.Ticks && cold.TaskSet == next[i].Task) continue;
+
             // a step of the act-out
             if (ActOut((CharacterTask)next[i].Task) == ActOut((CharacterTask)prev[i].Task)
                 && cold.Running is { } step && step.Runs((CharacterTask)prev[i].Task))
@@ -456,6 +460,7 @@ public static class TaskStart
             n.Task = (byte)resume;
             n.TaskTime = 0;
         }
+
         cold.Running = null;
         DecisionSystem.Request(cold);   // the plan finished or was stopped: the character is decided again
         Stamp(table, slot);

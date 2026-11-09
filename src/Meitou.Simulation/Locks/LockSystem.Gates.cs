@@ -41,6 +41,7 @@ public sealed partial class LockSystem
             int s = f.DoorBroken || f.Motion is DoorMotion.Open or DoorMotion.Opening ? 1 : f.Lock is { EffectivelyLocked: true } ? 3 : 2;
             state = state == 0 ? s : Math.Min(state, s);
         }
+
         return state == 0 ? 1 : state;
     }
 
@@ -56,18 +57,23 @@ public sealed partial class LockSystem
             if (_gateGraph is { } raced) return raced;
             var graph = new Dictionary<int, List<(int To, int State, GateLink Gate)>>();
             if (Regions is not null)
+            {
                 foreach (var gate in Regions.Gates)
                 {
                     if (gate.Codes.Length < 2) continue;
                     int state = GateState(world.Fixtures, gate.Building);
                     for (int i = 0; i < gate.Codes.Length; i++)
+                    {
                         for (int j = 0; j < gate.Codes.Length; j++)
                         {
                             if (i == j) continue;
                             if (!graph.TryGetValue(gate.Codes[i], out var list)) graph[gate.Codes[i]] = list = [];
                             list.Add((gate.Codes[j], state, gate));
                         }
+                    }
                 }
+            }
+
             Volatile.Write(ref _gateGraph, graph);
             return graph;
         }
@@ -94,9 +100,11 @@ public sealed partial class LockSystem
         {
             if (best.TryGetValue(next, out var known) && (known.State < state || known.State == state && Nearer(world, known.Gate, gate, near)))
                 continue;
+
             best[next] = (state, gate);
             open.Enqueue(next, state);
         }
+
         var done = new HashSet<int> { from };
 
         // States only grow along a route, so a code's first dequeue is its best.
@@ -109,6 +117,7 @@ public sealed partial class LockSystem
                 first = via;
                 return worst;
             }
+
             if (!graph.TryGetValue(code, out var edges)) continue;
             foreach (var (next, state, _) in edges)
             {
@@ -118,6 +127,7 @@ public sealed partial class LockSystem
                 open.Enqueue(next, s);
             }
         }
+
         return 3;
     }
 
@@ -174,6 +184,7 @@ public sealed partial class LockSystem
             if (gate.DoorBroken || gate.Motion == DoorMotion.Open) return false;
             any = true;
         }
+
         return any;
     }
 
@@ -184,8 +195,11 @@ public sealed partial class LockSystem
     {
         (Fixture, DoorSpot)? main = null;
         foreach (var f in world.Fixtures.OfBuilding(building))
+        {
             if (f.Kind == FixtureKind.Door && world.Fixtures.DoorSpotOf(f) is { } spot && (main is null || f.DoorIndex < main.Value.Item1.DoorIndex))
                 main = (f, spot);
+        }
+
         return main;
     }
 
@@ -223,6 +237,7 @@ public sealed partial class LockSystem
         int a = Regions.CodeAt(from), b = Regions.CodeAt(to);
         if (a == b || a < 0 || b < 0 || RouteState(world, a, b, Flat(from), out var gate) == 1)
             return (DoorPlan.Entry.Walk, null);
+
         if (gate is not { } g || MainGateDoor(world, g.Building) is not { } main) return (DoorPlan.Entry.Blocked, null);
         var entry = _gatePlan.PlansEntry(world, Combat, this, s, to, g.Building, main.Door, main.Spot);
         return (entry, entry == DoorPlan.Entry.Bash ? main.Door.Id : null);

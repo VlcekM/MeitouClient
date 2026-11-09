@@ -15,6 +15,7 @@ public sealed partial class FixtureRegistry
 
     // The population data the registered buildings came from (relations, factions, towns): what the usable test reads. Derived, not hashed.
     PopulationData? _usableData;
+
     // A town building's Open to public flag at registration (the saved state, else the level's <c>is public day</c>, public when absent: the AI's
     // reading, AiSystem places); derived.
     readonly Dictionary<string, bool> _levelPublic = new(StringComparer.Ordinal);
@@ -100,6 +101,7 @@ public sealed partial class FixtureRegistry
     {
         if (town.Site >= 0)
             return (new Vector2(data.Sites[town.Site].Position.X, data.Sites[town.Site].Position.Z), data.Sites[town.Site].Town.Radius * TownReach);
+
         return world.Buildings.FindTown(town.PlayerTown) is { } t ? (new Vector2(t.Position.X, t.Position.Z), t.Radius * TownReach) : default;
     }
 
@@ -114,14 +116,17 @@ public sealed partial class FixtureRegistry
         {
             if (site.Town.Type == TownType.NestMarker || site.Index >= data.SiteFactions.Count || data.SiteFactions[site.Index] != faction)
                 continue;
+
             float d = Vector2.DistanceSquared(here, new Vector2(site.Position.X, site.Position.Z));
             if (d <= bestD) (best, bestD) = (CampaignTown.OfSite(site.Index), d);
         }
+
         foreach (var town in world.Buildings.Towns)
         {
             float d = Vector2.DistanceSquared(here, new Vector2(town.Position.X, town.Position.Z));
             if (town.Owner == faction && d <= bestD) (best, bestD) = (CampaignTown.OfPlayer(town.Number), d);
         }
+
         return best;
     }
 
@@ -150,6 +155,7 @@ public sealed partial class FixtureRegistry
         if (f is not null && squad?.Ai is { CurrentClass: PackageClass.OccupyTown, Destination.IsNone: false } board
                 && TownOfFixture(world, f) == board.Destination)
             return true;
+
         var relations = data.Relations;
         bool known = owner >= 0 && relations.Contains(owner) && relations.Contains(faction);
         if (known && relations.IsHostile(owner, faction) || f?.Contents is not null) return false;
@@ -157,6 +163,7 @@ public sealed partial class FixtureRegistry
         if (f is not null && IsInside(f) && IsPublic(f.Building) && faction < data.Factions.Count && !data.Factions[faction].NotReal
                 && owner != world.Player.Faction)
             return true;
+
         return known && relations.IsAlly(owner, faction);
     }
 }

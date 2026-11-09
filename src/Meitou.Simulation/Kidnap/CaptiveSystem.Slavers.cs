@@ -45,8 +45,11 @@ public sealed partial class CaptiveSystem
     {
         var slots = new Dictionary<(int C, int I), int>();
         for (int s = 0; s < table.HighWater; s++)
+        {
             if (table.Next[s].Alive && table.Cold(s)?.Save is { } saved)
                 slots[(saved.Source.Handle.C, saved.Source.Handle.I)] = s;
+        }
+
         return slots;
     }
 

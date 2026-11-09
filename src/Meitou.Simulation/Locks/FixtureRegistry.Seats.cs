@@ -42,12 +42,15 @@ public sealed partial class FixtureRegistry
             _seatSpots[id] = new(id, building.Key, spot.Record, spot.Position, owner, spot.Yaw) { PlacementYaw = spot.PlacementYaw,
                     FaithfulYaw = spot.FaithfulYaw };
         }
+
         _publishedSeats = null;
     }
+
     void RemoveSeats(string building)
     {
         foreach (var id in _seatSpots.Values.Where(s => s.Building == building).Select(s => s.Id).ToArray())
             _seatSpots.Remove(id);
+
         _publishedSeats = null;
     }
 }

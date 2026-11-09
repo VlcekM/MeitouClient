@@ -269,6 +269,7 @@ public sealed partial class FixtureRegistry
                     ^ ((ulong)(uint)f.Owner << 40)
                 ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 62 : 0) ^ (f.OccupantSelection ? 1UL << 63 : 0);
         }
+
         if (_publishedCages is not null && key == _publishedCagesKey) return _publishedCages;
         _publishedCagesKey = key;
         return _publishedCages = [.. _cageList.Select(f
@@ -331,12 +332,18 @@ public sealed partial class FixtureRegistry
             key = Rng.Mix(key ^ (ulong)i) ^ BitConverter.SingleToUInt32Bits(f.OpenAmount) ^ ((ulong)f.Motion << 32)
                     ^ (f.Lock is { EffectivelyLocked: true } ? 1UL << 40 : 0) ^ (f.WantsLock ? 1UL << 41 : 0) ^ (f.DoorBroken ? 1UL << 42 : 0);
         }
+
         if (key == _publishedDoorsKey) return _publishedDoors;
         var doorViews = new Dictionary<(string Building, int Door), DoorView>();
         foreach (var f in _doorList)
+        {
             if (Shown(f))
+            {
                 doorViews[(f.Building, f.DoorIndex)] = new DoorView(f.OpenAmount, f.Motion, f.Lock is { EffectivelyLocked: true }, f.WantsLock,
                         f.DoorBroken, DoorSpotOf(f)?.Centre ?? f.Position, f.RecordId, f.Lock?.Level ?? 0);
+            }
+        }
+
         _publishedDoorsKey = key;
         return _publishedDoors = doorViews;
 
@@ -435,6 +442,7 @@ public sealed partial class FixtureRegistry
                 GetOut(world, f.Occupant);
             }
         }
+
         Unregister(building);
         _properties.Remove(building);
         _resetBuildings.Remove(building);
@@ -670,6 +678,7 @@ public sealed partial class FixtureRegistry
             if (made.Lock is { } l) l.OwnerBroken = world.Machines.Find(site.Id)?.Broken == true;
             list.Add(made);
         }
+
         if (bed is { } b) list.Add(BedOf(data.Db, site.Id, record, -1, site.Owner, site.Position, site.Rotation, b));
         _byBuilding[site.Id] = list;
         _buildings.Add(site.Id);
@@ -678,6 +687,7 @@ public sealed partial class FixtureRegistry
             _all.Add(f);
             _byId[f.Id] = f;
         }
+
         _containerSpots = null;
         _doorPicks = null;
         _doorsByBuilding = null;
@@ -689,6 +699,7 @@ public sealed partial class FixtureRegistry
         _dummySpots = null;
         if (Saved?.GetValueOrDefault(BuildingKey.Of(site.Zone, site.Id)) is { } state)
             Restore(StateKeys.Of(state), site.Id, list, level: false);
+
         SyncDoors(site.Id);
         if (bed is not null) Bind(world);
     }
@@ -713,6 +724,7 @@ public sealed partial class FixtureRegistry
             made.Nest = site < 0;
             list.Add(made);
         }
+
         if (bed is { } b) list.Add(BedOf(data.Db, piece.Id, record, site, owner, piece.Position, piece.Rotation, b));
         _byBuilding[piece.Id] = list;
         _buildings.Add(piece.Id);
@@ -721,6 +733,7 @@ public sealed partial class FixtureRegistry
             _all.Add(f);
             _byId[f.Id] = f;
         }
+
         _containerSpots = null;
         _cageList = null;
         _publishedCages = null;
@@ -769,13 +782,20 @@ public sealed partial class FixtureRegistry
     public static BedData? BedDataOf(GameDatabase db, GameRecord building)
     {
         foreach (var list in building.ReferenceLists)
+        {
             foreach (var r in building.GetReferences(list))
+            {
                 if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f && f.GetInt("function") is TownBuildings.BedFunction
                         or TownBuildings.SkeletonBedFunction)
+                {
                     return new BedData(f.GetInt("function"),
                             f.GetReferences("animation").Select(a => db.Find(a.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
                         Data.Gameplay.Construction.BuildingBuildData.From(building).Target, UseNodes(db, building) is { Length: >= 2 } nodes ? nodes
                                 : null);
+                }
+            }
+        }
+
         return null;
     }
 
@@ -824,6 +844,7 @@ public sealed partial class FixtureRegistry
             float d = Vector3.DistanceSquared(bed.Position + Vector3.Transform(nodes[i].At, turn), at);
             if (d < bestD) (best, bestD) = (i, d);
         }
+
         if (best < 0) return;
         var list = bed.BadNodes ??= [];
         list.RemoveAll(e => e.Node == best || world.GameHours > e.Stamp + BadNodeHours);
@@ -866,6 +887,7 @@ public sealed partial class FixtureRegistry
             float d = Vector3.DistanceSquared(at, from);
             if (d < bestD) (best, bestD) = ((at, MathF.IEEERemainder(f.Yaw + nodes[i].Yaw, MathF.Tau)), d);
         }
+
         // every node skipped: node 0
         return best
                 ?? (nodes.Length > 0 ? (f.Position + Vector3.Transform(nodes[0].At, turn), MathF.IEEERemainder(f.Yaw + nodes[0].Yaw, MathF.Tau))
@@ -885,6 +907,7 @@ public sealed partial class FixtureRegistry
             _all.Remove(f);
             _byId.Remove(f.Id);
         }
+
         _containerSpots = null;
         _doorPicks = null;
         _doorsByBuilding = null;
@@ -905,6 +928,7 @@ public sealed partial class FixtureRegistry
     {
         if (TownBuildings.FunctionOf(db, record, _functions)?.GetInt("function") == TownBuildings.CageFunction)
             return FixtureKind.Cage;
+
         return record.GetBool("has lock") ? FixtureKind.Container : null;
     }
 
@@ -984,6 +1008,7 @@ public sealed partial class FixtureRegistry
         {
             if (!next[s].Alive || table.Cold(s) is not { InSomething: not HeldState.None, InWhat: { } what } c)
                 continue;
+
             if (HeldFixture(c, what) is not { } f || !IsFree(table, f)) continue;
             f.Occupant = new CharacterId(s, next[s].Generation);
             c.InWhat = f.Id;
@@ -1035,6 +1060,7 @@ public sealed partial class FixtureRegistry
             bool near = Vector3.DistanceSquared(b.Position, spot.Position) <= SavedSpotReach * SavedSpotReach;
             if (b.Record == spot.Record && near) return _byId.GetValueOrDefault(b.Id);
         }
+
         return null;
     }
 
@@ -1048,6 +1074,7 @@ public sealed partial class FixtureRegistry
             bool near = Vector3.DistanceSquared(f.Position, spot.Position) <= SavedSpotReach * SavedSpotReach;
             if (f.Id != f.Building && f.RecordId == spot.Record && near) return f;
         }
+
         return null;
     }
 
@@ -1068,36 +1095,41 @@ public sealed partial class FixtureRegistry
             if (d.Kind != FixtureKind.Door || d.Restored || d.Lock is not { } l) continue;
             switch (state)
             {
-                case 1: l.Locked = false;
-                l.Broken = false;
-                d.DoorBroken = false;
-                d.DoorProgress = 1;
-                d.Motion = DoorMotion.Open;
-                d.OpenAmount = 1;
-                break;
-                case 2: l.Locked = true;
-                l.Broken = false;
-                d.DoorBroken = false;
-                d.DoorProgress = 1;
-                d.Motion = DoorMotion.Closed;
-                d.OpenAmount = 0;
-                break;
-                case 3: l.Locked = false;
-                l.Broken = true;
-                d.DoorBroken = true;
-                d.DoorProgress = 0;
-                d.Motion = DoorMotion.Closed;
-                d.OpenAmount = 0;
-                break;
-                default: l.Locked = false;
-                l.Broken = false;
-                d.DoorBroken = false;
-                d.DoorProgress = 1;
-                d.Motion = DoorMotion.Closed;
-                d.OpenAmount = 0;
-                break;
+                case 1:
+                    l.Locked = false;
+                    l.Broken = false;
+                    d.DoorBroken = false;
+                    d.DoorProgress = 1;
+                    d.Motion = DoorMotion.Open;
+                    d.OpenAmount = 1;
+                    break;
+                case 2:
+                    l.Locked = true;
+                    l.Broken = false;
+                    d.DoorBroken = false;
+                    d.DoorProgress = 1;
+                    d.Motion = DoorMotion.Closed;
+                    d.OpenAmount = 0;
+                    break;
+                case 3:
+                    l.Locked = false;
+                    l.Broken = true;
+                    d.DoorBroken = true;
+                    d.DoorProgress = 0;
+                    d.Motion = DoorMotion.Closed;
+                    d.OpenAmount = 0;
+                    break;
+                default:
+                    l.Locked = false;
+                    l.Broken = false;
+                    d.DoorBroken = false;
+                    d.DoorProgress = 1;
+                    d.Motion = DoorMotion.Closed;
+                    d.OpenAmount = 0;
+                    break;
             }
         }
+
         SyncDoors(buildingInstance);
     }
 
@@ -1153,6 +1185,7 @@ public sealed partial class FixtureRegistry
                     f.OpenAmount = 1;
                     f.Motion = DoorMotion.Open;
                 }
+
                 if (!wasNavOpen && f.OpenAmount >= DoorLeaf.NavOpen) SyncDoors(f.Building);   // the navmesh counts it open now, locked or not
             }
             else if (f.Motion == DoorMotion.Closing)
@@ -1187,6 +1220,7 @@ public sealed partial class FixtureRegistry
             door.Spot = local with { Centre = door.Position + Vector3.Transform(local.Centre, turn), Normal = Vector3.Transform(local.Normal, turn),
                     Slide = Vector3.Transform(local.Slide, turn) };
         }
+
         return door.Spot;
     }
 
@@ -1213,6 +1247,7 @@ public sealed partial class FixtureRegistry
             if (d.DoorBroken || d.OpenAmount >= DoorLeaf.NavOpen || d.Lock is not { EffectivelyLocked: true })
                 blocked = false;
         }
+
         if (any) _doors.SetDoorsBlocked(building, blocked);
     }
 
@@ -1229,6 +1264,7 @@ public sealed partial class FixtureRegistry
             any = true;
             if (d.DoorBroken || d.Lock is not { EffectivelyLocked: true }) return false;
         }
+
         return any;
     }
 
@@ -1246,6 +1282,7 @@ public sealed partial class FixtureRegistry
             any = true;
             if (d.DoorBroken || d.Lock is not { Locked: true, Broken: false }) return false;
         }
+
         return any;
     }
 
@@ -1262,6 +1299,7 @@ public sealed partial class FixtureRegistry
             any = true;
             if (d.DoorBroken || d.Motion is DoorMotion.Open or DoorMotion.Opening) return true;
         }
+
         return !any;
     }
 
@@ -1271,8 +1309,11 @@ public sealed partial class FixtureRegistry
     public int DoorOwner(string building)
     {
         if (_byBuilding.TryGetValue(building, out var list))
+        {
             foreach (var d in list)
                 if (d.Kind == FixtureKind.Door) return d.Owner;
+        }
+
         return -1;
     }
 
@@ -1297,6 +1338,7 @@ public sealed partial class FixtureRegistry
             l.PickTime = 0;
             l.NextRoll = LockState.FirstRoll;
         }
+
         if (any) SyncDoors(building);
         return any;
     }
@@ -1387,6 +1429,7 @@ public sealed partial class FixtureRegistry
             if (f.Kind != FixtureKind.Cage || IsFree(world.Characters, f) == occupied || !occupied && !Reachable(world, f, faction)
                     || skip?.Invoke(f) == true)
                 continue;
+
             bool own = faction >= 0 && f.Owner == faction;
             if (!own && !carrier.IsPlayer && !CanUse(world, carrier, f)) continue;   // an AI ownership test: the player's characters may use any cage
             float d2 = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
@@ -1397,10 +1440,13 @@ public sealed partial class FixtureRegistry
             {
                 if (!policeKnown)
                     (police, policeKnown) = (world.SystemOf<CrimeSystem>()?.IsPoliceLike(world, carrier) == true, true);
+
                 if (police) w *= NotPublicPolice;
             }
+
             if (w > bestWeight) (best, bestWeight) = (f, w);
         }
+
         return best;
     }
 
@@ -1444,6 +1490,7 @@ public sealed partial class FixtureRegistry
             float d2 = Vector3.DistanceSquared(at, f.Position);
             if (d2 <= bestD) (best, bestD) = (f, d2);
         }
+
         return best;
     }
 
@@ -1473,12 +1520,14 @@ public sealed partial class FixtureRegistry
                     && relations.IsAlly(f.Owner, c.Faction) ? 0.01f : 0;
             if (weight <= 0 || Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z)) > r2)
                 continue;
+
             if (!IsFree(table, f) || !Reachable(world, f, c.Faction) || skip?.Invoke(f) == true) continue;
             if (f.Bed.Materials > 1) weight *= 3;
             if (f.Indoors) weight *= 2;
             if (regions?.CodeAt(f.Position) is > 0) weight *= InsideWallsBedFactor;
             if (weight > bestWeight) (best, bestWeight) = (f, weight);
         }
+
         return best;
     }
 
@@ -1498,8 +1547,11 @@ public sealed partial class FixtureRegistry
         bool Usable(Fixture f) => f.Kind == FixtureKind.Bed && f.Bed.Function == TownBuildings.BedFunction && IsFree(table, f)
                 && Reachable(world, f, c.Faction) && skip?.Invoke(f) != true;
         if (squad?.HomeBuilding is { } home)
+        {
             foreach (var f in OfBuilding(home.Key))
                 if (Usable(f)) return f;
+        }
+
         Fixture? best = null;
         float bestD = float.MaxValue;
         foreach (var f in _all)
@@ -1508,6 +1560,7 @@ public sealed partial class FixtureRegistry
             float d = Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(f.Position.X, f.Position.Z));
             if (d < bestD) (best, bestD) = (f, d);
         }
+
         return best;
     }
 
@@ -1536,8 +1589,10 @@ public sealed partial class FixtureRegistry
         var table = world.Characters;
         if (cage.Kind != FixtureKind.Cage || !IsFree(table, cage) || !table.TryResolveNext(prisoner, out int s))
             return false;
+
         var c = table.Cold(s)!;
         if (c.InSomething != HeldState.None || !c.CarriedBy.IsNone || !c.Carrying.IsNone) return false;
+
         // the task and a fight end through their handlers: a caged character works no machine, site or bed
         TaskStart.End(world, s, TaskEnd.Stopped);
         c.InSomething = HeldState.Imprisoned;
@@ -1551,6 +1606,7 @@ public sealed partial class FixtureRegistry
             l.PickTime = 0;
             l.NextRoll = LockState.FirstRoll;
         }
+
         Hold(table, s, c, cage.Position, cage.Yaw);
         if (world.SystemOf<CrimeSystem>() is { } law && c.Bounties?.BookedFor(law.Factions.Relations, cage.Owner) is { Amount: > 0 } entry)
         {
@@ -1571,6 +1627,7 @@ public sealed partial class FixtureRegistry
             _cagings.Clear();
             _cagingsTick = world.Tick;
         }
+
         var caging = new Imprisonment(world.Tick, carrier ?? CharacterId.None, prisoner, cage);
         _cagings.Add(caging);
         Caged?.Invoke(world, caging);
@@ -1594,6 +1651,7 @@ public sealed partial class FixtureRegistry
         var table = world.Characters;
         if (!table.TryResolveNext(prisoner, out int s) || table.Cold(s) is not { IsImprisoned: true } c || table.Cold(lifter) is not { } lc)
             return false;
+
         var cage = c.InWhat is { } id ? Find(id) : null;
         if (cage?.Lock is { EffectivelyLocked: true }) return false;
         bool foreign = cage is { Owner: >= 0 } && cage.Owner != lc.Faction;
@@ -1602,6 +1660,7 @@ public sealed partial class FixtureRegistry
             crimes.SetPending(world, lifter, CrimeCode.Terrorism, cage!.Owner, prisoner, CrimeSystem.MinTimer);
             crimes.SetPending(world, s, CrimeCode.EscapingPrison, cage.Owner, CharacterId.None, CrimeSystem.MinTimer);
         }
+
         if (cage is not null && cage.Occupant == prisoner) cage.Occupant = CharacterId.None;
         bool kidnapped = c.Kidnapped;   // a kidnap victim lifted out is no escapee (the lifter's crime stays)
         Clear(c);
@@ -1623,9 +1682,11 @@ public sealed partial class FixtureRegistry
             if (IsFree(table, f) || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { InSomething: HeldState.Imprisoned } c
                     || c.InWhat != f.Id)
                 continue;
+
             ref var n = ref table.Next[s];
             if (n.Position != f.Position || n.Yaw != f.Yaw) table.Place(s, f.Position, f.Yaw);
         }
+
         HoldSleepers(world);
     }
 
@@ -1642,6 +1703,7 @@ public sealed partial class FixtureRegistry
             if (f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c
                     || c.InWhat != f.Id)
                 continue;
+
             c.BedUsedHours = world.GameHours;   // Task_UseBed's update stamps the status clock (+0xc0)
             ref var n = ref table.Next[s];
             var (at, yaw) = LieSpot(f, n.Position, world.GameHours);
@@ -1689,12 +1751,14 @@ public sealed partial class FixtureRegistry
             if (cage.Occupant == prisoner) cage.Occupant = CharacterId.None;
             StepOut(table, s, cage);
         }
+
         if (releaserFaction >= 0 && crimes is not null && crimes.Factions.Books(releaserFaction) && c.Bounties is { } ledger)
         {
             if (ledger.BookedFor(crimes.Factions.Relations, releaserFaction) is { } a) ledger.Remove(a);
             if (cage is not null && ledger.BookedFor(crimes.Factions.Relations, cage.Owner) is { } b) ledger.Remove(b);
             if (ledger.Count == 0) c.Bounties = null;
         }
+
         Clear(c);
 
         // Task_ReleasePrisoner adds the leave task 133 (flag 0, which clears the escaped flag for a real cage owner, FUN_1403554b0) only for a
@@ -1707,6 +1771,7 @@ public sealed partial class FixtureRegistry
         // that is not the player's takes a slave over (FUN_14032e430: the owner changes, the state stays).
         if (releaserFaction >= 0 && releaserFaction != world.Player.Faction && c.SlaveState != 0)
             c.SlaveOwner = releaserFaction;
+
         if (c.IsPlayer) world.Post(Loc.Tr("{1} has been released from prison.", c.Name));
         return true;
     }
@@ -1730,10 +1795,12 @@ public sealed partial class FixtureRegistry
         Clear(c);
         if (!(cage is not null && crimes?.Factions.NotReal(cage.Owner) == true)) c.Escaped = escape;
         if (escape && c.SlaveState == 1) SetSlave(world, c, 2, c.SlaveOwner);   // a slave getting out is an escaped slave (Task_GetOutOfCage)
+
         // The crime is set once the hold is cleared: the setter refuses an imprisoned culprit (FUN_1403554b0 sets it after FUN_140330600,
         // FUN_140852c80).
         if (escape)
             crimes?.SetPending(world, s, CrimeCode.EscapingPrison, cage!.Owner, CharacterId.None, CrimeSystem.MinTimer);
+
         return true;
     }
 
@@ -1750,6 +1817,7 @@ public sealed partial class FixtureRegistry
         if (c.InSomething == HeldState.Bed && c.InWhat == bed.Id) return true;
         if (!IsFree(table, bed) || c.InSomething != HeldState.None || !c.CarriedBy.IsNone || !c.Carrying.IsNone)
             return false;
+
         c.InSomething = HeldState.Bed;
         c.InWhat = bed.Id;
         bed.Occupant = sleeper;
@@ -1770,8 +1838,10 @@ public sealed partial class FixtureRegistry
     {
         if (!world.Characters.TryResolveNext(held, out int s) || world.Characters.Cold(s) is not { InSomething: not HeldState.None } c)
             return;
+
         if (c.InWhat is { } id && Find(id) is { } fixture && fixture.Occupant == held)
             fixture.Occupant = CharacterId.None;
+
         Clear(c);
     }
 
@@ -1786,6 +1856,7 @@ public sealed partial class FixtureRegistry
         var table = world.Characters;
         if (!table.TryResolveNext(sleeper, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c)
             return true;
+
         bool backwards = c.InWhat is { } id && Find(id) is { } bed && bed.Bed.Clip == GoToBedClip;
         if (!backwards || c.BedExitDone) return LeaveBed(world, sleeper);
         c.LeavingBed = true;
@@ -1801,6 +1872,7 @@ public sealed partial class FixtureRegistry
         var table = world.Characters;
         if (!table.TryResolveNext(sleeper, out int s) || table.Cold(s) is not { InSomething: HeldState.Bed } c)
             return false;
+
         if (c.InWhat is { } id && Find(id) is { } bed && bed.Occupant == sleeper) bed.Occupant = CharacterId.None;
         Clear(c);
         StandBeside(world, s);
@@ -1875,9 +1947,9 @@ public sealed partial class FixtureRegistry
     static void SetSlave(World world, CharacterCold c, byte state, int owner)
     {
         byte before = c.SlaveState;
-        if (c.SlaveState == 0 && state == 1
-                && (c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction)) world.Post(Loc.Tr("{1} has been enslaved",
-                        c.Name));
+        if (c.SlaveState == 0 && state == 1 && (c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction))
+            world.Post(Loc.Tr("{1} has been enslaved", c.Name));
+
         if (state == 2) c.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;
         if (state > 1 && before != state) c.SlaveSince = world.GameHours;
         c.SlaveState = state;
@@ -1944,12 +2016,14 @@ public sealed partial class FixtureRegistry
             if (f.Contents is { } grid && Items is { } factory && ContainerSave.KeyOf(f, building) is { } contentsKey
                     && state.Strings.TryGetValue(contentsKey, out var saved))
                 ContainerSave.Read(saved, grid, factory);
+
             if (f.Kind == FixtureKind.Door)
             {
                 string i = f.DoorIndex.ToString(CultureInfo.InvariantCulture);
                 ReadLock(state, f.Lock!, i, broken: false);
                 if (state.Ints.TryGetValue("state" + i, out int motion))
                     f.Motion = (DoorMotion)Math.Clamp(motion, 0, 3);
+
                 if (state.Floats.TryGetValue("doa" + i, out float doa)) f.OpenAmount = doa;
                 if (state.Bools.TryGetValue("broken" + i, out bool b)) f.DoorBroken = b;
                 if (state.Ints.TryGetValue("gatecode" + i, out int g)) f.GateCode = g;
@@ -2024,6 +2098,7 @@ public sealed partial class FixtureRegistry
                 state.Strings.Remove(contentsKey);
                 if (ContainerSave.Write(grid) is { } text) state.Strings[contentsKey] = text;
             }
+
             if (f.Lock is not { } l) continue;
             if (f.Kind == FixtureKind.Door)
             {
@@ -2051,6 +2126,7 @@ public sealed partial class FixtureRegistry
                 else state.Ints.Remove(key);
             }
         }
+
         return true;
     }
 
@@ -2065,6 +2141,7 @@ public sealed partial class FixtureRegistry
         {
             if (d.Kind != FixtureKind.Door || old.FirstOrDefault(o => o.Kind == FixtureKind.Door && o.DoorIndex == d.DoorIndex) is not { } was)
                 continue;
+
             d.Motion = was.Motion;
             d.OpenAmount = was.OpenAmount;
             d.DoorBroken = was.DoorBroken;
@@ -2073,6 +2150,7 @@ public sealed partial class FixtureRegistry
             d.GateCode = was.GateCode;
             if (d.Lock is { } l && was.Lock is { } wl) l.Locked = wl.Locked;
         }
+
         _doorPicks = null;
         _doorsByBuilding = null;
         SyncDoors(building);
@@ -2104,11 +2182,14 @@ public sealed partial class FixtureRegistry
         h.Add(_initialApplied.Count);
         HashRecords(ref h);
         if (_publicFlags.Count > 0)
+        {
             foreach (var (b, open) in _publicFlags.OrderBy(p => p.Key, StringComparer.Ordinal))
             {
                 h.Add(Rng.StableHash(b));
                 h.Add(open);
             }
+        }
+
         if (_unreachable.Count == 0) return;   // only once a walk failed, so worlds without one hash as before
         h.Add(_unreachable.Count);
         foreach (var ((cage, faction), until) in _unreachable)

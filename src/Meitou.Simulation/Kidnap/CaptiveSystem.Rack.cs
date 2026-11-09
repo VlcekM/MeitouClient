@@ -38,6 +38,7 @@ public sealed partial class CaptiveSystem
             if (machine is not null) machine.Status = 0;
             return;
         }
+
         world.Defer(new Dialogue.DialogueEvent(rack.Occupant, CharacterId.None, ScreamingTorture) { Tick = world.Tick + 1 });
         bool busy;
         if (StripArmour(world, rack, c, cc, dt))
@@ -59,6 +60,7 @@ public sealed partial class CaptiveSystem
                 if (machine is not null) machine.Status = 1;
             }
         }
+
         rack.RackBusy = busy;
     }
 
@@ -83,12 +85,14 @@ public sealed partial class CaptiveSystem
         if (cc.Inventory is not { } inventory
                 || inventory.Items.FirstOrDefault(i => i.Type == FcsRecordType.Armour && i.Section == "armour") is not { } piece)
             return false;
+
         rack.RackTimer += dt;
         if (data.Combat.Armour(piece.Record) is { } armour)
         {
             var p = ArmourPiece.Create(armour, ArmourPiece.QualityOf(armour, piece.Level), ArmourPiece.Graded(armour, piece.Level));
             if (p.CutDefence + p.BluntDefence >= rack.RackTimer * ArmourStripRate) return true;
         }
+
         inventory.Items.Remove(piece);
         _assembly.RefreshEquipment(cc);
         rack.RackTimer = 0;

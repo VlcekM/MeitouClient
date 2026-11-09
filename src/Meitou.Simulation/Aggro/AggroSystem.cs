@@ -876,6 +876,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         {
             if (!prev[i].Alive || prev[i].Dormant || i >= _slots.Length || !world.Turn(i, every))
                 continue;   // its turn (the far cadence, World.Turn)
+
             if (_slots[i].Heard is { } heard) _slots[i].Heard = PruneHeard(heard, world);
             if (table.Cold(i) is not { Medical: not null } cold) continue;
 
@@ -931,6 +932,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             Pick(ref scan);
             if (scan.Best >= 0) effects.Emit(i, scan.Best, SightEffect, MathF.Sqrt(scan.BestD2));
         }
+
         // An NPC with a mind that senses a new enemy thinks again, and its squad mates with it (the sighting is shared): a replan trigger (engine
         // stand-in), whatever its goals; a fighter only in its own fight (in another, the AI weighs nothing but the run).
         else if (scan.NewEnemy >= 0 && cold.Ai is not null && (cold.InCombat ? AiSystem.Holds(next[i], cold) : looks))
@@ -1141,6 +1143,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
             int t = e.Target;
             if ((uint)t >= (uint)table.HighWater || !prev[t].Alive || prev[t].Generation != e.Generation || table.Cold(t) is not { } c)
                 continue;
+
             if (Decay(ref s, ref e, t, c)) list[w++] = e;
         }
 
@@ -1387,8 +1390,10 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
             // The check's stealth XP (FUN_1408c7330): its a is slot 125, the looker regarding the heard as an enemy (FUN_14079c950).
             if (xpCheck)
+            {
                 fx.Emit(s.Self, slot, HearingXpEffect,
                     (heard ? 1 : 0) | (Fighting(ref s, slot) || Regards(ref s, slot, c, other.Position, out _) ? 2 : 0));
+            }
         }
 
         return seen || heard;
@@ -1457,10 +1462,13 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
         // (Character +0x1a9) is treated as always true: the simulation does not depend on the camera (engine choice).
         if (s.War.IsSet && WarEnemy(ref s, c, at))
             fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
+
         if (s.War.IsSet && (WarEnemy(ref s, c, at) || AssaultSensed(ref s, e, c, at)))
             fx.Emit(s.Self, slot, AssaultTargetEffect, 0);
+
         if (s.EmployerTags && s.Employer >= 0 && c.Faction == s.Employer)
             fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempAlly);
+
         if (BanditFightTag(ref s, e, c, at))
             fx.Emit(s.Self, slot, TagEffect, Dialogue.MemoryTag.TempEnemy);
     }
@@ -1919,6 +1927,7 @@ public sealed class AggroSystem(FactionRelations relations, AggroSettings? setti
 
                 if (!(intends || aggressor || TaskAggression.OfTask(c) > 0 && (c.NpcClass == FundamentalType.Bandit || c.Fighter?.IsAnimal == true)))
                     continue;
+
                 if (!AttacksProtected(world, fights, cold, c, t, e.Generation)) continue;
             }
             else if (!intends && !aggressor) continue;

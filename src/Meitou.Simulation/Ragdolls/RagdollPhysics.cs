@@ -44,7 +44,8 @@ internal struct ContactRules : INarrowPhaseCallbacks
     public bool AllowContactGeneration(int workerIndex, CollidablePair pair, int childIndexA, int childIndexB) => true;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool ConfigureContactManifold<TManifold>(int workerIndex, CollidablePair pair, ref TManifold manifold, out PairMaterialProperties pairMaterial)
+    public bool ConfigureContactManifold<TManifold>(int workerIndex, CollidablePair pair, ref TManifold manifold,
+        out PairMaterialProperties pairMaterial)
         where TManifold : unmanaged, IContactManifold<TManifold>
     {
         pairMaterial = new PairMaterialProperties(RagdollPhysics.Friction, RagdollPhysics.RecoverySpeed, new SpringSettings(30, 1));
@@ -52,7 +53,8 @@ internal struct ContactRules : INarrowPhaseCallbacks
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool ConfigureContactManifold(int workerIndex, CollidablePair pair, int childIndexA, int childIndexB, ref ConvexContactManifold manifold) => true;
+    public bool ConfigureContactManifold(int workerIndex, CollidablePair pair, int childIndexA, int childIndexB,
+        ref ConvexContactManifold manifold) => true;
 
     public void Dispose() => Tags.Dispose();
 }
@@ -80,17 +82,21 @@ internal struct Integration : IPoseIntegratorCallbacks
         _maxSpinSquared = new Vector<float>(RagdollPhysics.MaxSpin * RagdollPhysics.MaxSpin);
     }
 
-    public void IntegrateVelocity(Vector<int> bodyIndices, Vector3Wide position, QuaternionWide orientation, BodyInertiaWide localInertia, Vector<int> integrationMask,
+    public void IntegrateVelocity(Vector<int> bodyIndices, Vector3Wide position, QuaternionWide orientation, BodyInertiaWide localInertia,
+        Vector<int> integrationMask,
         int workerIndex, Vector<float> dt, ref BodyVelocityWide velocity)
     {
         velocity.Linear = (velocity.Linear + _gravityDt) * _linear;
         velocity.Angular *= _angular;
+
         // A body is never faster than the ground can catch (see RagdollPhysics.MaxSpeed): a joint pushed past its limits would otherwise fling a limb through the terrain.
         var speedSquared = Vector3Wide.Dot(velocity.Linear, velocity.Linear);
-        var keep = Vector.ConditionalSelect(Vector.GreaterThan(speedSquared, _maxSpeedSquared), Vector.SquareRoot(_maxSpeedSquared / speedSquared), Vector<float>.One);
+        var keep = Vector.ConditionalSelect(Vector.GreaterThan(speedSquared, _maxSpeedSquared), Vector.SquareRoot(_maxSpeedSquared / speedSquared),
+            Vector<float>.One);
         velocity.Linear *= keep;
         var spinSquared = Vector3Wide.Dot(velocity.Angular, velocity.Angular);
-        velocity.Angular *= Vector.ConditionalSelect(Vector.GreaterThan(spinSquared, _maxSpinSquared), Vector.SquareRoot(_maxSpinSquared / spinSquared), Vector<float>.One);
+        velocity.Angular *= Vector.ConditionalSelect(Vector.GreaterThan(spinSquared, _maxSpinSquared),
+            Vector.SquareRoot(_maxSpinSquared / spinSquared), Vector<float>.One);
     }
 }
 
@@ -141,7 +147,8 @@ internal sealed class RagdollPhysics : IDisposable
     public RagdollPhysics()
     {
         _tags = new CollidableProperty<BodyTag>(Pool);
-        Simulation = BepuPhysics.Simulation.Create(Pool, new ContactRules { Tags = _tags }, new Integration(), new SolveDescription(Iterations, Substeps, FallbackBatches));
+        Simulation = BepuPhysics.Simulation.Create(Pool, new ContactRules { Tags = _tags }, new Integration(),
+            new SolveDescription(Iterations, Substeps, FallbackBatches));
         Simulation.Deterministic = true;
     }
 
@@ -189,39 +196,23 @@ internal sealed class RagdollPhysics : IDisposable
             var hull = new ConvexHull(corners, physics.Pool, out _);
             (TypedIndex Shape, BodyInertia Inertia)[] shapes =
             [
-                (simulation.Shapes.Add(new Sphere(1)), new Sphere(1).ComputeInertia(1)), (simulation.Shapes.Add(new Capsule(0.6f, 2.5f)), new Capsule(0.6f, 2.5f).ComputeInertia(1)),
-                (simulation.Shapes.Add(new Box(2, 1.5f, 2.5f)), new Box(2, 1.5f, 2.5f).ComputeInertia(1)), (simulation.Shapes.Add(hull), hull.ComputeInertia(1)),
+                (simulation.Shapes.Add(new Sphere(1)), new Sphere(1).ComputeInertia(1)),
+                (simulation.Shapes.Add(new Capsule(0.6f, 2.5f)), new Capsule(0.6f, 2.5f).ComputeInertia(1)),
+                (simulation.Shapes.Add(new Box(2, 1.5f, 2.5f)), new Box(2, 1.5f, 2.5f).ComputeInertia(1)),
+                (simulation.Shapes.Add(hull), hull.ComputeInertia(1)),
             ];
             var spring = new SpringSettings(30, 1);
             var joints = new List<ConstraintHandle>();
             var bodies = new List<BodyHandle>();
+
             // Three chains of five, piled on each other, the ground and the building's corner; the first body of the first is pinned (kinematic, moving).
-            for (int r = 0; r < 3; r++)
-            {
-                var chain = new BodyHandle[5];
-                for (int b = 0; b < chain.Length; b++)
-                {
-                    var (shape, inertia) = shapes[(b + r) % shapes.Length];
-                    var pose = new RigidPose(new Vector3(8 + 3 * r + 1.6f * b, 2 + 2.5f * r, 10 + 0.5f * b), Quaternion.CreateFromYawPitchRoll(r, 0.3f * b, 0.2f));
-                    var activity = new BodyActivityDescription(0.01f);
-                    var description = r == 0 && b == 0
-                        ? BodyDescription.CreateKinematic(pose, new BodyVelocity(new Vector3(6, 0, 0)), Collidable(shape), activity)
-                        : BodyDescription.CreateDynamic(pose, inertia, Collidable(shape), activity);
-                    bodies.Add(chain[b] = physics.AddBody(description, new BodyTag { Ragdoll = r + 1, Index = b, Joined = (b > 0 ? 1UL << (b - 1) : 0) | (b < 4 ? 1UL << (b + 1) : 0) }));
-                }
-                var solver = simulation.Solver;
-                joints.Add(solver.Add(chain[0], chain[1], new Hinge { LocalOffsetA = new(0.8f, 0, 0), LocalHingeAxisA = Vector3.UnitZ, LocalOffsetB = new(-0.8f, 0, 0), LocalHingeAxisB = Vector3.UnitZ, SpringSettings = spring }));
-                joints.Add(solver.Add(chain[0], chain[1], new TwistLimit { LocalBasisA = Quaternion.Identity, LocalBasisB = Quaternion.Identity, MinimumAngle = -0.5f, MaximumAngle = 0.5f, SpringSettings = spring }));
-                joints.Add(solver.Add(chain[1], chain[2], new BallSocket { LocalOffsetA = new(0.8f, 0, 0), LocalOffsetB = new(-0.8f, 0, 0), SpringSettings = spring }));
-                joints.Add(solver.Add(chain[1], chain[2], new SwingLimit { AxisLocalA = Vector3.UnitX, AxisLocalB = Vector3.UnitX, MaximumSwingAngle = 0.6f, SpringSettings = spring }));
-                joints.Add(solver.Add(chain[1], chain[2], new TwistLimit { LocalBasisA = Quaternion.Identity, LocalBasisB = Quaternion.Identity, MinimumAngle = -0.3f, MaximumAngle = 0.3f, SpringSettings = spring }));
-                joints.Add(solver.Add(chain[2], chain[3], new Weld { LocalOffset = new(1.6f, 0, 0), LocalOrientation = Quaternion.Identity, SpringSettings = spring }));
-                joints.Add(solver.Add(chain[3], chain[4], new BallSocket { LocalOffsetA = new(0.8f, 0, 0), LocalOffsetB = new(-0.8f, 0, 0), SpringSettings = spring }));
-            }
+            AddChains(physics, shapes, spring, joints, bodies);
+
             // Single-threaded, then on a dispatcher as RagdollSystem steps with more than one world thread: Bepu's multithreaded solver and broad phase are code
             // paths of their own (they still compiled 50 ms in the first moving tick with the single-threaded warm-up alone).
             for (int tick = 0; tick < 45; tick++) physics.Step(1 / 30f);
             for (int tick = 0; tick < 45; tick++) physics.Step(1 / 30f, threads);
+
             // Frozen as RagdollSystem.Freeze does: the joints go, the bodies stop and turn kinematic; then the tiles are swept away.
             foreach (var joint in joints) simulation.Solver.Remove(joint);
             foreach (var handle in bodies)
@@ -230,10 +221,59 @@ internal sealed class RagdollPhysics : IDisposable
                 body.Velocity = default;
                 if (!body.Kinematic) body.BecomeKinematic();
             }
+
             for (int tick = 0; tick < 5; tick++) physics.Step(1 / 30f);
             physics.Sweep(TileLife + 1);
         }
-        catch (Exception e) { Console.Error.WriteLine($"warning   the ragdoll warm-up failed: {e.Message}"); }
+        catch (Exception e)
+        {
+            Console.Error.WriteLine($"warning   the ragdoll warm-up failed: {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Three chains of five, piled on each other, the ground and the building's corner; the first body of the first is pinned (kinematic,
+    /// moving). Each joint kind the ragdolls use joins them.
+    /// </summary>
+    static void AddChains(RagdollPhysics physics, (TypedIndex Shape, BodyInertia Inertia)[] shapes, SpringSettings spring,
+        List<ConstraintHandle> joints, List<BodyHandle> bodies)
+    {
+        var simulation = physics.Simulation;
+        for (int r = 0; r < 3; r++)
+        {
+            var chain = new BodyHandle[5];
+            for (int b = 0; b < chain.Length; b++)
+            {
+                var (shape, inertia) = shapes[(b + r) % shapes.Length];
+                var pose = new RigidPose(new Vector3(8 + 3 * r + 1.6f * b, 2 + 2.5f * r, 10 + 0.5f * b),
+                    Quaternion.CreateFromYawPitchRoll(r, 0.3f * b, 0.2f));
+                var activity = new BodyActivityDescription(0.01f);
+                var description = r == 0 && b == 0
+                    ? BodyDescription.CreateKinematic(pose, new BodyVelocity(new Vector3(6, 0, 0)), Collidable(shape), activity)
+                    : BodyDescription.CreateDynamic(pose, inertia, Collidable(shape), activity);
+                bodies.Add(chain[b] = physics.AddBody(description,
+                    new BodyTag { Ragdoll = r + 1, Index = b, Joined = (b > 0 ? 1UL << (b - 1) : 0) | (b < 4 ? 1UL << (b + 1) : 0) }));
+            }
+
+            var solver = simulation.Solver;
+            joints.Add(solver.Add(chain[0], chain[1],
+                new Hinge { LocalOffsetA = new(0.8f, 0, 0), LocalHingeAxisA = Vector3.UnitZ, LocalOffsetB = new(-0.8f, 0, 0),
+                    LocalHingeAxisB = Vector3.UnitZ, SpringSettings = spring }));
+            joints.Add(solver.Add(chain[0], chain[1],
+                new TwistLimit { LocalBasisA = Quaternion.Identity, LocalBasisB = Quaternion.Identity, MinimumAngle = -0.5f, MaximumAngle = 0.5f,
+                    SpringSettings = spring }));
+            joints.Add(solver.Add(chain[1], chain[2],
+                new BallSocket { LocalOffsetA = new(0.8f, 0, 0), LocalOffsetB = new(-0.8f, 0, 0), SpringSettings = spring }));
+            joints.Add(solver.Add(chain[1], chain[2],
+                new SwingLimit { AxisLocalA = Vector3.UnitX, AxisLocalB = Vector3.UnitX, MaximumSwingAngle = 0.6f, SpringSettings = spring }));
+            joints.Add(solver.Add(chain[1], chain[2],
+                new TwistLimit { LocalBasisA = Quaternion.Identity, LocalBasisB = Quaternion.Identity, MinimumAngle = -0.3f, MaximumAngle = 0.3f,
+                    SpringSettings = spring }));
+            joints.Add(solver.Add(chain[2], chain[3],
+                new Weld { LocalOffset = new(1.6f, 0, 0), LocalOrientation = Quaternion.Identity, SpringSettings = spring }));
+            joints.Add(solver.Add(chain[3], chain[4],
+                new BallSocket { LocalOffsetA = new(0.8f, 0, 0), LocalOffsetB = new(-0.8f, 0, 0), SpringSettings = spring }));
+        }
     }
 
     /// <summary>
@@ -313,6 +353,7 @@ internal sealed class RagdollPhysics : IDisposable
     {
         var (x0, x1, z0, z1) = Span(centre, reach);
         for (int x = x0; x <= x1; x++)
+        {
             for (int z = z0; z <= z1; z++)
             {
                 if (!_tiles.TryGetValue((x, z), out var tile))
@@ -325,10 +366,13 @@ internal sealed class RagdollPhysics : IDisposable
                 {
                     // Collision that changed since the tile's buildings were built (a building placed or ruined): asked again, the old mesh standing until the new one is ready.
                     if (tile.Generation != environment.Generation) (tile.Generation, tile.BuildingsPending) = (environment.Generation, true);
-                    if (tile.BuildingsPending && budget > 0 && AddBuildings(tile, new Vector3(x * TileSize, 0, z * TileSize), environment)) budget -= BuildingUnits;
+                    if (tile.BuildingsPending && budget > 0 && AddBuildings(tile, new Vector3(x * TileSize, 0, z * TileSize), environment))
+                        budget -= BuildingUnits;
                 }
+
                 tile.Used = tick;
             }
+        }
     }
 
     /// <summary>
@@ -348,13 +392,17 @@ internal sealed class RagdollPhysics : IDisposable
     {
         var (x0, x1, z0, z1) = Span(centre, reach);
         for (int x = x0; x <= x1; x++)
+        {
             for (int z = z0; z <= z1; z++)
                 if (!_tiles.TryGetValue((x, z), out var tile) || tile.BuildingsPending) return false;
+        }
+
         return true;
     }
 
     static (int X0, int X1, int Z0, int Z1) Span(Vector3 centre, float reach) =>
-        ((int)MathF.Floor((centre.X - reach) / TileSize), (int)MathF.Floor((centre.X + reach) / TileSize), (int)MathF.Floor((centre.Z - reach) / TileSize), (int)MathF.Floor((centre.Z + reach) / TileSize));
+        ((int)MathF.Floor((centre.X - reach) / TileSize), (int)MathF.Floor((centre.X + reach) / TileSize),
+            (int)MathF.Floor((centre.Z - reach) / TileSize), (int)MathF.Floor((centre.Z + reach) / TileSize));
 
     /// <summary>
     /// Removes the tiles not used for a while.
@@ -377,21 +425,29 @@ internal sealed class RagdollPhysics : IDisposable
         var origin = new Vector3(tx * TileSize, 0, tz * TileSize);
         var heights = new float[(n + 1) * (n + 1)];
         for (int i = 0; i <= n; i++)
+        {
             for (int k = 0; k <= n; k++)
                 heights[i * (n + 1) + k] = environment.GroundHeight(origin.X + i * Cell, origin.Z + k * Cell, nearY);
+        }
+
         Pool.Take<Triangle>(n * n * 2, out var triangles);
         int t = 0;
         for (int i = 0; i < n; i++)
+        {
             for (int k = 0; k < n; k++)
             {
                 Vector3 P(int a, int b) => new(a * Cell, heights[a * (n + 1) + b], b * Cell);
+
                 // Wound so the face looks up (Bepu's triangles collide on one side).
                 triangles[t++] = new Triangle(P(i, k), P(i + 1, k), P(i, k + 1));
                 triangles[t++] = new Triangle(P(i + 1, k), P(i + 1, k + 1), P(i, k + 1));
             }
+        }
+
         var tile = new Tile { Generation = environment.Generation };
         tile.GroundShape = Simulation.Shapes.Add(new Mesh(triangles, Vector3.One, Pool));
         tile.Ground = Simulation.Statics.Add(new StaticDescription(origin, Quaternion.Identity, tile.GroundShape));
+
         // Its buildings when the budget allows, else on a later cover (the tile asks again while BuildingsPending).
         tile.BuildingsPending = true;
         if (budget > 0 && AddBuildings(tile, origin, environment)) budget -= BuildingUnits;
@@ -413,6 +469,7 @@ internal sealed class RagdollPhysics : IDisposable
             RemoveBuildings(tile);
             return true;
         }
+
         // Both faces of every triangle: the files' windings are not trusted, and a body may meet a wall or floor from either side.
         int count = _gathered.Count / 3;
         Pool.Take<Triangle>(count * 2, out var building);
@@ -422,6 +479,7 @@ internal sealed class RagdollPhysics : IDisposable
             building[2 * i] = new Triangle(a, b, c);
             building[2 * i + 1] = new Triangle(a, c, b);
         }
+
         if (tile.HasBuildings) RemoveBuildings(tile);
         tile.BuildingShape = Simulation.Shapes.Add(new Mesh(building, Vector3.One, Pool));
         tile.Buildings = Simulation.Statics.Add(new StaticDescription(origin, Quaternion.Identity, tile.BuildingShape));

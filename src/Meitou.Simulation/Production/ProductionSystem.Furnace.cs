@@ -55,6 +55,7 @@ public sealed partial class ProductionSystem
             m.Status = 1;
             return;
         }
+
         m.Status = 2;
         float amount = m.Yield * m.Data.Rate * WorkFactor(world, m) * dt * _constants.ProductionSpeed * Settings.ProductionOption;
         if (amount == 0) return;
@@ -112,6 +113,7 @@ public sealed partial class ProductionSystem
             if (r.TargetStringId == RawIron) iron += r.Values.Value0 * 0.01f;
             else if (_db.Find(r.TargetStringId) is { } ingredient) iron += IronIn(ingredient, depth + 1);
         }
+
         return iron;
     }
 
@@ -124,6 +126,7 @@ public sealed partial class ProductionSystem
         int total = 0;
         foreach (var r in armour.GetReferences("part coverage"))
             total += r.TargetStringId == WeightedPart ? (int)(r.Values.Value0 * 1.5) : r.Values.Value0;
+
         return total == 0 ? 100 : total;
     }
 }

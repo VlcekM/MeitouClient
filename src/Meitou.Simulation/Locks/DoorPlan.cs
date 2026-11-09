@@ -89,15 +89,18 @@ sealed class DoorPlan : IPlanWorld
     {
         if (cold.SquadId >= 0 && world.Squads.Find(cold.SquadId)?.Ai is { Town: >= 0 } board && world.SystemOf<AiSystem>()?.TownAt(at) == board.Town)
             return 0;
+
         if (cold.NpcClass == FundamentalType.Bandit) return BanditDesire;
         int owner = world.Fixtures.DoorOwner(building);
         if (combat?.Relations is not { } relations || !relations.Contains(cold.Faction))
             return owner == cold.Faction ? 0 : 1;
+
         if (relations.Contains(owner))
         {
             if (relations.Get(cold.Faction, owner) >= FactionRelations.AllyThreshold) return 0;
             if (relations.IsHostile(cold.Faction, owner)) return 1;
         }
+
         return relations.Factions[cold.Faction].FundamentalType is FundamentalType.Trader or FundamentalType.Civilian or FundamentalType.Diplomat
                 or FundamentalType.Adventurer ? 0 : 1;
     }
@@ -107,6 +110,7 @@ sealed class DoorPlan : IPlanWorld
         // The gate rows (scoreBashGate: the same score, shared by the crowd) never win on a house: 81 comes first.
         if (row.Type is TaskType.BashDoor or TaskType.BashDoorHere or TaskType.BashGate or TaskType.Unnamed290)
             return _aggressive;
+
         float d = TaskProfiles.Of(row.Type).Desire;
         return d >= 0 ? d : 1;
     }

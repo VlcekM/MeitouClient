@@ -137,10 +137,12 @@ public sealed partial class World : IDisposable
     readonly EffectBuffer[] _buffers;
     readonly List<Effect> _effects = [];
     Partition[] _partitions = [];
+
     // The far cadence (RefreshCadence): per slot, the ticks this tick's step covers (0: skipped this tick) and the tick of its last step.
     byte[] _stepTicks = [];
     long[] _lastStep = [];
     readonly List<System.Numerics.Vector3> _playerSpots = [];
+
     // Per system, built once when it is added: which parallel phases it implements and the delegates that run them (no closure per tick).
     readonly List<SystemPhases> _phases = [];
     readonly List<SimCommand> _deferred = [];
@@ -508,6 +510,38 @@ public sealed partial class World : IDisposable
         table.BeginTick();
 
         // 1. Inputs (serial).
+        RunInputs(table, prof);
+
+        // 2. Schedule (serial): the grid of the last tick's positions, then the systems.
+        RunSchedule(table, prof);
+
+        // 3-5. Think, move, act (parallel; each system's phase is a barrier).
+        RunThinkMoveAct(table, prof);
+
+        // 6. Commit (serial): the effects in an order the partitioning cannot change.
+        Commit(table, prof);
+
+        // 7. Slow world (serial).
+        RunSlowWorld(prof);
+
+        // 8. Publish.
+        Squads.Refresh(table);
+        Player.Prune(table);
+        table.Phase = TablePhase.Outside;
+        table.EndTick();
+        prof?.Part("end tick");   // F12: the squads, the prune and the table's end, apart from the snapshot
+        Tick++;
+        GameHours += TickSeconds / SecondsPerGameHour;
+        if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);
+
+        prof?.Lap(TickProfile.Publish);
+    }
+
+    /// <summary>
+    /// Phase 1: the due commands, then each system's inputs.
+    /// </summary>
+    void RunInputs(CharacterTable table, TickProfile? prof)
+    {
         table.Phase = TablePhase.Inputs;
         var due = TakeDue();
         prof?.Lap(TickProfile.Inputs);
@@ -517,8 +551,13 @@ public sealed partial class World : IDisposable
             _systems[k].Inputs(this, due);
             prof?.Lap(TickProfile.Inputs, k);
         }
+    }
 
-        // 2. Schedule (serial): the grid of the last tick's positions, then the systems.
+    /// <summary>
+    /// Phase 2: the grid of the last tick's positions, the cadence, the dormant marks, the sight and the partitions, then the systems.
+    /// </summary>
+    void RunSchedule(CharacterTable table, TickProfile? prof)
+    {
         table.Phase = TablePhase.Schedule;
         Grid.Build(table.Previous);
         RefreshCadence();
@@ -534,8 +573,13 @@ public sealed partial class World : IDisposable
             _systems[k].Schedule(this);
             prof?.Lap(TickProfile.Schedule, k);
         }
+    }
 
-        // 3-5. Think, move, act (parallel; each system's phase is a barrier).
+    /// <summary>
+    /// Phases 3 to 5: think, move and act, each system's phase a barrier.
+    /// </summary>
+    void RunThinkMoveAct(CharacterTable table, TickProfile? prof)
+    {
         table.Phase = TablePhase.Parallel;
 
         // A system that leaves a phase at its empty default is skipped there: a barrier costs more than the nothing it would wait for.
@@ -549,14 +593,21 @@ public sealed partial class World : IDisposable
         {
             if (p.BeforeAct is { } before) RunParallel(before, prof, TickProfile.Act, p.Index);
             if (p.Act is not { } act) continue;
-            foreach (var b in _buffers) b.BeginSystem(p.Index);   // Effect.System is the system's real index, so the commit order does not depend on which systems act
+
+            // Effect.System is the system's real index, so the commit order does not depend on which systems act
+            foreach (var b in _buffers) b.BeginSystem(p.Index);
 
             RunParallel(act, prof, TickProfile.Act, p.Index);
         }
+    }
 
+    /// <summary>
+    /// Phase 6: the effects sorted and applied, then the squads refreshed.
+    /// </summary>
+    void Commit(CharacterTable table, TickProfile? prof)
+    {
         table.Phase = TablePhase.Commit;
 
-        // 6. Commit (serial): the effects in an order the partitioning cannot change.
         _effects.Clear();
         for (int i = 0; i < _partitions.Length; i++) _effects.AddRange(_buffers[i].Items);
 
@@ -572,8 +623,13 @@ public sealed partial class World : IDisposable
         Squads.Refresh(table);
         prof?.Lap(TickProfile.Commit);
         table.Phase = TablePhase.SlowWorld;
+    }
 
-        // 7. Slow world (serial).
+    /// <summary>
+    /// Phase 7: each system's slow world (the decisions after their system), the task starts and the squads' goals.
+    /// </summary>
+    void RunSlowWorld(TickProfile? prof)
+    {
         for (int k = 0; k < _systems.Count; k++)
         {
             _systems[k].SlowWorld(this);
@@ -588,18 +644,6 @@ public sealed partial class World : IDisposable
         Claims.Now = Tick;
         if (_hasGoalSources)
             SquadGoals.Of(this);   // the duties running now refresh their entries; the ones past their 3 s go
-
-        // 8. Publish.
-        Squads.Refresh(table);
-        Player.Prune(table);
-        table.Phase = TablePhase.Outside;
-        table.EndTick();
-        prof?.Part("end tick");   // F12: the squads, the prune and the table's end, apart from the snapshot
-        Tick++;
-        GameHours += TickSeconds / SecondsPerGameHour;
-        if (publish && Settings.PublishSnapshots) Publish(prof, farShared: true);
-
-        prof?.Lap(TickProfile.Publish);
     }
 
     /// <summary>
@@ -652,6 +696,7 @@ public sealed partial class World : IDisposable
         ArgumentNullException.ThrowIfNull(command);
         if (Characters.Phase == TablePhase.Parallel)
             throw new InvalidOperationException("commands are deferred in serial phases only");
+
         if (command.Tick <= Tick)
             throw new ArgumentException("a deferred command is for a later tick", nameof(command));
 
@@ -849,12 +894,16 @@ public sealed partial class World : IDisposable
         Player.Hash(ref h);
         if (Uniques.Count > 0)
             Uniques.Hash(ref h);   // only once a unique is tracked, so worlds without one hash as before
+
         if (Fixtures.Count > 0)
             Fixtures.Hash(ref h);   // only once a town with buildings registered, so worlds without them hash as before
+
         if (Buildings.Count > 0 || Buildings.Towns.Count > 0)
             Buildings.Hash(ref h);   // only once the player has a site, so worlds without one hash as before
+
         if (GroundItems.Count > 0)
             GroundItems.Hash(ref h);   // only once something lies on the ground, so worlds without hash as before
+
         if (ItemSlots.Count > 0) ItemSlots.Hash(ref h);   // only once a town with item slots registered
         if (Machines.Count > 0) Machines.Hash(ref h);   // only once the player has a working building
         if (Research.Changed) Research.Hash(ref h);   // only once research changed in play

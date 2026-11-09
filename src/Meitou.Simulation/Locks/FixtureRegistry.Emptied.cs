@@ -64,6 +64,7 @@ public sealed partial class FixtureRegistry
             _all.Remove(f);
             _byId.Remove(f.Id);
         }
+
         _containerSpots = null;
         _bedSpots = null;
         _cageList = null;

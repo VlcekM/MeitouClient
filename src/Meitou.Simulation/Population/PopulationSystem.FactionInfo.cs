@@ -28,7 +28,10 @@ public sealed partial class PopulationSystem
             }
 
             foreach (var request in war.Requests)
-                lines.Add(new(FactionInfoKind.Queued, CampaignOf(request.CampaignId)?.DisplayName ?? request.CampaignId, "", request.Due - world.GameHours));
+            {
+                lines.Add(new(FactionInfoKind.Queued, CampaignOf(request.CampaignId)?.DisplayName ?? request.CampaignId, "",
+                    request.Due - world.GameHours));
+            }
         }
 
         return lines;

@@ -382,6 +382,7 @@ public sealed class Blackboard
             MissionTarget = CharacterId.None;
             Current = null;   // the slots choose again
         }
+
         foreach (var (slot, list) in _slots.Reverse())
             if (TrySlot(slot, list, rules)) return;
     }
@@ -397,8 +398,10 @@ public sealed class Blackboard
                 if (list[0].LeadsTo is { } hop && Find(hop) is { } follow && MayLead(list[0], rules)) Start(follow.Package, follow.Slot, rules);
                 else if (CanStart(list[0], rules)) Start(list[0], 0, rules);
             }
+
             return true;
         }
+
         foreach (var p in list)
         {
             if (p == Current)
@@ -409,14 +412,17 @@ public sealed class Blackboard
                     Start(follow.Package, follow.Slot, rules);
                     return true;
                 }
+
                 return false;
             }
+
             if (CanStart(p, rules))
             {
                 Start(p, slot, rules);
                 return true;
             }
         }
+
         return false;
     }
 
@@ -437,8 +443,11 @@ public sealed class Blackboard
     SlottedPackage? Find(string id)
     {
         foreach (var (slot, list) in _slots)
+        {
             foreach (var p in list)
                 if (p.Id == id) return new SlottedPackage(slot, p);
+        }
+
         return null;
     }
 
@@ -480,6 +489,7 @@ public sealed class Blackboard
             if (running.Id == package.Id) return;
             _ended = (running, MissionTarget);
         }
+
         Contract = package;
         ContractEnd = now + (hours < 1 ? 10.0 / 60 : hours);
         MissionTarget = target ?? CharacterId.None;
@@ -496,11 +506,14 @@ public sealed class Blackboard
     public bool Resume(AiPackage package)
     {
         foreach (var (slot, list) in _slots)
+        {
             if (list.Contains(package))
             {
                 Start(package, slot, null);
                 return true;
             }
+        }
+
         return false;
     }
 
@@ -575,6 +588,7 @@ public sealed class Blackboard
             hasher.Add(Destination.Site);
             hasher.Add(Destination.PlayerTown);
         }
+
         if (TraderWait > 0)
         {
             hasher.Add(TraderState);
@@ -591,6 +605,7 @@ public sealed class Blackboard
             hasher.Add(AssaultDone);
             hasher.Add(AssaultCooldown);
         }
+
         if (OccupyAway > 0) hasher.Add(OccupyAway);
         if (RefugeeBroken || RefugeeTarget >= 0)
         {
@@ -1004,6 +1019,7 @@ public sealed class AiMind
             hasher.Add(WorkEpoch);
             hasher.Add(WorkActive);
         }
+
         if (NodeRoll != 0) hasher.Add(NodeRoll);
         if (Resume) hasher.Add(0x52657375);
         if (PlaceAt is { } place) hasher.Add(place);
@@ -1015,6 +1031,7 @@ public sealed class AiMind
             hasher.Add(MedicPatient);
             hasher.Add(MedicScore);
         }
+
         if (CaptiveOffers.Count > 0)
         {
             hasher.Add(0x434F6666);   // "COff"
@@ -1024,16 +1041,19 @@ public sealed class AiMind
                 hasher.Add(d);
             }
         }
+
         if (!ForcedAssault.IsNone)
         {
             hasher.Add(0x466F7241);
             hasher.Add(ForcedAssault);
         }
+
         if (GuardVisitorAt is { } visitor)
         {
             hasher.Add(0x47756172);
             hasher.Add(visitor);
         }
+
         if (FightFrom != 0) hasher.Add(FightFrom);
         if (Replan) hasher.Add(0x5265706C);
         if (LookAbout != Crime.CrimeSystem.FirstLookAboutSeconds) hasher.Add(LookAbout);

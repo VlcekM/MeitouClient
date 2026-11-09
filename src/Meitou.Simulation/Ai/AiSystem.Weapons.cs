@@ -29,6 +29,7 @@ public sealed partial class AiSystem
             owner.Items.Add(item);
             return false;
         }
+
         _assembly.RefreshEquipment(cold);
         return true;
     }

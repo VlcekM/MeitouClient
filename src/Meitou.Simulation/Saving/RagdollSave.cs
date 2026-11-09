@@ -48,7 +48,8 @@ public static class RagdollSave
         if (state is null || !state.Strings.TryGetValue(Key, out var text)) return null;
 
         var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 3 || !int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) || n <= 0 || parts.Length != 3 + 7 * n
+        if (parts.Length < 3 || !int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) || n <= 0
+            || parts.Length != 3 + 7 * n
             || !TryF(parts[1], out float age)) return null;
 
         var pose = new RigidTransform[n];

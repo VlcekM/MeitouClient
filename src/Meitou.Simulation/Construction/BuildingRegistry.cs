@@ -130,7 +130,10 @@ public sealed class BuildSite
         if (LevelPlacement is not null) h.Add(0x4c657665);
         h.Add(Rng.StableHash(Record));
         h.Add(Position);
-        h.Add(Rotation.X); h.Add(Rotation.Y); h.Add(Rotation.Z); h.Add(Rotation.W);
+        h.Add(Rotation.X);
+        h.Add(Rotation.Y);
+        h.Add(Rotation.Z);
+        h.Add(Rotation.W);
         h.Add(Floor);
         h.Add(Parent is null ? 0UL : Rng.StableHash(Parent));
         h.Add(Owner);
@@ -300,7 +303,10 @@ public sealed partial class BuildingRegistry
         var m = IdPattern().Match(id);
         if (!m.Success) return false;
         if (!int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out n)) return false;
-        if (!int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int x) || !int.TryParse(m.Groups[3].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int y)) return false;
+        if (!int.TryParse(m.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int x)
+            || !int.TryParse(m.Groups[3].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int y))
+            return false;
+
         zone = new ZoneCoordinate(x, y);
         return true;
     }
@@ -373,9 +379,14 @@ public sealed partial class BuildingRegistry
         foreach (var s in _sites)
         {
             var materials = new MaterialView[s.Materials.Length];
-            for (int i = 0; i < materials.Length; i++) materials[i] = new MaterialView(s.Materials[i].Item, s.Materials[i].Required, s.Materials[i].Delivered);
-            list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials, s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public, TownName = s.LevelTownName ?? FindTown(s.Town)?.Name, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
+            for (int i = 0; i < materials.Length; i++)
+                materials[i] = new MaterialView(s.Materials[i].Item, s.Materials[i].Required, s.Materials[i].Delivered);
+
+            list.Add(new BuildingSnapshot(s.Id, s.Record, s.Position, s.Rotation, s.Floor, s.Parent, s.Owner, s.Progress, s.Target, materials,
+                s.Complete, s.Paused) { Dismantling = s.Dismantling, WallParent = s.WallParent, Public = s.Public,
+                TownName = s.LevelTownName ?? FindTown(s.Town)?.Name, LevelPlacement = s.LevelPlacement, Destroyed = s.Destroyed, Name = s.Name });
         }
+
         _publishedVersion = Version;
         return _published = list;
     }
@@ -392,6 +403,7 @@ public sealed partial class BuildingRegistry
             h.Add(z.Y);
             h.Add(_counters[z]);
         }
+
         h.Add(_sites.Count);
         foreach (var s in _sites) s.Hash(ref h);
         if (_towns.Count > 0)

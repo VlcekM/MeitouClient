@@ -1347,6 +1347,7 @@ public sealed class CharacterTable
             _highWater++;
             generation = 0;
         }
+
         state.Alive = true;
         state.Generation = generation;
 
@@ -1377,6 +1378,7 @@ public sealed class CharacterTable
     {
         if (_phase is TablePhase.Parallel or TablePhase.Inputs or TablePhase.Schedule)
             throw new InvalidOperationException("characters are removed in the commit or the slow world only (a phase reads them as alive)");
+
         if (!TryResolveNext(id, out int slot)) return false;
         _next[slot].Alive = false;
         if (!_inTick) _previous[slot].Alive = false;
@@ -1471,12 +1473,14 @@ public sealed class CharacterTable
             hasher.Add(0x4C766742);
             hasher.Add(k.BedExitDone);
         }
+
         if (c.Task == (byte)CharacterTask.Follow)
         {
             hasher.Add(k.FollowHeading);
             hasher.Add(k.FollowSpeed);
             hasher.Add(k.FollowDirect);
         }
+
         if (k.PaceCap is { } pace) hasher.Add(pace);
         hasher.Add(k.Path.Length);
         hasher.Add(k.PathRequest);
@@ -1525,11 +1529,13 @@ public sealed class CharacterTable
                 }
             }
         }
+
         if (k.SteerSpeed != 0)
         {
             hasher.Add(0x53746572);
             hasher.Add(k.SteerSpeed);
         }
+
         if (k.AgentSpeed != 0)
         {
             hasher.Add(0x41676e74);
@@ -1563,6 +1569,7 @@ public sealed class CharacterTable
             hasher.Add((int)resume);
             if (k.TreatSplint) hasher.Add(0x53706C74);
         }
+
         if (k.Fleeing) hasher.Add(k.FleesAlone ? 0x466C6566 : 0x466C6565);   // only while set, so worlds without fleeing hash as before
         if (k.StealthExposureTick != long.MinValue)
         {
@@ -1588,11 +1595,13 @@ public sealed class CharacterTable
             hasher.Add(0x43617272);
             hasher.Add(k.Carrying);
         }
+
         if (!k.CarriedBy.IsNone)
         {
             hasher.Add(0x42726E65);
             hasher.Add(k.CarriedBy);
         }
+
         if (k.CarriedAwake) hasher.Add(0x4177616B);
         if (c.Task is (byte)CharacterTask.PickUp or (byte)CharacterTask.PutDown or (byte)CharacterTask.Loot or (byte)CharacterTask.StealthKo)
         {
@@ -1618,6 +1627,7 @@ public sealed class CharacterTable
             hasher.Add(0x4F726473);
             hasher.Add((int)k.Orders);
         }
+
         if (k.RunSpeed != SpeedMode.Free)
         {
             hasher.Add(0x52756E53);
@@ -1634,6 +1644,7 @@ public sealed class CharacterTable
             hasher.Add(0x41694D64);
             mind.Hash(ref hasher);
         }
+
         if (k.Engaged) hasher.Add(0x456E6761);
         if (!k.FollowOrder.IsNone)
         {
@@ -1641,6 +1652,7 @@ public sealed class CharacterTable
             hasher.Add(k.FollowOrder);
             if (k.Guarding) hasher.Add(0x47756172);
         }
+
         if (k.FollowResume) hasher.Add(0x46526573);
         if (k.Replan) hasher.Add(0x52706C6E);
         if (!k.TurretTarget.IsNone)
@@ -1648,11 +1660,13 @@ public sealed class CharacterTable
             hasher.Add(0x54725467);
             hasher.Add(k.TurretTarget);
         }
+
         if (!k.Freeing.IsNone)
         {
             hasher.Add(0x46726565);
             hasher.Add(k.Freeing);
         }
+
         if (k.EnteringCage is { } entering)
         {
             hasher.Add(0x456E7472);
@@ -1681,6 +1695,7 @@ public sealed class CharacterTable
             hasher.Add((int)k.InSomething);
             hasher.Add(k.InWhat is { } w ? Rng.StableHash(w) : 0UL);
         }
+
         if (k.SentenceLength > 0)
         {
             hasher.Add(k.SentenceStart);
@@ -1699,17 +1714,20 @@ public sealed class CharacterTable
             hasher.Add(0x52576E74);
             hasher.Add(k.RecentlyWanted);
         }
+
         if (k.Recognition > 0)
         {
             hasher.Add(0x5265636F);
             hasher.Add(k.Recognition);
         }
+
         if (k.DisguiseLevel > 0)
         {
             hasher.Add(0x44697367);
             hasher.Add(k.DisguiseLevel);
             hasher.Add(k.DisguiseFaction);
         }
+
         if (k.Escaped) hasher.Add(0x45736361);
         if (k.Kidnapped) hasher.Add(0x4B64706E);
         if (k.Freed) hasher.Add(0x46726564);
@@ -1721,6 +1739,7 @@ public sealed class CharacterTable
             hasher.Add(k.SlaveOwner);
             if (k.SlaveState > 1) hasher.Add(k.SlaveSince);
         }
+
         if (k.Shaved) hasher.Add(0x53686176);
         if (k.Crouched) hasher.Add(0x43726F63);
         if (k.PickingLock is { } pick)
@@ -1744,12 +1763,14 @@ public sealed class CharacterTable
             if (k.BashWall) hasher.Add(0x57616C6C);
             if (k.BashErrand) hasher.Add(0x45727264);
         }
+
         if (k.ForcingLock is { } force)
         {
             hasher.Add(0x466F7263);
             hasher.Add(Rng.StableHash(force));
             hasher.Add((int)k.Force);
         }
+
         if (k.DoorJob is { } doorJob)
         {
             hasher.Add(0x446F724A);
@@ -1757,17 +1778,20 @@ public sealed class CharacterTable
             hasher.Add(doorJob.Lock);
             hasher.Add(doorJob.Work);
         }
+
         if (k.Shackles is { } job)
         {
             hasher.Add(0x5368636B);
             hasher.Add(Rng.Key(job.Wearer));
             hasher.Add((int)job.Work);
         }
+
         if (k.PickingUpItem is { } taking)
         {
             hasher.Add(0x54616B65);
             hasher.Add(taking);
         }
+
         if (k.Mouth is { } mouth)
         {
             hasher.Add(0x4D6F7574);
@@ -1784,7 +1808,10 @@ public sealed class CharacterTable
         // A builder's site, bar and the task it goes back to add to the hash only while it works one, so worlds without sites hash as before.
         if (k.BuildSite is { } site)
         {
-            hasher.Add(0x4275696C); hasher.Add(Rng.StableHash(site)); hasher.Add(k.BuildBar); hasher.Add((int)resume);
+            hasher.Add(0x4275696C);
+            hasher.Add(Rng.StableHash(site));
+            hasher.Add(k.BuildBar);
+            hasher.Add((int)resume);
             if (k.FetchRecord is { } fetch)
             {
                 hasher.Add(0x46657463);
@@ -1793,22 +1820,26 @@ public sealed class CharacterTable
                 hasher.Add(k.FetchItem ?? 0);
             }
         }
+
         if (k.OperateSite is { } machine)
         {
             hasher.Add(0x4F706572);
             hasher.Add(Rng.StableHash(machine));
         }
+
         if (k.Prospecting is { } prospected)
         {
             hasher.Add(0x50726F73);
             hasher.Add(prospected);
         }
+
         if (k.HaulSite is { } haul)
         {
             hasher.Add(0x4861756C);
             hasher.Add(Rng.StableHash(haul));
             hasher.Add(Rng.StableHash(k.HaulFetch ?? ""));
         }
+
         if (k.HaulTo is { } haulTo) hasher.Add(Rng.StableHash(haulTo));
     }
 
@@ -1824,12 +1855,14 @@ public sealed class CharacterTable
             hasher.Add((int)listJob.Row);
             hasher.Add((int)listJob.Resume);
         }
+
         // the job passes' mark, only while it runs
         if (k.Running is { Source: TaskSource.Job, Task: CharacterTask.Treat or CharacterTask.PickUp or CharacterTask.Loot } pass
             && pass.Runs((CharacterTask)c.Task))
         {
             hasher.Add(0x4A6F6254);
         }
+
         if (k.Jobs.Count > 0)
         {
             hasher.Add(0x4A6F6273);

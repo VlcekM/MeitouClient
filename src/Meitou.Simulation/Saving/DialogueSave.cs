@@ -19,8 +19,10 @@ public static class DialogueSave
         if (state.Ints.GetValueOrDefault(PersonalityKey) is > 0 and < Dialogue.Personality.Count and var p) cold.Personality = p;
 
         for (int i = 0; state.Strings.TryGetValue(LockPrefix + i, out var dialogue); i++)
+        {
             if (dialogue.Length > 0)
                 (cold.DialogueLocks ??= new(StringComparer.Ordinal))[dialogue] = state.Bools.GetValueOrDefault(LockPrefix + i);
+        }
     }
 
     public static void Write(FcsRecord state, CharacterCold cold)

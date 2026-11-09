@@ -63,11 +63,14 @@ public sealed partial class PopulationSystem
             if (_wildSites![i].Kind != WildKind.Sector || _wildStates[i].Status != SiteStatus.Loaded) continue;
             foreach (int id in _wildStates[i].Squads)
             {
-                if (world.Squads.Find(id) is not { } squad || !table.TryResolveNext(squad.Leader, out int slot) || !table.IsAlive(squad.Leader)) continue;
+                if (world.Squads.Find(id) is not { } squad || !table.TryResolveNext(squad.Leader, out int slot) || !table.IsAlive(squad.Leader))
+                    continue;
+
                 var zone = WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
                 _patrolStanding[zone] = _patrolStanding.GetValueOrDefault(zone) + (SquadIntact(world, squad) ? 1 : 0.5f);
             }
         }
+
         AddPlatoonLoad(world, _patrolStanding, null);
         foreach (int i in _wildLoaded)
         {
@@ -75,13 +78,16 @@ public sealed partial class PopulationSystem
             if (site.Kind != WildKind.Sector || _wildStates[i].Status != SiteStatus.Loaded) continue;
             foreach (int id in _wildStates[i].Squads)
             {
-                if (world.Squads.Find(id) is not { } squad || !table.TryResolveNext(squad.Leader, out int slot) || !table.IsAlive(squad.Leader)) continue;
+                if (world.Squads.Find(id) is not { } squad || !table.TryResolveNext(squad.Leader, out int slot) || !table.IsAlive(squad.Leader))
+                    continue;
+
                 _sectorSeen.Add(id);
                 var zone = WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
                 if (zone != site.Zone && SectorAt(zone) is var to and >= 0 && MayRefile(world, id, to, zone, slot)) _refiles.Add((id, i, to));
                 PatrolStep(world, squad, slot, site.Group, site.Zone);
             }
         }
+
         PatrolLoadedSquads(world);
         foreach (var (id, from, to) in _refiles) Refile(world, id, from, to);
         if (_homelessPatrols.Count > _patrolSeen.Count)
@@ -113,6 +119,7 @@ public sealed partial class PopulationSystem
             _outsideSince.Remove(id);
             return false;
         }
+
         if (!_outsideSince.TryGetValue(id, out long since)) _outsideSince[id] = since = world.Tick;
         if (world.Tick - since < (long)Math.Ceiling(_settings.RoamUnloadGraceSeconds / world.TickSeconds)) return false;
         var p = world.Characters.Previous[slot].Position;
@@ -129,8 +136,11 @@ public sealed partial class PopulationSystem
     int SectorAt(ZoneCoordinate zone)
     {
         if (_wildByZone.TryGetValue(zone, out var list))
+        {
             foreach (int i in list)
                 if (_wildSites![i].Kind == WildKind.Sector) return i;
+        }
+
         return -1;
     }
 
@@ -148,15 +158,19 @@ public sealed partial class PopulationSystem
             state.Squads.Add(id);
             return;
         }
+
         var one = new SiteState();
         one.Squads.Add(id);
+
         // Kept only up to the sector's own count, so sectors round where the player goes do not pile them up (engine choice); an occupier always, as the original's persistent one.
         bool occupier = world.Squads.Find(id) is { } squad && Occupying(squad);
-        if (!occupier && (!KeepWild || KeptWildOf(to).Count >= HomelessCount(_data.Biomes!.Groups[_wildSites![to].Group], _settings.PopulationMultiplier)))
+        if (!occupier
+            && (!KeepWild || KeptWildOf(to).Count >= HomelessCount(_data.Biomes!.Groups[_wildSites![to].Group], _settings.PopulationMultiplier)))
         {
             Drop(world, one);
             return;
         }
+
         KeepAlso(world, to, one);
     }
 
@@ -168,7 +182,8 @@ public sealed partial class PopulationSystem
     void PatrolStep(World world, Squad squad, int slot, int group, ZoneCoordinate zone)
     {
         var table = world.Characters;
-        if (table.Cold(slot)?.Ai is not { Goal.Task.Type: TaskType.Patrol } || squad.Ai is { CurrentClass: PackageClass.Patrol or PackageClass.PatrolRunning } board
+        if (table.Cold(slot)?.Ai is not { Goal.Task.Type: TaskType.Patrol }
+            || squad.Ai is { CurrentClass: PackageClass.Patrol or PackageClass.PatrolRunning } board
             && board.RouteIndex < board.Route.Length || squad.Ai is { Destination.IsNone: false }) return;
         _patrolSeen.Add(squad.Id);
         var at = new Vector2(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
@@ -216,16 +231,21 @@ public sealed partial class PopulationSystem
         float sum = 0;
         for (int k = 0; k < 4; k++)
         {
-            (int X, int Z) cell = diagonal ? (cx + ((k & 1) == 0 ? 1 : -1), cz + (k < 2 ? 1 : -1)) : k switch { 0 => (cx + 1, cz), 1 => (cx, cz + 1), 2 => (cx - 1, cz), _ => (cx, cz - 1) };
+            (int X, int Z) cell = diagonal
+                ? (cx + ((k & 1) == 0 ? 1 : -1), cz + (k < 2 ? 1 : -1))
+                : k switch { 0 => (cx + 1, cz), 1 => (cx, cz + 1), 2 => (cx - 1, cz), _ => (cx, cz - 1) };
             if (biomes.GroupOf(cell.X, cell.Z) != group) continue;
+
             // The tether: a homed squad's sectors are within one of its home's (FUN_1408f5ad0's range factor, near 0 and far 1 from Task_Patrol's start).
             if (home is { } h && Math.Max(Math.Abs(cell.X - h.X), Math.Abs(cell.Z - h.Z)) > 1) continue;
             weight[count] = SectorWeight(new ZoneCoordinate(cell.X, cell.Z));
             sum += weight[count];
             near[count++] = cell;
         }
+
         int drawn = 0;
         for (float r = Rng.Float(Roll()) * sum; drawn < count - 1 && r >= weight[drawn]; drawn++) r -= weight[drawn];
+
         // No neighbour: a point of the home's sector, else of its own (engine choice; the original's fallback, FUN_1408fc1a0, takes the first active sector of the
         // group with no town and fewer than 2 excluded platoons where a spot is found, else any sector of the group).
         var (tx, tz) = count > 0 ? near[drawn] : home is { } back ? back : (cx, cz);
@@ -236,15 +256,20 @@ public sealed partial class PopulationSystem
             TownSite? pick = null;
             foreach (var s in _data.Sites)
             {
-                if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null || WorldLayout.ZoneOf(s.Position.X, s.Position.Z) != target) continue;
+                if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null
+                    || WorldLayout.ZoneOf(s.Position.X, s.Position.Z) != target)
+                    continue;
+
                 bool players = _data.PlayerFaction >= 0 && _data.SiteFactions[s.Index] == _data.PlayerFaction;
                 if (Rng.Float(Roll()) >= (players ? 0.5f : 0.25f)) continue;
                 float w = players ? 1 : 0.2f;
                 total += w;
                 if (Rng.Float(Roll()) * total < w) pick = s;   // a running weighted pick
             }
+
             if (pick is not null) return (OutsideTown(world, pick), true);
         }
+
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(tx, tz);
         return PlaceInSector(minX, minZ, maxX, maxZ, squad.Faction, world.Seed, key, world.Walkability, []) is { } spot ? (spot, false) : null;
     }
@@ -306,27 +331,36 @@ public sealed partial class PopulationSystem
             Vector2 townAt = default, nestAt = default;
             foreach (var s in _data.Sites)
             {
-                if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null || _data.SiteFactions[s.Index] != squad.Faction) continue;
+                if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null || _data.SiteFactions[s.Index] != squad.Faction)
+                    continue;
+
                 var p = new Vector2(s.Position.X, s.Position.Z);
                 if (Vector2.Distance(at, p) is var d && d < town) (town, townAt) = (d, p);
             }
+
             for (int i = 0; i < _wildSites!.Count; i++)
             {
                 if (_wildSites[i] is not { Kind: WildKind.Nest } w || w.Faction != squad.Faction) continue;
                 var p = _wildCentres[i] ?? w.Spots[0];
                 if (Vector2.Distance(at, p) is var d && d < nest) (nest, nestAt) = (d, p);
             }
+
             if (town == float.MaxValue) return null;
             (home, float far) = nest + 9216 < town ? (nestAt, nest) : (townAt, town);
             if (far > 50000) return null;
         }
+
         return home is { } h ? WeatherAreas.CellOf(h.X, h.Y) : null;
     }
 
     bool ApproachesTowns(string templateId)
     {
         if (!_approachesTowns.TryGetValue(templateId, out bool yes))
-            _approachesTowns[templateId] = yes = _data.Db.Find(templateId) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r).PatrolApproachesTowns;
+        {
+            _approachesTowns[templateId] = yes = _data.Db.Find(templateId) is { } r && SquadFactory.IsTemplate(r)
+                && SquadTemplate.From(r).PatrolApproachesTowns;
+        }
+
         return yes;
     }
 
@@ -339,6 +373,7 @@ public sealed partial class PopulationSystem
     {
         var groups = _data.Biomes!.Groups;
         var table = world.Characters;
+
         // Each zone's load (intact squads 1, the others 0.5) and its intact count (the original's sets B and C, FUN_1408f6d20), by where the squads stand.
         var standing = new Dictionary<ZoneCoordinate, float>();
         var intactIn = new Dictionary<ZoneCoordinate, int>();
@@ -368,33 +403,28 @@ public sealed partial class PopulationSystem
                 held += intact ? 1 : 0.5f;
                 var zone = site.Zone;
                 foreach (var m in squad.Members.OrderBy(m => !Living(world, m)))
+                {
                     if (table.TryResolveNext(m, out int slot))
                     {
                         zone = WorldLayout.ZoneOf(table.Previous[slot].Position.X, table.Previous[slot].Position.Z);
                         break;
                     }
+                }
+
                 standing[zone] = standing.GetValueOrDefault(zone) + (intact ? 1 : 0.5f);
                 if (intact) intactIn[zone] = intactIn.GetValueOrDefault(zone) + 1;
             }
+
             held += roaming.GetValueOrDefault(site.Zone);
+
             // Clamped to [0, 2] where a town is: its own, or the sector flag (FUN_1408f62e0, +0x30).
             load += ownTown[^1] || towns.Contains(site.Zone) ? Math.Min(held, 2) : held;
         }
+
         if (sectors.Count == 0 || load >= target) return;
-        // The sector under the camera focus is never drawn (DAT_142135230, set every frame from the GameWorld +0x580 object's place); the focus as RefreshZones takes it.
-        ZoneCoordinate? view = (_focus ?? (this._players.Count > 0 ? this._players[0] : null)) is { } eye ? WorldLayout.ZoneOf(eye.X, eye.Z) : null;
-        var weights = new float[sectors.Count];
-        for (int k = 0; k < sectors.Count; k++)
-        {
-            var site = _wildSites![sectors[k]];
-            float share = _settings.PopulationMultiplier * groups[site.Group].HomelessSpawnAmount;
-            float here = standing.GetValueOrDefault(site.Zone);
-            float w = MathF.Max(0, share + 1 - here);
-            if (ownTown[k]) w *= 0.5f;
-            if (here == 0) w = (w + 1) * 2;
-            // A sector whose intact squads are at its share is drawn and passed over in the original; it never makes one. A town's sector and the one in view never enter the pick.
-            weights[k] = intactIn.GetValueOrDefault(site.Zone) < share && !towns.Contains(site.Zone) && site.Zone != view ? w : 0;
-        }
+
+        var weights = SectorWeights(groups, sectors, ownTown, standing, intactIn, towns);
+
         // The sectors in draw order: the original draws one by weight, takes it out of the tree and tries the next while it made no squad (a sector with no usable spot), so the
         // order is a weighted draw without replacement, the first draw as before.
         ulong key = Rng.Mix(SeedSalts.HomelessRefill ^ (ulong)world.Tick);
@@ -406,13 +436,56 @@ public sealed partial class PopulationSystem
             st.Pending = true;
             var hold = new WildHold(0, 0, new Dictionary<string, int>(StringComparer.Ordinal));
             foreach (int id in st.Squads)
-                if (world.Squads.Find(id) is { } squad && squad.Members.Any(m => Living(world, m))) hold.Templates[squad.TemplateId] = hold.Templates.GetValueOrDefault(squad.TemplateId) + 1;
+            {
+                if (world.Squads.Find(id) is { } squad && squad.Members.Any(m => Living(world, m)))
+                    hold.Templates[squad.TemplateId] = hold.Templates.GetValueOrDefault(squad.TemplateId) + 1;
+            }
+
             tries.Add((_wildSites![sectors[picked]], st.LoadId, hold, st.Made));
         }
+
         if (tries.Count == 0) return;
+
+        BuildTries(world, tries);
+    }
+
+    /// <summary>
+    /// Each loaded sector's draw weight: max(0, share + 1 - load), halved by its own town, (w + 1) x 2 when nobody stands in it; 0 at
+    /// its share, in a town or in view.
+    /// </summary>
+    float[] SectorWeights(IReadOnlyList<BiomeGroupData> groups, List<int> sectors, List<bool> ownTown, Dictionary<ZoneCoordinate, float> standing,
+        Dictionary<ZoneCoordinate, int> intactIn, HashSet<ZoneCoordinate> towns)
+    {
+        // The sector under the camera focus is never drawn (DAT_142135230, set every frame from the GameWorld +0x580 object's place); the focus as
+        // RefreshZones takes it.
+        ZoneCoordinate? view = (_focus ?? (this._players.Count > 0 ? this._players[0] : null)) is { } eye ? WorldLayout.ZoneOf(eye.X, eye.Z) : null;
+        var weights = new float[sectors.Count];
+        for (int k = 0; k < sectors.Count; k++)
+        {
+            var site = _wildSites![sectors[k]];
+            float share = _settings.PopulationMultiplier * groups[site.Group].HomelessSpawnAmount;
+            float here = standing.GetValueOrDefault(site.Zone);
+            float w = MathF.Max(0, share + 1 - here);
+            if (ownTown[k]) w *= 0.5f;
+            if (here == 0) w = (w + 1) * 2;
+
+            // A sector whose intact squads are at its share is drawn and passed over in the original; it never makes one. A town's sector and the one
+            // in view never enter the pick.
+            weights[k] = intactIn.GetValueOrDefault(site.Zone) < share && !towns.Contains(site.Zone) && site.Zone != view ? w : 0;
+        }
+
+        return weights;
+    }
+
+    /// <summary>
+    /// Builds the sectors tried, on the population thread when there is one, and spawns the squads made.
+    /// </summary>
+    void BuildTries(World world, List<(WildSite Site, long LoadId, WildHold Hold, int Number)> tries)
+    {
         ulong seed = world.Seed;
         var walk = world.Walkability;
         var players = PlayerSpots(world);
+
         // One job builds them in order until a squad is made; the sectors it did not reach come back empty so their pending marks clear.
         List<BuiltWild> Build()
         {
@@ -420,12 +493,16 @@ public sealed partial class PopulationSystem
             bool made = false;
             foreach (var t in tries)
             {
-                var b = made ? new BuiltWild(t.Site.Index, t.LoadId, default, [], TopUp: true) : BuildSector(t.Site, t.LoadId, seed, walk, players, t.Hold, t.Number);
+                var b = made
+                    ? new BuiltWild(t.Site.Index, t.LoadId, default, [], TopUp: true)
+                    : BuildSector(t.Site, t.LoadId, seed, walk, players, t.Hold, t.Number);
                 made |= b.Squads.Count > 0;
                 results.Add(b);
             }
+
             return results;
         }
+
         if (_work is null) foreach (var b in Build()) SpawnWild(world, b);
         else _work.Add(() => { foreach (var b in Build()) _builtWild.Enqueue(b); });
     }
@@ -445,11 +522,11 @@ public sealed partial class PopulationSystem
     /// <summary>
     /// Whether the town nearest a sector's centre stands in it (<c>FUN_1408f62e0</c>).
     /// </summary>
-
     bool OwnTown(WildSite site)
     {
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(site.Zone.X, site.Zone.Y);
-        return NearestTown(new Vector2((minX + maxX) / 2, (minZ + maxZ) / 2), out _) is { } town && WorldLayout.ZoneOf(town.Position.X, town.Position.Z) == site.Zone;
+        return NearestTown(new Vector2((minX + maxX) / 2, (minZ + maxZ) / 2), out _) is { } town
+            && WorldLayout.ZoneOf(town.Position.X, town.Position.Z) == site.Zone;
     }
 
     /// <summary>
@@ -466,6 +543,7 @@ public sealed partial class PopulationSystem
             if (s.Coverage.Count > 0) zones.UnionWith(s.Coverage);
             else zones.Add(WorldLayout.ZoneOf(s.Position.X, s.Position.Z));
         }
+
         return zones;
     }
 }

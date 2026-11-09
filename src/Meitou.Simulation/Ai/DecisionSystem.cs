@@ -266,6 +266,7 @@ public sealed class DecisionSystem
                 cold.Replan = false;
                 continue;
             }
+
             Decide(world, i, paused);
         }
     }
@@ -288,6 +289,7 @@ public sealed class DecisionSystem
             if (step == DecisionStep.Goals ? PickGoal(world, slot, k, end, ref winner) : PickFirst(world, slot, k, end, ref winner)) break;
             k = end;
         }
+
         if (!paused) cold.Replan = false;   // what its own start ended asks nothing more
         if (Tracing) cold.Decision = new DecisionTrace(world.Tick, winner, _lines.ToArray());
         else if (cold.Decision is not null) cold.Decision = null;
@@ -306,9 +308,11 @@ public sealed class DecisionSystem
                 if (!check.Running) source.Start(world, slot);
                 return true;
             }
+
             Note(source, check.Why ?? "cannot run");
             source.Passed(world, slot, check);
         }
+
         return false;
     }
 
@@ -331,10 +335,12 @@ public sealed class DecisionSystem
                 source.Passed(world, slot, check);
                 continue;
             }
+
             float score = source.Desire(world, slot) * source.Weight * (check.Running ? 1.25f : 1);
             Note(source, score > 0 ? $"score {score:0.###}{(check.Running ? " (running)" : "")}" : "desire 0");
             if (score > 0 && score >= bestScore) (best, bestScore, bestRuns) = (k, score, check.Running);
         }
+
         if (best < 0) return false;
         winner = _sources[best].Name;
         if (!bestRuns) _sources[best].Start(world, slot);
@@ -384,6 +390,7 @@ public sealed class DecisionSystem
                 _picked = k;
                 return check;
             }
+
             return DecisionCheck.No(urgent ? "no urgent job" : "no job can run");
         }
 
@@ -409,6 +416,7 @@ public sealed class DecisionSystem
                 || cold.Running is not { Source: TaskSource.Job, Implicit: false, Job: >= 0 } run
                 || !run.Runs(task) || run.Job >= cold.Jobs.Count)
                 return;
+
             owner._jobs.GetValueOrDefault(cold.Jobs[run.Job].Type)?.Stop(world, slot, run.Job);
         }
     }
