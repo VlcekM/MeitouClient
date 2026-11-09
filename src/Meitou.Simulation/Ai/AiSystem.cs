@@ -412,6 +412,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     const float TieStep = 1e-4f;
 
     /// <summary>
+    /// The factor on the followed character's <c>followMe</c> in the following desire (<c>DAT_14167e8d8</c>, <see cref="FollowDesire"/>).
+    /// </summary>
+    const float FollowShare = 0.5f;
+
+    /// <summary>
     /// The tiers the chooser weighs in turn (<see cref="Choose"/>).
     /// </summary>
     static readonly TaskPriority[] Tiers = [TaskPriority.Urgent, TaskPriority.NonUrgent, TaskPriority.Fluff];
@@ -585,8 +590,11 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
         {
             // A goal aimed at the squad's mission follows the contract's target (a bodyguard its employer), wanted only while there is one alive.
             AiBehaviour.Follow when targeting == TaskTargetType.SquadMission =>
-                board.MissionTarget.IsNone || board.MissionTarget == self || !world.Characters.IsAlive(board.MissionTarget) ? 0 : 1,
-            AiBehaviour.Follow => squad.Leader.IsNone || squad.Leader == self || !world.Characters.IsAlive(squad.Leader) ? 0 : 1,
+                board.MissionTarget.IsNone || board.MissionTarget == self || !world.Characters.IsAlive(board.MissionTarget) ? 0 : FollowDesire(type),
+            AiBehaviour.Follow => squad.Leader.IsNone || squad.Leader == self || !world.Characters.IsAlive(squad.Leader) ? 0 : FollowDesire(type),
+            // Sleeping on the ground has row 98's desire (AI slot 30): the registry gives rows 98, 153, 175, 239 and 261 the same desire
+            // (FUN_140319a60, Verified).
+            AiBehaviour.Sleep when type == TaskType.SleepOnFloor => SleepingDesire(world, board, self.Slot),
             AiBehaviour.GoHome => AtHomeTown(world, squad, board, self) ? 0 : GoHomeDesire(world, self),
             // Static guard's finder (FUN_14099edd0, Verified; 38 and 268 both register it, 268 with the indoors flag; 157 has its own, FUN_14099f1a0)
             // returns 0.5 on its normal exit; only its visitor branch (a node beside a neutral stranger, not modelled) returns 1. Staying home needs
@@ -642,6 +650,13 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             _ => 1,
         };
     }
+
+    /// <summary>
+    /// Following's desire (AI slot 15, <c>FUN_1405a33f0</c>, <b>Verified</b>; rows 31, 40, 44, 141 and 289 register it): 0.5 times the followed
+    /// character's <c>followMe</c> (StateBroadcastData <c>+0xa8</c>), 1 when the target does not resolve. What sets <c>followMe</c> is
+    /// <b>Unknown</b>; Meitou reads 1, so a member weighs following its leader at 0.5.
+    /// </summary>
+    static float FollowDesire(TaskType type) => type is TaskType.FollowSquadleader or TaskType.FollowPlayerOrder ? FollowShare : 1;
 
     /// <summary>
     /// Going home while away (AI slot 56, <c>FUN_1405a3710</c>, Verified): 0.5, but 0.01 for a slave (state 1) that is not with the player

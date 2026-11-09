@@ -758,6 +758,14 @@ by it when the row has an effect, `FUN_14060fd80`);
 - Desires (`AI` vtable slots): 19 = 1, 39 = 0.1 (Idleness), 40 = 0.25 (Patrolling, Patrolling town), 41 = 0.5 (Stand at node, Shopkeeper, Static guard,
   general node), 48 = 0.01 + 0.4 x rand (Wandering town, Staying home, Sitting around, Static town guard, Shopping 119). 125 rows desire 1; 102 call a
   function of their own (sleeping, following, retreating, turrets, Shopping 118: 1 until the shopping list is done, see its entry below).
+- Shared desires (**Verified**: the desire member of each registration in `FUN_140319a60`, the thunks' AI vtable slots, `FUN_1405a33f0` decompiled):
+  rows 98, 153, 175, 239 and 261 have Sleeping's desire (AI slot 30, [row 98](#slave-work-shout-and-capture)), so Sleeping on ground weighs danger and the last sleep
+  as a bed does. Rows 31, 40, 44, 141 and 289 have Following's (AI slot 15): 0.5 (`DAT_14167e8d8`) times the followed character's StateBroadcastData
+  `+0xa8` (`followMe`, KenshiLib name), 1.0 when the target does not resolve. What writes `followMe` is **Unknown** (no write found next to the
+  state object's getter). **Observed** (KenshiOracle Sho-Battai hold, 2026-11-09): skimmer packs (`animal agressive patrol nocturnal`, whose Squad list
+  holds Animal Sleep from its sleep add-on and Follow leader at the same weight) sleep with their sleeping leader, while members follow a patrolling
+  one, so `followMe` stays between 0 and 2 there. Meitou: `AiSystem.FollowDesire` (0.5 for 141 and 44, `followMe` read as 1) and
+  `AiSystem.SleepingDesire` for 175.
 
 | Type | Commitment (h) | Crowd |
 |---|---|---|
