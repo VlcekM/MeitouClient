@@ -849,7 +849,8 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     {
         if (!cold.IsPlayer) return;
 
-        Console.WriteLine($"order     {cold.Name} dropped its move at tick {world.Tick}: {why}; at {n.Position.X:0}, {n.Position.Y:0}, {n.Position.Z:0}, goal {n.Goal.X:0}, {n.Goal.Y:0}");
+        Console.WriteLine($"order     {cold.Name} dropped its move at tick {world.Tick}: {why}; " +
+            $"at {n.Position.X:0}, {n.Position.Y:0}, {n.Position.Z:0}, goal {n.Goal.X:0}, {n.Goal.Y:0}");
     }
 
     #endregion

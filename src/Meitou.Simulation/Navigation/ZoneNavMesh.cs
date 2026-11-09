@@ -299,7 +299,11 @@ public sealed class ZoneNavMesh
             {
                 var (x0, x1, z0, z1) = CellRange(m, p);
                 for (int z = z0; z <= z1; z++)
-                    for (int x = x0; x <= x1; x++) { int c = z * Columns + x; Cells[c][counts[c]++] = p; }
+                    for (int x = x0; x <= x1; x++)
+                    {
+                        int c = z * Columns + x;
+                        Cells[c][counts[c]++] = p;
+                    }
             }
         }
 

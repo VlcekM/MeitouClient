@@ -141,7 +141,8 @@ public static class OriginalNavTiles
                 result[^1] = result[^1] with { Hash = value };
                 hashed = true;
             }
-            else if (name == "Info" && v["variant"] is HkObject info && info["string"] is string text && mesh is not null && Group(mesh, text) is { } group)
+            else if (name == "Info" && v["variant"] is HkObject info && info["string"] is string text && mesh is not null
+                && Group(mesh, text) is { } group)
             {
                 result.Add(group);
                 (mesh, hashed) = (null, false);

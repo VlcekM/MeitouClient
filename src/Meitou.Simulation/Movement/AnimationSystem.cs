@@ -1083,7 +1083,8 @@ public sealed class AnimationSystem(
     /// <summary>
     /// Starts or ends the character's fall and getting-up action, from its posture and ragdoll this tick, and records the posture for the next one.
     /// </summary>
-    void UpdateFallAndGetUp(CharacterAnimation a, CharacterCold cold, bool down, bool carried, bool crawling, bool inBed, bool inCage, RagdollView ragdoll)
+    void UpdateFallAndGetUp(CharacterAnimation a, CharacterCold cold, bool down, bool carried, bool crawling, bool inBed,
+        bool inCage, RagdollView ragdoll)
     {
         // Held in a cage or on a pole, it plays the fixture's own pose whatever it was doing: a fall left over from before it was put in, or a
         // get-up, would show over it (docs/game/locks.md "Cages and beds": a captive lies in a cage or stands on a pole, and an awake one stands at
@@ -1259,7 +1260,8 @@ public sealed class AnimationSystem(
     /// the times advanced, with the clip lengths of <paramref name="lengths"/>; returns the root motion of the relocating clips times
     /// <paramref name="rootScale"/>.
     /// </summary>
-    Vector2 Settle(CharacterAnimation a, List<(int Index, float Weight)> wanted, int legs, int lift, float liftTime, int technique, in CombatView fight,
+    Vector2 Settle(CharacterAnimation a, List<(int Index, float Weight)> wanted, int legs, int lift, float liftTime,
+        int technique, in CombatView fight,
         float speed, float dt, AnimationLengths lengths, float rootScale, ulong seed, ulong key, long tick, float legsShare = 1)
     {
         a.HoldsStill = false;
@@ -1350,14 +1352,20 @@ public sealed class AnimationSystem(
             bool synched = d.Synchs && d.MoveSpeed != 0;
             if (layer.Definition == lift) layer.Time = liftTime;
             else if (layer.Definition == technique) layer.Time = fight.Progress * length;   // the combat system's timing: the blow lands at its frame
-            else if (layer.Definition == a.Action) layer.Time = MathF.Max(a.ActionTime, 0);   // held at the start while getting up blends out of a ragdoll
+            // held at the start while getting up blends out of a ragdoll
+            else if (layer.Definition == a.Action) layer.Time = MathF.Max(a.ActionTime, 0);
             else if (layer.Target <= 0 && !RunsFading(d, synched)) layer.Time = FadingTime(d, layer, dt);
             else if (IsStrafe(d))
-                layer.Time = Wrap(layer.Time + dt * a.Rate * d.PlaySpeed * a.StrafeSpeed, length);   // signed: a step the other way plays it backwards
+            {
+                // signed: a step the other way plays it backwards
+                layer.Time = Wrap(layer.Time + dt * a.Rate * d.PlaySpeed * a.StrafeSpeed, length);
+            }
             else if (synched) layer.Time = (a.Phase + d.SynchOffset - MathF.Floor(a.Phase + d.SynchOffset)) * length;
             else if (d.MoveSpeed != 0) layer.Time += dt * a.Rate * d.PlaySpeed * speed;
             else layer.Time += dt * (d.PlaySpeed > 0 ? d.PlaySpeed : d.Technique ? 1 : 0) * (layer.Definition == a.HeldIndex ? a.HeldRate : 1);
-            if (!d.Loop && !synched && !IsStrafe(d)) layer.Time = Math.Clamp(layer.Time, 0, length * 0.999f);   // a one-shot clip holds its last frame
+
+            // a one-shot clip holds its last frame
+            if (!d.Loop && !synched && !IsStrafe(d)) layer.Time = Math.Clamp(layer.Time, 0, length * 0.999f);
             if (layer.Time > before && dt > 0) layer.Rate = (layer.Time - before) / dt;
             if (d.Relocates && layer.Time > before) root += (lengths.Root(d.Clip, layer.Time) - lengths.Root(d.Clip, before)) * layer.Weight;
             if (layer.Weight <= 0 && layer.Target <= 0) continue;   // faded out: dropped
@@ -1595,7 +1603,8 @@ public sealed class AnimationSystem(
     /// is wanted at all, and how big, the combat system decides): one of the hit part's stumbles with that <c>big stumble</c> and <c>stumble from</c>
     /// = the side, drawn by weight with <paramref name="roll"/>; with its length in seconds at its play speed. Null when none fits.
     /// </summary>
-    static (int Clip, float Seconds)? ChooseStumble(AnimationLibrary library, AnimationLengths lengths, CharacterCold cold, string part, bool big, int side,
+    static (int Clip, float Seconds)? ChooseStumble(AnimationLibrary library, AnimationLengths lengths, CharacterCold cold,
+        string part, bool big, int side,
         float roll)
     {
         if (library.Animal(cold.RecordId) is not null) return null;

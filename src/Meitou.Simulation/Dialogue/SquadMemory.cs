@@ -9,7 +9,8 @@ namespace Meitou.Simulation.Dialogue;
 /// </summary>
 public static class MemoryTag
 {
-    public const int None = 0, Intruder = 1, Lifesaver = 2, FreedMe = 3, StoleFromMe = 4, Captor = 5, Friendly = 6, DefeatedMySquad = 7, SquadLostToMe = 8,
+    public const int None = 0, Intruder = 1, Lifesaver = 2, FreedMe = 3, StoleFromMe = 4, Captor = 5, Friendly = 6,
+        DefeatedMySquad = 7, SquadLostToMe = 8,
         KilledMyFriend = 9, ScrewedThisGuy = 10;
     public const int Aggressor = 2, TempAlly = 3, TempEnemy = 4, Criminal = 7;
     /// <summary>
@@ -119,7 +120,8 @@ public sealed class SquadMemory
     {
         if (squad < 0 || (uint)tag > 31 || !_index.TryGetValue((squad, who), out var e) || (e.Short >> tag & 1) == 0) return;
         e.Short &= ~(1u << tag);
-        if (tag == MemoryTag.TempEnemy && !_entries.Any(kv => kv.Key.Squad == squad && (kv.Value.Short >> MemoryTag.TempEnemy & 1) != 0)) _tempEnemySquads.Remove(squad);
+        if (tag == MemoryTag.TempEnemy && !_entries.Any(kv => kv.Key.Squad == squad && (kv.Value.Short >> MemoryTag.TempEnemy & 1) != 0))
+            _tempEnemySquads.Remove(squad);
     }
 
     /// <summary>
@@ -139,7 +141,8 @@ public sealed class SquadMemory
     /// </summary>
     public void Copy(int from, int to)
     {
-        foreach (var ((squad, who), e) in _entries.Where(kv => kv.Key.Squad == from).ToArray()) _entries[(to, who)] = _index[(to, who)] = new Entry { Time = e.Time, Long = e.Long, Short = e.Short };
+        foreach (var ((squad, who), e) in _entries.Where(kv => kv.Key.Squad == from).ToArray())
+            _entries[(to, who)] = _index[(to, who)] = new Entry { Time = e.Time, Long = e.Long, Short = e.Short };
         if (_player.TryGetValue(from, out var p)) _player[to] = new Entry { Time = p.Time, Long = p.Long, Short = p.Short };
         if (_tempPlayerAlly.Contains(from)) _tempPlayerAlly.Add(to);
         if (_tempEnemySquads.Contains(from)) _tempEnemySquads.Add(to);
@@ -184,7 +187,8 @@ public sealed class SquadMemory
         foreach (var ((squad, who), e) in _entries)
         {
             if (counts[squad] <= ForgetAbove || (int)(world.GameHours - e.Time) <= ForgetAfterHours) continue;
-            bool player = world.Characters.TryResolveNext(who, out int slot) && world.Characters.Cold(slot) is { } c && c.Faction == world.Player.Faction;
+            bool player = world.Characters.TryResolveNext(who, out int slot) && world.Characters.Cold(slot) is { } c
+                && c.Faction == world.Player.Faction;
             if (!player) (gone ??= []).Add((squad, who));
         }
         if (gone is null) return;
@@ -223,7 +227,11 @@ public sealed class SquadMemory
     {
         var data = Snapshot(squad);
         if (data is null) return null;
-        foreach (var item in data.Entries) { _entries.Remove((squad, item.Who)); _index.Remove((squad, item.Who)); }
+        foreach (var item in data.Entries)
+        {
+            _entries.Remove((squad, item.Who));
+            _index.Remove((squad, item.Who));
+        }
         _player.Remove(squad);
         _tempPlayerAlly.Remove(squad);
         _tempEnemySquads.Remove(squad);
@@ -261,8 +269,21 @@ public sealed class SquadMemory
     {
         if (IsEmpty) return;
         hasher.Add(0x4D656D6F);
-        foreach (var ((squad, who), e) in _entries) { hasher.Add(squad); hasher.Add(who); hasher.Add(e.Time); hasher.Add((ulong)e.Long); hasher.Add((ulong)e.Short); }
-        foreach (var (squad, e) in _player) { hasher.Add(squad); hasher.Add(e.Time); hasher.Add((ulong)e.Long); hasher.Add((ulong)e.Short); }
+        foreach (var ((squad, who), e) in _entries)
+        {
+            hasher.Add(squad);
+            hasher.Add(who);
+            hasher.Add(e.Time);
+            hasher.Add((ulong)e.Long);
+            hasher.Add((ulong)e.Short);
+        }
+        foreach (var (squad, e) in _player)
+        {
+            hasher.Add(squad);
+            hasher.Add(e.Time);
+            hasher.Add((ulong)e.Long);
+            hasher.Add((ulong)e.Short);
+        }
         foreach (int squad in _tempPlayerAlly) hasher.Add(squad);
     }
 }

@@ -40,7 +40,9 @@ public sealed class NavSystem : IDisposable
         Walkability = new NavmeshWalkability(
             terrainHeight,
             routeTerrain: () => ReadRouteTerrain(install, terrainHeight),
-            routeObstacles: () => [.. _footprints.Value.Obstacles(levels.Buildings(), levels, _placementHeight), .. _footprints.Value.FeatureObstacles(_placementHeight)]);
+            routeObstacles: () =>
+                [.. _footprints.Value.Obstacles(levels.Buildings(), levels, _placementHeight),
+                .. _footprints.Value.FeatureObstacles(_placementHeight)]);
         _service = new NavMeshService(install, db, levels, Walkability, settings, cache, Runtime);
         Walkability.KeepStanding = _service.KeepAt;
         Walkability.DoorGeometry = new NavDoorGeometry(install, db);

@@ -114,7 +114,8 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
         if (data is not null && data.TownAt(world.Characters.Next[victim].Position) is >= 0 and var town)
         {
             if (v.SquadId >= 0 && world.Squads.Find(v.SquadId) is { Town: var home } && home == town) w = 1;
-            else if (town < data.SiteFactions.Count && data.SiteFactions[town] is >= 0 and var owner && Relations.Contains(owner) && Relations.Contains(v.Faction)
+            else if (town < data.SiteFactions.Count && data.SiteFactions[town] is >= 0 and var owner && Relations.Contains(owner)
+                && Relations.Contains(v.Faction)
                 && Relations.IsAlly(owner, v.Faction)) w = 0.6f;
         }
         return w * v.FactionImportance;
@@ -174,7 +175,11 @@ public sealed class FactionDeeds(FactionRelations relations, PopulationData? dat
     void Remember(World world, int striker, int victim, bool dead)
     {
         var table = world.Characters;
-        if (Memory is not { } memory || table.Cold(striker) is not { } s || table.Cold(victim) is not { } v || v.SquadId < 0 || v.SquadId == s.SquadId) return;
+        if (Memory is not { } memory || table.Cold(striker) is not { } s || table.Cold(victim) is not { } v || v.SquadId < 0
+            || v.SquadId == s.SquadId)
+        {
+            return;
+        }
         var strikerId = table.IdOf(striker);
         if (dead) memory.Remember(world, v.SquadId, strikerId, Dialogue.MemoryTag.KilledMyFriend);
         if (world.Squads.Find(v.SquadId) is not { } squad) return;

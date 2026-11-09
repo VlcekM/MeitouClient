@@ -40,7 +40,8 @@ public sealed record MemberPlan(string RecordId, SquadRole Role, int Index, Vect
 /// <summary>
 /// What a squad template makes, before any character exists: the members in creation order and the squads made recursively for <c>slaves</c>.
 /// </summary>
-public sealed record SquadPlan(SquadTemplate Template, IReadOnlyList<MemberPlan> Members, IReadOnlyList<SquadPlan> Slaves, IReadOnlyList<string> Problems)
+public sealed record SquadPlan(SquadTemplate Template, IReadOnlyList<MemberPlan> Members, IReadOnlyList<SquadPlan> Slaves,
+    IReadOnlyList<string> Problems)
 {
     /// <summary>
     /// Members of this squad and, recursively, of its slave squads.
@@ -89,12 +90,16 @@ public static class SquadFactory
     /// </summary>
     public static Vector2 Offset(int i, float spacing = 3) => new(spacing * (i % 8), spacing * (i / 8) + (i % 2));
 
-    public static SquadPlan Plan(GameDatabase db, SquadTemplate template, float multiplier, ulong seed, ulong key, IWorldStates? states = null, bool checkWorldState = true)
+    /// <summary>
+    /// The members a squad template spawns with (their records, roles, offsets and ages) and its slave squads' plans, with the problems met; the
+    /// draws come from <paramref name="seed"/> and <paramref name="key"/> in member order.
+    /// </summary>
+    public static SquadPlan Plan(
+        GameDatabase db, SquadTemplate template, float multiplier, ulong seed, ulong key, IWorldStates? states = null, bool checkWorldState = true)
     {
         states ??= IWorldStates.None;
         var members = new List<MemberPlan>();
         var problems = new List<string>();
-        var slaves = new List<SquadPlan>();
         ulong counter = 0;
         ulong Next() => Rng.Hash(seed, key, RngPurpose.Spawn, counter++);
         bool haveLeader = false;
@@ -106,7 +111,9 @@ public static class SquadFactory
             members.Add(new MemberPlan(recordId, role, i, Offset(i, spacing), animal, age));
         }
 
-        bool Gated(string recordId) => db.Find(recordId) is { } r && r.GetReferences("world state").Any(w => !IWorldStates.Passes(states, db, w.TargetStringId, w.Values.Value0));
+        bool Gated(string recordId) =>
+            db.Find(recordId) is { } r
+                && r.GetReferences("world state").Any(w => !IWorldStates.Passes(states, db, w.TargetStringId, w.Values.Value0));
 
         // The squad itself can be gated by its own world state (section 4: the AND gate for the spawn); not a slave squad made by its owner's
         // recursion (FUN_140583a10 never tests it).
@@ -159,6 +166,17 @@ public static class SquadFactory
         Group(template.Animals, SquadRole.Squad1, true, 3, "animals");
         Group(template.Animals2, SquadRole.Squad2, true, 5, "animals2");
 
+        var slaves = SlavePlans(db, template, multiplier, seed, key, states, problems);
+        return new SquadPlan(template, members, slaves, problems);
+    }
+
+    /// <summary>
+    /// The plans of a squad's slave squads, each keyed by its number; a missing or non-squad record is a problem.
+    /// </summary>
+    static List<SquadPlan> SlavePlans(
+        GameDatabase db, SquadTemplate template, float multiplier, ulong seed, ulong key, IWorldStates states, List<string> problems)
+    {
+        var slaves = new List<SquadPlan>();
         foreach (var slave in template.Slaves)
         {
             if (db.Find(slave.Id) is not { } record || !IsTemplate(record))
@@ -166,9 +184,10 @@ public static class SquadFactory
                 problems.Add($"Missing squad slaves data reference ({slave.Id}) for squad '{template.Name}'");
                 continue;
             }
-            slaves.Add(Plan(db, SquadTemplate.From(record), multiplier, seed, Rng.Mix(key ^ (ulong)slaves.Count + SeedSalts.SlaveSquad), states, checkWorldState: false));
+            slaves.Add(Plan(db, SquadTemplate.From(record), multiplier, seed, Rng.Mix(key ^ (ulong)slaves.Count + SeedSalts.SlaveSquad), states,
+                checkWorldState: false));
         }
-        return new SquadPlan(template, members, slaves, problems);
+        return slaves;
     }
 
     /// <summary>

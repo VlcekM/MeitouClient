@@ -102,8 +102,13 @@ sealed class BountyBook
         double hoursPerTick = tickSeconds * 11.0 / 1200.0;
         var lines = new List<BountyLine>(ledger.Count);
         foreach (var e in ledger.Entries)
+        {
             if (e.Amount > 0)
-                lines.Add(new BountyLine(e.FactionName, e.Amount, CrimeTable.Names(e.Crimes), CrimeTable.LifetimeHours(e.Amount) - (tick - e.RaisedTick) * hoursPerTick, e.Faction == local));
+            {
+                lines.Add(new BountyLine(e.FactionName, e.Amount, CrimeTable.Names(e.Crimes),
+                    CrimeTable.LifetimeHours(e.Amount) - (tick - e.RaisedTick) * hoursPerTick, e.Faction == local));
+            }
+        }
         return lines;
     }
 }

@@ -19,13 +19,15 @@ public enum CharacterTradeKind : byte { SlaveSelling, SlaveBuying, AnimalBuying 
 /// <summary>
 /// One row of the window (<c>Kenshi_CharacterSelectionBox</c>): the character, its name, its price and the label/value lines of its two stats panels.
 /// </summary>
-public sealed record CharacterTradeRow(CharacterId Character, string Name, long Price, IReadOnlyList<(string Label, string Value)> Panel1, IReadOnlyList<(string Label, string Value)> Panel2);
+public sealed record CharacterTradeRow(CharacterId Character, string Name, long Price, IReadOnlyList<(string Label, string Value)> Panel1,
+    IReadOnlyList<(string Label, string Value)> Panel2);
 
 /// <summary>
 /// The open character trading window as the UI shows it (published with the snapshot): its title and confirm caption, the buyer's money (the slaver's
 /// squad when selling, the player's when buying) and the rows. <see cref="Id"/> is new for every opening.
 /// </summary>
-public sealed record CharacterTradeView(long Id, CharacterTradeKind Kind, CharacterId Slaver, CharacterId Player, string Title, string ConfirmCaption, long BuyerMoney,
+public sealed record CharacterTradeView(long Id, CharacterTradeKind Kind, CharacterId Slaver, CharacterId Player, string Title,
+    string ConfirmCaption, long BuyerMoney,
     IReadOnlyList<CharacterTradeRow> Rows);
 
 /// <summary>
@@ -65,7 +67,8 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     /// The stats a bought animal keeps a quarter of (<c>FUN_1406aa730</c>, <b>Observed</b>: CharStats +0x90, +0x94, +0x124, +0x120, +0x10c, +0xf0,
     /// +0xa4, +0x9c, +0xa8).
     /// </summary>
-    static readonly StatsEnumerated[] TamedStats = [StatsEnumerated.Toughness, StatsEnumerated.Athletics, StatsEnumerated.MeleeDefence, StatsEnumerated.MeleeAttack,
+    static readonly StatsEnumerated[] TamedStats = [StatsEnumerated.Toughness, StatsEnumerated.Athletics, StatsEnumerated.MeleeDefence,
+        StatsEnumerated.MeleeAttack,
         StatsEnumerated.MartialArts, StatsEnumerated.Dodge, StatsEnumerated.Stealth, StatsEnumerated.MassCombat, StatsEnumerated.Swimming];
 
     /// <summary>
@@ -152,14 +155,26 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         if (_characterTradeAfter is not { } t) return;
         _characterTradeAfter = null;
         var table = world.Characters;
-        if (!table.TryResolveNext(t.Slaver, out int s) || !table.TryResolveNext(t.Player, out int p) || table.Cold(s) is not { } sc || table.Cold(p) is not { IsPlayer: true } pc) return;
+        if (!table.TryResolveNext(t.Slaver, out int s) || !table.TryResolveNext(t.Player, out int p) || table.Cold(s) is not { } sc
+            || table.Cold(p) is not { IsPlayer: true } pc)
+        {
+            return;
+        }
         var rows = new List<CharacterTradeRow>();
         if (t.Kind == CharacterTradeKind.SlaveSelling)
         {
             if (world.Squads.Find(pc.SquadId) is { } squad)
+            {
                 foreach (var id in squad.Members)
-                    if (table.TryResolveNext(id, out int m) && table.Cold(m) is { Medical.Dead: false } mc && Vector3.Distance(table.Next[m].Position, table.Next[s].Position) <= SlaveSaleRange)
-                        rows.Add(new(id, mc.Name, SalePrice(mc, t.Price), [(Loc.Tr("Name:"), mc.Name), (Loc.Tr("WARNING: Character will become a slave!"), "")], []));
+                {
+                    if (table.TryResolveNext(id, out int m) && table.Cold(m) is { Medical.Dead: false } mc
+                        && Vector3.Distance(table.Next[m].Position, table.Next[s].Position) <= SlaveSaleRange)
+                    {
+                        rows.Add(new(id, mc.Name, SalePrice(mc, t.Price),
+                            [(Loc.Tr("Name:"), mc.Name), (Loc.Tr("WARNING: Character will become a slave!"), "")], []));
+                    }
+                }
+            }
         }
         else if (t.Kind == CharacterTradeKind.AnimalBuying)
         {
@@ -172,8 +187,10 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
             {
                 if (!table.Next[i].Alive || table.Cold(i) is not { SlaveState: 1, Medical.Dead: false } c || c.SlaveOwner != sc.Faction) continue;
                 rows.Add(new(table.IdOf(i), c.Name, PurchasePrice(world, c, t.Price),
-                    StatLines(c, StatsEnumerated.Strength, StatsEnumerated.Dexterity, StatsEnumerated.Toughness, StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence),
-                    StatLines(c, StatsEnumerated.Labouring, StatsEnumerated.Farming, StatsEnumerated.Cooking, StatsEnumerated.Engineering, StatsEnumerated.Medic)));
+                    StatLines(c, StatsEnumerated.Strength, StatsEnumerated.Dexterity, StatsEnumerated.Toughness, StatsEnumerated.MeleeAttack,
+                        StatsEnumerated.MeleeDefence),
+                    StatLines(c, StatsEnumerated.Labouring, StatsEnumerated.Farming, StatsEnumerated.Cooking, StatsEnumerated.Engineering,
+                        StatsEnumerated.Medic)));
             }
         }
         _characterTrade = new(++_characterTradeId, t.Kind, t.Slaver, t.Player, rows);
@@ -192,12 +209,14 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         int town = world.Squads.Find(sc.SquadId)?.Town ?? -1;
         bool Near(int slot, float range) => Vector3.Distance(table.Next[slot].Position, at) <= range;
         for (int i = 0; i < table.HighWater; i++)
-            if (town >= 0 && table.Next[i].Alive && table.Cold(i) is { Animal: not null, Medical.Dead: false, IsPlayer: false } ac && ac.Faction == sc.Faction && Near(i, AnimalTownRange)
+            if (town >= 0 && table.Next[i].Alive && table.Cold(i) is { Animal: not null, Medical.Dead: false, IsPlayer: false } ac
+                && ac.Faction == sc.Faction && Near(i, AnimalTownRange)
                 && (world.Squads.Find(ac.SquadId)?.Town ?? -1) == town)
                 found.Add((table.IdOf(i), ac));
         if (world.Squads.Find(sc.SquadId) is { } own)
             foreach (var id in own.Members)
-                if (table.TryResolveNext(id, out int m) && table.Cold(m) is { Animal: not null, Medical.Dead: false } ac && Near(m, AnimalSquadRange) && !found.Exists(f => f.Id == id))
+                if (table.TryResolveNext(id, out int m) && table.Cold(m) is { Animal: not null, Medical.Dead: false } ac && Near(m, AnimalSquadRange)
+                    && !found.Exists(f => f.Id == id))
                     found.Add((id, ac));
         return found;
     }
@@ -205,7 +224,8 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     /// <summary>
     /// An animal's price (<c>FUN_1406a9440</c>): the override when above 0, else <see cref="AnimalBasePrice"/>, times (age + 0.1), truncated.
     /// </summary>
-    public static long AnimalPrice(CharacterCold c, int priceOverride) => (int)(((c.Stats?.Scale ?? 1) + 0.1f) * (priceOverride > 0 ? priceOverride : AnimalBasePrice));
+    public static long AnimalPrice(CharacterCold c, int priceOverride) =>
+        (int)(((c.Stats?.Scale ?? 1) + 0.1f) * (priceOverride > 0 ? priceOverride : AnimalBasePrice));
 
     /// <summary>
     /// The first panel of an animal's row (<c>FUN_1406a9440</c>): "Strength:" and "Melee Attack:" as whole stats read through the age, "Gender:"
@@ -268,9 +288,14 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
     /// </summary>
     public void RefreshCharacterTrade(World world)
     {
-        if (_characterTrade is not { } t) { _characterTradeView = null; return; }
+        if (_characterTrade is not { } t)
+        {
+            _characterTradeView = null;
+            return;
+        }
         bool buying = t.Kind != CharacterTradeKind.SlaveSelling;
-        string title = t.Kind switch { CharacterTradeKind.SlaveBuying => "Buying Slaves", CharacterTradeKind.AnimalBuying => "Buying Animals", _ => "Selling Slaves" };
+        string title = t.Kind switch { CharacterTradeKind.SlaveBuying => "Buying Slaves", CharacterTradeKind.AnimalBuying => "Buying Animals",
+            _ => "Selling Slaves" };
         _characterTradeView = new(t.Id, t.Kind, t.Slaver, t.Player, Loc.Tr(title), Loc.Tr(buying ? "Buy" : "Sell"), BuyerMoney(world, t), t.Rows);
     }
 
@@ -288,7 +313,8 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         if (!table.TryResolveNext(t.Slaver, out int s) || table.Cold(s) is not { } sc) return;
         var chosen = new List<(int Slot, CharacterCold Cold, long Price)>();
         foreach (var row in t.Rows)
-            if (selected.Contains(row.Character) && table.TryResolveNext(row.Character, out int c) && table.Cold(c) is { Medical.Dead: false } cc) chosen.Add((c, cc, row.Price));
+            if (selected.Contains(row.Character) && table.TryResolveNext(row.Character, out int c) && table.Cold(c) is { Medical.Dead: false } cc)
+                chosen.Add((c, cc, row.Price));
         long total = chosen.Sum(x => x.Price);
         if (chosen.Count == 0 || total > buyerMoney) return;
         if (t.Kind == CharacterTradeKind.AnimalBuying)
@@ -329,7 +355,9 @@ sealed class CharacterTrading(DialogueSystem system, PopulationData data)
         TaskStart.Stand(table, slot);
         if (caged && table.TryResolveNext(player, out int buyer)) WalkOutOfCage(world, slot, buyer);
         if (Locks.LockSystem.WornShackles(c)?.Lock is { } l) l.Locked = false;
-        system.Memory.Remember(world, c.SquadId, player, MemoryTag.FreedMe);   // its (new) squad remembers the buyer as the one who freed it (FUN_1406add20, Observed)
+
+        // its (new) squad remembers the buyer as the one who freed it (FUN_1406add20, Observed)
+        system.Memory.Remember(world, c.SquadId, player, MemoryTag.FreedMe);
         system.FireEvent(world, id, player, DialogueSystem.BoughtMeFromSlavery);
         ChangeTowardPlayer(world, slaver.Faction, 1);
         ChangeTowardPlayer(world, c.Faction, 4);

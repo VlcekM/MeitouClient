@@ -122,7 +122,8 @@ internal static class NavMeshPipeline
         int doorPolygons = m.Areas.Count(a => a == NavArea.Door);
         string doorless = g.InteriorDoorless ? ", doorless" : "";
         string destroyed = g.InteriorDestroyed ? ", destroyed" : "";
-        log($"  interior {g.InteriorOf}: {m.PolygonCount} polygons, {m.KeptCount} kept, {g.Seeds.Count} seeds ({seeds}), {doorPolygons} door polygons, " +
+        log($"  interior {g.InteriorOf}: {m.PolygonCount} polygons, {m.KeptCount} kept, " +
+            $"{g.Seeds.Count} seeds ({seeds}), {doorPolygons} door polygons, " +
             $"{g.Painters.Count} painters{doorless}{destroyed}, hull y {g.InteriorHull!.YMin:0}..{g.InteriorHull!.YMax:0}");
 
         // Its connected components (neighbours only, not links), largest first: a stair or upper floor the seed did not reach shows up as an unkept one.

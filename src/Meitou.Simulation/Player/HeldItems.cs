@@ -27,7 +27,8 @@ sealed class HeldItems(PopulationData? data)
     /// <summary>
     /// The message for an item locked on its wearer, lifted or right-clicked.
     /// </summary>
-    internal const string LockedText = "This item is locked in place and cannot be removed. You can try to pick the lock, find a saw, or use brute strength.";
+    internal const string LockedText =
+        "This item is locked in place and cannot be removed. You can try to pick the lock, find a saw, or use brute strength.";
 
     /// <summary>
     /// Re-dresses a character whose worn items changed (null without game data).

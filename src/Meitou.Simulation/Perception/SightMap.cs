@@ -217,79 +217,113 @@ public sealed class SightMap
         var table = world.Characters;
         var prev = table.Previous;
         _count = table.HighWater;
-        if (_place.Length < _count)
-        {
-            int size = Math.Max(_count, _place.Length * 2);
-            int was = _place.Length;
-            Array.Resize(ref _place, size);
-            _place.AsSpan(was).Fill(-1);
-            Array.Resize(ref _onTop, size);
-            Array.Resize(ref _light, size);
-            Array.Resize(ref _wanted, size);
-            Array.Resize(ref _floorOf, size);
-            Array.Resize(ref _probed, size);
-            Array.Resize(ref _low, size);
-            Array.Resize(ref _facing, size);
-        }
+        if (_place.Length < _count) Grow();
         for (int s = 0; s < _count; s++)
         {
             if (!world.Steps(s)) continue;   // the far cadence: a skipped character keeps its last place, posture and facing
-            int was = _place[s];
-            _place[s] = -1;
-            _low[s] = prev[s].Alive && table.Cold(s)?.Medical is { Prone: true };
-            _facing[s] = table.Cold(s)?.Animation is { HasDrawYaw: true } drawn ? drawn.DrawYaw : prev[s].Yaw;
-            if (!prev[s].Alive || _rooms.Count == 0)
-            {
-                _onTop[s] = false;
-                _probed[s] = default;
-                continue;
-            }
-            var c = table.Cold(s);
-            var at = prev[s].Position;
-            if (c?.InWhat is { } held && world.Fixtures.Find(held) is { } fixture)
-            {
-                _place[s] = _roomOf.GetValueOrDefault(fixture.Building, -1);
-                _onTop[s] = false;
-                if (_place[s] != was)
-                {
-                    _floorOf[s] = -1;
-                    _probed[s] = default;
-                }
-            }
-            else if (RoomAt(at) is var r and >= 0)
-            {
-                _place[s] = r;
-                // The overhead and floor queries are triangle searches: kept while the character stays put in the same room.
-                var key = new Probe(at, r, prev[s].Generation);
-                if (r != was || _probed[s] != key)
-                {
-                    // A building that enforces its ceiling has nobody on top above its ground floor; elsewhere the overhead query decides.
-                    _floorOf[s] = _rooms[r].EnforcesCeiling ? _rooms[r].Volume.FloorAt(at) : -1;
-                    _onTop[s] = !(_rooms[r].EnforcesCeiling && _floorOf[s] != 0) && !_rooms[r].Volume.Covered(at);
-                    _probed[s] = key;
-                }
-            }
-            else
-                _onTop[s] = false;
+            Place(world, s);
         }
+
         // A carried body is where its carrier is (the original's location of a carried character is its carrier's).
         for (int s = 0; s < _count; s++)
+        {
             if (prev[s].Alive && table.Cold(s) is { CarriedBy.IsNone: false } c && table.TryResolveNext(c.CarriedBy, out int carrier)
-                    && carrier < _count)
+                && carrier < _count)
+            {
                 (_place[s], _onTop[s]) = (_place[carrier], _onTop[carrier]);
+            }
+        }
         RefreshSites(world);
-        // The lights characters carry (lanterns; docs/formats/lights.md "Carried lanterns"), at their owner, lit as their night flag allows.
-        _carried.Clear();
-        for (int s = 0; s < _count; s++)
-            if (prev[s].Alive && table.Cold(s)?.Appearance is { Lights.Count: > 0 } look)
-                foreach (var cl in look.Lights)
-                    if (cl.Light.Intensity > 0 && cl.Light.Radius > 0 && WorldLights.IsLit(cl.Light, Daylight))
-                        _carried.Add((s, cl.Light, prev[s].Position + new Vector3(0, cl.Light.Position.Y, 0)));
+        CollectCarriedLights(world);
         _brightest = 0;
         for (int s = 0; s < _count; s++)
         {
             _light[s] = prev[s].Alive ? SampleLight(s, prev[s].Position, table.Cold(s) is { IsPlayer: true }) : 1;
             if (prev[s].Alive) _brightest = MathF.Max(_brightest, _light[s]);
+        }
+    }
+
+    /// <summary>
+    /// Grows the per-character arrays to hold <see cref="_count"/> characters (at least doubling them); new places are -1.
+    /// </summary>
+    void Grow()
+    {
+        int size = Math.Max(_count, _place.Length * 2);
+        int was = _place.Length;
+        Array.Resize(ref _place, size);
+        _place.AsSpan(was).Fill(-1);
+        Array.Resize(ref _onTop, size);
+        Array.Resize(ref _light, size);
+        Array.Resize(ref _wanted, size);
+        Array.Resize(ref _floorOf, size);
+        Array.Resize(ref _probed, size);
+        Array.Resize(ref _low, size);
+        Array.Resize(ref _facing, size);
+    }
+
+    /// <summary>
+    /// Character <paramref name="s"/>'s posture, facing and place from the last tick's position: the building of what holds it, else the room it
+    /// stands in and whether it is on top.
+    /// </summary>
+    void Place(World world, int s)
+    {
+        var table = world.Characters;
+        var prev = table.Previous;
+        int was = _place[s];
+        _place[s] = -1;
+        _low[s] = prev[s].Alive && table.Cold(s)?.Medical is { Prone: true };
+        _facing[s] = table.Cold(s)?.Animation is { HasDrawYaw: true } drawn ? drawn.DrawYaw : prev[s].Yaw;
+        if (!prev[s].Alive || _rooms.Count == 0)
+        {
+            _onTop[s] = false;
+            _probed[s] = default;
+            return;
+        }
+        var c = table.Cold(s);
+        var at = prev[s].Position;
+        if (c?.InWhat is { } held && world.Fixtures.Find(held) is { } fixture)
+        {
+            _place[s] = _roomOf.GetValueOrDefault(fixture.Building, -1);
+            _onTop[s] = false;
+            if (_place[s] != was)
+            {
+                _floorOf[s] = -1;
+                _probed[s] = default;
+            }
+        }
+        else if (RoomAt(at) is var r and >= 0)
+        {
+            _place[s] = r;
+
+            // The overhead and floor queries are triangle searches: kept while the character stays put in the same room.
+            var key = new Probe(at, r, prev[s].Generation);
+            if (r != was || _probed[s] != key)
+            {
+                // A building that enforces its ceiling has nobody on top above its ground floor; elsewhere the overhead query decides.
+                _floorOf[s] = _rooms[r].EnforcesCeiling ? _rooms[r].Volume.FloorAt(at) : -1;
+                _onTop[s] = !(_rooms[r].EnforcesCeiling && _floorOf[s] != 0) && !_rooms[r].Volume.Covered(at);
+                _probed[s] = key;
+            }
+        }
+        else _onTop[s] = false;
+    }
+
+    /// <summary>
+    /// The lights characters carry (lanterns; docs/formats/lights.md "Carried lanterns"), at their owner, lit as their night flag allows.
+    /// </summary>
+    void CollectCarriedLights(World world)
+    {
+        var table = world.Characters;
+        var prev = table.Previous;
+        _carried.Clear();
+        for (int s = 0; s < _count; s++)
+        {
+            if (!prev[s].Alive || table.Cold(s)?.Appearance is not { Lights.Count: > 0 } look) continue;
+            foreach (var cl in look.Lights)
+            {
+                if (cl.Light.Intensity > 0 && cl.Light.Radius > 0 && WorldLights.IsLit(cl.Light, Daylight))
+                    _carried.Add((s, cl.Light, prev[s].Position + new Vector3(0, cl.Light.Position.Y, 0)));
+            }
         }
     }
 

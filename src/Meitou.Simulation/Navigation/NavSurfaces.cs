@@ -138,7 +138,8 @@ public sealed class NavSurfaces
                     var a = Corners[t * 3];
                     var b = Corners[t * 3 + 1];
                     var c = Corners[t * 3 + 2];
-                    if (NavGeometry.Barycentric(x, z, a, b, c, out float l1, out float l2, out float l3) && l1 >= -1e-4f && l2 >= -1e-4f && l3 >= -1e-4f)
+                    if (NavGeometry.Barycentric(x, z, a, b, c, out float l1, out float l2, out float l3) && l1 >= -1e-4f
+                        && l2 >= -1e-4f && l3 >= -1e-4f)
                     {
                         float h = l1 * a.Y + l2 * b.Y + l3 * c.Y;
                         float d = MathF.Abs(h - y);

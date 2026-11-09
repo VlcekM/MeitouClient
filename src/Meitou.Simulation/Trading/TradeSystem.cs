@@ -144,7 +144,8 @@ public sealed record ArrangeStock : SimCommand;
 /// <summary>
 /// The open trade as the UI shows it (published with the snapshot).
 /// </summary>
-public sealed record TradeView(CharacterId Customer, CharacterId Trader, string TraderName, long ShopMoney, long PlayerMoney, int StockWidth, int StockHeight,
+public sealed record TradeView(CharacterId Customer, CharacterId Trader, string TraderName, long ShopMoney, long PlayerMoney,
+    int StockWidth, int StockHeight,
     IReadOnlyList<TradeItemView> Stock, IReadOnlyList<TradeItemView> Goods, bool BuysStolen, bool BuysIllegal = false)
 {
     /// <summary>
@@ -156,7 +157,8 @@ public sealed record TradeView(CharacterId Customer, CharacterId Trader, string 
     /// The movable items of every player character who could take the trade over (the customer's are <see cref="Goods"/>), priced for that seller;
     /// keyed by character.
     /// </summary>
-    public IReadOnlyDictionary<CharacterId, IReadOnlyList<TradeItemView>> GoodsOf { get; init; } = new Dictionary<CharacterId, IReadOnlyList<TradeItemView>>();
+    public IReadOnlyDictionary<CharacterId, IReadOnlyList<TradeItemView>> GoodsOf { get; init; } =
+        new Dictionary<CharacterId, IReadOnlyList<TradeItemView>>();
     /// <summary>
     /// The stock cells outside every container of a building shop (<see cref="Shop.Unused"/>), which hold nothing; empty for a squad shop.
     /// </summary>
@@ -307,7 +309,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!_customer.IsNone)
         {
             if (!Resolve(world, out int c, out int t, out _)) Close(world);
-            else if (_open ? InReach(world, c, t, Settings.PassRange) : InReach(world, c, t))   // opens in talk range, stays open within the pass-on reach
+            // opens in talk range, stays open within the pass-on reach
+            else if (_open ? InReach(world, c, t, Settings.PassRange) : InReach(world, c, t))
             {
                 if (!_open)
                     TaskStart.Stand(world.Characters, c);   // the customer stops where it stands, not at the trader's spot behind a counter
@@ -368,7 +371,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     internal bool TradeWith(World world, CharacterId who)
     {
         if (who == _customer) return true;
-        if (!world.Characters.TryResolveNext(who, out int c) || !world.Characters.TryResolveNext(_trader, out int t) || !Trades(world.Characters.Cold(c)))
+        if (!world.Characters.TryResolveNext(who, out int c) || !world.Characters.TryResolveNext(_trader, out int t)
+            || !Trades(world.Characters.Cold(c)))
             return false;
 
         if (InReach(world, c, t, Settings.PassRange))
@@ -428,7 +432,10 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     SquadTemplate? TemplateOf(string id)
     {
         if (!_templates.TryGetValue(id, out var t))
-            _templates[id] = t = _data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r) is { HasShop: true } shop ? shop : null;
+        {
+            _templates[id] = t = _data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r) is { HasShop: true } shop
+                ? shop : null;
+        }
 
         return t;
     }
@@ -474,7 +481,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         }
     }
 
-    bool PlayersSquad(World world, Squad squad) => squad.Faction >= 0 && (squad.Faction == world.Player.Faction || squad.Faction == _data.PlayerFaction);
+    bool PlayersSquad(World world, Squad squad) =>
+        squad.Faction >= 0 && (squad.Faction == world.Player.Faction || squad.Faction == _data.PlayerFaction);
 
     /// <summary>
     /// Makes a trader squad's shop and its first fill.
@@ -593,10 +601,19 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
     SquadTemplate? HomeTemplateOf(string id)
     {
-        if (!_homeTemplates.TryGetValue(id, out var t))
-            _homeTemplates[id] = t = _data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r) is { } fill && (!fill.IsTrader || fill.Vendors.Count == 0) && (fill.Vendors.Count > 0 || fill.BuildingDesignation is 2 or 3 or 5 or 6 or 8 or 9 or 11) ? fill : null;
+        if (!_homeTemplates.TryGetValue(id, out var t)) _homeTemplates[id] = t = HomeFill(_data.Db.Find(id));
 
         return t;
+    }
+
+    /// <summary>
+    /// The squad template of a record that fills a home: a squad that is no trader with vendors, with vendors or of a housing designation.
+    /// </summary>
+    static SquadTemplate? HomeFill(Data.GameRecord? r)
+    {
+        if (r is null || !SquadFactory.IsTemplate(r) || SquadTemplate.From(r) is not { } fill) return null;
+        if (fill.IsTrader && fill.Vendors.Count != 0) return null;
+        return fill.Vendors.Count > 0 || fill.BuildingDesignation is 2 or 3 or 5 or 6 or 8 or 9 or 11 ? fill : null;
     }
 
     /// <summary>
@@ -731,7 +748,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     static ItemInstance? Find(Inventory inventory, InventoryItemToken token)
     {
         var item = inventory.All().ElementAtOrDefault(token.Index);
-        return item is not null && item.Record == token.Record && item.Section == token.Section && item.X == token.X && item.Y == token.Y && item.Quantity == token.Quantity
+        return item is not null && item.Record == token.Record && item.Section == token.Section && item.X == token.X && item.Y == token.Y
+            && item.Quantity == token.Quantity
             && item.Quality == token.Quality && (item.Contents is null || item.Quantity == 1) ? item : null;
     }
 
@@ -760,7 +778,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         if (!Resolve(world, out int c, out int t, out var shop)) return 0;
 
         var squad = world.Squads.Find(world.Characters.Cold(t)!.SquadId)!;
-        int n = Affordable(Market(world), item, Math.Clamp(units, 0, item.Quantity), sell, shop!.Terms, sell ? world.Characters.Cold(c)!.Faction : squad.Faction,
+        int n = Affordable(Market(world), item, Math.Clamp(units, 0, item.Quantity), sell, shop!.Terms,
+            sell ? world.Characters.Cold(c)!.Faction : squad.Faction,
             sell ? squad.Money : world.Player.Money);
         if (n == 0) world.Post(sell ? "The shopkeeper can't afford that." : "You can't afford that.");
 
@@ -1017,7 +1036,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
     /// Whether the shop's squad asks about and rolls on a stolen good at all (<c>FUN_140792830</c>, <b>Observed</b>): always, unless it buys stolen
     /// goods; a squad that does only for goods stolen from one of its own members (the item's owner handle names the squad's platoon).
     /// </summary>
-    static bool Fences(ItemInstance item, Squad shopSquad, Trader terms) => !terms.BuysStolen || item.OwnerSquad >= 0 && item.OwnerSquad == shopSquad.Id;
+    static bool Fences(ItemInstance item, Squad shopSquad, Trader terms) =>
+        !terms.BuysStolen || item.OwnerSquad >= 0 && item.OwnerSquad == shopSquad.Id;
 
     /// <summary>
     /// The faction the shop's squad sits in regards another as its own (the game's <c>FUN_1406b2630</c>: the same faction, or a relation of 50 or
@@ -1051,7 +1071,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
 
         if (from != shopFaction && from >= 0)
         {
-            if (!Fences(item, shopSquad, terms) || _data.Relations.Factions[from].FundamentalType is FundamentalType.Bandit or FundamentalType.Adventurer)
+            if (!Fences(item, shopSquad, terms)
+                || _data.Relations.Factions[from].FundamentalType is FundamentalType.Bandit or FundamentalType.Adventurer)
                 return 1;
             if (!Allied(shopFaction, from) && home != AiSystem.TownAt(_data, world, table.Next[trader].Position))
                 return NeverCaught;
@@ -1297,7 +1318,8 @@ public sealed class TradeSystem : ITickSystem, ITradeSource
         world.Player.Held switch
         {
             { From.Holder: ItemHolder.Stock } h => view(h.Item, false, c),
-            { From.Holder: ItemHolder.Character } h when goodsOf.ContainsKey(h.From.Character) && world.Characters.TryResolveNext(h.From.Character, out int s) => view(h.Item, true, s),
+            { From.Holder: ItemHolder.Character } h when goodsOf.ContainsKey(h.From.Character)
+                && world.Characters.TryResolveNext(h.From.Character, out int s) => view(h.Item, true, s),
             _ => null,
         };
 

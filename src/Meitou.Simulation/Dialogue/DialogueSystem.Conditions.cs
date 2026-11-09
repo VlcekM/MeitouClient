@@ -35,7 +35,9 @@ public sealed partial class DialogueSystem
         }
 
         if (dc.Condition >= SimulationExtensions.FirstModCode) return ModCondition(world, me, s is null ? CharacterId.None : subjectId, dc);
-        if (dc.Condition == 12) return Num3(dc, world.Research.TechLevel);   // the research manager's tech level (*(*(game + 0x38) + 8), FUN_140676950), whatever the subject
+
+        // the research manager's tech level (*(*(game + 0x38) + 8), FUN_140676950), whatever the subject
+        if (dc.Condition == 12) return Num3(dc, world.Research.TechLevel);
         if (s is null) return FactionLevelCondition(world, dc, mc);
         if (dc.Condition == 10) return Num3(dc, _data.Relations.Rank(mc.Faction));   // the speaker's faction's rank, whatever `who` says
         int meF = mc.Faction, sF = s.Faction;
@@ -80,7 +82,8 @@ public sealed partial class DialogueSystem
         int player = world.Player.Faction;
         return dc.Condition switch
         {
-            1 => Num2(dc, player == mc.Faction ? 100 : relations.Contains(mc.Faction) && relations.Contains(player) ? (int)relations.Get(mc.Faction, player) : 0),
+            1 => Num2(dc, player == mc.Faction ? 100
+                : relations.Contains(mc.Faction) && relations.Contains(player) ? (int)relations.Get(mc.Faction, player) : 0),
             2 => Num2(dc, world.Player.Money),
             3 => Num2(dc, (int)relations.GlobalTrust(player)),
             11 => Bool(dc, HouseLocked(world, mc)),
@@ -120,7 +123,8 @@ public sealed partial class DialogueSystem
                     float mine = Combat.CombatSystem.Rating(world, ms), theirs = Combat.CombatSystem.Rating(world, ss);
                     return Bool(dc, dc.Condition == 21 ? mine > theirs * 1.5f : theirs > mine * 1.5f);
                 }
-            case 32: return subjectId == me ? b : Bool(dc, Speed(world, subjectId) > (world.Characters.TryResolveNext(subjectId, out int rs) ? world.Characters.Next[rs].WalkSpeed * 1.2f : float.MaxValue));
+            case 32: return subjectId == me ? b : Bool(dc, Speed(world, subjectId)
+                > (world.Characters.TryResolveNext(subjectId, out int rs) ? world.Characters.Next[rs].WalkSpeed * 1.2f : float.MaxValue));
             case 39:
                 {
                     // IS_OUTNUMBERED: S's sensed enemies above 1.3 x its sensed conscious allies, strict (SensoryData +0x94 numEnemies, +0x4c
@@ -147,19 +151,26 @@ public sealed partial class DialogueSystem
             case 7 or 8:
                 {
                     // Caged by the speaker's faction (7) or another (8); when S is the speaker, by the target's faction instead (FUN_140676950).
-                    if (Cold(world, other) is not { } tcold || !s.IsImprisoned || s.InWhat is not { } cell || world.Fixtures.Find(cell) is not { } cell2) return !b;
+                    if (Cold(world, other) is not { } tcold || !s.IsImprisoned || s.InWhat is not { } cell
+                        || world.Fixtures.Find(cell) is not { } cell2)
+                    {
+                        return !b;
+                    }
                     int by = subjectId == me ? tcold.Faction : meF;
                     return Bool(dc, dc.Condition == 7 ? cell2.Owner == by : cell2.Owner != by);
                 }
             case 4 or 5:
-                return Bool(dc, Cold(world, s.Carrying) is { } body && (body.Medical?.Dead ?? false) == (dc.Condition == 5) && (body.Bounties?.BookedAmount(_data.Relations, meF) ?? 0) > 0);
+                return Bool(dc,
+                    Cold(world, s.Carrying) is { } body && (body.Medical?.Dead ?? false) == (dc.Condition == 5)
+                    && (body.Bounties?.BookedAmount(_data.Relations, meF) ?? 0) > 0);
             case 14: return Bool(dc, s.IsImprisoned);
             case 33: return Bool(dc, CopsAround(world, me));
             case 40: return Num2(dc, s.RecentlyWanted > 0 || s.Recognition >= 1 ? s.Bounties?.BookedAmount(_data.Relations, meF) ?? 0 : 0);
             // Carrying nobody it is the value's negation (value 0 true); carrying someone only value 1 can pass (FUN_140676950 case 0x2e).
             case 46:
                 return Cold(world, s.Carrying) is not { } carried ? !b
-                : b && carried is { Medical.Dead: false, NpcClass: FundamentalType.Adventurer or FundamentalType.Bandit or FundamentalType.Slave or FundamentalType.Civilian };
+                : b && carried is { Medical.Dead: false,
+                    NpcClass: FundamentalType.Adventurer or FundamentalType.Bandit or FundamentalType.Slave or FundamentalType.Civilian };
             case 47: return Num2(dc, s.Bounties?.BookedAmount(_data.Relations, meF) ?? 0);
             case 63: return Bool(dc, s.IsImprisoned && s.InWhat is { } cage && world.Fixtures.Find(cage)?.Lock is { EffectivelyLocked: true });
             case 66: return Bool(dc, s.IsPlayer && world.Player.Money >= (s.Bounties?.BookedAmount(_data.Relations, meF) ?? 0));
@@ -174,7 +185,9 @@ public sealed partial class DialogueSystem
     {
         switch (dc.Condition)
         {
-            case 9: return Bool(dc, s.SquadId >= 0 && world.Squads.Find(s.SquadId) is { } sq && _data.Db.Find(sq.TemplateId)?.GetBool("is trader") == true);   // the template's flag, not its stock
+            // the template's flag, not its stock
+            case 9: return Bool(dc,
+                s.SquadId >= 0 && world.Squads.Find(s.SquadId) is { } sq && _data.Db.Find(sq.TemplateId)?.GetBool("is trader") == true);
             case 19: return Bool(dc, s.SquadId < 0 || world.Squads.Find(s.SquadId)?.Leader == subjectId);
             case 35: return Num3(dc, SquadOf(world, subjectId).Count(m => world.Characters.IsAlive(m)));
             case 37: return Num3(dc, SquadOf(world, subjectId).Count(m => Cold(world, m)?.Inventory?.Backpack is not null));
@@ -196,7 +209,8 @@ public sealed partial class DialogueSystem
     {
         switch (dc.Condition)
         {
-            case 18: return Num2(dc, (int)Memory.HoursSince(world, mc.SquadId, subjectId));   // `who` 0 asks the squad about its own speaker: never noted
+            // `who` 0 asks the squad about its own speaker: never noted
+            case 18: return Num2(dc, (int)Memory.HoursSince(world, mc.SquadId, subjectId));
             case 20: return Bool(dc, Memory.Find(world, mc.SquadId, subjectId) is not null);
             case 50: return Bool(dc, world.Squads.Find(mc.SquadId)?.Ai is { } board && board.MissionTarget == subjectId);
             case 52: return Bool(dc, Loves(world, mc, subjectId));
@@ -242,23 +256,32 @@ public sealed partial class DialogueSystem
                     var whom = subjectId == me ? other : subjectId;
                     return Bool(dc, Position(world, whom) is { } p && Position(world, me) is { } q && Vector3.DistanceSquared(p, q) < 67600);
                 }
-            case 17: return Bool(dc, mc.SquadId >= 0 && world.Squads.Find(mc.SquadId)?.HomeBuilding is { } home && Position(world, subjectId) is { } inside && InBuilding(home, inside));
-            case 31: return Bool(dc, Position(world, subjectId) is { } where && TownAt(where) is >= 0 and var town && (town >= _data.SiteFactions.Count || _data.SiteFactions[town] != world.Player.Faction));
+            case 17: return Bool(dc,
+                mc.SquadId >= 0 && world.Squads.Find(mc.SquadId)?.HomeBuilding is { } home && Position(world, subjectId) is { } inside
+                && InBuilding(home, inside));
+            case 31: return Bool(dc,
+                Position(world, subjectId) is { } where && TownAt(where) is >= 0 and var town
+                && (town >= _data.SiteFactions.Count || _data.SiteFactions[town] != world.Player.Faction));
             // WITHIN_TOWN_WALLS: S's gate code above 0 (Character slot 35, docs/game/pathfinding.md "Gate codes"); no gate pass yet reads as the open
             // world.
             case 57: return Bool(dc, Position(world, subjectId) is { } walled && world.SystemOf<Locks.LockSystem>()?.Regions?.CodeAt(walled) > 0);
             // TOWN_WALLS_LOCKED_UP: S's current town has gates and none of their doors is open (FUN_140929820 behind Town vfunc 0x300); S in no town
             // reads false.
-            case 58: return Bool(dc, Position(world, subjectId) is { } inTown && TownAt(inTown) is >= 0 and var walledTown && Locks.LockSystem.TownLockedUp(world, _data.Sites[walledTown]));
+            case 58: return Bool(dc,
+                Position(world, subjectId) is { } inTown && TownAt(inTown) is >= 0 and var walledTown
+                && Locks.LockSystem.TownLockedUp(world, _data.Sites[walledTown]));
             case 60: return Bool(dc, Position(world, me) is { } here && NearestTownOf(sF, here) is { } d && d <= 23040);
             case 68: return Bool(dc, world.Characters.TryResolveNext(subjectId, out int indoors) && world.Sight.BuildingOf(indoors) is not null);
             case 73:
                 // The speaker's current town when it is the player's: that town's level (Town +0x388); false otherwise, whatever the value. Engine
                 // reading of "current town": the player outpost whose centre is within the player-town extent of the speaker.
-                return _population is not null && Position(world, me) is { } standing && PlayerTownAt(world, standing) is { } ownTown && Num3(dc, _population.TownLevel(world, ownTown.Number));
+                return _population is not null && Position(world, me) is { } standing && PlayerTownAt(world, standing) is { } ownTown
+                    && Num3(dc, _population.TownLevel(world, ownTown.Number));
             case 74: return Num3(dc, PlayersBestTownLevel(world));
             case 75:
-                return Bool(dc, Position(world, subjectId) is { } loc && TownAt(loc) is >= 0 and var ptown && ptown < _data.SiteFactions.Count && world.Player.Faction >= 0
+                return Bool(dc,
+                    Position(world, subjectId) is { } loc && TownAt(loc) is >= 0 and var ptown && ptown < _data.SiteFactions.Count
+                    && world.Player.Faction >= 0
                 && _data.SiteFactions[ptown] == world.Player.Faction);
             default: return Bool(dc, false);
         }
@@ -278,9 +301,12 @@ public sealed partial class DialogueSystem
             case 62: return Bool(dc, s.SlaveState > 1);
             case 64: return Bool(dc, Locks.LockSystem.WornShackles(s) is not null);
             // Same RACE_GROUP (two races in no group also count as the same).
-            case 65: return Bool(dc, s.Race is not null && mc.Race is not null && _dialogue.RaceGroupOf(s.Race.StringId)?.Group == _dialogue.RaceGroupOf(mc.Race.StringId)?.Group);
+            case 65: return Bool(dc,
+                s.Race is not null && mc.Race is not null
+                && _dialogue.RaceGroupOf(s.Race.StringId)?.Group == _dialogue.RaceGroupOf(mc.Race.StringId)?.Group);
             case 77:
-                return s.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat or FundamentalType.Military ? !b : b;
+                return s.NpcClass is FundamentalType.LawEnforcement or FundamentalType.Trader or FundamentalType.Diplomat or FundamentalType.Military
+                    ? !b : b;
             default: return Bool(dc, false);
         }
     }
@@ -326,12 +352,18 @@ public sealed partial class DialogueSystem
     /// </summary>
     bool HasIllegalItem(World world, Conversation c, CharacterId me, CharacterCold mc, CharacterId subject)
     {
-        int faction = Position(world, me) is { } at && TownAt(at) is >= 0 and var town && town < _data.SiteFactions.Count && _data.SiteFactions[town] >= 0 ? _data.SiteFactions[town] : mc.Faction;
+        int faction =
+            Position(world, me) is { } at && TownAt(at) is >= 0 and var town && town < _data.SiteFactions.Count && _data.SiteFactions[town] >= 0
+            ? _data.SiteFactions[town] : mc.Faction;
         if (_illegalGoods.BannedBy(faction) is not { } culture) return false;
         bool found = false;
         foreach (var m in Known(world, me, subject))
         {
-            if (Cold(world, m) is not { Inventory: { } inventory } carrier || inventory.All().FirstOrDefault(i => culture.Illegal.Contains(i.Record)) is not { } item) continue;
+            if (Cold(world, m) is not { Inventory: { } inventory } carrier
+                || inventory.All().FirstOrDefault(i => culture.Illegal.Contains(i.Record)) is not { } item)
+            {
+                continue;
+            }
             found = true;
             _illegalGoods.Report(world, m, carrier, item.Record, c.DryRun);
         }
@@ -387,10 +419,12 @@ public sealed partial class DialogueSystem
     /// <summary>
     /// The character's position; null when the id no longer resolves.
     /// </summary>
-    internal static Vector3? Position(World world, CharacterId id) => world.Characters.TryResolveNext(id, out int s) ? world.Characters.Next[s].Position : null;
+    internal static Vector3? Position(World world, CharacterId id) =>
+        world.Characters.TryResolveNext(id, out int s) ? world.Characters.Next[s].Position : null;
 
     static float Speed(World world, CharacterId id) =>
-        world.Characters.TryResolveNext(id, out int s) ? new Vector2(world.Characters.Next[s].Velocity.X, world.Characters.Next[s].Velocity.Z).Length() : 0;
+        world.Characters.TryResolveNext(id, out int s)
+            ? new Vector2(world.Characters.Next[s].Velocity.X, world.Characters.Next[s].Velocity.Z).Length() : 0;
 
     /// <summary>
     /// DC_COPS_AROUND, engine reading of the speaker's sensed law enforcement: an awake law-enforcement NPC within the outdoor sight.
@@ -401,7 +435,8 @@ public sealed partial class DialogueSystem
         var table = world.Characters;
         float r = AggroSystem.OutdoorSight;
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Cold(i) is { NpcClass: FundamentalType.LawEnforcement, Medical.Incapacitated: false } && table.IdOf(i) != me
+            if (table.Next[i].Alive
+                && table.Cold(i) is { NpcClass: FundamentalType.LawEnforcement, Medical.Incapacitated: false } && table.IdOf(i) != me
                 && Vector3.DistanceSquared(table.Next[i].Position, at) <= r * r) return true;
         return false;
     }

@@ -298,7 +298,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         if (chasing || world.Tick >= steer.LineTick || steer.Target != band)
         {
             bool clear = combat.SteersAt(world, i, t);
-            if (!clear && !chasing) steer.PathUntil = Orders.Holding(cold) ? 0 : world.Tick + (long)MathF.Ceiling(PathChaseSeconds / world.TickSeconds);
+            if (!clear && !chasing)
+                steer.PathUntil = Orders.Holding(cold) ? 0 : world.Tick + (long)MathF.Ceiling(PathChaseSeconds / world.TickSeconds);
 
             steer.LineClear = clear;
             steer.LineTick = world.Tick + (long)MathF.Ceiling(RepathSeconds / world.TickSeconds);
@@ -359,7 +360,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     static int BandTarget(World world, in CombatSlot st, int t)
     {
         int followed = st.ReactedSlot;
-        if (st.ReactTech < 0 || st.Picked || (uint)followed >= (uint)world.Characters.Previous.Length || !world.Characters.Previous[followed].Alive) return t;
+        if (st.ReactTech < 0 || st.Picked || (uint)followed >= (uint)world.Characters.Previous.Length || !world.Characters.Previous[followed].Alive)
+            return t;
 
         return followed;
     }
@@ -544,7 +546,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
         // Passive zeroes it even in a fight (FUN_140599b90, Verified).
         public float Desire(World world, int slot) =>
-            (world.Characters.Cold(slot)!.Orders & CharacterOrders.Passive) != 0 ? 0 : owner.ProtectDesire(world, slot) is var score && score > 0 ? score : 0.7f;
+            (world.Characters.Cold(slot)!.Orders & CharacterOrders.Passive) != 0
+                ? 0 : owner.ProtectDesire(world, slot) is var score && score > 0 ? score : 0.7f;
 
         public DecisionCheck CanRun(World world, int slot)
         {
@@ -600,7 +603,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             return table.Cold(other)!.Faction == cold.Faction ? v : help ? v * v : 0;
         }
 
-        var scan = ScanAllies(world, slot, combat, aggro, senses, SenseTag.Ko | SenseTag.Imprisoned, () => SlaveHelpAllowed(world, cold, world.Characters.Previous[slot].Position), Weigh);
+        var scan = ScanAllies(world, slot, combat, aggro, senses, SenseTag.Ko | SenseTag.Imprisoned,
+            () => SlaveHelpAllowed(world, cold, world.Characters.Previous[slot].Position), Weigh);
         (ally, first) = (scan.Best, scan.First);
 
         return scan.Best < 0 ? 0 : Math.Min(scan.Value, CombatSystem.ProtectCap);
@@ -738,7 +742,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             var table = world.Characters;
             var cold = table.Cold(slot)!;
             var task = (CharacterTask)table.Next[slot].Task;
-            if (task == CharacterTask.Attack && cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf } run && run.Runs(task)) return DecisionCheck.Runs;
+            if (task == CharacterTask.Attack && cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf } run && run.Runs(task))
+                return DecisionCheck.Runs;
             if (cold is not { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true })
                 return DecisionCheck.No("cannot fight");
 
@@ -790,7 +795,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         for (int a = 0; a < table.HighWater; a++)
         {
             _justAlerted[a] = false;
-            int t = next[a].Alive && next[a].Task == (byte)CharacterTask.Attack ? combat.StateOf(new CharacterId(a, next[a].Generation)).TargetSlot : -1;
+            int t = next[a].Alive && next[a].Task == (byte)CharacterTask.Attack
+                ? combat.StateOf(new CharacterId(a, next[a].Generation)).TargetSlot : -1;
             if (t < 0 || t >= table.HighWater)
             {
                 _alertSlot[a] = -1;
@@ -860,7 +866,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         var attacker = new CharacterId(a, next[a].Generation);
         var st = combat.StateOf(attacker);
         int t = st.TargetSlot;
-        if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration || table.Cold(a) is not { Medical.Incapacitated: false })
+        if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration
+            || table.Cold(a) is not { Medical.Incapacitated: false })
             return;
 
         // An attacker its target was not alerted to (the wall and floor filter) is left alone until a blow lands.
@@ -893,7 +900,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         {
             int ds = defenders[k].Slot;
             if (table.Cold(ds) is { } dc && Orders.Holding(dc)
-                && !Orders.HoldPost(next[ds].Position, Orders.HoldPointOf(dc, next[ds].Position), from, next[a].Velocity, next[a].Yaw, attackerCrawls, true))
+                && !Orders.HoldPost(next[ds].Position, Orders.HoldPointOf(dc, next[ds].Position), from, next[a].Velocity,
+                    next[a].Yaw, attackerCrawls, true))
                 defenders.RemoveAt(k);
         }
 
@@ -984,8 +992,13 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
         foreach (int s in guards)
         {
-            if (!next[s].Alive || s == attacker || table.Cold(s) is not { } c || c.FollowOrder != target || table.Cold(attacker)?.Faction == c.Faction) continue;
-            if (next[s].Task != (byte)CharacterTask.Follow || c.Running is not { } run || !Production.PermaJobs.Follows(run.Row) || !run.Runs(CharacterTask.Follow)
+            if (!next[s].Alive || s == attacker || table.Cold(s) is not { } c || c.FollowOrder != target
+                || table.Cold(attacker)?.Faction == c.Faction)
+            {
+                continue;
+            }
+            if (next[s].Task != (byte)CharacterTask.Follow || c.Running is not { } run || !Production.PermaJobs.Follows(run.Row)
+                || !run.Runs(CharacterTask.Follow)
                 || !Helps(table, s, taken))
                 continue;
 
@@ -1036,7 +1049,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// Able, not Passive, not sneaking outside a fight (<c>scoreProtectAllies</c>'s zero), for anyone.
     /// </summary>
     static bool Helps(CharacterTable table, int slot, HashSet<int> taken) =>
-        Able(table, slot, taken, out var cold, out _) && (cold.Orders & CharacterOrders.Passive) == 0 && ((cold.Orders & CharacterOrders.Sneak) == 0 || cold.InCombat);
+        Able(table, slot, taken, out var cold, out _) && (cold.Orders & CharacterOrders.Passive) == 0
+            && ((cold.Orders & CharacterOrders.Sneak) == 0 || cold.InCombat);
 
     static bool Able(CharacterTable table, int slot, HashSet<int> taken, out CharacterCold cold, out byte task)
     {
@@ -1061,10 +1075,12 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     bool SlaveHelpAllowed(World world, CharacterCold helper, Vector3 at) => SlaveHelpAllowed(world, Towns, combat.Relations, helper, at);
 
     /// <inheritdoc cref="SlaveHelpAllowed(World, CharacterCold, Vector3)"/>
-    internal static bool SlaveHelpAllowed(World world, PopulationData? towns, Data.Gameplay.FactionRelations? factions, CharacterCold helper, Vector3 at)
+    internal static bool SlaveHelpAllowed(World world, PopulationData? towns, Data.Gameplay.FactionRelations? factions,
+        CharacterCold helper, Vector3 at)
     {
         if (towns is not { } data || factions is not { } relations) return true;
-        if (relations.Contains(helper.Faction) && relations.Factions[helper.Faction].FundamentalType == Data.Gameplay.FundamentalType.Bandit) return true;
+        if (relations.Contains(helper.Faction) && relations.Factions[helper.Faction].FundamentalType == Data.Gameplay.FundamentalType.Bandit)
+            return true;
 
         var town = AiSystem.TownAt(data, world, at);
         if (town.Site < 0) return true;

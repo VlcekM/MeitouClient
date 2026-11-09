@@ -91,6 +91,7 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
             : new DoorSpot((lo + hi) / 2, Vector3.UnitZ, size.X / 2, size.Y / 2);
         return spot with { Slide = slide ?? Vector3.Zero };
 
-        static Vector3 Unit(float x, float y, float z) => new Vector3(x, y, z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
+        static Vector3 Unit(float x, float y, float z) =>
+            new Vector3(x, y, z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
     }
 }

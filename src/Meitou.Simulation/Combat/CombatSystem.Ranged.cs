@@ -139,7 +139,8 @@ public sealed partial class CombatSystem : IProjectileSource
     #region Geometry
 
     static Vector3 Barrel(in CharacterHot c) =>
-        c.Position + new Vector3(MathF.Sin(c.Yaw) * RangedTuning.BarrelForward, RangedTuning.BarrelHeight, MathF.Cos(c.Yaw) * RangedTuning.BarrelForward);
+        c.Position + new Vector3(MathF.Sin(c.Yaw) * RangedTuning.BarrelForward, RangedTuning.BarrelHeight,
+            MathF.Cos(c.Yaw) * RangedTuning.BarrelForward);
 
     /// <summary>
     /// The aim point (<c>FUN_140436d10</c>): the target's spine (here <see cref="RangedTuning.AimHeight"/> above its feet) plus its velocity times
@@ -395,7 +396,8 @@ public sealed partial class CombatSystem : IProjectileSource
     static bool CanShoot(in CombatSlot s, CharacterCold cold, CrossbowInstance x)
     {
         bool hasAmmo = x.InfiniteAmmo || Ammunition.Find(cold.Inventory, x.Data.AmmoId) is not null;
-        return (s.Loaded > 0 || hasAmmo) && cold.Medical is not { BothArmsWork: false } && cold.Medical is not { Prone: true } && cold.WaterState != 3;
+        return (s.Loaded > 0 || hasAmmo) && cold.Medical is not { BothArmsWork: false }
+            && cold.Medical is not { Prone: true } && cold.WaterState != 3;
     }
 
     /// <summary>
@@ -462,7 +464,8 @@ public sealed partial class CombatSystem : IProjectileSource
                 return;
             }
 
-            float skill = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Crossbows), Eff(cold, StatsEnumerated.Dexterity), fighter.DexterityMult);
+            float skill = RangedFormulas.SkillBlend(Eff(cold, StatsEnumerated.Crossbows),
+                Eff(cold, StatsEnumerated.Dexterity), fighter.DexterityMult);
             s.ReloadTime = RangedFormulas.ReloadTime(skill, x.Stats.ReloadMin, x.Stats.ReloadMax);
             s.ReloadLeft = s.ReloadTime;
         }
@@ -597,7 +600,8 @@ public sealed partial class CombatSystem : IProjectileSource
         if (to.LengthSquared() < 1e-6f) return;
 
         float h = RangedFormulas.HeightFactor(barrel.Y, prev[t].Position.Y);
-        float deviation = RangedFormulas.Deviation(x.Stats.AccuracyDeviation, Eff(ac, StatsEnumerated.Crossbows), Eff(ac, StatsEnumerated.Perception));
+        float deviation = RangedFormulas.Deviation(x.Stats.AccuracyDeviation, Eff(ac, StatsEnumerated.Crossbows),
+            Eff(ac, StatsEnumerated.Perception));
         ulong key = Rng.Key(table.IdOf(a));
         ulong counter = (ulong)(uint)shot << 3;
         float u = Rng.Float(Rng.Hash(world.Seed, key, RngPurpose.Ranged, counter));
@@ -705,7 +709,8 @@ public sealed partial class CombatSystem : IProjectileSource
         BoltShooterEffects(world, p, v, dc, dc.Medical, intended, death);
         if (Settings.RecordLog)
         {
-            _log.Add(new CombatLogEntry(now, p.Shooter, v, 0, BlowOutcome.Hit, part, damage.Cut, damage.Blunt, damage.Pierce, damage.ExtraStun, knockout, death)
+            _log.Add(new CombatLogEntry(now, p.Shooter, v, 0, BlowOutcome.Hit, part, damage.Cut, damage.Blunt, damage.Pierce,
+                damage.ExtraStun, knockout, death)
             {
                 Ranged = true,
                 Intended = intended,
@@ -723,7 +728,8 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <summary>
     /// The victim's reaction to a bolt: down (its swing and reaction cut off, the down sound), or staggered by a heavy one.
     /// </summary>
-    void BoltReaction(World world, ref CombatSlot d, int v, CharacterCold dc, MedicalState medical, in Projectile p, in HitDamage damage, float toughness,
+    void BoltReaction(World world, ref CombatSlot d, int v, CharacterCold dc, MedicalState medical, in Projectile p,
+        in HitDamage damage, float toughness,
         bool death, int now)
     {
         if (medical.Incapacitated)

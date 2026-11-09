@@ -82,7 +82,8 @@ public sealed partial class CombatSystem
                     var template = dc.Medical!.Parts[ev.Part].Template;
                     _xp.ToughnessFromLimbLoss(dc.Stats!, dc.Race!);
                     table.LimbsChanged.Enqueue((d, template.LimbSlot));
-                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None, template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
+                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None,
+                        template.LimbSlot is 2 or 3 ? 70 : 71) { Tick = world.Tick + 1 });
                     break;
             }
         }

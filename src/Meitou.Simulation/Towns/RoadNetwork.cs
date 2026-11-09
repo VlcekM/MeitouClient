@@ -210,21 +210,33 @@ public sealed class RoadNetwork
         }
 
         if (best == float.MaxValue) return null;
+        return (best, RoutePoints(entry, exit, back, bestJunction));
+    }
 
+    /// <summary>
+    /// The points of the route <see cref="Search"/> found: along the entry road to its junction, the chain of roads <paramref name="back"/> holds
+    /// to <paramref name="bestJunction"/>, then along the exit road (along the one road when <paramref name="bestJunction"/> is -1).
+    /// </summary>
+    List<Vector2> RoutePoints(Spot entry, Spot exit, Dictionary<int, int> back, int bestJunction)
+    {
+        var er = _roads[entry.Road];
+        var xr = _roads[exit.Road];
         var points = new List<Vector2>();
 
         if (bestJunction < 0)
         {
             AddAlong(points, er, entry.T, exit.T);
-            return (best, points);
+            return points;
         }
 
         // Back from the junction the exit road was reached at, to a seed junction.
         var chain = new List<(int Road, int To)>();
-        for (int j = bestJunction; back.TryGetValue(j, out int via) && via >= 0; j = _roads[via].From == j ? _roads[via].To : _roads[via].From) chain.Add((via, j));
+        for (int j = bestJunction; back.TryGetValue(j, out int via) && via >= 0; j = _roads[via].From == j ? _roads[via].To : _roads[via].From)
+            chain.Add((via, j));
 
         chain.Reverse();
-        int first = chain.Count > 0 ? (_roads[chain[0].Road].From == chain[0].To ? _roads[chain[0].Road].To : _roads[chain[0].Road].From) : bestJunction;
+        int first = chain.Count > 0
+            ? (_roads[chain[0].Road].From == chain[0].To ? _roads[chain[0].Road].To : _roads[chain[0].Road].From) : bestJunction;
         AddAlong(points, er, entry.T, first == er.From ? 0 : 1);
 
         foreach (var (index, end) in chain)
@@ -234,7 +246,7 @@ public sealed class RoadNetwork
         }
 
         AddAlong(points, xr, bestJunction == xr.From ? 0 : 1, exit.T);
-        return (best, points);
+        return points;
     }
 
     /// <summary>

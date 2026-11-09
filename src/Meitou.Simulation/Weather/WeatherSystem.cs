@@ -1,5 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
+using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.World;
 using Meitou.Simulation.Bodies;
 
@@ -76,102 +77,135 @@ public sealed class WeatherSystem(GameConstants constants) : ITickSystem
     readonly Dictionary<(CharacterId, int), long> _eventAfter = [];
     readonly Dictionary<string, bool> _shelterRecords = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Updates every living character whose turn it is (<see cref="EveryTicks"/>) with that many ticks of the weather.
+    /// </summary>
     public void SlowWorld(World world)
     {
         if (world.Weather is not { } source) return;
 
         var table = world.Characters;
-        var next = table.Next;
 
         // Each character every EveryTicks ticks on its slot's turn, with that many ticks of time.
         float dt = world.TickSeconds * EveryTicks;
         var zones = source.Zones;
+        for (int i = (int)(world.Tick % EveryTicks); i < table.HighWater; i += EveryTicks) Update(world, source, zones, i, dt);
+    }
 
-        for (int i = (int)(world.Tick % EveryTicks); i < table.HighWater; i += EveryTicks)
+    /// <summary>
+    /// One character's weather update over <paramref name="dt"/> seconds: acid underfoot, the local effects, then the region's weather.
+    /// </summary>
+    void Update(World world, IWeatherSource source, IReadOnlyList<WeatherAffectZone> zones, int i, float dt)
+    {
+        var table = world.Characters;
+        var next = table.Next;
+        if (!next[i].Alive || table.Cold(i) is not { } cold) return;
+
+        cold.Weather = WeatherAffecting.None;
+        cold.WeatherStrength = cold.WeatherProtection = 0;
+        cold.WeatherNotice = WeatherNotice.None;
+        if (cold.Medical is not { Dead: false } medical || cold.Race is not { } race) return;
+
+        var at = next[i].Position;
+        if (source.At(at.X, at.Z) is not { } here) return;
+
+        bool outdoors = world.Sight.Outdoors(i);
+
+        // Acid water and acid ground (immunity to WA_ACID covers both).
+        if (!race.ImmuneTo(WeatherAffecting.Acid)) AcidUnderfoot(world, i, cold, medical, race, here, outdoors, dt);
+
+        // Local effects: the last unit of each kind that reaches the character (a later one replaces an earlier one's strength).
+        if (outdoors && zones.Count > 0) LocalEffects(world, i, cold, medical, race, zones, at, dt);
+
+        RegionWeather(world, i, cold, medical, race, here, at, dt);
+    }
+
+    /// <summary>
+    /// Acid water burns every part of a swimmer; acid ground burns the legs of one standing barefoot outdoors.
+    /// </summary>
+    void AcidUnderfoot(
+        World world, int i, CharacterCold cold, MedicalState medical, RaceData race, WeatherHere here, bool outdoors,
+        float dt)
+    {
+        var table = world.Characters;
+        var carrier = cold.CarriedBy;
+        int water = cold.InSomething != Locks.HeldState.None ? 0
+            : table.IsAlive(carrier) && table.Cold(carrier.Slot) is { } c ? c.WaterState : cold.WaterState;
+
+        if (water == 3)
         {
-            if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
+            if (medical.AcidWater(dt * here.AcidicWater, Constants))
+                Hurt(world, i, cold, WeatherNotice.AcidWater, 0, AcidWaterEvent);
+        }
+        else if (outdoors && !medical.Incapacitated && carrier.IsNone && cold.InSomething == Locks.HeldState.None && Barefoot(cold, race)
+            && medical.AcidGround(dt * here.AcidicGround, race, Constants))
+        {
+            Hurt(world, i, cold, WeatherNotice.AcidFeet, 0, AcidFeetEvent);
+        }
+    }
 
-            cold.Weather = WeatherAffecting.None;
-            cold.WeatherStrength = cold.WeatherProtection = 0;
-            cold.WeatherNotice = WeatherNotice.None;
-            if (cold.Medical is not { Dead: false } medical || cold.Race is not { } race) continue;
+    /// <summary>
+    /// The burning and gas of the affecting units that reach the character, the last of each kind.
+    /// </summary>
+    void LocalEffects(
+        World world, int i, CharacterCold cold, MedicalState medical, RaceData race, IReadOnlyList<WeatherAffectZone> zones,
+        Vector3 at, float dt)
+    {
+        float burning = 0, gas = 0;
 
-            var at = next[i].Position;
-            if (source.At(at.X, at.Z) is not { } here) continue;
-
-            bool outdoors = world.Sight.Outdoors(i);
-
-            // Acid water and acid ground (immunity to WA_ACID covers both).
-            if (!race.ImmuneTo(WeatherAffecting.Acid))
+        foreach (var z in zones)
+        {
+            if (z.Affect is not (WeatherAffecting.Burning or WeatherAffecting.Gas)
+                || Vector3.DistanceSquared(z.Position, at) > z.Radius * z.Radius)
             {
-                var carrier = cold.CarriedBy;
-                int water = cold.InSomething != Locks.HeldState.None ? 0
-                    : table.IsAlive(carrier) && table.Cold(carrier.Slot) is { } c ? c.WaterState : cold.WaterState;
-
-                if (water == 3)
-                {
-                    if (medical.AcidWater(dt * here.AcidicWater, Constants))
-                        Hurt(world, i, cold, WeatherNotice.AcidWater, 0, AcidWaterEvent);
-                }
-                else if (outdoors && !medical.Incapacitated && carrier.IsNone && cold.InSomething == Locks.HeldState.None && Barefoot(cold, race)
-                    && medical.AcidGround(dt * here.AcidicGround, race, Constants))
-                {
-                    Hurt(world, i, cold, WeatherNotice.AcidFeet, 0, AcidFeetEvent);
-                }
+                continue;
             }
 
-            // Local effects: the last unit of each kind that reaches the character (a later one replaces an earlier one's strength).
-            if (outdoors && zones.Count > 0)
-            {
-                float burning = 0, gas = 0;
+            if (z.Affect == WeatherAffecting.Burning) burning = z.Strength;
+            else gas = z.Strength;
+        }
 
-                foreach (var z in zones)
-                {
-                    if (z.Affect is not (WeatherAffecting.Burning or WeatherAffecting.Gas)
-                        || Vector3.DistanceSquared(z.Position, at) > z.Radius * z.Radius)
-                    {
-                        continue;
-                    }
+        if (burning > 0 && !race.ImmuneTo(WeatherAffecting.Burning))
+        {
+            float p = Protection(cold, WeatherAffecting.Burning);
+            if (medical.Burning(dt * burning, p)) Hurt(world, i, cold, WeatherNotice.Burning, p, BurningEvent);
+        }
 
-                    if (z.Affect == WeatherAffecting.Burning) burning = z.Strength; else gas = z.Strength;
-                }
+        if (gas > 0 && !race.ImmuneTo(WeatherAffecting.Gas))
+        {
+            float p = Protection(cold, WeatherAffecting.Gas);
+            if (medical.Gas(dt * gas, p, Constants)) Hurt(world, i, cold, WeatherNotice.Gas, p, GasEvent);
+        }
+    }
 
-                if (burning > 0 && !race.ImmuneTo(WeatherAffecting.Burning))
-                {
-                    float p = Protection(cold, WeatherAffecting.Burning);
-                    if (medical.Burning(dt * burning, p)) Hurt(world, i, cold, WeatherNotice.Burning, p, BurningEvent);
-                }
+    /// <summary>
+    /// The region's weather on an exposed, not immune character: its kind and strength for the senses, a dust storm's dust, acid rain's burns.
+    /// </summary>
+    void RegionWeather(
+        World world, int i, CharacterCold cold, MedicalState medical, RaceData race, WeatherHere here, Vector3 at,
+        float dt)
+    {
+        var kind = here.Affect;
+        if (kind == WeatherAffecting.None || world.Sight.Inside(i) || race.ImmuneTo(kind)) return;
 
-                if (gas > 0 && !race.ImmuneTo(WeatherAffecting.Gas))
-                {
-                    float p = Protection(cold, WeatherAffecting.Gas);
-                    if (medical.Gas(dt * gas, p, Constants)) Hurt(world, i, cold, WeatherNotice.Gas, p, GasEvent);
-                }
-            }
+        float protection = Protection(cold, kind);
+        cold.Weather = kind;
+        cold.WeatherStrength = here.Strength;
+        cold.WeatherProtection = protection;
 
-            // The region's weather.
-            var kind = here.Affect;
-            if (kind == WeatherAffecting.None || world.Sight.Inside(i) || race.ImmuneTo(kind)) continue;
+        if (kind == WeatherAffecting.DustStorm)
+        {
+            medical.DustStorm(here.Strength, protection);
 
-            float protection = Protection(cold, kind);
-            cold.Weather = kind;
-            cold.WeatherStrength = here.Strength;
-            cold.WeatherProtection = protection;
-
-            if (kind == WeatherAffecting.DustStorm)
-            {
-                medical.DustStorm(here.Strength, protection);
-
-                // The dust notice shows while the storm still reaches it through its gear: s x (1 - P) above 0 (FUN_140648ef0's caller reads the
-                // stored value).
-                if (cold.IsPlayer && here.Strength * (1 - protection) > 0)
-                    (cold.WeatherNotice, cold.WeatherNoticeProtection) = (WeatherNotice.Dust, protection);
-            }
-            else if (kind == WeatherAffecting.Acid && !Sheltered(world, i, at))
-            {
-                if (medical.AcidRain(dt, protection, Constants))
-                    Hurt(world, i, cold, WeatherNotice.AcidRain, protection, AcidRainEvent);
-            }
+            // The dust notice shows while the storm still reaches it through its gear: s x (1 - P) above 0 (FUN_140648ef0's caller reads the
+            // stored value).
+            if (cold.IsPlayer && here.Strength * (1 - protection) > 0)
+                (cold.WeatherNotice, cold.WeatherNoticeProtection) = (WeatherNotice.Dust, protection);
+        }
+        else if (kind == WeatherAffecting.Acid && !Sheltered(world, i, at))
+        {
+            if (medical.AcidRain(dt, protection, Constants))
+                Hurt(world, i, cold, WeatherNotice.AcidRain, protection, AcidRainEvent);
         }
     }
 

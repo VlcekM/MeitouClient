@@ -35,7 +35,8 @@ public sealed class NavMeshCache
     public static uint SettingsHash(NavBuildSettings s)
     {
         uint h = BuilderVersion;
-        foreach (var v in new[] { s.CellSize, s.CellHeight, s.DoorInflateCells, s.AgentHeight, s.MaxClimb, s.MaxSimplificationError, s.SeedDistance, s.SeedHeightSlack })
+        foreach (var v in new[] { s.CellSize, s.CellHeight, s.DoorInflateCells, s.AgentHeight, s.MaxClimb, s.MaxSimplificationError,
+            s.SeedDistance, s.SeedHeightSlack })
             h = (h * 16777619) ^ (uint)BitConverter.SingleToInt32Bits(v);
 
         foreach (var v in new[] { s.TileCells, s.MaxEdgeLength, s.MinRegionArea, s.MergeRegionArea, s.Watershed ? 1 : 0 })
@@ -74,7 +75,8 @@ public sealed class NavMeshCache
                 : mods.TryGetValue(Path.GetFileNameWithoutExtension(name), out var mod) ? mod : name);
         }
 
-        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath, TerrainMaps.BiomeMap, MapFeatureFile.RelativePath })
+        foreach (var rel in new[] { NavSeeds.RelativePath, TerrainHeightmap.RelativePath, BlendInfoFile.RelativePath, TerrainMaps.BiomeMap,
+            MapFeatureFile.RelativePath })
             Stamp(Path.Combine(install.DataDirectory, rel));
 
         if (Path.GetDirectoryName(TerrainMaps.OverlayTile(install, "new_overlay", 0, 0)) is { } overlays && System.IO.Directory.Exists(overlays))

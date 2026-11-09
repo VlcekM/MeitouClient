@@ -198,7 +198,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// </summary>
     public SquadMemory Memory { get; } = new();
 
-    internal static int CompareIds(CharacterId a, CharacterId b) => a.Slot != b.Slot ? a.Slot.CompareTo(b.Slot) : a.Generation.CompareTo(b.Generation);
+    internal static int CompareIds(CharacterId a, CharacterId b) =>
+        a.Slot != b.Slot ? a.Slot.CompareTo(b.Slot) : a.Generation.CompareTo(b.Generation);
 
     /// <summary>
     /// One open player conversation.
@@ -257,7 +258,10 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                     break;
                 case DialogueEvent e:
                     if (e.Event == UnlockMyCageOrShackles && e.Dialogue is null) Freed(world, e.Npc, e.Target);
-                    if (e.Dialogue is { } id) { if (_dialogue.Node(id) is { IsRoot: true } root) StartBubbles(world, e.Npc, e.Target, root, e.Event); }
+                    if (e.Dialogue is { } id)
+                    {
+                        if (_dialogue.Node(id) is { IsRoot: true } root) StartBubbles(world, e.Npc, e.Target, root, e.Event);
+                    }
                     else if (Settings.AmbientEvents) Fire(world, e.Npc, e.Target, e.Event);
                     break;
             }
@@ -273,14 +277,19 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _characterTrading.KeepCharacterTrade(world);
         Memory.Age(world);
         if (_bubbles.Count > 0) StepBubbles(world);
-        if (Settings.AmbientEvents && world.Tick % Settings.AmbientEveryTicks == 0) { SeeOthers(world); SeeGettingUp(world); }
+        if (Settings.AmbientEvents && world.Tick % Settings.AmbientEveryTicks == 0)
+        {
+            SeeOthers(world);
+            SeeGettingUp(world);
+        }
         if (_npcApproaches.Count > 0) _npcApproaches.Step(world);
         _followers.StepFollowers(world);
         _stalkers.StepStalkers(world);
         if (!_talker.IsNone && _open is null)
         {
             var table = world.Characters;
-            if (!table.TryResolveNext(_talker, out int p) || !table.TryResolveNext(_target, out int n) || !Awake(table, p) || !Awake(table, n)) CancelApproach(world);
+            if (!table.TryResolveNext(_talker, out int p) || !table.TryResolveNext(_target, out int n) || !Awake(table, p) || !Awake(table, n))
+                CancelApproach(world);
             else if (InTalkRange(table, p, n))
             {
                 TaskStart.Stand(table, p);
@@ -297,7 +306,11 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     void StartApproach(World world, TalkOrder order)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(order.Talker, out int p) || table.Cold(p) is not { IsPlayer: true } pc || !table.TryResolveNext(order.Target, out int n) || table.Cold(n) is not { IsPlayer: false } nc) return;
+        if (!table.TryResolveNext(order.Talker, out int p) || table.Cold(p) is not { IsPlayer: true } pc
+            || !table.TryResolveNext(order.Target, out int n) || table.Cold(n) is not { IsPlayer: false } nc)
+        {
+            return;
+        }
         // The order check (FUN_1405d1940, order 12): a character whose record says dumb refuses to talk to people.
         if (_data.Db.Find(pc.RecordId)?.GetBool("dumb") == true)
         {
@@ -341,11 +354,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     internal static bool InTalkRange(CharacterTable table, int talker, int target)
     {
         var (a, b) = (table.Next[talker].Position, table.Next[target].Position);
-        float reach = Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
+        float reach =
+            Combat.CombatSteering.Radius(table.Cold(target)) + TalkReach * ((table.Next[talker].Flags & (ushort)MoveFlags.AnyPath) == 0 ? 2 : 1);
         return Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) < reach && MathF.Abs(a.Y - b.Y) < TalkHeight;
     }
 
-    internal static bool Awake(CharacterTable table, int slot) => table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
+    internal static bool Awake(CharacterTable table, int slot) =>
+        table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
 
     /// <summary>
     /// Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends.
@@ -393,7 +408,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (!table.TryResolveNext(npc, out int n) || table.Cold(n) is not { } nc) return;
         if (ev == DialogueEvents.PlayerTalkToMe && TooFarFromCamera(table, player)) return;
         var c = new Conversation { Npc = npc, Player = player, Event = ev };
-        IReadOnlyList<DialogueNode> roots = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } interrupt ? [interrupt] : SetOf(world, n).For(ev);
+        IReadOnlyList<DialogueNode> roots = _interrupts.Remove(npc, out var pending) && _dialogue.Node(pending) is { IsRoot: true } interrupt
+            ? [interrupt] : SetOf(world, n).For(ev);
         var picked = Pick(world, c, roots);
         if (picked is not { } p)
         {
@@ -418,7 +434,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         var squad = cold.SquadId >= 0 ? world.Squads.Find(cold.SquadId) : null;
         bool animal = cold.Fighter?.IsAnimal ?? cold.Appearance?.Animal is not null;
         string? playerFaction = _data.Relations.Contains(world.Player.Faction) ? _data.Factions[world.Player.Faction].Id : null;
-        return _dialogue.SetFor(cold.RecordId, squad?.TemplateId, squad is not null && squad.Leader == world.Characters.IdOf(slot), cold.IsPlayer, animal, playerFaction);
+        return _dialogue.SetFor(cold.RecordId, squad?.TemplateId, squad is not null && squad.Leader == world.Characters.IdOf(slot),
+            cold.IsPlayer, animal, playerFaction);
     }
 
     /// <summary>
@@ -442,7 +459,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         // A dry run of Start's pick (it rolls dice and memoizes permanent chances: both put back), so the menu never offers a Talk that ends in "has
         // nothing to say".
         var (savedRolls, known) = (_rolls, _permanent.Keys.ToList());
-        bool says = Pick(world, new Conversation { Npc = npc, Player = player, Event = DialogueEvents.PlayerTalkToMe, DryRun = true }, roots) is not null;
+        bool says = Pick(world,
+            new Conversation { Npc = npc, Player = player, Event = DialogueEvents.PlayerTalkToMe, DryRun = true }, roots) is not null;
         _rolls = savedRolls;
         foreach (var key in _permanent.Keys.Except(known).ToList()) _permanent.Remove(key);
         return says;
@@ -495,7 +513,11 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     void Choose(World world, Conversation c, int index)
     {
         if ((uint)index >= (uint)c.Choices.Count) return;
-        if (_bailList is not null) { ChooseBail(world, c, index); return; }
+        if (_bailList is not null)
+        {
+            ChooseBail(world, c, index);
+            return;
+        }
         var (reply, text) = c.Choices[index];
         DialogueNode? from = c.Line;
         if (reply is not null)
@@ -507,9 +529,17 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             if (c.Ended) return;
             from = reply;
         }
-        else if (text == LeaveChoice || from is null) { c.Ended = true; return; }
+        else if (text == LeaveChoice || from is null)
+        {
+            c.Ended = true;
+            return;
+        }
         var next = Pick(world, c, from.Children);
-        if (next is not { } p) { c.Ended = true; return; }
+        if (next is not { } p)
+        {
+            c.Ended = true;
+            return;
+        }
         if (IsNpcSide(p.Line.Speaker)) Say(world, c, p.Line, p.Speaker);
         else
         {
@@ -529,12 +559,20 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (_open is not { } c) return;
         _open = null;
         _view = null;
-        if (_bailList is not null) { _bailList = null; Release(world, c.Npc); return; }   // the bail list closing: the conversation was counted already
+
+        // the bail list closing: the conversation was counted already
+        if (_bailList is not null)
+        {
+            _bailList = null;
+            Release(world, c.Npc);
+            return;
+        }
         var key = (c.Npc, c.Event);
         var (count, _) = _counters.GetValueOrDefault(key);
         _counters[key] = (count + 1, world.GameHours);
         // A player conversation (event 1) leaves the speaker's squad remembering the partner (FUN_140674830; other events do not).
-        if (c.Event == DialogueEvents.PlayerTalkToMe && world.Characters.TryResolveNext(c.Npc, out int n) && world.Characters.Cold(n) is { SquadId: >= 0 } nc)
+        if (c.Event == DialogueEvents.PlayerTalkToMe && world.Characters.TryResolveNext(c.Npc, out int n)
+            && world.Characters.Cold(n) is { SquadId: >= 0 } nc)
             Memory.Remember(world, nc.SquadId, c.Player, MemoryTag.None);
         // An arrest the conversation started (DA 29, 30) keeps the guard held.
         if (Arrests?.Arrests.Any(a => a.Guard == c.Npc) != true) Release(world, c.Npc);
@@ -570,7 +608,11 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     internal void RefreshView(World world)
     {
         _characterTrading.RefreshCharacterTrade(world);
-        if (_open is not { } c) { _view = null; return; }
+        if (_open is not { } c)
+        {
+            _view = null;
+            return;
+        }
         _view = new ConversationView(c.Npc, c.Player, c.Speaker, NameOf(world, c.Speaker.IsNone ? c.Npc : c.Speaker), NameOf(world, c.Player), c.Text,
             [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
     }
@@ -583,7 +625,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// <summary>
     /// A choice as the window shows it: the engine's [Leave] in the player's language; a reply's text is the data's own and stays as it is.
     /// </summary>
-    static string Shown((DialogueNode? Reply, string Text) choice) => choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text;
+    static string Shown((DialogueNode? Reply, string Text) choice) =>
+        choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text;
 
     public ConversationView? PublishConversation() => _view;
     public DialogueRequest? PublishRequest() => _request;
@@ -607,21 +650,59 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     public void Hash(ref StateHasher hasher)
     {
-        if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0 && _ambientAt.Count == 0 && _npcApproaches.Count == 0 && _down.Count == 0 && _quiet.Count == 0 && _followers.Count == 0 && _stalkers.Count == 0 && _open is null && _talker.IsNone) return;
+        if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0
+            && _ambientAt.Count == 0 && _npcApproaches.Count == 0 && _down.Count == 0 && _quiet.Count == 0 && _followers.Count == 0
+            && _stalkers.Count == 0 && _open is null && _talker.IsNone)
+        {
+            return;
+        }
         hasher.Add(0x44696167);
         hasher.Add(_rolls);
-        foreach (var (line, hours) in _lastUse) { hasher.Add(Rng.StableHash(line)); hasher.Add(hours); }
-        foreach (var ((who, line), passed) in _permanent) { hasher.Add(who); hasher.Add(Rng.StableHash(line)); hasher.Add(passed); }
-        foreach (var ((who, ev), (count, last)) in _counters) { hasher.Add(who); hasher.Add(ev); hasher.Add(count); hasher.Add(last); }
+        foreach (var (line, hours) in _lastUse)
+        {
+            hasher.Add(Rng.StableHash(line));
+            hasher.Add(hours);
+        }
+        foreach (var ((who, line), passed) in _permanent)
+        {
+            hasher.Add(who);
+            hasher.Add(Rng.StableHash(line));
+            hasher.Add(passed);
+        }
+        foreach (var ((who, ev), (count, last)) in _counters)
+        {
+            hasher.Add(who);
+            hasher.Add(ev);
+            hasher.Add(count);
+            hasher.Add(last);
+        }
         Memory.Hash(ref hasher);
         _followers.Hash(ref hasher);
         _stalkers.Hash(ref hasher);
-        foreach (var (who, line) in _interrupts) { hasher.Add(who); hasher.Add(Rng.StableHash(line)); }
-        foreach (var b in _bubbles) { hasher.Add(b.C.Npc); hasher.Add(Rng.StableHash(b.Line.StringId)); hasher.Add(b.DueTick); }
-        foreach (var ((squad, whom), hours) in _ambientAt) { hasher.Add(squad); hasher.Add(whom); hasher.Add(hours); }
+        foreach (var (who, line) in _interrupts)
+        {
+            hasher.Add(who);
+            hasher.Add(Rng.StableHash(line));
+        }
+        foreach (var b in _bubbles)
+        {
+            hasher.Add(b.C.Npc);
+            hasher.Add(Rng.StableHash(b.Line.StringId));
+            hasher.Add(b.DueTick);
+        }
+        foreach (var ((squad, whom), hours) in _ambientAt)
+        {
+            hasher.Add(squad);
+            hasher.Add(whom);
+            hasher.Add(hours);
+        }
         _npcApproaches.Hash(ref hasher);
         foreach (var id in _down) hasher.Add(id);
-        foreach (var (npc, pc) in _quiet) { hasher.Add(npc); hasher.Add(pc); }
+        foreach (var (npc, pc) in _quiet)
+        {
+            hasher.Add(npc);
+            hasher.Add(pc);
+        }
         hasher.Add(_talker);
         hasher.Add(_target);
         if (_open is { } c)
