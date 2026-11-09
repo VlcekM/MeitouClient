@@ -28,8 +28,7 @@ public sealed class MyGuiCodeRanges
         var merged = new List<(int First, int Last)>();
         foreach (var (first, last) in include.Where(r => r.First <= r.Last).OrderBy(r => r.First))
         {
-            if (merged.Count > 0 && first <= merged[^1].Last + 1)
-                merged[^1] = (merged[^1].First, Math.Max(merged[^1].Last, last));
+            if (merged.Count > 0 && first <= merged[^1].Last + 1) merged[^1] = (merged[^1].First, Math.Max(merged[^1].Last, last));
             else merged.Add((first, last));
         }
         foreach (var (hideFirst, hideLast) in hide)
@@ -37,11 +36,7 @@ public sealed class MyGuiCodeRanges
             var kept = new List<(int First, int Last)>(merged.Count + 1);
             foreach (var (first, last) in merged)
             {
-                if (hideLast < first || hideFirst > last)
-                {
-                    kept.Add((first, last));
-                    continue;
-                }
+                if (hideLast < first || hideFirst > last) { kept.Add((first, last)); continue; }
                 if (first < hideFirst) kept.Add((first, hideFirst - 1));
                 if (last > hideLast) kept.Add((hideLast + 1, last));
             }
@@ -109,16 +104,9 @@ public sealed record MyGuiTrueTypeFont(string Source, float Size, float Resoluti
     public static MyGuiTrueTypeFont? Read(XElement resource)
     {
         if ((string?)resource.Attribute("type") != "ResourceTrueTypeFont") return null;
-        string? Property(string key) => resource.Elements("Property").FirstOrDefault(p
-                => (string?)p.Attribute("key") == key)?.Attribute("value")?.Value;
-        float Number(
-            string key,
-            float fallback
-        ) => float.TryParse(Property(key), NumberStyles.Float, CultureInfo.InvariantCulture, out float n) && float.IsFinite(n) ? n : fallback;
-        int Integer(
-            string key,
-            int fallback
-        ) => int.TryParse(Property(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : fallback;
+        string? Property(string key) => resource.Elements("Property").FirstOrDefault(p => (string?)p.Attribute("key") == key)?.Attribute("value")?.Value;
+        float Number(string key, float fallback) => float.TryParse(Property(key), NumberStyles.Float, CultureInfo.InvariantCulture, out float n) && float.IsFinite(n) ? n : fallback;
+        int Integer(string key, int fallback) => int.TryParse(Property(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : fallback;
         if (Property("Source") is not { Length: > 0 } source) return null;
 
         var include = new List<(int First, int Last)>();
@@ -135,12 +123,8 @@ public sealed record MyGuiTrueTypeFont(string Source, float Size, float Resoluti
         string? hinting = Property("Hinting");
         return new MyGuiTrueTypeFont(source, Number("Size", 0), Number("Resolution", DefaultResolution),
             Property("Antialias") is { } aa && (aa.Equals("true", StringComparison.OrdinalIgnoreCase) || aa == "1"),
-            hinting switch { "force_auto" => MyGuiHinting.ForceAuto, "disable_auto" => MyGuiHinting.DisableAuto,
-            "disable_all" => MyGuiHinting.DisableAll, _ => MyGuiHinting.UseNative },
-            Number(
-                "TabWidth",
-                0
-            ), Integer("OffsetHeight", 0), Integer("SubstituteCode", -1), Integer("Distance", -1), new MyGuiCodeRanges(include, hide));
+            hinting switch { "force_auto" => MyGuiHinting.ForceAuto, "disable_auto" => MyGuiHinting.DisableAuto, "disable_all" => MyGuiHinting.DisableAll, _ => MyGuiHinting.UseNative },
+            Number("TabWidth", 0), Integer("OffsetHeight", 0), Integer("SubstituteCode", -1), Integer("Distance", -1), new MyGuiCodeRanges(include, hide));
     }
 
     /// <summary>
@@ -150,8 +134,7 @@ public sealed record MyGuiTrueTypeFont(string Source, float Size, float Resoluti
     {
         if (value is null) return null;
         var parts = value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0 || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int first) || first < 0)
-            return null;
+        if (parts.Length == 0 || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int first) || first < 0) return null;
         int last = parts.Length > 1 && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int second) ? second : first;
         return (first, Math.Max(first, last));
     }

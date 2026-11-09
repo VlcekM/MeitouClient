@@ -3,12 +3,13 @@ using System.Numerics;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The cascade fitting of the Meitou shadows (not the game's; docs/formats/shadows.md, "Meitou shadows"): the splits run from the camera's near plane
-/// (quantised, so they do not move every frame while zooming) to the shadow range, so all the cascades cover something visible (the game's halved
-/// splits leave the first two in front of the near plane in most views); each cascade is a light-space square around the bounding sphere of its own
-/// slice (rotation-invariant size, centre snapped to whole texels as the game's, but on a grid through an anchor near the camera rather than through
-/// the world origin, so a turning sun does not slide it), slightly enlarged so that a cascade drawn a few frames ago still covers the view; the box
-/// reaches further towards the sun so casters there keep their depth (for the penumbra width).
+/// The cascade fitting of the Meitou shadows (not the game's; docs/formats/shadows.md, "Meitou shadows"): the splits run from the
+/// camera's near plane (quantised, so they do not move every frame while zooming) to the shadow range, so all the cascades cover
+/// something visible (the game's halved splits leave the first two in front of the near plane in most views); each cascade is a
+/// light-space square around the bounding sphere of its own slice (rotation-invariant size, centre snapped to whole texels as the
+/// game's, but on a grid through an anchor near the camera rather than through the world origin, so a turning sun does not slide it),
+/// slightly enlarged so that a cascade drawn a few frames ago still covers the view; the box reaches further towards the sun
+/// so casters there keep their depth (for the penumbra width).
 /// </summary>
 public static class MeitouShadowFit
 {
@@ -30,15 +31,15 @@ public static class MeitouShadowFit
     public const int DefaultCascades = 5;
 
     /// <summary>
-    /// How much larger than its slice's sphere the box of cascade <paramref name="i"/> of <paramref name="count"/> is: slack for cascades redrawn
-    /// every few frames, more the less often they are (ShadowPass.Cadence): 0.02 for the first, 0.06, 0.08 and 0.08 for the last three, 0.04 for any
-    /// between (four cascades: 0.02, 0.06, 0.08, 0.08; five: 0.02, 0.04, 0.06, 0.08, 0.08).
+    /// How much larger than its slice's sphere the box of cascade <paramref name="i"/> of <paramref name="count"/> is: slack for cascades redrawn every few
+    /// frames, more the less often they are (ShadowPass.Cadence): 0.02 for the first, 0.06, 0.08 and 0.08 for the last three, 0.04 for any between
+    /// (four cascades: 0.02, 0.06, 0.08, 0.08; five: 0.02, 0.04, 0.06, 0.08, 0.08).
     /// </summary>
     public static float Margin(int i, int count) => i == 0 ? 0.02f : (count - 1 - i) switch { 0 or 1 => 0.08f, 2 => 0.06f, _ => 0.04f };
     /// <summary>
-    /// The casters' depth bias in texels of their cascade: <c>z += min(MaxTexels, Slope · |∇z|) + FixedTexels</c>, each texel the cascade's world
-    /// texel (the game's 0.75 world units fixed and up to 2 % of the box's depth by slope pushed the shadows of posts and walls several units off
-    /// their feet under a low sun, 10 to 100 texels of the first cascade). The receiver's normal offset (a texel or two) keeps the acne off.
+    /// The casters' depth bias in texels of their cascade: <c>z += min(MaxTexels, Slope · |∇z|) + FixedTexels</c>, each texel the cascade's world texel
+    /// (the game's 0.75 world units fixed and up to 2 % of the box's depth by slope pushed the shadows of posts and walls several units off their
+    /// feet under a low sun, 10 to 100 texels of the first cascade). The receiver's normal offset (a texel or two) keeps the acne off.
     /// </summary>
     public const float FixedTexels = 1, Slope = 2, MaxTexels = 4;
     /// <summary>
@@ -74,11 +75,10 @@ public static class MeitouShadowFit
     public const float FocusSplit = 2;
 
     /// <summary>
-    /// The splits with the first one sized by the camera's focus (<paramref name="focus"/>, 0: none): <see cref="FocusSplit"/> times it, rounded down
-    /// to a power of <see cref="NearStep"/>, between twice the near plane and the practical scheme's own first split, and the other cascades split
-    /// from there to <paramref name="far"/>. The practical scheme's first split is mostly its uniform term (a fifth of a quarter of the range: about
-    /// 500 units at 10000), so a close-up drew its characters with the texels of a 500-unit slice, several times coarser than the game's first
-    /// cascades.
+    /// The splits with the first one sized by the camera's focus (<paramref name="focus"/>, 0: none): <see cref="FocusSplit"/> times it, rounded down to a power of
+    /// <see cref="NearStep"/>, between twice the near plane and the practical scheme's own first split, and the other cascades split from there to <paramref name="far"/>.
+    /// The practical scheme's first split is mostly its uniform term (a fifth of a quarter of the range: about 500 units at 10000), so a close-up drew its characters
+    /// with the texels of a 500-unit slice, several times coarser than the game's first cascades.
     /// </summary>
     public static float[] Splits(float near, float far, int count, float focus)
     {
@@ -97,11 +97,11 @@ public static class MeitouShadowFit
     public const int BaseCascades = 4;
 
     /// <summary>
-    /// The splits of more than <see cref="BaseCascades"/> cascades: the four's (<paramref name="baseSplits"/>), with the extra cascades put into the
-    /// four's second slice, which is the largest step in depth (its far end several times its near: 87 to 1016 units in a close-up at range 10000,
-    /// 600 to 1500 from 900 away), by equal ratios (one extra: at the slice's geometric mean). The first slice and the last two stay as they are, so
-    /// the near cascade and the far ones keep their texels; the second slice's texels get finer near its start, where the four's cascade 1 was
-    /// coarsest for the depth it was seen at.
+    /// The splits of more than <see cref="BaseCascades"/> cascades: the four's (<paramref name="baseSplits"/>), with the extra cascades put into the four's
+    /// second slice, which is the largest step in depth (its far end several times its near: 87 to 1016 units in a close-up at range 10000, 600 to 1500
+    /// from 900 away), by equal ratios (one extra: at the slice's geometric mean). The first slice and the last two stay as they are, so the near
+    /// cascade and the far ones keep their texels; the second slice's texels get finer near its start, where the four's cascade 1 was coarsest for
+    /// the depth it was seen at.
     /// </summary>
     public static float[] Subdivided(float[] baseSplits, int count)
     {
@@ -123,8 +123,8 @@ public static class MeitouShadowFit
         (i == 0 ? splits[0] : splits[i] - BlendBand * (splits[i] - splits[i - 1]), splits[i + 1]);
 
     /// <summary>
-    /// The bounding sphere of the view frustum between view depths <paramref name="near"/> and <paramref name="far"/>: its distance along the view
-    /// axis from the eye and its radius (the textbook form; the game's own enlarges it, see <see cref="ShadowCascades.StableSize"/>).
+    /// The bounding sphere of the view frustum between view depths <paramref name="near"/> and <paramref name="far"/>: its distance
+    /// along the view axis from the eye and its radius (the textbook form; the game's own enlarges it, see <see cref="ShadowCascades.StableSize"/>).
     /// </summary>
     public static (double Centre, double Radius) Sphere(double near, double far, double fieldOfViewY, double aspect)
     {
@@ -148,20 +148,13 @@ public static class MeitouShadowFit
     }
 
     /// <summary>
-    /// Fits cascade <paramref name="i"/> of <paramref name="splits"/> to this view and sun (<paramref name="toSun"/> normalised). The box is snapped
-    /// to whole texels on a grid through <paramref name="anchor"/> (world units): the light rotation turns about the world origin, so a grid through
-    /// the origin slides past a point by its distance from the origin times the angle the sun turned (at The Hub, 51000 units out, a time-lapse
-    /// frame's 0.006 degrees slid it 5.6 units, three texels of the first cascade, and every shadow edge flickered); through a point near the camera
-    /// the slide is that distance from the anchor instead.
+    /// Fits cascade <paramref name="i"/> of <paramref name="splits"/> to this view and sun (<paramref name="toSun"/> normalised). The box
+    /// is snapped to whole texels on a grid through <paramref name="anchor"/> (world units): the light rotation turns about the world
+    /// origin, so a grid through the origin slides past a point by its distance from the origin times the angle the sun turned (at
+    /// The Hub, 51000 units out, a time-lapse frame's 0.006 degrees slid it 5.6 units, three texels of the first cascade, and every
+    /// shadow edge flickered); through a point near the camera the slide is that distance from the anchor instead.
     /// </summary>
-    public static ShadowCascade Fit(
-        ShadowView view,
-        Vector3 toSun,
-        ShadowSettings settings,
-        float[] splits,
-        int i,
-        (double X, double Y, double Z) anchor = default
-    )
+    public static ShadowCascade Fit(ShadowView view, Vector3 toSun, ShadowSettings settings, float[] splits, int i, (double X, double Y, double Z) anchor = default)
     {
         var rotation = ShadowCascades.LightRotation(toSun);
         double ox = rotation.M11 * anchor.X + rotation.M21 * anchor.Y + rotation.M31 * anchor.Z,
@@ -177,11 +170,7 @@ public static class MeitouShadowFit
         // Light space: z grows away from the sun, so the box's centre sits sunward of the sphere's by half the extra reach.
         double zCentre = cz - SunwardReach * radius * 0.5;
         // Snapped on the grid through the anchor's light-space position (o): light space minus o is a whole number of texels at every texel corner.
-        var translation = (
-            Math.Floor((-cx + ox) / texel) * texel - ox,
-            Math.Floor((-cy + oy) / texel) * texel - oy,
-            Math.Floor((-zCentre + oz) / step) * step - oz
-        );
+        var translation = (Math.Floor((-cx + ox) / texel) * texel - ox, Math.Floor((-cy + oy) / texel) * texel - oy, Math.Floor((-zCentre + oz) / step) * step - oz);
         return new ShadowCascade
         {
             Index = i,
@@ -192,10 +181,7 @@ public static class MeitouShadowFit
             Translation = translation,
             Extent = (size, size, depth),
             Texel = texel,
-            FixedBias = (float)Math.Max(
-                FixedTexels * 2 * texel / depth,
-                KenshiShadows.MinFixedBias * 0.25
-            ),   // clip z is -1..1: world units x 2 / depth
+            FixedBias = (float)Math.Max(FixedTexels * 2 * texel / depth, KenshiShadows.MinFixedBias * 0.25),   // clip z is -1..1: world units x 2 / depth
             MaxSlopeBias = (float)(MaxTexels * 2 * texel / depth),
             FilterRadius = (float)(1.5 / tile),
             Tile = new Vector4(0, 0, 1, 1),   // the whole of its layer (i) of the cascade array
@@ -203,8 +189,8 @@ public static class MeitouShadowFit
     }
 
     /// <summary>
-    /// Whether <paramref name="cascade"/> (fitted some frames ago) still holds this view's slice, with <paramref name="border"/> world units to spare
-    /// at its sides for the receiver's filter; when not, it must be fitted and drawn again.
+    /// Whether <paramref name="cascade"/> (fitted some frames ago) still holds this view's slice, with <paramref name="border"/> world
+    /// units to spare at its sides for the receiver's filter; when not, it must be fitted and drawn again.
     /// </summary>
     public static bool Covers(ShadowCascade cascade, ShadowView view, float[] splits, double border)
     {
@@ -217,9 +203,9 @@ public static class MeitouShadowFit
     }
 
     /// <summary>
-    /// The landmark shadow map's box (Meitou; docs/formats/shadows.md, "Landmark shadows"): one square light-space box around the bounding spheres
-    /// (xyz centre, w radius) of every landmark drawn, so that each casts its shadow however far it is from the camera. A receiver outside the box is
-    /// lit (no landmark lies towards the sun from it). Null without spheres. <see cref="ShadowCascade.Index"/> is
+    /// The landmark shadow map's box (Meitou; docs/formats/shadows.md, "Landmark shadows"): one square light-space box around the bounding
+    /// spheres (xyz centre, w radius) of every landmark drawn, so that each casts its shadow however far it is from the camera. A receiver
+    /// outside the box is lit (no landmark lies towards the sun from it). Null without spheres. <see cref="ShadowCascade.Index"/> is
     /// <see cref="ShadowCascade.LandmarkIndex"/> (it is no cascade and has a map of its own), <see cref="ShadowCascade.Tile"/> the whole map.
     /// </summary>
     public static ShadowCascade? FitLandmarks(Vector3 toSun, IReadOnlyList<Vector4> spheres, int mapSize)
@@ -232,14 +218,7 @@ public static class MeitouShadowFit
             double x = rotation.M11 * (double)s.X + rotation.M21 * (double)s.Y + rotation.M31 * (double)s.Z;
             double y = rotation.M12 * (double)s.X + rotation.M22 * (double)s.Y + rotation.M32 * (double)s.Z;
             double z = rotation.M13 * (double)s.X + rotation.M23 * (double)s.Y + rotation.M33 * (double)s.Z;
-            (x0, x1, y0, y1, z0, z1) = (
-                Math.Min(x0, x - s.W),
-                Math.Max(x1, x + s.W),
-                Math.Min(y0, y - s.W),
-                Math.Max(y1, y + s.W),
-                Math.Min(z0, z - s.W),
-                Math.Max(z1, z + s.W)
-            );
+            (x0, x1, y0, y1, z0, z1) = (Math.Min(x0, x - s.W), Math.Max(x1, x + s.W), Math.Min(y0, y - s.W), Math.Max(y1, y + s.W), Math.Min(z0, z - s.W), Math.Max(z1, z + s.W));
         }
         double size = Math.Max(Math.Max(x1 - x0, y1 - y0), 1) * 1.02, texel = size / mapSize;
         double depth = Math.Max(z1 - z0, 1) * 1.02;

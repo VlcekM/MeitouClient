@@ -10,14 +10,13 @@ public static class CollisionPaths
     static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Stamp, Dictionary<string, string> Mods)> ModCache = new();
 
     /// <summary>
-    /// <see cref="ModList.FindMods"/> of an install (local mods over Workshop ones), rescanned when its <c>mods</c> or Workshop folder changes, since
-    /// a mod can be subscribed or added while the process runs.
+    /// <see cref="ModList.FindMods"/> of an install (local mods over Workshop ones), rescanned when its <c>mods</c> or Workshop folder changes,
+    /// since a mod can be subscribed or added while the process runs.
     /// </summary>
     static Dictionary<string, string> Mods(GameInstall install)
     {
         var stamp = Directory.GetLastWriteTimeUtc(install.ModsDirectory);
-        if (install.WorkshopDirectory is { } workshop && Directory.GetLastWriteTimeUtc(workshop) is var w && w > stamp)
-            stamp = w;
+        if (install.WorkshopDirectory is { } workshop && Directory.GetLastWriteTimeUtc(workshop) is var w && w > stamp) stamp = w;
         if (ModCache.TryGetValue(install.Root, out var cached) && cached.Stamp == stamp) return cached.Mods;
         var found = ModList.FindMods(install);
         ModCache[install.Root] = (stamp, found);
@@ -25,8 +24,8 @@ public static class CollisionPaths
     }
 
     /// <summary>
-    /// The folder of the mod a record path names: the exact name as the game matches mods, else the one mod that matches ignoring case (paths are
-    /// case-insensitive on Windows); null when none or several do.
+    /// The folder of the mod a record path names: the exact name as the game matches mods, else the one mod that matches ignoring case
+    /// (paths are case-insensitive on Windows); null when none or several do.
     /// </summary>
     static string? ModFolder(GameInstall install, string name)
     {
@@ -50,8 +49,7 @@ public static class CollisionPaths
         var rel = recordPath.Replace('\\', '/').TrimStart('.', '/');
         var full = GameFiles.Resolve(Path.Combine(install.Root, rel));
         if (File.Exists(full)) return full;
-        // A mod's own files: <c>.\mods\Mod Name\x</c> is the folder of that mod, which for a Workshop mod is its Workshop folder, not a folder under
-        // the install.
+        // A mod's own files: <c>.\mods\Mod Name\x</c> is the folder of that mod, which for a Workshop mod is its Workshop folder, not a folder under the install.
         if (rel.StartsWith("mods/", StringComparison.OrdinalIgnoreCase) && rel.IndexOf('/', 5) is var slash and > 5
             && ModFolder(install, rel[5..slash]) is { } folder)
         {

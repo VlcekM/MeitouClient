@@ -13,8 +13,8 @@ public sealed record LoadedTexture(IReadOnlyList<RgbaImage> Levels, DdsFile? Sou
 }
 
 /// <summary>
-/// Loads the texture files the base game uses: <c>.dds</c> with <see cref="DdsReader"/> / <see cref="DdsDecoder"/>, and <c>.png</c>, <c>.tga</c>,
-/// <c>.jpg</c>, <c>.bmp</c> with StbImageSharp (Unlicense OR MIT).
+/// Loads the texture files the base game uses: <c>.dds</c> with <see cref="DdsReader"/> / <see cref="DdsDecoder"/>,
+/// and <c>.png</c>, <c>.tga</c>, <c>.jpg</c>, <c>.bmp</c> with StbImageSharp (Unlicense OR MIT).
 /// </summary>
 public static class TextureLoader
 {

@@ -3,14 +3,15 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// FOLIAGE_LAYER <c>visibility range</c> (fcs_enums.def FoliageVisibilityRange). The game's distance is <see cref="FoliageLayer.Range"/>.
+/// FOLIAGE_LAYER <c>visibility range</c> (fcs_enums.def FoliageVisibilityRange). The game's distance is
+/// <see cref="FoliageLayer.Range"/>.
 /// </summary>
 public enum FoliageVisibility { Close, Medium, Far, Feature }
 
 /// <summary>
-/// A FOLIAGE_MESH record as the foliage placer reads it (docs/formats/foliage.md, "Records"). Fields keep their FCS names; defaults are fcs.def's.
-/// <see cref="MinScale"/> / <see cref="MaxScale"/> are the game's scale draw bounds: the record's <c>min height</c> / <c>max height</c> times 2,
-/// clamped to [0.01, 10].
+/// A FOLIAGE_MESH record as the foliage placer reads it (docs/formats/foliage.md, "Records"). Fields keep their FCS names;
+/// defaults are fcs.def's. <see cref="MinScale"/> / <see cref="MaxScale"/> are the game's scale draw bounds: the record's
+/// <c>min height</c> / <c>max height</c> times 2, clamped to [0.01, 10].
 /// </summary>
 public sealed class FoliageMesh
 {
@@ -227,8 +228,8 @@ public sealed class FoliageLayer
     public bool IsGrass => Grass.Count > 0;
 
     /// <summary>
-    /// Distance at which the layer's pages are dropped, at range setting 1: {50, 100, 800, 4000}[visibility] × 10. Grass and wind layers use at most
-    /// FAR.
+    /// Distance at which the layer's pages are dropped, at range setting 1: {50, 100, 800, 4000}[visibility] × 10. Grass and
+    /// wind layers use at most FAR.
     /// </summary>
     public float Range => FoliageLayout.VisibilityRange(IsGrass || Wind ? (FoliageVisibility)Math.Min((int)Visibility, 2) : Visibility);
 
@@ -280,8 +281,7 @@ public sealed class FoliageCatalog
             foreach (var f in b.GetReferences("foliage"))
             {
                 if (db.Find(f.TargetStringId) is not { Type: FcsRecordType.FoliageLayer } lr) continue;
-                if (!c.Layers.TryGetValue(lr.StringId, out var layer))
-                    c.Layers[lr.StringId] = layer = FoliageLayer.FromRecord(lr, db, c.Meshes);
+                if (!c.Layers.TryGetValue(lr.StringId, out var layer)) c.Layers[lr.StringId] = layer = FoliageLayer.FromRecord(lr, db, c.Meshes);
                 list.Add(layer);
             }
             c.ByBiome[index] = list;

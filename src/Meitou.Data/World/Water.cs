@@ -5,8 +5,9 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// How the game places and parameterises water (docs/formats/terrain.md, "Water"): one level for the whole world, a 4608-unit plane per loaded zone
-/// near the camera and a 500000-unit distant plane, both shaded with the parameters of the biomes under them.
+/// How the game places and parameterises water (docs/formats/terrain.md, "Water"): one level for the whole world,
+/// a 4608-unit plane per loaded zone near the camera and a 500000-unit distant plane, both shaded with the
+/// parameters of the biomes under them.
 /// </summary>
 public static class WorldWater
 {
@@ -34,8 +35,8 @@ public static class WorldWater
 }
 
 /// <summary>
-/// A BIOMES record's water parameters, converted the way the game hands them to the water shader (Verified, kenshi_x64.exe water material builder;
-/// defaults from fcs.def).
+/// A BIOMES record's water parameters, converted the way the game hands them to the water shader (Verified,
+/// kenshi_x64.exe water material builder; defaults from fcs.def).
 /// </summary>
 public sealed record BiomeWater
 {

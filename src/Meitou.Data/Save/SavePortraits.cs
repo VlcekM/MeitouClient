@@ -4,9 +4,8 @@ using System.IO.Compression;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// The portrait atlas of a save (<c>portraits_texture.png</c>, docs/formats/save.md): 2048 x 2048, 8-bit RGBA, 16 x 16 cells of 128 px. A save made
-/// from nothing has no portraits yet, so it gets an atlas of transparent cells (a few KB once deflated); a save made from a loaded one keeps the
-/// atlas it came with.
+/// The portrait atlas of a save (<c>portraits_texture.png</c>, docs/formats/save.md): 2048 x 2048, 8-bit RGBA, 16 x 16 cells of 128 px. A save made from nothing has
+/// no portraits yet, so it gets an atlas of transparent cells (a few KB once deflated); a save made from a loaded one keeps the atlas it came with.
 /// </summary>
 public static class SavePortraits
 {

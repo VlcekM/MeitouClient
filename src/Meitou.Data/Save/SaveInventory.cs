@@ -4,8 +4,8 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// One item of a saved inventory: an INVENTORY_ITEM_STATE (docs/formats/save.md), with what the engine models. <see cref="Source"/> is the record it
-/// was read from, so the keys the engine does not model (the <c>ownedby</c> and <c>insideBuilding</c> handles) survive a round trip.
+/// One item of a saved inventory: an INVENTORY_ITEM_STATE (docs/formats/save.md), with what the engine models. <see cref="Source"/> is the record it was read from, so
+/// the keys the engine does not model (the <c>ownedby</c> and <c>insideBuilding</c> handles) survive a round trip.
 /// </summary>
 public sealed class SaveItem
 {
@@ -82,8 +82,8 @@ public readonly record struct SaveItemLock(int Level, bool Locked, bool Broken, 
 public static class SaveInventory
 {
     /// <summary>
-    /// The items an INVENTORY_STATE holds: each instance names an INVENTORY_ITEM_STATE of the same file; a container item's single instance names the
-    /// INVENTORY_STATE of its contents (<b>Verified</b> in the samples, save.md). Instances whose target is missing are skipped.
+    /// The items an INVENTORY_STATE holds: each instance names an INVENTORY_ITEM_STATE of the same file; a container item's single instance names the INVENTORY_STATE of its
+    /// contents (<b>Verified</b> in the samples, save.md). Instances whose target is missing are skipped.
     /// </summary>
     public static List<SaveItem> Read(SaveFile file, FcsRecord inventory)
     {
@@ -98,8 +98,7 @@ public static class SaveInventory
         if (depth > 4) return items;
         foreach (var instance in inventory.Instances)
         {
-            if (!byId.TryGetValue(instance.Target, out var r) || r.RecordType != FcsRecordType.InventoryItemState)
-                continue;
+            if (!byId.TryGetValue(instance.Target, out var r) || r.RecordType != FcsRecordType.InventoryItemState) continue;
             List<SaveItem>? contents = null;
             if (r.Instances.Count > 0 && byId.TryGetValue(r.Instances[0].Target, out var inner) && inner.RecordType == FcsRecordType.InventoryState)
                 contents = Read(byId, inner, depth + 1);
@@ -132,12 +131,7 @@ public static class SaveInventory
         Stun = r.Floats.GetValueOrDefault("stun"),
         Death = r.Bools.GetValueOrDefault("death"),
         Unique = r.Bools.GetValueOrDefault("unique"),
-        Lock = r.Ints.TryGetValue("lock lvl", out int lockLevel) ? new SaveItemLock(
-            lockLevel,
-            r.Bools.GetValueOrDefault("locked"),
-            r.Bools.GetValueOrDefault("broken"),
-            r.Floats.GetValueOrDefault("hardness")
-        ) : null,
+        Lock = r.Ints.TryGetValue("lock lvl", out int lockLevel) ? new SaveItemLock(lockLevel, r.Bools.GetValueOrDefault("locked"), r.Bools.GetValueOrDefault("broken"), r.Floats.GetValueOrDefault("hardness")) : null,
         Contents = contents,
         Source = r,
     };
@@ -160,8 +154,8 @@ public static class SaveInventory
     }
 
     /// <summary>
-    /// The INVENTORY_ITEM_STATE of an item: a copy of its <see cref="SaveItem.Source"/> when it has one (the keys the engine does not model kept),
-    /// else the key set every real item record has (null handles, empty colour and uniform), with the modelled keys written over.
+    /// The INVENTORY_ITEM_STATE of an item: a copy of its <see cref="SaveItem.Source"/> when it has one (the keys the engine does not model kept), else the key set every
+    /// real item record has (null handles, empty colour and uniform), with the modelled keys written over.
     /// </summary>
     internal static FcsRecord ItemRecord(SaveItem item)
     {
@@ -214,18 +208,13 @@ public static class SaveInventory
         return r;
     }
 
-    internal static FcsInstance Link(
-        int index,
-        string target
-    ) => new() { Id = index.ToString(System.Globalization.CultureInfo.InvariantCulture), Target = target, Position = Vector3.Zero,
-    Rotation = Quaternion.Identity };
+    internal static FcsInstance Link(int index, string target) => new() { Id = index.ToString(System.Globalization.CultureInfo.InvariantCulture), Target = target, Position = Vector3.Zero, Rotation = Quaternion.Identity };
 
     /// <summary>
-    /// Replaces what an INVENTORY_STATE of <paramref name="file"/> holds with <paramref name="items"/>: the old item records (and the contents of
-    /// containers among them) leave the file, and each item gets an INVENTORY_ITEM_STATE linked by an instance numbered from 1; a container's
-    /// contents get an INVENTORY_STATE of their own, linked by the item's one instance, as the game writes them. An item read from this inventory
-    /// keeps its record's id and place in the file, so an inventory that did not change is written back the same. New records take the next numbers
-    /// of the file, named by <paramref name="idOf"/>.
+    /// Replaces what an INVENTORY_STATE of <paramref name="file"/> holds with <paramref name="items"/>: the old item records (and the contents of containers among them) leave the file, and
+    /// each item gets an INVENTORY_ITEM_STATE linked by an instance numbered from 1; a container's contents get an INVENTORY_STATE of their own, linked by the item's one instance, as the
+    /// game writes them. An item read from this inventory keeps its record's id and place in the file, so an inventory that did not change is written back the same. New records take the
+    /// next numbers of the file, named by <paramref name="idOf"/>.
     /// </summary>
     public static void Replace(SaveFile file, FcsRecord inventory, IReadOnlyList<SaveItem> items, Func<int, string> idOf)
     {

@@ -3,10 +3,10 @@ using System.Numerics;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Ground height for the simulation, read from the CPU heightmap and immutable once built, so any thread may sample it (docs/simulation.md: the
-/// simulation does not depend on the renderer). Inside the <see cref="HeightWindow"/> it interpolates the window's samples bilinearly; outside, the
-/// coarse whole-world grid (every <c>coarseStep</c>-th sample, as <see cref="TerrainHeightmap.Downsample"/> returns it) so a character that strays
-/// past the window still stands on something.
+/// Ground height for the simulation, read from the CPU heightmap and immutable once built, so any thread may sample it
+/// (docs/simulation.md: the simulation does not depend on the renderer). Inside the <see cref="HeightWindow"/> it interpolates
+/// the window's samples bilinearly; outside, the coarse whole-world grid (every <c>coarseStep</c>-th sample, as
+/// <see cref="TerrainHeightmap.Downsample"/> returns it) so a character that strays past the window still stands on something.
 /// </summary>
 public sealed class GroundHeights
 {

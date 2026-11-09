@@ -3,9 +3,9 @@ using System.Numerics;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// A rectangular window of heightmap samples in memory, taken every <see cref="Step"/>-th sample. Window point (i, j) is heightmap sample
-/// (<see cref="Column0"/> + i·step, <see cref="Row0"/> + j·step); samples past the heightmap's edge repeat the edge. Column follows world +X, row
-/// world +Z (docs/formats/terrain.md).
+/// A rectangular window of heightmap samples in memory, taken every <see cref="Step"/>-th sample. Window
+/// point (i, j) is heightmap sample (<see cref="Column0"/> + i·step, <see cref="Row0"/> + j·step); samples past
+/// the heightmap's edge repeat the edge. Column follows world +X, row world +Z (docs/formats/terrain.md).
 /// </summary>
 public sealed class HeightWindow
 {
@@ -54,10 +54,7 @@ public sealed class HeightWindow
         if (u < 0 || v < 0 || u > Columns - 1 || v > Rows - 1) return false;
         int i = Math.Min((int)u, Columns - 2), j = Math.Min((int)v, Rows - 2);
         double fu = u - i, fv = v - j;
-        height = (float)(Height(
-            i,
-            j
-        ) * (1 - fu) * (1 - fv) + Height(i + 1, j) * fu * (1 - fv) + Height(i, j + 1) * (1 - fu) * fv + Height(i + 1, j + 1) * fu * fv);
+        height = (float)(Height(i, j) * (1 - fu) * (1 - fv) + Height(i + 1, j) * fu * (1 - fv) + Height(i, j + 1) * (1 - fu) * fv + Height(i + 1, j + 1) * fu * fv);
         return true;
     }
 
@@ -76,8 +73,8 @@ public sealed class HeightWindow
     }
 
     /// <summary>
-    /// Surface normal at window point (i, j) from central differences of the window's own heights (one-sided at the window edge). For y = h(x, z) the
-    /// normal is (−∂h/∂x, 1, −∂h/∂z), normalised.
+    /// Surface normal at window point (i, j) from central differences of the window's own heights (one-sided at
+    /// the window edge). For y = h(x, z) the normal is (−∂h/∂x, 1, −∂h/∂z), normalised.
     /// </summary>
     public Vector3 Normal(int i, int j)
     {

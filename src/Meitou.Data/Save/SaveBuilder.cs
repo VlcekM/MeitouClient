@@ -5,16 +5,13 @@ using Meitou.Data.World;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// Makes the records of a new save from scratch (docs/formats/save.md "Implementation outline"): the key sets are the ones that every record of the
-/// type has in the three real saves, ids follow the game's patterns (<c>&lt;n&gt;-quick.save-INGAME</c> in <c>quick.save</c>,
-/// <c>&lt;n&gt;--INGAME</c> in a platoon file, <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> in a zone file, a state's id with <c>-S&lt;hex
-/// type&gt;</c>), and the random serials of handles come from a seeded hash so the same input gives the same save. Call
-/// <see cref="SaveGame.UpdateDerived"/> when done.
+/// Makes the records of a new save from scratch (docs/formats/save.md "Implementation outline"): the key sets are the ones that every record of the type has in
+/// the three real saves, ids follow the game's patterns (<c>&lt;n&gt;-quick.save-INGAME</c> in <c>quick.save</c>, <c>&lt;n&gt;--INGAME</c> in a platoon file,
+/// <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> in a zone file, a state's id with <c>-S&lt;hex type&gt;</c>), and the random serials of handles come from a seeded
+/// hash so the same input gives the same save. Call <see cref="SaveGame.UpdateDerived"/> when done.
 /// </summary>
 public sealed class SaveBuilder
 {
-    #region Construction
-
     readonly ulong _seed;
     int _nextContainer = 1;
     int _nextTownContainer = 1;
@@ -29,10 +26,7 @@ public sealed class SaveBuilder
         FactionCollectionPlayer = NewCollection(Game.Quick);
         Game.Reindex();
         Game.Camera.Version = SaveGame.GameVersion;
-        Game.Quick.SlotLists.AddRange([[], [], Enumerable.Range(
-            1,
-            SaveGame.ZoneContainerCount
-        ).ToArray(), Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray()]);
+        Game.Quick.SlotLists.AddRange([[], [], Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray(), Enumerable.Range(1, SaveGame.ZoneContainerCount).ToArray()]);
         Game.Portraits = SavePortraits.Blank();
     }
 
@@ -45,10 +39,7 @@ public sealed class SaveBuilder
         Game = game;
         var player = game.PlayerFaction;
         var collections = game.FactionCollections;
-        FactionCollectionPlayer = collections.FirstOrDefault(
-            c => player is not null
-            && c.Instances.Any(i => i.Target == player.Record.StringId)
-        ) ?? Quick(FcsRecordType.InstanceCollection);
+        FactionCollectionPlayer = collections.FirstOrDefault(c => player is not null && c.Instances.Any(i => i.Target == player.Record.StringId)) ?? Quick(FcsRecordType.InstanceCollection);
         FactionCollectionOthers = collections.FirstOrDefault(c => c != FactionCollectionPlayer) ?? Quick(FcsRecordType.InstanceCollection);
         _nextContainer = game.Platoons.Select(p => p.Handle.C).DefaultIfEmpty(0).Max() + 1;
         _nextTownContainer = game.Towns.Select(t => t.Handle.C).DefaultIfEmpty(0).Max() + 1;
@@ -59,17 +50,12 @@ public sealed class SaveBuilder
     public FcsRecord FactionCollectionOthers { get; }
     public FcsRecord FactionCollectionPlayer { get; }
 
-    #endregion
-
-    #region Ids
+    // ------------------------------------------------------------------ ids
 
     /// <summary>
     /// The next number of a file: one more than the highest numeric id in it.
     /// </summary>
-    public static int NextNumber(SaveFile file) => file.Records.Count == 0 ? Math.Max(
-        file.Data.NextId,
-        0
-    ) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => Math.Max(r.Id, SaveGame.NumberOf(r)))) + 1;
+    public static int NextNumber(SaveFile file) => file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => Math.Max(r.Id, SaveGame.NumberOf(r)))) + 1;
 
     static string QuickId(int n) => $"{n}-{SaveFolder.QuickSaveName}-INGAME";
 
@@ -93,9 +79,7 @@ public sealed class SaveBuilder
         return (int)(x ^ (x >> 31));
     }
 
-    #endregion
-
-    #region Quick save records
+    // ------------------------------------------------------------------ quick.save
 
     static FcsRecord NewCamera()
     {
@@ -125,8 +109,7 @@ public sealed class SaveBuilder
         r.Vector3S["pos"] = Vector3.Zero;
         r.Vector3S["sky ambient color mult"] = Vector3.One;
         r.Vector3S["sky ambient color mult speed"] = Vector3.Zero;
-        // The game's own start view: yaw 0, 30 degrees down (w, x, y, z; docs/formats/camera.md "Saved camera"); the host writes the real view over
-        // it.
+        // The game's own start view: yaw 0, 30 degrees down (w, x, y, z; docs/formats/camera.md "Saved camera"); the host writes the real view over it.
         r.Vector4S["rot"] = KenshiCamera.ToSaved(0, KenshiCamera.InitialPitchDegrees * MathF.PI / 180, 800).Rot;
         r.Strings["version"] = SaveGame.GameVersion;
         r.Strings["pfaction name"] = "Nameless";
@@ -144,18 +127,10 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
-    /// Adds a faction: the GAMESTATE_FACTION, its WAR_SAVESTATE, and an instance in the player collection or the other one (the collections are what
-    /// the game's faction writers walk). <paramref name="relations"/> is the faction's table (not for the player's faction, which has none).
+    /// Adds a faction: the GAMESTATE_FACTION, its WAR_SAVESTATE, and an instance in the player collection or the other one (the collections are what the game's
+    /// faction writers walk). <paramref name="relations"/> is the faction's table (not for the player's faction, which has none).
     /// </summary>
-    public SaveFaction AddFaction(
-        string factionId,
-        string name,
-        bool isPlayer,
-        float prosperity,
-        IEnumerable<SaveRelation>? relations = null,
-        int platoonCounter = 0,
-        int rank = 0
-    )
+    public SaveFaction AddFaction(string factionId, string name, bool isPlayer, float prosperity, IEnumerable<SaveRelation>? relations = null, int platoonCounter = 0, int rank = 0)
     {
         var war = Quick(FcsRecordType.WarSavestate);
         war.Floats["updatetime"] = 40;
@@ -179,8 +154,7 @@ public sealed class SaveBuilder
         }
 
         var collection = isPlayer ? FactionCollectionPlayer : FactionCollectionOthers;
-        collection.Instances.Add(new FcsInstance { Id = (collection.Instances.Count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
-        Target = f.StringId });
+        collection.Instances.Add(new FcsInstance { Id = (collection.Instances.Count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), Target = f.StringId });
         Game.Factions.Add(faction);
         return faction;
     }
@@ -189,15 +163,7 @@ public sealed class SaveBuilder
     /// Adds the state of a town or nest. <paramref name="handleType"/> is 13 (TOWN) or 85 (NEST); each gets a container of its own, or keeps
     /// <paramref name="hand"/> (a level town state's).
     /// </summary>
-    public SaveTown AddTown(
-        string name,
-        string instance,
-        string factionId,
-        bool isNest,
-        ZoneCoordinate? zone,
-        int handleType = (int)FcsRecordType.Town,
-        Hand? hand = null
-    )
+    public SaveTown AddTown(string name, string instance, string factionId, bool isNest, ZoneCoordinate? zone, int handleType = (int)FcsRecordType.Town, Hand? hand = null)
     {
         var r = Quick(FcsRecordType.GamestateTown, name);
         foreach (var k in new[] { "started", "explored", "recently discovered", "discovered", "ded" }) r.Bools[k] = false;
@@ -241,31 +207,20 @@ public sealed class SaveBuilder
         Game.Reindex();
     }
 
-    #endregion
-
-    #region Platoons and characters
+    // ------------------------------------------------------------------ platoons and characters
 
     /// <summary>
-    /// Adds a platoon: its PLATOON record and an empty platoon file (named <c>&lt;name&gt;.platoon</c>, the record's <c>content file</c>) with the
-    /// characters' INSTANCE_COLLECTION. Characters are added with <see cref="AddCharacter"/>.
+    /// Adds a platoon: its PLATOON record and an empty platoon file (named <c>&lt;name&gt;.platoon</c>, the record's <c>content file</c>) with the characters'
+    /// INSTANCE_COLLECTION. Characters are added with <see cref="AddCharacter"/>.
     /// </summary>
-    public SavePlatoon AddPlatoon(
-        string name,
-        string factionName,
-        string factionId,
-        string squadTemplate,
-        Vector3 position,
-        int money = 0,
-        int squadIndex = 0
-    )
+    public SavePlatoon AddPlatoon(string name, string factionName, string factionId, string squadTemplate, Vector3 position, int money = 0, int squadIndex = 0)
     {
         var r = new FcsRecord { Type = (int)FcsRecordType.Platoon, Name = name, StringId = name, Id = NextNumber(Game.Quick) };
         Game.Quick.Records.Add(r);
         Game.Quick.Data.NextId = Math.Max(Game.Quick.Data.NextId, r.Id);
         // `persistent` with `sqt` 1 (every sqt-1 platoon of the samples is persistent): a caller writing another pool sets both.
         foreach (var k in new[] { "intact", "is resident", "canref", "persistent" }) r.Bools[k] = k is "intact" or "canref" or "persistent";
-        foreach (var k in new[] { "special", "dead", "never been activated", "imprisoned", "runningAwayMode", "homelok",
-        "campaign" }) r.Bools[k] = false;
+        foreach (var k in new[] { "special", "dead", "never been activated", "imprisoned", "runningAwayMode", "homelok", "campaign" }) r.Bools[k] = false;
         r.Floats["towntime"] = 0;
         r.Floats["jobhr"] = 0;
         r.Ints["squad index"] = squadIndex;
@@ -276,12 +231,10 @@ public sealed class SaveBuilder
         r.Ints["slave count"] = 0;
         int cs = Serial();
         new Hand((int)FcsRecordType.Platoon, _nextContainer++, cs, 0, 0).Write(r, "handle");
-        foreach (var prefix in new[] { "currenttown", "hometown", "homebuilding", "occupied", "separated", "target town", "mission employer",
-        "mission target", "mission town" })
+        foreach (var prefix in new[] { "currenttown", "hometown", "homebuilding", "occupied", "separated", "target town", "mission employer", "mission target", "mission town" })
             Hand.Null.Write(r, prefix);
         r.Vector3S["position"] = position;
-        foreach (var k in new[] { "replacementAI", "contractjob", "mission data", "map area name", "map area sid", "currentPackage",
-        "basetown" }) r.Strings[k] = "";
+        foreach (var k in new[] { "replacementAI", "contractjob", "mission data", "map area name", "map area sid", "currentPackage", "basetown" }) r.Strings[k] = "";
         r.Strings["platoon stringID"] = name;
         r.Strings["faction name"] = factionName;
         r.Strings["faction stringID"] = factionId;
@@ -294,8 +247,8 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
-    /// Gives a platoon with no file an empty one (named <c>&lt;string id&gt;.platoon</c>, the record's <c>content file</c>) with the characters'
-    /// INSTANCE_COLLECTION; a platoon with a file keeps it.
+    /// Gives a platoon with no file an empty one (named <c>&lt;string id&gt;.platoon</c>, the record's <c>content file</c>) with the characters' INSTANCE_COLLECTION; a platoon
+    /// with a file keeps it.
     /// </summary>
     public void GiveFile(SavePlatoon platoon)
     {
@@ -322,20 +275,10 @@ public sealed class SaveBuilder
 
     /// <summary>
     /// Adds a character to a platoon: an instance in the file's collection and the six state records in the order the game writes them, with the
-    /// handle (type 1, the platoon's container and serial, the next free slot from 1). The records start with the defaults of a character that has
-    /// done nothing; fill STATS, MEDICAL_STATE and CHARACTER_APPEARANCE afterwards.
+    /// handle (type 1, the platoon's container and serial, the next free slot from 1). The records start with the defaults of a character that has done nothing;
+    /// fill STATS, MEDICAL_STATE and CHARACTER_APPEARANCE afterwards.
     /// </summary>
-    public SaveCharacter AddCharacter(
-        SavePlatoon platoon,
-        string recordId,
-        string name,
-        string ownerFactionId,
-        Vector3 position,
-        Quaternion rotation,
-        bool isLeader = false,
-        int squadMemberType = 0,
-        float age = 0.5f
-    )
+    public SaveCharacter AddCharacter(SavePlatoon platoon, string recordId, string name, string ownerFactionId, Vector3 position, Quaternion rotation, bool isLeader = false, int squadMemberType = 0, float age = 0.5f)
     {
         var file = platoon.File ?? throw new InvalidOperationException("The platoon has no file.");
         var instance = new FcsInstance { Target = recordId, Position = position, Rotation = rotation };
@@ -349,8 +292,7 @@ public sealed class SaveBuilder
             return r;
         }
 
-        // The file's records come in the order: the character's items are made first by callers, so the six states are appended here in a fixed
-        // order.
+        // The file's records come in the order: the character's items are made first by callers, so the six states are appended here in a fixed order.
         c.GameState = Make(FcsRecordType.GamestateCharacter);
         c.Ai = Make(FcsRecordType.GamestateAi, "ai");
         c.Inventory = Make(FcsRecordType.InventoryState);
@@ -403,8 +345,8 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
-    /// Removes a character from its platoon: its instance, the six state records and everything its inventory holds (items and the inventories of
-    /// containers inside it). The other characters keep their slots.
+    /// Removes a character from its platoon: its instance, the six state records and everything its inventory holds (items and the inventories of containers
+    /// inside it). The other characters keep their slots.
     /// </summary>
     public void RemoveCharacter(SavePlatoon platoon, SaveCharacter character)
     {
@@ -429,11 +371,10 @@ public sealed class SaveBuilder
     }
 
     /// <summary>
-    /// Replaces what a character's INVENTORY_STATE holds with <paramref name="items"/>: the old item records (and the contents of containers among
-    /// them) leave the file, and each item gets an INVENTORY_ITEM_STATE (<see cref="SaveInventory"/>) linked by an instance numbered from 1; a
-    /// container's contents get an INVENTORY_STATE of their own, linked by the item's one instance, as the game writes them. An item read from this
-    /// inventory keeps its record's id and place in the file (and a container its contents' state), so an inventory that did not change is written
-    /// back the same.
+    /// Replaces what a character's INVENTORY_STATE holds with <paramref name="items"/>: the old item records (and the contents of containers among them) leave the file, and
+    /// each item gets an INVENTORY_ITEM_STATE (<see cref="SaveInventory"/>) linked by an instance numbered from 1; a container's contents get an INVENTORY_STATE of their
+    /// own, linked by the item's one instance, as the game writes them. An item read from this inventory keeps its record's id and place in the file (and a container its
+    /// contents' state), so an inventory that did not change is written back the same.
     /// </summary>
     public void SetInventory(SavePlatoon platoon, SaveCharacter character, IReadOnlyList<SaveItem> items)
     {
@@ -442,26 +383,21 @@ public sealed class SaveBuilder
         SaveInventory.Replace(file, inventory, items, n => $"{n}--INGAME");
     }
 
-    #endregion
-
-    #region Stats defaults
+    // ------------------------------------------------------------------ STATS defaults
 
     /// <summary>
     /// The STATS floats a record always has that the stat system does not write (the legacy ones): zero.
     /// </summary>
-    public static readonly string[] LegacyStatKeys = ["xp", "free attribute points", "warrior spirit", "endurance", "ff", "hackers", "survival",
-    "arrow defence"];
+    public static readonly string[] LegacyStatKeys = ["xp", "free attribute points", "warrior spirit", "endurance", "ff", "hackers", "survival", "arrow defence"];
 
     /// <summary>
-    /// Fills the legacy STATS floats a real record always has (zero unless already set); a new character's <c>warrior spirit</c> is the STATS
-    /// template's (<paramref name="warriorSpirit"/>, <c>FUN_14064b6a0</c> reads it into CharStats, <c>FUN_14064a8f0</c> writes it back).
+    /// Fills the legacy STATS floats a real record always has (zero unless already set); a new character's <c>warrior spirit</c> is the STATS template's
+    /// (<paramref name="warriorSpirit"/>, <c>FUN_14064b6a0</c> reads it into CharStats, <c>FUN_14064a8f0</c> writes it back).
     /// </summary>
     public static void FillLegacyStats(FcsRecord stats, float warriorSpirit = 0)
     {
         foreach (var k in LegacyStatKeys) stats.Floats.TryAdd(k, k == "warrior spirit" ? warriorSpirit : 0);
     }
-
-    #endregion
 }
 
 static class SaveFileExtensions

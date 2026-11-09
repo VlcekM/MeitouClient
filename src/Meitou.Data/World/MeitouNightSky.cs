@@ -13,10 +13,10 @@ public readonly record struct CelestialFrame(Vector3 X, Vector3 Y, Vector3 Z)
 }
 
 /// <summary>
-/// The turning sky of the Meitou <c>stars</c> switch (the viewer's own design, not the game's: docs/formats/sky.md "Meitou night sky"). The stars
-/// turn about the axis the sun's path turns about, one turn per game day, at the game's latitude. <see cref="SkyClock.SunDirection"/> puts the sun on
-/// the plane spanned by (1, 0, 0) and (0, cos lat, sin lat), so its axis is their cross product, (0, −sin lat, cos lat); the celestial pole is the
-/// end of it that is above the horizon, (0, sin lat, −cos lat), at the altitude of the latitude. Stars turn about it the way the sun does (from its
+/// The turning sky of the Meitou <c>stars</c> switch (the viewer's own design, not the game's: docs/formats/sky.md "Meitou night sky"). The stars turn
+/// about the axis the sun's path turns about, one turn per game day, at the game's latitude. <see cref="SkyClock.SunDirection"/> puts the sun on the
+/// plane spanned by (1, 0, 0) and (0, cos lat, sin lat), so its axis is their cross product, (0, −sin lat, cos lat); the celestial pole is the end
+/// of it that is above the horizon, (0, sin lat, −cos lat), at the altitude of the latitude. Stars turn about it the way the sun does (from its
 /// rising direction +x up and over +z), so both rise on one side and set on the other.
 /// </summary>
 public static class CelestialSphere
@@ -76,8 +76,8 @@ public static class CelestialSphere
 }
 
 /// <summary>
-/// What the air does to a star on its way down (the <c>stars</c> switch): extinction grows with the air mass and reddens, stars vanish at the
-/// horizon, and low stars twinkle. The constants are the shader's too (<c>SkyRenderer</c> writes them in).
+/// What the air does to a star on its way down (the <c>stars</c> switch): extinction grows with the air mass and reddens, stars vanish at the horizon,
+/// and low stars twinkle. The constants are the shader's too (<c>SkyRenderer</c> writes them in).
 /// </summary>
 public static class NightAtmosphere
 {
@@ -113,11 +113,7 @@ public static class NightAtmosphere
     public static Vector3 Transmission(float altitudeDegrees)
     {
         float x = AirMass(altitudeDegrees) - 1;
-        return new Vector3(
-            MathF.Exp(-ExtinctionPerAirMass.X * x),
-            MathF.Exp(-ExtinctionPerAirMass.Y * x),
-            MathF.Exp(-ExtinctionPerAirMass.Z * x)
-        ) * Horizon(altitudeDegrees);
+        return new Vector3(MathF.Exp(-ExtinctionPerAirMass.X * x), MathF.Exp(-ExtinctionPerAirMass.Y * x), MathF.Exp(-ExtinctionPerAirMass.Z * x)) * Horizon(altitudeDegrees);
     }
 
     /// <summary>
@@ -140,14 +136,7 @@ public static class NightAtmosphere
 /// One density layer of the procedural starfield: <see cref="Cells"/> cells a side on each cube face, <see cref="Count"/> stars over the sphere
 /// between the magnitudes.
 /// </summary>
-public readonly record struct StarLayer(
-    int Cells,
-    float Count,
-    float BrightestMagnitude,
-    float FaintestMagnitude,
-    float Slope = StarField.MagnitudeSlope,
-    float ReachPixels = 2.2f
-);
+public readonly record struct StarLayer(int Cells, float Count, float BrightestMagnitude, float FaintestMagnitude, float Slope = StarField.MagnitudeSlope, float ReachPixels = 2.2f);
 
 /// <summary>
 /// A star the cell of a layer holds (see <see cref="StarField.Candidate"/>): where on its cube face, how bright, which colour.
@@ -173,9 +162,9 @@ public static class StarField
     public const float BrightnessGamma = 0.7f;
 
     /// <summary>
-    /// The layers, brightest first. Counts follow the real sky past magnitude 4.5 (about 900 stars brighter than 4.5, 9000 brighter than 6.5); the
-    /// bright layer has a flatter slope and twice as many stars, so a few of the brightest show on any screen (about 100 brighter than magnitude 1
-    /// over the whole sphere, the real sky has 15). The stars are spread evenly over the sphere.
+    /// The layers, brightest first. Counts follow the real sky past magnitude 4.5 (about 900 stars brighter than 4.5, 9000 brighter than 6.5); the bright
+    /// layer has a flatter slope and twice as many stars, so a few of the brightest show on any screen (about 100 brighter than magnitude 1 over the whole sphere,
+    /// the real sky has 15). The stars are spread evenly over the sphere.
     /// </summary>
     public static readonly StarLayer[] Layers =
     [
@@ -215,16 +204,8 @@ public static class StarField
     public static int Face(Vector3 d, out Vector2 uv)
     {
         var a = Vector3.Abs(d);
-        if (a.X >= a.Y && a.X >= a.Z)
-        {
-            uv = new Vector2(d.Y, d.Z) / a.X;
-            return d.X > 0 ? 0 : 1;
-        }
-        if (a.Y >= a.Z)
-        {
-            uv = new Vector2(d.X, d.Z) / a.Y;
-            return d.Y > 0 ? 2 : 3;
-        }
+        if (a.X >= a.Y && a.X >= a.Z) { uv = new Vector2(d.Y, d.Z) / a.X; return d.X > 0 ? 0 : 1; }
+        if (a.Y >= a.Z) { uv = new Vector2(d.X, d.Z) / a.Y; return d.Y > 0 ? 2 : 3; }
         uv = new Vector2(d.X, d.Y) / a.Z;
         return d.Z > 0 ? 4 : 5;
     }
@@ -236,18 +217,10 @@ public static class StarField
     {
         unchecked
         {
-            x = x * 1664525u + 1013904223u;
-            y = y * 1664525u + 1013904223u;
-            z = z * 1664525u + 1013904223u;
-            x += y * z;
-            y += z * x;
-            z += x * y;
-            x ^= x >> 16;
-            y ^= y >> 16;
-            z ^= z >> 16;
-            x += y * z;
-            y += z * x;
-            z += x * y;
+            x = x * 1664525u + 1013904223u; y = y * 1664525u + 1013904223u; z = z * 1664525u + 1013904223u;
+            x += y * z; y += z * x; z += x * y;
+            x ^= x >> 16; y ^= y >> 16; z ^= z >> 16;
+            x += y * z; y += z * x; z += x * y;
         }
         return (x, y, z);
     }
@@ -352,11 +325,7 @@ public static class StarColours
     /// <summary>
     /// The colour index distribution of the naked-eye sky, as a mixture: blue (B), white (A and F), yellow and orange (G and K giants), red (M).
     /// </summary>
-    static readonly (
-        float Weight,
-        float Mean,
-        float Spread
-    )[] ColourIndexMix = [(0.12f, -0.10f, 0.10f), (0.60f, 0.32f, 0.25f), (0.20f, 0.80f, 0.20f), (0.08f, 1.40f, 0.20f)];
+    static readonly (float Weight, float Mean, float Spread)[] ColourIndexMix = [(0.12f, -0.10f, 0.10f), (0.60f, 0.32f, 0.25f), (0.20f, 0.80f, 0.20f), (0.08f, 1.40f, 0.20f)];
 
     /// <summary>
     /// The tint of the star at the fraction <paramref name="u"/> of the colour index distribution: its blackbody, desaturated by
@@ -370,8 +339,7 @@ public static class StarColours
         {
             float mid = 0.5f * (lo + hi), cdf = 0;
             foreach (var (w, mean, spread) in ColourIndexMix) cdf += w / (1 + MathF.Exp(-1.702f * (mid - mean) / spread));
-            if (cdf < u) lo = mid;
-            else hi = mid;
+            if (cdf < u) lo = mid; else hi = mid;
         }
         var c = Blackbody(Temperature(0.5f * (lo + hi)));
         c = Vector3.Lerp(Vector3.One, c, Saturation);

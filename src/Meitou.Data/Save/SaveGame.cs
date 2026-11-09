@@ -7,14 +7,11 @@ namespace Meitou.Data.Save;
 
 /// <summary>
 /// A whole save: <c>quick.save</c>, the platoon files and the zone files of a save folder, as typed views over their records (docs/formats/save.md).
-/// The views hold the records themselves, so changing one changes what <see cref="Write"/> writes; reading and writing again without a change gives
-/// the same bytes. <see cref="UpdateDerived"/> brings the parts that follow from the rest (slot lists, counters, CAMERA zone list) up to date after
-/// changes.
+/// The views hold the records themselves, so changing one changes what <see cref="Write"/> writes; reading and writing again without a change gives the
+/// same bytes. <see cref="UpdateDerived"/> brings the parts that follow from the rest (slot lists, counters, CAMERA zone list) up to date after changes.
 /// </summary>
 public sealed partial class SaveGame
 {
-    #region Model and loading
-
     /// <summary>
     /// The game version the saves are written as (<see cref="SaveCamera.Version"/>); the original refuses nothing at or above 0.99.99.
     /// </summary>
@@ -31,10 +28,7 @@ public sealed partial class SaveGame
     public List<SaveFaction> Factions { get; } = [];
     public List<SaveTown> Towns { get; } = [];
     public List<SavePlatoon> Platoons { get; } = [];
-    public SortedDictionary<ZoneCoordinate, SaveZone> Zones { get; } = new(Comparer<ZoneCoordinate>.Create((
-        a,
-        b
-    ) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
+    public SortedDictionary<ZoneCoordinate, SaveZone> Zones { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
 
     /// <summary>
     /// The two INSTANCE_COLLECTIONs of <c>quick.save</c>: the player's faction, then every other faction (each instance targets a GAMESTATE_FACTION).
@@ -60,19 +54,15 @@ public sealed partial class SaveGame
     public byte[]? Portraits { get; set; }
 
     /// <summary>
-    /// Meitou's own sidecar files of code mods (<c>meitou-mods/&lt;mod id&gt;.dat</c>, docs/formats/save.md "Mod data"), by mod id. Kept for mods not
-    /// loaded now, so a save made from this one carries them on.
+    /// Meitou's own sidecar files of code mods (<c>meitou-mods/&lt;mod id&gt;.dat</c>, docs/formats/save.md "Mod data"), by mod id. Kept for mods not loaded now, so a save
+    /// made from this one carries them on.
     /// </summary>
     public SortedDictionary<string, byte[]> ModData { get; } = new(StringComparer.Ordinal);
     /// <summary>
-    /// The level editor's edits of the session (Meitou's own, in <see cref="SaveFolder.LevelEditsDirectory"/>): per zone the bytes of a zone file in
-    /// the form of the editor's saved mod (placed buildings with their state, cleared ones as entries with no target). A save without the folder
-    /// (every older save, the original's) has none.
+    /// The level editor's edits of the session (Meitou's own, in <see cref="SaveFolder.LevelEditsDirectory"/>): per zone the bytes of a zone file in the form of the editor's saved mod
+    /// (placed buildings with their state, cleared ones as entries with no target). A save without the folder (every older save, the original's) has none.
     /// </summary>
-    public SortedDictionary<ZoneCoordinate, byte[]> LevelEdits { get; } = new(Comparer<ZoneCoordinate>.Create((
-        a,
-        b
-    ) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
+    public SortedDictionary<ZoneCoordinate, byte[]> LevelEdits { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
 
     /// <summary>
     /// The bytes of <c>meitou-mods/environment.json</c> (the code mods the save was made with, <c>CodeModEnvironment</c>); null when it has none.
@@ -117,8 +107,7 @@ public sealed partial class SaveGame
             game.Zones[zone] = new SaveZone(zone, folder.ReadFile(SaveFolder.ZoneName(zone)));
         if (folder.Exists(SaveFolder.PortraitName)) game.Portraits = folder.ReadAllBytes(SaveFolder.PortraitName);
         foreach (var (id, name) in folder.ModDataFiles) game.ModData[id] = folder.ReadAllBytes(name);
-        if (folder.Exists(SaveFolder.ModEnvironmentName))
-            game.ModEnvironment = folder.ReadAllBytes(SaveFolder.ModEnvironmentName);
+        if (folder.Exists(SaveFolder.ModEnvironmentName)) game.ModEnvironment = folder.ReadAllBytes(SaveFolder.ModEnvironmentName);
         foreach (var (zone, name) in folder.LevelEditFiles) game.LevelEdits[zone] = folder.ReadAllBytes(name);
         game.Reindex();
         game.CheckZoneFiles();
@@ -137,38 +126,25 @@ public sealed partial class SaveGame
         Platoons.Clear();
         var wars = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
         foreach (var r in Quick.Records)
-            if (r.RecordType == FcsRecordType.WarSavestate && r.Strings.TryGetValue("faction", out var f))
-                wars.TryAdd(f, r);
+            if (r.RecordType == FcsRecordType.WarSavestate && r.Strings.TryGetValue("faction", out var f)) wars.TryAdd(f, r);
         foreach (var r in Quick.Records)
         {
             switch (r.RecordType)
             {
-                case FcsRecordType.Camera: Camera = new SaveCamera(r);
-                break;
+                case FcsRecordType.Camera: Camera = new SaveCamera(r); break;
                 case FcsRecordType.GamestateFaction:
                     var faction = new SaveFaction(r, null);
                     faction.War = wars.GetValueOrDefault(faction.Id);
                     Factions.Add(faction);
                     break;
-                case FcsRecordType.GamestateTown: Towns.Add(new SaveTown(r));
-                break;
-                case FcsRecordType.Platoon: Platoons.Add(new SavePlatoon(r, files.GetValueOrDefault(r)));
-                break;
-                case FcsRecordType.InstanceCollection: FactionCollections.Add(r);
-                break;
-                case FcsRecordType.GamestateTownInstanceList: TownInstanceList = r;
-                break;
-                case FcsRecordType.Biomes: Biomes = r;
-                break;
-                case FcsRecordType.Research: Research = r;
-                break;
-                case FcsRecordType.TerrainDecals: Decals = r;
-                break;
-                case FcsRecordType.SavedState: if (
-                    r.StringId.EndsWith("5-redirect", StringComparison.Ordinal)
-                    || r.Name == "5-redirect"
-                ) Redirect = r;
-                break;
+                case FcsRecordType.GamestateTown: Towns.Add(new SaveTown(r)); break;
+                case FcsRecordType.Platoon: Platoons.Add(new SavePlatoon(r, files.GetValueOrDefault(r))); break;
+                case FcsRecordType.InstanceCollection: FactionCollections.Add(r); break;
+                case FcsRecordType.GamestateTownInstanceList: TownInstanceList = r; break;
+                case FcsRecordType.Biomes: Biomes = r; break;
+                case FcsRecordType.Research: Research = r; break;
+                case FcsRecordType.TerrainDecals: Decals = r; break;
+                case FcsRecordType.SavedState: if (r.StringId.EndsWith("5-redirect", StringComparison.Ordinal) || r.Name == "5-redirect") Redirect = r; break;
             }
         }
         if (Camera is null) throw new FcsFormatException("quick.save has no CAMERA record.", 0);
@@ -192,18 +168,12 @@ public sealed partial class SaveGame
                 if (!byId.TryGetValue(id, out var s)) continue;
                 switch (s.RecordType)
                 {
-                    case FcsRecordType.GamestateCharacter: c.GameState = s;
-                    break;
-                    case FcsRecordType.GamestateAi: c.Ai = s;
-                    break;
-                    case FcsRecordType.InventoryState: c.Inventory = s;
-                    break;
-                    case FcsRecordType.MedicalState: c.Medical = s;
-                    break;
-                    case FcsRecordType.Stats: c.Stats = s;
-                    break;
-                    case FcsRecordType.CharacterAppearance: c.Appearance = s;
-                    break;
+                    case FcsRecordType.GamestateCharacter: c.GameState = s; break;
+                    case FcsRecordType.GamestateAi: c.Ai = s; break;
+                    case FcsRecordType.InventoryState: c.Inventory = s; break;
+                    case FcsRecordType.MedicalState: c.Medical = s; break;
+                    case FcsRecordType.Stats: c.Stats = s; break;
+                    case FcsRecordType.CharacterAppearance: c.Appearance = s; break;
                 }
             }
             platoon.Characters.Add(c);
@@ -222,8 +192,8 @@ public sealed partial class SaveGame
         Factions.FirstOrDefault(f => f.Record.References.ContainsKey("known")) ?? Factions.FirstOrDefault(f => f.Id == Gameplay.FactionData.PlayerId);
 
     /// <summary>
-    /// The zone-file check the game runs at load and at save (docs/formats/save.md, <c>FUN_140a0bef0</c>): the CAMERA <c>zones</c> list against the
-    /// files. Adds "Zone file missing" and "Extra zone file" problems.
+    /// The zone-file check the game runs at load and at save (docs/formats/save.md, <c>FUN_140a0bef0</c>): the CAMERA <c>zones</c> list against the files.
+    /// Adds "Zone file missing" and "Extra zone file" problems.
     /// </summary>
     public void CheckZoneFiles()
     {
@@ -253,24 +223,19 @@ public sealed partial class SaveGame
         return copy;
     }
 
-    #endregion
-
-    #region Handles
+    // ------------------------------------------------------------------ handles
 
     /// <summary>
     /// An index for resolving handles against this save's platoons, characters, towns and zone buildings (rebuild it after changing them).
     /// </summary>
     public SaveHandles BuildHandles() => new(this);
 
-    #endregion
-
-    #region Derived data
+    // ------------------------------------------------------------------ derived data
 
     /// <summary>
-    /// Brings the parts that follow from the rest up to date: the CAMERA <c>zones</c> list from the zone files, the character count of every platoon
-    /// with a file and the file name, slot lists 0 (platoon containers) and 1 (town containers) of <c>quick.save</c> (lists 2 and 3 are kept, or
-    /// start as 1..4096: their meaning is Unknown), a zone file's slot list when it has none, each file's <c>nextId</c> (raised to its highest record
-    /// id, never lowered) and the <c>byteSize</c> of the records that carry a child count.
+    /// Brings the parts that follow from the rest up to date: the CAMERA <c>zones</c> list from the zone files, the character count of every platoon with a file and the file name,
+    /// slot lists 0 (platoon containers) and 1 (town containers) of <c>quick.save</c> (lists 2 and 3 are kept, or start as 1..4096: their meaning is Unknown), a zone file's
+    /// slot list when it has none, each file's <c>nextId</c> (raised to its highest record id, never lowered) and the <c>byteSize</c> of the records that carry a child count.
     /// </summary>
     public void UpdateDerived()
     {
@@ -327,18 +292,13 @@ public sealed partial class SaveGame
             case FcsRecordType.InventoryState or FcsRecordType.InventoryItemState or FcsRecordType.ItemPlacementGroup:
                 return (uint)r.Instances.Count;
             case FcsRecordType.InstanceCollection:
-                return fileName == SaveFolder.QuickSaveName || r.StringId.EndsWith(
-                    "-itemlist",
-                    StringComparison.Ordinal
-                ) ? (uint)r.Instances.Count : 0;
+                return fileName == SaveFolder.QuickSaveName || r.StringId.EndsWith("-itemlist", StringComparison.Ordinal) ? (uint)r.Instances.Count : 0;
             default:
                 return 0;
         }
     }
 
-    #endregion
-
-    #region Writing
+    // ------------------------------------------------------------------ writing
 
     /// <summary>
     /// Every file of the save as (relative name, file): <c>quick.save</c>, then the platoon files, then the zone files.
@@ -354,11 +314,10 @@ public sealed partial class SaveGame
     }
 
     /// <summary>
-    /// Writes the save into <paramref name="folder"/> the way the game does (docs/formats/save.md "The save file system"): first into a working
-    /// folder <c>_current&lt;N&gt;</c> beside it (the first N whose folder does not exist), then the finished folder replaces the old one in two
-    /// renames, so a crash leaves either the old save or the new one, never half of one. The old folder's contents are replaced as a whole: files the
-    /// new save no longer has are gone. <paramref name="beforeInstall"/> runs between the two renames (a test uses it to fail there); the old save is
-    /// then moved back.
+    /// Writes the save into <paramref name="folder"/> the way the game does (docs/formats/save.md "The save file system"): first into a working folder
+    /// <c>_current&lt;N&gt;</c> beside it (the first N whose folder does not exist), then the finished folder replaces the old one in two renames, so a crash
+    /// leaves either the old save or the new one, never half of one. The old folder's contents are replaced as a whole: files the new save no longer has are gone.
+    /// <paramref name="beforeInstall"/> runs between the two renames (a test uses it to fail there); the old save is then moved back.
     /// </summary>
     void WriteModData(string work)
     {
@@ -427,18 +386,12 @@ public sealed partial class SaveGame
     /// <summary>
     /// The number in the front of a record's string id (<c>12-quick.save-INGAME</c> is 12), or -1 when it has none.
     /// </summary>
-    public static int NumberOf(FcsRecord r) => NumberPrefix().Match(r.StringId) is { Success: true } m && int.TryParse(
-        m.Groups[1].Value,
-        out int v
-    ) ? v : -1;
-
-    #endregion
+    public static int NumberOf(FcsRecord r) => NumberPrefix().Match(r.StringId) is { Success: true } m && int.TryParse(m.Groups[1].Value, out int v) ? v : -1;
 }
 
 /// <summary>
-/// Resolves <see cref="Hand"/>s against a save: platoon handles by the platoon's container, character handles by (container, slot) within the
-/// platoon, town and nest handles by the town's container, building handles by (zone container, slot) with the slot taken from the buildings' own
-/// handles.
+/// Resolves <see cref="Hand"/>s against a save: platoon handles by the platoon's container, character handles by (container, slot) within the platoon,
+/// town and nest handles by the town's container, building handles by (zone container, slot) with the slot taken from the buildings' own handles.
 /// </summary>
 public sealed class SaveHandles
 {

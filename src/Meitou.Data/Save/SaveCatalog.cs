@@ -14,11 +14,7 @@ public static class SaveCatalog
             name.Any(c => char.IsControl(c) || "<>:\"/\\|?*".Contains(c)) || name is "." or "..")
             throw new ArgumentException("Use a name of 1-80 characters without path separators or trailing dots/spaces.", nameof(name));
         string stem = name.Split('.')[0].ToUpperInvariant();
-        if (
-            stem is "CON" or "PRN" or "AUX" or "NUL" || stem.Length == 4
-            && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal))
-            && stem[3] is >= '0' and <= '9'
-        )
+        if (stem is "CON" or "PRN" or "AUX" or "NUL" || stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal)) && stem[3] is >= '0' and <= '9')
             throw new ArgumentException("That name is reserved by the operating system.", nameof(name));
         return name;
     }
@@ -32,8 +28,7 @@ public static class SaveCatalog
             foreach (string directory in Directory.EnumerateDirectories(root))
             {
                 string folder = Path.GetFullPath(directory), quick = Path.Combine(folder, SaveFolder.QuickSaveName);
-                if (File.Exists(quick))
-                    found.TryAdd(folder, new(Path.GetFileName(folder), folder, File.GetLastWriteTimeUtc(quick), writable));
+                if (File.Exists(quick)) found.TryAdd(folder, new(Path.GetFileName(folder), folder, File.GetLastWriteTimeUtc(quick), writable));
             }
         }
         return found.Values.OrderByDescending(s => s.ModifiedUtc).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToArray();

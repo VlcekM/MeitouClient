@@ -4,8 +4,7 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// An AMBIENT_SOUND record (docs/audio.md "Point emitters"): which looping sound a building (and a foliage mesh, map feature, effect or race) makes
-/// and how far it carries.
+/// An AMBIENT_SOUND record (docs/audio.md "Point emitters"): which looping sound a building (and a foliage mesh, map feature, effect or race) makes and how far it carries.
 /// </summary>
 /// <param name="Emitter">The <c>emitter</c> name: the value of the <c>Emitters</c> switch (<c>Fire</c>, <c>Generator</c>, …).</param>
 /// <param name="Chance">Probability 0..1 that the placed object gets the sound at all.</param>
@@ -30,13 +29,11 @@ public sealed record AmbientSound(string Id, string Emitter, float Chance, float
         record.GetFloat("efficiency multiplier"), record.GetBool("needs power"));
 
     /// <summary>
-    /// The sound of the first entry of <paramref name="holder"/>'s <paramref name="field"/> list (EFFECT <c>sound</c>, RACE <c>ambient sound</c>), or
-    /// null when the list is empty, the AMBIENT_SOUND is missing or names no emitter. The exe takes the first entry only and rolls no <c>chance</c>
-    /// for them (docs/audio.md "Point emitters").
+    /// The sound of the first entry of <paramref name="holder"/>'s <paramref name="field"/> list (EFFECT <c>sound</c>, RACE <c>ambient sound</c>), or null when the list is empty,
+    /// the AMBIENT_SOUND is missing or names no emitter. The exe takes the first entry only and rolls no <c>chance</c> for them (docs/audio.md "Point emitters").
     /// </summary>
     public static AmbientSound? FirstOf(GameDatabase db, GameRecord holder, string field) =>
-        holder.GetReferences(field) is { Count: > 0 } list && db.Find(list[0].TargetStringId) is { } record && From(record)
-                is { Emitter.Length: > 0 } sound ? sound : null;
+        holder.GetReferences(field) is { Count: > 0 } list && db.Find(list[0].TargetStringId) is { } record && From(record) is { Emitter.Length: > 0 } sound ? sound : null;
 }
 
 /// <summary>
@@ -51,17 +48,14 @@ public readonly record struct PlacedEmitter(string Key, AmbientSound Sound, Vect
 public static class BuildingEmitters
 {
     /// <summary>
-    /// The emitter of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when its record has no <c>sounds</c>,
-    /// the AMBIENT_SOUND is missing, has no emitter name, or the chance roll fails. Only the first entry of <c>sounds</c> counts (the game keeps one
-    /// emitter per building); its three values are an offset in the building's own axes, scaled by the building's <c>scale</c>. The roll is a stable
-    /// hash of the placement (the game rolls once with <c>rand()</c>).
+    /// The emitter of a building placed at <paramref name="position"/> / <paramref name="rotation"/>, or null when its record has no <c>sounds</c>, the AMBIENT_SOUND is
+    /// missing, has no emitter name, or the chance roll fails. Only the first entry of <c>sounds</c> counts (the game keeps one emitter per building); its three values
+    /// are an offset in the building's own axes, scaled by the building's <c>scale</c>. The roll is a stable hash of the placement (the game rolls once with <c>rand()</c>).
     /// </summary>
     public static PlacedEmitter? For(GameDatabase db, GameRecord building, string instanceId, Vector3 position, Quaternion rotation)
     {
         var sounds = building.GetReferences("sounds");
-        if (sounds.Count == 0 || db.Find(sounds[0].TargetStringId) is not { } record || AmbientSound.From(record)
-                is not { Emitter.Length: > 0 } sound)
-            return null;
+        if (sounds.Count == 0 || db.Find(sounds[0].TargetStringId) is not { } record || AmbientSound.From(record) is not { Emitter.Length: > 0 } sound) return null;
         if (sound.Chance <= Roll(instanceId)) return null;
         float scale = building.GetFloat("scale", 1);
         var offset = new Vector3(sounds[0].Values.Value0, sounds[0].Values.Value1, sounds[0].Values.Value2) * (scale > 0 ? scale : 1);

@@ -9,8 +9,8 @@ namespace Meitou.Data.Ui;
 public readonly record struct TextColourRun(int Start, Vector3 Colour);
 
 /// <summary>
-/// MyGUI's inline colour tags (its TextView, docs/game/ui-screens.md "Inline colour tags"): <c>#rrggbb</c> colours the text after it, <c>##</c> is
-/// one <c>#</c>. A <c>#</c> before anything else is kept as written (engine choice: MyGUI reads any six characters).
+/// MyGUI's inline colour tags (its TextView, docs/game/ui-screens.md "Inline colour tags"): <c>#rrggbb</c> colours the text after it, <c>##</c> is one <c>#</c>.
+/// A <c>#</c> before anything else is kept as written (engine choice: MyGUI reads any six characters).
 /// </summary>
 public static class MyGuiTextTags
 {
@@ -24,21 +24,9 @@ public static class MyGuiTextTags
         var runs = new List<TextColourRun>();
         for (int i = 0; i < text.Length; i++)
         {
-            if (text[i] != '#')
-            {
-                plain.Append(text[i]);
-                continue;
-            }
-            if (i + 1 < text.Length && text[i + 1] == '#')
-            {
-                plain.Append('#');
-                i++;
-                continue;
-            }
-            if (
-                i + 7 <= text.Length
-                && int.TryParse(text.AsSpan(i + 1, 6), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out int rgb)
-            )
+            if (text[i] != '#') { plain.Append(text[i]); continue; }
+            if (i + 1 < text.Length && text[i + 1] == '#') { plain.Append('#'); i++; continue; }
+            if (i + 7 <= text.Length && int.TryParse(text.AsSpan(i + 1, 6), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out int rgb))
             {
                 var colour = new Vector3((rgb >> 16 & 255) / 255f, (rgb >> 8 & 255) / 255f, (rgb & 255) / 255f);
                 if (runs.Count > 0 && runs[^1].Start == plain.Length) runs[^1] = new(plain.Length, colour);

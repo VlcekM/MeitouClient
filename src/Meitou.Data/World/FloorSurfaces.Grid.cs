@@ -5,9 +5,9 @@ namespace Meitou.Data.World;
 public sealed partial class FloorSurfaces
 {
     /// <summary>
-    /// A surface's triangles binned on an X/Z grid over its box (engine choice): a point query tests only the triangles whose box, slightly widened,
-    /// holds the point's cell, in their order in the surface, so it finds what testing them all would. Every character inside a building asks its
-    /// floor and cover whenever it moves, and a large building's floor part holds thousands of triangles.
+    /// A surface's triangles binned on an X/Z grid over its box (engine choice): a point query tests only the triangles whose box, slightly widened, holds the point's cell,
+    /// in their order in the surface, so it finds what testing them all would. Every character inside a building asks its floor and cover whenever it moves, and a large
+    /// building's floor part holds thousands of triangles.
     /// </summary>
     sealed class TriangleGrid
     {
@@ -95,8 +95,8 @@ public sealed partial class FloorSurfaces
         }
 
         /// <summary>
-        /// The cells of triangle <paramref name="i"/>'s X/Z box, widened past the slack the point tests allow at the edges (<see cref="HeightAt"/>,
-        /// <see cref="RayTriangle"/>: a barycentric 1e-4 of the triangle's size).
+        /// The cells of triangle <paramref name="i"/>'s X/Z box, widened past the slack the point tests allow at the edges (<see cref="HeightAt"/>, <see cref="RayTriangle"/>:
+        /// a barycentric 1e-4 of the triangle's size).
         /// </summary>
         (int X0, int X1, int Z0, int Z1) Cells(Vector3[] corners, int i)
         {
@@ -104,12 +104,7 @@ public sealed partial class FloorSurfaces
             var lo = new Vector2(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
             var hi = new Vector2(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
             float pad = 1e-3f * MathF.Max(hi.X - lo.X, hi.Y - lo.Y) + 1e-2f;
-            return (
-                Cell(lo.X - pad, _min.X, _perX, _nx),
-                Cell(hi.X + pad, _min.X, _perX, _nx),
-                Cell(lo.Y - pad, _min.Y, _perZ, _nz),
-                Cell(hi.Y + pad, _min.Y, _perZ, _nz)
-            );
+            return (Cell(lo.X - pad, _min.X, _perX, _nx), Cell(hi.X + pad, _min.X, _perX, _nx), Cell(lo.Y - pad, _min.Y, _perZ, _nz), Cell(hi.Y + pad, _min.Y, _perZ, _nz));
         }
     }
 }

@@ -4,20 +4,12 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The sky-related fields of a WEATHER record (docs/formats/sky.md, Observed from the base game's records): colour multiplier of the sky, fog (colour
-/// and a start/end distance), the cloud density and the heat haze (0..1, the post effect's strength before the weather strength and the sun factor:
-/// <see cref="World.HeatHaze"/>, docs/formats/weather.md). Rain, wetness, dust and wind fields are not read here.
+/// The sky-related fields of a WEATHER record (docs/formats/sky.md, Observed from the base game's records): colour
+/// multiplier of the sky, fog (colour and a start/end distance), the cloud density and the heat haze (0..1, the post effect's
+/// strength before the weather strength and the sun factor: <see cref="World.HeatHaze"/>, docs/formats/weather.md). Rain,
+/// wetness, dust and wind fields are not read here.
 /// </summary>
-public sealed record SkyWeather(
-    string Name,
-    Vector3 SkyColourMultiplier,
-    bool FogEnabled,
-    Vector3 FogColour,
-    float FogMin,
-    float FogMax,
-    float CloudDensity,
-    float HeatHaze = 0
-)
+public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool FogEnabled, Vector3 FogColour, float FogMin, float FogMax, float CloudDensity, float HeatHaze = 0)
 {
     /// <summary>
     /// The base game's "Default" weather: clear, no fog, no clouds, white multipliers.
@@ -52,9 +44,5 @@ public sealed record SkyWeather(
     /// (docs/formats/lighting.md).
     /// </summary>
     public static float NightDarkness(GameDatabase db) =>
-        (db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS")
-                ?? db.OfType(FcsRecordType.Constants).FirstOrDefault())?.GetFloat(
-            "night darkness",
-            0.5f
-        ) ?? 0.5f;
+        (db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault())?.GetFloat("night darkness", 0.5f) ?? 0.5f;
 }

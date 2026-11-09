@@ -19,8 +19,7 @@ public sealed class StatHelpCatalog
     public static StatHelpCatalog From(IEnumerable<PotEntry> template)
     {
         var result = new StatHelpCatalog();
-        // The structure (which paragraph answers which stat) comes from the English template; the text shown is its translation when the language has
-        // one.
+        // The structure (which paragraph answers which stat) comes from the English template; the text shown is its translation when the language has one.
         foreach (var entry in template)
             if (entry.References.Where(r => r.File == "kenshi/statswindow.cpp").Select(r => r.Line).Distinct().ToArray() is { Length: > 0 } lines)
                 result._entries.Add(new(lines, Loc.Tr(entry.Id), entry.Id.Length));

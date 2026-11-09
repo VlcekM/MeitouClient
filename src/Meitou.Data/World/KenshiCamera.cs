@@ -1,10 +1,10 @@
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The limits of the game's strategy camera (docs/formats/camera.md): a pivot on the ground with the camera on a boom behind it. Verified 2026-10-05
-/// against <c>kenshi_x64.exe</c> (the camera rig's set-up, zoom and pitch steps): the boom is clamped to
-/// <see cref="MinDistance"/>..<see cref="MaxDistance"/>, the view direction's height component to <see cref="MinViewY"/>..<see cref="MaxViewY"/>;
-/// nothing in the settings or the game data changes either.
+/// The limits of the game's strategy camera (docs/formats/camera.md): a pivot on the ground with the camera on a boom behind it.
+/// Verified 2026-10-05 against <c>kenshi_x64.exe</c> (the camera rig's set-up, zoom and pitch steps): the boom is clamped to
+/// <see cref="MinDistance"/>..<see cref="MaxDistance"/>, the view direction's height component to
+/// <see cref="MinViewY"/>..<see cref="MaxViewY"/>; nothing in the settings or the game data changes either.
 /// </summary>
 public static class KenshiCamera
 {
@@ -124,9 +124,8 @@ public static class KenshiCamera
     public const float MaxHeightAbovePivot = MaxDistance * -MinViewY;
 
     /// <summary>
-    /// Engine choice: a free camera's eye this far above the ground under it is in flight. The world's focus (squads, navmesh) stays where it left
-    /// the ground (docs/formats/camera.md "In the game") and the weather's fog and effects are off. The strategy camera never gets this high
-    /// (<see cref="MaxHeightAbovePivot"/>).
+    /// Engine choice: a free camera's eye this far above the ground under it is in flight. The world's focus (squads, navmesh) stays where it left the
+    /// ground (docs/formats/camera.md "In the game") and the weather's fog and effects are off. The strategy camera never gets this high (<see cref="MaxHeightAbovePivot"/>).
     /// </summary>
     public const float FlightHeight = 3000;
 
@@ -148,9 +147,8 @@ public static class KenshiCamera
         pivot.X >= -SavedPivotLimit && pivot.X <= SavedPivotLimit && pivot.Z >= -SavedPivotLimit && pivot.Z <= SavedPivotLimit;
 
     /// <summary>
-    /// The CAMERA <c>rot</c> and <c>zoom</c> for a view: <c>rot</c> is the pivot's orientation, yaw about Y then pitch about the pivot's X, stored w,
-    /// x, y, z; <c>zoom</c> is the camera's position on the pivot's local Z, minus the boom. <paramref name="yaw"/> 0 looks along -Z,
-    /// <paramref name="pitch"/> is radians below the horizon.
+    /// The CAMERA <c>rot</c> and <c>zoom</c> for a view: <c>rot</c> is the pivot's orientation, yaw about Y then pitch about the pivot's X, stored w, x, y, z; <c>zoom</c> is
+    /// the camera's position on the pivot's local Z, minus the boom. <paramref name="yaw"/> 0 looks along -Z, <paramref name="pitch"/> is radians below the horizon.
     /// </summary>
     public static (System.Numerics.Vector4 Rot, float Zoom) ToSaved(float yaw, float pitch, float distance)
     {

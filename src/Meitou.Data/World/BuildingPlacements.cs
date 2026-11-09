@@ -9,8 +9,8 @@ public readonly record struct ResolvedBuilding(BuildingPlacement Placement, Game
 
 /// <summary>
 /// Resolves a zone's <see cref="BuildingPlacement"/> the way the game places it (docs/formats/zones.md, "From placements to meshes"): a placement at
-/// the origin is unplaced, the record is looked up by id, Y is the placement's absolute <see cref="BuildingPlacement.WorldY"/> when there is one and
-/// else the terrain height plus the instance's Y, and the state record of the zone file says whether the building is destroyed.
+/// the origin is unplaced, the record is looked up by id, Y is the placement's absolute <see cref="BuildingPlacement.WorldY"/> when there is one and else the
+/// terrain height plus the instance's Y, and the state record of the zone file says whether the building is destroyed.
 /// </summary>
 public static class BuildingPlacements
 {
@@ -36,11 +36,6 @@ public static class BuildingPlacements
         if (db.Find(b.BuildingId) is not { } record) return null;
         float y = b.WorldY ?? terrainHeight(b.Position.X, b.Position.Z) + b.Position.Y;
         var state = b.StateId is not null && levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
-        return new ResolvedBuilding(
-            b,
-            record,
-            new Vector3(b.Position.X, y, b.Position.Z),
-            b.DestroyedOverride ?? state?.GetBool("destroyed") ?? false
-        );
+        return new ResolvedBuilding(b, record, new Vector3(b.Position.X, y, b.Position.Z), b.DestroyedOverride ?? state?.GetBool("destroyed") ?? false);
     }
 }

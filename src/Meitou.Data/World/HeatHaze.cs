@@ -1,9 +1,9 @@
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The game's heat-haze amount and time base (docs/formats/weather.md "Heat haze", docs/formats/post-processing.md "Heat haze"): the shared
-/// <c>heatHaze</c> moves towards the camera region's WEATHER <c>heat haze</c> × strength × saturate(6 · sunY) at 1/3 per second, and the shader's
-/// animation runs on <c>gameTime</c> (game hours since the load) × 100.
+/// The game's heat-haze amount and time base (docs/formats/weather.md "Heat haze", docs/formats/post-processing.md "Heat haze"):
+/// the shared <c>heatHaze</c> moves towards the camera region's WEATHER <c>heat haze</c> × strength × saturate(6 · sunY) at 1/3 per
+/// second, and the shader's animation runs on <c>gameTime</c> (game hours since the load) × 100.
 /// </summary>
 public static class HeatHaze
 {

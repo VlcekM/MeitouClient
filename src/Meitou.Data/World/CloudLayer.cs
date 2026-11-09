@@ -3,10 +3,10 @@ using System.Numerics;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// SkyX's planar cloud layer as Kenshi runs it (docs/formats/clouds.md): the layer's options, the numbers the weather feeds it (<c>DensityOffset</c>,
-/// <c>Darkness</c>), the light the shader uses and the wind offset. The per-pixel pass is in <c>SkyRenderer</c>'s shader; these are the parts that
-/// don't need a GPU, so a test can pin them. Verified: <c>SkyX_Clouds.hlsl</c>, <c>CloudLayer::CloudLayer</c> and the sky controller
-/// (<c>kenshi_x64.exe</c> FUN_14066e380 / FUN_14066f190).
+/// SkyX's planar cloud layer as Kenshi runs it (docs/formats/clouds.md): the layer's options, the numbers the weather feeds it
+/// (<c>DensityOffset</c>, <c>Darkness</c>), the light the shader uses and the wind offset. The per-pixel pass is in <c>SkyRenderer</c>'s
+/// shader; these are the parts that don't need a GPU, so a test can pin them. Verified: <c>SkyX_Clouds.hlsl</c>, <c>CloudLayer::CloudLayer</c>
+/// and the sky controller (<c>kenshi_x64.exe</c> FUN_14066e380 / FUN_14066f190).
 /// </summary>
 public static class CloudLayer
 {
@@ -63,15 +63,14 @@ public static class CloudLayer
 
     /// <summary>
     /// <c>zenithLight = max(getColorAt(+Z) · skyMult, (0.001, 0.001, 0.0015)) · sunColour.g</c> (FUN_14066f190: the direction is Ogre's
-    /// <c>UNIT_Z</c>). <paramref name="sun"/>: unit direction towards the sun; <paramref name="skyMultiplier"/>: the weather's (faded) sky colour
-    /// multiplier.
+    /// <c>UNIT_Z</c>). <paramref name="sun"/>: unit direction towards the sun; <paramref name="skyMultiplier"/>: the weather's (faded) sky colour multiplier.
     /// </summary>
     public static Vector3 ZenithLight(Vector3 sun, Vector3 skyMultiplier) =>
         Vector3.Max(SkyXModel.Colour(Vector3.UnitZ, sun, skydome: false) * skyMultiplier, ZenithFloor) * KenshiLighting.SunColour(sun).Y;
 
     /// <summary>
-    /// <c>horizonClouds.rgb</c>, the colour the distance haze is pulled to: <c>saturate(sun (1 − 0.1 (offset + 0.2) · 3) + zenithLight) · (1 −
-    /// darkness) · √exposure</c>, the same terms as the cloud pass (docs/formats/sky.md).
+    /// <c>horizonClouds.rgb</c>, the colour the distance haze is pulled to: <c>saturate(sun (1 − 0.1 (offset + 0.2) · 3) + zenithLight) ·
+    /// (1 − darkness) · √exposure</c>, the same terms as the cloud pass (docs/formats/sky.md).
     /// </summary>
     public static Vector3 HorizonColour(Vector3 sunColour, Vector3 zenithLight, float c) =>
         Vector3.Clamp(sunColour * (1 - 0.1f * (DensityOffset(c) + 0.2f) * DensityMultiplier) + zenithLight, Vector3.Zero, Vector3.One)
@@ -79,8 +78,8 @@ public static class CloudLayer
 
     /// <summary>
     /// The pixel's alpha straight overhead (<c>h = 1</c>) with the second lookup, the tile and no volume displacement, from the red of
-    /// <c>Clouds.dds</c> at the shifted coordinate (<paramref name="cloud"/>) and of <c>CloudsTile.dds</c> (<paramref name="tile"/>), both 0..1: <c>D
-    /// = (cloud + o) · 3 + 0.1 tile + 1</c>, <c>alpha = saturate(D · saturate(1 − tile + o))</c>.
+    /// <c>Clouds.dds</c> at the shifted coordinate (<paramref name="cloud"/>) and of <c>CloudsTile.dds</c> (<paramref name="tile"/>), both 0..1:
+    /// <c>D = (cloud + o) · 3 + 0.1 tile + 1</c>, <c>alpha = saturate(D · saturate(1 − tile + o))</c>.
     /// </summary>
     public static float OverheadAlpha(float cloud, float tile, float c)
     {
@@ -90,14 +89,13 @@ public static class CloudLayer
     }
 
     /// <summary>
-    /// Coverage of the overhead alpha over a whole square texture pair (<paramref name="size"/>², red channels as 0..255 bytes, row-major): the mean
-    /// alpha and the shares of texels above 0.05 and 0.5. The second lookup reads <c>Clouds</c> shifted by (0.2, 0.6) of the texture.
+    /// Coverage of the overhead alpha over a whole square texture pair (<paramref name="size"/>², red channels as 0..255 bytes, row-major):
+    /// the mean alpha and the shares of texels above 0.05 and 0.5. The second lookup reads <c>Clouds</c> shifted by (0.2, 0.6) of the texture.
     /// </summary>
     public static (double Mean, double Above005, double Above05) Coverage(ReadOnlySpan<byte> cloudRed, ReadOnlySpan<byte> tileRed, int size, float c)
     {
         int shiftX = (int)MathF.Round(SecondLookupShift.X * size), shiftY = (int)MathF.Round(SecondLookupShift.Y * size);
-        double sum = 0;
-        int above005 = 0, above05 = 0;
+        double sum = 0; int above005 = 0, above05 = 0;
         for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)
             {
@@ -112,8 +110,8 @@ public static class CloudLayer
     }
 
     /// <summary>
-    /// One frame of the drift: the sky controller adds <c>velocity × dt</c> (world units; dt in seconds, 0 when paused) to an offset, the shader
-    /// shifts the textures by <c>offset × 0.00005</c>. The offset is kept in doubles (it grows without bound). Returns the new offset.
+    /// One frame of the drift: the sky controller adds <c>velocity × dt</c> (world units; dt in seconds, 0 when paused) to an offset, the
+    /// shader shifts the textures by <c>offset × 0.00005</c>. The offset is kept in doubles (it grows without bound). Returns the new offset.
     /// </summary>
     public static (double X, double Z) Advance((double X, double Z) offset, Vector2 velocity, float dt) =>
         (offset.X + (double)velocity.X * dt, offset.Z + (double)velocity.Y * dt);

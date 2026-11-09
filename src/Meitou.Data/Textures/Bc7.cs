@@ -1,25 +1,14 @@
 namespace Meitou.Data.Textures;
 
 /// <summary>
-/// BC7 (BPTC) block decoding to RGBA8, written from the public format description (Microsoft, "BC7 Format"; Khronos Data Format Specification,
-/// "BPTC"): eight modes, 1 to 3 subsets, optional rotation and index selection. The partition and anchor tables are the published ones
-/// (docs/formats/dds.md).
+/// BC7 (BPTC) block decoding to RGBA8, written from the public format description (Microsoft, "BC7 Format"; Khronos Data
+/// Format Specification, "BPTC"): eight modes, 1 to 3 subsets, optional rotation and index selection. The partition and
+/// anchor tables are the published ones (docs/formats/dds.md).
 /// </summary>
 static class Bc7
 {
-    // Per mode: subsets, partition bits, rotation bits, index-selection bit, colour bits, alpha bits, p-bits (0 none, 1 per endpoint, 2 shared per
-    // subset), index bits, second index bits.
-    static readonly (
-        int Subsets,
-        int PartBits,
-        int RotBits,
-        int SelBits,
-        int ColorBits,
-        int AlphaBits,
-        int PBits,
-        int IdxBits,
-        int Idx2Bits
-    )[] Modes =
+    // Per mode: subsets, partition bits, rotation bits, index-selection bit, colour bits, alpha bits, p-bits (0 none, 1 per endpoint, 2 shared per subset), index bits, second index bits.
+    static readonly (int Subsets, int PartBits, int RotBits, int SelBits, int ColorBits, int AlphaBits, int PBits, int IdxBits, int Idx2Bits)[] Modes =
     [
         (3, 4, 0, 0, 4, 0, 1, 3, 0),
         (2, 6, 0, 0, 6, 0, 2, 3, 0),
@@ -92,8 +81,7 @@ static class Bc7
     /// </summary>
     public static void DecodeBlock(ReadOnlySpan<byte> src, Span<byte> rgba)
     {
-        ulong lo = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src),
-        hi = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src[8..]);
+        ulong lo = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src), hi = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src[8..]);
         int pos = 0;
         int Read(int n)
         {
@@ -123,17 +111,9 @@ static class Bc7
             for (int ch = 0; ch < 4; ch++)
             {
                 int bits = ch < 3 ? m.ColorBits : m.AlphaBits;
-                if (bits == 0)
-                {
-                    ep[e * 4 + ch] = 255;
-                    continue;
-                }
+                if (bits == 0) { ep[e * 4 + ch] = 255; continue; }
                 int v = raw[e * 4 + ch];
-                if (m.PBits != 0)
-                {
-                    v = v << 1 | pbit[e];
-                    bits++;
-                }
+                if (m.PBits != 0) { v = v << 1 | pbit[e]; bits++; }
                 ep[e * 4 + ch] = v << (8 - bits) | v >> (2 * bits - 8);
             }
 
@@ -157,39 +137,19 @@ static class Bc7
             if (m.Idx2Bits > 0)
             {
                 // Mode 4 can swap which stream drives colour; mode 5 always has separate colour and alpha streams.
-                if (selection == 0)
-                {
-                    alphaIdx = idx2[i];
-                    alphaBits = m.Idx2Bits;
-                }
-                else
-                {
-                    colorIdx = idx2[i];
-                    colorBits = m.Idx2Bits;
-                    alphaIdx = idx[i];
-                    alphaBits = m.IdxBits;
-                }
+                if (selection == 0) { alphaIdx = idx2[i]; alphaBits = m.Idx2Bits; }
+                else { colorIdx = idx2[i]; colorBits = m.Idx2Bits; alphaIdx = idx[i]; alphaBits = m.IdxBits; }
             }
             int e0 = s * 2 * 4, e1 = e0 + 4;
             int wc = Weight(colorBits, colorIdx), wa = Weight(alphaBits, alphaIdx);
-            int r = Mix(
-                ep[e0],
-                ep[e1],
-                wc
-            ), g = Mix(ep[e0 + 1], ep[e1 + 1], wc), b = Mix(ep[e0 + 2], ep[e1 + 2], wc), a = Mix(ep[e0 + 3], ep[e1 + 3], wa);
+            int r = Mix(ep[e0], ep[e1], wc), g = Mix(ep[e0 + 1], ep[e1 + 1], wc), b = Mix(ep[e0 + 2], ep[e1 + 2], wc), a = Mix(ep[e0 + 3], ep[e1 + 3], wa);
             switch (rotation)
             {
-                case 1: (a, r) = (r, a);
-                break;
-                case 2: (a, g) = (g, a);
-                break;
-                case 3: (a, b) = (b, a);
-                break;
+                case 1: (a, r) = (r, a); break;
+                case 2: (a, g) = (g, a); break;
+                case 3: (a, b) = (b, a); break;
             }
-            rgba[i * 4] = (byte)r;
-            rgba[i * 4 + 1] = (byte)g;
-            rgba[i * 4 + 2] = (byte)b;
-            rgba[i * 4 + 3] = (byte)a;
+            rgba[i * 4] = (byte)r; rgba[i * 4 + 1] = (byte)g; rgba[i * 4 + 2] = (byte)b; rgba[i * 4 + 3] = (byte)a;
         }
     }
 

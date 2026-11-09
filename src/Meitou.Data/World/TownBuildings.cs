@@ -95,38 +95,26 @@ public readonly record struct HomeSpot(HomeSpotKind Kind, Vector3 Position, floa
     /// <summary>
     /// A node a goal may stand at: neither a bed, a seat nor a dummy.
     /// </summary>
-    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training
-            or HomeSpotKind.Workstation or HomeSpotKind.Other);
+    public bool IsNode => Kind is not (HomeSpotKind.Bed or HomeSpotKind.Chair or HomeSpotKind.ThroneSeat or HomeSpotKind.Training or HomeSpotKind.Workstation or HomeSpotKind.Other);
 }
 
 /// <summary>
-/// A turret building (<c>BUILDING_FUNCTIONALITY</c> function BF_TURRET): where its mount stands and faces (0 along +Z, turning towards +X), how near
-/// its gunner must be, the GUN_DATA it fires, and the <see cref="BuildingKey"/> of the building it is mounted on (<c>mounted</c> handle; null when it
-/// names none known).
+/// A turret building (<c>BUILDING_FUNCTIONALITY</c> function BF_TURRET): where its mount stands and faces (0 along +Z, turning towards +X), how near its gunner must be,
+/// the GUN_DATA it fires, and the <see cref="BuildingKey"/> of the building it is mounted on (<c>mounted</c> handle; null when it names none known).
 /// </summary>
 public readonly record struct TurretPost(Vector3 Position, float Yaw, float UseRange, string GunId, string? MountedOn);
 
 /// <summary>
-/// A placed building of a town that squads can live in, with the beds and nodes of its interior layout (docs/formats/zones.md "Building layouts") and
-/// the shop and bar flags of its exterior layout. Position is the building's origin (absolute Y).
+/// A placed building of a town that squads can live in, with the beds and nodes of its interior layout (docs/formats/zones.md "Building layouts") and the shop and
+/// bar flags of its exterior layout. Position is the building's origin (absolute Y).
 /// </summary>
-public sealed record TownBuilding(
-    string InstanceId,
-    string BuildingId,
-    string Name,
-    Vector3 Position,
-    float Yaw,
-    bool IsShop,
-    bool IsBar,
-    IReadOnlyList<HomeSpot> Spots
-)
+public sealed record TownBuilding(string InstanceId, string BuildingId, string Name, Vector3 Position, float Yaw, bool IsShop, bool IsBar, IReadOnlyList<HomeSpot> Spots)
 {
     public IEnumerable<HomeSpot> Of(HomeSpotKind kind) => Spots.Where(s => s.Kind == kind);
     public int Beds => Spots.Count(s => s.Kind == HomeSpotKind.Bed);
     /// <summary>
-    /// Furniture of its interior layout with a BF_THRONE or BF_TRAINING functionality, in layout order, and the building itself when it is a
-    /// free-standing chair, throne or dummy (its own origin and yaw): the pieces sitting around (275) can take besides the chairs in
-    /// <see cref="Spots"/> (<see cref="SeatAt"/>). Kept apart from <see cref="Spots"/>, which are the home's nodes.
+    /// Furniture of its interior layout with a BF_THRONE or BF_TRAINING functionality, in layout order, and the building itself when it is a free-standing chair, throne or dummy (its own
+    /// origin and yaw): the pieces sitting around (275) can take besides the chairs in <see cref="Spots"/> (<see cref="SeatAt"/>). Kept apart from <see cref="Spots"/>, which are the home's nodes.
     /// </summary>
     public IReadOnlyList<HomeSpot> Furniture { get; init; } = [];
     /// <summary>
@@ -159,14 +147,13 @@ public sealed record TownBuilding(
     /// </summary>
     public ResolvedBuilding? Resolved { get; init; }
     /// <summary>
-    /// Whether residents can be housed in it (docs/game/factions-squads-towns.md "Town residents"): a BUILDING with <c>interior</c> parts that does
-    /// not <c>links together</c> (a wall), or an <c>is wall gate</c> gate.
+    /// Whether residents can be housed in it (docs/game/factions-squads-towns.md "Town residents"): a BUILDING with <c>interior</c> parts that does not
+    /// <c>links together</c> (a wall), or an <c>is wall gate</c> gate.
     /// </summary>
     public bool CanHouse { get; init; }
     /// <summary>
-    /// It has <c>interior</c> parts, is not a ruin, and its named interior layout places at least one object (the original's interior holding
-    /// internal buildings, docs/game/economy.md "Artifacts"; the name is its residents' since <see cref="ResidentRuins.Apply"/>). Without contents
-    /// laid out: it has <c>interior</c> parts.
+    /// It has <c>interior</c> parts, is not a ruin, and its named interior layout places at least one object (the original's interior holding internal buildings,
+    /// docs/game/economy.md "Artifacts"; the name is its residents' since <see cref="ResidentRuins.Apply"/>). Without contents laid out: it has <c>interior</c> parts.
     /// </summary>
     public bool Furnished { get; init; }
     /// <summary>
@@ -223,10 +210,7 @@ public sealed record TownBuilding(
     /// The name of its interior or exterior layout now: its placement's (<see cref="TownBuildings.Relay"/>), else its level state's; "" for none.
     /// </summary>
     public string LayoutName(bool exterior) =>
-        Resolved?.Placement.LayoutName(
-            LevelState,
-            exterior
-        ) ?? LevelState?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
+        Resolved?.Placement.LayoutName(LevelState, exterior) ?? LevelState?.GetString(exterior ? ResidentRuins.ExteriorKey : ResidentRuins.InteriorKey) ?? "";
     /// <summary>
     /// The names of the interior and exterior layouts its record can take (its own and those of <c>shares interiors with</c>), case ignored.
     /// </summary>
@@ -247,8 +231,8 @@ public sealed record TownBuilding(
     public bool IsOutdoorTable => Function is TownBuildings.TableFunction or TownBuildings.CorpseDisposalFunction or TownBuildings.RefineryFunction
         && !(LevelState?.GetBool("is inside building") ?? false);
     /// <summary>
-    /// The slot (<c>I</c>) and serial (<c>S</c>) of the <c>handle</c> its level-data state carries (-1 / 0 when it has none). A save writes a base
-    /// building's state with this same handle (docs/formats/save.md "Object handles"), so a platoon can name a building whose zone was never saved.
+    /// The slot (<c>I</c>) and serial (<c>S</c>) of the <c>handle</c> its level-data state carries (-1 / 0 when it has none). A save writes a base building's state with this
+    /// same handle (docs/formats/save.md "Object handles"), so a platoon can name a building whose zone was never saved.
     /// </summary>
     public int HandleSlot { get; init; } = -1;
     public int HandleSerial { get; init; }
@@ -257,9 +241,8 @@ public sealed record TownBuilding(
 }
 
 /// <summary>
-/// A lockable object or container of a building's interior layout: a cage or pole (BUILDING_FUNCTIONALITY <c>function</c> 8), a BUILDING with <c>has
-/// lock</c> or <c>has inventory</c>. <paramref name="Id"/> is the parent's <see cref="BuildingKey"/>, "/", and the item's index in the layout (an
-/// <b>engine</b> name: the save's ids of generated interiors are not mapped).
+/// A lockable object or container of a building's interior layout: a cage or pole (BUILDING_FUNCTIONALITY <c>function</c> 8), a BUILDING with <c>has lock</c> or <c>has inventory</c>. <paramref name="Id"/> is
+/// the parent's <see cref="BuildingKey"/>, "/", and the item's index in the layout (an <b>engine</b> name: the save's ids of generated interiors are not mapped).
 /// </summary>
 public sealed record TownFixture(string Id, string RecordId, bool IsCage, Vector3 Position, float Yaw)
 {
@@ -276,30 +259,24 @@ public sealed record TownFixture(string Id, string RecordId, bool IsCage, Vector
     /// Its stock is a building shop's (functions 2 BF_RESOURCE_STORAGE, 9 BF_SHOP, 13 BF_GENERAL_STORAGE with an inventory; <c>FUN_1409562f0</c>,
     /// docs/game/economy.md "Building shops").
     /// </summary>
-    public bool HoldsShopStock => StorageWidth > 0 && StorageHeight > 0 && Function is TownBuildings.ResourceStorageFunction
-            or TownBuildings.ShopFunction or TownBuildings.GeneralStorageFunction;
+    public bool HoldsShopStock => StorageWidth > 0 && StorageHeight > 0 && Function is TownBuildings.ResourceStorageFunction or TownBuildings.ShopFunction or TownBuildings.GeneralStorageFunction;
 }
 
 /// <summary>
-/// A loose-item slot of a building's interior layout: an ITEM_PLACEMENT_GROUP placed at a world position and rotation, on its object's floor.
-/// <paramref name="Id"/> is the parent's <see cref="BuildingKey"/>, "/item", and the slot's index among the layout's groups (an <b>engine</b> name).
+/// A loose-item slot of a building's interior layout: an ITEM_PLACEMENT_GROUP placed at a world position and rotation, on its object's floor. <paramref name="Id"/> is the parent's
+/// <see cref="BuildingKey"/>, "/item", and the slot's index among the layout's groups (an <b>engine</b> name).
 /// </summary>
 public sealed record TownItemSlot(string Id, string GroupId, Vector3 Position, Quaternion Rotation, int Floor);
 
 /// <summary>
-/// The buildings of each placed town, for the AI's homes, beds and nodes (docs/simulation.md "AI", Homes). A placed building belongs to a town as the
-/// game's import decides (<see cref="MemberOf"/>, docs/formats/zones.md "Town membership"). Buildings the level data marks destroyed are kept (the
-/// game rebuilds a non-player building on import: <c>FUN_140552b70</c> keeps <c>destroyed</c> only for the player's; the Hub's ruins house its
-/// squatters); node markers and resource buildings (<c>is foliage</c>) are left out. Turrets stay, with their gun and the building they are mounted
-/// on (<see cref="TownBuilding.Turret"/>), the AI's turret posts. Beds are interior-layout objects with a BED or SKELETON_BED functionality
-/// (docs/game/buildings-production.md, BuildingFunction 6 and 25, found by the type of the referenced records rather than a field name); seats are
-/// those with a CHAIR functionality (17); nodes are its <c>is node</c> objects, their <c>node type</c> kept and their kind read from it (0
-/// shopkeeper, 2 guard post), else from the record name (<see cref="NodeKind(string)"/>).
+/// The buildings of each placed town, for the AI's homes, beds and nodes (docs/simulation.md "AI", Homes). A placed building belongs to a town as the game's import decides
+/// (<see cref="MemberOf"/>, docs/formats/zones.md "Town membership"). Buildings the level data marks destroyed are kept (the game rebuilds a non-player building on import: <c>FUN_140552b70</c> keeps <c>destroyed</c> only for the player's; the Hub's ruins house its squatters); node markers and resource buildings
+/// (<c>is foliage</c>) are left out. Turrets stay, with their gun and the building they are mounted on (<see cref="TownBuilding.Turret"/>), the AI's turret posts. Beds are interior-layout objects with a BED or SKELETON_BED functionality (docs/game/buildings-production.md, BuildingFunction 6
+/// and 25, found by the type of the referenced records rather than a field name); seats are those with a CHAIR functionality (17); nodes are its <c>is node</c> objects,
+/// their <c>node type</c> kept and their kind read from it (0 shopkeeper, 2 guard post), else from the record name (<see cref="NodeKind(string)"/>).
 /// </summary>
 public static class TownBuildings
 {
-    #region Function ids
-
     public const int BedFunction = 6, SkeletonBedFunction = 25;
     /// <summary>
     /// BUILDING_FUNCTIONALITY <c>function</c> 8, BF_CAGE: cages, the prisoner pole, the peeler (docs/game/locks.md "Data").
@@ -307,9 +284,8 @@ public static class TownBuildings
     public const int CageFunction = 8;
 
     /// <summary>
-    /// Whether a BF_CAGE functionality is a torture rack (the class <c>TortureBuilding</c>; <b>Verified</b>, factory <c>FUN_14057cc70</c>, function
-    /// 8): its <c>produces</c> list is not empty, or its <c>flags</c> are not 0. Base data has none (the peeler, cooking pole, drill and hooks come
-    /// from mods; docs/game/locks.md "Torture racks").
+    /// Whether a BF_CAGE functionality is a torture rack (the class <c>TortureBuilding</c>; <b>Verified</b>, factory <c>FUN_14057cc70</c>, function 8): its <c>produces</c> list is not empty, or its
+    /// <c>flags</c> are not 0. Base data has none (the peeler, cooking pole, drill and hooks come from mods; docs/game/locks.md "Torture racks").
     /// </summary>
     public static bool IsRack(GameRecord functionality) =>
         functionality.GetInt("function") == CageFunction && (functionality.GetReferences("produces").Count > 0 || functionality.GetInt("flags") != 0);
@@ -319,9 +295,8 @@ public static class TownBuildings
     public const int GateFunction = 21;
 
     /// <summary>
-    /// A gate, a boundary of the gate codes (docs/game/pathfinding.md "Gate codes"): a wall gate the player builds (<c>is wall gate</c>) or a
-    /// building whose functionality is BF_GATE (engine reading of the original's GatewayBuilding class, which the factory picks by the function,
-    /// <b>Observed</b>).
+    /// A gate, a boundary of the gate codes (docs/game/pathfinding.md "Gate codes"): a wall gate the player builds (<c>is wall gate</c>) or a building whose functionality is
+    /// BF_GATE (engine reading of the original's GatewayBuilding class, which the factory picks by the function, <b>Observed</b>).
     /// </summary>
     public static bool IsGate(GameDatabase db, GameRecord building, Dictionary<string, GameRecord?> cache) =>
         building.GetBool("is wall gate") || FunctionOf(db, building, cache)?.GetInt("function") == GateFunction;
@@ -348,17 +323,11 @@ public static class TownBuildings
     /// </summary>
     public const int ResourceStorageFunction = 2, ShopFunction = 9, GeneralStorageFunction = 13;
 
-    #endregion
-
-    #region Building
-
     /// <summary>
-    /// The buildings by town placement id (<see cref="TownPlacement.InstanceId"/>), each list in placement order. Without <paramref name="contents"/>
-    /// their interior layouts are not laid out (no spots, fixtures, item slots, tables or furniture, no shop or bar): enough to house residents
-    /// (<see cref="ResidentHomes.Assign"/>).
+    /// The buildings by town placement id (<see cref="TownPlacement.InstanceId"/>), each list in placement order. Without <paramref name="contents"/> their interior
+    /// layouts are not laid out (no spots, fixtures, item slots, tables or furniture, no shop or bar): enough to house residents (<see cref="ResidentHomes.Assign"/>).
     /// </summary>
-    public static Dictionary<string, List<TownBuilding>> Build(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double,
-    float> terrainHeight,
+    public static Dictionary<string, List<TownBuilding>> Build(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight,
         bool contents = true)
     {
         var builder = new Builder(db, levels, layouts, terrainHeight, contents);
@@ -373,9 +342,8 @@ public static class TownBuildings
     }
 
     /// <summary>
-    /// Builds the town buildings one at a time with the data the boot pass shares between them (<see cref="TownBuildings.Build"/> runs it over every
-    /// level building; the level editor over a single one placed in the session, so the two make a <see cref="TownBuilding"/> the same way). Its
-    /// tables are filled while it works: one builder is used by one thread.
+    /// Builds the town buildings one at a time with the data the boot pass shares between them (<see cref="TownBuildings.Build"/> runs it over every level building; the level editor over
+    /// a single one placed in the session, so the two make a <see cref="TownBuilding"/> the same way). Its tables are filled while it works: one builder is used by one thread.
     /// </summary>
     public sealed class Builder
     {
@@ -390,22 +358,14 @@ public static class TownBuildings
         readonly Dictionary<(int C, int I), string> _instances = [];
         readonly Dictionary<(string, bool), IReadOnlySet<string>> _names = [];
 
-        public Builder(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight,
-        bool contents = true)
+        public Builder(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight, bool contents = true)
         {
             (this._db, this._levels, this._layouts, this._terrainHeight, this._contents) = (db, levels, layouts, terrainHeight, contents);
             foreach (var t in levels.Towns())
-                if (db.Find(t.TownId) is { Type: FcsRecordType.Town } record)
-                    _towns.Add((t, Gameplay.TownData.From(record)));
+                if (db.Find(t.TownId) is { Type: FcsRecordType.Town } record) _towns.Add((t, Gameplay.TownData.From(record)));
             // The instance of each building state's own handle, so a turret's mounted handle names the building it stands on.
             foreach (var b in levels.Buildings())
-                if (
-                    b.StateId is not null
-                    && levels.Zones.TryGetValue(b.Zone, out var zone)
-                    && zone.Find(b.StateId) is { } state
-                    && state.GetInt("handleTYPE") == (int)FcsRecordType.Building
-                    && state.Ints.ContainsKey("handleI")
-                )
+                if (b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zone) && zone.Find(b.StateId) is { } state && state.GetInt("handleTYPE") == (int)FcsRecordType.Building && state.Ints.ContainsKey("handleI"))
                     _instances[(state.GetInt("handleC"), state.GetInt("handleI"))] = b.Key;
         }
 
@@ -430,16 +390,7 @@ public static class TownBuildings
                 : new Contents { Furnished = record.GetReferences("interior").Count > 0 };
             if (_contents) AddAlone(_db, resolved, functionality, c);
             string? owner = state?.GetString("owner faction ID") is { Length: > 0 } o ? o : null;
-            return (town.InstanceId, new TownBuilding(
-                b.InstanceId,
-                record.StringId,
-                record.Name,
-                resolved.Position,
-                YawOf(b.Rotation),
-                c.Shop,
-                c.Bar,
-                c.Spots
-            )
+            return (town.InstanceId, new TownBuilding(b.InstanceId, record.StringId, record.Name, resolved.Position, YawOf(b.Rotation), c.Shop, c.Bar, c.Spots)
             {
                 OwnerFactionId = owner,
                 Fixtures = c.Fixtures,
@@ -462,8 +413,7 @@ public static class TownBuildings
                 LevelNaming = _levels.LevelNames.TryGetValue(b.Key, out var named) ? named : BuildingNaming.Of(state),
                 InteriorLayouts = LayoutNames(_layouts, record, exterior: false, _names),
                 ExteriorLayouts = LayoutNames(_layouts, record, exterior: true, _names),
-                HandleSlot = state is not null && state.Ints.ContainsKey("handleI") && state.GetInt("handleTYPE") == (int)FcsRecordType.Building
-                        ? state.GetInt("handleI") : -1,
+                HandleSlot = state is not null && state.Ints.ContainsKey("handleI") && state.GetInt("handleTYPE") == (int)FcsRecordType.Building ? state.GetInt("handleI") : -1,
                 HandleSerial = state?.GetInt("handleS") ?? 0,
                 Tables = c.Tables,
                 Furniture = c.Furniture,
@@ -473,19 +423,11 @@ public static class TownBuildings
     }
 
     /// <summary>
-    /// <paramref name="b"/> laid out with other layout names (docs/game/factions-squads-towns.md "Town residents", Layouts): a town override's or a
-    /// loaded save's residents name them as the level data's do not. Its contents come from them, and the names ride on its placement
-    /// (<see cref="BuildingPlacement.InteriorLayout"/>) so every reader lays it out alike. A building without a level state or placement stays as it
-    /// is.
+    /// <paramref name="b"/> laid out with other layout names (docs/game/factions-squads-towns.md "Town residents", Layouts): a town override's or a loaded save's
+    /// residents name them as the level data's do not. Its contents come from them, and the names ride on its placement
+    /// (<see cref="BuildingPlacement.InteriorLayout"/>) so every reader lays it out alike. A building without a level state or placement stays as it is.
     /// </summary>
-    public static TownBuilding Relay(
-        GameDatabase db,
-        BuildingLayouts layouts,
-        TownBuilding b,
-        string interior,
-        string exterior,
-        BuildingNaming? naming = null
-    )
+    public static TownBuilding Relay(GameDatabase db, BuildingLayouts layouts, TownBuilding b, string interior, string exterior, BuildingNaming? naming = null)
     {
         if (b.Resolved is not { } resolved || b.LevelState is not { } state) return b;
         if (b.LayoutName(exterior: false) == interior && b.LayoutName(exterior: true) == exterior) return b with { Naming = naming ?? b.Naming };
@@ -509,10 +451,6 @@ public static class TownBuildings
         };
     }
 
-    #endregion
-
-    #region Interior contents
-
     /// <summary>
     /// What a building's layouts put in it (<see cref="TownBuilding"/>'s spots, fixtures, item slots, tables, furniture, shop and bar flags).
     /// </summary>
@@ -527,10 +465,9 @@ public static class TownBuildings
     }
 
     /// <summary>
-    /// The contents of a placed building's layouts, named by its placement or else its state (<see cref="BuildingPlacement.LayoutName"/>): the
-    /// exterior's shop and bar flags, the interior's beds, nodes, seats, furniture, tables, fixtures and item slots. Its interior holds objects only
-    /// from a named layout the data has (none named, or one the data lacks, loads nothing); a ruin holds none, as destroying it clears them
-    /// (docs/game/buildings-production.md "Ruined by residents").
+    /// The contents of a placed building's layouts, named by its placement or else its state (<see cref="BuildingPlacement.LayoutName"/>): the exterior's shop and
+    /// bar flags, the interior's beds, nodes, seats, furniture, tables, fixtures and item slots. Its interior holds objects only from a named layout the data has (none
+    /// named, or one the data lacks, loads nothing); a ruin holds none, as destroying it clears them (docs/game/buildings-production.md "Ruined by residents").
     /// </summary>
     static Contents LayContents(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord state, Dictionary<string, bool> beds,
         Dictionary<string, GameRecord?> functions)
@@ -543,8 +480,7 @@ public static class TownBuildings
             c.Shop = exterior.GetInt("is shop") != 0;
             c.Bar = exterior.GetInt("is bar") != 0;
         }
-        if (resolved.Destroyed || layouts.Find(record, b.LayoutName(state, exterior: false), exterior: false) is not { } interior)
-            return c;
+        if (resolved.Destroyed || layouts.Find(record, b.LayoutName(state, exterior: false), exterior: false) is not { } interior) return c;
         LayInterior(db, layouts, resolved, interior, beds, functions, c);
         return c;
     }
@@ -579,10 +515,8 @@ public static class TownBuildings
                     HungerRate = function.GetFloat("hunger rate", 1),
                 });
             }
-            else if (function is not null && FurnitureOf(db, item.Building, function, at, YawOf(rotation), inside: true) is { } piece)
-                c.Furniture.Add(piece);
-            if (function?.GetInt("function") is TableFunction or CorpseDisposalFunction or RefineryFunction)
-                c.Tables.Add(at);
+            else if (function is not null && FurnitureOf(db, item.Building, function, at, YawOf(rotation), inside: true) is { } piece) c.Furniture.Add(piece);
+            if (function?.GetInt("function") is TableFunction or CorpseDisposalFunction or RefineryFunction) c.Tables.Add(at);
             else AddFixture(db, functions, item, $"{b.Key}/{index}", at, rotation, c);
             index++;
         }
@@ -605,12 +539,10 @@ public static class TownBuildings
     /// <summary>
     /// A cage, a lockable object or a container with an inventory of the interior layout (<see cref="TownFixture"/>); nothing for anything else.
     /// </summary>
-    static void AddFixture(GameDatabase db, Dictionary<string, GameRecord?> functions, LayoutItem item, string id, Vector3 at, Quaternion rotation,
-    Contents c)
+    static void AddFixture(GameDatabase db, Dictionary<string, GameRecord?> functions, LayoutItem item, string id, Vector3 at, Quaternion rotation, Contents c)
     {
         var itemFn = FunctionOf(db, item.Building, functions)?.GetInt("function");
-        if (itemFn != CageFunction && !item.Building.GetBool("has lock") && !item.Building.GetBool("has inventory"))
-            return;
+        if (itemFn != CageFunction && !item.Building.GetBool("has lock") && !item.Building.GetBool("has inventory")) return;
         var (storageWidth, storageHeight) = item.Building.GetBool("has inventory") ? MachineData.StorageGrid(db, item.Building) : (0, 0);
         c.Fixtures.Add(new TownFixture(id, item.Building.StringId, itemFn == CageFunction, at, YawOf(rotation))
         {
@@ -625,17 +557,13 @@ public static class TownBuildings
     /// </summary>
     static void AddAlone(GameDatabase db, ResolvedBuilding resolved, GameRecord? functionality, Contents c)
     {
-        if (
-            functionality is not null
-            && FurnitureOf(db, resolved.Record, functionality, resolved.Position, YawOf(resolved.Placement.Rotation)) is { } alone
-        )
+        if (functionality is not null && FurnitureOf(db, resolved.Record, functionality, resolved.Position, YawOf(resolved.Placement.Rotation)) is { } alone)
             c.Furniture.Add(alone);
     }
 
     /// <summary>
-    /// A seat-like piece for sitting around (275, <see cref="TownBuilding.Furniture"/>) from a functionality: BF_CHAIR and BF_THRONE are sat on (its
-    /// <c>animation</c> and <c>hunger rate</c>), BF_TRAINING is stood at (and keeps its BUILDING, the dummy's stat and cap), and an interior piece of
-    /// function MINE, RESEARCH, REFINERY or CRAFTING is a <see cref="HomeSpotKind.Workstation"/>; null for any other function.
+    /// A seat-like piece for sitting around (275, <see cref="TownBuilding.Furniture"/>) from a functionality: BF_CHAIR and BF_THRONE are sat on (its <c>animation</c> and <c>hunger rate</c>), BF_TRAINING
+    /// is stood at (and keeps its BUILDING, the dummy's stat and cap), and an interior piece of function MINE, RESEARCH, REFINERY or CRAFTING is a <see cref="HomeSpotKind.Workstation"/>; null for any other function.
     /// </summary>
     static HomeSpot? FurnitureOf(GameDatabase db, GameRecord building, GameRecord function, Vector3 at, float yaw, bool inside = false)
     {
@@ -651,16 +579,15 @@ public static class TownBuildings
         return new HomeSpot(k, at, yaw)
         {
             Record = building.StringId,
-            SitClip = k is HomeSpotKind.Training or HomeSpotKind.Workstation ? null : function.GetReferences("animation").Select(r
-                    => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
+            SitClip = k is HomeSpotKind.Training or HomeSpotKind.Workstation ? null : function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
             HungerRate = function.GetFloat("hunger rate", 1),
         };
     }
 
     /// <summary>
-    /// The town a level-data building belongs to (docs/formats/zones.md "Town membership", Observed: the building import <c>FUN_14057cc70</c>): the
-    /// nearest town whose <see cref="Gameplay.TownData.Radius"/> holds it (X/Z, nest markers left out); else, for a record with <c>interior</c>
-    /// parts, the nearest town within 10000; else none. The state's <c>town</c> handle is not used: the game keeps it only for player towns.
+    /// The town a level-data building belongs to (docs/formats/zones.md "Town membership", Observed: the building import <c>FUN_14057cc70</c>): the nearest town whose
+    /// <see cref="Gameplay.TownData.Radius"/> holds it (X/Z, nest markers left out); else, for a record with <c>interior</c> parts, the nearest town within 10000; else none.
+    /// The state's <c>town</c> handle is not used: the game keeps it only for player towns.
     /// </summary>
     static TownPlacement? MemberOf(List<(TownPlacement Placement, Gameplay.TownData Town)> towns, Vector3 position, GameRecord record)
     {
@@ -683,10 +610,6 @@ public static class TownBuildings
         return best;
     }
 
-    #endregion
-
-    #region Lookups
-
     /// <summary>
     /// A building with an interior outside every town's radius goes to the nearest town within this distance (the import's squared bound 1e8).
     /// </summary>
@@ -700,9 +623,8 @@ public static class TownBuildings
         instances.TryGetValue((state.GetInt("mountedC"), state.GetInt("mountedI")), out string? instance) ? instance : null;
 
     /// <summary>
-    /// The kind of a node from its <c>node type</c> alone (<c>FUN_14038c2f0</c>): 0 shopkeeper, 1 general, 2 guard post, whatever the name. Types 3
-    /// (turret), 4 (use) and 5 (light) are never general: the record's name only gives the engine's bar and throne stand-ins, else
-    /// <see cref="HomeSpotKind.Other"/>.
+    /// The kind of a node from its <c>node type</c> alone (<c>FUN_14038c2f0</c>): 0 shopkeeper, 1 general, 2 guard post, whatever the name. Types 3 (turret), 4 (use) and 5 (light) are never
+    /// general: the record's name only gives the engine's bar and throne stand-ins, else <see cref="HomeSpotKind.Other"/>.
     /// </summary>
     public static HomeSpotKind NodeKind(GameRecord node) => node.GetInt("node type") switch
     {
@@ -715,10 +637,7 @@ public static class TownBuildings
     /// <summary>
     /// The layout names a building record can take (case ignored), cached by record and side; empty without layouts.
     /// </summary>
-    static IReadOnlySet<string> LayoutNames(BuildingLayouts? layouts, GameRecord record, bool exterior, Dictionary<(
-        string,
-        bool
-    ), IReadOnlySet<string>> cache)
+    static IReadOnlySet<string> LayoutNames(BuildingLayouts? layouts, GameRecord record, bool exterior, Dictionary<(string, bool), IReadOnlySet<string>> cache)
     {
         if (layouts is null) return new HashSet<string>();
         if (!cache.TryGetValue((record.StringId, exterior), out var set))
@@ -745,18 +664,15 @@ public static class TownBuildings
         bool bed = false;
         foreach (var list in building.ReferenceLists)
             foreach (var r in building.GetReferences(list))
-                if (
-                    db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f
-                    && f.GetInt("function") is BedFunction or SkeletonBedFunction
-                )
+                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f && f.GetInt("function") is BedFunction or SkeletonBedFunction)
                     bed = true;
         cache[building.StringId] = bed;
         return bed;
     }
 
     /// <summary>
-    /// The first BUILDING_FUNCTIONALITY record in any reference list of <paramref name="building"/> (its <c>function</c>, <c>restrains movement</c>,
-    /// <c>use range</c>), cached by id; null for a building without one.
+    /// The first BUILDING_FUNCTIONALITY record in any reference list of <paramref name="building"/> (its <c>function</c>, <c>restrains movement</c>, <c>use range</c>), cached by id; null
+    /// for a building without one.
     /// </summary>
     public static GameRecord? FunctionOf(GameDatabase db, GameRecord building, Dictionary<string, GameRecord?> cache)
     {
@@ -765,11 +681,7 @@ public static class TownBuildings
         foreach (var list in building.ReferenceLists)
         {
             foreach (var r in building.GetReferences(list))
-                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f)
-                {
-                    found = f;
-                    break;
-                }
+                if (db.Find(r.TargetStringId) is { Type: FcsRecordType.BuildingFunctionality } f) { found = f; break; }
             if (found is not null) break;
         }
         cache[building.StringId] = found;
@@ -777,10 +689,8 @@ public static class TownBuildings
     }
 
     /// <summary>
-    /// The way a seat is sat facing (docs/game/ai-tasks.md "Chairs"): by its functionality's <c>flags</c>, 0 its own <paramref name="yaw"/>, 1
-    /// towards the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing when that one is in
-    /// front, else the opposite one. <paramref name="faithful"/>: behind it, as the game does, the absolute look point negated (generally towards the
-    /// world origin).
+    /// The way a seat is sat facing (docs/game/ai-tasks.md "Chairs"): by its functionality's <c>flags</c>, 0 its own <paramref name="yaw"/>, 1 towards
+    /// the nearest of <paramref name="faced"/> (the building's tables, corpse disposals and refineries), 2 its own facing when that one is in front, else the opposite one. <paramref name="faithful"/>: behind it, as the game does, the absolute look point negated (generally towards the world origin).
     /// </summary>
     public static float SeatYaw(Vector3 position, float yaw, int flags, IEnumerable<Vector3> faced, bool faithful = false)
     {
@@ -812,6 +722,4 @@ public static class TownBuildings
         var forward = Vector3.Transform(Vector3.UnitZ, q);
         return MathF.Atan2(forward.X, forward.Z);
     }
-
-    #endregion
 }

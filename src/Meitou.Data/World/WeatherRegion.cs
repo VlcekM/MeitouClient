@@ -8,19 +8,11 @@ namespace Meitou.Data.World;
 public readonly record struct RegionFog(float Enabled, Vector3 Colour, float Distance);
 
 /// <summary>
-/// A region's wind change in progress: from (speed, heading) at <see cref="StartMinute"/> to the targets over <see cref="DurationMinutes"/>
-/// (docs/formats/weather.md "Wind"). The heading is an angle in the ground plane, direction = (cos h, sin h) in (x, z); the angle is lerped linearly,
-/// so a change across ±π goes the long way round as the game's does (<b>Verified</b>: <c>FUN_1409dc0e0</c> lerps with <c>FUN_1409b1cd0</c>; a save
-/// caught mid-change agrees).
+/// A region's wind change in progress: from (speed, heading) at <see cref="StartMinute"/> to the targets over <see cref="DurationMinutes"/> (docs/formats/weather.md
+/// "Wind"). The heading is an angle in the ground plane, direction = (cos h, sin h) in (x, z); the angle is lerped linearly, so a change across ±π
+/// goes the long way round as the game's does (<b>Verified</b>: <c>FUN_1409dc0e0</c> lerps with <c>FUN_1409b1cd0</c>; a save caught mid-change agrees).
 /// </summary>
-public readonly record struct WindInterpolation(
-    double StartMinute,
-    double DurationMinutes,
-    float Speed0,
-    float Heading0,
-    float Speed1,
-    float Heading1
-)
+public readonly record struct WindInterpolation(double StartMinute, double DurationMinutes, float Speed0, float Heading0, float Speed1, float Heading1)
 {
     public (float Speed, Vector2 Direction) At(double minute)
     {
@@ -35,14 +27,12 @@ public readonly record struct WindInterpolation(
 /// Everything a region needs to continue from a saved game (the random source is not part of it: a restored region draws from a fresh seeded
 /// sequence).
 /// </summary>
-public sealed record WeatherRegionSnapshot(string RegionId, string SeasonId, int SeasonIndex, int SeasonEndDay, string WeatherId,
-int WeatherEntryIndex,
-    double WeatherStartMinute, double WeatherEndMinute, float Strength, WindInterpolation Wind, double NextWindUpdateMinute, RegionFog FogFrom,
-    double FogFadeMinutes);
+public sealed record WeatherRegionSnapshot(string RegionId, string SeasonId, int SeasonIndex, int SeasonEndDay, string WeatherId, int WeatherEntryIndex,
+    double WeatherStartMinute, double WeatherEndMinute, float Strength, WindInterpolation Wind, double NextWindUpdateMinute, RegionFog FogFrom, double FogFadeMinutes);
 
 /// <summary>
-/// One weather region's schedule (docs/formats/weather.md "Seasons", "Choosing a weather", "Wind", "Fog"): the season calendar, the chain of weathers
-/// by weight and duration, the strength, the wind and the fog fade. It runs on its own seeded random source, whatever the camera does.
+/// One weather region's schedule (docs/formats/weather.md "Seasons", "Choosing a weather", "Wind", "Fog"): the season calendar, the chain of weathers by
+/// weight and duration, the strength, the wind and the fog fade. It runs on its own seeded random source, whatever the camera does.
 /// </summary>
 public sealed class WeatherRegion
 {
@@ -153,14 +143,12 @@ public sealed class WeatherRegion
         float targetEnabled = w.FogEnabled ? 1 : 0;
         float targetDistance = w.FogDistanceAt(WindSpeed);
         float k = _fogFadeMinutes <= 0 ? 1 : (float)Math.Clamp((minute - WeatherStartMinute) / _fogFadeMinutes, 0, 1);
-        // A time before the weather began only comes from a clock moved back (the viewer's time slider, its camera keys' time of day): the fade is
-        // over, as it would be after it; holding k at 0 there showed the previous weather's fog (a dust storm's, say) for as long as the clock stayed
-        // before the start.
+        // A time before the weather began only comes from a clock moved back (the viewer's time slider, its camera keys' time of day): the fade is over, as it
+        // would be after it; holding k at 0 there showed the previous weather's fog (a dust storm's, say) for as long as the clock stayed before the start.
         if (k >= 1 || minute < WeatherStartMinute) return new RegionFog(targetEnabled, w.FogColour, targetDistance);
         var from = _fogFrom;
         float enabled = from.Enabled + (targetEnabled - from.Enabled) * k;
-        // Observed: a side that is off lends its colour and distance to the other, so only the on/off weight fades (an "off" record's distance is not
-        // meant to be seen).
+        // Observed: a side that is off lends its colour and distance to the other, so only the on/off weight fades (an "off" record's distance is not meant to be seen).
         if (from.Enabled <= 0) return new RegionFog(enabled, w.FogColour, targetDistance);
         if (targetEnabled <= 0) return new RegionFog(enabled, from.Colour, from.Distance);
         return new RegionFog(enabled, Vector3.Lerp(from.Colour, w.FogColour, k), from.Distance + (targetDistance - from.Distance) * k);
@@ -169,8 +157,8 @@ public sealed class WeatherRegion
     // ---- choosing ----
 
     /// <summary>
-    /// The viewer's weather list (not the game's): starts the season's weather <paramref name="entry"/> (an index into
-    /// <see cref="SeasonDef.Weathers"/>) now, with a new duration and strength, fading the fog in as after any change.
+    /// The viewer's weather list (not the game's): starts the season's weather <paramref name="entry"/> (an index into <see cref="SeasonDef.Weathers"/>) now, with a
+    /// new duration and strength, fading the fog in as after any change.
     /// </summary>
     public void Pick(WeatherTime now, int entry)
     {
@@ -189,10 +177,9 @@ public sealed class WeatherRegion
         double end = t + minutes;
         if (chosen.Weather.HasTimeWindow)
         {
-            // Cut at today's end time (Verified, FUN_1409dcf60: also when already past). One chosen in the window's last hour, which the inclusive
-            // window test accepts, so ends at once in the original and is chosen again every update until the hour is out; here it ends at the next
-            // whole hour (engine choice: one change instead of one a frame). Skipping a past cut ran Venge's beams, chosen at 23:xx, through the
-            // night (#374).
+            // Cut at today's end time (Verified, FUN_1409dcf60: also when already past). One chosen in the window's last hour, which the inclusive window
+            // test accepts, so ends at once in the original and is chosen again every update until the hour is out; here it ends at the next whole hour
+            // (engine choice: one change instead of one a frame). Skipping a past cut ran Venge's beams, chosen at 23:xx, through the night (#374).
             double cut = now.Day * WeatherTime.MinutesPerDay + chosen.Weather.EndTime * 60.0;
             if (cut <= t) cut = (Math.Floor(t / 60) + 1) * 60;
             end = Math.Min(end, cut);
@@ -235,11 +222,7 @@ public sealed class WeatherRegion
         for (int i = 0; i < season.Weathers.Count; i++)
         {
             var w = season.Weathers[i];
-            if (w.Weight > 0 && w.Weather.IsInWindow(hour))
-            {
-                candidates.Add(i);
-                sum += w.Weight;
-            }
+            if (w.Weight > 0 && w.Weather.IsInWindow(hour)) { candidates.Add(i); sum += w.Weight; }
         }
         if (candidates.Count == 0) return season.Weathers.Count - 1;
         if (candidates.Count == 1) return candidates[0];
@@ -275,9 +258,9 @@ public sealed class WeatherRegion
     // ---- wind ----
 
     /// <summary>
-    /// A wind update (also what a new weather does): the target speed moves <c>limit / 360</c> of the way from the current speed to the weather's,
-    /// the target heading turns by a random angle in ±π · limit / 360 from the current heading, read back unsigned (0..π) as the game does; both are
-    /// then interpolated over <c>round(0.05 × wind update time)</c> minutes.
+    /// A wind update (also what a new weather does): the target speed moves <c>limit / 360</c> of the way from the current speed to the weather's, the
+    /// target heading turns by a random angle in ±π · limit / 360 from the current heading, read back unsigned (0..π) as the game does; both are then
+    /// interpolated over <c>round(0.05 × wind update time)</c> minutes.
     /// </summary>
     void RetargetWind(double t, WeatherDef w, float strength)
     {
@@ -297,8 +280,7 @@ public sealed class WeatherRegion
 
     // ---- saving ----
 
-    public WeatherRegionSnapshot Snapshot() => new(Def.StringId, Season.Season.StringId, SeasonIndex, SeasonEndDay, Weather.StringId,
-    WeatherEntryIndex, WeatherStartMinute,
+    public WeatherRegionSnapshot Snapshot() => new(Def.StringId, Season.Season.StringId, SeasonIndex, SeasonEndDay, Weather.StringId, WeatherEntryIndex, WeatherStartMinute,
         WeatherEndMinute, Strength, _wind, NextWindUpdateMinute, _fogFrom, _fogFadeMinutes);
 
     /// <summary>

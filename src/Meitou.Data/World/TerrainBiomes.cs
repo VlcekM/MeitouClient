@@ -6,9 +6,10 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// <c>data/newland/land/blendinfo.dat</c> (magic <c>KBI1</c>): which biomes the terrain blends in each cell of a square grid. Cell (x, z) lists up to
-/// <see cref="SlotsPerCell"/> biome colours (the BIOMES <c>index</c> colours of <c>biomemap.png</c>); <c>blendmap.png</c>'s R, G, B, A are the
-/// weights of slots 0..3 at each pixel. After the table each cell has a quadtree of slot masks saying which slots are in use where, which the game
+/// <c>data/newland/land/blendinfo.dat</c> (magic <c>KBI1</c>): which biomes the terrain blends in each cell of a
+/// square grid. Cell (x, z) lists up to <see cref="SlotsPerCell"/> biome colours (the BIOMES <c>index</c>
+/// colours of <c>biomemap.png</c>); <c>blendmap.png</c>'s R, G, B, A are the weights of slots 0..3 at each pixel.
+/// After the table each cell has a quadtree of slot masks saying which slots are in use where, which the game
 /// queries to find the biomes a terrain page or water patch needs. Layout and evidence in docs/formats/terrain.md.
 /// </summary>
 public sealed class BlendInfoFile
@@ -40,9 +41,9 @@ public sealed class BlendInfoFile
     public uint[] Slots { get; }
 
     /// <summary>
-    /// Per cell (<c>z × Cells + x</c>) its slot-mask nodes: one byte when the cell uses a single slot, else 2 × <see cref="Resolution"/>² bytes
-    /// indexed like a heap (node 1 the whole cell, node i's children 4i..4i+3, leaves from Resolution²; byte 0 repeats the root). Null when the file
-    /// ends after the slot table.
+    /// Per cell (<c>z × Cells + x</c>) its slot-mask nodes: one byte when the cell uses a single slot, else
+    /// 2 × <see cref="Resolution"/>² bytes indexed like a heap (node 1 the whole cell, node i's children 4i..4i+3,
+    /// leaves from Resolution²; byte 0 repeats the root). Null when the file ends after the slot table.
     /// </summary>
     public byte[][]? Nodes { get; }
 
@@ -77,9 +78,9 @@ public sealed class BlendInfoFile
     }
 
     /// <summary>
-    /// The mask of the smallest quadtree node of a cell that contains the box from (<paramref name="u0"/>, <paramref name="v0"/>) to
-    /// (<paramref name="u1"/>, <paramref name="v1"/>), given as fractions 0..1 of the cell along X and Z: which of the cell's slots have weight
-    /// anywhere in the box (the game's rule, docs/formats/terrain.md).
+    /// The mask of the smallest quadtree node of a cell that contains the box from (<paramref name="u0"/>, <paramref name="v0"/>)
+    /// to (<paramref name="u1"/>, <paramref name="v1"/>), given as fractions 0..1 of the cell along X and Z: which of
+    /// the cell's slots have weight anywhere in the box (the game's rule, docs/formats/terrain.md).
     /// </summary>
     public byte SlotMask(int cellX, int cellZ, double u0, double v0, double u1, double v1)
     {
@@ -121,11 +122,7 @@ public sealed class BlendInfoFile
         {
             if (p >= data.Length) throw new InvalidDataException($"Truncated slot masks at cell {c}.");
             byte root = data[p++];
-            if (MaskCount(root) == 1)
-            {
-                nodes[c] = [root];
-                continue;
-            }
+            if (MaskCount(root) == 1) { nodes[c] = [root]; continue; }
             if (p + count - 1 > data.Length) throw new InvalidDataException($"Truncated slot masks at cell {c}.");
             var n = new byte[count];
             n[0] = root;
@@ -144,8 +141,9 @@ public sealed class BlendInfoFile
 public enum TerrainLayer { Base, Slope, Cliff, Grass, Dirt, Road }
 
 /// <summary>
-/// How a BIOMES record textures the terrain: six layers (diffuse + normal map, tiling), slope ranges, colour overlay strengths and the distance fade.
-/// Slope values are converted the way the game hands them to the shader (× 0.01, compared with <c>1 − normal.y</c>).
+/// How a BIOMES record textures the terrain: six layers (diffuse + normal map, tiling), slope ranges, colour
+/// overlay strengths and the distance fade. Slope values are converted the way the game hands them to the
+/// shader (× 0.01, compared with <c>1 − normal.y</c>).
 /// </summary>
 public sealed record BiomeTerrain
 {
@@ -202,10 +200,7 @@ public sealed record BiomeTerrain
         // Defaults are the fcs.def ones.
         Vector2[] defaultTiling = [new(50, 50), new(70, 70), new(40, 10), new(40, 40), new(40, 40), new(40, 40)];
         Vector4 Slope(string what, float d1, float d2, float dGrass) => new Vector4(
-            r.GetFloat(
-                $"slope {what} 1",
-                d1
-            ), r.GetFloat($"slope {what} 2", d2), r.GetFloat($"slope {what} 3", 0), r.GetFloat($"slope {what} grass", dGrass)) * SlopeScale;
+            r.GetFloat($"slope {what} 1", d1), r.GetFloat($"slope {what} 2", d2), r.GetFloat($"slope {what} 3", 0), r.GetFloat($"slope {what} grass", dGrass)) * SlopeScale;
         uint ground = (uint)r.GetInt("ground colour", 0xC0A040) & 0xFFFFFF;
         float brightness = r.GetFloat("brightness fix", 1);
         return new BiomeTerrain
@@ -215,28 +210,17 @@ public sealed record BiomeTerrain
             Index = (uint)r.GetInt("index") & 0xFFFFFF,
             Diffuse = [.. TextureFields.Select(f => Tex(r, f))],
             Normal = [.. TextureFields.Select(f => Tex(r, f + " normal"))],
-            Tiling = [.. TilingSuffix.Select((
-                s,
-                i
-            ) => new Vector2(r.GetFloat($"tiling X {s}", defaultTiling[i].X), r.GetFloat($"tiling Y {s}", defaultTiling[i].Y)))],
+            Tiling = [.. TilingSuffix.Select((s, i) => new Vector2(r.GetFloat($"tiling X {s}", defaultTiling[i].X), r.GetFloat($"tiling Y {s}", defaultTiling[i].Y)))],
             SlopeMin = Slope("min", 0, 0, 0),
             SlopeMax = Slope("max", 90, 90, 20),
             SlopeBlend = Slope("fade", 5, 5, 5),
-            OverlayMult = new Vector4(
-                r.GetFloat("overlay mult vertical", 1),
-                r.GetFloat("overlay mult grass", 1),
-                r.GetFloat("overlay mult dirt", 1),
-                r.GetFloat("overlay mult road", 1)
-            ),
+            OverlayMult = new Vector4(r.GetFloat("overlay mult vertical", 1), r.GetFloat("overlay mult grass", 1), r.GetFloat("overlay mult dirt", 1), r.GetFloat("overlay mult road", 1)),
             GroundColour = new Vector3((ground >> 16) & 0xFF, (ground >> 8) & 0xFF, ground & 0xFF) / 255f,
             FadeDistance = r.GetFloat("fade distance", 4000),
             BrightnessFix = brightness == 0 ? 1 : brightness, // the game replaces 0 with 1
             DistortWavelength = r.GetFloat("distort wavelength", 1000),
             DistortAmplitude = r.GetFloat("distort amplitude", 0),
-            Absorbance = [r.GetFloat("absorbance 0", 0.55f), r.GetFloat("absorbance 1", 0.2f), r.GetFloat(
-                "absorbance 2",
-                0.5f
-            ), r.GetFloat("absorbance grass", 0.44f), r.GetFloat("absorbance dirt", 0.3f), r.GetFloat("absorbance road", 0.25f)],
+            Absorbance = [r.GetFloat("absorbance 0", 0.55f), r.GetFloat("absorbance 1", 0.2f), r.GetFloat("absorbance 2", 0.5f), r.GetFloat("absorbance grass", 0.44f), r.GetFloat("absorbance dirt", 0.3f), r.GetFloat("absorbance road", 0.25f)],
         };
     }
 
@@ -253,8 +237,9 @@ public sealed record BiomeTerrain
 }
 
 /// <summary>
-/// Paths of the land maps under <c>data/newland/land/</c> used to texture the terrain (docs/formats/terrain.md): the biome blend map, and the 8 × 8
-/// tiled overlay (<c>new_overlay.X.Y.png</c>) and colour (<c>colour.X.Y.png</c>) maps, tile X along world +X and Y along +Z.
+/// Paths of the land maps under <c>data/newland/land/</c> used to texture the terrain (docs/formats/terrain.md):
+/// the biome blend map, and the 8 × 8 tiled overlay (<c>new_overlay.X.Y.png</c>) and colour (<c>colour.X.Y.png</c>)
+/// maps, tile X along world +X and Y along +Z.
 /// </summary>
 public static class TerrainMaps
 {
@@ -271,9 +256,9 @@ public static class TerrainMaps
 }
 
 /// <summary>
-/// Per-pixel blends of per-biome values over a blend-map-sized grid of the whole world: each pixel weights the values of its cell's slots by the
-/// blend map (slot 4 takes the remainder), the way the terrain shader blends biomes. Used for the far terrain's ground colour and the water
-/// parameters.
+/// Per-pixel blends of per-biome values over a blend-map-sized grid of the whole world: each pixel weights the
+/// values of its cell's slots by the blend map (slot 4 takes the remainder), the way the terrain shader blends biomes.
+/// Used for the far terrain's ground colour and the water parameters.
 /// </summary>
 public static class BiomeField
 {

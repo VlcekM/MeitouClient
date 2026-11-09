@@ -1,9 +1,9 @@
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The random numbers Kenshi uses when it builds a placed building (docs/formats/zones.md, "From placements to meshes"): the C runtime's
-/// <c>rand()</c> of MSVCR100 (a linear congruential generator, 15-bit results), reseeded from the building's position before its parts are chosen,
-/// and the game's two helpers that scale a result to an int or float range.
+/// The random numbers Kenshi uses when it builds a placed building (docs/formats/zones.md, "From placements to meshes"):
+/// the C runtime's <c>rand()</c> of MSVCR100 (a linear congruential generator, 15-bit results), reseeded from the
+/// building's position before its parts are chosen, and the game's two helpers that scale a result to an int or float range.
 /// </summary>
 public sealed class BuildingRandom(uint seed)
 {
@@ -41,8 +41,8 @@ public sealed class BuildingRandom(uint seed)
     public float NextFloat(float min, float max) => (float)(Next() * (1.0 / 32768)) * (max - min) + min;
 
     /// <summary>
-    /// Seed of a building at world X/Z: both truncated toward zero to an integer, XOR <c>0xDEADBEEF</c>, low 32 bits, then combined like
-    /// <c>boost::hash_combine(x, z)</c>.
+    /// Seed of a building at world X/Z: both truncated toward zero to an integer, XOR <c>0xDEADBEEF</c>, low 32 bits, then
+    /// combined like <c>boost::hash_combine(x, z)</c>.
     /// </summary>
     public static uint Seed(float x, float z)
     {

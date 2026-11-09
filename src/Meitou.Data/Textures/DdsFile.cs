@@ -1,8 +1,8 @@
 namespace Meitou.Data.Textures;
 
 /// <summary>
-/// A DirectDraw Surface (<c>.dds</c>) texture: header facts plus the raw surface data, unchanged. Layout: docs/formats/dds.md. Decode a surface with
-/// <see cref="DdsDecoder"/>.
+/// A DirectDraw Surface (<c>.dds</c>) texture: header facts plus the raw surface data, unchanged. Layout:
+/// docs/formats/dds.md. Decode a surface with <see cref="DdsDecoder"/>.
 /// </summary>
 public sealed class DdsFile
 {
@@ -25,8 +25,8 @@ public sealed class DdsFile
     public int MipCount { get; init; } = 1;
 
     /// <summary>
-    /// Images in the file, each with its own mip chain: 6 for a cubemap (faces +X, -X, +Y, -Y, +Z, -Z, as present), the array size for a DX10 texture
-    /// array (times 6 for a cube array), otherwise 1.
+    /// Images in the file, each with its own mip chain: 6 for a cubemap (faces +X, -X, +Y, -Y, +Z, -Z, as present),
+    /// the array size for a DX10 texture array (times 6 for a cube array), otherwise 1.
     /// </summary>
     public int ImageCount { get; init; } = 1;
 

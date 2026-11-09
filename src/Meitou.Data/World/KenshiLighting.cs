@@ -5,9 +5,9 @@ using Meitou.Data.Textures;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// How the game lights the deferred scene (docs/formats/lighting.md): the sun's colour taken from SkyX, its daylight scale, the light direction and
-/// ambient factor, and the exposure band of the HDR composite. Verified 2026-10-04 against <c>kenshi_x64.exe</c> (the sky controller's update and
-/// creation), <c>SkyX_x64.dll</c> and <c>data/materials/deferred/deferred.hlsl</c>.
+/// How the game lights the deferred scene (docs/formats/lighting.md): the sun's colour taken from SkyX, its daylight scale, the light
+/// direction and ambient factor, and the exposure band of the HDR composite. Verified 2026-10-04 against <c>kenshi_x64.exe</c> (the sky
+/// controller's update and creation), <c>SkyX_x64.dll</c> and <c>data/materials/deferred/deferred.hlsl</c>.
 /// </summary>
 public static class KenshiLighting
 {
@@ -45,8 +45,8 @@ public static class KenshiLighting
         : SkyXModel.Colour(sun + new Vector3(0, 0, SunColourOffsetZ), sun, skydome: false) / (SunColourDivisor * SkyAtmosphere.Exposure);
 
     /// <summary>
-    /// <c>sunColour.w</c>: with the controller's value <paramref name="scale"/> (1, set when the sky is created), half of it at the horizon, rising
-    /// to all of it with the sun's height, and falling at 10.8 times the rate below the horizon to 0 (at <c>sunY ≈ −0.093</c>).
+    /// <c>sunColour.w</c>: with the controller's value <paramref name="scale"/> (1, set when the sky is created), half of it at the horizon,
+    /// rising to all of it with the sun's height, and falling at 10.8 times the rate below the horizon to 0 (at <c>sunY ≈ −0.093</c>).
     /// </summary>
     public static float Daylight(float sunY, float scale = 1)
     {
@@ -56,8 +56,8 @@ public static class KenshiLighting
     }
 
     /// <summary>
-    /// The sun's light before the biome's sun brightness: <c>sunColour.rgb · sunColour.w · ambientParams.w</c> (the last is 1: no code sets it). The
-    /// shader multiplies it by the ambient map's alpha times 2.
+    /// The sun's light before the biome's sun brightness: <c>sunColour.rgb · sunColour.w · ambientParams.w</c> (the last is 1: no code sets it).
+    /// The shader multiplies it by the ambient map's alpha times 2.
     /// </summary>
     public static Vector3 SunLight(Vector3 sun) => SunColour(sun) * Daylight(sun.Y);
 
@@ -101,21 +101,16 @@ public sealed record ExposureConstants(float Min, float Max, float NightDarkness
 
     public static ExposureConstants FromDatabase(GameDatabase db)
     {
-        var c = db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS")
-                ?? db.OfType(FcsRecordType.Constants).FirstOrDefault();
+        var c = db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault();
         if (c is null) return Default;
-        return new ExposureConstants(
-            c.GetFloat("exposure min", Default.Min),
-            c.GetFloat("exposure max", Default.Max),
-            c.GetFloat("night darkness", Default.NightDarkness)
-        );
+        return new ExposureConstants(c.GetFloat("exposure min", Default.Min), c.GetFloat("exposure max", Default.Max), c.GetFloat("night darkness", Default.NightDarkness));
     }
 }
 
 /// <summary>
-/// The ambient map the lighting pass multiplies by (docs/formats/lighting.md "The ambient map"): built by the game from the biome map and the BIOMES
-/// records, rgb the biome's <c>ambient light</c>, alpha its <c>sun brightness</c> (0..2) × 0.5 × 255; white with alpha 0x80 where a colour has no
-/// record. Covers the square ±<see cref="HalfWorld"/> like the biome map (row = +Z).
+/// The ambient map the lighting pass multiplies by (docs/formats/lighting.md "The ambient map"): built by the game from the biome map
+/// and the BIOMES records, rgb the biome's <c>ambient light</c>, alpha its <c>sun brightness</c> (0..2) × 0.5 × 255; white with alpha
+/// 0x80 where a colour has no record. Covers the square ±<see cref="HalfWorld"/> like the biome map (row = +Z).
 /// </summary>
 public static class AmbientMap
 {

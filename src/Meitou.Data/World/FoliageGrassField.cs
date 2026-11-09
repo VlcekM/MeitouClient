@@ -1,11 +1,12 @@
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The grass blades of one GRASS patch over a square page of its zone (docs/formats/foliage.md, "Grass blades"), by the game grass loader's rule:
-/// <c>density × 0.005 × area × grass density setting</c> candidates, each at a uniform random point; kept when the ground's slope there is at most
-/// the grass's <c>max slope</c>, a random number is below the density map (0..1) there, and (when either altitude limit is set) the height is inside
-/// them. A kept blade gets one random scale (0..1, used for both width and height) and a random yaw. The game's page layout and random numbers depend
-/// on its camera; this field is seeded by page and grass instead, so it is deterministic but not the game's exact blades.
+/// The grass blades of one GRASS patch over a square page of its zone (docs/formats/foliage.md, "Grass blades"), by the game
+/// grass loader's rule: <c>density × 0.005 × area × grass density setting</c> candidates, each at a uniform random point;
+/// kept when the ground's slope there is at most the grass's <c>max slope</c>, a random number is below the density map
+/// (0..1) there, and (when either altitude limit is set) the height is inside them. A kept blade gets one random scale
+/// (0..1, used for both width and height) and a random yaw. The game's page layout and random numbers depend on its
+/// camera; this field is seeded by page and grass instead, so it is deterministic but not the game's exact blades.
 /// </summary>
 public static class FoliageGrassField
 {
@@ -30,43 +31,26 @@ public static class FoliageGrassField
     public const int PrefixSteps = 64;
 
     /// <summary>
-    /// The blades in the page from (<paramref name="x0"/>, <paramref name="z0"/>) of side <paramref name="size"/>, as <see cref="Stride"/> floats
-    /// each.
+    /// The blades in the page from (<paramref name="x0"/>, <paramref name="z0"/>) of side <paramref name="size"/>, as
+    /// <see cref="Stride"/> floats each.
     /// </summary>
     public static float[] Blades(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, float densitySetting = 1) =>
         BladesWithPrefixes(patch, ground, x0, z0, size, out _, densitySetting);
 
     /// <summary>
     /// <see cref="Blades"/> plus <paramref name="prefixes"/> (<see cref="PrefixSteps"/> + 1 entries): how many blades the first
-    /// i/<see cref="PrefixSteps"/> of the candidates gave. The candidates come from one random sequence in order, so the blades for a lower density
-    /// setting are exactly the first ones of a higher setting's, and a page generated at the highest setting can show any lower one by drawing a
-    /// prefix (<see cref="PrefixCount"/>).
+    /// i/<see cref="PrefixSteps"/> of the candidates gave. The candidates come from one random sequence in order, so the blades
+    /// for a lower density setting are exactly the first ones of a higher setting's, and a page generated at the highest
+    /// setting can show any lower one by drawing a prefix (<see cref="PrefixCount"/>).
     /// </summary>
-    public static float[] BladesWithPrefixes(
-        FoliageGrassPatch patch,
-        FoliageGround ground,
-        float x0,
-        float z0,
-        float size,
-        out int[] prefixes,
-        float densitySetting = 1
-    ) =>
+    public static float[] BladesWithPrefixes(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes, float densitySetting = 1) =>
         Generate(patch, ground, x0, z0, size, out prefixes, densitySetting) is { } blades ? [.. blades] : [];
 
     /// <summary>
-    /// <see cref="BladesWithPrefixes"/> into an array rented from <see cref="System.Buffers.ArrayPool{T}.Shared"/> (empty, not rented, without
-    /// blades): its first <paramref name="floats"/> hold the blades. The caller returns it.
+    /// <see cref="BladesWithPrefixes"/> into an array rented from <see cref="System.Buffers.ArrayPool{T}.Shared"/> (empty, not rented, without blades): its first
+    /// <paramref name="floats"/> hold the blades. The caller returns it.
     /// </summary>
-    public static float[] RentBladesWithPrefixes(
-        FoliageGrassPatch patch,
-        FoliageGround ground,
-        float x0,
-        float z0,
-        float size,
-        out int[] prefixes,
-        out int floats,
-        float densitySetting = 1
-    )
+    public static float[] RentBladesWithPrefixes(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes, out int floats, float densitySetting = 1)
     {
         var blades = Generate(patch, ground, x0, z0, size, out prefixes, densitySetting);
         floats = blades?.Count ?? 0;
@@ -77,27 +61,16 @@ public static class FoliageGrassField
     }
 
     // The blades into this thread's scratch list (valid until its next call); null when the page can have none.
-    static List<float>? Generate(
-        FoliageGrassPatch patch,
-        FoliageGround ground,
-        float x0,
-        float z0,
-        float size,
-        out int[] prefixes,
-        float densitySetting
-    )
+    static List<float>? Generate(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes, float densitySetting)
     {
         var grass = patch.Grass;
         prefixes = new int[PrefixSteps + 1];
         int candidates = (int)(grass.PerSquareUnit * densitySetting * size * size);
         if (candidates <= 0) return null;
-        // Where the patch's density is 0 throughout the page every candidate is dropped (it keeps a blade only for a random number below the
-        // density), so none is drawn: most pages of a zone's patches, and most of a town's loading-screen grass time.
+        // Where the patch's density is 0 throughout the page every candidate is dropped (it keeps a blade only for a random number below the density), so none is drawn:
+        // most pages of a zone's patches, and most of a town's loading-screen grass time.
         if (!AnyDensity(patch, x0, z0, size)) return null;
-        uint seed = FoliageNoise.Hash(
-            (int)MathF.Floor(x0),
-            (int)MathF.Floor(z0)
-        ) ^ (uint)FoliageRandom.LeadingInteger(grass.StringId) * 2654435761u ^ (uint)patch.Channel;
+        uint seed = FoliageNoise.Hash((int)MathF.Floor(x0), (int)MathF.Floor(z0)) ^ (uint)FoliageRandom.LeadingInteger(grass.StringId) * 2654435761u ^ (uint)patch.Channel;
         var rng = s_random ??= new FoliageRandom(seed);
         rng.Seed(seed);
         bool limits = grass.MinAltitude != 0 || grass.MaxAltitude != 0;
@@ -145,16 +118,8 @@ public static class FoliageGrassField
         const int n = FoliageGround.Size;
         if (x0 + size < patch.X0 || x0 > patch.X1 || z0 + size < patch.Z0 || z0 > patch.Z1) return false;
         float su = (n - 1) / (patch.X1 - patch.X0), sv = (n - 1) / (patch.Z1 - patch.Z0);
-        int i0 = Math.Clamp(
-            (int)MathF.Floor((x0 - patch.X0) * su) - 1,
-            0,
-            n - 1
-        ), i1 = Math.Clamp((int)MathF.Floor((x0 + size - patch.X0) * su) + 2, 0, n - 1);
-        int j0 = Math.Clamp(
-            (int)MathF.Floor((z0 - patch.Z0) * sv) - 1,
-            0,
-            n - 1
-        ), j1 = Math.Clamp((int)MathF.Floor((z0 + size - patch.Z0) * sv) + 2, 0, n - 1);
+        int i0 = Math.Clamp((int)MathF.Floor((x0 - patch.X0) * su) - 1, 0, n - 1), i1 = Math.Clamp((int)MathF.Floor((x0 + size - patch.X0) * su) + 2, 0, n - 1);
+        int j0 = Math.Clamp((int)MathF.Floor((z0 - patch.Z0) * sv) - 1, 0, n - 1), j1 = Math.Clamp((int)MathF.Floor((z0 + size - patch.Z0) * sv) + 2, 0, n - 1);
         var d = patch.Density;
         for (int j = j0; j <= j1; j++)
             for (int i = i0; i <= i1; i++)

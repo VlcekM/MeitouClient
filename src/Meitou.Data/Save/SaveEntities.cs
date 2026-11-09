@@ -26,26 +26,14 @@ public sealed class SaveFaction(FcsRecord record, FcsRecord? war)
     /// <summary>
     /// The FACTION record id (<c>gamedata stringID</c>).
     /// </summary>
-    public string Id
-    {
-        get => Record.Strings.GetValueOrDefault("gamedata stringID", "");
-        set => Record.Strings["gamedata stringID"] = value;
-    }
+    public string Id { get => Record.Strings.GetValueOrDefault("gamedata stringID", ""); set => Record.Strings["gamedata stringID"] = value; }
     public string Name { get => Record.Name; set => Record.Name = value; }
-    public float Prosperity
-    {
-        get => Record.Floats.GetValueOrDefault("prosperity");
-        set => Record.Floats["prosperity"] = value;
-    }
+    public float Prosperity { get => Record.Floats.GetValueOrDefault("prosperity"); set => Record.Floats["prosperity"] = value; }
 
     /// <summary>
     /// The faction's platoon name counter: the next <c>&lt;n&gt;</c> of <c>&lt;faction&gt;_&lt;n&gt;</c>.
     /// </summary>
-    public int PlatoonCounter
-    {
-        get => Record.Ints.GetValueOrDefault("platoonIDs");
-        set => Record.Ints["platoonIDs"] = value;
-    }
+    public int PlatoonCounter { get => Record.Ints.GetValueOrDefault("platoonIDs"); set => Record.Ints["platoonIDs"] = value; }
 
     /// <summary>
     /// The player's rank in this faction (<c>rank</c>, every faction but the player's; docs/game/factions-squads-towns.md "Faction rank").
@@ -98,13 +86,7 @@ public sealed class SaveFaction(FcsRecord record, FcsRecord? war)
         {
             var list = new List<SaveRelation>();
             for (int k = 0; Record.Strings.TryGetValue("relationSID" + k, out var sid); k++)
-                list.Add(new SaveRelation(
-                    sid,
-                    Record.Floats.GetValueOrDefault("relation" + k),
-                    Record.Floats.GetValueOrDefault("trust" + k),
-                    Record.Floats.GetValueOrDefault("trustNeg" + k),
-                    Record.Bools.GetValueOrDefault(WarKey + k)
-                ));
+                list.Add(new SaveRelation(sid, Record.Floats.GetValueOrDefault("relation" + k), Record.Floats.GetValueOrDefault("trust" + k), Record.Floats.GetValueOrDefault("trustNeg" + k), Record.Bools.GetValueOrDefault(WarKey + k)));
             return list;
         }
     }
@@ -147,16 +129,8 @@ public sealed class SaveTown(FcsRecord record)
     /// <summary>
     /// The instance id of the placement in the level data (<c>9-rebirth-INGAME</c>); empty for a nest.
     /// </summary>
-    public string Instance
-    {
-        get => Record.Strings.GetValueOrDefault("instance", "");
-        set => Record.Strings["instance"] = value;
-    }
-    public string FactionId
-    {
-        get => Record.Strings.GetValueOrDefault("faction", "");
-        set => Record.Strings["faction"] = value;
-    }
+    public string Instance { get => Record.Strings.GetValueOrDefault("instance", ""); set => Record.Strings["instance"] = value; }
+    public string FactionId { get => Record.Strings.GetValueOrDefault("faction", ""); set => Record.Strings["faction"] = value; }
     public bool IsNest => Record.Bools.GetValueOrDefault("is nest");
     public bool Discovered => Record.Bools.GetValueOrDefault("discovered");
     public Hand Handle { get => Hand.Read(Record, "hand"); set => value.Write(Record, "hand"); }
@@ -191,11 +165,7 @@ public sealed class SaveCharacter(SavePlatoon platoon, FcsInstance instance)
     public Quaternion Rotation { get => Instance.Rotation; set => Instance.Rotation = value; }
     public string Name => GameState?.Strings.GetValueOrDefault("name", "") ?? "";
     public string OwnerFactionId => GameState?.Strings.GetValueOrDefault("owner faction ID", "") ?? "";
-    public Hand Handle
-    {
-        get => GameState is null ? Hand.Null : Hand.Read(GameState, "handle");
-        set => value.Write(GameState!, "handle");
-    }
+    public Hand Handle { get => GameState is null ? Hand.Null : Hand.Read(GameState, "handle"); set => value.Write(GameState!, "handle"); }
     public bool IsLeader => GameState?.Bools.GetValueOrDefault("is leader") ?? false;
     public int SquadMemberType => GameState?.Ints.GetValueOrDefault("squad mem type") ?? 0;
 
@@ -219,23 +189,11 @@ public sealed class SavePlatoon(FcsRecord record, SaveFile? file)
     /// <summary>
     /// <c>&lt;faction name&gt;_&lt;n&gt;</c>, also the record's string id.
     /// </summary>
-    public string Name
-    {
-        get => Record.Strings.GetValueOrDefault("platoon stringID", Record.StringId);
-        set => Record.Strings["platoon stringID"] = value;
-    }
+    public string Name { get => Record.Strings.GetValueOrDefault("platoon stringID", Record.StringId); set => Record.Strings["platoon stringID"] = value; }
     public string FactionName => Record.Strings.GetValueOrDefault("faction name", "");
-    public string FactionId
-    {
-        get => Record.Strings.GetValueOrDefault("faction stringID", "");
-        set => Record.Strings["faction stringID"] = value;
-    }
+    public string FactionId { get => Record.Strings.GetValueOrDefault("faction stringID", ""); set => Record.Strings["faction stringID"] = value; }
     public string SquadTemplate => Record.Strings.GetValueOrDefault("squad template", "");
-    public string ContentFile
-    {
-        get => Record.Filenames.GetValueOrDefault("content file", "");
-        set => Record.Filenames["content file"] = value;
-    }
+    public string ContentFile { get => Record.Filenames.GetValueOrDefault("content file", ""); set => Record.Filenames["content file"] = value; }
 
     /// <summary>
     /// The name inside <c>platoon/</c>, or null when the platoon has no file.
@@ -243,26 +201,15 @@ public sealed class SavePlatoon(FcsRecord record, SaveFile? file)
     public string? FileName => ContentFile.Length > "platoon/".Length ? ContentFile : null;
     public bool IsLoaded => File is not null;
     public Hand Handle { get => Hand.Read(Record, "handle"); set => value.Write(Record, "handle"); }
-    public Vector3 Position
-    {
-        get => Record.Vector3S.GetValueOrDefault("position");
-        set => Record.Vector3S["position"] = value;
-    }
+    public Vector3 Position { get => Record.Vector3S.GetValueOrDefault("position"); set => Record.Vector3S["position"] = value; }
     public int Money { get => Record.Ints.GetValueOrDefault("money"); set => Record.Ints["money"] = value; }
-    public int CharCount
-    {
-        get => Record.Ints.GetValueOrDefault("char count");
-        set => Record.Ints["char count"] = value;
-    }
+    public int CharCount { get => Record.Ints.GetValueOrDefault("char count"); set => Record.Ints["char count"] = value; }
     public bool IsDead => Record.Bools.GetValueOrDefault("dead");
 
     /// <summary>
     /// The collection of the file that lists the characters.
     /// </summary>
-    public FcsRecord? Collection => File?.Records.FirstOrDefault(
-        r => r.RecordType == FcsRecordType.InstanceCollection
-        && r.Ints.ContainsKey("char count")
-    );
+    public FcsRecord? Collection => File?.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.InstanceCollection && r.Ints.ContainsKey("char count"));
 
     public override string ToString() => Name;
 }
@@ -270,15 +217,7 @@ public sealed class SavePlatoon(FcsRecord record, SaveFile? file)
 /// <summary>
 /// A building of a zone as the saved list names it: the placement, the state record, and where it came from.
 /// </summary>
-public sealed record SavedBuilding(
-    string InstanceId,
-    string Target,
-    Vector3 Position,
-    Quaternion Rotation,
-    FcsRecord? State,
-    bool InBase,
-    bool Overrides
-);
+public sealed record SavedBuilding(string InstanceId, string Target, Vector3 Position, Quaternion Rotation, FcsRecord? State, bool InBase, bool Overrides);
 
 /// <summary>
 /// A <c>zone.X.Y.zone</c> file (docs/formats/save.md ".zone files").
@@ -297,25 +236,19 @@ public sealed class SaveZone(ZoneCoordinate coordinate, SaveFile file)
     /// <summary>
     /// <c>0-buildinglist</c>: the zone's whole placed-building list; null when the zone has no building.
     /// </summary>
-    public FcsRecord? BuildingList => File.Records.FirstOrDefault(
-        r => r.StringId.EndsWith("-buildinglist", StringComparison.Ordinal)
-        && r.RecordType == FcsRecordType.InstanceCollection
-    );
+    public FcsRecord? BuildingList => File.Records.FirstOrDefault(r => r.StringId.EndsWith("-buildinglist", StringComparison.Ordinal) && r.RecordType == FcsRecordType.InstanceCollection);
 
     /// <summary>
     /// <c>1-itemlist</c>: loose items lying in the zone.
     /// </summary>
-    public FcsRecord? ItemList => File.Records.FirstOrDefault(
-        r => r.StringId.EndsWith("-itemlist", StringComparison.Ordinal)
-        && r.RecordType == FcsRecordType.InstanceCollection
-    );
+    public FcsRecord? ItemList => File.Records.FirstOrDefault(r => r.StringId.EndsWith("-itemlist", StringComparison.Ordinal) && r.RecordType == FcsRecordType.InstanceCollection);
 
     public IEnumerable<FcsRecord> BuildingStates => File.Records.Where(r => r.RecordType == FcsRecordType.GamestateBuilding);
 
     /// <summary>
-    /// The saved building list laid over the base game's placements of the zone, by instance id (the order the game loads them in: base layers first,
-    /// then the save's zone file on top, so an id in both is overwritten). <paramref name="baseZone"/> is <c>WorldLevelData.Zones[coordinate]</c> or
-    /// null. A base placement the save lacks stays as it is; an entry the save clears (empty target) clears the base one.
+    /// The saved building list laid over the base game's placements of the zone, by instance id (the order the game loads them in: base layers first, then the
+    /// save's zone file on top, so an id in both is overwritten). <paramref name="baseZone"/> is <c>WorldLevelData.Zones[coordinate]</c> or null.
+    /// A base placement the save lacks stays as it is; an entry the save clears (empty target) clears the base one.
     /// </summary>
     public List<SavedBuilding> Overlay(GameDatabase? baseZone)
     {
@@ -333,8 +266,7 @@ public sealed class SaveZone(ZoneCoordinate coordinate, SaveFile file)
             foreach (var i in list.Instances)
             {
                 // The building state; an inventory state can come first.
-                FcsRecord? state = i.States.Select(s => states.GetValueOrDefault(s)).FirstOrDefault(r
-                        => r?.RecordType == FcsRecordType.GamestateBuilding)
+                FcsRecord? state = i.States.Select(s => states.GetValueOrDefault(s)).FirstOrDefault(r => r?.RecordType == FcsRecordType.GamestateBuilding)
                     ?? (i.States.Count > 0 ? states.GetValueOrDefault(i.States[0]) : null);
                 bool inBase = merged.ContainsKey(i.Id);
                 if (!inBase) order.Add(i.Id);

@@ -18,17 +18,17 @@ public sealed record LayoutItem(string InstanceId, GameRecord Building, Vector3 
     public int Floor { get; init; }
 
     /// <summary>
-    /// Its state's outside flag (<c>flags</c> bit 0, else the older bool <c>is outside</c>; docs/formats/zones.md): an interior layout's object
-    /// without it is hidden while the building shows its outside, one with it (a yard's tents, torches, benches) stays.
+    /// Its state's outside flag (<c>flags</c> bit 0, else the older bool <c>is outside</c>; docs/formats/zones.md): an interior layout's object without it is hidden while
+    /// the building shows its outside, one with it (a yard's tents, torches, benches) stays.
     /// </summary>
     public bool Outside { get; init; }
 }
 
 /// <summary>
-/// Building layouts from <c>interiors.level</c> (docs/formats/zones.md, "Building layouts"): INSTANCE_COLLECTION records whose <c>associated
-/// building</c> names a BUILDING and whose name is what a GAMESTATE_BUILDING's <c>exterior layout name</c> / <c>interior layout name</c> refers to.
-/// Exterior layouts (<c>is exterior</c>, ids <c>EXT-&lt;building&gt;-&lt;name&gt;</c>) hold the signs and banners outside a building; interior
-/// layouts the furniture inside.
+/// Building layouts from <c>interiors.level</c> (docs/formats/zones.md, "Building layouts"): INSTANCE_COLLECTION records whose
+/// <c>associated building</c> names a BUILDING and whose name is what a GAMESTATE_BUILDING's <c>exterior layout name</c> /
+/// <c>interior layout name</c> refers to. Exterior layouts (<c>is exterior</c>, ids <c>EXT-&lt;building&gt;-&lt;name&gt;</c>) hold the
+/// signs and banners outside a building; interior layouts the furniture inside.
 /// </summary>
 public sealed class BuildingLayouts
 {
@@ -58,9 +58,9 @@ public sealed class BuildingLayouts
     public int Count => _byBuilding.Values.Sum(l => l.Count);
 
     /// <summary>
-    /// The layout named <paramref name="name"/> for <paramref name="building"/>: one associated with the building itself, else with a building it
-    /// lists in <c>shares interiors with</c>; within each, an exact name match before a case-insensitive one. Null when there is none (no fallback to
-    /// another building's layout of the same name: its positions belong to that building's shape).
+    /// The layout named <paramref name="name"/> for <paramref name="building"/>: one associated with the building itself, else with a
+    /// building it lists in <c>shares interiors with</c>; within each, an exact name match before a case-insensitive one. Null when
+    /// there is none (no fallback to another building's layout of the same name: its positions belong to that building's shape).
     /// </summary>
     public GameRecord? Find(GameRecord building, string name, bool exterior = true)
     {
@@ -68,11 +68,7 @@ public sealed class BuildingLayouts
         foreach (var id in building.GetReferences("shares interiors with").Select(r => r.TargetStringId).Prepend(building.StringId))
         {
             if (!_byBuilding.TryGetValue((exterior, id), out var list)) continue;
-            var match = list.FirstOrDefault(r => r.Name == name) ?? list.FirstOrDefault(r => string.Equals(
-                r.Name,
-                name,
-                StringComparison.OrdinalIgnoreCase
-            ));
+            var match = list.FirstOrDefault(r => r.Name == name) ?? list.FirstOrDefault(r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
             if (match is not null) return match;
         }
         return null;
@@ -104,9 +100,8 @@ public sealed class BuildingLayouts
     public void UseSwaps(Gameplay.BuildingSwaps swaps, IReadOnlyDictionary<string, string> owners) => (this._swaps, _swapOwners) = (swaps, owners);
 
     /// <summary>
-    /// Swaps the furniture as <paramref name="levels"/>' placements were swapped (<see cref="WorldLevelData.FurnitureSwaps"/>; nothing when they were
-    /// not). Every reader of the layouts calls it, or a piece the owner's swaps skip is drawn by none but still walled off in the navmesh (#345,
-    /// #346: a robot faction's beds).
+    /// Swaps the furniture as <paramref name="levels"/>' placements were swapped (<see cref="WorldLevelData.FurnitureSwaps"/>; nothing when they were not). Every reader of the
+    /// layouts calls it, or a piece the owner's swaps skip is drawn by none but still walled off in the navmesh (#345, #346: a robot faction's beds).
     /// </summary>
     public void UseSwaps(WorldLevelData levels)
     {
@@ -114,14 +109,12 @@ public sealed class BuildingLayouts
     }
 
     /// <summary>
-    /// The layout's furniture as <paramref name="placement"/>'s owner faction has it made: each piece goes through the faction's building swaps as
-    /// <c>createBuilding</c> asks them (<c>FUN_14057cc70</c>), a skipped one is left out and a replaced one is the new building in the same place.
-    /// Without swaps, <see cref="Items(GameRecord)"/>.
+    /// The layout's furniture as <paramref name="placement"/>'s owner faction has it made: each piece goes through the faction's building swaps as <c>createBuilding</c> asks them (<c>FUN_14057cc70</c>), a
+    /// skipped one is left out and a replaced one is the new building in the same place. Without swaps, <see cref="Items(GameRecord)"/>.
     /// </summary>
     public IEnumerable<LayoutItem> Items(GameRecord layout, BuildingPlacement placement)
     {
-        if (_swaps is null || _swapOwners is null || !_swapOwners.TryGetValue(placement.Key, out var owner))
-            return Items(layout);
+        if (_swaps is null || _swapOwners is null || !_swapOwners.TryGetValue(placement.Key, out var owner)) return Items(layout);
         return Swapped(Items(layout), owner, placement.Key);
     }
 
@@ -129,15 +122,14 @@ public sealed class BuildingLayouts
     {
         foreach (var item in items)
         {
-            if (_swaps!.Replacement(owner, item.Building.StringId, BuildingSwapPass.Roll($"{key}/{item.InstanceId}")) is not { } answer)
-                yield return item;
+            if (_swaps!.Replacement(owner, item.Building.StringId, BuildingSwapPass.Roll($"{key}/{item.InstanceId}")) is not { } answer) yield return item;
             else if (answer.Length > 0 && _db.Find(answer) is { } replacement) yield return item with { Building = replacement };
         }
     }
 
     /// <summary>
-    /// The layout's loose-item slots: its objects whose target is an ITEM_PLACEMENT_GROUP (<see cref="LayoutItem.Building"/> is then the group;
-    /// docs/game/factions-squads-towns.md "Loose items in buildings"), in instance id order.
+    /// The layout's loose-item slots: its objects whose target is an ITEM_PLACEMENT_GROUP (<see cref="LayoutItem.Building"/> is then the group; docs/game/factions-squads-towns.md
+    /// "Loose items in buildings"), in instance id order.
     /// </summary>
     public IEnumerable<LayoutItem> ItemGroups(GameRecord layout) => Placed(layout, FcsRecordType.ItemPlacementGroup);
 
@@ -156,8 +148,8 @@ public sealed class BuildingLayouts
     }
 
     /// <summary>
-    /// World position and rotation of a layout object on a building at <paramref name="parentPosition"/> with <paramref name="parentRotation"/>: the
-    /// object's local transform (rotation, then its position) under the building's node.
+    /// World position and rotation of a layout object on a building at <paramref name="parentPosition"/> with
+    /// <paramref name="parentRotation"/>: the object's local transform (rotation, then its position) under the building's node.
     /// </summary>
     public static (Vector3 Position, Quaternion Rotation) Place(Vector3 parentPosition, Quaternion parentRotation, LayoutItem item)
     {

@@ -10,11 +10,10 @@ namespace Meitou.Data.World;
 public sealed record FoliageInstanceGroup(FoliageMesh Mesh, FoliageLayer Layer, FoliageInstanceRecord[] Instances, float MaxScale);
 
 /// <summary>
-/// A laid-out zone with its instances already grouped by (mesh, layer), in the order each pair first appears, each instance in the order placed (what
-/// the renderer built from <see cref="FoliageZone.Instances"/> on its worker with <c>GroupBy</c>). <see cref="Zone"/> has the grass patches,
-/// <see cref="FoliageZone.Resources"/> and <see cref="FoliageZone.Complete"/> but an empty <see cref="FoliageZone.Instances"/>: they are in
-/// <see cref="Groups"/>, which a layout read back from the cache fills straight from the file's records
-/// (<see cref="FoliageLayoutCache.TryLoadGrouped"/>), without the 56-byte-per-instance list and the copies grouping it made.
+/// A laid-out zone with its instances already grouped by (mesh, layer), in the order each pair first appears, each instance in the order placed (what the renderer
+/// built from <see cref="FoliageZone.Instances"/> on its worker with <c>GroupBy</c>). <see cref="Zone"/> has the grass patches, <see cref="FoliageZone.Resources"/>
+/// and <see cref="FoliageZone.Complete"/> but an empty <see cref="FoliageZone.Instances"/>: they are in <see cref="Groups"/>, which a layout read back from the cache
+/// fills straight from the file's records (<see cref="FoliageLayoutCache.TryLoadGrouped"/>), without the 56-byte-per-instance list and the copies grouping it made.
 /// </summary>
 public sealed class GroupedFoliageZone
 {
@@ -51,13 +50,7 @@ public static class FoliageGrouping
         for (int i = 0; i < slots.Length; i++)
         {
             var key = (list[i].Mesh, list[i].Layer);
-            if (!slotOf.TryGetValue(key, out int slot))
-            {
-                slot = keys.Count;
-                slotOf[key] = slot;
-                keys.Add(key);
-                counts.Add(0);
-            }
+            if (!slotOf.TryGetValue(key, out int slot)) { slot = keys.Count; slotOf[key] = slot; keys.Add(key); counts.Add(0); }
             slots[i] = slot;
             counts[slot]++;
         }

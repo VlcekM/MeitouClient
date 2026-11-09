@@ -3,9 +3,10 @@ using System.Numerics;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Minimum and maximum terrain height over square areas of the world: a pyramid of cells, level 0 the cells of a coarse heightmap grid covering the
-/// whole world (refined with the samples of a finer window where one is given), each further level merging 2 × 2 cells, up to one cell for the world.
-/// Bounds are conservative for bilinear interpolation of either grid.
+/// Minimum and maximum terrain height over square areas of the world: a pyramid of cells, level 0 the cells of a
+/// coarse heightmap grid covering the whole world (refined with the samples of a finer window where one is given),
+/// each further level merging 2 × 2 cells, up to one cell for the world. Bounds are conservative for bilinear
+/// interpolation of either grid.
 /// </summary>
 public sealed class TerrainHeightBounds
 {
@@ -49,10 +50,7 @@ public sealed class TerrainHeightBounds
     {
         for (int l = 1; l < _min.Length; l++)
         {
-            cx0 >>= 1;
-            cz0 >>= 1;
-            cx1 >>= 1;
-            cz1 >>= 1;
+            cx0 >>= 1; cz0 >>= 1; cx1 >>= 1; cz1 >>= 1;
             int n = Cells >> l, p = n * 2;
             for (int z = cz0; z <= cz1; z++)
                 for (int x = cx0; x <= cx1; x++)
@@ -71,8 +69,8 @@ public sealed class TerrainHeightBounds
     public sealed record Patch(int Cx0, int Cz0, int Width, int Height, float[] Min, float[] Max);
 
     /// <summary>
-    /// Measures a window against the cell grid without touching the pyramid, so it can run on another thread while the pyramid is in use;
-    /// <see cref="Apply"/> then merges the result.
+    /// Measures a window against the cell grid without touching the pyramid, so it can run on another thread while
+    /// the pyramid is in use; <see cref="Apply"/> then merges the result.
     /// </summary>
     public Patch Measure(HeightWindow fine)
     {
@@ -112,8 +110,8 @@ public sealed class TerrainHeightBounds
     }
 
     /// <summary>
-    /// Widens the cells of a <see cref="Measure"/>d patch (never narrows them, so bounds stay valid for windows applied earlier) and refreshes the
-    /// levels above.
+    /// Widens the cells of a <see cref="Measure"/>d patch (never narrows them, so bounds stay valid for windows
+    /// applied earlier) and refreshes the levels above.
     /// </summary>
     public void Apply(Patch patch) => Apply(patch, rebuildAll: true);
 
@@ -166,12 +164,14 @@ public sealed class TerrainHeightBounds
 public readonly record struct TerrainNode(int Level, double X0, double Z0, double Size, int Quadrant);
 
 /// <summary>
-/// Continuous distance-dependent LOD (CDLOD) over the whole world, the scheme whose morphing Kenshi's own terrain shaders show
-/// (docs/formats/terrain.md, "Terrain LOD"). The world square is a quadtree; every node is drawn with the same <see cref="GridCells"/>² grid, level 0
-/// being the finest. A node of level l is drawn where the eye is within <see cref="Ranges"/>[l] of it and refined where it is within Ranges[l − 1].
-/// Between <see cref="MorphStart"/> and <see cref="MorphEnd"/> of its level a vertex slides onto the grid of the next coarser level, reaching it by
-/// the end of the range, so neighbouring levels meet without cracks or pops as long as the height depends on position only. The ranges come from a
-/// screen-space error rule (<see cref="TerrainLod"/>, <see cref="SetRanges(TerrainLod)"/>) or, for tests, a fixed multiple of the node size.
+/// Continuous distance-dependent LOD (CDLOD) over the whole world, the scheme whose morphing Kenshi's own terrain
+/// shaders show (docs/formats/terrain.md, "Terrain LOD"). The world square is a quadtree; every node is drawn with the
+/// same <see cref="GridCells"/>² grid, level 0 being the finest. A node of level l is drawn where the eye is within
+/// <see cref="Ranges"/>[l] of it and refined where it is within Ranges[l − 1]. Between <see cref="MorphStart"/> and
+/// <see cref="MorphEnd"/> of its level a vertex slides onto the grid of the next coarser level, reaching it by the end
+/// of the range, so neighbouring levels meet without cracks or pops as long as the height depends on position only.
+/// The ranges come from a screen-space error rule (<see cref="TerrainLod"/>, <see cref="SetRanges(TerrainLod)"/>) or, for tests,
+/// a fixed multiple of the node size.
 /// </summary>
 public sealed class TerrainQuadtree
 {
@@ -179,8 +179,7 @@ public sealed class TerrainQuadtree
     /// <param name="lodDistance">Range of a level in multiples of its node size (at least 2 keeps neighbours within one level).</param>
     public TerrainQuadtree(float finestSpacing, int gridCells = 32, float lodDistance = 2.5f, float morphFraction = 0.7f)
     {
-        if (gridCells < 2 || (gridCells & (gridCells - 1)) != 0)
-            throw new ArgumentOutOfRangeException(nameof(gridCells), "must be a power of two");
+        if (gridCells < 2 || (gridCells & (gridCells - 1)) != 0) throw new ArgumentOutOfRangeException(nameof(gridCells), "must be a power of two");
         ArgumentOutOfRangeException.ThrowIfLessThan(lodDistance, 2f);
         GridCells = gridCells;
         // The leaf is the smallest power-of-two fraction of the world whose grid is not finer than asked.
@@ -219,8 +218,9 @@ public sealed class TerrainQuadtree
     TerrainLod? _lastLod;
 
     /// <summary>
-    /// Sets the level ranges (increasing; the last one is ignored: the root is drawn wherever nothing finer is) and the morph band of each level, the
-    /// last <c>1 − morphFraction</c> of the distances between the finer level's range and its own. False when nothing changed.
+    /// Sets the level ranges (increasing; the last one is ignored: the root is drawn wherever nothing finer is) and the morph
+    /// band of each level, the last <c>1 − morphFraction</c> of the distances between the finer level's range and its own.
+    /// False when nothing changed.
     /// </summary>
     public bool SetRanges(ReadOnlySpan<float> ranges)
     {
@@ -271,8 +271,7 @@ public sealed class TerrainQuadtree
         Select(LevelCount - 1, -WorldLayout.HalfWorldSize, -WorldLayout.HalfWorldSize, eye, bounds, visible, result);
     }
 
-    bool Select(int level, double x0, double z0, Vector3 eye, TerrainHeightBounds bounds, Func<Vector3, Vector3, bool>? visible,
-    List<TerrainNode> result)
+    bool Select(int level, double x0, double z0, Vector3 eye, TerrainHeightBounds bounds, Func<Vector3, Vector3, bool>? visible, List<TerrainNode> result)
     {
         double size = NodeSize(level);
         var (lo, hi) = bounds.Range(x0, z0, size);
@@ -306,15 +305,11 @@ public sealed class TerrainQuadtree
     /// How far a vertex of <paramref name="level"/> at <paramref name="distance"/> from the eye has slid onto the coarser grid (0..1).
     /// </summary>
     public float Morph(int level, float distance) =>
-        MorphStart[level] == float.MaxValue ? 0 : Math.Clamp(
-            (distance - MorphStart[level]) / Math.Max(MorphEnd[level] - MorphStart[level], 1e-3f),
-            0,
-            1
-        );
+        MorphStart[level] == float.MaxValue ? 0 : Math.Clamp((distance - MorphStart[level]) / Math.Max(MorphEnd[level] - MorphStart[level], 1e-3f), 0, 1);
 
     /// <summary>
-    /// A grid coordinate (0..<see cref="GridCells"/>) after morphing by <paramref name="k"/>: odd coordinates move towards the even one below, so at
-    /// k = 1 the vertex lies on the next level's grid.
+    /// A grid coordinate (0..<see cref="GridCells"/>) after morphing by <paramref name="k"/>: odd coordinates move
+    /// towards the even one below, so at k = 1 the vertex lies on the next level's grid.
     /// </summary>
     public static Vector2 MorphGrid(Vector2 grid, float k)
     {
@@ -323,18 +318,13 @@ public sealed class TerrainQuadtree
     }
 
     /// <summary>
-    /// Triangle-list indices of a (cells + 1)² vertex grid (vertex (i, j) at j·(cells + 1) + i, X along i, Z along j), counter-clockwise seen from
-    /// above (+Y), for the whole grid (<paramref name="quadrant"/> −1) or one quarter.
+    /// Triangle-list indices of a (cells + 1)² vertex grid (vertex (i, j) at j·(cells + 1) + i, X along i, Z along j),
+    /// counter-clockwise seen from above (+Y), for the whole grid (<paramref name="quadrant"/> −1) or one quarter.
     /// </summary>
     public static uint[] GridIndices(int cells, int quadrant = -1)
     {
         int n = cells + 1, i0 = 0, j0 = 0, count = cells;
-        if (quadrant >= 0)
-        {
-            count = cells / 2;
-            i0 = (quadrant & 1) * count;
-            j0 = (quadrant >> 1) * count;
-        }
+        if (quadrant >= 0) { count = cells / 2; i0 = (quadrant & 1) * count; j0 = (quadrant >> 1) * count; }
         var list = new List<uint>(count * count * 6);
         uint V(int i, int j) => (uint)(j * n + i);
         for (int j = j0; j < j0 + count; j++)

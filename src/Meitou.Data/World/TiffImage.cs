@@ -3,9 +3,9 @@ using System.Buffers.Binary;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Minimal baseline TIFF reader for what the world maps use: one uncompressed greyscale image of 8 or 16 bits per sample, in strips, either byte
-/// order. Rows are read on demand, so a 537 MB heightmap never has to be in memory at once. Layout: TIFF 6.0 (public spec); see
-/// docs/formats/terrain.md.
+/// Minimal baseline TIFF reader for what the world maps use: one uncompressed greyscale image of 8 or 16
+/// bits per sample, in strips, either byte order. Rows are read on demand, so a 537 MB heightmap never has
+/// to be in memory at once. Layout: TIFF 6.0 (public spec); see docs/formats/terrain.md.
 /// </summary>
 public sealed class TiffImage : IDisposable
 {
@@ -125,8 +125,7 @@ public sealed class TiffImage : IDisposable
 
     static long[] ReadValues(Stream stream, TiffTag tag, bool le)
     {
-        int size = tag.Type switch { 1 or 2 or 6 or 7 => 1, 3 or 8 => 2, 4 or 9 => 4,
-        _ => throw new NotSupportedException($"TIFF tag {tag.Tag} has unsupported type {tag.Type}.") };
+        int size = tag.Type switch { 1 or 2 or 6 or 7 => 1, 3 or 8 => 2, 4 or 9 => 4, _ => throw new NotSupportedException($"TIFF tag {tag.Tag} has unsupported type {tag.Type}.") };
         long byteCount = size * tag.Count;
         byte[] data;
         if (byteCount <= 4)

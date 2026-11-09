@@ -5,14 +5,7 @@ namespace Meitou.Data.World;
 /// <summary>
 /// One placed foliage mesh: where, how big and turned, from which layer (docs/formats/foliage.md, "Placing").
 /// </summary>
-public readonly record struct FoliageInstance(
-    FoliageMesh Mesh,
-    FoliageLayer Layer,
-    Vector3 Position,
-    float Scale,
-    float YawDegrees,
-    Quaternion Orientation
-)
+public readonly record struct FoliageInstance(FoliageMesh Mesh, FoliageLayer Layer, Vector3 Position, float Scale, float YawDegrees, Quaternion Orientation)
 {
     public Matrix4x4 Transform => TransformOf(Scale, Orientation, Position);
 
@@ -78,10 +71,10 @@ public sealed class FoliageZoneInput
 }
 
 /// <summary>
-/// Kenshi's foliage placement for one zone (docs/formats/foliage.md), reproduced rule by rule: per biome of the zone, per FOLIAGE_LAYER of the biome,
-/// grass layers first, the layer's own Mersenne Twister seeded from the layer id and the zone's corner, then per mesh as many attempts as the layer
-/// gives it, clustered or uniform, each tested for slope, zone bounds, towns, height, roads, and placed with its scale, vertical offset, yaw and
-/// child meshes.
+/// Kenshi's foliage placement for one zone (docs/formats/foliage.md), reproduced rule by rule: per biome of the zone, per
+/// FOLIAGE_LAYER of the biome, grass layers first, the layer's own Mersenne Twister seeded from the layer id and the
+/// zone's corner, then per mesh as many attempts as the layer gives it, clustered or uniform, each tested for slope,
+/// zone bounds, towns, height, roads, and placed with its scale, vertical offset, yaw and child meshes.
 /// </summary>
 public static class FoliageLayout
 {
@@ -111,16 +104,16 @@ public static class FoliageLayout
     public static bool IsFarLayer(FoliageLayer layer) => !layer.IsGrass && layer.Visibility >= FoliageVisibility.Far;
 
     /// <summary>
-    /// Whether a mesh layer's placements depend only on its own records, the ground, the roads, the biome map and the towns: none of its meshes is
-    /// <c>limit to grass areas</c>, the only rule that reads what other layers wrote (grass coverage, grass spots; children never test it). The layer
-    /// reseeds its own generator, so such a layer places the same instances whether or not the other layers are placed.
+    /// Whether a mesh layer's placements depend only on its own records, the ground, the roads, the biome map and the towns: none of its meshes
+    /// is <c>limit to grass areas</c>, the only rule that reads what other layers wrote (grass coverage, grass spots; children never test it).
+    /// The layer reseeds its own generator, so such a layer places the same instances whether or not the other layers are placed.
     /// </summary>
     public static bool StandsAlone(FoliageLayer layer) => !layer.IsGrass && layer.Meshes.All(m => !m.Mesh.LimitToGrassAreas);
 
     /// <summary>
-    /// Places a zone's foliage. With <paramref name="farOnly"/> only the far layers (<see cref="IsFarLayer"/>) are placed, without the grass coverage
-    /// (the expensive part): exactly the far instances of the full layout, as long as every far layer of the zone <see cref="StandsAlone"/>;
-    /// otherwise the whole zone is placed. <see cref="FoliageZone.Complete"/> says which it was.
+    /// Places a zone's foliage. With <paramref name="farOnly"/> only the far layers (<see cref="IsFarLayer"/>) are placed, without the grass
+    /// coverage (the expensive part): exactly the far instances of the full layout, as long as every far layer of the zone
+    /// <see cref="StandsAlone"/>; otherwise the whole zone is placed. <see cref="FoliageZone.Complete"/> says which it was.
     /// </summary>
     public static FoliageZone Place(FoliageZoneInput input, FoliageCatalog catalog, bool farOnly = false)
     {
@@ -189,20 +182,12 @@ public static class FoliageLayout
                 bool give = false;
                 for (int tries = 0; mesh.LimitToGrassAreas && c.Input.Overlay.GrassAt(p.X, p.Y) <= GrassAreaThreshold; tries++)
                 {
-                    if (tries > 20)
-                    {
-                        give = true;
-                        break;
-                    }
+                    if (tries > 20) { give = true; break; }
                     p = new Vector2(rng.Float(c.X0, c.X1), 0);
                     p.Y = rng.Float(c.Z0, c.Z1);
                     centre = p;
                 }
-                if (give)
-                {
-                    left = 0;
-                    continue;
-                }
+                if (give) { left = 0; continue; }
             }
             else
             {
@@ -240,8 +225,7 @@ public static class FoliageLayout
         if (slope > mesh.MaxSlope || slope < mesh.MinSlope) return false;
         if (p.X < c.X0 || p.X > c.X1 || p.Y < c.Z0 || p.Y > c.Z1) return true;
         bool rejected = false;
-        // A resource mesh (one with a building type) is not rejected inside the no-foliage range of a town the player's faction owns
-        // (FUN_1406d2410:146-156, Verified).
+        // A resource mesh (one with a building type) is not rejected inside the no-foliage range of a town the player's faction owns (FUN_1406d2410:146-156, Verified).
         if (mesh.AvoidTowns && input.NearestTown?.Invoke(p.X, p.Y) is { } town && !(mesh.BuildingType is not null && town.Owned) &&
             Vector2.DistanceSquared(town.At, p) < town.Range * town.Range)
             rejected = true;
@@ -250,8 +234,7 @@ public static class FoliageLayout
         if (mesh.Floating) y = Math.Max(y, input.WaterHeight);
         float scale = rng.Float(mesh.MinScale, mesh.MaxScale);
         float offset = mesh.VerticalOffsetMin;
-        if (mesh.VerticalOffsetMin != mesh.VerticalOffsetMax)
-            offset = rng.Float(mesh.VerticalOffsetMin, mesh.VerticalOffsetMax);
+        if (mesh.VerticalOffsetMin != mesh.VerticalOffsetMax) offset = rng.Float(mesh.VerticalOffsetMin, mesh.VerticalOffsetMax);
         y += offset * scale;
         if (mesh.RoadAvoidance > 0 && NearRoad(input.Overlay, p, mesh.RoadAvoidance * scale)) rejected = true;
         float yaw = rng.Float(0, 360);
@@ -284,8 +267,8 @@ public static class FoliageLayout
     static float Quantise(float s, float min, float max) => max / 255 * (byte)(long)((s - min) / max * 255) + min;
 
     /// <summary>
-    /// A tree's orientation when its page is built: yaw about +Y; <c>slope align</c> turns its up axis onto the terrain normal; otherwise, unless
-    /// <c>keep upright</c>, a random axis and angle from the C runtime's <c>rand()</c> seeded by the position.
+    /// A tree's orientation when its page is built: yaw about +Y; <c>slope align</c> turns its up axis onto the terrain normal;
+    /// otherwise, unless <c>keep upright</c>, a random axis and angle from the C runtime's <c>rand()</c> seeded by the position.
     /// </summary>
     public static Quaternion Orientation(FoliageMesh mesh, FoliageGround ground, Vector3 position, float yawDegrees)
     {
@@ -347,8 +330,7 @@ public static class FoliageLayout
         for (int i = ix0; i <= ix1; i++)
             for (int j = iz0; j <= iz1; j++)
             {
-                if (i <= 0 || j <= 0 || i >= FoliageOverlay.TilePixels - 1 || j >= FoliageOverlay.TilePixels - 1)
-                    continue;
+                if (i <= 0 || j <= 0 || i >= FoliageOverlay.TilePixels - 1 || j >= FoliageOverlay.TilePixels - 1) continue;
                 float v = strength;
                 if (several)
                 {
@@ -361,9 +343,9 @@ public static class FoliageLayout
     }
 
     /// <summary>
-    /// Grass coverage of one GRASS type over the zone's 129² overlay pixels (R, the larger value kept): its noise (and blackout noise multiplied in)
-    /// × 255, faded over 300 units outside its altitude range, 0 on dirt (B above 70), roads (A above 10) left untouched. With several biomes only
-    /// the pixels of <paramref name="biome"/>.
+    /// Grass coverage of one GRASS type over the zone's 129² overlay pixels (R, the larger value kept): its noise (and blackout
+    /// noise multiplied in) × 255, faded over 300 units outside its altitude range, 0 on dirt (B above 70), roads (A above 10)
+    /// left untouched. With several biomes only the pixels of <paramref name="biome"/>.
     /// </summary>
     static void Coverage(FoliageZoneInput input, FoliageGrass grass, uint? biome)
     {
@@ -381,8 +363,7 @@ public static class FoliageLayout
                 fade = Math.Clamp(fade, 0, 1);
                 float dirt = o.Get(2, i, j) > 70 ? 0 : 255;
                 float n = FoliageNoise.Coverage(x, z, scale, grass.ZeroCutoff, grass.BrightnessBoost, grass.Cap);
-                if (grass.Blackout)
-                    n *= FoliageNoise.Coverage(x + 50007f, z + 50007f, blackoutScale, grass.BlackoutZeroCutoff, grass.BrightnessBoost, grass.Cap);
+                if (grass.Blackout) n *= FoliageNoise.Coverage(x + 50007f, z + 50007f, blackoutScale, grass.BlackoutZeroCutoff, grass.BrightnessBoost, grass.Cap);
                 if (o.Get(3, i, j) > 10) continue;
                 byte v = (byte)(long)(n * dirt * fade);
                 if (o.Get(0, i, j) < v) o.Set(0, i, j, v);

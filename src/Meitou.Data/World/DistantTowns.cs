@@ -13,8 +13,9 @@ namespace Meitou.Data.World;
 public sealed record DistantTown(string InstanceId, string TownId, string Name, Vector3 Position, int Handle, string MeshPath);
 
 /// <summary>
-/// Distant towns (docs/formats/zones.md, "Distant towns"): the game keeps, for each TOWN with the <c>distant mesh</c> flag, one mesh merging the
-/// <c>distant mesh</c> of every building of the town, baked into <c>data/meshes/distant/</c> under the town state's <c>handC</c> number.
+/// Distant towns (docs/formats/zones.md, "Distant towns"): the game keeps, for each TOWN with the <c>distant mesh</c> flag,
+/// one mesh merging the <c>distant mesh</c> of every building of the town, baked into <c>data/meshes/distant/</c>
+/// under the town state's <c>handC</c> number.
 /// </summary>
 public static class DistantTowns
 {
@@ -51,8 +52,7 @@ public static class DistantTowns
             if (db.Find(town.TownId) is not { } record || !record.GetBool("distant mesh")) continue;
             if (!handles.TryGetValue(town.InstanceId, out int handle)) continue;
             string path = GameFiles.Resolve(Path.Combine(directory, MeshFileName(handle)));
-            if (File.Exists(path))
-                result.Add(new DistantTown(town.InstanceId, town.TownId, record.Name, town.Position, handle, path));
+            if (File.Exists(path)) result.Add(new DistantTown(town.InstanceId, town.TownId, record.Name, town.Position, handle, path));
         }
         return result;
     }

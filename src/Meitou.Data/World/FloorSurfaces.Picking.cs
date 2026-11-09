@@ -5,23 +5,19 @@ namespace Meitou.Data.World;
 public sealed partial class FloorSurfaces
 {
     /// <summary>
-    /// The nearest collision hit on floors up to the viewed floor. Walls drop the destination onto a floor beneath the hit; stairs and landings
-    /// retain their collision height. Hidden upper floors do not intercept the ray.
+    /// The nearest collision hit on floors up to the viewed floor. Walls drop the destination onto a floor beneath the hit;
+    /// stairs and landings retain their collision height. Hidden upper floors do not intercept the ray.
     /// </summary>
     public (float Distance, Vector3 Position)? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance)
     {
         (float Distance, Vector3 Position)? best = null;
         foreach (var s in _surfaces)
         {
-            if (s.Floor > floor || !RayBox(origin, direction, new(s.Min.X, s.YMin, s.Min.Y), new(s.Max.X, s.YMax, s.Max.Y), maxDistance))
-                continue;
+            if (s.Floor > floor || !RayBox(origin, direction, new(s.Min.X, s.YMin, s.Min.Y), new(s.Max.X, s.YMax, s.Max.Y), maxDistance)) continue;
             for (int i = 0; i + 2 < s.Corners.Length; i += 3)
             {
-                var a = s.Corners[i];
-                var b = s.Corners[i + 1];
-                var c = s.Corners[i + 2];
-                if (RayTriangle(origin, direction, a, b, c) is not { } t || t > maxDistance || best is { } previous && t >= previous.Distance)
-                    continue;
+                var a = s.Corners[i]; var b = s.Corners[i + 1]; var c = s.Corners[i + 2];
+                if (RayTriangle(origin, direction, a, b, c) is not { } t || t > maxDistance || best is { } previous && t >= previous.Distance) continue;
                 var hit = origin + direction * t;
                 if (Walkable(a, b, c)) best = (t, hit);
                 else
@@ -36,9 +32,8 @@ public sealed partial class FloorSurfaces
     }
 
     /// <summary>
-    /// The upward unit normal of the floor surface a ray straight down from <paramref name="point"/> (raised by <paramref name="reach"/>) meets
-    /// first, on floors up to the viewed one; null when it meets none. The indoor ghost's single slope ray (<c>FUN_1404daa20</c>, <b>Verified</b>:
-    /// one ray at its origin when it has a parent building).
+    /// The upward unit normal of the floor surface a ray straight down from <paramref name="point"/> (raised by <paramref name="reach"/>) meets first, on floors up to the viewed one;
+    /// null when it meets none. The indoor ghost's single slope ray (<c>FUN_1404daa20</c>, <b>Verified</b>: one ray at its origin when it has a parent building).
     /// </summary>
     public Vector3? NormalBelow(Vector3 point, int floor, float reach)
     {
@@ -47,13 +42,10 @@ public sealed partial class FloorSurfaces
         Vector3? normal = null;
         foreach (var s in _surfaces)
         {
-            if (s.Floor > floor || point.X < s.Min.X || point.X > s.Max.X || point.Z < s.Min.Y || point.Z > s.Max.Y)
-                continue;
+            if (s.Floor > floor || point.X < s.Min.X || point.X > s.Max.X || point.Z < s.Min.Y || point.Z > s.Max.Y) continue;
             foreach (int i in s.Grid.At(new Vector2(point.X, point.Z)))
             {
-                var a = s.Corners[i];
-                var b = s.Corners[i + 1];
-                var c = s.Corners[i + 2];
+                var a = s.Corners[i]; var b = s.Corners[i + 1]; var c = s.Corners[i + 2];
                 if (RayTriangle(origin, -Vector3.UnitY, a, b, c) is not { } t || t >= nearest) continue;
                 var n = Vector3.Cross(b - a, c - a);
                 if (n.LengthSquared() < 1e-12f) continue;
@@ -70,14 +62,10 @@ public sealed partial class FloorSurfaces
         const float wallReach = 4;
         foreach (var s in _surfaces)
         {
-            if (s.Floor > floor || point.X < s.Min.X - wallReach || point.X > s.Max.X + wallReach || point.Z < s.Min.Y - wallReach
-                    || point.Z > s.Max.Y + wallReach)
-                continue;
+            if (s.Floor > floor || point.X < s.Min.X - wallReach || point.X > s.Max.X + wallReach || point.Z < s.Min.Y - wallReach || point.Z > s.Max.Y + wallReach) continue;
             for (int i = 0; i + 2 < s.Corners.Length; i += 3)
             {
-                var a = s.Corners[i];
-                var b = s.Corners[i + 1];
-                var c = s.Corners[i + 2];
+                var a = s.Corners[i]; var b = s.Corners[i + 1]; var c = s.Corners[i + 2];
                 if (!Walkable(a, b, c)) continue;
                 var q = new Vector2(point.X, point.Z);
                 Vector3 target;
@@ -89,14 +77,9 @@ public sealed partial class FloorSurfaces
                     Vector3? edge = null;
                     for (int k = 0; k < 3; k++)
                     {
-                        var p = s.Corners[i + k];
-                        var end = s.Corners[i + (k + 1) % 3];
+                        var p = s.Corners[i + k]; var end = s.Corners[i + (k + 1) % 3];
                         var delta = new Vector2(end.X - p.X, end.Z - p.Z);
-                        float along = delta.LengthSquared() < 1e-9f ? 0 : Math.Clamp(
-                            Vector2.Dot(q - new Vector2(p.X, p.Z), delta) / delta.LengthSquared(),
-                            0,
-                            1
-                        );
+                        float along = delta.LengthSquared() < 1e-9f ? 0 : Math.Clamp(Vector2.Dot(q - new Vector2(p.X, p.Z), delta) / delta.LengthSquared(), 0, 1);
                         var candidate = Vector3.Lerp(p, end, along);
                         float distance = Vector2.DistanceSquared(q, new(candidate.X, candidate.Z));
                         if (distance > nearest) continue;

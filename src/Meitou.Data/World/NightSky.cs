@@ -4,9 +4,9 @@ using Meitou.Data.Textures;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// SkyX's starfield as Kenshi lays it on the dome (docs/formats/sky.md "Stars"): the dome's texture coordinates are an azimuthal-equidistant map
-/// round the zenith, scaled by 0.1 in the skydome shader, and the shader shifts them along both axes by SkyX's time × 0.05. Kenshi runs that time at
-/// the game's hours since the load. Verified: <c>SkyX_x64.dll</c> <c>MeshManager::updateGeometry</c> and <c>SkyX::update</c>,
+/// SkyX's starfield as Kenshi lays it on the dome (docs/formats/sky.md "Stars"): the dome's texture coordinates are an azimuthal-equidistant
+/// map round the zenith, scaled by 0.1 in the skydome shader, and the shader shifts them along both axes by SkyX's time × 0.05. Kenshi runs
+/// that time at the game's hours since the load. Verified: <c>SkyX_x64.dll</c> <c>MeshManager::updateGeometry</c> and <c>SkyX::update</c>,
 /// <c>SkyX_Skydome.hlsl</c>, and the sky update (<c>kenshi_x64.exe</c> FUN_14066f190) setting the time multiplier.
 /// </summary>
 public static class Starfield
@@ -44,10 +44,10 @@ public static class Starfield
 
 /// <summary>
 /// One of the two planets the game hangs in its sky (docs/formats/sky.md "Planets"): <c>planet01.mesh</c> with the material
-/// <paramref name="Material"/> (<c>materials/forward/moon.material</c>: the texture lit by the sun, plus the sky's Rayleigh colour), placed in the
-/// fixed world direction <paramref name="Direction"/> from the camera, scaled by <paramref name="Scale"/>, turning about its own y axis by
-/// <paramref name="SpinPerDay"/> radians per game day. Verified: the sky creation (<c>kenshi_x64.exe</c> FUN_14066e380), the planet's constructor
-/// FUN_14066c920 and its per-frame update FUN_140670ed0.
+/// <paramref name="Material"/> (<c>materials/forward/moon.material</c>: the texture lit by the sun, plus the sky's Rayleigh colour), placed in
+/// the fixed world direction <paramref name="Direction"/> from the camera, scaled by <paramref name="Scale"/>, turning about its own y axis by
+/// <paramref name="SpinPerDay"/> radians per game day. Verified: the sky creation (<c>kenshi_x64.exe</c> FUN_14066e380), the planet's
+/// constructor FUN_14066c920 and its per-frame update FUN_140670ed0.
 /// </summary>
 public sealed record SkyPlanet(string Material, string Texture, Vector3 Direction, float Scale, float SpinPerDay)
 {
@@ -81,8 +81,8 @@ public sealed record SkyPlanet(string Material, string Texture, Vector3 Directio
     public float AngularRadius => MathF.Asin(SinRadius);
 
     /// <summary>
-    /// The turn about y after <paramref name="day"/> days and <paramref name="hour"/> hours: the update takes the game's whole minutes, <c>((day · 24
-    /// + hour) · 60 + minute) · SpinPerDay / 1440</c>. Wrapped to 0..2π.
+    /// The turn about y after <paramref name="day"/> days and <paramref name="hour"/> hours: the update takes the game's whole minutes,
+    /// <c>((day · 24 + hour) · 60 + minute) · SpinPerDay / 1440</c>. Wrapped to 0..2π.
     /// </summary>
     public float Spin(int day, float hour)
     {
@@ -109,18 +109,17 @@ public sealed record SkyPlanet(string Material, string Texture, Vector3 Directio
 
 /// <summary>
 /// Meitou's <c>planetshine</c> (docs/formats/sky.md "Planetshine"; the viewer's own feature, the game has nothing like it): the big planet as the
-/// night's light. The planet is a Lambert sphere lit by the sun, so it sends the land the fraction <c>E / E_sun = A · (Ω / π) · Φ(α)</c> of the sun's
-/// irradiance: <c>A</c> its mean albedo, <c>Ω = 2π (1 − cos r)</c> its solid angle, <c>Φ</c> the Lambert phase function of the phase angle <c>α</c>
-/// (sun–planet–observer). The viewer multiplies the ratio by the sun's light in the game's own units (<see cref="KenshiLighting.SunLight"/>) and a
-/// strength. Moon2 (an eighth of the solid angle) is left out.
+/// night's light. The planet is a Lambert sphere lit by the sun, so it sends the land the fraction
+/// <c>E / E_sun = A · (Ω / π) · Φ(α)</c> of the sun's irradiance: <c>A</c> its mean albedo, <c>Ω = 2π (1 − cos r)</c> its solid angle, <c>Φ</c> the
+/// Lambert phase function of the phase angle <c>α</c> (sun–planet–observer). The viewer multiplies the ratio by the sun's light in the game's
+/// own units (<see cref="KenshiLighting.SunLight"/>) and a strength. Moon2 (an eighth of the solid angle) is left out.
 /// </summary>
 public static class Planetshine
 {
     /// <summary>
-    /// Below <see cref="FullBelow"/> the planet is the only light (the game's sun light is zero from −0.093: <see cref="KenshiLighting.Daylight"/>);
-    /// above <see cref="NoneAbove"/> (2.3° under the horizon, the sun still a quarter as bright as at the horizon) it adds nothing; smoothstep
-    /// between, so the planet comes in only as the sun's last light fades, in deep twilight, and never overlaps the light shafts (which end at
-    /// −0.02).
+    /// Below <see cref="FullBelow"/> the planet is the only light (the game's sun light is zero from −0.093: <see cref="KenshiLighting.Daylight"/>); above
+    /// <see cref="NoneAbove"/> (2.3° under the horizon, the sun still a quarter as bright as at the horizon) it adds nothing; smoothstep between, so the
+    /// planet comes in only as the sun's last light fades, in deep twilight, and never overlaps the light shafts (which end at −0.02).
     /// </summary>
     public const float FullBelow = -0.093f, NoneAbove = -0.04f;
 
@@ -136,8 +135,8 @@ public static class Planetshine
 
     /// <summary>
     /// The phase angle in radians: at the planet, between the directions to the sun and to the observer. Both are far away, so the sun's direction
-    /// <paramref name="sun"/> (from the observer) is also the direction from the planet, and the observer lies in <c>−towardsPlanet</c>: <c>cos α =
-    /// −sun · towardsPlanet</c>. 0 with the sun behind the observer (a full planet), π with the sun behind the planet (new).
+    /// <paramref name="sun"/> (from the observer) is also the direction from the planet, and the observer lies in <c>−towardsPlanet</c>:
+    /// <c>cos α = −sun · towardsPlanet</c>. 0 with the sun behind the observer (a full planet), π with the sun behind the planet (new).
     /// </summary>
     public static float PhaseAngle(Vector3 sun, Vector3 towardsPlanet) =>
         MathF.Acos(Math.Clamp(-Vector3.Dot(Vector3.Normalize(sun), Vector3.Normalize(towardsPlanet)), -1, 1));
@@ -158,18 +157,17 @@ public static class Planetshine
     public static float IrradianceRatio(float albedo, float solidAngle, float alpha) => albedo * solidAngle / MathF.PI * LambertPhase(alpha);
 
     /// <summary>
-    /// The planet's light in the unit of <paramref name="sunLight"/> (the game's <c>uAtmoSunLight</c> scale), for the sun in direction
-    /// <paramref name="sun"/>: <c>sunLight · albedo · Ω / π · Φ(α) · strength</c>, the albedo per colour channel.
+    /// The planet's light in the unit of <paramref name="sunLight"/> (the game's <c>uAtmoSunLight</c> scale), for the sun in direction <paramref name="sun"/>:
+    /// <c>sunLight · albedo · Ω / π · Φ(α) · strength</c>, the albedo per colour channel.
     /// </summary>
     public static Vector3 Light(Vector3 sun, SkyPlanet planet, Vector3 albedo, float sunLight, float strength) =>
         sunLight * strength * albedo * IrradianceRatio(1, SolidAngle(planet.AngularRadius), PhaseAngle(sun, planet.Towards));
 
     /// <summary>
-    /// The radiance of the planet's disc, without any strength: what a mirror shows of it, and what the water's glint should be (the strength-scaled
-    /// light is an irradiance boosted 60 times, a hot spot where the planet itself is dim). The sky pass draws <c>albedo · saturate(n · sun)</c>,
-    /// brightest at the disc's centre (<c>cos α</c>), but that centre reaches the terminator at a quarter phase and is dark from there while a lit
-    /// crescent remains; the glint stands for the whole disc, so it takes the Lambert phase function instead (<c>albedo · Φ(α)</c>, the same Φ the
-    /// land's light uses): 1 for a full disc, 0.32 at a quarter, 0 for a new planet.
+    /// The radiance of the planet's disc, without any strength: what a mirror shows of it, and what the water's glint should be (the strength-scaled light is an
+    /// irradiance boosted 60 times, a hot spot where the planet itself is dim). The sky pass draws <c>albedo · saturate(n · sun)</c>, brightest at the disc's centre
+    /// (<c>cos α</c>), but that centre reaches the terminator at a quarter phase and is dark from there while a lit crescent remains; the glint stands for the whole disc, so
+    /// it takes the Lambert phase function instead (<c>albedo · Φ(α)</c>, the same Φ the land's light uses): 1 for a full disc, 0.32 at a quarter, 0 for a new planet.
     /// </summary>
     public static Vector3 DiscRadiance(Vector3 sun, SkyPlanet planet, Vector3 albedo) =>
         albedo * MathF.Max(LambertPhase(PhaseAngle(sun, planet.Towards)), 0);   // the phase function is a hair negative (1e-8) at a new planet
@@ -185,10 +183,10 @@ public static class Planetshine
     }
 
     /// <summary>
-    /// The one directional light that stands for the sun and the planet together: the colours add, the direction is the two directions weighted by
-    /// the square root of their luminance (it follows whichever is brighter, and the square root, against the luminance itself, spreads the swing
-    /// over twice as much of the sun's fade so the shadows turn rather than snap). With no planet light the sun's direction and colour come back
-    /// unchanged. Both directions are unit vectors.
+    /// The one directional light that stands for the sun and the planet together: the colours add, the direction is the two directions
+    /// weighted by the square root of their luminance (it follows whichever is brighter, and the square root, against the luminance itself, spreads
+    /// the swing over twice as much of the sun's fade so the shadows turn rather than snap). With no planet light the sun's direction and colour
+    /// come back unchanged. Both directions are unit vectors.
     /// </summary>
     public static (Vector3 Direction, Vector3 Light) Combine(Vector3 sunDirection, Vector3 sunLight, Vector3 planetDirection, Vector3 planetLight)
     {
@@ -216,9 +214,7 @@ public static class Planetshine
             for (int x = 0; x < map.Width; x++)
             {
                 int i = (y * map.Width + x) * 4;
-                r += map.Pixels[i] * w;
-                g += map.Pixels[i + 1] * w;
-                b += map.Pixels[i + 2] * w;
+                r += map.Pixels[i] * w; g += map.Pixels[i + 1] * w; b += map.Pixels[i + 2] * w;
                 total += w;
             }
         }
@@ -237,11 +233,11 @@ public static class Planetshine
 }
 
 /// <summary>
-/// Meitou's <c>night</c> switch, "night air" (docs/formats/sky.md "Night air"; the viewer's own feature, the game has nothing like it). The game's
-/// haze colour is SkyX's sunlit in-scattering, which is black once the sun is down, so everything past 0.6 D fades to black against a black sky.
-/// Meitou gives the air a faint radiance of its own at night: airglow, plus the big planet's light scattered by the air. The haze fades the far land
-/// into it and the sky adds the same colour above the horizon, falling off with the height, so the two meet without a seam. This class is the
-/// reference for the numbers the shaders get; the arithmetic is in <c>AtmosphereShaders</c> (<c>atmoNightAir</c>).
+/// Meitou's <c>night</c> switch, "night air" (docs/formats/sky.md "Night air"; the viewer's own feature, the game has nothing like it). The game's haze
+/// colour is SkyX's sunlit in-scattering, which is black once the sun is down, so everything past 0.6 D fades to black against a black sky. Meitou gives
+/// the air a faint radiance of its own at night: airglow, plus the big planet's light scattered by the air. The haze fades the far land into it and the
+/// sky adds the same colour above the horizon, falling off with the height, so the two meet without a seam. This class is the reference for the numbers
+/// the shaders get; the arithmetic is in <c>AtmosphereShaders</c> (<c>atmoNightAir</c>).
 /// </summary>
 public static class NightAir
 {
@@ -252,9 +248,8 @@ public static class NightAir
     public static readonly Vector3 Airglow = new(0.030f, 0.045f, 0.068f);
 
     /// <summary>
-    /// The share of the planet's light (in the light units of <see cref="Planetshine.Light"/>, luminance) the air sends back towards the eye, and its
-    /// colour (the air is blue: Rayleigh). Unknown physically; chosen by eye so that a gibbous planet adds about half the airglow and a thin crescent
-    /// next to nothing.
+    /// The share of the planet's light (in the light units of <see cref="Planetshine.Light"/>, luminance) the air sends back towards the eye, and its colour
+    /// (the air is blue: Rayleigh). Unknown physically; chosen by eye so that a gibbous planet adds about half the airglow and a thin crescent next to nothing.
     /// </summary>
     public const float PlanetGain = 0.25f;
     public static readonly Vector3 PlanetTint = new(0.8f, 1.0f, 1.4f);
@@ -266,16 +261,14 @@ public static class NightAir
     public const float FalloffHeight = 0.2f;
 
     /// <summary>
-    /// The night air's colour at the horizon at full night: <see cref="Airglow"/> plus <see cref="PlanetGain"/> times the planet's light (its
-    /// luminance, as <paramref name="planetLight"/> in the unit <see cref="Planetshine.Light"/> gives) in <see cref="PlanetTint"/>. A thin crescent
-    /// (light near 0) leaves the airglow.
+    /// The night air's colour at the horizon at full night: <see cref="Airglow"/> plus <see cref="PlanetGain"/> times the planet's light (its luminance, as
+    /// <paramref name="planetLight"/> in the unit <see cref="Planetshine.Light"/> gives) in <see cref="PlanetTint"/>. A thin crescent (light near 0) leaves the airglow.
     /// </summary>
     public static Vector3 Colour(Vector3 planetLight) => Airglow + PlanetGain * Planetshine.Luminance(planetLight) * PlanetTint;
 
     /// <summary>
-    /// How much night air there is at the sun's height <paramref name="sunY"/>: the planetshine's deep-twilight window (1 up to −0.093, 0 from −0.04,
-    /// smoothstep between), so the sunlit haze fades out as the sun's last light does and the night air comes in while it does, never over the
-    /// daylight.
+    /// How much night air there is at the sun's height <paramref name="sunY"/>: the planetshine's deep-twilight window (1 up to −0.093, 0 from −0.04, smoothstep
+    /// between), so the sunlit haze fades out as the sun's last light does and the night air comes in while it does, never over the daylight.
     /// </summary>
     public static float Weight(float sunY) => Planetshine.Weight(sunY);
 
@@ -286,9 +279,9 @@ public static class NightAir
     public static float HorizonFalloff(float y) => MathF.Exp(-MathF.Max(y, 0) / FalloffHeight);
 
     /// <summary>
-    /// The height (sine of elevation) over which the air in front of a planet thins to 1/e above the horizon. The air hides all of a planet's light
-    /// at the horizon (times the haze's strength, as it does for far land) and less above it. Chosen by eye, no physical basis: a body low over the
-    /// horizon fades into the glow as far hazed ridges do, one 20 degrees up barely.
+    /// The height (sine of elevation) over which the air in front of a planet thins to 1/e above the horizon. The air hides all of a planet's light at the horizon
+    /// (times the haze's strength, as it does for far land) and less above it. Chosen by eye, no physical basis: a body low over the horizon fades into the glow as
+    /// far hazed ridges do, one 20 degrees up barely.
     /// </summary>
     public const float VeilHeight = 0.15f;
 
@@ -296,11 +289,7 @@ public static class NightAir
     /// The share of a planet's light the night air in front of it hides, towards a direction of height <paramref name="y"/> at the sun's height
     /// <paramref name="sunY"/> (0 by day and in Faithful, where the planet is drawn as the game does).
     /// </summary>
-    public static float PlanetVeil(
-        float sunY,
-        float y,
-        float hazeStrength = 1f
-    ) => Math.Clamp(Weight(sunY) * hazeStrength * MathF.Exp(-MathF.Max(y, 0) / VeilHeight), 0, 1);
+    public static float PlanetVeil(float sunY, float y, float hazeStrength = 1f) => Math.Clamp(Weight(sunY) * hazeStrength * MathF.Exp(-MathF.Max(y, 0) / VeilHeight), 0, 1);
 
     /// <summary>
     /// The night air's radiance towards a direction of height <paramref name="y"/> at the sun's height <paramref name="sunY"/>: what the haze adds to

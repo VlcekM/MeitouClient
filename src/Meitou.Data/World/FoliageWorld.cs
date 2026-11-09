@@ -4,9 +4,10 @@ using Meitou.Content;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Everything the foliage placer reads, opened once, so a zone's foliage is one <see cref="Zone"/> call (docs/formats/foliage.md): the FOLIAGE
-/// catalog, the heightmap (its own handle), the blend file's per-zone biome list, <c>biomemap.png</c>, the overlay tiles (cached) and the towns with
-/// their <c>no-foliage range</c>. Not thread-safe: use one instance per worker thread.
+/// Everything the foliage placer reads, opened once, so a zone's foliage is one <see cref="Zone"/> call
+/// (docs/formats/foliage.md): the FOLIAGE catalog, the heightmap (its own handle), the blend file's per-zone biome list,
+/// <c>biomemap.png</c>, the overlay tiles (cached) and the towns with their <c>no-foliage range</c>.
+/// Not thread-safe: use one instance per worker thread.
 /// </summary>
 public sealed class FoliageWorld : IDisposable
 {
@@ -36,9 +37,8 @@ public sealed class FoliageWorld : IDisposable
     public FoliageCatalog Catalog { get; }
 
     /// <summary>
-    /// The towns the player's faction owned when the world was loaded, by <see cref="TownKey"/> (set by the host after a load or a new game; a
-    /// snapshot: a town founded or captured later changes the placement of resource rocks only when its zone is placed again, docs/formats/foliage.md
-    /// "Towns").
+    /// The towns the player's faction owned when the world was loaded, by <see cref="TownKey"/> (set by the host after a load or a new game; a snapshot: a town founded or captured later changes
+    /// the placement of resource rocks only when its zone is placed again, docs/formats/foliage.md "Towns").
     /// </summary>
     public static IReadOnlySet<(int X, int Z)> PlayerTowns { get; set; } = new HashSet<(int, int)>();
 
@@ -55,11 +55,7 @@ public sealed class FoliageWorld : IDisposable
         var list = new List<FoliageTown>();
         foreach (var t in world.Towns())
             if (db.Find(t.TownId) is { } record && record.GetInt("type") != BuildingTowns.NestMarkerType)
-                list.Add(new FoliageTown(
-                    new Vector2(t.Position.X, t.Position.Z),
-                    record.GetFloat("no-foliage range", 2000),
-                    PlayerTowns.Contains(TownKey(t.Position.X, t.Position.Z))
-                ));
+                list.Add(new FoliageTown(new Vector2(t.Position.X, t.Position.Z), record.GetFloat("no-foliage range", 2000), PlayerTowns.Contains(TownKey(t.Position.X, t.Position.Z))));
         return list;
     }
 
@@ -90,8 +86,7 @@ public sealed class FoliageWorld : IDisposable
         byte mask = _blend.SlotMask(cx, cz, u0 + inset, v0 + inset, u0 + du - inset, v0 + du - inset);
         var list = new List<uint>();
         for (int s = 0; s < BlendInfoFile.SlotsPerCell; s++)
-            if ((BlendInfoFile.MaskSlots(mask) & (1 << s)) != 0 && _blend.Slot(cx, cz, s) is var c && c != 0 && !list.Contains(c))
-                list.Add(c);
+            if ((BlendInfoFile.MaskSlots(mask) & (1 << s)) != 0 && _blend.Slot(cx, cz, s) is var c && c != 0 && !list.Contains(c)) list.Add(c);
         return list;
     }
 
@@ -114,9 +109,9 @@ public sealed class FoliageWorld : IDisposable
     public FoliageZone Zone(ZoneCoordinate zone) => Load(zone).Zone;
 
     /// <summary>
-    /// The foliage of one zone and the ground it was placed on (for grass blades); null ground outside the grid. <paramref name="farOnly"/>: only the
-    /// far layers when that is exact (<see cref="FoliageLayout.Place"/>). With a layout cache a zone placed before (same data and code) is read back
-    /// instead.
+    /// The foliage of one zone and the ground it was placed on (for grass blades); null ground outside the grid.
+    /// <paramref name="farOnly"/>: only the far layers when that is exact (<see cref="FoliageLayout.Place"/>).
+    /// With a layout cache a zone placed before (same data and code) is read back instead.
     /// </summary>
     public (FoliageZone Zone, FoliageGround? Ground) Load(ZoneCoordinate zone, bool farOnly = false)
     {
@@ -126,8 +121,8 @@ public sealed class FoliageWorld : IDisposable
     }
 
     /// <summary>
-    /// <see cref="Load"/> with the instances grouped for the renderer (<see cref="GroupedFoliageZone"/>, whose zone has no instance list): a layout
-    /// read back from the cache is grouped straight from the file's records, a placed one from its list (which is then emptied).
+    /// <see cref="Load"/> with the instances grouped for the renderer (<see cref="GroupedFoliageZone"/>, whose zone has no instance list): a layout read back
+    /// from the cache is grouped straight from the file's records, a placed one from its list (which is then emptied).
     /// </summary>
     public GroupedFoliageZone LoadGrouped(ZoneCoordinate zone, bool farOnly = false)
     {

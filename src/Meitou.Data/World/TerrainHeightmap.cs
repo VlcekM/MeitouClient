@@ -3,8 +3,9 @@ using Meitou.Content;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The world heightmap, <c>data/newland/land/fullmap.tif</c>: 16385 × 16385 unsigned 16-bit samples, column along world +X, row along world +Z,
-/// <see cref="WorldLayout.RawToHeight"/> to world units (docs/formats/terrain.md). Reads from the file on demand.
+/// The world heightmap, <c>data/newland/land/fullmap.tif</c>: 16385 × 16385 unsigned 16-bit samples, column
+/// along world +X, row along world +Z, <see cref="WorldLayout.RawToHeight"/> to world units
+/// (docs/formats/terrain.md). Reads from the file on demand.
 /// </summary>
 public sealed class TerrainHeightmap : IDisposable
 {
@@ -29,8 +30,7 @@ public sealed class TerrainHeightmap : IDisposable
         if (image.BitsPerSample != 16 || image.Width != image.Height)
         {
             image.Dispose();
-            throw new InvalidDataException(
-                $"Heightmap must be a square 16-bit image, got {image.Width}x{image.Height} at {image.BitsPerSample} bits.");
+            throw new InvalidDataException($"Heightmap must be a square 16-bit image, got {image.Width}x{image.Height} at {image.BitsPerSample} bits.");
         }
         return new TerrainHeightmap(image);
     }
@@ -40,8 +40,8 @@ public sealed class TerrainHeightmap : IDisposable
     public void ReadRow(int row, Span<ushort> destination) => Image.ReadRow(row, destination);
 
     /// <summary>
-    /// Bilinearly interpolated world height at (<paramref name="x"/>, <paramref name="z"/>), assuming this heightmap covers the whole world
-    /// (<see cref="WorldLayout"/>). Points outside are clamped to the edge.
+    /// Bilinearly interpolated world height at (<paramref name="x"/>, <paramref name="z"/>), assuming this
+    /// heightmap covers the whole world (<see cref="WorldLayout"/>). Points outside are clamped to the edge.
     /// </summary>
     public float HeightAt(double x, double z)
     {
@@ -61,9 +61,9 @@ public sealed class TerrainHeightmap : IDisposable
     public const float BuildingGroundFloor = 100;
 
     /// <summary>
-    /// The ground an outdoor building stands on in the original (docs/formats/zones.md "Placement height"): each zone keeps a coarse copy of its
-    /// heights, every other sample (36 units apart), interpolated bilinearly, and nothing lower than <see cref="BuildingGroundFloor"/>. Up to ~16
-    /// units off <see cref="HeightAt"/> on steep ground. Not thread-safe (it reads the file).
+    /// The ground an outdoor building stands on in the original (docs/formats/zones.md "Placement height"): each zone keeps a coarse copy of its heights, every
+    /// other sample (36 units apart), interpolated bilinearly, and nothing lower than <see cref="BuildingGroundFloor"/>. Up to ~16 units off <see cref="HeightAt"/>
+    /// on steep ground. Not thread-safe (it reads the file).
     /// </summary>
     public float BuildingGroundAt(double x, double z)
     {
@@ -79,8 +79,8 @@ public sealed class TerrainHeightmap : IDisposable
     }
 
     /// <summary>
-    /// Every <paramref name="step"/>-th sample on both axes (point sampling, starting at 0), streaming the file once. Returns a row-major grid of
-    /// <c>(Size - 1) / step + 1</c> samples per side.
+    /// Every <paramref name="step"/>-th sample on both axes (point sampling, starting at 0), streaming the file
+    /// once. Returns a row-major grid of <c>(Size - 1) / step + 1</c> samples per side.
     /// </summary>
     public ushort[] Downsample(int step, out int size)
     {
@@ -100,9 +100,9 @@ public sealed class TerrainHeightmap : IDisposable
     }
 
     /// <summary>
-    /// Reads a window of <paramref name="columns"/> × <paramref name="rows"/> points, every <paramref name="step"/>-th sample from
-    /// (<paramref name="column0"/>, <paramref name="row0"/>), reading each needed row once. Points past the heightmap's edge take the nearest edge
-    /// sample.
+    /// Reads a window of <paramref name="columns"/> × <paramref name="rows"/> points, every <paramref name="step"/>-th
+    /// sample from (<paramref name="column0"/>, <paramref name="row0"/>), reading each needed row once. Points past the
+    /// heightmap's edge take the nearest edge sample.
     /// </summary>
     public HeightWindow ReadWindow(int column0, int row0, int columns, int rows, int step = 1)
     {
@@ -147,8 +147,8 @@ public sealed class TerrainHeightmap : IDisposable
 }
 
 /// <summary>
-/// A square tile of raw little-endian unsigned 16-bit samples without a header, as in the legacy <c>data/land/grasssplits/fullmap.X.Y.raw</c> (257 ×
-/// 257). Neighbouring tiles share their edge samples.
+/// A square tile of raw little-endian unsigned 16-bit samples without a header, as in the legacy
+/// <c>data/land/grasssplits/fullmap.X.Y.raw</c> (257 × 257). Neighbouring tiles share their edge samples.
 /// </summary>
 public sealed class RawHeightTile
 {

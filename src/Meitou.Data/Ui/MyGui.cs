@@ -87,8 +87,8 @@ public sealed record MyGuiLayout(string Version, IReadOnlyList<MyGuiWidget> Root
     public MyGuiWidget? Find(string name) => Index().ByName.GetValueOrDefault(name);
 
     /// <summary>
-    /// The flattened tree, made once per tree (the HUD asks it every frame). Kept by the roots list rather than in a field, which a <c>with</c> copy
-    /// would carry over to other roots and which would take part in the record's equality.
+    /// The flattened tree, made once per tree (the HUD asks it every frame). Kept by the roots list rather than in a field, which a <c>with</c> copy would carry over
+    /// to other roots and which would take part in the record's equality.
     /// </summary>
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<MyGuiWidget>, WidgetIndex> Indexes = new();
     WidgetIndex Index() => Indexes.GetValue(Roots, static roots => new WidgetIndex(roots));
@@ -138,23 +138,14 @@ public sealed class MyGuiResources
             result.Documents[path] = new XElement(root);
             foreach (var child in root.Elements())
             {
-                if (child.Name == "List")
-                {
-                    Visit(MyGuiReader.Attribute(child, "file"));
-                    continue;
-                }
+                if (child.Name == "List") { Visit(MyGuiReader.Attribute(child, "file")); continue; }
                 string key = MyGuiReader.Attribute(child, "name");
-                if (child.Name == "Layer")
-                {
-                    if (!result.Layers.Contains(key)) result.Layers.Add(key);
-                }
+                if (child.Name == "Layer") { if (!result.Layers.Contains(key)) result.Layers.Add(key); }
                 else if (child.Name == "Resource")
                 {
                     result.Resources[key] = new XElement(child);
-                    if (MyGuiReader.Attribute(child, "type") == "ResourceLayout")
-                        result.Templates[key] = new XElement(child);
-                    if (MyGuiReader.Attribute(child, "type") == "ResourceSkin")
-                        result.Skins[key] = MyGuiReader.Skin(child);
+                    if (MyGuiReader.Attribute(child, "type") == "ResourceLayout") result.Templates[key] = new XElement(child);
+                    if (MyGuiReader.Attribute(child, "type") == "ResourceSkin") result.Skins[key] = MyGuiReader.Skin(child);
                 }
             }
         }
@@ -194,10 +185,7 @@ public static class MyGuiReader
 
     internal static string Attribute(XElement e, string name) => (string?)e.Attribute(name) ?? "";
     static Dictionary<string, string> Values(XElement e, string kind) => e.Elements(kind)
-        .Aggregate(new Dictionary<string, string>(StringComparer.Ordinal), (
-            map,
-            p
-        ) => { map[Attribute(p, "key")] = Attribute(p, "value"); return map; });
+        .Aggregate(new Dictionary<string, string>(StringComparer.Ordinal), (map, p) => { map[Attribute(p, "key")] = Attribute(p, "value"); return map; });
     static IReadOnlyDictionary<string, string> SkinStateValues(XElement state)
     {
         var values = Values(state, "Property");

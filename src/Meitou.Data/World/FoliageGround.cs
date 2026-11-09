@@ -5,9 +5,10 @@ using Meitou.Data.Textures;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The terrain the foliage placer sees in one zone (docs/formats/foliage.md, "Ground"): a 129 × 129 height grid 36 units apart from the zone's
-/// minimum corner (every second heightmap sample), with the game's bilinear height, its slope measure (the larger height step to the previous sample
-/// along X and the next one along Z, in units per 36 units) and a normal from central differences.
+/// The terrain the foliage placer sees in one zone (docs/formats/foliage.md, "Ground"): a 129 × 129 height grid 36 units
+/// apart from the zone's minimum corner (every second heightmap sample), with the game's bilinear height, its slope
+/// measure (the larger height step to the previous sample along X and the next one along Z, in units per 36 units) and a
+/// normal from central differences.
 /// </summary>
 public sealed class FoliageGround
 {
@@ -87,8 +88,8 @@ public sealed class FoliageGround
 
 /// <summary>
 /// The overlay map (<c>new_overlay.X.Y.png</c>, 36 units per pixel) around one zone as the foliage placer reads and writes it
-/// (docs/formats/foliage.md, "Overlay"): R grass coverage (generated from the GRASS noise), G grass spots, B dirt, A road. Pixel lookups are clamped
-/// to the overlay tile the zone lies in, as the game's are.
+/// (docs/formats/foliage.md, "Overlay"): R grass coverage (generated from the GRASS noise), G grass spots, B dirt, A road.
+/// Pixel lookups are clamped to the overlay tile the zone lies in, as the game's are.
 /// </summary>
 public sealed class FoliageOverlay
 {
@@ -103,8 +104,7 @@ public sealed class FoliageOverlay
     /// <param name="tileRgba">The zone's overlay tile, RGBA rows of <see cref="TilePixels"/>, row = +Z.</param>
     public FoliageOverlay(ZoneCoordinate zone, byte[] tileRgba)
     {
-        if (tileRgba.Length != TilePixels * TilePixels * 4)
-            throw new ArgumentException("Not a 1024² RGBA overlay tile.", nameof(tileRgba));
+        if (tileRgba.Length != TilePixels * TilePixels * 4) throw new ArgumentException("Not a 1024² RGBA overlay tile.", nameof(tileRgba));
         Zone = zone;
         int zonesPerTile = WorldLayout.ZoneCount / TerrainMaps.OverlayTiles;
         TileX = zone.X / zonesPerTile;
@@ -136,14 +136,8 @@ public sealed class FoliageOverlay
     /// <summary>
     /// Tile pixel column of world X (truncated, clamped to the tile), as the game computes it.
     /// </summary>
-    public int PixelX(float x) => x < TileX0 ? 0 : x > TileX0 + TilePixels * PixelSize ? TilePixels - 1 : Math.Min(
-        (int)((x - TileX0) / PixelSize),
-        TilePixels - 1
-    );
-    public int PixelZ(float z) => z < TileZ0 ? 0 : z > TileZ0 + TilePixels * PixelSize ? TilePixels - 1 : Math.Min(
-        (int)((z - TileZ0) / PixelSize),
-        TilePixels - 1
-    );
+    public int PixelX(float x) => x < TileX0 ? 0 : x > TileX0 + TilePixels * PixelSize ? TilePixels - 1 : Math.Min((int)((x - TileX0) / PixelSize), TilePixels - 1);
+    public int PixelZ(float z) => z < TileZ0 ? 0 : z > TileZ0 + TilePixels * PixelSize ? TilePixels - 1 : Math.Min((int)((z - TileZ0) / PixelSize), TilePixels - 1);
 
     /// <summary>
     /// World X/Z of a tile pixel's centre.
@@ -197,16 +191,8 @@ public sealed class FoliageOverlay
     public static byte[] ReadTile(GameInstall install, ZoneCoordinate zone)
     {
         int zonesPerTile = WorldLayout.ZoneCount / TerrainMaps.OverlayTiles;
-        var image = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.OverlayTile(
-            install,
-            "new_overlay",
-            zone.X / zonesPerTile,
-            zone.Y / zonesPerTile
-        )));
-        if (
-            image.Width != TilePixels
-            || image.Height != TilePixels
-        ) throw new InvalidDataException($"Overlay tile is {image.Width}x{image.Height}, not {TilePixels}².");
+        var image = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.OverlayTile(install, "new_overlay", zone.X / zonesPerTile, zone.Y / zonesPerTile)));
+        if (image.Width != TilePixels || image.Height != TilePixels) throw new InvalidDataException($"Overlay tile is {image.Width}x{image.Height}, not {TilePixels}².");
         return image.Pixels;
     }
 }
@@ -225,11 +211,7 @@ public sealed class FoliageBiomeMap(int size, byte[] rgba)
     public uint At(float x, float z)
     {
         float cell = (float)WorldLayout.WorldSize / size;
-        int i = Math.Clamp(
-            (int)((x + WorldLayout.HalfWorldSize) / cell),
-            0,
-            size - 1
-        ), j = Math.Clamp((int)((z + WorldLayout.HalfWorldSize) / cell), 0, size - 1);
+        int i = Math.Clamp((int)((x + WorldLayout.HalfWorldSize) / cell), 0, size - 1), j = Math.Clamp((int)((z + WorldLayout.HalfWorldSize) / cell), 0, size - 1);
         int o = (j * size + i) * 4;
         return (uint)(rgba[o] << 16 | rgba[o + 1] << 8 | rgba[o + 2]);
     }

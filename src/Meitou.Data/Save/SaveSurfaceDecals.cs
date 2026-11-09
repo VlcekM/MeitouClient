@@ -5,10 +5,9 @@ using Meitou.Data.World;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// The blood on walls, floors and objects (Meitou-only, docs/formats/save.md "Terrain decals") as keys of the TERRAIN_DECALS record, which the
-/// original reads by name and so ignores: per mark i from 0, the vec3 <c>meitou sd&lt;i&gt;</c> (centre), the vec4 <c>meitou sdS&lt;i&gt;</c> (angle,
-/// size, life left, 0) and the ints <c>meitou sdK&lt;i&gt;</c> (type | variant &lt;&lt; 8 | floor &lt;&lt; 16) and <c>meitou sdC&lt;i&gt;</c> (colour
-/// ABGR, raw bits). Read until a centre is missing.
+/// The blood on walls, floors and objects (Meitou-only, docs/formats/save.md "Terrain decals") as keys of the TERRAIN_DECALS record, which the original reads by name and so
+/// ignores: per mark i from 0, the vec3 <c>meitou sd&lt;i&gt;</c> (centre), the vec4 <c>meitou sdS&lt;i&gt;</c> (angle, size, life left, 0) and the ints
+/// <c>meitou sdK&lt;i&gt;</c> (type | variant &lt;&lt; 8 | floor &lt;&lt; 16) and <c>meitou sdC&lt;i&gt;</c> (colour ABGR, raw bits). Read until a centre is missing.
 /// </summary>
 public static class SaveSurfaceDecals
 {
@@ -25,8 +24,7 @@ public static class SaveSurfaceDecals
             var shape = record.Vector4S.GetValueOrDefault(Shape + i);
             int kind = record.Ints.GetValueOrDefault(Kind + i);
             if ((kind & 0xFF) > (int)TerrainDecalType.Smear) continue;
-            decals.Add(new SurfaceBloodDecal((TerrainDecalType)(kind & 0xFF), (byte)(kind >> 8), centre, shape.X, shape.Y, shape.Z,
-            unchecked((uint)record.Ints.GetValueOrDefault(Colour + i)),
+            decals.Add(new SurfaceBloodDecal((TerrainDecalType)(kind & 0xFF), (byte)(kind >> 8), centre, shape.X, shape.Y, shape.Z, unchecked((uint)record.Ints.GetValueOrDefault(Colour + i)),
                 (kind >> 16 & 1) != 0));
         }
         return decals;

@@ -1,11 +1,10 @@
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Meitou's night grading (the <c>nightgrade</c> switch; docs/render-post.md "Night grading"). The game has no grading at all; this is the viewer's
-/// own: at night the eye's rods take over and colour fades towards a blue-grey (the Purkinje shift), so the composite blends the scene towards its
-/// rod luminance times a blue tint, by a weight that is 0 by day and rises as the scene's adapted luminance falls, applied less to pixels much
-/// brighter than the adaptation (lamps, the moon, fires keep their colour). This is the C# mirror of the GLSL in <c>PostProcessShaders.Composite</c>
-/// (a test checks the constants match), so the maths can be tested.
+/// Meitou's night grading (the <c>nightgrade</c> switch; docs/render-post.md "Night grading"). The game has no grading at all; this is the viewer's own: at night
+/// the eye's rods take over and colour fades towards a blue-grey (the Purkinje shift), so the composite blends the scene towards its rod luminance times a blue
+/// tint, by a weight that is 0 by day and rises as the scene's adapted luminance falls, applied less to pixels much brighter than the adaptation (lamps, the moon,
+/// fires keep their colour). This is the C# mirror of the GLSL in <c>PostProcessShaders.Composite</c> (a test checks the constants match), so the maths can be tested.
 /// </summary>
 public static class NightGrade
 {
@@ -90,9 +89,8 @@ public static class NightGrade
     }
 
     /// <summary>
-    /// The graded colour. <paramref name="rgb"/> is the exposed linear colour; <paramref name="sceneLuminance"/> the same pixel's luminance in the
-    /// scene's own units (before the exposure) to compare with <paramref name="meanLuminance"/>; <paramref name="strength"/> 0 returns the colour
-    /// unchanged.
+    /// The graded colour. <paramref name="rgb"/> is the exposed linear colour; <paramref name="sceneLuminance"/> the same pixel's luminance in the scene's own units
+    /// (before the exposure) to compare with <paramref name="meanLuminance"/>; <paramref name="strength"/> 0 returns the colour unchanged.
     /// </summary>
     public static (float R, float G, float B) Apply((float R, float G, float B) rgb, float sceneLuminance, float meanLuminance, float strength)
     {

@@ -41,11 +41,7 @@ public static class VolumetricClouds
         uint h = (uint)(((x % period + period) % period) * 73856093)
                ^ (uint)(((y % period + period) % period) * 19349663)
                ^ (uint)(((z % period + period) % period) * 83492791);
-        h ^= h >> 16;
-        h *= 0x7feb352d;
-        h ^= h >> 15;
-        h *= 0x846ca68b;
-        h ^= h >> 16;
+        h ^= h >> 16; h *= 0x7feb352d; h ^= h >> 15; h *= 0x846ca68b; h ^= h >> 16;
         return (h & 0xffffff) / 16777215f;
     }
 
@@ -59,11 +55,7 @@ public static class VolumetricClouds
         f *= f * (new Vector3(3) - 2 * f);
         static float L(float a, float b, float t) => a + (b - a) * t;
         return L(L(L(Hash(x, y, z, period), Hash(x + 1, y, z, period), f.X), L(Hash(x, y + 1, z, period), Hash(x + 1, y + 1, z, period), f.X), f.Y),
-                 L(
-                     L(Hash(x, y, z + 1, period), Hash(x + 1, y, z + 1, period), f.X),
-                     L(Hash(x, y + 1, z + 1, period), Hash(x + 1, y + 1, z + 1, period), f.X),
-                     f.Y
-                 ), f.Z);
+                 L(L(Hash(x, y, z + 1, period), Hash(x + 1, y, z + 1, period), f.X), L(Hash(x, y + 1, z + 1, period), Hash(x + 1, y + 1, z + 1, period), f.X), f.Y), f.Z);
     }
 
     static float Worley(Vector3 p, int period)

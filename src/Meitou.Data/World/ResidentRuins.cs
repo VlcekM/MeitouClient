@@ -3,8 +3,8 @@ using Meitou.Data.Gameplay;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// What housing the residents does to the town buildings, laid out once in the level data before anything reads it, from the same seed-free
-/// assignment the population houses its towns with (<see cref="ResidentHomes.Assign"/>):
+/// What housing the residents does to the town buildings, laid out once in the level data before anything reads it, from the same seed-free assignment the
+/// population houses its towns with (<see cref="ResidentHomes.Assign"/>):
 /// <list type="bullet">
 /// <item>the ruins (docs/game/buildings-production.md "Ruined by residents"): the original's squad setup <c>FUN_14057f1f0</c> destroys a home whose template has
 /// <c>building ruined</c> when the building can be (<c>FUN_14055b520</c>);</item>
@@ -15,8 +15,8 @@ namespace Meitou.Data.World;
 public static class ResidentRuins
 {
     /// <summary>
-    /// Sets the level-data state's <c>destroyed</c> of each building its residents ruin and names each home's layouts as its residents' template
-    /// does; returns how many it ruined. A second call on the same levels does nothing.
+    /// Sets the level-data state's <c>destroyed</c> of each building its residents ruin and names each home's layouts as its residents' template does; returns how
+    /// many it ruined. A second call on the same levels does nothing.
     /// </summary>
     public static int Apply(GameDatabase db, WorldLevelData levels, BuildingLayouts layouts)
     {
@@ -29,11 +29,7 @@ public static class ResidentRuins
             int ruined = 0;
             foreach (var placement in levels.Towns())
             {
-                if (
-                    !buildings.TryGetValue(placement.InstanceId, out var list)
-                    || db.Find(placement.TownId) is not { Type: Fcs.FcsRecordType.Town } record
-                )
-                    continue;
+                if (!buildings.TryGetValue(placement.InstanceId, out var list) || db.Find(placement.TownId) is not { Type: Fcs.FcsRecordType.Town } record) continue;
                 var town = TownData.From(record);
                 var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.Faction } f ? FactionData.From(f) : null;
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
@@ -48,18 +44,16 @@ public static class ResidentRuins
 
     static bool Ruin(GameDatabase db, WorldLevelData levels, TownBuilding b)
     {
-        if (b.Destroyed || b.LevelState is not { } state || db.Find(b.BuildingId) is not { } record || !CanBeDestroyed(db, record))
-            return false;
+        if (b.Destroyed || b.LevelState is not { } state || db.Find(b.BuildingId) is not { } record || !CanBeDestroyed(db, record)) return false;
         state.BoolTable["destroyed"] = true;
         levels.ResidentRuined.Add(b.Key);
         return true;
     }
 
     /// <summary>
-    /// Names the template's <c>layout interior</c> and <c>layout exterior</c> on its home whatever the level state said, an empty one clearing it,
-    /// ruins too (the original's <c>FUN_140552140</c>; a name the building has no layout for places nothing, as in the original). Nothing reads a
-    /// ruin's layouts. The home is named as housing names it (<see cref="DisplayName"/>) and its state names the template, as the original's saved
-    /// state does.
+    /// Names the template's <c>layout interior</c> and <c>layout exterior</c> on its home whatever the level state said, an empty one clearing it, ruins too (the
+    /// original's <c>FUN_140552140</c>; a name the building has no layout for places nothing, as in the original). Nothing reads a ruin's layouts. The home is named
+    /// as housing names it (<see cref="DisplayName"/>) and its state names the template, as the original's saved state does.
     /// </summary>
     static void LayOut(WorldLevelData levels, TownBuilding b, SquadTemplate t)
     {
@@ -81,8 +75,8 @@ public static class ResidentRuins
     public static BuildingNaming Naming(SquadTemplate t, BuildingNaming own) => new(DisplayName(t) ?? own.Name, t.Id);
 
     /// <summary>
-    /// The name housing <paramref name="t"/> gives its home (docs/game/factions-squads-towns.md "Town residents", Layouts): its <c>building name</c>,
-    /// else its non-empty <c>layout interior</c>; null keeps the building's own.
+    /// The name housing <paramref name="t"/> gives its home (docs/game/factions-squads-towns.md "Town residents", Layouts): its <c>building name</c>, else its non-empty
+    /// <c>layout interior</c>; null keeps the building's own.
     /// </summary>
     public static string? DisplayName(SquadTemplate t) =>
         t.BuildingName.Length > 0 ? t.BuildingName : t.LayoutInterior.Length > 0 ? t.LayoutInterior : null;
@@ -93,13 +87,11 @@ public static class ResidentRuins
     public static IEnumerable<(string Key, string Layout)> Names(SquadTemplate t) =>
         [(InteriorKey, t.LayoutInterior), (ExteriorKey, t.LayoutExterior)];
 
-    public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name", NameKey = "name",
-    SquadTemplateKey = "squad template";
+    public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name", NameKey = "name", SquadTemplateKey = "squad template";
 
     /// <summary>
-    /// The templates housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> puts in its homes (a town override, which
-    /// names them as <see cref="LayOut"/> does), by building key; buildings it houses nobody in are not listed. <paramref name="playerOwned"/> as for
-    /// <see cref="RuinedHomes"/>.
+    /// The templates housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> puts in its homes (a town override, which names them as
+    /// <see cref="LayOut"/> does), by building key; buildings it houses nobody in are not listed. <paramref name="playerOwned"/> as for <see cref="RuinedHomes"/>.
     /// </summary>
     public static Dictionary<string, SquadTemplate> HomeTemplates(GameDatabase db, TownData town, FactionData? faction,
         IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
@@ -110,25 +102,21 @@ public static class ResidentRuins
     }
 
     /// <summary>
-    /// The keys of the homes <paramref name="town"/>'s residents ruin when they are housed in <paramref name="buildings"/> afresh (a town override):
-    /// homes of a ruined template that can be destroyed. <paramref name="playerOwned"/>: the buildings the player owns now, which house nobody
-    /// (<see cref="ResidentHomes.Assign"/>).
+    /// The keys of the homes <paramref name="town"/>'s residents ruin when they are housed in <paramref name="buildings"/> afresh (a town override): homes of a ruined
+    /// template that can be destroyed. <paramref name="playerOwned"/>: the buildings the player owns now, which house nobody (<see cref="ResidentHomes.Assign"/>).
     /// </summary>
-    public static HashSet<string> RuinedHomes(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings,
-    string? playerFactionId,
+    public static HashSet<string> RuinedHomes(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings, string? playerFactionId,
         IReadOnlySet<string>? playerOwned = null)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned))
-            if (t.BuildingRuined && db.Find(b.BuildingId) is { } record && CanBeDestroyed(db, record))
-                result.Add(b.Key);
+            if (t.BuildingRuined && db.Find(b.BuildingId) is { } record && CanBeDestroyed(db, record)) result.Add(b.Key);
         return result;
     }
 
     /// <summary>
-    /// Whether a building can be ruined (<c>FUN_14055b520</c>, Verified decompile): it or a part reached through <c>parts</c> (followed to any depth)
-    /// has a <c>destroyed mesh</c>. The original also says yes when the building's class (+0x358, +0x198) is 7, GatewayBuilding, the building the
-    /// factory makes for an `is wall gate` record (**Verified**, class table in docs/game/pathfinding.md): a gate can be ruined.
+    /// Whether a building can be ruined (<c>FUN_14055b520</c>, Verified decompile): it or a part reached through <c>parts</c> (followed to any depth) has a
+    /// <c>destroyed mesh</c>. The original also says yes when the building's class (+0x358, +0x198) is 7, GatewayBuilding, the building the factory makes for an `is wall gate` record (**Verified**, class table in docs/game/pathfinding.md): a gate can be ruined.
     /// </summary>
     public static bool CanBeDestroyed(GameDatabase db, GameRecord building)
     {
@@ -153,8 +141,5 @@ public readonly record struct BuildingNaming(string Name, string SquadTemplate)
     /// <summary>
     /// What <paramref name="state"/>, a GAMESTATE_BUILDING, names.
     /// </summary>
-    public static BuildingNaming Of(GameRecord? state) => new(
-        state?.GetString(ResidentRuins.NameKey) ?? "",
-        state?.GetString(ResidentRuins.SquadTemplateKey) ?? ""
-    );
+    public static BuildingNaming Of(GameRecord? state) => new(state?.GetString(ResidentRuins.NameKey) ?? "", state?.GetString(ResidentRuins.SquadTemplateKey) ?? "");
 }

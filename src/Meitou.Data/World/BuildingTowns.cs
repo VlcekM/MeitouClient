@@ -4,9 +4,9 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Which town a placed building belongs to, for its material (docs/formats/zones.md, "From placements to meshes"): the town its GAMESTATE_BUILDING's
-/// <c>town*</c> handle names (matched to a GAMESTATE_TOWN's <c>hand*</c> by the C and CS parts), else the nearest town by X/Z, ignoring
-/// TOWN_NEST_MARKER towns (the game's lookup by position).
+/// Which town a placed building belongs to, for its material (docs/formats/zones.md, "From placements to meshes"): the town
+/// its GAMESTATE_BUILDING's <c>town*</c> handle names (matched to a GAMESTATE_TOWN's <c>hand*</c> by the C and CS parts),
+/// else the nearest town by X/Z, ignoring TOWN_NEST_MARKER towns (the game's lookup by position).
 /// </summary>
 public sealed class BuildingTowns
 {
@@ -58,11 +58,7 @@ public sealed class BuildingTowns
         foreach (var (t, p) in _towns)
         {
             float d = Vector2.DistanceSquared(p, at);
-            if (d < bestDistance)
-            {
-                bestDistance = d;
-                best = t;
-            }
+            if (d < bestDistance) { bestDistance = d; best = t; }
         }
         return best;
     }
@@ -74,11 +70,7 @@ public sealed class BuildingTowns
     {
         if (town is null) return null;
         if (!_materials.TryGetValue(town.InstanceId, out var m))
-            _materials[town.InstanceId] = m = _db.Find(town.TownId) is { } record ? WorldObjectLayout.TownMaterial(
-                _db,
-                record,
-                town.InstanceId
-            ) : null;
+            _materials[town.InstanceId] = m = _db.Find(town.TownId) is { } record ? WorldObjectLayout.TownMaterial(_db, record, town.InstanceId) : null;
         return m;
     }
 }

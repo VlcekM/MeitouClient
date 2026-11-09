@@ -29,16 +29,11 @@ public sealed class WeatherAreas
     }
 
     /// <summary>
-    /// The map of a game install: <c>areasmap.tga</c> of resource group <c>Overlaymaps</c> (<b>Verified</b> <c>FUN_140408fa0</c>,
-    /// <c>FUN_140408970</c>: Ogre's <c>resourceExists</c> then <c>Image::load</c> there, so an enabled mod's <c>newland/land/areasmap.tga</c>
-    /// replaces it), else <c>data/newland/land/areasmap.tga</c>.
+    /// The map of a game install: <c>areasmap.tga</c> of resource group <c>Overlaymaps</c> (<b>Verified</b> <c>FUN_140408fa0</c>, <c>FUN_140408970</c>: Ogre's
+    /// <c>resourceExists</c> then <c>Image::load</c> there, so an enabled mod's <c>newland/land/areasmap.tga</c> replaces it), else <c>data/newland/land/areasmap.tga</c>.
     /// </summary>
     public static WeatherAreas Load(GameInstall install) =>
-        FromTga(File.ReadAllBytes(Ogre.GameResources.Find(
-            install,
-            "areasmap.tga",
-            "Overlaymaps"
-        ) ?? Path.Combine(install.DataDirectory, RelativePath)));
+        FromTga(File.ReadAllBytes(Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps") ?? Path.Combine(install.DataDirectory, RelativePath)));
 
     public static WeatherAreas FromTga(ReadOnlySpan<byte> tga) => FromImage(TgaReader.Read(tga));
 
@@ -48,10 +43,7 @@ public sealed class WeatherAreas
     /// </summary>
     public static WeatherAreas FromImage(RgbaImage image)
     {
-        if (
-            image.Width % Cells != 0
-            || image.Height % Cells != 0
-        ) throw new FormatException($"The areas map is {image.Width} x {image.Height}, not a multiple of {Cells}.");
+        if (image.Width % Cells != 0 || image.Height % Cells != 0) throw new FormatException($"The areas map is {image.Width} x {image.Height}, not a multiple of {Cells}.");
         int pw = image.Width / Cells, ph = image.Height / Cells;
         var colours = new int[Cells * Cells];
         for (int z = 0; z < Cells; z++)
@@ -69,9 +61,8 @@ public sealed class WeatherAreas
     public static (int X, int Z) CellOf(float x, float z) => ((int)MathF.Floor(x / CellSize) + Origin, (int)MathF.Floor(z / CellSize) + Origin);
 
     /// <summary>
-    /// The cell of the camera's region lookup (<c>FUN_1408f56b0</c>): <c>(int)((coordinate + 147465) / 4608)</c> truncated toward zero and clamped to
-    /// 0..63 per axis, so a position off the map takes the edge cell. The origin 147465 = 32 x 4608 + 9 puts the original's cell boundaries 9 units
-    /// from <see cref="CellOf"/>'s.
+    /// The cell of the camera's region lookup (<c>FUN_1408f56b0</c>): <c>(int)((coordinate + 147465) / 4608)</c> truncated toward zero and clamped to 0..63 per axis, so a position off the map takes the
+    /// edge cell. The origin 147465 = 32 x 4608 + 9 puts the original's cell boundaries 9 units from <see cref="CellOf"/>'s.
     /// </summary>
     public static (int X, int Z) CameraCellOf(float x, float z) =>
         (Math.Clamp((int)((x + CameraOrigin) / CellSize), 0, Cells - 1), Math.Clamp((int)((z + CameraOrigin) / CellSize), 0, Cells - 1));

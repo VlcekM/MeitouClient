@@ -6,8 +6,8 @@ using Meitou.Content;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// <c>data/newland/land/features.dat</c> (magic <c>MF01</c>): the map features (rocks, cliffs and other large meshes, FCS MAP_FEATURES records)
-/// placed in each zone. Layout in docs/formats/zones.md.
+/// <c>data/newland/land/features.dat</c> (magic <c>MF01</c>): the map features (rocks, cliffs and other large
+/// meshes, FCS MAP_FEATURES records) placed in each zone. Layout in docs/formats/zones.md.
 /// </summary>
 public sealed class MapFeatureFile
 {

@@ -1,8 +1,8 @@
 namespace Meitou.Data.World;
 
 /// <summary>
-/// How far placed objects are drawn (docs/formats/zones.md, "Draw distance and distant towns"): the game's <c>settings.cfg</c> values and the rules
-/// built on them.
+/// How far placed objects are drawn (docs/formats/zones.md, "Draw distance and distant towns"): the game's
+/// <c>settings.cfg</c> values and the rules built on them.
 /// </summary>
 public static class ObjectRanges
 {
@@ -42,9 +42,9 @@ public static class ObjectRanges
     public const int TurretFunction = 12;
 
     /// <summary>
-    /// The distance beyond which a building part is not drawn: the objects view range (half of it for turrets), unlimited for a part with a big mesh
-    /// or for generators. The distance is <see cref="Ogre.MeshLod.Value"/>-like: camera to bounds centre minus the bounds' radius (Observed; Ogre's
-    /// rule in the game's version is not decompiled).
+    /// The distance beyond which a building part is not drawn: the objects view range (half of it for turrets), unlimited
+    /// for a part with a big mesh or for generators. The distance is <see cref="Ogre.MeshLod.Value"/>-like: camera to bounds
+    /// centre minus the bounds' radius (Observed; Ogre's rule in the game's version is not decompiled).
     /// </summary>
     public static float PartRenderingDistance(float localRadius, int buildingFunction, float objectsViewRange = ObjectsViewRange)
     {
@@ -54,8 +54,8 @@ public static class ObjectRanges
     }
 
     /// <summary>
-    /// The viewer's soft edge for a distance cut: 1 up to <c>limit - band</c>, falling (smoothstep) to 0 at <paramref name="limit"/>, so nothing
-    /// pops. A limit of <see cref="float.MaxValue"/> never fades.
+    /// The viewer's soft edge for a distance cut: 1 up to <c>limit - band</c>, falling (smoothstep) to 0 at <paramref name="limit"/>,
+    /// so nothing pops. A limit of <see cref="float.MaxValue"/> never fades.
     /// </summary>
     public static float EdgeWeight(float value, float limit, float band)
     {

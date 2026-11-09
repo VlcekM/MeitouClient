@@ -3,9 +3,9 @@ using System.Globalization;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The random numbers of Kenshi's foliage placer (docs/formats/foliage.md, "Random numbers"): a 32-bit Mersenne Twister (MT19937, the standard
-/// initialisation and tempering), reseeded for every foliage layer of every zone, with the game's float draw (in double precision, <c>u / (2^32 −
-/// 1)</c>, inclusive of both ends) and its integer draw (mask rejection).
+/// The random numbers of Kenshi's foliage placer (docs/formats/foliage.md, "Random numbers"): a 32-bit Mersenne Twister
+/// (MT19937, the standard initialisation and tempering), reseeded for every foliage layer of every zone, with the game's
+/// float draw (in double precision, <c>u / (2^32 − 1)</c>, inclusive of both ends) and its integer draw (mask rejection).
 /// </summary>
 public sealed class FoliageRandom
 {
@@ -78,8 +78,8 @@ public sealed class FoliageRandom
     public float Float(float min, float max) => (float)(Next() * (1.0 / uint.MaxValue) * (double)(max - min) + min);
 
     /// <summary>
-    /// The game's integer draw in [0, <paramref name="range"/>]: results masked to the smallest all-ones mask covering the range, redrawn while above
-    /// it.
+    /// The game's integer draw in [0, <paramref name="range"/>]: results masked to the smallest all-ones mask covering the
+    /// range, redrawn while above it.
     /// </summary>
     public uint IntUpTo(uint range)
     {
@@ -90,14 +90,13 @@ public sealed class FoliageRandom
         mask |= mask >> 8;
         mask |= mask >> 16;
         uint v;
-        do v = Next() & mask;
-        while (v > range);
+        do v = Next() & mask; while (v > range);
         return v;
     }
 
     /// <summary>
-    /// Seed of a foliage layer in a zone: the leading integer of the layer record's string id (its number), minus the truncated <c>(h / 2^30) ×
-    /// 16777215 − 16777215</c> for the integer noise hash <c>h</c> of the zone's minimum corner.
+    /// Seed of a foliage layer in a zone: the leading integer of the layer record's string id (its number), minus the
+    /// truncated <c>(h / 2^30) × 16777215 − 16777215</c> for the integer noise hash <c>h</c> of the zone's minimum corner.
     /// </summary>
     public static uint LayerSeed(string layerStringId, float zoneMinX, float zoneMinZ)
     {
@@ -122,8 +121,8 @@ public sealed class FoliageRandom
 }
 
 /// <summary>
-/// Kenshi's value noise for grass coverage and per-position randomness (docs/formats/foliage.md, "Noise"): an integer hash (the classic value-noise
-/// hash with other multipliers), smoothed over the 3 × 3 neighbourhood, cosine interpolated, summed over five octaves.
+/// Kenshi's value noise for grass coverage and per-position randomness (docs/formats/foliage.md, "Noise"): an integer
+/// hash (the classic value-noise hash with other multipliers), smoothed over the 3 × 3 neighbourhood, cosine interpolated, summed over five octaves.
 /// </summary>
 public static class FoliageNoise
 {
@@ -133,8 +132,8 @@ public static class FoliageNoise
     const double Pi = 3.1415927;
 
     /// <summary>
-    /// The exe's integer hash <c>n = x + 57 z; n ^= n &lt;&lt; 13; (n (n² 60493 + 19990303) + 1376312589) &amp; 0x7FFFFFFF</c>: not the textbook
-    /// 15731 / 789221 multipliers. The exe adds 0xD208DD0D, which is 1376312589 under the mask.
+    /// The exe's integer hash <c>n = x + 57 z; n ^= n &lt;&lt; 13; (n (n² 60493 + 19990303) + 1376312589) &amp; 0x7FFFFFFF</c>:
+    /// not the textbook 15731 / 789221 multipliers. The exe adds 0xD208DD0D, which is 1376312589 under the mask.
     /// </summary>
     public static uint Hash(int x, int z)
     {
@@ -181,8 +180,9 @@ public static class FoliageNoise
     }
 
     /// <summary>
-    /// The grass coverage noise at world (x, z): five octaves (frequency 2^o / scale, amplitude 0.5^o) mapped to <c>0.5 + 0.5 n</c>, zero at or below
-    /// <paramref name="cutoff"/> and rescaled above it, times <paramref name="boost"/>, clamped to [0, <paramref name="cap"/>].
+    /// The grass coverage noise at world (x, z): five octaves (frequency 2^o / scale, amplitude 0.5^o) mapped to
+    /// <c>0.5 + 0.5 n</c>, zero at or below <paramref name="cutoff"/> and rescaled above it, times
+    /// <paramref name="boost"/>, clamped to [0, <paramref name="cap"/>].
     /// </summary>
     public static float Coverage(double x, double z, double scale, float cutoff, float boost, float cap)
     {

@@ -31,25 +31,18 @@ public static class PotTemplate
         void Finish()
         {
             if (references.Count > 0 && text.Length > 0) result.Add(new([.. references], text.ToString()));
-            references.Clear();
-            text.Clear();
-            reading = false;
+            references.Clear(); text.Clear(); reading = false;
         }
         foreach (string raw in File.ReadLines(path))
         {
             string line = raw.Trim();
-            if (line.Length == 0)
-            {
-                Finish();
-                continue;
-            }
+            if (line.Length == 0) { Finish(); continue; }
             if (line.StartsWith("#:", StringComparison.Ordinal))
                 foreach (Match match in Regex.Matches(line, @"(\S+):(\d+)"))
                     references.Add((match.Groups[1].Value, int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture)));
             if (line.StartsWith("msgid ", StringComparison.Ordinal))
             { reading = true; text.Append(JsonSerializer.Deserialize<string>(line[6..])); }
-            else if (line.StartsWith("msgstr", StringComparison.Ordinal) || line.StartsWith("msgctxt", StringComparison.Ordinal))
-                reading = false;
+            else if (line.StartsWith("msgstr", StringComparison.Ordinal) || line.StartsWith("msgctxt", StringComparison.Ordinal)) reading = false;
             else if (reading && line.StartsWith('"')) text.Append(JsonSerializer.Deserialize<string>(line));
         }
         Finish();

@@ -4,9 +4,9 @@ namespace Meitou.Data.Save;
 
 /// <summary>
 /// An object handle of the save (docs/formats/save.md "Object handles and slot lists"): the class of the object, the container it lives in with the
-/// container's serial, its slot in that container and its own random serial. Stored as five ints under one key prefix (<c>handleTYPE</c>,
-/// <c>handleC</c>, <c>handleCS</c>, <c>handleI</c>, <c>handleS</c>). Type 11 is the null handle; the other parts of a null handle are stale values
-/// nobody reads, so <see cref="IsNull"/> tests the type only.
+/// container's serial, its slot in that container and its own random serial. Stored as five ints under one key prefix
+/// (<c>handleTYPE</c>, <c>handleC</c>, <c>handleCS</c>, <c>handleI</c>, <c>handleS</c>). Type 11 is the null handle; the other parts of a null handle are
+/// stale values nobody reads, so <see cref="IsNull"/> tests the type only.
 /// </summary>
 public readonly record struct Hand(int Type, int C, int Cs, int I, int S)
 {

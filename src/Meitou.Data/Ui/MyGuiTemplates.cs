@@ -14,14 +14,10 @@ public static partial class MyGuiTemplates
     {
         if (source.Properties.GetValueOrDefault("ResolvedTemplate") == "true") return source;
         var children = source.Children.Select(c => ExpandWidget(c, resources, new(chain))).ToArray();
-        if (
-            !resources.Templates.TryGetValue(source.Skin, out var resource)
-            && (!resources.Resources.TryGetValue(source.Skin, out resource) || MyGuiReader.Attribute(resource, "type") != "ResourceLayout")
-        )
+        if (!resources.Templates.TryGetValue(source.Skin, out var resource) && (!resources.Resources.TryGetValue(source.Skin, out resource) || MyGuiReader.Attribute(resource, "type") != "ResourceLayout"))
             return source with { Children = children };
         if (!chain.Add(source.Skin)) throw new InvalidDataException($"Cyclic MyGUI template: {source.Skin}");
-        var template = MyGuiReader.ReadResourceLayout(resource).Roots.FirstOrDefault()
-                ?? throw new InvalidDataException($"Empty MyGUI template: {source.Skin}");
+        var template = MyGuiReader.ReadResourceLayout(resource).Roots.FirstOrDefault() ?? throw new InvalidDataException($"Empty MyGUI template: {source.Skin}");
         bool placed = false;
         int anonymous = 0;
         MyGuiWidget Clone(MyGuiWidget node, float referenceWidth, float referenceHeight)
@@ -37,38 +33,28 @@ public static partial class MyGuiTemplates
             properties["TemplatePart"] = originalName;
             if (originalName == "Caption") properties["CaptionOwner"] = source.Name;
             if (node.UserStrings.TryGetValue("Event", out string? eventName)) properties["TemplateEvent"] = eventName;
-            // MyGUI turns a part's position_real into pixels once, at the template's own size; its align then keeps those margins
-            // (Kenshi_ListBoxEmpty's client sits 19 x 18 px in, whatever the list's size).
+            // MyGUI turns a part's position_real into pixels once, at the template's own size; its align then keeps those margins (Kenshi_ListBoxEmpty's client sits
+            // 19 x 18 px in, whatever the list's size).
             var position = node.RealPosition
-                ? new UiRect(
-                    node.Position.X * referenceWidth,
-                    node.Position.Y * referenceHeight,
-                    node.Position.Width * referenceWidth,
-                    node.Position.Height * referenceHeight
-                )
+                ? new UiRect(node.Position.X * referenceWidth, node.Position.Y * referenceHeight, node.Position.Width * referenceWidth, node.Position.Height * referenceHeight)
                 : node.Position;
             var nested = node.Children.Select(c => Clone(c, position.Width, position.Height)).ToList();
-            // The layout's children go into the template's Client only for the widgets that take one as their client (MyGUI's setWidgetClient:
-            // windows, views, edit boxes, lists); a plain Widget, TextBox, ImageBox or Button keeps them itself (the title's CreditsPanel, a
-            // Kenshi_EditBox-skinned Widget, holds its text box over its whole face).
+            // The layout's children go into the template's Client only for the widgets that take one as their client (MyGUI's setWidgetClient: windows, views, edit
+            // boxes, lists); a plain Widget, TextBox, ImageBox or Button keeps them itself (the title's CreditsPanel, a Kenshi_EditBox-skinned Widget, holds its
+            // text box over its whole face).
             if (originalName == "Client" && !placed && source.Type is not ("TabControl" or "Widget" or "TextBox" or "ImageBox" or "Button"))
             {
                 nested.AddRange(children);
                 placed = true;
                 if (source.Type is "EditBox" or "TextBox") properties["CaptionOwner"] = source.Name;
             }
-            return ExpandWidget(
-                node with { Name = name, Position = position, RealPosition = false, Properties = properties, Children = nested },
-                resources,
-                new(chain)
-            );
+            return ExpandWidget(node with { Name = name, Position = position, RealPosition = false, Properties = properties, Children = nested }, resources, new(chain));
         }
         var framed = template.Children.Select(c => Clone(c, template.Position.Width, template.Position.Height)).ToList();
         if (!placed) framed.AddRange(children);
         var rootProperties = new Dictionary<string, string>(template.Properties, StringComparer.Ordinal);
         foreach (var p in source.Properties) rootProperties[p.Key] = p.Value;
-        if (framed.Any(c => c.DescendantsAndSelf().Any(n => n.Properties.ContainsKey("CaptionOwner"))))
-            rootProperties["SkipCaption"] = "true";
+        if (framed.Any(c => c.DescendantsAndSelf().Any(n => n.Properties.ContainsKey("CaptionOwner")))) rootProperties["SkipCaption"] = "true";
         var strings = new Dictionary<string, string>(template.UserStrings, StringComparer.Ordinal);
         foreach (var p in source.UserStrings) strings[p.Key] = p.Value;
         if (source.Type == "MultiListBox") framed.AddRange(ColumnPrototypes(source.Name, strings, resources, chain));

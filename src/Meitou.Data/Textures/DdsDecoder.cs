@@ -4,8 +4,9 @@ using System.Numerics;
 namespace Meitou.Data.Textures;
 
 /// <summary>
-/// CPU decoding of DDS surfaces to RGBA8. Block formats follow the public BC1–BC5 descriptions (Microsoft, "Block Compression (Direct3D 10)");
-/// interpolated values are rounded to nearest, which is within the tolerance the specification allows hardware.
+/// CPU decoding of DDS surfaces to RGBA8. Block formats follow the public BC1–BC5 descriptions (Microsoft,
+/// "Block Compression (Direct3D 10)"); interpolated values are rounded to nearest, which is within the
+/// tolerance the specification allows hardware.
 /// </summary>
 public static class DdsDecoder
 {
@@ -42,8 +43,7 @@ public static class DdsDecoder
 
         int blockBytes = format is DdsFormat.Bc1 or DdsFormat.Bc4 ? 8 : 16;
         int blocksX = (width + 3) / 4, blocksY = (height + 3) / 4;
-        if (data.Length < blocksX * blocksY * blockBytes)
-            throw new ArgumentException("Surface data too short.", nameof(data));
+        if (data.Length < blocksX * blocksY * blockBytes) throw new ArgumentException("Surface data too short.", nameof(data));
         Span<byte> block = stackalloc byte[16 * 4];
         Span<byte> channel = stackalloc byte[16];
         for (int by = 0; by < blocksY; by++)
@@ -115,8 +115,8 @@ public static class DdsDecoder
     }
 
     /// <summary>
-    /// BC1 colour block: two RGB565 endpoints and 2-bit indices. With <paramref name="allowOneBitAlpha"/> (BC1), <c>color0 &lt;= color1</c> selects
-    /// three colours plus transparent black; BC2/BC3 always use four colours.
+    /// BC1 colour block: two RGB565 endpoints and 2-bit indices. With <paramref name="allowOneBitAlpha"/> (BC1),
+    /// <c>color0 &lt;= color1</c> selects three colours plus transparent black; BC2/BC3 always use four colours.
     /// </summary>
     static void DecodeColourBlock(ReadOnlySpan<byte> src, Span<byte> block, bool allowOneBitAlpha)
     {

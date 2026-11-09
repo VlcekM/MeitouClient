@@ -34,9 +34,8 @@ public enum PhysicsShapeType
 public enum PhysicsJointType { Revolute = 1, Spherical = 2, Cylindrical = 3, Prismatic = 4, Fixed = 5, D6 = 6, PointOnLine = 7 }
 
 /// <summary>
-/// A Scythe physics file (<c>.phs</c>): ragdolls (RACE <c>male ragdoll</c>), physics props and attachment points. Everything is in model space
-/// (Kenshi units, Y up); the game multiplies positions and sizes by the race's scale when it builds the bodies. Layout and field meanings:
-/// docs/formats/phs.md.
+/// A Scythe physics file (<c>.phs</c>): ragdolls (RACE <c>male ragdoll</c>), physics props and attachment points. Everything is in model space (Kenshi units, Y up);
+/// the game multiplies positions and sizes by the race's scale when it builds the bodies. Layout and field meanings: docs/formats/phs.md.
 /// </summary>
 public sealed class PhysicsFile
 {
@@ -76,12 +75,10 @@ public sealed class PhysicsFile
     static PhysicsBodyActor ReadActor(ref Reader r, float v)
     {
         int shapes = r.Int(), points = r.Int(), lights = r.Int();
-        if (shapes is < 0 or > 10_000 || points is < 0 or > 10_000 || lights is < 0 or > 10_000)
-            throw new FormatException("Bad actor counts.");
+        if (shapes is < 0 or > 10_000 || points is < 0 or > 10_000 || lights is < 0 or > 10_000) throw new FormatException("Bad actor counts.");
         r.Int();
         var position = r.Vector();
-        r.Float();
-        r.Float();
+        r.Float(); r.Float();
         bool isStatic = r.Byte() != 0;
         float density = r.Float(), angularDamping = r.Float() * 10, linearDamping = r.Float();
         r.Skip(1, 32);
@@ -107,8 +104,7 @@ public sealed class PhysicsFile
             r.Vector(); r.Vector(); r.Vector(); r.Vector();   // the bone's binding pose: only the attachment loader reads it
             r.Byte();
         }
-        var actor = new PhysicsBodyActor(name, position, isStatic, mass, density, linearDamping, angularDamping,
-        useCentreOfMass ? centreOfMass : null, noGravity,
+        var actor = new PhysicsBodyActor(name, position, isStatic, mass, density, linearDamping, angularDamping, useCentreOfMass ? centreOfMass : null, noGravity,
             bone is { Length: > 0 } ? bone : null);
         for (int i = 0; i < shapes; i++) actor.Shapes.Add(ReadShape(ref r, v));
         for (int i = 0; i < points; i++) ReadPoint(ref r);
@@ -156,10 +152,7 @@ public sealed class PhysicsFile
         static float F(ReadOnlySpan<byte> b, int at) => BinaryPrimitives.ReadSingleLittleEndian(b[at..]);
         static int I(ReadOnlySpan<byte> b, int at) => BinaryPrimitives.ReadInt32LittleEndian(b[at..]);
         static Vector3 V(ReadOnlySpan<byte> b, int at) => new(F(b, at), F(b, at + 4), F(b, at + 8));
-        static PhysicsSpring? Spring(
-            ReadOnlySpan<byte> b,
-            int at
-        ) => b[at] != 0 ? new PhysicsSpring(F(b, at + 4), F(b, at + 8), F(b, at + 12)) : null;
+        static PhysicsSpring? Spring(ReadOnlySpan<byte> b, int at) => b[at] != 0 ? new PhysicsSpring(F(b, at + 4), F(b, at + 8), F(b, at + 12)) : null;
         bool full = v >= 1.2f;
         return new PhysicsJoint((PhysicsJointType)I(b, 0x30), I(b, 0x6c), I(b, 0x70), V(b, 0x00), V(b, 0x0c), V(b, 0x18),
             b[0x68] != 0, F(b, 0x5c), F(b, 0x58), F(b, 0x60), b[0x7c] != 0,
@@ -203,12 +196,10 @@ public sealed class PhysicsFile
 }
 
 /// <summary>
-/// An actor: one rigid body (none when <see cref="Static"/>), at <see cref="Position"/> in model space with no rotation of its own. In a ragdoll the
-/// name is the bone's and the position the bone's binding position. <see cref="AngularDamping"/> is the value the game uses (the file stores a tenth
-/// of it).
+/// An actor: one rigid body (none when <see cref="Static"/>), at <see cref="Position"/> in model space with no rotation of its own. In a ragdoll the name is the bone's and
+/// the position the bone's binding position. <see cref="AngularDamping"/> is the value the game uses (the file stores a tenth of it).
 /// </summary>
-public sealed record PhysicsBodyActor(string Name, Vector3 Position, bool Static, float Mass, float Density, float LinearDamping,
-float AngularDamping, Vector3? CentreOfMass,
+public sealed record PhysicsBodyActor(string Name, Vector3 Position, bool Static, float Mass, float Density, float LinearDamping, float AngularDamping, Vector3? CentreOfMass,
     bool NoGravity, string? Bone)
 {
     public List<PhysicsShape> Shapes { get; } = [];
@@ -217,17 +208,7 @@ float AngularDamping, Vector3? CentreOfMass,
 /// <summary>
 /// A collision shape in model space: its centre and rotation, and its size as <see cref="PhysicsShapeType"/> reads it.
 /// </summary>
-public sealed record PhysicsShape(
-    PhysicsShapeType Type,
-    Vector3 Position,
-    Quaternion Rotation,
-    Vector3 Size,
-    float Mass,
-    float Density,
-    float SkinWidth,
-    string CookedFile,
-    bool Convex
-);
+public sealed record PhysicsShape(PhysicsShapeType Type, Vector3 Position, Quaternion Rotation, Vector3 Size, float Mass, float Density, float SkinWidth, string CookedFile, bool Convex);
 
 /// <summary>
 /// A joint spring: target (degrees for a revolute joint), spring and damper.
@@ -235,11 +216,9 @@ public sealed record PhysicsShape(
 public readonly record struct PhysicsSpring(float Target, float Spring, float Damper);
 
 /// <summary>
-/// A joint between two actors (indices into <see cref="PhysicsFile.Actors"/>; -1 or a static actor is the world), anchored at <see cref="Anchor"/> in
-/// model space. Revolute: rotation about <see cref="Axis"/> from <see cref="Low"/> to <see cref="High"/> degrees. Spherical: twist about
-/// <see cref="Axis"/> from <see cref="Low"/> to <see cref="High"/>, swing up to <see cref="Swing"/> degrees. The limits apply only when
-/// <see cref="LimitsOn"/>.
+/// A joint between two actors (indices into <see cref="PhysicsFile.Actors"/>; -1 or a static actor is the world), anchored at <see cref="Anchor"/> in model space.
+/// Revolute: rotation about <see cref="Axis"/> from <see cref="Low"/> to <see cref="High"/> degrees. Spherical: twist about <see cref="Axis"/> from <see cref="Low"/> to
+/// <see cref="High"/>, swing up to <see cref="Swing"/> degrees. The limits apply only when <see cref="LimitsOn"/>.
 /// </summary>
-public sealed record PhysicsJoint(PhysicsJointType Type, int Actor0, int Actor1, Vector3 Anchor, Vector3 Normal, Vector3 Axis, bool LimitsOn,
-float Low, float High, float Swing,
+public sealed record PhysicsJoint(PhysicsJointType Type, int Actor0, int Actor1, Vector3 Anchor, Vector3 Normal, Vector3 Axis, bool LimitsOn, float Low, float High, float Swing,
     bool Collide, PhysicsSpring? Spring1, PhysicsSpring? Spring2, PhysicsSpring? Spring3);
