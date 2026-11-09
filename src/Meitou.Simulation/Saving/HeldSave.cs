@@ -97,7 +97,7 @@ public static class HeldSave
     /// <summary>
     /// Writes them back. The original's keys are left as read while the held state and fixture did not change since loading
     /// (<paramref name="loaded"/>); otherwise <c>in what</c> is the handle of the fixture's building when the fixture is the building's own (a placed
-    /// cage, a bed the player built) and the save has its state, else the null handle with <c>in something</c> 0 (the original would hold a prisoner
+    /// cage or standalone bed) and the save has its state, else the null handle with <c>in something</c> 0 (the original would hold a prisoner
     /// with no prison; Meitou's keys keep the truth).
     /// </summary>
     public static void Write(
@@ -124,7 +124,7 @@ public static class HeldSave
 
         var hand = Hand.Null;
         if (cold.InSomething != HeldState.None && cold.InWhat is { } id && fixtures.Find(id) is { } f
-            && (f.Id == f.Building || f is { Kind: FixtureKind.Bed, Site: < 0 })
+            && (f.Id == f.Building || f is { Kind: FixtureKind.Bed, Indoors: false })
             && buildings.TryGetValue(f.Building, out var b) && Hand.IsComplete(b, "handle"))
             hand = Hand.Read(b, "handle");
 

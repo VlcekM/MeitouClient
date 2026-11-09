@@ -517,7 +517,7 @@ public sealed partial class FixtureRegistry
     /// <summary>
     /// Adds a fixture for each bed spot of the building, numbered in spot order.
     /// </summary>
-    static void AddBeds(GameDatabase db, int site, TownBuilding b, int owner, List<Fixture> list)
+    void AddBeds(GameDatabase db, int site, TownBuilding b, int owner, List<Fixture> list)
     {
         int bed = 0;
         foreach (var spot in b.Spots)
@@ -541,6 +541,12 @@ public sealed partial class FixtureRegistry
             });
             bed++;
         }
+
+        if (bed != 0 || b.HasInterior || IsDestroyed(b) || db.Find(b.BuildingId) is not { } record || BedDataOf(db, record) is not { } outdoorBed)
+            return;
+
+        var rotation = b.Resolved?.Placement.Rotation ?? Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw);
+        list.Add(BedOf(db, b.Key, record, site, owner, b.Position, rotation, outdoorBed));
     }
 
     /// <summary>
@@ -1039,8 +1045,8 @@ public sealed partial class FixtureRegistry
     {
         if (_byId.TryGetValue(what, out var f)) return f;
 
-        // The original's `in what` of one lying in a bed the player built names that bed's building.
-        if (c.InSomething == HeldState.Bed && _byId.TryGetValue(what + "@bed0", out f) && f.Site < 0) return f;
+        // A standalone bed is saved as a building, including when it belongs to a town.
+        if (c.InSomething == HeldState.Bed && _byId.TryGetValue(what + "@bed0", out f) && !f.Indoors) return f;
         if (SavedSpots?.GetValueOrDefault(what) is not { } spot) return null;
         return c.InSomething switch
         {
