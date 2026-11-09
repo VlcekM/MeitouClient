@@ -370,7 +370,7 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
     }
 
-    // ---- memory type choice --------------------------------------------------------------------------------
+    #region Memory type choice
 
     bool IsRebarType(uint i)
     {
@@ -430,7 +430,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         return scored.ConvertAll(s => s.Index);
     }
 
-    // ---- allocation ----------------------------------------------------------------------------------------
+    #endregion
+
+    #region Allocation
 
     /// <summary>
     /// Allocates memory for a resource. <paramref name="optimal"/>: optimal-tiling image (else buffer / linear image). <paramref name="streamed"/>: a
@@ -963,7 +965,9 @@ public sealed unsafe class GpuAllocator : IDisposable
         }
     }
 
-    // ---- buffers and images --------------------------------------------------------------------------------
+    #endregion
+
+    #region Buffers and images
 
     public BufferAllocation CreateBuffer(ulong size, BufferUsageFlags usage, MemoryKind kind, string? name = null)
     {
@@ -1195,4 +1199,6 @@ public sealed unsafe class GpuAllocator : IDisposable
             _blockCount = 0;
         }
     }
+
+    #endregion
 }

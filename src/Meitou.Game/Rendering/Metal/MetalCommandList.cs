@@ -81,7 +81,7 @@ public sealed class MetalCommandList : IGpuCommandList
         _epoch++;
     }
 
-    // ---- rendering ----
+    #region Rendering
 
     public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
@@ -182,7 +182,9 @@ public sealed class MetalCommandList : IGpuCommandList
             _render.SetScissorRect(new MTLScissorRect { x = (ulong)_scissor.X, y = (ulong)_scissor.Y, width = _scissor.Width, height = _scissor.Height });
     }
 
-    // ---- state ----
+    #endregion
+
+    #region State
 
     public void BindPipeline(GpuPipeline pipeline)
     {
@@ -252,7 +254,9 @@ public sealed class MetalCommandList : IGpuCommandList
 
     public void SetDepthBias(bool enable, float constant, float slope) => _render.SetDepthBias(enable ? constant : 0, enable ? slope : 0, 0);
 
-    // ---- resources ----
+    #endregion
+
+    #region Resources
 
     /// <summary>
     /// Binds the vertex buffers of the locations from <paramref name="first"/>: the pipeline's slots, Vulkan's own numbers (the MSL's indices below
@@ -679,7 +683,9 @@ public sealed class MetalCommandList : IGpuCommandList
     /// </summary>
     public void Timestamp(IGpuTimestamps arena, in QuerySlot slot, GpuStage stage = GpuStage.All) { }
 
-    // ---- draws ----
+    #endregion
+
+    #region Draws
 
     public void Draw(uint vertices, uint instances = 1, uint firstVertex = 0, uint firstInstance = 0)
     {
@@ -773,7 +779,9 @@ public sealed class MetalCommandList : IGpuCommandList
     /// </summary>
     public GpuTexture CreateTexture(TextureDesc desc) => _ctx.CreateTexture(desc);
 
-    // ---- transfers ----
+    #endregion
+
+    #region Transfers
 
     /// <summary>
     /// Fills a range of a buffer with a value (the blit encoder's <c>fillBuffer</c>).
@@ -884,7 +892,9 @@ public sealed class MetalCommandList : IGpuCommandList
         b.GenerateMipmaps(_ctx.TextureAt(t));
     }
 
-    // ---- sync ----
+    #endregion
+
+    #region Sync
 
     /// <summary>
     /// Records the dependencies the engine's words describe. Two dispatches in one compute encoder may overlap, and a
@@ -907,7 +917,9 @@ public sealed class MetalCommandList : IGpuCommandList
         EndBlit();
     }
 
-    // ---- labels ----
+    #endregion
+
+    #region Labels
 
     public void BeginLabel(string name)
     {
@@ -923,7 +935,11 @@ public sealed class MetalCommandList : IGpuCommandList
         else _command.PopDebugGroup();
     }
 
-    // ---- the blit encoder (the mip chain's and the uploads') ----
+    #endregion
+
+    #region Blit encoder
+
+    // The blit encoder (the mip chain's and the uploads').
 
     /// <summary>
     /// The blit encoder of this list's command buffer, opened when the first transfer needs it.
@@ -990,4 +1006,6 @@ public sealed class MetalCommandList : IGpuCommandList
         _compute = default;
         _lastCompute = default;
     }
+
+    #endregion
 }
