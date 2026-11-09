@@ -234,7 +234,8 @@ public sealed partial class FirstAidSystem
     // ------------------------------------------------------------------ the finder
 
     /// <summary>
-    /// The Medic / Robotics finder (<c>FUN_14099f690</c>; 58 passes <paramref name="robotics"/> false, 57 true) and the Medic button's one look. Gates: awake and not fighting; an NPC medic
+    /// The Medic / Robotics finder (<c>FUN_14099f690</c>; 58 passes <paramref name="robotics"/> false, 57 true) and the Medic button's one look. Gates: awake, not carried (a body
+    /// carried awake treats no one, itself included, as with orders; engine choice, docs/simulation.md "Carrying, rescue and looting") and not fighting; an NPC medic
     /// also waits while its squad fights or it carries someone (engine stand-ins for the goal's desire <c>FUN_140998410</c>: 0.01 with enemies about, 0.1 while carrying someone, else 1). Returns the best patient's slot and score, -1 for none.
     /// A patient whose (medic, patient) pair is already on the sub-target list (<paramref name="taken"/>) is returned at once from pass 1 or 2 with a score of at least 0.95; passes 1, 2 and 4 skip a patient being eaten.
     /// <list type="number">
@@ -253,7 +254,9 @@ public sealed partial class FirstAidSystem
         var table = world.Characters;
         var next = table.Next;
         var cold = table.Cold(i)!;
-        if (cold.Medical is not { Incapacitated: false } own || cold.Race is null || cold.Stats is null || cold.InCombat && !ordered || cold.IsImprisoned || !TaskStart.Eligible(world, cold, ordered ? TaskType.FirstAidOrder : TaskType.JobMedic)) return (-1, 0);
+        if (cold.Medical is not { Incapacitated: false } own || !cold.CarriedBy.IsNone || cold.Race is null || cold.Stats is null) return (-1, 0);
+        if (cold.InCombat && !ordered || cold.IsImprisoned) return (-1, 0);
+        if (!TaskStart.Eligible(world, cold, ordered ? TaskType.FirstAidOrder : TaskType.JobMedic)) return (-1, 0);
         // No fight in the squad: an NPC's stand-in for its goal's desire (FUN_140998410 is 0.01 with enemies about). The finder has no such test and the job list keeps any job
         // whose desire is above 0 (FUN_14050e5b0), so a player's medic job and Medic order treat a downed mate while the squad fights.
         if (!cold.IsPlayer && cold.SquadId >= 0 && world.Squads.Find(cold.SquadId) is { } squad && CharacterFacts.SquadFighting(table, squad)) return (-1, 0);
@@ -452,6 +455,7 @@ public sealed partial class FirstAidSystem
         var table = world.Characters;
         var next = table.Next;
         var cold = table.Cold(i)!;
+        if (!cold.CarriedBy.IsNone) return -1;   // a carried medic treats no one (as FindPatient)
         if (cold.Medical is not { Incapacitated: false } own || cold.Race is not { } ownRace || cold.Stats is not { } stats) return -1;   // no combat test: the original's finder has none (FUN_14099e240)
         if (OwnKit(cold, ItemInfo.SplintKitFunction) is not { } kit) return -1;   // the medic's own kit, as the order and the splint use
         // No fight test in the original finder (FUN_14099e240) and the job keeps a positive desire (FUN_140998410): a player's splint job runs during a fight, as the Medic job does.
