@@ -3,7 +3,9 @@ using Meitou.Data.Textures;
 
 namespace Meitou.Tests.Textures;
 
-/// <summary>The game's texture quality rules (docs/formats/settings.md, "Mip skipping").</summary>
+/// <summary>
+/// The game's texture quality rules (docs/formats/settings.md, "Mip skipping").
+/// </summary>
 public class TextureQualityTests
 {
     // level, name, group, expected drop
@@ -22,7 +24,10 @@ public class TextureQualityTests
     public void LevelsToDropFollowsTheListener(int level, string name, string group, int expected) =>
         Assert.Equal(expected, TextureQuality.LevelsToDrop(name, group, level));
 
-    /// <summary>A DXT file of <paramref name="width"/>×<paramref name="height"/> with <paramref name="mips"/> levels; every block byte is its level's number plus 1.</summary>
+    /// <summary>
+    /// A DXT file of <paramref name="width"/>×<paramref name="height"/> with <paramref name="mips"/> levels; every block byte is its level's number
+    /// plus 1.
+    /// </summary>
     static DdsFile Dxt(int width, int height, int mips, string fourCc = "DXT1", uint caps2 = 0)
     {
         int blockBytes = fourCc == "DXT1" ? 8 : 16;
@@ -54,7 +59,9 @@ public class TextureQualityTests
         return DdsReader.Read(ms.ToArray());
     }
 
-    /// <summary>A DXT file's bytes (as <see cref="Dxt"/> makes them) on disk.</summary>
+    /// <summary>
+    /// A DXT file's bytes (as <see cref="Dxt"/> makes them) on disk.
+    /// </summary>
     static string DxtFile(int width, int height, int mips, string fourCc = "DXT1")
     {
         var dds = Dxt(width, height, mips, fourCc);
@@ -73,7 +80,8 @@ public class TextureQualityTests
             using var file = File.OpenHandle(path);
             var kept = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, 2), out var whole);
             Assert.Equal((64, 64, 7), (whole.Width, whole.Height, whole.MipCount));   // the headers as the whole file lays them out
-            Assert.Equal((expected.Width, expected.Height, expected.MipCount, expected.Format), (kept.Width, kept.Height, kept.MipCount, kept.Format));
+            Assert.Equal((expected.Width, expected.Height, expected.MipCount, expected.Format),
+                    (kept.Width, kept.Height, kept.MipCount, kept.Format));
             Assert.Equal(expected.Surfaces.Count, kept.Surfaces.Count);
             Assert.True(kept.Data.Length < new FileInfo(path).Length / 8, "the top two levels (15/16 of the file) are not read");
             Assert.Equal(0, kept.Surfaces[0].Offset);   // rebased

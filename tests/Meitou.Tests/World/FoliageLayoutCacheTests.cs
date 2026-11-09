@@ -6,7 +6,9 @@ using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The foliage layout cache (docs/formats/foliage.md, "Layout cache"), on a small catalog made here: no game files needed.</summary>
+/// <summary>
+/// The foliage layout cache (docs/formats/foliage.md, "Layout cache"), on a small catalog made here: no game files needed.
+/// </summary>
 public sealed class FoliageLayoutCacheTests : IDisposable
 {
     readonly string _temp = Path.Combine(Path.GetTempPath(), "meitou-foliage-cache-test-" + Guid.NewGuid().ToString("N"));
@@ -62,8 +64,10 @@ public sealed class FoliageLayoutCacheTests : IDisposable
         var lawn = catalog.Layers["11-t.mod"];
         var zone = new FoliageZone { Zone = coordinate, Resources = 7, Complete = complete };
         for (int i = 0; i < 500; i++)
-            zone.Instances.Add(new FoliageInstance(i % 3 == 0 ? leaf : tree, trees, new Vector3(rng.NextSingle() * 1000, rng.NextSingle() * 50, rng.NextSingle() * 1000),
-                rng.NextSingle() * 3, rng.NextSingle() * 360, Quaternion.Normalize(new Quaternion(rng.NextSingle(), rng.NextSingle(), rng.NextSingle(), rng.NextSingle() + 0.1f))));
+            zone.Instances.Add(new FoliageInstance(i % 3 == 0 ? leaf : tree, trees,
+                    new Vector3(rng.NextSingle() * 1000, rng.NextSingle() * 50, rng.NextSingle() * 1000),
+                rng.NextSingle() * 3, rng.NextSingle() * 360, Quaternion.Normalize(new Quaternion(rng.NextSingle(), rng.NextSingle(),
+                        rng.NextSingle(), rng.NextSingle() + 0.1f))));
         if (complete)
         {
             var a = new byte[FoliageGround.Size * FoliageGround.Size];

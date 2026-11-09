@@ -2,7 +2,9 @@ using System.Text;
 using Meitou.Content;
 using Meitou.Data.Audio;
 
-/// <summary>Surveys and dumps of the install's Wwise banks (docs/formats/wwise-bnk.md).</summary>
+/// <summary>
+/// Surveys and dumps of the install's Wwise banks (docs/formats/wwise-bnk.md).
+/// </summary>
 static class AudioTool
 {
     static string AudioDirectory(GameInstall install) => Path.Combine(install.DataDirectory, "audio");
@@ -11,7 +13,8 @@ static class AudioTool
     {
         if (args.Length == 0) return Survey(install);
         if (args[0] == "render") return Render(install, args[1..]);
-        var path = File.Exists(args[0]) ? args[0] : Path.Combine(AudioDirectory(install), args[0].EndsWith(".bnk", StringComparison.OrdinalIgnoreCase) ? args[0] : args[0] + ".bnk");
+        var path = File.Exists(args[0]) ? args[0]
+                : Path.Combine(AudioDirectory(install), args[0].EndsWith(".bnk", StringComparison.OrdinalIgnoreCase) ? args[0] : args[0] + ".bnk");
         if (!File.Exists(path))
         {
             Console.Error.WriteLine($"No bank {args[0]}");
@@ -27,10 +30,11 @@ static class AudioTool
 
     /// <summary>
     /// <c>audio render &lt;seconds&gt; &lt;out.wav&gt; [banks and events...] [name=value parameters] [group:state states]</c>: plays events through
-    /// <see cref="Meitou.Game.Audio.WwisePlayer"/> offline (no sound card) and writes the mix; a word ending in <c>.bnk</c> loads that bank first.
-    /// An event word may carry a place, an object and a time: <c>Footsteps@500,0,0~3</c> posts it at second 3 on a new game object at (500, 0, 0),
-    /// <c>Stop_Emitter#1~9</c> on object 1001 (<c>#1</c> names it; <c>Start_Emitter@50,0,0#1</c> places it), while <c>Pause_Game~10</c> posts it on the music object (100) at second 10; <c>@listener=x,y,z[,fx,fy,fz]</c> puts the listener there (facing -z by
-    /// default). Prints the level each second, with the left and right levels.
+    /// <see cref="Meitou.Game.Audio.WwisePlayer"/> offline (no sound card) and writes the mix; a word ending in <c>.bnk</c> loads that bank first. An
+    /// event word may carry a place, an object and a time: <c>Footsteps@500,0,0~3</c> posts it at second 3 on a new game object at (500, 0, 0),
+    /// <c>Stop_Emitter#1~9</c> on object 1001 (<c>#1</c> names it; <c>Start_Emitter@50,0,0#1</c> places it), while <c>Pause_Game~10</c> posts it on
+    /// the music object (100) at second 10; <c>@listener=x,y,z[,fx,fy,fz]</c> puts the listener there (facing -z by default). Prints the level each
+    /// second, with the left and right levels.
     /// </summary>
     static int Render(GameInstall install, string[] args)
     {
@@ -39,14 +43,33 @@ static class AudioTool
             Console.Error.WriteLine("audio render <seconds> <out.wav> [Bank.bnk ...] [Event[@x,y,z][~seconds] or 8-digit hex id ...] [Parameter=value ...] [Group:State ...] [@listener=x,y,z[,fx,fy,fz]]");
             return 2;
         }
+
         if (Library(install) is not { } library) return 1;
         const int rate = Meitou.Game.Audio.AudioSystem.SampleRate;
         using var player = new Meitou.Game.Audio.WwisePlayer(library, AudioDirectory(install), rate);
         var loads = new List<Task>();
+        var events = ReadRenderArguments(player, args[2..], loads);
+        Task.WaitAll([.. loads]);
+        events.Sort((x, y) => x.At.CompareTo(y.At));
+        int total = (int)(seconds * rate);
+        var all = new float[total * 2];
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        MixRender(player, events, all, rate, total);
+        WriteWav(args[1], all, 2, rate);
+        Console.WriteLine($"{args[1]}: {seconds} s mixed in {watch.Elapsed.TotalSeconds:0.00} s");
+        return 0;
+    }
+
+    // Loads the banks, sets parameters, states and the listener, and returns the events to post while mixing.
+    static List<(double At, string Event, ulong Object)> ReadRenderArguments(
+        Meitou.Game.Audio.WwisePlayer player,
+        string[] args,
+        List<Task> loads)
+    {
         var events = new List<(double At, string Event, ulong Object)>();
         ulong nextObject = 2000;
         var ci = System.Globalization.CultureInfo.InvariantCulture;
-        foreach (var a in args[2..])
+        foreach (var a in args)
         {
             if (a.EndsWith(".bnk", StringComparison.OrdinalIgnoreCase)) loads.Add(player.LoadBank(a[..^4]));
             else if (a.StartsWith("@listener=", StringComparison.Ordinal))
@@ -67,12 +90,14 @@ static class AudioTool
                     at = double.Parse(word[(tilde + 1)..], ci);
                     word = word[..tilde];
                 }
+
                 ulong obj = Meitou.Game.Audio.AudioSystem.MusicObject;
                 if (word.LastIndexOf('#') is var hash and >= 0)
                 {
                     obj = 1000 + ulong.Parse(word[(hash + 1)..], ci);
                     word = word[..hash];
                 }
+
                 if (word.IndexOf('@') is var pos and >= 0)
                 {
                     var n = word[(pos + 1)..].Split(',').Select(x => float.Parse(x, ci)).ToArray();
@@ -80,48 +105,62 @@ static class AudioTool
                     player.SetPosition(obj, new System.Numerics.Vector3(n[0], n[1], n[2]));
                     word = word[..pos];
                 }
+
                 events.Add((at, word, obj));
             }
         }
-        Task.WaitAll([.. loads]);
-        events.Sort((x, y) => x.At.CompareTo(y.At));
+
+        return events;
+    }
+
+    static void MixRender(
+        Meitou.Game.Audio.WwisePlayer player,
+        List<(double At, string Event, ulong Object)> events,
+        float[] all,
+        int rate,
+        int total)
+    {
         int nextEvent = 0;
-        int total = (int)(seconds * rate);
-        var all = new float[total * 2];
         var block = new float[Meitou.Game.Audio.AudioOutput.BlockFrames * 2];
-        var watch = System.Diagnostics.Stopwatch.StartNew();
         for (int at = 0; at < total; at += Meitou.Game.Audio.AudioOutput.BlockFrames)
         {
             for (; nextEvent < events.Count && events[nextEvent].At <= (double)at / rate; nextEvent++)
             {
                 var (_, name, obj) = events[nextEvent];
-                if (name.Length == 8 && uint.TryParse(name, System.Globalization.NumberStyles.AllowHexSpecifier, null, out var id)) player.Post(id, obj);
-                else player.Post(name, obj);
+                if (name.Length == 8 && uint.TryParse(name, System.Globalization.NumberStyles.AllowHexSpecifier, null, out var id))
+                    player.Post(id, obj);
+                else
+                    player.Post(name, obj);
             }
+
             Array.Clear(block);
             player.Mix(block, Meitou.Game.Audio.AudioOutput.BlockFrames);
             Array.Copy(block, 0, all, at * 2, Math.Min(block.Length, (total - at) * 2));
             if ((at / Meitou.Game.Audio.AudioOutput.BlockFrames) % 43 == 0)
-            {
-                var (instances, voices, _, clips) = player.Stats;
-                int from = Math.Max(0, at - rate), to = at;
-                double left = 0, right = 0;
-                float peak = 0;
-                for (int i = from; i < to; i++)
-                {
-                    left += all[2 * i] * all[2 * i];
-                    right += all[2 * i + 1] * all[2 * i + 1];
-                    peak = Math.Max(peak, Math.Max(Math.Abs(all[2 * i]), Math.Abs(all[2 * i + 1])));
-                }
-                int n = Math.Max(1, to - from);
-                double rms = Math.Sqrt((left + right) / (2 * n));
-                static double Db(double x) => 20 * Math.Log10(x + 1e-9);
-                Console.WriteLine($"{(double)at / rate,6:0.0} s  instances {instances,2} voices {voices,2} (music {player.MusicVoices,2}) clips {clips,3}  last second: rms {Db(rms),6:0.0} dBFS (L {Db(Math.Sqrt(left / n)),6:0.0} R {Db(Math.Sqrt(right / n)),6:0.0}) peak {peak:0.000}");
-            }
+                PrintLevel(player, all, at, rate);
         }
-        WriteWav(args[1], all, 2, rate);
-        Console.WriteLine($"{args[1]}: {seconds} s mixed in {watch.Elapsed.TotalSeconds:0.00} s");
-        return 0;
+    }
+
+    // The level of the last second mixed up to block start 'at': RMS and peak, with the left and right RMS.
+    static void PrintLevel(Meitou.Game.Audio.WwisePlayer player, float[] all, int at, int rate)
+    {
+        var (instances, voices, _, clips) = player.Stats;
+        int from = Math.Max(0, at - rate), to = at;
+        double left = 0, right = 0;
+        float peak = 0;
+        for (int i = from; i < to; i++)
+        {
+            left += all[2 * i] * all[2 * i];
+            right += all[2 * i + 1] * all[2 * i + 1];
+            peak = Math.Max(peak, Math.Max(Math.Abs(all[2 * i]), Math.Abs(all[2 * i + 1])));
+        }
+
+        int n = Math.Max(1, to - from);
+        double rms = Math.Sqrt((left + right) / (2 * n));
+        static double Db(double x) => 20 * Math.Log10(x + 1e-9);
+        string position = $"{(double)at / rate,6:0.0} s  instances {instances,2} voices {voices,2} (music {player.MusicVoices,2}) clips {clips,3}";
+        string level = $"rms {Db(rms),6:0.0} dBFS (L {Db(Math.Sqrt(left / n)),6:0.0} R {Db(Math.Sqrt(right / n)),6:0.0}) peak {peak:0.000}";
+        Console.WriteLine($"{position}  last second: {level}");
     }
 
     static WwiseCodebookLibrary? Library(GameInstall install)
@@ -132,7 +171,9 @@ static class AudioTool
         return library;
     }
 
-    /// <summary>Converts every Vorbis WEM of the bank and reports failures and sample counts.</summary>
+    /// <summary>
+    /// Converts every Vorbis WEM of the bank and reports failures and sample counts.
+    /// </summary>
     static int DecodeAll(GameInstall install, WwiseBank bank)
     {
         if (Library(install) is not { } library) return 1;
@@ -149,7 +190,8 @@ static class AudioTool
                 seconds += (double)w.SampleCount / w.SampleRate;
                 int frames = pcm.Length / w.Channels;
                 float peak = pcm.Length == 0 ? 0 : pcm.Max(MathF.Abs);
-                if (frames != w.SampleCount || peak is 0 or > 4) Console.WriteLine($"  {m.Id:X8} frames {frames} of {w.SampleCount}, peak {peak:0.###}");
+                if (frames != w.SampleCount
+                        || peak is 0 or > 4) Console.WriteLine($"  {m.Id:X8} frames {frames} of {w.SampleCount}, peak {peak:0.###}");
             }
             catch (Exception e) when (e is InvalidDataException or ArgumentException or IndexOutOfRangeException)
             {
@@ -161,7 +203,9 @@ static class AudioTool
         return failed == 0 ? 0 : 1;
     }
 
-    /// <summary>Writes WEMs of the bank (one id, or all) as 16-bit WAV files into a folder.</summary>
+    /// <summary>
+    /// Writes WEMs of the bank (one id, or all) as 16-bit WAV files into a folder.
+    /// </summary>
     static int ExportWav(GameInstall install, WwiseBank bank, string folder, string? id)
     {
         if (Library(install) is not { } library) return 1;
@@ -195,7 +239,9 @@ static class AudioTool
         foreach (var x in pcm) s.Write((short)Math.Clamp(MathF.Round(x * 32767), -32768, 32767));
     }
 
-    /// <summary>Every bank: version, sections, object types, decode failures, media and references that do not resolve.</summary>
+    /// <summary>
+    /// Every bank: version, sections, object types, decode failures, media and references that do not resolve.
+    /// </summary>
     static int Survey(GameInstall install)
     {
         int failures = 0;
@@ -217,9 +263,11 @@ static class AudioTool
             }
             var sounds = bank.Objects.OfType<WwiseSound>().ToList();
             var external = sounds.Where(s => s.Source.IsVorbis && bank.FindMedia(s.Source.SourceId) is null)
-                .Select(s => allMedia.TryGetValue(s.Source.SourceId, out var other) ? other : "nowhere").GroupBy(x => x).Select(g => $"{g.Key} x{g.Count()}").ToList();
+                .Select(s => allMedia.TryGetValue(s.Source.SourceId, out var other) ? other
+                        : "nowhere").GroupBy(x => x).Select(g => $"{g.Key} x{g.Count()}").ToList();
             var unused = bank.Media.Count(m => !sounds.Any(s => s.Source.SourceId == m.Id));
-            var misplaced = sounds.Count(s => bank.FindMedia(s.Source.SourceId) is { } m && (m.Offset != s.Source.Offset || m.Length != s.Source.Size));
+            var misplaced = sounds.Count(s => bank.FindMedia(s.Source.SourceId) is { } m
+                    && (m.Offset != s.Source.Offset || m.Length != s.Source.Size));
             var dangling = Dangling(bank).ToList();
             if (external.Count > 0) Console.WriteLine($"    sounds with media in another bank: {string.Join(", ", external)}");
             if (unused > 0) Console.WriteLine($"    media no sound uses: {unused}");
@@ -230,7 +278,9 @@ static class AudioTool
         return failures == 0 ? 0 : 1;
     }
 
-    /// <summary>Child, parent, playlist and action-target references that do not resolve inside the bank.</summary>
+    /// <summary>
+    /// Child, parent, playlist and action-target references that do not resolve inside the bank.
+    /// </summary>
     public static IEnumerable<(string Kind, uint Id)> Dangling(WwiseBank bank)
     {
         foreach (var o in bank.Objects)
@@ -268,7 +318,9 @@ static class AudioTool
         _ => null,
     };
 
-    /// <summary>Child ids stored in the bank. A music switch's decision tree may also name objects of other banks (the shared top switches).</summary>
+    /// <summary>
+    /// Child ids stored in the bank. A music switch's decision tree may also name objects of other banks (the shared top switches).
+    /// </summary>
     public static uint[] Children(WwiseObject o) => o switch
     {
         WwiseActorMixer m => m.Children,
@@ -278,7 +330,9 @@ static class AudioTool
         _ => Music(o)?.Children ?? [],
     };
 
-    /// <summary>Names of the music banks' events, groups and states that match the exe's strings by hash (docs/formats/wwise-bnk.md#music).</summary>
+    /// <summary>
+    /// Names of the music banks' events, groups and states that match the exe's strings by hash (docs/formats/wwise-bnk.md#music).
+    /// </summary>
     static readonly Dictionary<uint, string> KnownNames = new[]
     {
         "Biomes", "General", "Time_in_Game", "Day", "Night", "Radio", "menu", "In_Game", "Beds", "Frames",
@@ -309,7 +363,8 @@ static class AudioTool
                 if (action.Kind == WwiseActionKind.Play) Tree(bank, action.Target, 2, printed);
             }
         }
-        var rest = bank.Objects.Where(o => Node(o) is not null && !printed.Contains(o.Id) && (Node(o)!.ParentId == 0 || bank.Find(Node(o)!.ParentId) is null)).ToList();
+        var rest = bank.Objects.Where(o => Node(o) is not null && !printed.Contains(o.Id)
+                && (Node(o)!.ParentId == 0 || bank.Find(Node(o)!.ParentId) is null)).ToList();
         foreach (var o in rest) Tree(bank, o.Id, 0, printed);
         foreach (var raw in bank.Objects.OfType<WwiseRawObject>()) Console.WriteLine($"{raw.Type} {raw.Id:X8} {raw.Body.Length} bytes{(raw.Error is null ? "" : " FAIL " + raw.Error)}");
     }
@@ -339,13 +394,56 @@ static class AudioTool
         }
         var node = Node(o);
         var sb = new StringBuilder($"{pad}{o.Type} {id:X8}");
-        if (node is not null)
+        if (node is not null) AppendNodeDetails(sb, node);
+        AppendKindDetails(sb, o);
+        if (Music(o) is { } music && music.Meter.Flags != 0)
+            sb.Append($" grid {music.Meter.GridPeriod:0.#} ms {music.Meter.Tempo} bpm {music.Meter.Beats}/{music.Meter.BeatUnit}");
+        Console.WriteLine(sb);
+        var rules = o switch { WwiseMusicSwitch w => w.Transitions, WwiseMusicPlaylist p => p.Transitions, _ => [] };
+        foreach (var t in rules) Console.WriteLine($"{pad}  {Transition(t)}");
+        if (o is WwiseMusicSwitch ms)
         {
-            sb.Append(Props(node.Properties));
-            if (node.Positioning.OverridesParent) sb.Append($" pos {node.Positioning.Bits:X2}{(node.Positioning.Is3D ? $" att {node.Positioning.AttenuationId:X8}" : "")}{(node.Positioning.Vertices.Length > 0 ? $" paths {node.Positioning.Paths.Length}" : "")}");
-            foreach (var rtpc in node.Rtpcs) sb.Append($" rtpc {rtpc.GameParameterId:X8}->p{rtpc.ParameterId}[{rtpc.Points.Length}]");
-            foreach (var s in node.StateGroups) sb.Append($" states {s.GroupId:X8}[{s.States.Length}]");
+            foreach (var d in ms.Tree.Children) Decision(bank, d, depth + 1, printed);
+            return;
         }
+        if (o is WwiseMusicPlaylist pl)
+        {
+            PlaylistItem(bank, pl.Playlist, depth + 1, printed);
+            return;
+        }
+
+        PrintChildren(bank, o, depth, pad, printed);
+    }
+
+    static void PrintChildren(WwiseBank bank, WwiseObject o, int depth, string pad, HashSet<uint> printed)
+    {
+        if (o is WwiseSwitchContainer sw)
+            foreach (var (switchId, nodes) in sw.Switches)
+            {
+                Console.WriteLine($"{pad}  when {switchId:X8}:");
+                foreach (var n in nodes) Tree(bank, n, depth + 2, printed);
+            }
+
+        foreach (var c in Children(o))
+            if (o is not WwiseSwitchContainer || !printed.Contains(c)) Tree(bank, c, depth + 1, printed);
+    }
+
+    static void AppendNodeDetails(StringBuilder sb, WwiseNodeBase node)
+    {
+        sb.Append(Props(node.Properties));
+        if (node.Positioning.OverridesParent)
+        {
+            string attenuation = node.Positioning.Is3D ? $" att {node.Positioning.AttenuationId:X8}" : "";
+            string paths = node.Positioning.Vertices.Length > 0 ? $" paths {node.Positioning.Paths.Length}" : "";
+            sb.Append($" pos {node.Positioning.Bits:X2}{attenuation}{paths}");
+        }
+
+        foreach (var rtpc in node.Rtpcs) sb.Append($" rtpc {rtpc.GameParameterId:X8}->p{rtpc.ParameterId}[{rtpc.Points.Length}]");
+        foreach (var s in node.StateGroups) sb.Append($" states {s.GroupId:X8}[{s.States.Length}]");
+    }
+
+    static void AppendKindDetails(StringBuilder sb, WwiseObject o)
+    {
         switch (o)
         {
             case WwiseSound s:
@@ -368,30 +466,10 @@ static class AudioTool
                     sb.Append($" clip wem {c.SourceId:X8} at {c.PlayAt:0.#} trim {c.BeginTrim:0.#}/{c.EndTrim:0.#} of {c.SourceDuration:0.#} ms");
                 break;
             case WwiseMusicSwitch w:
-                sb.Append($" on {string.Join(", ", w.Arguments.Select(a => $"{(a.GroupType == 1 ? "state" : "switch")} {Name(a.GroupId)}"))}{(w.ContinuePlayback ? " continue" : "")}");
+                string arguments = string.Join(", ", w.Arguments.Select(a => $"{(a.GroupType == 1 ? "state" : "switch")} {Name(a.GroupId)}"));
+                sb.Append($" on {arguments}{(w.ContinuePlayback ? " continue" : "")}");
                 break;
         }
-        if (Music(o) is { } music && music.Meter.Flags != 0) sb.Append($" grid {music.Meter.GridPeriod:0.#} ms {music.Meter.Tempo} bpm {music.Meter.Beats}/{music.Meter.BeatUnit}");
-        Console.WriteLine(sb);
-        var rules = o switch { WwiseMusicSwitch w => w.Transitions, WwiseMusicPlaylist p => p.Transitions, _ => [] };
-        foreach (var t in rules) Console.WriteLine($"{pad}  {Transition(t)}");
-        if (o is WwiseMusicSwitch ms)
-        {
-            foreach (var d in ms.Tree.Children) Decision(bank, d, depth + 1, printed);
-            return;
-        }
-        if (o is WwiseMusicPlaylist pl)
-        {
-            PlaylistItem(bank, pl.Playlist, depth + 1, printed);
-            return;
-        }
-        if (o is WwiseSwitchContainer sw)
-            foreach (var (switchId, nodes) in sw.Switches)
-            {
-                Console.WriteLine($"{pad}  when {switchId:X8}:");
-                foreach (var n in nodes) Tree(bank, n, depth + 2, printed);
-            }
-        foreach (var c in Children(o)) if (o is not WwiseSwitchContainer || !printed.Contains(c)) Tree(bank, c, depth + 1, printed);
     }
 
     static string Fade(WwiseFade f) => f.Time == 0 && f.Offset == 0 ? "cut" : $"{f.Time} ms curve {f.Curve} offset {f.Offset}";
@@ -402,7 +480,7 @@ static class AudioTool
         var (s, d) = (t.Source, t.Destination);
         return $"rule {Ids(t.Sources)} -> {Ids(t.Destinations)}: exit sync {s.SyncType} fade-out {Fade(s.FadeOut)}{(s.PlayPostExit ? " post-exit" : "")}"
             + $"; enter fade-in {Fade(d.FadeIn)}{(d.PlayPreEntry ? " pre-entry" : "")}{(d.JumpToId != 0 ? $" jump to item {d.JumpToId:X8}" : "")}"
-            + $"{(d.EntryType != 0 ? $" entry {d.EntryType}" : "")}{(s.CueFilter != 0 || d.CueFilter != 0 ? $" cues {s.CueFilter:X8}/{d.CueFilter:X8}" : "")}";
+                + $"{(d.EntryType != 0 ? $" entry {d.EntryType}" : "")}{(s.CueFilter != 0 || d.CueFilter != 0 ? $" cues {s.CueFilter:X8}/{d.CueFilter:X8}" : "")}";
     }
 
     static void Decision(WwiseBank bank, WwiseDecisionNode d, int depth, HashSet<uint> printed)
@@ -464,7 +542,9 @@ static class AudioTool
         return raw < 0x00800000 ? raw.ToString() : f.ToString("0.###");
     }
 
-    /// <summary>The RIFF header of a WEM: the codec tag, channels, rate, the fmt chunk's size and the other chunks.</summary>
+    /// <summary>
+    /// The RIFF header of a WEM: the codec tag, channels, rate, the fmt chunk's size and the other chunks.
+    /// </summary>
     public static string WemSummary(ReadOnlySpan<byte> wem)
     {
         if (wem.Length < 12 || !wem.StartsWith("RIFF"u8)) return "not RIFF";

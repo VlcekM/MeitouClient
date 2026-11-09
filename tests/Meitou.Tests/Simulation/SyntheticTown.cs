@@ -8,7 +8,9 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>A small invented game database with one town, for the population and movement tests (no install needed).</summary>
+/// <summary>
+/// A small invented game database with one town, for the population and movement tests (no install needed).
+/// </summary>
 static class SyntheticTown
 {
     const uint New = 0x10;
@@ -24,9 +26,11 @@ static class SyntheticTown
     public static readonly Vector3 Far = new(9500, 300, 2000);
 
     /// <summary><paramref name="roaming"/> adds a second town (<c>31-t</c>, far away), roaming squads and bar squads at the first, and a roaming budget for the faction;
-    /// <paramref name="extra"/> adds records, <paramref name="changePatrol"/> changes the resident <c>Patrol</c> template (<c>10-t</c>) and <paramref name="changeFolk"/> the
+    /// <paramref name="extra"/> adds records, <paramref name="changePatrol"/> changes the resident <c>Patrol</c> template (<c>10-t</c>) and
+    /// <paramref name="changeFolk"/> the
     /// <c>Faction folk</c> one (<c>12-t</c>, the roaming squads') before the database is made.</summary>
-    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false, bool items = false,
+    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false,
+            bool items = false,
         IReadOnlyList<FcsRecord>? extra = null, Action<FcsRecord>? changePatrol = null, Action<FcsRecord>? changeFolk = null, Action<FcsRecord>? changeTown = null)
     {
         var race = Rec("1-t", FcsRecordType.Race, "Testers");
@@ -141,9 +145,15 @@ static class SyntheticTown
 
     public static float Ground(float x, float z) => 300;
 
-    /// <summary>The game's system order (<see cref="StandardSystems"/>) for the parts a test needs; path requests are answered inside the tick unless asked otherwise.</summary>
-    public static StandardSystemSet Standard(PopulationData data, IWalkability walk, StandardParts parts, PopulationSettings? population = null, bool synchronousPaths = true, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null) =>
-        StandardSystems.Build(data, walk, new StandardSystemOptions { Parts = parts, Population = population, SynchronousPaths = synchronousPaths, BodyTimeScale = bodyTimeScale, Feed = feed });
+    /// <summary>
+    /// The game's system order (<see cref="StandardSystems"/>) for the parts a test needs; path requests are answered inside the tick unless asked
+    /// otherwise.
+    /// </summary>
+    public static StandardSystemSet Standard(PopulationData data, IWalkability walk, StandardParts parts, PopulationSettings? population = null,
+            bool synchronousPaths = true, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null) =>
+        StandardSystems.Build(data, walk,
+                new StandardSystemOptions { Parts = parts, Population = population, SynchronousPaths = synchronousPaths,
+                        BodyTimeScale = bodyTimeScale, Feed = feed });
 
     public static SimWorld World(ulong seed, int threads, int residentSquads = 3, PopulationSettings? settings = null, bool synchronousPaths = true,
         GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null, Meitou.Simulation.Bodies.BodyOptions? bodyOptions = null, int minPartition = 16, params ITickSystem[] extra)
@@ -151,9 +161,11 @@ static class SyntheticTown
         db ??= Database(residentSquads);
         var walk = new OpenGroundWalkability(Ground);
         var data = Data(db, bodyOptions);
-        var parts = StandardParts.Population | StandardParts.Movement | (bodies ? StandardParts.Body : 0) | (feed is not null ? StandardParts.Feed : 0);
+        var parts = StandardParts.Population | StandardParts.Movement | (bodies ? StandardParts.Body : 0) | (feed is not null ? StandardParts.Feed
+                : 0);
         var systems = Standard(data, walk, parts, settings, synchronousPaths, bodyTimeScale, feed).Systems.Concat(extra);
-        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, walk, systems);
+        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition },
+                walk, systems);
         world.Commands.Enqueue(new FocusCommand(Centre) { Tick = 0 });
         return world;
     }

@@ -5,7 +5,9 @@ using Meitou.Tests.Gameplay;
 
 namespace Meitou.Tests.World;
 
-/// <summary>A building's position marker: its position plus its orientation applied to the flagged part's offset times the building scale (FUN_14055f6e0).</summary>
+/// <summary>
+/// A building's position marker: its position plus its orientation applied to the flagged part's offset times the building scale (FUN_14055f6e0).
+/// </summary>
 public class PositionMarkerTests
 {
     [Fact]

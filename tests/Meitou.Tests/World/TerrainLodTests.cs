@@ -3,7 +3,9 @@ using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The terrain's screen-space error LOD (<see cref="TerrainLod"/>) and the CDLOD tree it drives.</summary>
+/// <summary>
+/// The terrain's screen-space error LOD (<see cref="TerrainLod"/>) and the CDLOD tree it drives.
+/// </summary>
 public class TerrainLodTests
 {
     static readonly float Scale1080 = TerrainLod.ProjectionScale(1080, 50 * MathF.PI / 180);
@@ -15,7 +17,8 @@ public class TerrainLodTests
     static readonly double Cell = (double)WorldLayout.WorldSize / (Samples - 1);
 
     static ushort Raw(Func<double, double, float> height, int i, int j) =>
-        (ushort)Math.Round(height(i * Cell - WorldLayout.HalfWorldSize, j * Cell - WorldLayout.HalfWorldSize) / WorldLayout.MaxHeight * ushort.MaxValue);
+        (ushort)Math.Round(height(i * Cell - WorldLayout.HalfWorldSize, j * Cell
+                - WorldLayout.HalfWorldSize) / WorldLayout.MaxHeight * ushort.MaxValue);
 
     static TerrainHeightBounds Bounds(Func<double, double, float> height)
     {
@@ -26,18 +29,23 @@ public class TerrainLodTests
         return new TerrainHeightBounds(raw, Samples);
     }
 
-    /// <summary>The height the shaders would read: the samples' bilinear interpolation (inside the bounds).</summary>
+    /// <summary>
+    /// The height the shaders would read: the samples' bilinear interpolation (inside the bounds).
+    /// </summary>
     static float Height(Func<double, double, float> height, double x, double z)
     {
-        double fx = Math.Clamp((x + WorldLayout.HalfWorldSize) / Cell, 0, Samples - 1.0001), fz = Math.Clamp((z + WorldLayout.HalfWorldSize) / Cell, 0, Samples - 1.0001);
+        double fx = Math.Clamp((x + WorldLayout.HalfWorldSize) / Cell, 0, Samples - 1.0001), fz = Math.Clamp((z + WorldLayout.HalfWorldSize) / Cell,
+                0, Samples - 1.0001);
         int i = (int)fx, j = (int)fz;
         double tx = fx - i, tz = fz - j;
-        double v = Raw(height, i, j) * (1 - tx) * (1 - tz) + Raw(height, i + 1, j) * tx * (1 - tz) + Raw(height, i, j + 1) * (1 - tx) * tz + Raw(height, i + 1, j + 1) * tx * tz;
+        double v = Raw(height, i, j) * (1 - tx) * (1 - tz) + Raw(height, i + 1, j) * tx * (1 - tz) + Raw(height, i, j + 1) * (1 - tx) * tz
+                + Raw(height, i + 1, j + 1) * tx * tz;
         return (float)(v * WorldLayout.MaxHeight / ushort.MaxValue);
     }
 
     static IEnumerable<(int Level, double X, double Z, double S)> Squares(List<TerrainNode> nodes) =>
-        nodes.Select(n => n.Quadrant < 0 ? (n.Level, n.X0, n.Z0, n.Size) : (n.Level, n.X0 + (n.Quadrant & 1) * n.Size / 2, n.Z0 + (n.Quadrant >> 1) * n.Size / 2, n.Size / 2));
+        nodes.Select(n => n.Quadrant < 0 ? (n.Level, n.X0, n.Z0, n.Size)
+                : (n.Level, n.X0 + (n.Quadrant & 1) * n.Size / 2, n.Z0 + (n.Quadrant >> 1) * n.Size / 2, n.Size / 2));
 
     /// <summary>
     /// The surface the patch shader draws at <paramref name="p"/>: the drawn square holding it, its grid cells around p with the
@@ -48,7 +56,8 @@ public class TerrainLodTests
     {
         var node = nodes.First(n =>
         {
-            double x0 = n.Quadrant < 0 ? n.X0 : n.X0 + (n.Quadrant & 1) * n.Size / 2, z0 = n.Quadrant < 0 ? n.Z0 : n.Z0 + (n.Quadrant >> 1) * n.Size / 2;
+            double x0 = n.Quadrant < 0 ? n.X0 : n.X0 + (n.Quadrant & 1) * n.Size / 2, z0 = n.Quadrant < 0 ? n.Z0 : n.Z0
+                    + (n.Quadrant >> 1) * n.Size / 2;
             double s = n.Quadrant < 0 ? n.Size : n.Size / 2;
             return p.X >= x0 && p.X < x0 + s && p.Y >= z0 && p.Y < z0 + s;
         });
@@ -65,7 +74,8 @@ public class TerrainLodTests
         // Slid triangles can cover p from a neighbouring cell: look in the cells around it (the grid's triangulation, GridIndices).
         for (int j = Math.Max(cj - 1, 0); j <= Math.Min(cj + 1, q.GridCells - 1); j++)
             for (int i = Math.Max(ci - 1, 0); i <= Math.Min(ci + 1, q.GridCells - 1); i++)
-                foreach (var (a, b, c) in new[] { (Vertex(i, j), Vertex(i, j + 1), Vertex(i + 1, j)), (Vertex(i + 1, j), Vertex(i, j + 1), Vertex(i + 1, j + 1)) })
+                foreach (var (a, b, c) in new[] { (Vertex(i, j), Vertex(i, j + 1), Vertex(i + 1, j)),
+                        (Vertex(i + 1, j), Vertex(i, j + 1), Vertex(i + 1, j + 1)) })
                 {
                     float area = (b.X - a.X) * (c.Z - a.Z) - (c.X - a.X) * (b.Z - a.Z);
                     if (Math.Abs(area) < 1e-6f) continue;   // collapsed by the slide
@@ -116,7 +126,8 @@ public class TerrainLodTests
     [Theory]
     [MemberData(nameof(Views))]
     [Slow]
-    public void Touching_squares_differ_by_one_level_and_meet_without_cracks(float scale, float near, float far, float ramp, float x, float y, float z)
+    public void Touching_squares_differ_by_one_level_and_meet_without_cracks(float scale, float near, float far, float ramp, float x, float y,
+            float z)
     {
         Func<double, double, float> height = Hills;
         var q = new TerrainQuadtree(18, 64, new TerrainLod(scale, near, far, ramp));
@@ -141,8 +152,16 @@ public class TerrainLodTests
                 for (int k = 1; k < 2 * q.GridCells * a.S / q.NodeSize(a.Level); k += 2)
                 {
                     double px, pz;
-                    if (touchX) { px = Math.Abs(a.X + a.S - b.X) < 1e-6 ? a.X + a.S : a.X; pz = a.Z + k * spacing; if (pz <= b.Z || pz >= b.Z + b.S) continue; }
-                    else { pz = Math.Abs(a.Z + a.S - b.Z) < 1e-6 ? a.Z + a.S : a.Z; px = a.X + k * spacing; if (px <= b.X || px >= b.X + b.S) continue; }
+                    if (touchX)
+                    {
+                        px = Math.Abs(a.X + a.S - b.X) < 1e-6 ? a.X + a.S : a.X;
+                        pz = a.Z + k * spacing;
+                        if (pz <= b.Z || pz >= b.Z + b.S) continue;
+                    }
+                    else { pz = Math.Abs(a.Z + a.S - b.Z) < 1e-6 ? a.Z + a.S : a.Z; px = a.X
+                            + k * spacing;
+                            if (px <= b.X || px >= b.X + b.S) continue;
+                            }
                     Assert.Equal(1f, q.Morph(a.Level, Distance(px, pz)));
                 }
                 // ... while the coarser one's vertices there have not started sliding to the next level yet.
@@ -150,8 +169,16 @@ public class TerrainLodTests
                 for (int k = 1; k < 2 * q.GridCells; k += 2)
                 {
                     double px, pz;
-                    if (touchX) { px = Math.Abs(a.X + a.S - b.X) < 1e-6 ? b.X : b.X + b.S; pz = b.Z + k * coarse; if (pz <= a.Z || pz >= a.Z + a.S) continue; }
-                    else { pz = Math.Abs(a.Z + a.S - b.Z) < 1e-6 ? b.Z : b.Z + b.S; px = b.X + k * coarse; if (px <= a.X || px >= a.X + a.S) continue; }
+                    if (touchX)
+                    {
+                        px = Math.Abs(a.X + a.S - b.X) < 1e-6 ? b.X : b.X + b.S;
+                        pz = b.Z + k * coarse;
+                        if (pz <= a.Z || pz >= a.Z + a.S) continue;
+                    }
+                    else { pz = Math.Abs(a.Z + a.S - b.Z) < 1e-6 ? b.Z : b.Z + b.S; px = b.X
+                            + k * coarse;
+                            if (px <= a.X || px >= a.X + a.S) continue;
+                            }
                     Assert.Equal(0f, q.Morph(b.Level, Distance(px, pz)));
                 }
             }

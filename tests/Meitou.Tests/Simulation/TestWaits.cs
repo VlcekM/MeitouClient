@@ -3,7 +3,9 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Waiting for the simulation's helper threads (path service, population builder) by condition, not by a fixed number of sleeping ticks.</summary>
+/// <summary>
+/// Waiting for the simulation's helper threads (path service, population builder) by condition, not by a fixed number of sleeping ticks.
+/// </summary>
 static class TestWaits
 {
     public static readonly TimeSpan Deadline = TimeSpan.FromSeconds(20);

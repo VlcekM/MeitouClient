@@ -8,7 +8,9 @@ public class DdsReaderTests
 {
     const uint FlagsBase = 0x1 | 0x2 | 0x4 | 0x1000; // CAPS | HEIGHT | WIDTH | PIXELFORMAT
 
-    /// <summary>A DDS file: legacy header (and DX10 header if given), then <paramref name="body"/>.</summary>
+    /// <summary>
+    /// A DDS file: legacy header (and DX10 header if given), then <paramref name="body"/>.
+    /// </summary>
     static byte[] Dds(int width, int height, int mips, string? fourCc, byte[] body,
         uint pfFlags = 0x4, int bitCount = 0, uint r = 0, uint g = 0, uint b = 0, uint a = 0, uint caps2 = 0,
         (int Dxgi, int Dimension, uint Misc, int ArraySize)? dx10 = null)
@@ -49,7 +51,9 @@ public class DdsReaderTests
         return ms.ToArray();
     }
 
-    /// <summary>A BC1 colour block: endpoints and one 2-bit index per pixel (row-major).</summary>
+    /// <summary>
+    /// A BC1 colour block: endpoints and one 2-bit index per pixel (row-major).
+    /// </summary>
     static byte[] ColourBlock(ushort c0, ushort c1, params int[] indices)
     {
         uint bits = 0;
@@ -57,7 +61,9 @@ public class DdsReaderTests
         return [.. BitConverter.GetBytes(c0), .. BitConverter.GetBytes(c1), .. BitConverter.GetBytes(bits)];
     }
 
-    /// <summary>A BC3 alpha / BC4 block: endpoints and one 3-bit index per pixel.</summary>
+    /// <summary>
+    /// A BC3 alpha / BC4 block: endpoints and one 3-bit index per pixel.
+    /// </summary>
     static byte[] ChannelBlock(byte a0, byte a1, params int[] indices)
     {
         ulong bits = 0;

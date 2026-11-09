@@ -12,12 +12,17 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>A plastic surgeon's work (docs/characters.md "Plastic surgeons"): <see cref="EditCharacter"/> is refused unless the surgeon is in reach, the race and gender are kept and the money is more than the price.</summary>
+/// <summary>
+/// A plastic surgeon's work (docs/characters.md "Plastic surgeons"): <see cref="EditCharacter"/> is refused unless the surgeon is in reach, the race
+/// and gender are kept and the money is more than the price.
+/// </summary>
 public class SurgeryTests
 {
     const int Price = 200;
 
-    /// <summary>Gives every look the tests' race, and keeps the proposed record as it is.</summary>
+    /// <summary>
+    /// Gives every look the tests' race, and keeps the proposed record as it is.
+    /// </summary>
     sealed class Looks(GameRecord race) : IAppearanceSource
     {
         public CharacterAppearance? Create(string recordId, string? factionId, int seed) => new() { Race = race };
@@ -55,7 +60,8 @@ public class SurgeryTests
         var at = world.Characters.Previous[patient.Slot].Position;
 
         CharacterId Surgeon(Vector3 where) =>
-            world.Characters.Spawn(new CharacterHot { Position = where, Health = 100 }, new CharacterCold { Name = "Surgeon", RecordId = "85-t", Faction = cold.Faction }, world.Tick);
+            world.Characters.Spawn(new CharacterHot { Position = where, Health = 100 },
+                    new CharacterCold { Name = "Surgeon", RecordId = "85-t", Faction = cold.Faction }, world.Tick);
         var near = Surgeon(at + new Vector3(10, 0, 0));
         var far = Surgeon(at + new Vector3(CharacterEditing.SurgeonReach + 40, 0, 0));
         world.RunTicks(1);
@@ -72,7 +78,8 @@ public class SurgeryTests
         void Attempt(CharacterId surgeon, string raceId, bool female, int money, bool accepted)
         {
             world.Player.Money = money;
-            world.Commands.Enqueue(new EditCharacter(patient, Look(raceId, female), "Renamed", EditKind.Surgery) { Tick = world.Tick, Surgeon = surgeon });
+            world.Commands.Enqueue(new EditCharacter(patient, Look(raceId, female), "Renamed", EditKind.Surgery) { Tick = world.Tick,
+                    Surgeon = surgeon });
             world.RunTicks(1);
             var messages = world.TakeMessages();
             if (accepted)
@@ -101,7 +108,8 @@ public class SurgeryTests
     }
 
     /// <summary>
-    /// An animal on the new-game editor's list (docs/characters.md "Character editor", #312): a name-only edit renames it, a new look sent for it is refused and leaves it as it was.
+    /// An animal on the new-game editor's list (docs/characters.md "Character editor", #312): a name-only edit renames it, a new look sent for it is
+    /// refused and leaves it as it was.
     /// </summary>
     [Fact]
     public void At_creation_a_name_only_edit_renames_an_animal_and_a_new_look_for_it_is_refused()

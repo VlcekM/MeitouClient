@@ -45,10 +45,13 @@ public class AtmosphereTests
         var dome = KenshiHaze.Colour(dir * KenshiHaze.DomeRadius, sun);
         var beyond = KenshiHaze.Colour(dir * 300000, sun);
         Assert.True(near.Y < mid.Y && mid.Y < dome.Y, "more in-scattered light the longer the path");
-        Assert.True((dome - beyond).Length() < 0.02f * dome.Length(), $"{dome} {beyond}");   // the path is capped at one dome radius (the direction still shifts a little)
+        Assert.True((dome - beyond).Length() < 0.02f * dome.Length(),
+                $"{dome} {beyond}");   // the path is capped at one dome radius (the direction still shifts a little)
         // At the dome radius the haze is the sky's Rayleigh light just above the horizon (same integral, same eye).
         var (ray, _, _) = KenshiHaze.Ray(dir * KenshiHaze.DomeRadius);
-        var sky = SkyXModel.InScatter(ray, 1, sun) * SkyAtmosphere.InverseWaveLength4 * (SkyAtmosphere.KrESun * SkyXModel.RayleighPhase(Vector3.Dot(sun, ray)) * SkyAtmosphere.Exposure);
+        var sky = SkyXModel.InScatter(ray, 1,
+                sun) * SkyAtmosphere.InverseWaveLength4 * (SkyAtmosphere.KrESun * SkyXModel.RayleighPhase(Vector3.Dot(sun,
+                        ray)) * SkyAtmosphere.Exposure);
         Assert.Equal(sky.Y, dome.Y, 3);
         // Night: the integral vanishes, the haze is black.
         var night = KenshiHaze.Colour(dir * 30000, Clock.SunDirection(1));

@@ -27,7 +27,8 @@ sealed class VramWatch : IDisposable
                 lock (Gate) { s_peakUsed = Math.Max(s_peakUsed, used); s_budget = total; }
                 if (limit > 0 && total > 0 && used > limit * total)
                 {
-                    Console.WriteLine($"vram      ABORT: {used / 1048576.0:0} MB in use of a {total / 1048576.0:0} MB budget ({100.0 * used / total:0.0}%, limit {limit * 100:0}%)");
+                    Console.WriteLine($"vram      ABORT: {used / 1048576.0:0} MB in use of a {total / 1048576.0:0} MB budget "
+                        + $"({100.0 * used / total:0.0}%, limit {limit * 100:0}%)");
                     Console.Out.Flush();
                     Console.Error.Flush();
                     Terminate(9);
@@ -59,10 +60,14 @@ sealed class VramWatch : IDisposable
         return new VramWatch(device, limit);
     }
 
-    /// <summary>The peak device-local use seen so far and the budget.</summary>
+    /// <summary>
+    /// The peak device-local use seen so far and the budget.
+    /// </summary>
     public static string Describe()
     {
-        lock (Gate) return $"peak {s_peakUsed / 1048576.0:0} MB in use of a {s_budget / 1048576.0:0} MB budget ({(s_budget > 0 ? 100.0 * s_peakUsed / s_budget : 0):0.0}%)";
+        lock (Gate)
+            return $"peak {s_peakUsed / 1048576.0:0} MB in use of a {s_budget / 1048576.0:0} MB budget "
+                + $"({(s_budget > 0 ? 100.0 * s_peakUsed / s_budget : 0):0.0}%)";
     }
 
     public void Dispose()

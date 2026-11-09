@@ -5,7 +5,8 @@ namespace Meitou.Tests.World;
 
 public class ShadowTests
 {
-    static readonly ShadowView Camera = new(new Vector3(-51468, 1200, -14324), Vector3.Normalize(new Vector3(0.6f, -0.35f, 0.7f)), Vector3.UnitY, 50 * MathF.PI / 180, 4 / 3f, 2);
+    static readonly ShadowView Camera = new(new Vector3(-51468, 1200, -14324), Vector3.Normalize(new Vector3(0.6f, -0.35f, 0.7f)), Vector3.UnitY,
+            50 * MathF.PI / 180, 4 / 3f, 2);
     static readonly Vector3 Sun = Vector3.Normalize(new Vector3(0.5f, 0.6f, 0.3f));
 
     [Fact]
@@ -117,22 +118,29 @@ public class ShadowTests
             int j = i == 0 ? 0 : i - 1;
             var a = MeitouShadowFit.Fit(view, Sun, settings, four, j);
             var b = MeitouShadowFit.Fit(view, Sun, settings, five, i);
-            if (i == 3) Assert.True(b.Texel <= a.Texel * 1.0001, $"cascade {i}: {b.Texel} against {a.Texel}");   // its blend band starts later: no larger
+            if (i == 3) Assert.True(b.Texel <= a.Texel * 1.0001,
+                    $"cascade {i}: {b.Texel} against {a.Texel}");   // its blend band starts later: no larger
             else Assert.Equal(a.Texel, b.Texel, 6);
         }
         // The new cascade 1 is finer than the four's cascade 1 (several times in the close-up, whose second slice is the deepest step).
-        Assert.True(MeitouShadowFit.Fit(view, Sun, settings, five, 1).Texel < MeitouShadowFit.Fit(view, Sun, settings, four, 1).Texel / (focus == 45 ? 2 : 1.2));
+        Assert.True(MeitouShadowFit.Fit(view, Sun, settings, five, 1).Texel < MeitouShadowFit.Fit(view, Sun, settings, four, 1).Texel / (focus == 45
+                ? 2 : 1.2));
     }
 
-    /// <summary>Where a world point falls on cascade 0's texel grid (light-space x and y in texels, from the box's translation).</summary>
+    /// <summary>
+    /// Where a world point falls on cascade 0's texel grid (light-space x and y in texels, from the box's translation).
+    /// </summary>
     static (double X, double Y) GridPosition(ShadowCascade c, Vector3 p)
     {
         var r = c.Rotation;
-        double lx = r.M11 * (double)p.X + r.M21 * (double)p.Y + r.M31 * (double)p.Z, ly = r.M12 * (double)p.X + r.M22 * (double)p.Y + r.M32 * (double)p.Z;
+        double lx = r.M11 * (double)p.X + r.M21 * (double)p.Y + r.M31 * (double)p.Z, ly = r.M12 * (double)p.X + r.M22 * (double)p.Y
+                + r.M32 * (double)p.Z;
         return ((lx + c.Translation.X) / c.Texel, (ly + c.Translation.Y) / c.Texel);
     }
 
-    /// <summary>How far, in texels, the grid slid past a point between two fits (whole-texel snaps do not count).</summary>
+    /// <summary>
+    /// How far, in texels, the grid slid past a point between two fits (whole-texel snaps do not count).
+    /// </summary>
     static double Slide((double X, double Y) a, (double X, double Y) b)
     {
         double dx = b.X - a.X, dy = b.Y - a.Y;
@@ -147,16 +155,21 @@ public class ShadowTests
         var settings = new ShadowSettings(4096);
         var splits = MeitouShadowFit.Splits(MeitouShadowFit.QuantizedNear(Camera.Near), settings.Range, 4);
         float turn = 1e-6f;
-        var turned = Vector3.Normalize(new Vector3(Sun.X * MathF.Cos(turn) + Sun.Z * MathF.Sin(turn), Sun.Y, Sun.Z * MathF.Cos(turn) - Sun.X * MathF.Sin(turn)));
+        var turned = Vector3.Normalize(new Vector3(Sun.X * MathF.Cos(turn) + Sun.Z * MathF.Sin(turn), Sun.Y, Sun.Z * MathF.Cos(turn)
+                - Sun.X * MathF.Sin(turn)));
         var p = Camera.Eye + Camera.Forward * 300;   // a receiver in front of the eye
         var eye = (Math.Round(Camera.Eye.X), Math.Round(Camera.Eye.Y), Math.Round(Camera.Eye.Z));
 
-        double atOrigin = Slide(GridPosition(MeitouShadowFit.Fit(Camera, Sun, settings, splits, 0), p), GridPosition(MeitouShadowFit.Fit(Camera, turned, settings, splits, 0), p));
-        double atEye = Slide(GridPosition(MeitouShadowFit.Fit(Camera, Sun, settings, splits, 0, eye), p), GridPosition(MeitouShadowFit.Fit(Camera, turned, settings, splits, 0, eye), p));
+        double atOrigin = Slide(GridPosition(MeitouShadowFit.Fit(Camera, Sun, settings, splits, 0), p),
+                GridPosition(MeitouShadowFit.Fit(Camera, turned, settings, splits, 0), p));
+        double atEye = Slide(GridPosition(MeitouShadowFit.Fit(Camera, Sun, settings, splits, 0, eye), p),
+                GridPosition(MeitouShadowFit.Fit(Camera, turned, settings, splits, 0, eye), p));
         // Through the origin the grid slides about 53000 × 1e-6 = 0.05 units (a quarter texel) under the point; through the eye, 300 × 1e-6.
         Assert.True(atOrigin > 0.1, $"through the origin {atOrigin:0.###} texel");
         Assert.True(atEye < 0.02, $"through the eye {atEye:0.###} texel");
         // With the sun still, either anchor keeps the grid where it was (the camera did not move).
-        Assert.Equal(0, Slide(GridPosition(MeitouShadowFit.Fit(Camera, Sun, settings, splits, 0, eye), p), GridPosition(MeitouShadowFit.Fit(Camera, Sun, settings, splits, 0, eye), p)), 6);
+        Assert.Equal(0,
+                Slide(GridPosition(MeitouShadowFit.Fit(Camera, Sun, settings, splits, 0, eye), p),
+                        GridPosition(MeitouShadowFit.Fit(Camera, Sun, settings, splits, 0, eye), p)), 6);
     }
 }

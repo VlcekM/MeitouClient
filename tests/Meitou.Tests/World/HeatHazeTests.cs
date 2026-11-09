@@ -6,7 +6,9 @@ using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The heat haze's amount and inputs (docs/formats/weather.md and post-processing.md "Heat haze").</summary>
+/// <summary>
+/// The heat haze's amount and inputs (docs/formats/weather.md and post-processing.md "Heat haze").
+/// </summary>
 public class HeatHazeTests
 {
     [Fact]

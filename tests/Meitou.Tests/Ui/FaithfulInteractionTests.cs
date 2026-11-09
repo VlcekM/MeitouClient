@@ -20,11 +20,13 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
 {
     static PlayerInterface Ui(WorldSession session)
     {
-        var install = GameInstall.Locate(); Assert.SkipWhen(install is null, "No Kenshi install configured");
+        var install = GameInstall.Locate();
+        Assert.SkipWhen(install is null, "No Kenshi install configured");
         var resources = OgreScriptResources.ForInstall(install, LoadOrder.FromInstall(install));
         var ui = new PlayerInterface(session, (_, _) => 0, c => c.Position) { Width = 1600, Height = 900 };
         ui.LoadUi(UiMode.Faithful, name => resources.Find(name));
-        ui.Frontend.ConfigureFrontend(SyntheticTown.Database(), () => [], ""); return ui;
+        ui.Frontend.ConfigureFrontend(SyntheticTown.Database(), () => [], "");
+        return ui;
     }
     static Vector2 Centre(UiControl c) => new(c.Bounds.X + c.Bounds.Width / 2, c.Bounds.Y + c.Bounds.Height / 2);
     static void Click(PlayerInterface ui, string name) => ui.MouseDown(MouseButton.Left, Centre(ui.UiFrame.Last(c => c.Name == name)), false);
@@ -36,7 +38,10 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         var ui = Ui(session);
         try
         {
-            int height = 720; ui.Width = 1280; ui.Height = height; ui.Frontend.ShowTitle();
+            int height = 720;
+            ui.Width = 1280;
+            ui.Height = height;
+            ui.Frontend.ShowTitle();
             Click(ui, "NewGameButton");
             float closedY = ui.UiFrame.Last(c => c.Name == "BeginButton").Bounds.Y;
             Click(ui, "AdvancedButton");
@@ -74,12 +79,16 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.Contains(ui.UiFrame, c => c.Name == "BeginButton");
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "advanced-track-0");
             Click(ui, "AdvancedButton");
-            MyGuiEvent? request = null; ui.ScreenAction += e => request = e;
-            Click(ui, "BeginButton"); Assert.Equal("new-game", request?.Action);
+            MyGuiEvent? request = null;
+            ui.ScreenAction += e => request = e;
+            Click(ui, "BeginButton");
+            Assert.Equal("new-game", request?.Action);
             Assert.Equal(selectedHunger, ui.AdvancedOptions.NewGameOptions[0]);
             Click(ui, "CancelButton");
             Assert.DoesNotContain(ui.UiFrame, c => c.Name == "advanced-track-0");
-            Click(ui, "NewGameButton"); Assert.Equal(selectedHunger, ui.AdvancedOptions.NewGameOptions[0]);   // kept between openings, as the original's globals
+            Click(ui, "NewGameButton");
+            Assert.Equal(selectedHunger, ui.AdvancedOptions.NewGameOptions[0]);
+            // kept between openings, as the original's globals
         }
         finally { ui.DisposeUi(); }
     }
@@ -88,7 +97,9 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
     public void OriginalTitleNewGameAndExitConfirmationProduceHostRequestsAndPauseTheWorld()
     {
         using var session = new WorldSession(Vector3.Zero, (-100, -100, 100, 100), (_, _) => 0);
-        var ui = Ui(session); MyGuiEvent? request = null; ui.ScreenAction += e => request = e;
+        var ui = Ui(session);
+        MyGuiEvent? request = null;
+        ui.ScreenAction += e => request = e;
         try
         {
             // The Meitou title uses the world and keeps the new-game dialogs and mode switching functional.
@@ -105,17 +116,29 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.Contains(ui.UiFrame, c => c.Properties.GetValueOrDefault("ImageResource") == "Kenshi_TitleScreen");
             ui.Frontend.CloseFrontend();
             Assert.False(session.Simulation.RequestedPause);
-            ui.Frontend.ShowTitle(); Assert.True(session.Simulation.RequestedPause);
-            Click(ui, "NewGameButton"); Assert.Contains(ui.UiFrame, c => c.Name == "BeginButton" && c.Enabled);
-            Click(ui, "BeginButton"); Assert.Equal("new-game", request!.Action); Assert.False(session.World.Player.Exists);
-            ui.UiKey(Key.Escape); Click(ui, "ExitButton");
+            ui.Frontend.ShowTitle();
+            Assert.True(session.Simulation.RequestedPause);
+            Click(ui, "NewGameButton");
+            Assert.Contains(ui.UiFrame, c => c.Name == "BeginButton" && c.Enabled);
+            Click(ui, "BeginButton");
+            Assert.Equal("new-game", request!.Action);
+            Assert.False(session.World.Player.Exists);
+            ui.UiKey(Key.Escape);
+            Click(ui, "ExitButton");
             Assert.Contains(ui.UiFrame, c => c.Name == "ButtonA");
-            Click(ui, "ButtonB"); Assert.Equal("new-game", request.Action);
-            Click(ui, "ExitButton"); Click(ui, "ButtonA"); Assert.Equal("exit", request.Action);
-            ui.Frontend.CloseFrontend(); Assert.False(session.Simulation.RequestedPause);
+            Click(ui, "ButtonB");
+            Assert.Equal("new-game", request.Action);
+            Click(ui, "ExitButton");
+            Click(ui, "ButtonA");
+            Assert.Equal("exit", request.Action);
+            ui.Frontend.CloseFrontend();
+            Assert.False(session.Simulation.RequestedPause);
             // In play the Esc menu's Exit offers the main menu, quit and cancel.
-            ui.UiKey(Key.Escape); Click(ui, "ExitGameButton"); Assert.Contains(ui.UiFrame, c => c.Name == "ButtonC" && c.Enabled);
-            Click(ui, "ButtonA"); Assert.Equal("main-menu", request.Action);
+            ui.UiKey(Key.Escape);
+            Click(ui, "ExitGameButton");
+            Assert.Contains(ui.UiFrame, c => c.Name == "ButtonC" && c.Enabled);
+            Click(ui, "ButtonA");
+            Assert.Equal("main-menu", request.Action);
         }
         finally { ui.DisposeUi(); }
     }
@@ -128,7 +151,9 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         var item = new ItemInstance { Record = "item", Name = "Test item", Width = 1, Height = 1 };
         inventory.Items.Add(item);
         var character = session.World.Characters.Spawn(new(), new() { Name = "Player", IsPlayer = true, Inventory = inventory }, 0);
-        session.World.Player.Faction = 0; session.World.Player.Selection.Add(character); session.World.RunTick();
+        session.World.Player.Faction = 0;
+        session.World.Player.Selection.Add(character);
+        session.World.RunTick();
         var ui = Ui(session);
         try
         {
@@ -139,10 +164,14 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             Assert.Equal(slot.Width / 8, slot.Height / 6, 3);
             Assert.Contains(ui.UiFrame, c => c.Properties.ContainsKey("CaptionOwner") && c.Caption == "PLAYER");
             var target = new Vector2(slot.X + slot.Width * 2.5f / 8, slot.Y + slot.Height * 1.5f / 6);
-            ui.MouseDown(MouseButton.Left, Centre(source), false); Assert.True(ui.UiCapturesPointer);
-            ui.MouseMove(target); ui.MouseUp(MouseButton.Left, target, false);
+            ui.MouseDown(MouseButton.Left, Centre(source), false);
+            Assert.True(ui.UiCapturesPointer);
+            ui.MouseMove(target);
+            ui.MouseUp(MouseButton.Left, target, false);
             Assert.Equal((0, 0), (item.X, item.Y));
-            session.World.RunTick(); Assert.Equal((2, 1), (item.X, item.Y)); Assert.False(ui.UiCapturesPointer);
+            session.World.RunTick();
+            Assert.Equal((2, 1), (item.X, item.Y));
+            Assert.False(ui.UiCapturesPointer);
         }
         finally { ui.DisposeUi(); }
     }
@@ -154,17 +183,23 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
     {
         using var session = new WorldSession(Vector3.Zero, (-100, -100, 100, 100), (_, _) => 0, systems: [new PlayerSystem()]);
         var inventory = new Inventory();
-        inventory.Items.Add(new() { Record = "bag", Name = "Thieves Backpack", Section = "backpack_attach", Width = 4, Height = 4, Contents = new Inventory(10, 14) });
+        inventory.Items.Add(new() { Record = "bag", Name = "Thieves Backpack", Section = "backpack_attach", Width = 4, Height = 4,
+                Contents = new Inventory(10, 14) });
         inventory.Items.Add(new() { Record = "sword", Name = "Sword", Section = "back", Width = 7, Height = 1 });
         var character = session.World.Characters.Spawn(new(), new() { Name = "Wolf", IsPlayer = true, Inventory = inventory }, 0);
-        session.World.Player.Faction = 0; session.World.Player.Selection.Add(character); session.World.RunTick();
+        session.World.Player.Faction = 0;
+        session.World.Player.Selection.Add(character);
+        session.World.RunTick();
         var ui = Ui(session);
         try
         {
-            ui.SetUiMode(mode); ui.Width = width; ui.Height = height;
+            ui.SetUiMode(mode);
+            ui.Width = width;
+            ui.Height = height;
             ui.ShowUiPanel("inventory");
             var main = ui.UiFrame.Single(c => c.Name == "main").Bounds;
-            Assert.Equal(8, inventory.Width); Assert.Equal(10, inventory.Height);
+            Assert.Equal(8, inventory.Width);
+            Assert.Equal(10, inventory.Height);
             Assert.Equal(main.Width / 8, main.Height / 10, 3);
             var sword = ui.UiFrame.Single(c => c.Name == $"inventory-item-{character}-1").Bounds;
             Assert.Equal(7, sword.Width / sword.Height, 3);
@@ -189,21 +224,28 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         using var session = new WorldSession(Vector3.Zero, (-100, -100, 100, 100), (_, _) => 0, systems: [new PlayerSystem()]);
         var own = session.World.Characters.Spawn(new() { Position = new(-3, 0, 0) }, new() { Name = "Player", IsPlayer = true }, 0);
         var other = session.World.Characters.Spawn(new() { Position = new(3, 0, 0) }, new() { Name = "Stranger" }, 0);
-        session.World.Player.Faction = 0; session.World.Player.Selection.Add(own); session.World.RunTick();
+        session.World.Player.Faction = 0;
+        session.World.Player.Selection.Add(own);
+        session.World.RunTick();
         var ui = Ui(session);
         try
         {
             var eye = new Vector3(0, 6, -14);
             ui.Eye = eye;
-            ui.ViewProjection = Matrix4x4.CreateLookAt(eye, new(0, 1, 0), Vector3.UnitY) * Meitou.Game.Rendering.Frame.DepthConvention.Perspective(1, 1600 / 900f, 0.1f, 1000);
+            ui.ViewProjection = Matrix4x4.CreateLookAt(eye, new(0, 1, 0), Vector3.UnitY) * Meitou.Game.Rendering.Frame.DepthConvention.Perspective(1,
+                    1600 / 900f, 0.1f, 1000);
             var at = ui.Project(new Vector3(3, 1, 0))!.Value;
             ui.MouseDown(MouseButton.Right, at, false);
-            ui.Steer(); Assert.False(ui.ContextMenuWindow.ContextMenuOpen);   // not held long enough yet
+            ui.Steer();
+            Assert.False(ui.ContextMenuWindow.ContextMenuOpen);
+            // not held long enough yet
             Thread.Sleep(TimeSpan.FromSeconds(ContextMenuWindow.ContextHoldSeconds + 0.05));
-            ui.Steer(); Assert.True(ui.ContextMenuWindow.ContextMenuOpen);
+            ui.Steer();
+            Assert.True(ui.ContextMenuWindow.ContextMenuOpen);
             Assert.Contains(ui.UiFrame, c => c.Name == "context-title" && c.Caption == "Stranger");
             Assert.Equal(0, session.World.Commands.Count);   // the hold gave no quick order
-            // The rows act on the release (the original's eventMouseButtonReleased): the held button let go over the first verb gives it and closes the menu.
+            // The rows act on the release (the original's eventMouseButtonReleased): the held button let go over the first verb gives it and closes
+            // the menu.
             var verb = Centre(ui.UiFrame.Last(c => c.Name == "context-verb-0"));
             ui.MouseMove(verb);
             ui.MouseUp(MouseButton.Right, verb, false);
@@ -219,13 +261,16 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         using var session = new WorldSession(Vector3.Zero, (-100, -100, 100, 100), (_, _) => 0, systems: [new PlayerSystem()]);
         var first = session.World.Characters.Spawn(new() { Position = new(-3, 0, 0) }, new() { Name = "First", IsPlayer = true }, 0);
         var second = session.World.Characters.Spawn(new() { Position = new(3, 0, 0) }, new() { Name = "Second", IsPlayer = true }, 0);
-        session.World.Player.Faction = 0; session.World.Player.Selection.Add(first); session.World.RunTick();
+        session.World.Player.Faction = 0;
+        session.World.Player.Selection.Add(first);
+        session.World.RunTick();
         var ui = Ui(session);
         try
         {
             Assert.Equal([first, second], ui.PortraitBar.SquadBarMembers().Select(c => c.Id));
             var frame = ui.UiFrame;
-            // The renderer draws member i into atlas cell i (CharacterRenderer.PortraitRequests): the second cell starts 256 px in, the original's 128 px portrait in its corner.
+            // The renderer draws member i into atlas cell i (CharacterRenderer.PortraitRequests): the second cell starts 256 px in, the original's
+            // 128 px portrait in its corner.
             var portrait = Assert.Single(frame, c => c.Name == "portrait-1");
             Assert.Equal(PortraitBar.PortraitTexture, portrait.Properties["ImageTexture"]);
             Assert.Equal("256 0 128 128", portrait.Properties["ImageRect"]);
@@ -237,7 +282,9 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         finally { ui.DisposeUi(); }
     }
 
-    /// <summary>The HUD's medical word thresholds, body part rows and stats line format (docs/game/ui-screens.md section 4).</summary>
+    /// <summary>
+    /// The HUD's medical word thresholds, body part rows and stats line format (docs/game/ui-screens.md section 4).
+    /// </summary>
     [Fact]
     public void HudTextFollowsTheOriginalsRules()
     {
@@ -247,10 +294,12 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         Assert.Equal("Wounded", HudPanels.HealthWord(new BodyStatus(1, 0.5f, 3, false, false)).Text);
         Assert.Equal("Starving", HudPanels.HealthWord(new BodyStatus(1, 1, 0.5f, false, false)).Text);
         // The race lists Right Leg, Left Arm, Left Leg, Head, Stomach, Right Arm, Chest; the panel shows head, torso, arms, legs, left before right.
-        (string Name, BodyPartType Type, int Collapse)[] race = [("Right Leg", BodyPartType.Leg, 0x10), ("Left Arm", BodyPartType.Arm, 4), ("Left Leg", BodyPartType.Leg, 0x20),
+        (string Name, BodyPartType Type, int Collapse)[] race = [("Right Leg", BodyPartType.Leg, 0x10), ("Left Arm", BodyPartType.Arm, 4),
+                ("Left Leg", BodyPartType.Leg, 0x20),
             ("Head", BodyPartType.Head, 1), ("Stomach", BodyPartType.Torso, 1), ("Right Arm", BodyPartType.Arm, 2), ("Chest", BodyPartType.Torso, 1)];
         var parts = race.Select(p => new BodyPartTemplate { StringId = p.Name, Name = p.Name, Type = p.Type, CollapsePart = p.Collapse });
-        Assert.Equal(["Head", "Stomach", "Chest", "Left Arm", "Right Arm", "Left Leg", "Right Leg"], parts.OrderBy(p => p.MedicalOrder).Select(p => p.Name));
+        Assert.Equal(["Head", "Stomach", "Chest", "Left Arm", "Right Arm", "Left Leg", "Right Leg"],
+                parts.OrderBy(p => p.MedicalOrder).Select(p => p.Name));
         var lead = new CharacterSnapshot(new CharacterId(0, 0), null, Vector3.Zero, 0, [])
             { Hud = new HudView(150, 150, 0, 1, [new("Strength:", 99.4f, 100), new("Toughness:", 100, 100), new("Dodge:", 105, 100)]) };
         Assert.Equal(["STRENGTH: 99 (-1)", "TOUGHNESS: 100", "DODGE: 105 (+5)"], HudPanels.StatsLines(lead).Select(l => $"{l.Label} {l.Value}"));
@@ -260,7 +309,9 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             HudPanels.ExtendedLines(extended).Select(l => $"{l.Label} {l.Value}"));
     }
 
-    /// <summary>A click on another faction's character shows it in the HUD without selecting it (<see cref="InspectCommand"/>).</summary>
+    /// <summary>
+    /// A click on another faction's character shows it in the HUD without selecting it (<see cref="InspectCommand"/>).
+    /// </summary>
     [Fact]
     public void InspectingACharacterPublishesItsHudDetailsWithoutSelectingIt()
     {
@@ -277,7 +328,9 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
         Assert.False(Assert.Single(session.CurrentSnapshot.Characters).Inspected);
     }
 
-    /// <summary>Names the HUD bindings carry for the Meitou mode's native HUD only; the faithful layout has no widget for them.</summary>
+    /// <summary>
+    /// Names the HUD bindings carry for the Meitou mode's native HUD only; the faithful layout has no widget for them.
+    /// </summary>
     static readonly HashSet<string> NativeOnly = ["clock", "hunger", "condition", "blood", "body", "squad.count", "members"];
 
     [Fact, Slow]
@@ -285,7 +338,9 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
     {
         using var session = new WorldSession(Vector3.Zero, (-100, -100, 100, 100), (_, _) => 0, systems: [new PlayerSystem()]);
         var character = session.World.Characters.Spawn(new(), new() { Name = "Player", IsPlayer = true, Inventory = new Inventory(8, 6) }, 0);
-        session.World.Player.Faction = 0; session.World.Player.Selection.Add(character); session.World.RunTick();
+        session.World.Player.Faction = 0;
+        session.World.Player.Selection.Add(character);
+        session.World.RunTick();
         var ui = Ui(session);
         var missing = new List<string>();
         try
@@ -294,7 +349,8 @@ public class FaithfulInteractionTests(ITestOutputHelper output)
             {
                 var (layout, b) = ui.FaithfulBindings(id);
                 var names = layout.Widgets.Select(w => w.Name).Where(n => n.Length > 0).ToHashSet(StringComparer.Ordinal);
-                bool Native(string n) => id == "hud" && (NativeOnly.Contains(n) || n.StartsWith("squad.", StringComparison.Ordinal)) || n.IndexOf("@tab", StringComparison.Ordinal) is > 0 and int at && names.Contains(n[..at]);
+                bool Native(string n) => id == "hud" && (NativeOnly.Contains(n) || n.StartsWith("squad.", StringComparison.Ordinal))
+                        || n.IndexOf("@tab", StringComparison.Ordinal) is > 0 and int at && names.Contains(n[..at]);
                 // What the screen shows or answers to must land on a real widget; hiding or styling an absent one is only reported.
                 foreach (string n in b.Text.Keys.Concat(b.Actions.Keys).Concat(b.Lists.Keys).Concat(b.Progress.Keys).Distinct())
                     if (!names.Contains(n) && !Native(n)) missing.Add($"{id}: {n}");

@@ -81,7 +81,8 @@ public class WorldLightTests
             Assert.InRange(lights[0].Power, 0.4f, 0.8f);
             Assert.Equal(childKept, meshes.Any(m => m.Source.StringId == "child"));
             // The light list does not change the meshes.
-            Assert.Equal(meshes.Select(m => m.Source.StringId), WorldObjectLayout.Building(db, db.Find("b")!, "id", at, Quaternion.Identity).Select(m => m.Source.StringId));
+            Assert.Equal(meshes.Select(m => m.Source.StringId),
+                    WorldObjectLayout.Building(db, db.Find("b")!, "id", at, Quaternion.Identity).Select(m => m.Source.StringId));
             if (childKept) withChild++;
         }
         Assert.InRange(withChild, 1, 63);
