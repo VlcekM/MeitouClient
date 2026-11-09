@@ -156,7 +156,7 @@ cost more (the bumps overdraw themselves).
 **Registers** (**Observed**, Nsight GPU Trace, 2560x1440 at render scale 1): with the march in the fragment stage the colour pass held about 220
 registers a thread and a tenth of the pixel warps (SM throughput 20%, texture 22%: latency-bound), whether the parallax ran or not (a uniform branch
 does not lower the allocation). With the parallax off the colour programs are built without the march (`TerrainShaders.FragmentNative(march: false)`,
-`TerrainRenderer.UseColour`; a toggle builds the other set once): the terrain stage 3.37 -> 2.42 ms and the frame 7.0 -> 6.1 ms at a save's view,
+`TerrainPrograms.UseColour`; a toggle builds the other set once): the terrain stage 3.37 -> 2.42 ms and the frame 7.0 -> 6.1 ms at a save's view,
 the picture unchanged. The interior-cut patches' late colour took 1.4 ms for 19 draws with 8 wait-for-idles (the SMs idle a third of it): its `discard` turned the early
 depth test off. Their prepass already discards the cut, so the late colour draws them with the plain program and an equal depth test (both passes
 run the same vertex and tessellation stages, invariant positions): GPU frame 6.14 -> 5.80 ms, the picture unchanged (one pixel over 8 levels at a town view).
@@ -184,7 +184,7 @@ is named at the top left with its tile size and depth. In the game's sandbox Esc
 
 ## Material cache
 
-Meitou, not in the game (`TerrainRenderer.MaterialCache`, A/B `terrain-material-cache`, B: every pixel shades the layers). The patches' layered
+Meitou, not in the game (`MaterialCache`, A/B `terrain-material-cache`, B: every pixel shades the layers). The patches' layered
 material is baked into world-space levels round the eye, and a patch pixel within them reads the cache instead of shading up to five biomes of up
 to 14 layer samples each.
 - **Levels**: 4 of 2048² texels, level k's texel 0.25 × 2^k units (51, 102, 205, 410 m squares), RGBA8 albedo + gloss and RGBA8 tangent-space

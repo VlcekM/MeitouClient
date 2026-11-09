@@ -236,7 +236,7 @@ public sealed unsafe partial class ShadowPass
             .Select(i => $"c{i} {RedrawReasons[i, 0]}/{RedrawReasons[i, 1]}/{RedrawReasons[i, 2]}/{RedrawReasons[i, 3]}");
         string reasons = string.Join(" ", reasonText);
         string terrain = $"terrain shadow rebuilt {_terrainMap?.Builds ?? 0} times (cpu {_terrainMap?.LastBuildCpuMs ?? 0:0.00} ms)";
-        string landmarks = $"landmark shadow map drawn {LandmarkDraws} times ({LandmarkCount} landmarks, {LandmarkTexel()})";
+        string landmarks = $"landmark shadow map drawn {_landmarks.Draws} times ({_landmarks.Count} landmarks, {_landmarks.Texel()})";
         string frames = $"drawn {draws} times in {MeitouFrames} frames " +
             $"(because the view left the box / the sun turned / the cadence / all at once: {reasons}); ";
         return frames +
@@ -244,11 +244,6 @@ public sealed unsafe partial class ShadowPass
             $"far cascades skipped for the camera's flight in {FlightFrames} frames; " +
             $"{terrain}; {landmarks}";
     }
-
-    /// <summary>
-    /// The landmark map's texel size in units for the log, or "off".
-    /// </summary>
-    string LandmarkTexel() => _landmarkBox is { } b ? $"{b.Texel:0} units per texel" : "off";
 
     #endregion
 
@@ -301,23 +296,10 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public readonly record struct LandmarkCasters(LandmarkCollect Collect, CasterDraw Draw);
 
-    GpuTexture? _landmarkMap;
-    SampledTexture _landmarkSampled;
-    bool _landmarkPublished;
-    ShadowCascade? _landmarkBox;
-    long _landmarkKey;
-    Vector3 _landmarkSun;
-    readonly List<Vector4> _landmarkSpheres = [];
-
     /// <summary>
-    /// How often the landmark map was drawn, and the landmarks in it the last time (for the log).
+    /// The landmark shadow map: every landmark along the sun, fitted round them all.
     /// </summary>
-    public int LandmarkDraws { get; private set; }
-
-    /// <summary>
-    /// The landmarks in the landmark map the last time it was drawn (for the log).
-    /// </summary>
-    public int LandmarkCount { get; private set; }
+    readonly LandmarkShadowMap _landmarks;
 
     /// <summary>
     /// The landmark shadow map (docs/formats/shadows.md, "Landmark shadows"): every landmark drawn (resolved, within the landmark reach) into one
@@ -326,45 +308,15 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     void UpdateLandmarks(ShadowView view, Vector3 toSun, LandmarkCasters? landmarks)
     {
-        if (landmarks is not { } l)
-        {
-            _landmarkBox = null;
-            return;
-        }
+        if (_landmarks.Plan(toSun, landmarks, out long key) is not { } box) return;
 
-        long key = l.Collect(_landmarkSpheres);
-        if (_landmarkSpheres.Count == 0)
-        {
-            _landmarkBox = null;
-            return;
-        }
-
-        bool sameSun = Vector3.Dot(toSun, _landmarkSun) > MathF.Cos(TerrainShadowMap.RebuildAngle);
-        if (_landmarkBox is not null && key == _landmarkKey && sameSun) return;
-
-        var box = MeitouShadowFit.FitLandmarks(toSun, _landmarkSpheres, LandmarkMapSize)!;
-        EnsureLandmarkMap();
-        var host = BeginHost("landmark shadows", clear: true, _landmarkMap);
+        var map = _landmarks.EnsureMap();
+        var host = BeginHost("landmark shadows", clear: true, map);
         SetTile(0, 0, LandmarkMapSize);
         SetCasterBias(new Vector4(box.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 1f));
-        l.Draw(box, box.WorldToClip(), box.CullPlanes(), view.Eye);
+        landmarks!.Value.Draw(box, box.WorldToClip(), box.CullPlanes(), view.Eye);
         EndHost(host);
-        (_landmarkBox, _landmarkKey, _landmarkSun) = (box, key, toSun);
-        LandmarkDraws++;
-        LandmarkCount = _landmarkSpheres.Count;
-    }
-
-    /// <summary>
-    /// Makes the landmark map and its sampler on first use: a map of its own (4096², larger than a cascade layer), read through its own sampler.
-    /// </summary>
-    void EnsureLandmarkMap()
-    {
-        if (_landmarkMap is not null) return;
-
-        // A map of its own (4096², larger than a cascade layer), read through its own sampler (uShadowLandmark), not a layer of the cascade array.
-        _landmarkMap = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, LandmarkMapSize, LandmarkMapSize,
-            Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "landmark shadow map"));
-        _landmarkSampled = Sampled(_landmarkMap, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, compare: true);
+        _landmarks.Drawn(box, key, toSun);
     }
 
     #endregion
@@ -454,7 +406,7 @@ public sealed unsafe partial class ShadowPass
         prepare?.Invoke(_casterViews.AsSpan(0, drawn));
         DrawCascades(drawn, draw, toSun);
         Array.Clear(_casterViews);
-        bool blockers = ContactHardening && _filterQuality > 0 && UpdateBlockers(drawNow, count);
+        bool blockers = ContactHardening && _filterQuality > 0 && _blockers.Update(drawNow, count, _atlasSize, _atlasPlain);
         if (_coarse is not null)
         {
             _terrainMap ??= new TerrainShadowMap(Gpu, _coarse, _coarseSize);
@@ -525,88 +477,6 @@ public sealed unsafe partial class ShadowPass
 
     #endregion
 
-    #region Blockers
-
-    GpuTexture? _blocker;
-    SampledTexture _blockerSampled;
-    bool _blockerPublished;
-    LegacyProgram? _blockerNative;
-    SamplerSlot _blockerAtlasSlot;
-    UniformHandle _blockerSizeHandle, _blockerLayerHandle;
-
-    /// <summary>
-    /// The blocker pass's state, as the GL version's was: no culling, depth or blending, every colour channel written.
-    /// </summary>
-    static readonly DrawState BlockerState = new(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal, false, 0, 0,
-        BlendState.Off, ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A,
-        PolygonKind.Fill, false, false);
-
-    /// <summary>
-    /// The half-resolution blocker map (native; null until the first frame with contact hardening).
-    /// </summary>
-    public GpuTexture? BlockerMap => _blocker;
-
-    /// <summary>
-    /// Rebuilds the blocker map's layers of the cascades drawn this frame: one native segment with a rendering per layer (the layers not drawn keep
-    /// what they hold), the cascade array read raw through a plain sampler (no comparison), the fullscreen triangle.
-    /// </summary>
-    bool UpdateBlockers(ReadOnlySpan<bool> drawn, int count)
-    {
-        int size = _atlasSize / 2;
-        bool fresh = false;   // a new map: every layer
-        if (_blocker is null || _blocker.Desc.Width != size || _blocker.Desc.Layers != count)
-        {
-            _blocker?.Dispose();
-            _blocker = Gpu.CreateTexture(new TextureDesc(InternalFormat.R32F, size, size, Layers: count, Kind: TextureKind.Texture2DArray,
-                Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "shadow blocker map"));
-            _blockerSampled = Sampled(_blocker, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
-            _blockerPublished = false;
-            fresh = true;
-        }
-
-        if (_blockerNative is null)
-        {
-            // Native (docs/renderer-native.md 7.1, wave 3 agent B, step P): VkGl's SPIR-V and layout, made here once, never inside a draw.
-            var p = _blockerNative = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment, "shadow blockers");
-            (_blockerAtlasSlot, _blockerSizeHandle, _blockerLayerHandle) = (p.Sampler("uAtlas"), p.Uniform("uAtlasSize"), p.Uniform("uLayer"));
-        }
-
-        RecordBlockers(drawn, count, fresh);
-        return true;
-    }
-
-    void RecordBlockers(ReadOnlySpan<bool> drawn, int count, bool fresh)
-    {
-        var p = _blockerNative!;
-        var map = _blocker!;
-        p.Set(_blockerSizeHandle, (float)_atlasSize);
-        var cmd = Gpu.BeginNative("shadow blockers");
-        var formats = new AttachmentFormats(map.Desc.Format, InternalFormat.None, 1);
-        int side = map.Desc.Width;
-        var whole = new PixelRect(0, 0, (uint)side, (uint)side);
-        var pipeline = Gpu.Pipelines.Get(BlockerState.Pipeline(p.Program, p.VertexLayout([]), PrimitiveType.Triangles, formats, "shadow blockers"));
-        for (int i = 0; i < count; i++)
-        {
-            if (!drawn[i] && !fresh) continue;
-
-            var target = new RenderTarget(map.Attachment(0, i), LoadOp.Load, default);
-            cmd.BeginRendering(new RenderingDesc(target, default, side, side));
-            BlockerState.Record(cmd, new PassTargets(target, default, formats, side, side, new PixelViewport(0, 0, side, side, 0, 1), whole));
-            cmd.BindPipeline(pipeline);
-
-            // Each layer is a new encoder: bind the atlas for it, not only once before the loop.
-            p.Bind(_blockerAtlasSlot, _atlasPlain);
-            p.Set(_blockerLayerHandle, i);
-            p.Flush(cmd);
-            cmd.Draw(3);
-            cmd.EndRendering();
-        }
-
-        Gpu.EndNative(cmd);
-    }
-
-    #endregion
-
     #region Publish
 
     /// <summary>
@@ -624,6 +494,16 @@ public sealed unsafe partial class ShadowPass
     TerrainShadowMap? _terrainMap;
     SampledTexture? _boundTerrain;   // the terrain shadow map the receivers sample, as the GL code bound it to its unit (kept while no new one is)
     readonly FrameBlock _meitouBlock;
+
+    /// <summary>
+    /// The blocker map of the contact-hardening search.
+    /// </summary>
+    readonly ShadowBlockerMap _blockers;
+
+    /// <summary>
+    /// The half-resolution blocker map (native; null until the first frame with contact hardening).
+    /// </summary>
+    public GpuTexture? BlockerMap => _blockers.Map;
 
     void PublishMeitou(ShadowView view, ShadowCascade[] cascades, Vector3 toSun, bool blockers)
     {
@@ -667,12 +547,12 @@ public sealed unsafe partial class ShadowPass
         }
 
         Put(ms, p + 12, new Vector4(blockers ? 1 : 0, range * 0.9f, FullFilterCascades, 0));
-        if (_landmarkBox is { } box)
+        if (_landmarks.Box is { } box)
         {
             // The landmark map: (p - origin) -> (u, v, depth); its filter radius (UV) and normal offset (world: one and a half texels).
             Put(ms, p + 16, ReceiverTile(box, origin));
             Put(ms, p + 32, new Vector4(box.FilterRadius, (float)(box.Texel * 1.5), 0, 1));
-            _landmarkPublished = true;
+            _landmarks.MarkPublished();
         }
 
         Upload(data);
@@ -680,17 +560,15 @@ public sealed unsafe partial class ShadowPass
 
         // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
         if (terrain) _boundTerrain = _terrainMap!.Sampled;
-        if (blockers) _blockerPublished = true;
+        if (blockers) _blockers.MarkPublished();
     }
 
     void DisposeMeitou()
     {
         _terrainMap?.Dispose();
         _boundTerrain = null;
-        _blocker?.Dispose();
-        _blockerNative?.Dispose();
-        _landmarkPublished = false;
-        _landmarkMap?.Dispose();
+        _blockers.Dispose();
+        _landmarks.Dispose();
     }
 
     #endregion

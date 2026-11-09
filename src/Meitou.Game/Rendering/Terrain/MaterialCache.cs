@@ -23,7 +23,7 @@ public static class TerrainMaterialCache
 /// layers; fewer and a moving eye outran it), and a refresh after the material's inputs changed (<see cref="CacheKey"/>: a biome loaded, a pair's
 /// near slot, the overlay window, the arrays) <see cref="CacheRows"/> rows, the finest level first, drawn from meanwhile.
 /// </summary>
-public sealed unsafe partial class TerrainRenderer
+sealed class MaterialCache : IDisposable
 {
     const int CacheLevels = 4, CacheSide = 2048, CacheStep = 64, CacheRows = 64, CacheBuildRows = 256;
     const float CacheTexel = 0.25f;
@@ -41,16 +41,50 @@ public sealed unsafe partial class TerrainRenderer
     int _cacheKey;
     float _cacheReach;
 
+    /// <summary>
+    /// The renderer whose material is baked: its textures, options and constants.
+    /// </summary>
+    readonly TerrainRenderer _terrain;
+
+    /// <summary>
+    /// The context the levels and their program are made on.
+    /// </summary>
+    readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The terrain's frame set, which the bake binds as set 0.
+    /// </summary>
+    readonly NativeFrame _nativeFrame;
+
+    /// <summary>
+    /// The terrain set's layout (set 2), for the bake program.
+    /// </summary>
+    readonly GpuSetLayout _constantsLayout;
+
+    /// <summary>
+    /// The alignment of a constants slice.
+    /// </summary>
+    readonly ulong _uniformAlign;
+
+    public MaterialCache(TerrainRenderer terrain, IGpuContext gpu, NativeFrame nativeFrame, GpuSetLayout constantsLayout, ulong uniformAlign)
+    {
+        _terrain = terrain;
+        _gpu = gpu;
+        _nativeFrame = nativeFrame;
+        _constantsLayout = constantsLayout;
+        _uniformAlign = uniformAlign;
+    }
+
     static long CacheBytes => 2L * CacheLevels * CacheSide * CacheSide * 4;
 
     /// <summary>
     /// Bakes what the cache levels need this frame round <paramref name="eye"/> (before the scene, outside a pass).
     /// </summary>
-    public void RecordMaterialCache(Vector3 eye)
+    public void Record(Vector3 eye)
     {
         // Switched off, the levels keep what they hold (an A/B alternation finds them whole); the strips catch up when it is back on.
         if (!TerrainMaterialCache.Enabled) return;
-        if (_cacheRefused || _textures is not { HasBiomes: true, MapState: 2 } t || _frame.Options is not { Textures: true })
+        if (_cacheRefused || _terrain.TextureSet is not { HasBiomes: true, MapState: 2 } t || _terrain.FrameOptions is not { Textures: true })
         {
             Array.Clear(_cacheOrigin);
             Array.Fill(_cacheBuilt, -1);
@@ -58,8 +92,7 @@ public sealed unsafe partial class TerrainRenderer
         }
         if (_cacheAlbedo is null && !CreateCache(t)) return;
 
-        PrepareConstants(material: true, patches: true);
-        var c = _constants;
+        var c = _terrain.MaterialConstants();
         // The bake has no march (its program is built without it); uParallax gives the relief height's depth.
         (c.Displace, c.FarStart, c.FarEnd, c.Debug, c.Grid) = (0, 1e9f, 2e9f, 0, 0);
         (c.InteriorCut, c.BloodCount, c.FieldCount, c.BakeLevels) = (0, 0, 0, 0);
@@ -247,8 +280,7 @@ public sealed unsafe partial class TerrainRenderer
         NativeFrame.Record(cmd, p.P, in binding);
         var slice = _gpu.Frame.WriteConstants(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in c)),
             _uniformAlign);
-        ulong key = (ulong)slice.Handle.Index;
-        if (!_constantSets.TryGetValue(key, out var set)) _constantSets[key] = set = ConstantSet(slice.Handle);
+        var set = _terrain.ConstantSetOf(slice.Handle);
         uint offset = (uint)slice.Offset;
         cmd.BindSets(p.P, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in set), new ReadOnlySpan<uint>(in offset));
         var push = new TerrainBakePush { Pass = level };
@@ -303,10 +335,10 @@ public sealed unsafe partial class TerrainRenderer
     }
 
     /// <summary>
-    /// The cache's levels for the patches' colour programs (<see cref="PrepareConstants"/>); none in the texture field (its tiles are not blended) or
-    /// a debug view.
+    /// The cache's levels for the patches' colour programs (<see cref="TerrainRenderer.MaterialConstants"/>); none in the texture field (its tiles
+    /// are not blended) or a debug view.
     /// </summary>
-    void ApplyMaterialCache(ref TerrainConstants c)
+    public void Apply(ref TerrainConstants c)
     {
         if (!TerrainMaterialCache.Enabled || _cacheAlbedo is null || c.FieldCount > 0 || c.Debug != 0) return;
         bool any = false;
@@ -319,7 +351,7 @@ public sealed unsafe partial class TerrainRenderer
         (c.BakeAlbedo, c.BakeNormal, c.BakeLevels, c.BakeReach) = (_cacheAlbedoIndex, _cacheNormalIndex, CacheLevels, _cacheReach);
     }
 
-    void DisposeMaterialCache()
+    public void Dispose()
     {
         if (_cacheAlbedoIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheAlbedoIndex);
         if (_cacheNormalIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2DArray, _cacheNormalIndex);
