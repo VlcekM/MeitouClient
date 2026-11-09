@@ -209,7 +209,7 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
     /// <paramref name="key"/>) a single unit of the <c>inventory</c> list that holds more than one charge starts with a random part of them; without
     /// one the items start full.
     /// </summary>
-    public Inventory Build(GameRecord? character, Data.Characters.Loadout? loadout, ulong? seed = null, ulong key = 0, bool deathItems = true)
+    public Inventory Build(GameRecord? character, Data.Characters.Loadout? loadout, ulong? seed = null, ulong key = 0)
     {
         var (width, height) = MainSize(character);
         var inventory = new Inventory(width, height);
@@ -259,7 +259,7 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
             }
         }
         if (loadout?.Crossbow is { } bow) AddAmmo(inventory, bow.Weapon);
-        if (character is not null && deathItems)
+        if (character is not null)
             foreach (var r in character.GetReferences("death items"))
             {
                 // One stack of the whole quantity in the first free cell, whatever the item's stack limit (as the saves hold them).

@@ -288,9 +288,9 @@ sealed class CharacterAssembly(PopulationData data)
         cold.Medical = medical;
         if (AnimalData.From(record) is { } animal) (cold.Animal, cold.ShownAge) = (animal, age);
 
-        // One made for the player has no death items (engine choice, docs/game/animals.md "Death items": a start's dog had its meat and skins, #341).
+        // One made for the player has its death items too (docs/game/animals.md "Death items"), but no spawn money.
         bool npc = !cold.IsPlayer && (data.PlayerFaction < 0 || cold.Faction != data.PlayerFaction);
-        cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout, seed, Rng.Key(id), deathItems: npc);
+        cold.Inventory = data.Items.Build(record, cold.Appearance?.Loadout, seed, Rng.Key(id));
         if (npc) data.Items.AddSpawnMoney(cold.Inventory, record, seed, Rng.Key(id));
 
         // CHARACTER `wears uniform` (CharacterHuman::setupInventorySections, Verified read; Observed use): the armour it is made wearing is its
