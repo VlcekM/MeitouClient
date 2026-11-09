@@ -817,19 +817,7 @@ sealed class TooltipRuntime(PlayerInterface player)
         if (t.Trade is { Buyback: true }) lines.Add(new("Buyback", ""));
         if (t.Brief) return lines;
 
-        if (research is not null)
-        {
-            lines.Add(new(Loc.Tr("Research Blueprint"), "", TooltipTone.Title));
-            lines.AddRange(BlueprintRows(research));
-        }
-
-        // Every grade line (weapon model, armour, crossbow, prosthetic) goes right under the name, as in the original.
-        if (model is not null) lines.Add(new(model, "", GradeTone(WeaponGrade(t.Level))));
-        else if (type == Data.Fcs.FcsRecordType.Crossbow)
-        {
-            int grade = ArmourTooltip.GradeOf(t.Level);
-            lines.Add(new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", GradeTone(grade)));
-        }
+        AddGradeRows(lines, t, type, model, research);
 
         var combat = CombatOf?.Invoke();
         var armour = type == Data.Fcs.FcsRecordType.Armour ? combat?.Armour(t.Record) : null;
@@ -853,6 +841,58 @@ sealed class TooltipRuntime(PlayerInterface player)
         // A bag's own weight, without its contents (Item +0x120, FUN_1407aa090).
         float unitWeight = type == Data.Fcs.FcsRecordType.Container ? record!.GetFloat("weight kg") : t.Quantity > 0 ? t.Weight / t.Quantity : t.Weight;
 
+        AddKindMarkers(lines, t, record, function);
+        AddStolenRows(lines, t);
+        AddAmmunitionRows(lines, t, function);
+
+        if (type == Data.Fcs.FcsRecordType.Crossbow && combat?.Crossbow(t.Record) is { } bow) AddCrossbowRows(lines, t, bow, combat, unitWeight);
+        else if (type == Data.Fcs.FcsRecordType.Weapon && combat?.Weapon(t.Record) is { } weapon) AddWeaponRows(lines, t, weapon, combat);
+        else AddWeightRows(lines, t, type, armour, armourHead, limbRows, unitWeight);
+
+        AddPriceRows(lines, t);
+
+        if (type == Data.Fcs.FcsRecordType.Container) lines.AddRange(ContainerRows(record!));
+        if (research is not null) lines.AddRange(UnlockRows(research));
+
+        AddAveragePriceRows(lines, t, type);
+        if (armour is not null) AddArmourTail(lines, t, record, armour);
+        AddChargeRows(lines, t, type, function);
+        AddMapNoteRows(lines, t);
+
+        // The record's description closes every other item's tooltip, with no blank row before it (the second tooltip function, FUN_14079f4d0 and its
+        // overrides).
+        if (armour is null && record?.GetString("description") is { Length: > 0 } text)
+            lines.Add(new(text, "", TooltipTone.Ink, Paragraph: true));
+        if (type == Data.Fcs.FcsRecordType.Weapon) lines.AddRange(WeaponTail(t, model));
+
+        return lines;
+    }
+
+    /// <summary>
+    /// A blueprint's research title and rows, then the grade line right under the name (a weapon's model, a crossbow's grade).
+    /// </summary>
+    void AddGradeRows(List<TooltipLine> lines, ItemTip t, Data.Fcs.FcsRecordType? type, string? model, GameRecord? research)
+    {
+        if (research is not null)
+        {
+            lines.Add(new(Loc.Tr("Research Blueprint"), "", TooltipTone.Title));
+            lines.AddRange(BlueprintRows(research));
+        }
+
+        // Every grade line (weapon model, armour, crossbow, prosthetic) goes right under the name, as in the original.
+        if (model is not null) lines.Add(new(model, "", GradeTone(WeaponGrade(t.Level))));
+        else if (type == Data.Fcs.FcsRecordType.Crossbow)
+        {
+            int grade = ArmourTooltip.GradeOf(t.Level);
+            lines.Add(new(Loc.Tr("{1} Grade", Loc.Tr(ArmourTooltip.GradeNames[grade])), "", GradeTone(grade)));
+        }
+    }
+
+    /// <summary>
+    /// The kind markers, and a food's nutrition and ingredients.
+    /// </summary>
+    void AddKindMarkers(List<TooltipLine> lines, ItemTip t, GameRecord? record, int function)
+    {
         // The kind markers in the original's order (FUN_1407ae130): Ammunition, Research Artifact (the record's artifact flag), Unique (the item's
         // flag; both Special, #14ffdc), Book, Food.
         if (function == 16) lines.Add(new("[Ammunition]", "", TooltipTone.Main));
@@ -878,14 +918,26 @@ sealed class TooltipRuntime(PlayerInterface player)
                 .Where(n => n is { Length: > 0 }));
             lines.Add(new("Ingredients", ingredients, TooltipTone.Ink, TooltipTone.Ink));
         }
+    }
 
+    /// <summary>
+    /// A stolen good's fencing chance and its owner.
+    /// </summary>
+    void AddStolenRows(List<TooltipLine> lines, ItemTip t)
+    {
         // A stolen good the open shop would roll on: its fencing chance above the owner, as the sale prompt shows it (Observed, the original's trade
         // tooltip; #330).
         if (t.Goods && t.Trade is { FenceChance: { } fence })
             lines.Add(new("FENCING CHANCE:", $"{(int)(fence * 100)}%", TooltipTone.Bad, TooltipTone.Bad));
         if (t.StolenFrom >= 0)
             lines.Add(player.FactionName?.Invoke(t.StolenFrom) is { Length: > 0 } owner ? new("Stolen from:", owner, TooltipTone.Bad, TooltipTone.Bad) : new("Stolen", "", TooltipTone.Bad));
+    }
 
+    /// <summary>
+    /// Ammunition's damage and shots.
+    /// </summary>
+    static void AddAmmunitionRows(List<TooltipLine> lines, ItemTip t, int function)
+    {
         if (function == 16)
         {
             // Ammunition (FUN_1407ae130, Verified by disassembly): Damage = the item's quality x 0.01 then "x"; Shots = the charges left / the full
@@ -893,11 +945,13 @@ sealed class TooltipRuntime(PlayerInterface player)
             lines.Add(new("Damage:", (t.Quality * 0.01f).ToString("G6", CultureInfo.InvariantCulture) + "x", TooltipTone.Main, TooltipTone.Main));
             lines.Add(new("-Shots", $"{(int)t.Charges}/{(int)t.MaxCharges}", TooltipTone.Main, TooltipTone.Main));
         }
+    }
 
-        if (type == Data.Fcs.FcsRecordType.Crossbow && combat?.Crossbow(t.Record) is { } bow) AddCrossbowRows(lines, t, bow, combat, unitWeight);
-        else if (type == Data.Fcs.FcsRecordType.Weapon && combat?.Weapon(t.Record) is { } weapon) AddWeaponRows(lines, t, weapon, combat);
-        else AddWeightRows(lines, t, type, armour, armourHead, limbRows, unitWeight);
-
+    /// <summary>
+    /// The value and sell value: a trade's prices with the trader's mark-up, else the plain prices.
+    /// </summary>
+    void AddPriceRows(List<TooltipLine> lines, ItemTip t)
+    {
         if (t.Trade is { } trade)
         {
             // Value and Sell value: one unit's prices (slot 81), with the trader factor as a mark-up in the bad colour (FUN_14079e7a0).
@@ -916,10 +970,13 @@ sealed class TooltipRuntime(PlayerInterface player)
             lines.Add(new("-Value", "c." + TradeWindows.Money(prices.Value), TooltipTone.Ink, TooltipTone.Ink));
             lines.Add(new("-Sell value", "c." + TradeWindows.Money(prices.Sell), TooltipTone.Ink, TooltipTone.Ink));
         }
+    }
 
-        if (type == Data.Fcs.FcsRecordType.Container) lines.AddRange(ContainerRows(record!));
-        if (research is not null) lines.AddRange(UnlockRows(research));
-
+    /// <summary>
+    /// A trade item's average price and, while trading, its mark-up.
+    /// </summary>
+    void AddAveragePriceRows(List<TooltipLine> lines, ItemTip t, Data.Fcs.FcsRecordType? type)
+    {
         // A trade item's average price follows the prices, in and out of a trade; while trading, the mark-up of the town and trader factors, Bad
         // above 1 and Good below (FUN_1407ae130).
         if (type == Data.Fcs.FcsRecordType.Item && player.PricesOf?.Invoke(t) is { Average: { } average })
@@ -933,30 +990,39 @@ sealed class TooltipRuntime(PlayerInterface player)
                     markup < 1 ? TooltipTone.Good : TooltipTone.Bad));
             }
         }
+    }
 
-        if (armour is not null)
+    /// <summary>
+    /// An armour piece's closing rows: its tail, the record's description and the crafter.
+    /// </summary>
+    void AddArmourTail(List<TooltipLine> lines, ItemTip t, GameRecord? record, ArmourData armour)
+    {
+        lines.AddRange(ArmourTooltip.Tail(armour, id => player.RecordName?.Invoke(id), t.Level).Select(ArmourRow));
+
+        // Then a blank row and the record's description; for a piece with a crafter's name another blank row, the heading and a paragraph naming
+        // the smith and the player's faction (FUN_1407a33a0, Observed: docs/game/ui-screens.md "Item tooltip"). Paragraphs wrap at the tooltip's
+        // width without widening it.
+        if (record?.GetString("description") is { Length: > 0 } description)
         {
-            lines.AddRange(ArmourTooltip.Tail(armour, id => player.RecordName?.Invoke(id), t.Level).Select(ArmourRow));
-
-            // Then a blank row and the record's description; for a piece with a crafter's name another blank row, the heading and a paragraph naming
-            // the smith and the player's faction (FUN_1407a33a0, Observed: docs/game/ui-screens.md "Item tooltip"). Paragraphs wrap at the tooltip's
-            // width without widening it.
-            if (record?.GetString("description") is { Length: > 0 } description)
-            {
-                lines.Add(new(" "));
-                lines.Add(new(description, "", TooltipTone.Title, Paragraph: true));
-            }
-
-            if (t.Crafter.Length > 0)
-            {
-                string faction = player.PlayerFactionName?.Invoke() ?? "";
-                lines.Add(new(" "));
-                lines.Add(new(Loc.Tr("[Crafted by {1}]", t.Crafter), "", TooltipTone.Title));
-                lines.Add(new(t.Level >= 70 ? Loc.Tr("High quality armour crafted by the renowned smith {1} of {2}.", t.Crafter, faction)
-                    : Loc.Tr("Crafted by the smith {1} of {2}.", t.Crafter, faction), "", TooltipTone.Title, Paragraph: true));
-            }
+            lines.Add(new(" "));
+            lines.Add(new(description, "", TooltipTone.Title, Paragraph: true));
         }
 
+        if (t.Crafter.Length > 0)
+        {
+            string faction = player.PlayerFactionName?.Invoke() ?? "";
+            lines.Add(new(" "));
+            lines.Add(new(Loc.Tr("[Crafted by {1}]", t.Crafter), "", TooltipTone.Title));
+            lines.Add(new(t.Level >= 70 ? Loc.Tr("High quality armour crafted by the renowned smith {1} of {2}.", t.Crafter, faction)
+                : Loc.Tr("Crafted by the smith {1} of {2}.", t.Crafter, faction), "", TooltipTone.Title, Paragraph: true));
+        }
+    }
+
+    /// <summary>
+    /// An item's charges and quality (not food or ammunition).
+    /// </summary>
+    static void AddChargeRows(List<TooltipLine> lines, ItemTip t, Data.Fcs.FcsRecordType? type, int function)
+    {
         if (type == Data.Fcs.FcsRecordType.Item && function is not (3 or 16))
         {
             if (t.MaxCharges > 1) lines.Add(Row("Charges", $"{Number(t.Charges)}/{Number(t.MaxCharges)}"));
@@ -964,20 +1030,18 @@ sealed class TooltipRuntime(PlayerInterface player)
             // FUN_1407ae130: shown whenever the quality is not 1 (an ITEM carries its record's quality, 1 unless the data sets it).
             if (t.Quality != 1) lines.Add(Row("Quality", $"{Number(t.Quality)}/100"));
         }
+    }
 
+    /// <summary>
+    /// A map item's note, one row per line, the right-click and location hints in cyan.
+    /// </summary>
+    static void AddMapNoteRows(List<TooltipLine> lines, ItemTip t)
+    {
         if (t.MapNote is { Length: > 0 } note)
         {
             foreach (string row in note.Split('\n')) lines.Add(new(row, "",
                 row.StartsWith("[Right", StringComparison.Ordinal) || row.StartsWith("[Location", StringComparison.Ordinal) ? TooltipTone.Cyan : TooltipTone.Ink));
         }
-
-        // The record's description closes every other item's tooltip, with no blank row before it (the second tooltip function, FUN_14079f4d0 and its
-        // overrides).
-        if (armour is null && record?.GetString("description") is { Length: > 0 } text)
-            lines.Add(new(text, "", TooltipTone.Ink, Paragraph: true));
-        if (type == Data.Fcs.FcsRecordType.Weapon) lines.AddRange(WeaponTail(t, model));
-
-        return lines;
     }
 
     /// <summary>

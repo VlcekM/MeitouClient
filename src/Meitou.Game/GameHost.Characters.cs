@@ -168,7 +168,7 @@ sealed partial class GameHost
     /// <summary>
     /// Fills the renderer's list from the last two snapshots, interpolated by the simulation's alpha.
     /// </summary>
-    void FillDrawList(CharacterDrawList list)
+    internal void FillDrawList(CharacterDrawList list)
     {
         long f0 = Stopwatch.GetTimestamp();
         // The portraits first: their characters are posed however far (FillDrawListCore).
@@ -184,7 +184,7 @@ sealed partial class GameHost
     /// The world's characters for a host without the player interface (the Metal loop): the same interpolation and ragdoll
     /// blending as <see cref="FillDrawListCore"/>, without the editor previews and the portraits.
     /// </summary>
-    void FillWorldDrawList(CharacterDrawList list)
+    internal void FillWorldDrawList(CharacterDrawList list)
     {
         var current = Session.CurrentSnapshot;
         IndexPrevious();
