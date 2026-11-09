@@ -116,7 +116,7 @@ static class AtmosphereShaders
         uniform vec4 uLightGrid;      // the lamps (docs/render-lights.md): the grid's corner x, z, its cell size, cells per side (0: no lamps)
         uniform sampler2D uLightCells, uLightIndex, uLightData, uLampTiles, uLampMovers;
         {{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
-        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampTileVisibility(lamp, toLamp, d, n)
+        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampTileVisibility(lamp, world, toLamp, d, n)
         {{LampShaders.Lighting}}
 
         // ---- the weather's surfaces (docs/formats/weather.md "Rain and wetness", "Dust") ----
