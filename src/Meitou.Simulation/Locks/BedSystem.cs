@@ -380,14 +380,15 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     }
 
     /// <summary>
-    /// The walker at its bed: the rent, then in (the original's <c>Task_UseBed</c> start <c>FUN_140357d00</c>). A bed whose machine draws power and
-    /// gets none refuses (<c>FUN_140357ad0</c> with the power test <c>FUN_140299370</c>, <b>Verified</b>; only a bed the player built has a machine,
-    /// and no base-game bed draws power): the task ends and the player hears "This bed needs power to operate.". False: the trip is over either way.
+    /// The walker at its bed: the rent, then in (the original's <c>Task_UseBed</c> start <c>FUN_140357d00</c>). A bed without power refuses
+    /// (<c>FUN_140357ad0</c> with the power test <c>FUN_140299370</c>, <b>Verified</b>): the task ends and the player hears "This bed needs power to
+    /// operate.". Without power is a player-built bed whose machine draws power and gets none, or a placed one that draws power in a town with no
+    /// generator (<see cref="Unpowered"/>). False: the trip is over either way.
     /// </summary>
     bool LieIn(World world, int s, CharacterCold c, Fixture bed)
     {
         var table = world.Characters;
-        if (world.Machines.Find(bed.Building) is { Data.IsConsumer: true, HasPower: false })
+        if (world.Machines.Find(bed.Building) is { Data.IsConsumer: true, HasPower: false } || Unpowered(world, bed))
         {
             if (c.IsPlayer) world.Post(Loc.Tr("This bed needs power to operate."));
             TaskStart.Stand(table, s);
@@ -398,6 +399,19 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             TaskStart.Stand(table, s);
         return false;
     }
+
+    /// <summary>
+    /// A bed the world placed (no machine) that draws power (its BUILDING's <c>power output</c> below 0, the base Skeleton Repair Bed's -10) in a town
+    /// none of whose standing buildings holds a generator. The original asks the town's generator output, or its batteries' in battery mode
+    /// (docs/game/buildings-production.md "Power"); town machines are not simulated, so a generator present stands for that output and a town's
+    /// batteries never hold charge (engine reading). A bed in no town has no grid and works.
+    /// </summary>
+    bool Unpowered(World world, Fixture bed) =>
+        world.Machines.Find(bed.Building) is null
+        && bed.Site >= 0
+        && bed.Site < data.Sites.Count
+        && data.Db.Find(bed.RecordId)?.GetInt("power output") < 0
+        && !data.Sites[bed.Site].Buildings.Any(b => b.Generators > 0 && !world.Fixtures.IsDestroyed(b));
 
     /// <summary>
     /// The carrier at the bed: the rent (the cheaper of the carrier's and the body's, <c>FUN_140358170</c>), then the body is let go and lies in the
