@@ -5,23 +5,31 @@ namespace Meitou.Data.Particles;
 public enum PuDynamicKind { Fixed, Random, CurvedLinear, CurvedSpline, Oscillate }
 
 /// <summary>
-/// A ParticleUniverse "dynamic attribute" (docs/formats/particle-universe.md): a number, or <c>dyn_random</c> (uniform between
-/// <c>min</c> and <c>max</c>, drawn when read), <c>dyn_curved_linear</c> / <c>dyn_curved_spline</c> (control points (x, y), read at
-/// an x such as the particle's life fraction) or <c>dyn_oscillate</c> (<c>base + amplitude · wave(frequency · x + phase)</c>).
-/// Immutable; <see cref="Evaluate"/> takes the random source so a seeded simulation stays deterministic.
+/// A ParticleUniverse "dynamic attribute" (docs/formats/particle-universe.md): a number, or <c>dyn_random</c> (uniform between <c>min</c> and
+/// <c>max</c>, drawn when read), <c>dyn_curved_linear</c> / <c>dyn_curved_spline</c> (control points (x, y), read at an x such as the particle's life
+/// fraction) or <c>dyn_oscillate</c> (<c>base + amplitude · wave(frequency · x + phase)</c>). Immutable; <see cref="Evaluate"/> takes the random
+/// source so a seeded simulation stays deterministic.
 /// </summary>
 public sealed class PuDynamic
 {
     public PuDynamicKind Kind { get; }
-    /// <summary>Fixed: the value. Random: the minimum. Oscillate: the base.</summary>
+    /// <summary>
+    /// Fixed: the value. Random: the minimum. Oscillate: the base.
+    /// </summary>
     public float A { get; }
-    /// <summary>Random: the maximum. Oscillate: the amplitude.</summary>
+    /// <summary>
+    /// Random: the maximum. Oscillate: the amplitude.
+    /// </summary>
     public float B { get; }
-    /// <summary>The control points, sorted by x.</summary>
+    /// <summary>
+    /// The control points, sorted by x.
+    /// </summary>
     public IReadOnlyList<Vector2> Points { get; }
     public float Frequency { get; }
     public float Phase { get; }
-    /// <summary>Oscillate: a square wave instead of a sine.</summary>
+    /// <summary>
+    /// Oscillate: a square wave instead of a sine.
+    /// </summary>
     public bool Square { get; }
 
     PuDynamic(PuDynamicKind kind, float a, float b, Vector2[]? points = null, float frequency = 0, float phase = 0, bool square = false)
@@ -38,7 +46,9 @@ public sealed class PuDynamic
 
     public bool IsFixed => Kind == PuDynamicKind.Fixed;
 
-    /// <summary>The smallest and largest value the attribute can take (random: its range; curves: their control points; oscillate: base ± amplitude).</summary>
+    /// <summary>
+    /// The smallest and largest value the attribute can take (random: its range; curves: their control points; oscillate: base ± amplitude).
+    /// </summary>
     public (float Min, float Max) Range => Kind switch
     {
         PuDynamicKind.Fixed => (A, A),
@@ -47,7 +57,10 @@ public sealed class PuDynamic
         _ => Points.Count == 0 ? (0, 0) : (Points.Min(p => p.Y), Points.Max(p => p.Y)),
     };
 
-    /// <summary>The value at <paramref name="x"/> (ignored by fixed and random values); <paramref name="random"/> is read by <c>dyn_random</c> only (null: the middle).</summary>
+    /// <summary>
+    /// The value at <paramref name="x"/> (ignored by fixed and random values); <paramref name="random"/> is read by <c>dyn_random</c> only (null: the
+    /// middle).
+    /// </summary>
     public float Evaluate(float x, Random? random = null)
     {
         switch (Kind)
@@ -55,41 +68,41 @@ public sealed class PuDynamic
             case PuDynamicKind.Fixed: return A;
             case PuDynamicKind.Random: return random is null ? (A + B) * 0.5f : A + (B - A) * random.NextSingle();
             case PuDynamicKind.Oscillate:
-            {
-                float turns = Frequency * x + Phase;
-                float wave = Square ? (turns - MathF.Floor(turns) < 0.5f ? 1 : -1) : MathF.Sin(MathF.Tau * turns);
-                return A + B * wave;
-            }
+                {
+                    float turns = Frequency * x + Phase;
+                    float wave = Square ? (turns - MathF.Floor(turns) < 0.5f ? 1 : -1) : MathF.Sin(MathF.Tau * turns);
+                    return A + B * wave;
+                }
             case PuDynamicKind.CurvedLinear:
-            {
-                // The segment whose end is the first point beyond x; below the first point the first segment is extended, above the last
-                // the last value holds (docs/formats/particle-universe.md "Curves").
-                var p = Points;
-                if (p.Count == 0) return 0;
-                if (p.Count == 1 || x >= p[^1].X) return p[^1].Y;
-                int i = 0;
-                while (i < p.Count - 2 && p[i + 1].X <= x) i++;
-                float span = p[i + 1].X - p[i].X;
-                return span <= 1e-9f ? p[i + 1].Y : p[i].Y + (p[i + 1].Y - p[i].Y) * (x - p[i].X) / span;
-            }
+                {
+                    // The segment whose end is the first point beyond x; below the first point the first segment is extended, above the last
+                    // the last value holds (docs/formats/particle-universe.md "Curves").
+                    var p = Points;
+                    if (p.Count == 0) return 0;
+                    if (p.Count == 1 || x >= p[^1].X) return p[^1].Y;
+                    int i = 0;
+                    while (i < p.Count - 2 && p[i + 1].X <= x) i++;
+                    float span = p[i + 1].X - p[i].X;
+                    return span <= 1e-9f ? p[i + 1].Y : p[i].Y + (p[i + 1].Y - p[i].Y) * (x - p[i].X) / span;
+                }
             default:
-            {
-                // An Ogre spline through the points, evenly spaced in its parameter whatever their x, read at x over the points' x range
-                // (not less the first x), at most 1; the value is the curve's y (docs/formats/particle-universe.md "Curves").
-                var p = Points;
-                if (p.Count == 0) return 0;
-                float range = p[^1].X - p[0].X;
-                float u = range > 0 ? Math.Min(x / range, 1) : 1;
-                float segment = u * (p.Count - 1);
-                if (segment < 0) segment = 0;
-                int i = (int)segment;
-                if (i >= p.Count - 1) return p[^1].Y;
-                float t = segment - i;
-                // Hermite with tangents half the difference of the neighbours (the end ones of their own segment): Catmull-Rom.
-                float y0 = p[Math.Max(i - 1, 0)].Y, y1 = p[i].Y, y2 = p[i + 1].Y, y3 = p[Math.Min(i + 2, p.Count - 1)].Y;
-                float t2 = t * t, t3 = t2 * t;
-                return 0.5f * (2 * y1 + (y2 - y0) * t + (2 * y0 - 5 * y1 + 4 * y2 - y3) * t2 + (3 * y1 - y0 - 3 * y2 + y3) * t3);
-            }
+                {
+                    // An Ogre spline through the points, evenly spaced in its parameter whatever their x, read at x over the points' x range
+                    // (not less the first x), at most 1; the value is the curve's y (docs/formats/particle-universe.md "Curves").
+                    var p = Points;
+                    if (p.Count == 0) return 0;
+                    float range = p[^1].X - p[0].X;
+                    float u = range > 0 ? Math.Min(x / range, 1) : 1;
+                    float segment = u * (p.Count - 1);
+                    if (segment < 0) segment = 0;
+                    int i = (int)segment;
+                    if (i >= p.Count - 1) return p[^1].Y;
+                    float t = segment - i;
+                    // Hermite with tangents half the difference of the neighbours (the end ones of their own segment): Catmull-Rom.
+                    float y0 = p[Math.Max(i - 1, 0)].Y, y1 = p[i].Y, y2 = p[i + 1].Y, y3 = p[Math.Min(i + 2, p.Count - 1)].Y;
+                    float t2 = t * t, t3 = t2 * t;
+                    return 0.5f * (2 * y1 + (y2 - y0) * t + (2 * y0 - 5 * y1 + 4 * y2 - y3) * t2 + (3 * y1 - y0 - 3 * y2 + y3) * t3);
+                }
         }
     }
 }

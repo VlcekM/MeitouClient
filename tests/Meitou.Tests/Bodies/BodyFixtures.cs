@@ -4,7 +4,9 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Tests.Bodies;
 
-/// <summary>Shared inputs of the body tests: the base game's CONSTANTS, a human race with the Greenlander anatomy, and contexts.</summary>
+/// <summary>
+/// Shared inputs of the body tests: the base game's CONSTANTS, a human race with the Greenlander anatomy, and contexts.
+/// </summary>
 static class BodyFixtures
 {
     /// <summary>
@@ -42,10 +44,10 @@ static class BodyFixtures
         ExpGainMultiplier = 0.75f,
         XpRateMedic1 = 15,
         XpRateMedic99 = 150,
-        SkillDiffXp2xBonus = 10,
-        SkillDiffXp0xPenalty = 25,
+        SkillDiffXp2XBonus = 10,
+        SkillDiffXp0XPenalty = 25,
         MinStrengthXpMult = 0.1f,
-        WeightStrengthDiff1x = 20,
+        WeightStrengthDiff1X = 20,
         WeightStrengthDiffMax = 1,
         XpRateStrength = 0.5f,
         XpRateStrengthFromWalking = 0.5f,
@@ -57,18 +59,48 @@ static class BodyFixtures
         WeaponInventoryWeightMult = 0.5f,
     };
 
-    public static BodyPartTemplate Head { get; } = new() { StringId = "32-t", Name = "Head", Type = BodyPartType.Head, Collapses = true, Vital = true, Severance = true, CollapsePart = 1, AffectsSkills = 0.6f, KoMult = 2 };
-    public static BodyPartTemplate Chest { get; } = new() { StringId = "101-t", Name = "Chest", Type = BodyPartType.Torso, Collapses = true, Vital = true, CollapsePart = 1, KoMult = 1 };
-    public static BodyPartTemplate Stomach { get; } = new() { StringId = "100-t", Name = "Stomach", Type = BodyPartType.Torso, Collapses = true, Vital = true, Severance = true, CollapsePart = 1, AffectsMoveSpeed = 0.3f, KoMult = 1 };
-    public static BodyPartTemplate LeftArm { get; } = new() { StringId = "28-t", Name = "Left Arm", Type = BodyPartType.Arm, Collapses = true, Severance = true, CollapsePart = 4, AffectsSkills = 0.25f, KoMult = 0.5f };
-    public static BodyPartTemplate RightArm { get; } = new() { StringId = "29-t", Name = "Right Arm", Type = BodyPartType.Arm, Collapses = true, Severance = true, CollapsePart = 2, AffectsSkills = 1, KoMult = 0.5f };
-    public static BodyPartTemplate LeftLeg { get; } = new() { StringId = "30-t", Name = "Left Leg", Type = BodyPartType.Leg, Collapses = true, Severance = true, CollapsePart = 32, KoMult = 0.5f };
-    public static BodyPartTemplate RightLeg { get; } = new() { StringId = "31-t", Name = "Right Leg", Type = BodyPartType.Leg, Collapses = true, Severance = true, CollapsePart = 16, KoMult = 0.5f };
+    public static BodyPartTemplate Head { get; } = new()
+    {
+        StringId = "32-t", Name = "Head", Type = BodyPartType.Head, Collapses = true, Vital = true, Severance = true, CollapsePart = 1,
+        AffectsSkills = 0.6f, KoMult = 2,
+    };
+    public static BodyPartTemplate Chest { get; } = new()
+    {
+        StringId = "101-t", Name = "Chest", Type = BodyPartType.Torso, Collapses = true, Vital = true, CollapsePart = 1, KoMult = 1,
+    };
+    public static BodyPartTemplate Stomach { get; } = new()
+    {
+        StringId = "100-t", Name = "Stomach", Type = BodyPartType.Torso, Collapses = true, Vital = true, Severance = true, CollapsePart = 1,
+        AffectsMoveSpeed = 0.3f, KoMult = 1,
+    };
+    public static BodyPartTemplate LeftArm { get; } = new()
+    {
+        StringId = "28-t", Name = "Left Arm", Type = BodyPartType.Arm, Collapses = true, Severance = true, CollapsePart = 4,
+        AffectsSkills = 0.25f, KoMult = 0.5f,
+    };
+    public static BodyPartTemplate RightArm { get; } = new()
+    {
+        StringId = "29-t", Name = "Right Arm", Type = BodyPartType.Arm, Collapses = true, Severance = true, CollapsePart = 2,
+        AffectsSkills = 1, KoMult = 0.5f,
+    };
+    public static BodyPartTemplate LeftLeg { get; } = new()
+    {
+        StringId = "30-t", Name = "Left Leg", Type = BodyPartType.Leg, Collapses = true, Severance = true, CollapsePart = 32, KoMult = 0.5f,
+    };
+    public static BodyPartTemplate RightLeg { get; } = new()
+    {
+        StringId = "31-t", Name = "Right Leg", Type = BodyPartType.Leg, Collapses = true, Severance = true, CollapsePart = 16, KoMult = 0.5f,
+    };
 
-    /// <summary>Part indices of <see cref="Human"/> (the original's part order, <see cref="BodyPartTemplate.MedicalOrder"/>: head, stomach, chest, left arm, right arm, left leg, right leg).</summary>
+    /// <summary>
+    /// Part indices of <see cref="Human"/> (the original's part order, <see cref="BodyPartTemplate.MedicalOrder"/>: head, stomach, chest,
+    /// left arm, right arm, left leg, right leg).
+    /// </summary>
     public const int HeadIx = 0, LArm = 3, RArm = 4, RLeg = 6;
 
-    /// <summary>A Greenlander: anatomy 80/100, 140/100, 140/100, arms 80 and 40, legs 80 and 80; good Science, Farming, Cooking.</summary>
+    /// <summary>
+    /// A Greenlander: anatomy 80/100, 140/100, 140/100, arms 80 and 40, legs 80 and 80; good Science, Farming, Cooking.
+    /// </summary>
     public static RaceData Human { get; } = new()
     {
         StringId = "17-t",
@@ -86,7 +118,9 @@ static class BodyFixtures
 
     public static MedicalState Healthy(RaceData? race = null, float strength = 50) => MedicalState.Create(race ?? Human, strength);
 
-    /// <summary>Ticks in steps of <paramref name="step"/> seconds of character time until <paramref name="seconds"/> have passed.</summary>
+    /// <summary>
+    /// Ticks in steps of <paramref name="step"/> seconds of character time until <paramref name="seconds"/> have passed.
+    /// </summary>
     public static void Run(MedicalState m, in MedicalContext ctx, float seconds, float step = 0.1f, List<MedicalEvent>? events = null)
     {
         int n = (int)MathF.Round(seconds / step);

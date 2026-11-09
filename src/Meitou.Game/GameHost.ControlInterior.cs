@@ -1,6 +1,23 @@
+using Meitou.Game.Host.WorldSync;
+using Meitou.Game.DevTools;
 using System.Numerics;
 using System.Text.Json;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gi;
+using Meitou.Game.Rendering.Impostors;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Rendering.Ui;
+using Meitou.Game.Rendering.Upscalers;
+using Meitou.Game.Rendering.Water;
 
 namespace Meitou.Game;
 
@@ -11,40 +28,40 @@ namespace Meitou.Game;
 sealed partial class GameHost
 {
     /// <summary>The floor <c>interior-view</c> holds the building at the camera target at, or null.</summary>
-    int? forcedViewFloor;
+    int? _forcedViewFloor;
 
     /// <summary>Called by <see cref="UpdateInteriorView"/>: puts the building over the camera target in the view at the forced floor.</summary>
-    void ApplyForcedInteriorView(Meitou.Rendering.WorldObjectRenderer objects)
+    internal void ApplyForcedInteriorView(Meitou.Game.Rendering.Objects.WorldObjectRenderer objects)
     {
-        if (forcedViewFloor is not { } floor) return;
-        ViewedFloor = floor;
+        if (_forcedViewFloor is not { } floor) return;
+        Interiors.ViewedFloor = floor;
         for (float dy = 0; dy < 600; dy += 20)
-            if (objects.InteriorAt(camera.Target + new Vector3(0, dy, 0), InsideMargin) is { } room)
+            if (objects.InteriorAt(Camera.Target + new Vector3(0, dy, 0), InteriorView.InsideMargin) is { } room)
             {
-                if (interiorView.TryAdd(room.PlacementId, viewedFloor)) viewed.Add(room);
+                Interiors.AddViewed(room);
                 return;
             }
     }
 
-    void WriteInteriorState(Utf8JsonWriter w)
+    internal void WriteInteriorState(Utf8JsonWriter w)
     {
         w.WriteStartObject("interior");
-        w.WriteNumber("floor", viewedFloor);
-        w.WriteBoolean("forced", forcedViewFloor is not null);
+        w.WriteNumber("floor", Interiors.ViewedFloorValue);
+        w.WriteBoolean("forced", _forcedViewFloor is not null);
         w.WriteStartArray("views");
-        foreach (var (id, floor) in interiorView) { w.WriteStartObject(); w.WriteString("building", id); w.WriteNumber("floor", floor); w.WriteEndObject(); }
+        foreach (var (id, floor) in Interiors.InteriorFloors) { w.WriteStartObject(); w.WriteString("building", id); w.WriteNumber("floor", floor); w.WriteEndObject(); }
         w.WriteEndArray();
         w.WriteEndObject();
     }
 
-    void RegisterControlInteriorCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add)
+    internal void RegisterControlInteriorCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add)
     {
         add("interior-view", "interior-view <floor 0..3 | off>", "hold the interior view of the building over the camera target at a floor, with no character inside (off: back to the characters' own view); state lists the view", (args, con) =>
         {
             if (args.Count != 1) { con.Error("usage: interior-view <floor 0..3 | off>"); return; }
-            if (args[0] == "off") { forcedViewFloor = null; con.Print("interior view released"); return; }
+            if (args[0] == "off") { _forcedViewFloor = null; con.Print("interior view released"); return; }
             if (!int.TryParse(args[0], out int f) || f < 0 || f > 3) { con.Error("usage: interior-view <floor 0..3 | off>"); return; }
-            forcedViewFloor = f;
+            _forcedViewFloor = f;
             con.Print($"interior view held at floor {f}");
         });
         add("interior-hide", "interior-hide <mesh text | off>", "debug: building parts whose mesh path contains the text count as hidden by the floor view (colour and shadow passes), to find which part draws a surface", (args, con) =>
@@ -54,7 +71,7 @@ sealed partial class GameHost
         });
         add("vram", "vram", "debug: device-local memory in use and the budget (MB), as the memory guard samples it", (args, con) =>
         {
-            if (gpu.Guard is not { } g) { con.Error("no memory guard"); return; }
+            if (Gpu.Guard is not { } g) { con.Error("no memory guard"); return; }
             con.Print(FormattableString.Invariant($"vram {g.Fraction * g.BudgetBytes / 1048576:F0} / {g.BudgetBytes / 1048576} MB ({g.Fraction:P1})"));
         });
         add("object-sort", "object-sort <on|off>", "debug: colour batches of the objects are drawn nearest first (on, the default with the reach switch) or in the order met (off)", (args, con) =>
@@ -65,8 +82,8 @@ sealed partial class GameHost
         });
         add("gpu-times", "gpu-times [frames]", "debug: the GPU's mean ms per frame stage over the newest frames (default 60, at most 300), largest first", (args, con) =>
         {
-            if (profiler is null) { con.Error("no profiler in this run"); return; }
-            con.Print(profiler.GpuMeans(args.Count > 0 ? int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture) : 60));
+            if (DebugMenu.Profiler is null) { con.Error("no DebugMenu.Profiler in this run"); return; }
+            con.Print(DebugMenu.Profiler.GpuMeans(args.Count > 0 ? int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture) : 60));
         });
         add("lamps", "lamps list [radius] | lamps off <index...> | lamps on", "debug: the lamps reaching the camera's target (index, position relative to it, colour, power, radius, type, cone, falloff, rule, owner); off leaves those indices out, on brings them all back", (args, con) =>
         {
@@ -77,7 +94,7 @@ sealed partial class GameHost
                 if (args.Count < 4) { lamps.DebugCarried = null; con.Print("carried lamp off"); return; }
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
                 float cx = float.Parse(args[1], inv), cz = float.Parse(args[2], inv), lift = float.Parse(args[3], inv), reach = args.Count > 4 ? float.Parse(args[4], inv) : 300;
-                lamps.DebugCarried = new Meitou.Data.World.WorldLight(new System.Numerics.Vector3(cx, gpu.Terrain.HeightAt(cx, cz) + lift, cz), new System.Numerics.Vector3(1, 0.9f, 0.6f), 0.8f, reach, Meitou.Data.World.WorldLightType.Point,
+                lamps.DebugCarried = new Meitou.Data.World.WorldLight(new System.Numerics.Vector3(cx, Gpu.Terrain.HeightAt(cx, cz) + lift, cz), new System.Numerics.Vector3(1, 0.9f, 0.6f), 0.8f, reach, Meitou.Data.World.WorldLightType.Point,
                     -System.Numerics.Vector3.UnitY, 0, 0, 1, default, default, false, 0, "debug", "debug", "debug-carried");
                 con.Print($"carried lamp at {cx} {cz}");
                 return;
@@ -96,7 +113,7 @@ sealed partial class GameHost
             }
             if (args[0] == "off") { foreach (var a in args.Skip(1)) lamps.DebugOff.Add(int.Parse(a)); con.Print($"{lamps.DebugOff.Count} lamps off"); return; }
             float radius = args.Count > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
-            var at = camera.Target;
+            var at = Camera.Target;
             var listed = new System.Text.StringBuilder();
             foreach (var (i, l) in lamps.Around(at, radius))
             {

@@ -2,12 +2,15 @@ using Meitou.Data.Gameplay;
 
 namespace Meitou.Tests.Gameplay;
 
-/// <summary>Rules of the original's animation candidate filters (docs/animation.md "Choosing candidates").</summary>
+/// <summary>
+/// Rules of the original's animation candidate filters (docs/animation.md "Choosing candidates").
+/// </summary>
 public class AnimationPickTests
 {
     static AnimationDefinition Clip(string id, int category = 0, string[]? stumbles = null) => new()
     {
-        Id = id, Name = id, Clip = id, Category = category, Stumbles = stumbles ?? [], Chance = 100, WeaponLeft = 2, WeaponRight = 2, CombatMode = 2, StealthMode = 2, Kinds = WeaponKinds.All,
+        Id = id, Name = id, Clip = id, Category = category, Stumbles = stumbles ?? [], Chance = 100, WeaponLeft = 2, WeaponRight = 2,
+        CombatMode = 2, StealthMode = 2, Kinds = WeaponKinds.All,
     };
 
     [Fact]

@@ -54,14 +54,16 @@ public class FoliageTests
         using var far = new FoliageWorld(install!, db, WorldLevelData.LoadBaseGame(install!), catalog);
         int farZones = 0, farInstances = 0;
         // Desert and canyon zones around (-60564, -45142) with CinderBall01 and canyon blocks, the forest of 14.30, the Hub's south.
-        foreach (var zone in new ZoneCoordinate[] { new(17, 21), new(18, 21), new(18, 22), new(19, 22), new(17, 23), new(14, 30), new(20, 29), new(21, 29), new(44, 23), new(31, 45) })
+        foreach (var zone in new ZoneCoordinate[] { new(17, 21), new(18, 21), new(18, 22), new(19, 22), new(17, 23), new(14, 30), new(20, 29),
+                new(21, 29), new(44, 23), new(31, 45) })
         {
             var (full, ground) = whole.Load(zone);
             var part = far.Load(zone, farOnly: true).Zone;
             Assert.True(full.Complete);
             if (zone == new ZoneCoordinate(14, 30))
             {
-                // The forest zone: a ground and grass come with it, the zone cache returns the same instances, and every instance lies in the zone with a legal scale.
+                // The forest zone: a ground and grass come with it, the zone cache returns the same instances, and every instance lies in the zone
+                // with a legal scale.
                 Assert.NotNull(ground);
                 Assert.NotEmpty(full.Instances);
                 Assert.NotEmpty(full.Grass);

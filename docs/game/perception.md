@@ -89,7 +89,7 @@ sense `AggroSystem.Notice` (level seen, for a player-side target of another fact
 conscious victim (engine choice: not when it goes down). Not wired: the forced sense of the AI tasks, the body drop and dialogue events 0x21 / 0x37, and a hit's `param_4`
 gate. Whether the arrows read well in game (the mesh is 10 units long) was not checked with a run (**Unknown**).
 Every player character within the 1.2e8 range gets the `Kenshi_CharacterNamePanel` over its head (name in `Kenshi_StandardFont_Large` with shadow, selected: white in [brackets], else #b3b3b3 (**Observed**); the icon only while sneaking); NPCs get none
-(**Observed** in the original). **Verified** (`FUN_1406e8100`, `FUN_1406e2fd0`, `FUN_1406e2900`, `FUN_1405cc310`, `FUN_1403eca90`): a tag is made when a character with a faction whose `+0x250` is set (and a relation test against the player's faction object, **Unknown**) enters the world; the `Show names` option (`DAT_142133508`, saved by `FUN_1403eca90`) is copied into each tag (`+0x20`), and off hides the name text and sizes the panel to the two icons (Meitou: `PlayerInterface.ShowNames`, Interface settings "Show names", default on); a carried character's tag is lifted by the name's height (Meitou draws none for a carried one).
+(**Observed** in the original). **Verified** (`FUN_1406e8100`, `FUN_1406e2fd0`, `FUN_1406e2900`, `FUN_1405cc310`, `FUN_1403eca90`): a tag is made when a character with a faction whose `+0x250` is set (and a relation test against the player's faction object, **Unknown**) enters the world; the `Show names` option (`DAT_142133508`, saved by `FUN_1403eca90`) is copied into each tag (`+0x20`), and off hides the name text and sizes the panel to the two icons (Meitou: `PlayerInterface.ShowNames`, Interface settings "Show names", default on); a carried character's tag is lifted by the name's height (Meitou draws none for a carried one). Where the tag stands is **Unknown**; Meitou puts it 22 over the feet, moving it over the drawn head as the head drops from 12 to 8 above them (crouching, sitting on the ground, a sleeper laid onto the mattress away from its feet; `PlayerInterface.TagAnchor`, also for task bars and speech).
 
 ## Disguise
 
@@ -166,7 +166,7 @@ Hearing does not imply ordinary visual cone/line-of-sight eligibility.
   urgent kind-2 jobs (`FUN_14050e5b0`), state 6 `isNoEnemiesInVicinity`, the medic job's desire (0.01 while `+0xb0` > 0, else 0.05 while `+0xbc` > 0), IS_OUTNUMBERED, playing dead.
   The fight's end and the chase give-up read the senses directly ([leaving a fight](combat.md#leaving-a-fight)); target choice the threats and the entries ([target selection](combat.md#attack-slots-and-circling)).
 
-A carried or knocked-out character runs `FUN_140859220` instead of the sense update (`FUN_1405d00b0`: the sense update runs when not carried and either not down/dead or the medical get-up test `FUN_140598c20` passes, **Verified**): counts and threats cleared, each entry decays as one not sensed, nobody gathered (Meitou: `AggroSystem.Fade`). So one lying awake (playing dead) senses normally; Meitou also lets one whose knockout ends within two looks look (`AggroSystem.AwakeLying`, engine choice: playing dead is decided on the waking tick).
+A carried or knocked-out character runs `FUN_140859220` instead of the sense update (`FUN_1405d00b0`: the sense update runs when not carried and either not down/dead or the medical get-up test `FUN_140598c20` passes, **Verified**): counts and threats cleared, each entry decays as one not sensed, nobody gathered (Meitou: `AggroSystem.Fade`). So one lying awake (playing dead) senses normally; Meitou also lets one whose knockout ends within two looks, or that is held down for its look, look (`AggroSystem.AwakeLying`, engine choice: playing dead is decided on the waking tick; `SenseBlock.Faded` marks a faded block).
 Meitou (`SenseBlock`, `CharacterFacts.Senses`): written by `AggroSystem`'s look in `Act` for every living character not carried or knocked out (`AwakeLying` aside) on its turn (one in `ScanEveryTicks` = 15, by slot), the looker's
 own slot only, and by `AggroSystem.Force` (serial: the alert, a landed blow, a bolt, an alarm; it also takes an existing entry's threat at once, standing for the pass the original runs before
 its chooser). Engine choices: at most 40 entries (`SenseBlock.Cap`; a new one replaces the one sensed
@@ -224,13 +224,17 @@ staying low and not in combat mode, 15 carried (`+0x3d4`), 7 the status object's
   reading, "while the 8 bytes at `+0x110` are zero", was wrong: that function never reads `+0x110`), and by a pending crime set through the wrapper `FUN_140852e10` when the setter
   succeeds (callers: police hit, caught stealing, fencing, kidnapping seen, uniform theft, body put-down; not through the direct setter `FUN_140852c80`, e.g. attack orders and
   looting; **Verified**). Saved as the short key `tn` (`FUN_140626580`/`FUN_140626830`; the loader zeroes it first). Meitou `CharacterCold.Freed`: set by all three, not by
-  a kidnap victim's release; cleared outside towns (`ArrestSystem`, the point-in-town stand-in) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`;
+  a kidnap victim's release; cleared outside towns (`ArrestSystem`, by the [status town](carry-loot.md#the-status-town)) and by `SetPending(viaWrapper)` for the first four callers; saved as `tn`;
   `FUN_1408569a0` is left out. Whether the original's status `+0x88` is already set when a loaded character first updates (else a loaded flag dies at once) is **Unknown**.
 - So attack on sight is relations only: no fundamental-type BANDIT rule (**Observed**). In the base data the Shek Kingdom, Holy Nation and
   United Cities start at -100 only with Bloodraiders, Cannibals, Rebel Farmers, Grass Pirates, Gorillo Bandits and Yabuta Outlaws (Holy
   Nation also Holy Nation Outlaws); at -10 with Starving and Dust Bandits; at 0 with the other bandit factions (**Verified** by probe of
   the merged data). Fights lower relations ([factions 3.5](factions-squads-towns.md#35-what-fires-relation-changes-observed-decompile)), so a
-  bandit faction a town keeps fighting can drop to hostile. The only BANDIT-type target rule found is the player's Shoot first gunners
+  bandit faction a town keeps fighting can drop to hostile. A Dust Bandit squad (the player at -10, not hostile) starts its fight through its
+  event 3 / 66 lines ([dialogue](dialogue.md)); `Bandit mugging one liner`, `bandit fight picking new target in wilds` and `Bandit Revenge` need
+  the speaker outside a non-player town (DC 31 false), `Give us your stuff!` the target, so inside a town's radius (the Hub: 2500) only
+  `Bandit hold up 1` can fire (20 % a check, 50 % permanent; **Verified** by probe of the merged data; Meitou headless on a save at the Hub's
+  edge: no attack until the boss's patrol left the circle, then the one liner and the fight). The only BANDIT-type target rule found is the player's Shoot first gunners
   ([squad AI options](ai-tasks.md#squad-ai-options)).
 
 ### The attack-on-sight tests

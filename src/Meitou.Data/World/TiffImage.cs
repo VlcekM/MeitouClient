@@ -9,23 +9,23 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class TiffImage : IDisposable
 {
-    readonly Stream stream;
-    readonly bool ownsStream;
-    readonly long[] stripOffsets;
-    readonly long[] stripByteCounts;
+    readonly Stream _stream;
+    readonly bool _ownsStream;
+    readonly long[] _stripOffsets;
+    readonly long[] _stripByteCounts;
 
     TiffImage(Stream stream, bool ownsStream, bool littleEndian, int width, int height, int bitsPerSample,
         int rowsPerStrip, long[] stripOffsets, long[] stripByteCounts, IReadOnlyDictionary<int, TiffTag> tags)
     {
-        this.stream = stream;
-        this.ownsStream = ownsStream;
+        this._stream = stream;
+        this._ownsStream = ownsStream;
         LittleEndian = littleEndian;
         Width = width;
         Height = height;
         BitsPerSample = bitsPerSample;
         RowsPerStrip = rowsPerStrip;
-        this.stripOffsets = stripOffsets;
-        this.stripByteCounts = stripByteCounts;
+        this._stripOffsets = stripOffsets;
+        this._stripByteCounts = stripByteCounts;
         Tags = tags;
     }
 
@@ -34,14 +34,18 @@ public sealed class TiffImage : IDisposable
     public int Height { get; }
     public int BitsPerSample { get; }
     public int RowsPerStrip { get; }
-    public int StripCount => stripOffsets.Length;
+    public int StripCount => _stripOffsets.Length;
     public int BytesPerRow => Width * (BitsPerSample / 8);
 
-    /// <summary>Every tag of the first image directory, by tag number (including ones this reader ignores).</summary>
+    /// <summary>
+    /// Every tag of the first image directory, by tag number (including ones this reader ignores).
+    /// </summary>
     public IReadOnlyDictionary<int, TiffTag> Tags { get; }
 
-    /// <summary>Byte offset of the first strip's pixel data.</summary>
-    public long DataOffset => stripOffsets[0];
+    /// <summary>
+    /// Byte offset of the first strip's pixel data.
+    /// </summary>
+    public long DataOffset => _stripOffsets[0];
 
     public static TiffImage Open(string path) => Open(File.OpenRead(path), ownsStream: true);
 
@@ -140,16 +144,20 @@ public sealed class TiffImage : IDisposable
         return values;
     }
 
-    /// <summary>Reads one row's raw bytes (in file byte order) into <paramref name="destination"/>.</summary>
+    /// <summary>
+    /// Reads one row's raw bytes (in file byte order) into <paramref name="destination"/>.
+    /// </summary>
     public void ReadRowBytes(int row, Span<byte> destination)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(row);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(row, Height);
-        stream.Position = RowOffset(row);
-        stream.ReadExactly(destination[..BytesPerRow]);
+        _stream.Position = RowOffset(row);
+        _stream.ReadExactly(destination[..BytesPerRow]);
     }
 
-    /// <summary>Reads one row of samples (8-bit samples widen to 0..255).</summary>
+    /// <summary>
+    /// Reads one row of samples (8-bit samples widen to 0..255).
+    /// </summary>
     public void ReadRow(int row, Span<ushort> destination)
     {
         var bytes = new byte[BytesPerRow];
@@ -157,7 +165,9 @@ public sealed class TiffImage : IDisposable
         DecodeRow(bytes, destination);
     }
 
-    /// <summary>Reads the sample at (<paramref name="column"/>, <paramref name="row"/>).</summary>
+    /// <summary>
+    /// Reads the sample at (<paramref name="column"/>, <paramref name="row"/>).
+    /// </summary>
     public ushort ReadSample(int column, int row)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(column);
@@ -165,13 +175,15 @@ public sealed class TiffImage : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(row);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(row, Height);
         int size = BitsPerSample / 8;
-        stream.Position = RowOffset(row) + (long)column * size;
+        _stream.Position = RowOffset(row) + (long)column * size;
         Span<byte> b = stackalloc byte[2];
-        stream.ReadExactly(b[..size]);
+        _stream.ReadExactly(b[..size]);
         return size == 1 ? b[0] : U16(b, LittleEndian);
     }
 
-    /// <summary>Converts raw row bytes (from <see cref="ReadRowBytes"/>) to samples.</summary>
+    /// <summary>
+    /// Converts raw row bytes (from <see cref="ReadRowBytes"/>) to samples.
+    /// </summary>
     public void DecodeRow(ReadOnlySpan<byte> bytes, Span<ushort> destination)
     {
         if (BitsPerSample == 8)
@@ -180,16 +192,18 @@ public sealed class TiffImage : IDisposable
             for (int x = 0; x < Width; x++) destination[x] = U16(bytes[(x * 2)..], LittleEndian);
     }
 
-    long RowOffset(int row) => stripOffsets[row / RowsPerStrip] + (long)(row % RowsPerStrip) * BytesPerRow;
+    long RowOffset(int row) => _stripOffsets[row / RowsPerStrip] + (long)(row % RowsPerStrip) * BytesPerRow;
 
     static ushort U16(ReadOnlySpan<byte> b, bool le) => le ? BinaryPrimitives.ReadUInt16LittleEndian(b) : BinaryPrimitives.ReadUInt16BigEndian(b);
     static uint U32(ReadOnlySpan<byte> b, bool le) => le ? BinaryPrimitives.ReadUInt32LittleEndian(b) : BinaryPrimitives.ReadUInt32BigEndian(b);
 
     public void Dispose()
     {
-        if (ownsStream) stream.Dispose();
+        if (_ownsStream) _stream.Dispose();
     }
 }
 
-/// <summary>A raw TIFF directory entry. <see cref="RawValue"/> holds the value, or its offset when it doesn't fit in 4 bytes.</summary>
+/// <summary>
+/// A raw TIFF directory entry. <see cref="RawValue"/> holds the value, or its offset when it doesn't fit in 4 bytes.
+/// </summary>
 public sealed record TiffTag(int Tag, int Type, uint Count, byte[] RawValue);

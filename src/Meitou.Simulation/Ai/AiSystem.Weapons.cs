@@ -1,4 +1,5 @@
 using Meitou.Data.Fcs;
+using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Items;
 
@@ -6,19 +7,21 @@ namespace Meitou.Simulation.Ai;
 
 public sealed partial class AiSystem
 {
-    readonly CharacterAssembly assembly = new(data);
+    readonly CharacterAssembly _assembly = new(data);
 
     /// <summary>
-    /// The third section of <c>Task_EquipBestWeapon</c> (<c>FUN_140346c30</c> :91-118, <b>Verified</b>; docs/game/ai-tasks.md): when neither the back nor the hip gave a weapon of the task's kind and the
-    /// character is not of a player faction, the first item of its inventory (in inventory order, the worn backpack's contents after the items) of the kind goes into its hand. The task flag
-    /// is the weapon's ranged flag: 6 EQUIP_WEAPON takes a melee WEAPON, 264 EQUIP_CROSSBOW a CROSSBOW. The AI's usability test (vfunc <c>0x68</c>) is not decoded and counts as true. Meitou has no held-item
-    /// pointer (the drawn weapon follows the back and hip sections), so the item goes into the first weapon section it fits (<see cref="InventoryCommands.TryEquip"/>) and the fighter is rebuilt;
-    /// with both sections full nothing is replaced and the hand stays empty. True when a weapon came out.
+    /// The third section of <c>Task_EquipBestWeapon</c> (<c>FUN_140346c30</c> :91-118, <b>Verified</b>; docs/game/ai-tasks.md): when neither the back
+    /// nor the hip gave a weapon of the task's kind and the character is not of a player faction, the first item of its inventory (in inventory
+    /// order, the worn backpack's contents after the items) of the kind goes into its hand. The task flag is the weapon's ranged flag: 6 EQUIP_WEAPON
+    /// takes a melee WEAPON, 264 EQUIP_CROSSBOW a CROSSBOW. The AI's usability test (vfunc <c>0x68</c>) is not decoded and counts as true. Meitou has
+    /// no held-item pointer (the drawn weapon follows the back and hip sections), so the item goes into the first weapon section it fits
+    /// (<see cref="InventoryCommands.TryEquip"/>) and the fighter is rebuilt; with both sections full nothing is replaced and the hand stays empty.
+    /// True when a weapon came out.
     /// </summary>
     internal bool DrawFromInventory(World world, CharacterCold cold, bool ranged)
     {
         if (cold.Inventory is not { } inventory || CarrySystem.PlayerSide(world, cold)) return false;
-        var kind = ranged ? FcsRecordType.CROSSBOW : FcsRecordType.WEAPON;
+        var kind = ranged ? FcsRecordType.Crossbow : FcsRecordType.Weapon;
         if (FirstOfKind(inventory, inventory, kind) is not var (owner, item)) return false;
         owner.Items.Remove(item);
         if (!InventoryCommands.TryEquip(inventory, item, cold))
@@ -26,7 +29,7 @@ public sealed partial class AiSystem
             owner.Items.Add(item);
             return false;
         }
-        assembly.RefreshEquipment(cold);
+        _assembly.RefreshEquipment(cold);
         return true;
     }
 

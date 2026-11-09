@@ -6,7 +6,9 @@ using static Meitou.Tests.Gameplay.EconomyTests;
 
 namespace Meitou.Tests.Gameplay;
 
-/// <summary>The towns' artifacts of a new game (docs/game/economy.md "Artifacts") on invented records, and the boost draws they are shared with.</summary>
+/// <summary>
+/// The towns' artifacts of a new game (docs/game/economy.md "Artifacts") on invented records, and the boost draws they are shared with.
+/// </summary>
 public class ArtifactTests
 {
     static FcsReference Ref(string id, int v0 = 0, int v1 = 0) => new(id, v0, v1, 0);
@@ -30,20 +32,20 @@ public class ArtifactTests
     public void Gear_gives_each_town_one_unit_then_the_rest_by_draws_and_items_are_spread_by_the_towns_maxima()
     {
         var db = Db(
-            Rec("book", FcsRecordType.ITEM, r => r.Ints["value"] = 100),
-            Rec("core", FcsRecordType.ITEM, r => r.Ints["value"] = 1000),
-            Rec("relic", FcsRecordType.ITEM, r => r.Ints["value"] = 50000),
-            Rec("plate", FcsRecordType.ARMOUR, r => r.Ints["value"] = 500),
-            Rec("sword", FcsRecordType.WEAPON, r => r.Ints["value"] = 10),
-            Rec("axe", FcsRecordType.WEAPON, r => r.Ints["value"] = 10),
-            Rec("mk1", FcsRecordType.MATERIAL_SPECS_WEAPON),
-            Rec("smith", FcsRecordType.WEAPON_MANUFACTURER, r =>
+            Rec("book", FcsRecordType.Item, r => r.Ints["value"] = 100),
+            Rec("core", FcsRecordType.Item, r => r.Ints["value"] = 1000),
+            Rec("relic", FcsRecordType.Item, r => r.Ints["value"] = 50000),
+            Rec("plate", FcsRecordType.Armour, r => r.Ints["value"] = 500),
+            Rec("sword", FcsRecordType.Weapon, r => r.Ints["value"] = 10),
+            Rec("axe", FcsRecordType.Weapon, r => r.Ints["value"] = 10),
+            Rec("mk1", FcsRecordType.MaterialSpecsWeapon),
+            Rec("smith", FcsRecordType.WeaponManufacturer, r =>
             {
                 r.Floats["price mod"] = 1;
                 r.References["weapon models"] = [Ref("mk1", 50)];
                 r.References["weapon types"] = [Ref("sword"), Ref("axe")];
             }),
-            Rec("art", FcsRecordType.ARTIFACTS, r =>
+            Rec("art", FcsRecordType.Artifacts, r =>
             {
                 r.References["items"] = [Ref("book", 4), Ref("core", 2), Ref("relic", 1)];
                 r.References["armours"] = [Ref("plate", 3)];
@@ -53,18 +55,26 @@ public class ArtifactTests
             Town("B", 0, 1000, 0, 600),
             Town("C", 500, 2000, 0, 0),
             Town("N", 0, 2000, 0, 1000, type: 0));
-        var plan = Artifacts.Plan(db, new[] { "A", "B", "C", "N" }.Select((id, k) => new ArtifactTown(k, TownData.From(db.Find(id)!), new Vector3(k, 0, 0))));
+        var plan = Artifacts.Plan(
+            db,
+            new[] { "A", "B", "C", "N" }.Select((id, k) => new ArtifactTown(k, TownData.From(db.Find(id)!), new Vector3(k, 0, 0))));
 
-        // Towns in order B (max 1000), A, C. Book (100): B and A, spread 2 / 2 by their maxima; core (1000): B, A and C, 1 / 1. The relic no town takes, nor the nest.
-        // Gear: B takes a plate (500), A a plate; the third plate is drawn between them (A); each weapon (mk1 at level 50: 875) only A takes, a type each.
-        Assert.Equal([new ArtifactStack("plate", "", "", 80, 2), new("axe", "mk1", "smith", 50, 1), new("sword", "mk1", "smith", 50, 1), new("book", "", "", 0, 2), new("core", "", "", 0, 1)],
+        // Towns in order B (max 1000), A, C. Book (100): B and A, spread 2 / 2 by their maxima;
+        // core (1000): B, A and C, 1 / 1. The relic no town takes, nor the nest.
+        // Gear: B takes a plate (500), A a plate; the third plate is drawn between them (A);
+        // each weapon (mk1 at level 50: 875) only A takes, a type each.
+        Assert.Equal(
+            [
+                new ArtifactStack("plate", "", "", 80, 2), new("axe", "mk1", "smith", 50, 1), new("sword", "mk1", "smith", 50, 1),
+                new("book", "", "", 0, 2), new("core", "", "", 0, 1),
+            ],
             plan[0]);
         Assert.Equal([new ArtifactStack("plate", "", "", 80, 1), new("book", "", "", 0, 2), new("core", "", "", 0, 1)], plan[1]);
         Assert.False(plan.ContainsKey(2));
         Assert.False(plan.ContainsKey(3));
     }
 
-    static FcsRecord Town(string id, int itemMin, int itemMax, int gearMin, int gearMax, int type = 2) => Rec(id, FcsRecordType.TOWN, r =>
+    static FcsRecord Town(string id, int itemMin, int itemMax, int gearMin, int gearMax, int type = 2) => Rec(id, FcsRecordType.Town, r =>
     {
         r.Ints["type"] = type;
         (r.Ints["item artifacts min value"], r.Ints["item artifacts max value"]) = (itemMin, itemMax);

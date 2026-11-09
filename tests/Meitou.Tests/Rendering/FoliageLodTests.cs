@@ -1,13 +1,17 @@
 using Meitou.Data.World;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>Generated foliage levels (docs/formats/foliage.md, "Generated levels"): the builder and its deviation measure, the disk cache, and the cull kernel's choice of level.</summary>
+/// <summary>
+/// Generated foliage levels (docs/formats/foliage.md, "Generated levels"): the builder and its deviation measure, the disk cache, and the cull
+/// kernel's choice of level.
+/// </summary>
 public class FoliageLodTests
 {
     static Model Sphere(int rings, int segments, float radius, float spikes = 0)
@@ -18,7 +22,8 @@ public class FoliageLodTests
             {
                 float phi = MathF.PI * r / rings, theta = 2 * MathF.PI * (s % segments) / segments;
                 var n = new Vector3(MathF.Sin(phi) * MathF.Cos(theta), MathF.Cos(phi), MathF.Sin(phi) * MathF.Sin(theta));
-                vertices.Add(new Vertex { Position = n * radius, Normal = n, Uv = new Vector2((float)s / segments, (float)r / rings), Weights = new Vector4(1, 0, 0, 0) });
+                vertices.Add(new Vertex { Position = n * radius, Normal = n, Uv = new Vector2((float)s / segments, (float)r / rings),
+                        Weights = new Vector4(1, 0, 0, 0) });
             }
         var indices = new List<uint>();
         for (int r = 0; r < rings; r++)
@@ -37,16 +42,20 @@ public class FoliageLodTests
     {
         var model = Sphere(40, 80, 100);
         var set = FoliageLodBuilder.Build(model, radius: 100);
+
         Assert.NotNull(set);
         Assert.True(set.Levels >= 3, $"{set.Levels} levels");
         Assert.Equal(0, set.Errors[0]);
+
         for (int i = 1; i < set.Levels; i++)
         {
             Assert.True(set.Errors[i] >= set.Errors[i - 1], $"deviation of level {i}");
             Assert.True(set.Triangles[i] <= set.Triangles[i - 1] * FoliageLodBuilder.MinGain + 1, $"triangles of level {i}");
         }
+
         Assert.Equal(model.Parts[0].Indices.Length / 3, set.Triangles[0]);
         Assert.True(set.Errors[1] < 0.02f * 100, $"half the triangles of a sphere deviate {set.Errors[1]} units");
+
         foreach (var level in set.Indices[0])
         {
             Assert.Equal(0, level.Length % 3);
@@ -73,6 +82,7 @@ public class FoliageLodTests
         uint tip = (uint)vertices.Count - 1, p0 = 10 * 21 + 10, p1 = p0 + 1;
         indices.AddRange([p0, p1, tip]);
         float deviation = FoliageLodBuilder.Deviation([.. vertices], [.. indices], flat);
+
         Assert.InRange(deviation, 29.9f, 30.1f);
         Assert.Equal(0, FoliageLodBuilder.Deviation([.. vertices], flat, flat), 4);
     }
@@ -82,20 +92,26 @@ public class FoliageLodTests
     static VulkanDevice? TryCreate()
     {
         try { return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { return null; }
+        catch (Exception e)
+            when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
-    /// Three batches (levels 0 to 2) hold the same instances in chunks flagged <see cref="FoliageCullChunk.Lod"/>: every instance the plain cull keeps lands in exactly
-    /// one of them, the one the rule picks (the deviation in pixels, or in texels for an orthographic view, at most the tolerance while the next level's is not), and
-    /// the draws carry their first index.
+    /// Three batches (levels 0 to 2) hold the same instances in chunks flagged <see cref="FoliageCullChunk.Lod"/>: every instance the plain cull
+    /// keeps lands in exactly one of them, the one the rule picks (the deviation in pixels, or in texels for an orthographic view, at most the
+    /// tolerance while the next level's is not), and the draws carry their first index.
     /// </summary>
     [Fact]
     [Slow]
     public unsafe void The_cull_puts_each_instance_in_the_level_its_size_picks()
     {
         using var d = TryCreate();
+
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+
         var random = new Random(77);
         float[] relative = [0, 0.004f, 0.02f];   // the levels' deviation in radii of the mesh
         using (var ctx = new GpuContext(d!))
@@ -116,7 +132,8 @@ public class FoliageLodTests
                     float angle = (float)(random.NextDouble() * Math.PI * 2), dist = (float)(random.NextDouble() * random.NextDouble() * 9000);
                     var p = new Vector3(eye.X + MathF.Cos(angle) * dist, (float)random.NextDouble() * 300, eye.Z + MathF.Sin(angle) * dist);
                     float scale = (float)(0.3 + random.NextDouble() * 3);
-                    records[i] = new FoliageInstanceRecord { Transform = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateTranslation(p), Ground = new Vector4(p.X, p.Z, scale, 0) };
+                    records[i] = new FoliageInstanceRecord { Transform = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateTranslation(p),
+                            Ground = new Vector4(p.X, p.Z, scale, 0) };
                 }
                 FoliageCull.FillSpheres(records, new Vector3(0, 10, 0), 80);
                 var range = FoliageGroupRange.Of(12000, 1200);
@@ -141,7 +158,8 @@ public class FoliageLodTests
                 starts[3] = chunks.Count;
                 var draws = new List<FoliageCullDraw>();
                 for (int level = 0; level < 3; level++)
-                    draws.Add(new FoliageCullDraw { IndexCount = (uint)(30 - level * 8), FirstIndex = (uint)(level * 100), ChunkStart = (uint)starts[level], ChunkEnd = (uint)starts[level + 1] });
+                    draws.Add(new FoliageCullDraw { IndexCount = (uint)(30 - level * 8), FirstIndex = (uint)(level * 100),
+                            ChunkStart = (uint)starts[level], ChunkEnd = (uint)starts[level + 1] });
                 var work = cull.Prepare(chunks.ToArray(), draws.ToArray());
                 var result = cull.Dispatch(work, view, eyeXz, default, 0.999f, default, default, lod);
                 using var readback = ReadbackBuffer.Create(ctx, FoliageGpuCull.ReadbackBytes(result), "lod readback");
@@ -149,7 +167,8 @@ public class FoliageLodTests
                 ctx.EndFrame();
                 d!.Frames.WaitAll();
 
-                // The plain cull's survivors, and the level the rule gives each (a range of counts where an instance sits within a hair of a boundary).
+                // The plain cull's survivors, and the level the rule gives each (a range of counts where an instance sits within a hair of a
+                // boundary).
                 var output = new FoliageCullOutput();
                 FoliageCull.CullGroup(records, range, eyeXz, view, record: false, output);
                 var survivors = new HashSet<(float, float, float)>();
@@ -159,17 +178,24 @@ public class FoliageLodTests
                 {
                     var r = records[i];
                     var t = r.Transform;
-                    if (!output.Visible.AsSpan(0, output.Count).ToArray().Any(m => m.M41 == t.M41 && m.M42 == t.M42 && m.M43 == t.M43)) continue;
+                    if (!output.Visible.AsSpan(0, output.Count).ToArray().Any(m => m.M41 == t.M41 && m.M42 == t.M42 && m.M43 == t.M43))
+                        continue;
                     total++;
                     double radius = r.Sphere.W;
                     double s = ortho ? radius * lod.Scale
                         : radius * lod.Scale / Math.Max(Vector3.Distance(new Vector3(r.Sphere.X, r.Sphere.Y, r.Sphere.Z), eye) - radius, 1);
-                    // Level k is picked when relative[k] s <= tolerance < relative[k+1] s; the candidates within 0.1 % of a boundary are either neighbour.
+
+                    // Level k is picked when relative[k] s
+                    // <= tolerance < relative[k+1] s; the candidates within 0.1 % of a boundary are either neighbour.
                     int lo = 0, hi = 0;
                     for (int k = 1; k < 3; k++)
                     {
                         double v = relative[k] * s / lod.Tolerance;
-                        if (v <= 1 - 1e-3) { lo = k; hi = k; }
+                        if (v <= 1 - 1e-3)
+                        {
+                            lo = k;
+                            hi = k;
+                        }
                         else if (v <= 1 + 1e-3) hi = k;
                     }
                     for (int k = lo; k <= hi; k++) high[k]++;
@@ -183,10 +209,12 @@ public class FoliageLodTests
                 {
                     uint count = args[level * 5 + 1];
                     sum += (int)count;
+
                     Assert.InRange((int)count, low[level], high[level]);
                     Assert.Equal((uint)(30 - level * 8), args[level * 5]);
                     Assert.Equal((uint)(level * 100), args[level * 5 + 2]);
                 }
+
                 Assert.Equal(total, sum);
                 Assert.True(total > 100, $"view {viewNumber}: {total} instances survive");
                 Assert.True(high[1] > 0 || high[2] > 0, "the views should pick some coarser levels");
@@ -196,6 +224,7 @@ public class FoliageLodTests
     }
 
     static void ExpectClean(VulkanDevice d) =>
+
         Assert.True(d.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
 
     static Vector4[] Frustum(Vector3 eye, float yaw, float pitch)

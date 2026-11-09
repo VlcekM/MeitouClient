@@ -12,14 +12,14 @@ namespace Meitou.Data.Save;
 /// </summary>
 public sealed class SaveBuilder
 {
-    readonly ulong seed;
-    int nextContainer = 1;
-    int nextTownContainer = 1;
-    int nextSerial;
+    readonly ulong _seed;
+    int _nextContainer = 1;
+    int _nextTownContainer = 1;
+    int _nextSerial;
 
     public SaveBuilder(ulong seed = 0)
     {
-        this.seed = seed;
+        this._seed = seed;
         var quick = new SaveFile();
         Game = new SaveGame(quick.WithRecord(NewCamera()));
         FactionCollectionOthers = NewCollection(Game.Quick);
@@ -30,18 +30,20 @@ public sealed class SaveBuilder
         Game.Portraits = SavePortraits.Blank();
     }
 
-    /// <summary>Adds to an existing save (a loaded one): containers and numbers continue after the highest in use.</summary>
+    /// <summary>
+    /// Adds to an existing save (a loaded one): containers and numbers continue after the highest in use.
+    /// </summary>
     public SaveBuilder(SaveGame game, ulong seed = 0)
     {
-        this.seed = seed;
+        this._seed = seed;
         Game = game;
         var player = game.PlayerFaction;
         var collections = game.FactionCollections;
-        FactionCollectionPlayer = collections.FirstOrDefault(c => player is not null && c.Instances.Any(i => i.Target == player.Record.StringId)) ?? Quick(FcsRecordType.INSTANCE_COLLECTION);
-        FactionCollectionOthers = collections.FirstOrDefault(c => c != FactionCollectionPlayer) ?? Quick(FcsRecordType.INSTANCE_COLLECTION);
-        nextContainer = game.Platoons.Select(p => p.Handle.C).DefaultIfEmpty(0).Max() + 1;
-        nextTownContainer = game.Towns.Select(t => t.Handle.C).DefaultIfEmpty(0).Max() + 1;
-        nextSerial = game.Platoons.Count;
+        FactionCollectionPlayer = collections.FirstOrDefault(c => player is not null && c.Instances.Any(i => i.Target == player.Record.StringId)) ?? Quick(FcsRecordType.InstanceCollection);
+        FactionCollectionOthers = collections.FirstOrDefault(c => c != FactionCollectionPlayer) ?? Quick(FcsRecordType.InstanceCollection);
+        _nextContainer = game.Platoons.Select(p => p.Handle.C).DefaultIfEmpty(0).Max() + 1;
+        _nextTownContainer = game.Towns.Select(t => t.Handle.C).DefaultIfEmpty(0).Max() + 1;
+        _nextSerial = game.Platoons.Count;
     }
 
     public SaveGame Game { get; }
@@ -50,7 +52,9 @@ public sealed class SaveBuilder
 
     // ------------------------------------------------------------------ ids
 
-    /// <summary>The next number of a file: one more than the highest numeric id in it.</summary>
+    /// <summary>
+    /// The next number of a file: one more than the highest numeric id in it.
+    /// </summary>
     public static int NextNumber(SaveFile file) => file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => Math.Max(r.Id, SaveGame.NumberOf(r)))) + 1;
 
     static string QuickId(int n) => $"{n}-{SaveFolder.QuickSaveName}-INGAME";
@@ -64,10 +68,12 @@ public sealed class SaveBuilder
         return r;
     }
 
-    /// <summary>A random 32-bit serial from the seed and a counter, the way the game's allocator makes one (any value is legal; negative ones occur).</summary>
+    /// <summary>
+    /// A random 32-bit serial from the seed and a counter, the way the game's allocator makes one (any value is legal; negative ones occur).
+    /// </summary>
     public int Serial()
     {
-        ulong x = seed + 0x9E3779B97F4A7C15UL * (ulong)(++nextSerial);
+        ulong x = _seed + 0x9E3779B97F4A7C15UL * (ulong)(++_nextSerial);
         x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9UL;
         x = (x ^ (x >> 27)) * 0x94D049BB133111EBUL;
         return (int)(x ^ (x >> 31));
@@ -77,7 +83,7 @@ public sealed class SaveBuilder
 
     static FcsRecord NewCamera()
     {
-        var r = new FcsRecord { Type = (int)FcsRecordType.CAMERA, Name = "0" };
+        var r = new FcsRecord { Type = (int)FcsRecordType.Camera, Name = "0" };
         foreach (var k in new[] { "eject", "share", "sit", "sleep", "feed", "ditch", "bl" }) r.Bools[k] = true;
         foreach (var k in new[] { "help", "shootfirst", "stay", "rescue", "heal", "ep", "sky updating" }) r.Bools[k] = false;
         foreach (var k in new[] { "nnm", "bs", "rs", "gdm", "ht", "ps", "cod" }) r.Floats[k] = 1;
@@ -100,11 +106,11 @@ public sealed class SaveBuilder
         Hand.Null.Write(r, "selected_character");
         Hand.Null.Write(r, "selected_gui_object");
         Hand.Null.Write(r, "tracking");
-        r.Vector3s["pos"] = Vector3.Zero;
-        r.Vector3s["sky ambient color mult"] = Vector3.One;
-        r.Vector3s["sky ambient color mult speed"] = Vector3.Zero;
+        r.Vector3S["pos"] = Vector3.Zero;
+        r.Vector3S["sky ambient color mult"] = Vector3.One;
+        r.Vector3S["sky ambient color mult speed"] = Vector3.Zero;
         // The game's own start view: yaw 0, 30 degrees down (w, x, y, z; docs/formats/camera.md "Saved camera"); the host writes the real view over it.
-        r.Vector4s["rot"] = KenshiCamera.ToSaved(0, KenshiCamera.InitialPitchDegrees * MathF.PI / 180, 800).Rot;
+        r.Vector4S["rot"] = KenshiCamera.ToSaved(0, KenshiCamera.InitialPitchDegrees * MathF.PI / 180, 800).Rot;
         r.Strings["version"] = SaveGame.GameVersion;
         r.Strings["pfaction name"] = "Nameless";
         r.Strings["area"] = "";
@@ -116,7 +122,7 @@ public sealed class SaveBuilder
 
     FcsRecord NewCollection(SaveFile file)
     {
-        var r = Quick(FcsRecordType.INSTANCE_COLLECTION);
+        var r = Quick(FcsRecordType.InstanceCollection);
         return r;
     }
 
@@ -126,12 +132,12 @@ public sealed class SaveBuilder
     /// </summary>
     public SaveFaction AddFaction(string factionId, string name, bool isPlayer, float prosperity, IEnumerable<SaveRelation>? relations = null, int platoonCounter = 0, int rank = 0)
     {
-        var war = Quick(FcsRecordType.WAR_SAVESTATE);
+        var war = Quick(FcsRecordType.WarSavestate);
         war.Floats["updatetime"] = 40;
         foreach (var k in new[] { "num plats", "num poss", "num requests", "num actives", "fwc id" }) war.Ints[k] = 0;
         war.Strings["faction"] = factionId;
 
-        var f = Quick(FcsRecordType.GAMESTATE_FACTION, name);
+        var f = Quick(FcsRecordType.GamestateFaction, name);
         f.Strings["gamedata stringID"] = factionId;
         f.Floats["prosperity"] = prosperity;
         f.Ints["platoonIDs"] = platoonCounter;
@@ -153,10 +159,13 @@ public sealed class SaveBuilder
         return faction;
     }
 
-    /// <summary>Adds the state of a town or nest. <paramref name="handleType"/> is 13 (TOWN) or 85 (NEST); each gets a container of its own, or keeps <paramref name="hand"/> (a level town state's).</summary>
-    public SaveTown AddTown(string name, string instance, string factionId, bool isNest, ZoneCoordinate? zone, int handleType = (int)FcsRecordType.TOWN, Hand? hand = null)
+    /// <summary>
+    /// Adds the state of a town or nest. <paramref name="handleType"/> is 13 (TOWN) or 85 (NEST); each gets a container of its own, or keeps
+    /// <paramref name="hand"/> (a level town state's).
+    /// </summary>
+    public SaveTown AddTown(string name, string instance, string factionId, bool isNest, ZoneCoordinate? zone, int handleType = (int)FcsRecordType.Town, Hand? hand = null)
     {
-        var r = Quick(FcsRecordType.GAMESTATE_TOWN, name);
+        var r = Quick(FcsRecordType.GamestateTown, name);
         foreach (var k in new[] { "started", "explored", "recently discovered", "discovered", "ded" }) r.Bools[k] = false;
         r.Bools["is nest"] = isNest;
         r.Bools["public"] = !isNest;
@@ -166,9 +175,9 @@ public sealed class SaveBuilder
         if (hand is { } h)
         {
             h.Write(r, "hand");
-            nextTownContainer = Math.Max(nextTownContainer, h.C + 1);
+            _nextTownContainer = Math.Max(_nextTownContainer, h.C + 1);
         }
-        else new Hand(handleType, nextTownContainer++, Serial(), 0, 0).Write(r, "hand");
+        else new Hand(handleType, _nextTownContainer++, Serial(), 0, 0).Write(r, "hand");
         r.Strings["faction"] = factionId;
         r.Strings["instance"] = instance;
         r.Strings["building material"] = "";
@@ -183,14 +192,17 @@ public sealed class SaveBuilder
         return town;
     }
 
-    /// <summary>Adds the world records the game always writes after the towns: BIOMES, RESEARCH and TERRAIN_DECALS, empty. (Weather is not modelled yet; the research is written by <c>Meitou.Simulation.Saving.ResearchSave</c>.)</summary>
+    /// <summary>
+    /// Adds the world records the game always writes after the towns: BIOMES, RESEARCH and TERRAIN_DECALS, empty. (Weather is not modelled yet; the
+    /// research is written by <c>Meitou.Simulation.Saving.ResearchSave</c>.)
+    /// </summary>
     public void AddEmptyWorldState()
     {
-        Quick(FcsRecordType.BIOMES);
-        var research = Quick(FcsRecordType.RESEARCH);
+        Quick(FcsRecordType.Biomes);
+        var research = Quick(FcsRecordType.Research);
         research.Floats["num finished"] = 0;
         research.Floats["num currents"] = 0;
-        var decals = Quick(FcsRecordType.TERRAIN_DECALS);
+        var decals = Quick(FcsRecordType.TerrainDecals);
         decals.Ints["total"] = 0;
         Game.Reindex();
     }
@@ -203,7 +215,7 @@ public sealed class SaveBuilder
     /// </summary>
     public SavePlatoon AddPlatoon(string name, string factionName, string factionId, string squadTemplate, Vector3 position, int money = 0, int squadIndex = 0)
     {
-        var r = new FcsRecord { Type = (int)FcsRecordType.PLATOON, Name = name, StringId = name, Id = NextNumber(Game.Quick) };
+        var r = new FcsRecord { Type = (int)FcsRecordType.Platoon, Name = name, StringId = name, Id = NextNumber(Game.Quick) };
         Game.Quick.Records.Add(r);
         Game.Quick.Data.NextId = Math.Max(Game.Quick.Data.NextId, r.Id);
         // `persistent` with `sqt` 1 (every sqt-1 platoon of the samples is persistent): a caller writing another pool sets both.
@@ -218,10 +230,10 @@ public sealed class SaveBuilder
         r.Ints["owned stuff count"] = 0;
         r.Ints["slave count"] = 0;
         int cs = Serial();
-        new Hand((int)FcsRecordType.PLATOON, nextContainer++, cs, 0, 0).Write(r, "handle");
+        new Hand((int)FcsRecordType.Platoon, _nextContainer++, cs, 0, 0).Write(r, "handle");
         foreach (var prefix in new[] { "currenttown", "hometown", "homebuilding", "occupied", "separated", "target town", "mission employer", "mission target", "mission town" })
             Hand.Null.Write(r, prefix);
-        r.Vector3s["position"] = position;
+        r.Vector3S["position"] = position;
         foreach (var k in new[] { "replacementAI", "contractjob", "mission data", "map area name", "map area sid", "currentPackage", "basetown" }) r.Strings[k] = "";
         r.Strings["platoon stringID"] = name;
         r.Strings["faction name"] = factionName;
@@ -243,14 +255,16 @@ public sealed class SaveBuilder
         if (platoon.File is not null) return;
         platoon.ContentFile = SaveFolder.PlatoonName(platoon.Record.StringId);
         var file = new SaveFile();
-        var collection = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Name = "0" };
+        var collection = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Name = "0" };
         file.Records.Add(collection);
         collection.Ints["char count"] = 0;
         AssignId(file, collection, "");
         platoon.File = file;
     }
 
-    /// <summary>Gives a record the next number of the file: id, string id <c>&lt;n&gt;-&lt;suffix&gt;-INGAME</c>.</summary>
+    /// <summary>
+    /// Gives a record the next number of the file: id, string id <c>&lt;n&gt;-&lt;suffix&gt;-INGAME</c>.
+    /// </summary>
     static void AssignId(SaveFile file, FcsRecord r, string suffix, string stateSuffix = "")
     {
         int n = NextNumber(file);
@@ -279,12 +293,12 @@ public sealed class SaveBuilder
         }
 
         // The file's records come in the order: the character's items are made first by callers, so the six states are appended here in a fixed order.
-        c.GameState = Make(FcsRecordType.GAMESTATE_CHARACTER);
-        c.Ai = Make(FcsRecordType.GAMESTATE_AI, "ai");
-        c.Inventory = Make(FcsRecordType.INVENTORY_STATE);
-        c.Medical = Make(FcsRecordType.MEDICAL_STATE);
-        c.Stats = Make(FcsRecordType.STATS, name);
-        c.Appearance = Make(FcsRecordType.CHARACTER_APPEARANCE);
+        c.GameState = Make(FcsRecordType.GamestateCharacter);
+        c.Ai = Make(FcsRecordType.GamestateAi, "ai");
+        c.Inventory = Make(FcsRecordType.InventoryState);
+        c.Medical = Make(FcsRecordType.MedicalState);
+        c.Stats = Make(FcsRecordType.Stats, name);
+        c.Appearance = Make(FcsRecordType.CharacterAppearance);
 
         var g = c.GameState;
         foreach (var k in new[] { "tn", "escap", "kidn", "carrying", "stealth" }) g.Bools[k] = false;
@@ -308,7 +322,7 @@ public sealed class SaveBuilder
         var collection = platoon.Collection ?? throw new InvalidOperationException("The platoon file has no collection.");
         int slot = platoon.Characters.Count == 0 ? 1 : platoon.Characters.Max(x => x.Handle.I) + 1;
         var ph = platoon.Handle;
-        new Hand((int)FcsRecordType.CHARACTER, ph.C, ph.CS, slot, Serial()).Write(g, "handle");
+        new Hand((int)FcsRecordType.Character, ph.C, ph.Cs, slot, Serial()).Write(g, "handle");
         int n = NextNumber(file);
         instance.Id = $"{n}--INGAME";
         file.Data.NextId = n;
@@ -320,7 +334,10 @@ public sealed class SaveBuilder
         return c;
     }
 
-    /// <summary>Removes a platoon: its PLATOON record and its file (the original deletes the record of a platoon it destroys, docs/game/factions-squads-towns.md "Persistent platoons").</summary>
+    /// <summary>
+    /// Removes a platoon: its PLATOON record and its file (the original deletes the record of a platoon it destroys,
+    /// docs/game/factions-squads-towns.md "Persistent platoons").
+    /// </summary>
     public void RemovePlatoon(SavePlatoon platoon)
     {
         Game.Quick.Records.Remove(platoon.Record);
@@ -368,7 +385,9 @@ public sealed class SaveBuilder
 
     // ------------------------------------------------------------------ STATS defaults
 
-    /// <summary>The STATS floats a record always has that the stat system does not write (the legacy ones): zero.</summary>
+    /// <summary>
+    /// The STATS floats a record always has that the stat system does not write (the legacy ones): zero.
+    /// </summary>
     public static readonly string[] LegacyStatKeys = ["xp", "free attribute points", "warrior spirit", "endurance", "ff", "hackers", "survival", "arrow defence"];
 
     /// <summary>

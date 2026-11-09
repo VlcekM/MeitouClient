@@ -12,7 +12,16 @@ static class FcsTypeMatcher
     public static int Run(GameInstall install)
     {
         var schema = FcsSchema.Load(Path.Combine(install.Root, "fcs.def"));
+        var (used, recordCounts) = ReadUsage(install);
+        var best = PrintTypeMatches(schema, used, recordCounts);
+        PrintKindCrossCheck(schema, used, best);
+        PrintSummary(schema, used, best);
+        return 0;
+    }
 
+    static (SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> Used, Dictionary<int, int> RecordCounts)
+        ReadUsage(GameInstall install)
+    {
         // type number -> field name -> (data kind, records using it)
         var used = new SortedDictionary<int, Dictionary<string, (string Kind, int Count)>>();
         var recordCounts = new Dictionary<int, int>();
@@ -25,6 +34,14 @@ static class FcsTypeMatcher
                     fields[key] = (kind, fields.GetValueOrDefault(key).Count + 1);
             }
 
+        return (used, recordCounts);
+    }
+
+    static Dictionary<int, string> PrintTypeMatches(
+        FcsSchema schema,
+        SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> used,
+        Dictionary<int, int> recordCounts)
+    {
         Console.WriteLine("type records fields  best match (fields found, schema size) | runner-up");
         var best = new Dictionary<int, string>();
         foreach (var (type, fields) in used)
@@ -44,7 +61,17 @@ static class FcsTypeMatcher
                 Console.WriteLine($"{"",20}not in schema: {string.Join(", ", missing.Take(8).Select(k => $"'{k}'"))}");
         }
 
-        // Cross-check: the list a field is stored in vs. the kind fcs.def gives it.
+        return best;
+    }
+
+    /// <summary>
+    /// Cross-check: the list a field is stored in vs. the kind fcs.def gives it.
+    /// </summary>
+    static void PrintKindCrossCheck(
+        FcsSchema schema,
+        SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> used,
+        Dictionary<int, string> best)
+    {
         Console.WriteLine();
         Console.WriteLine("schema kind -> stored in (field occurrences):");
         var kindPairs = new Dictionary<(FcsFieldKind, string), int>();
@@ -55,7 +82,13 @@ static class FcsTypeMatcher
                         kindPairs[(def.Kind, kind)] = kindPairs.GetValueOrDefault((def.Kind, kind)) + count;
         foreach (var ((schemaKind, dataKind), count) in kindPairs.OrderBy(p => p.Key.Item1).ThenByDescending(p => p.Value))
             Console.WriteLine($"  {schemaKind,-10} -> {dataKind,-9} {count,8}");
+    }
 
+    static void PrintSummary(
+        FcsSchema schema,
+        SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> used,
+        Dictionary<int, string> best)
+    {
         Console.WriteLine();
         Console.WriteLine("schema fields of unknown kind: " + string.Join(", ", schema.TypeNames
             .SelectMany(schema.FieldsOf).Where(f => f.Kind == FcsFieldKind.Unknown)
@@ -65,14 +98,14 @@ static class FcsTypeMatcher
             .Where(g => g.Count() > 1).Select(g => $"{g.Key} ({string.Join(", ", g.Select(kv => kv.Key))})")));
         Console.WriteLine("'REMOVED' key: " + string.Join(", ", used.Where(u => u.Value.ContainsKey("REMOVED"))
             .Select(u => $"{u.Key}:{u.Value["REMOVED"].Kind}x{u.Value["REMOVED"].Count}")));
-        return 0;
     }
+
     static IEnumerable<(string Key, string Kind)> KeysOf(FcsRecord r) =>
         r.Bools.Keys.Select(k => (k, "bool"))
             .Concat(r.Floats.Keys.Select(k => (k, "float")))
             .Concat(r.Ints.Keys.Select(k => (k, "int")))
-            .Concat(r.Vector3s.Keys.Select(k => (k, "vec3")))
-            .Concat(r.Vector4s.Keys.Select(k => (k, "vec4")))
+            .Concat(r.Vector3S.Keys.Select(k => (k, "vec3")))
+            .Concat(r.Vector4S.Keys.Select(k => (k, "vec4")))
             .Concat(r.Strings.Keys.Select(k => (k, "string")))
             .Concat(r.Filenames.Keys.Select(k => (k, "filename")))
             .Concat(r.References.Keys.Select(k => (k, "reference")));
@@ -92,7 +125,7 @@ static class FcsRecordDump
                 Console.WriteLine($"  float:  {string.Join(", ", r.Floats.Keys)}");
                 Console.WriteLine($"  int:    {string.Join(", ", r.Ints.Keys)}");
                 Console.WriteLine($"  string: {string.Join(", ", r.Strings.Keys)}  file: {string.Join(", ", r.Filenames.Keys)}");
-                Console.WriteLine($"  vec:    {string.Join(", ", r.Vector3s.Keys.Concat(r.Vector4s.Keys))}");
+                Console.WriteLine($"  vec:    {string.Join(", ", r.Vector3S.Keys.Concat(r.Vector4S.Keys))}");
                 Console.WriteLine($"  refs:   {string.Join(", ", r.References.Select(kv => $"{kv.Key}[{kv.Value.Count}]"))}  instances: {r.Instances.Count}");
             }
         return 0;

@@ -1,14 +1,14 @@
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Tests.Navigation;
 
 /// <summary>
-/// How much of the original tiles' interior meshes our build covers, per town zone (docs/game/pathfinding.md "Stairs under floors": a stair or storey the
-/// builder loses shows as uncovered faces). The floors are the measured coverage less one point when the test was written; a drop means a building lost a
-/// stair, a floor or its interior (issues #139, #142, #147, #149).
+/// How much of the original tiles' interior meshes our build covers, per town zone (docs/game/pathfinding.md "Stairs under floors":
+/// a stair or storey the builder loses shows as uncovered faces). The floors are the measured coverage less one point when the test
+/// was written; a drop means a building lost a stair, a floor or its interior (issues #139, #142, #147, #149).
 /// </summary>
 [Slow]
 public class InteriorCoverageTests
@@ -40,8 +40,13 @@ public class InteriorCoverageTests
         int faces = coverage.Sum(c => c.Faces), covered = coverage.Sum(c => c.Covered);
         Assert.True(faces > 0, $"{town} {zone}: no original interior face in the zone");
         double percent = 100.0 * covered / faces;
-        var worst = coverage.Where(c => c.Faces > 0 && c.Covered < 0.9 * c.Faces).OrderBy(c => (double)c.Covered / c.Faces).Take(5)
+        var worst = coverage.Where(c => c.Faces > 0 && c.Covered < 0.9 * c.Faces)
+            .OrderBy(c => (double)c.Covered / c.Faces)
+            .Take(5)
             .Select(c => $"{c.Group.Uid} at {c.Group.Origin.X:0},{c.Group.Origin.Z:0} {c.Covered}/{c.Faces} missing y {c.MissingLow:0}..{c.MissingHigh:0}");
-        Assert.True(percent >= floorPercent, $"{town} {zone}: {covered}/{faces} faces covered ({percent:0.0} %), floor {floorPercent} %; worst groups: {string.Join("; ", worst)}");
+        string worstText = string.Join("; ", worst);
+        Assert.True(
+            percent >= floorPercent,
+            $"{town} {zone}: {covered}/{faces} faces covered ({percent:0.0} %), floor {floorPercent} %; worst groups: {worstText}");
     }
 }

@@ -10,8 +10,8 @@ public sealed class FaceWeights
 {
     public const float Resolution = 128;
 
-    string[] keys = new string[8];
-    float[] values = new float[8];
+    string[] _keys = new string[8];
+    float[] _values = new float[8];
 
     /// <summary>The number of keys set.</summary>
     public int Count { get; private set; }
@@ -22,8 +22,8 @@ public sealed class FaceWeights
     /// </summary>
     public IReadOnlySet<string>? Available { get; set; }
 
-    public string KeyAt(int index) => keys[index];
-    public float WeightAt(int index) => values[index];
+    public string KeyAt(int index) => _keys[index];
+    public float WeightAt(int index) => _values[index];
 
     public void Clear() => Count = 0;
 
@@ -31,7 +31,7 @@ public sealed class FaceWeights
     public bool TryGet(string key, out float weight)
     {
         for (int i = 0; i < Count; i++)
-            if (string.Equals(keys[i], key, StringComparison.Ordinal)) { weight = values[i]; return true; }
+            if (string.Equals(_keys[i], key, StringComparison.Ordinal)) { weight = _values[i]; return true; }
         weight = 0;
         return false;
     }
@@ -41,14 +41,14 @@ public sealed class FaceWeights
     {
         float w = MathF.Round(Math.Clamp(float.IsFinite(weight) ? weight : 0, 0, 1) * Resolution) / Resolution;
         for (int i = 0; i < Count; i++)
-            if (string.Equals(keys[i], key, StringComparison.Ordinal)) { values[i] = w; return; }
-        if (Count == keys.Length)
+            if (string.Equals(_keys[i], key, StringComparison.Ordinal)) { _values[i] = w; return; }
+        if (Count == _keys.Length)
         {
-            Array.Resize(ref keys, Count * 2);
-            Array.Resize(ref values, Count * 2);
+            Array.Resize(ref _keys, Count * 2);
+            Array.Resize(ref _values, Count * 2);
         }
-        keys[Count] = key;
-        values[Count++] = w;
+        _keys[Count] = key;
+        _values[Count++] = w;
     }
 
     /// <summary>Whether the arrays (the last <see cref="CopyTo"/>) hold the same keys with the same weights in the same order.</summary>
@@ -57,8 +57,8 @@ public sealed class FaceWeights
         if (otherCount != Count) return false;
         for (int i = 0; i < Count; i++)
         {
-            if (!ReferenceEquals(keys[i], otherKeys[i]) && keys[i] != otherKeys[i]) return false;
-            if (values[i] != otherValues[i]) return false;
+            if (!ReferenceEquals(_keys[i], otherKeys[i]) && _keys[i] != otherKeys[i]) return false;
+            if (_values[i] != otherValues[i]) return false;
         }
         return true;
     }
@@ -66,9 +66,9 @@ public sealed class FaceWeights
     /// <summary>Copies the current keys and weights into the arrays (grown when needed) and returns their count; for the renderer's "unchanged" test.</summary>
     public int CopyTo(ref string[] otherKeys, ref float[] otherValues)
     {
-        if (otherKeys.Length < Count) { otherKeys = new string[keys.Length]; otherValues = new float[keys.Length]; }
-        Array.Copy(keys, otherKeys, Count);
-        Array.Copy(values, otherValues, Count);
+        if (otherKeys.Length < Count) { otherKeys = new string[_keys.Length]; otherValues = new float[_keys.Length]; }
+        Array.Copy(_keys, otherKeys, Count);
+        Array.Copy(_values, otherValues, Count);
         return Count;
     }
 }

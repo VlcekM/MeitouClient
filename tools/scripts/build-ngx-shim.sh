@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds libmeitou_ngx.so, which DLSS on Linux loads (src/Meitou.Rendering/Upscalers/Ngx.cs): the NGX client library of NVIDIA's DLSS SDK,
+# Builds libmeitou_ngx.so, which DLSS on Linux loads (src/Meitou.Game/Rendering/Upscalers/Ngx.cs): the NGX client library of NVIDIA's DLSS SDK,
 # its static libnvsdk_ngx.a linked as is into a shared library (no source of ours). The archive is downloaded at the pinned SDK version and
 # checked against its SHA-256; neither it nor the result is in the repository. Needs curl and g++ (on Fedora and RHEL also libstdc++-static).
 #   build-ngx-shim.sh [output folder, default the repository's dlss-runtime] [download cache, default a temporary folder, removed after]

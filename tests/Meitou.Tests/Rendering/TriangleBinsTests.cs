@@ -1,8 +1,12 @@
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Bench;
+
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The pure parts of the bench's triangle measurements (docs/bench.md "Triangles per pass"): the area bins, the folding of counted samples into triangles, the shader change and the result file.</summary>
+/// <summary>
+/// The pure parts of the bench's triangle measurements (docs/bench.md "Triangles per pass"): the area bins, the folding of counted samples into
+/// triangles, the shader change and the result file.
+/// </summary>
 public class TriangleBinsTests
 {
     [Fact]
@@ -14,6 +18,7 @@ public class TriangleBinsTests
         counts[TriangleBins.FineOf(0.25)] = 1250;
         counts[TriangleBins.FineOf(400)] = 4000;
         var h = TriangleBins.Fold(counts);
+
         Assert.InRange(h.Triangles[0], 5000 * 0.85, 5000 * 1.15);
         Assert.InRange(h.Triangles[1], 1000 * 0.85, 1000 * 1.15);
         Assert.InRange(h.Triangles[4], 10 * 0.85, 10 * 1.15);

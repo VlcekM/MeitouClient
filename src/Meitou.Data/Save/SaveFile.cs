@@ -12,7 +12,9 @@ public sealed class SaveFile
 {
     public FcsFile Data { get; init; } = new() { FileType = FcsFileType.V15 };
 
-    /// <summary>The slot lists after the records, in file order.</summary>
+    /// <summary>
+    /// The slot lists after the records, in file order.
+    /// </summary>
     public List<int[]> SlotLists { get; } = [];
 
     public List<FcsRecord> Records => Data.Records;

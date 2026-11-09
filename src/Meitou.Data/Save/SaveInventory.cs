@@ -12,11 +12,17 @@ public sealed class SaveItem
     public required string BaseId { get; init; }
     public string MaterialId { get; init; } = "";
     public string CompanyId { get; init; } = "";
-    /// <summary>The <c>crafter</c> key: the name of the smith who made the item at a crafting bench (empty: none).</summary>
+    /// <summary>
+    /// The <c>crafter</c> key: the name of the smith who made the item at a crafting bench (empty: none).
+    /// </summary>
     public string Crafter { get; init; } = "";
-    /// <summary>The <c>uniform</c> key: the id of the faction whose uniform the item is (empty: none).</summary>
+    /// <summary>
+    /// The <c>uniform</c> key: the id of the faction whose uniform the item is (empty: none).
+    /// </summary>
     public string Uniform { get; init; } = "";
-    /// <summary>The <c>color sid</c> key: the COLOR_DATA the item is dyed with (empty: none; docs/characters.md "Clothing colours").</summary>
+    /// <summary>
+    /// The <c>color sid</c> key: the COLOR_DATA the item is dyed with (empty: none; docs/characters.md "Clothing colours").
+    /// </summary>
     public string ColourId { get; init; } = "";
     public string Section { get; init; } = "main";
     public int X { get; init; }
@@ -26,31 +32,53 @@ public sealed class SaveItem
     public int ItemFunction { get; init; }
     public float Quality { get; init; }
     public float Charges { get; init; } = 1;
-    /// <summary>A removed prosthetic's condition, the <c>dam</c>, <c>wear</c> and <c>stun</c> floats (docs/game/character-stats.md "Limb replacements and robots"); 0 for other items.</summary>
+    /// <summary>
+    /// A removed prosthetic's condition, the <c>dam</c>, <c>wear</c> and <c>stun</c> floats (docs/game/character-stats.md "Limb replacements and
+    /// robots"); 0 for other items.
+    /// </summary>
     public float Damage { get; init; }
     public float Wear { get; init; }
     public float Stun { get; init; }
-    /// <summary>The <c>death</c> bool: a death item still on its owner (docs/game/animals.md "Death items").</summary>
+    /// <summary>
+    /// The <c>death</c> bool: a death item still on its owner (docs/game/animals.md "Death items").
+    /// </summary>
     public bool Death { get; init; }
-    /// <summary>The <c>unique</c> bool, written only when set (<c>FUN_1407609e0</c>): a town's artifact (docs/game/economy.md "Artifacts").</summary>
+    /// <summary>
+    /// The <c>unique</c> bool, written only when set (<c>FUN_1407609e0</c>): a town's artifact (docs/game/economy.md "Artifacts").
+    /// </summary>
     public bool Unique { get; init; }
-    /// <summary>Shackles' lock (LockedArmour, docs/game/locks.md "Save keys"): <c>lock lvl</c>, <c>locked</c>, <c>broken</c>, <c>hardness</c>; null for other items.</summary>
+    /// <summary>
+    /// Shackles' lock (LockedArmour, docs/game/locks.md "Save keys"): <c>lock lvl</c>, <c>locked</c>, <c>broken</c>, <c>hardness</c>; null for other
+    /// items.
+    /// </summary>
     public SaveItemLock? Lock { get; init; }
-    /// <summary>A container's contents (the INVENTORY_STATE its one instance names); null for other items.</summary>
+    /// <summary>
+    /// A container's contents (the INVENTORY_STATE its one instance names); null for other items.
+    /// </summary>
     public List<SaveItem>? Contents { get; init; }
     public FcsRecord? Source { get; init; }
-    /// <summary>The <c>ownedby</c> handle (the character the item was stolen from) written over the source's; null keeps the source's (the null handle for an item without one).</summary>
+    /// <summary>
+    /// The <c>ownedby</c> handle (the character the item was stolen from) written over the source's; null keeps the source's (the null handle for an
+    /// item without one).
+    /// </summary>
     public Hand? OwnedBy { get; init; }
-    /// <summary>The record the item was last written as, so a handle known only once every character has one can be put on it.</summary>
+    /// <summary>
+    /// The record the item was last written as, so a handle known only once every character has one can be put on it.
+    /// </summary>
     public FcsRecord? Written { get; private set; }
 
     internal void WrittenAs(FcsRecord r) => Written = r;
 }
 
-/// <summary>An item's lock as saved; <see cref="Locked"/> is written true only while the lock is effectively locked (as the original's writer, <c>FUN_14029ffd0</c>).</summary>
+/// <summary>
+/// An item's lock as saved; <see cref="Locked"/> is written true only while the lock is effectively locked (as the original's writer,
+/// <c>FUN_14029ffd0</c>).
+/// </summary>
 public readonly record struct SaveItemLock(int Level, bool Locked, bool Broken, float Hardness);
 
-/// <summary>Reads and writes the items of an INVENTORY_STATE inside one save file (a platoon's).</summary>
+/// <summary>
+/// Reads and writes the items of an INVENTORY_STATE inside one save file (a platoon's).
+/// </summary>
 public static class SaveInventory
 {
     /// <summary>
@@ -70,16 +98,18 @@ public static class SaveInventory
         if (depth > 4) return items;
         foreach (var instance in inventory.Instances)
         {
-            if (!byId.TryGetValue(instance.Target, out var r) || r.RecordType != FcsRecordType.INVENTORY_ITEM_STATE) continue;
+            if (!byId.TryGetValue(instance.Target, out var r) || r.RecordType != FcsRecordType.InventoryItemState) continue;
             List<SaveItem>? contents = null;
-            if (r.Instances.Count > 0 && byId.TryGetValue(r.Instances[0].Target, out var inner) && inner.RecordType == FcsRecordType.INVENTORY_STATE)
+            if (r.Instances.Count > 0 && byId.TryGetValue(r.Instances[0].Target, out var inner) && inner.RecordType == FcsRecordType.InventoryState)
                 contents = Read(byId, inner, depth + 1);
             items.Add(ItemOf(r, contents));
         }
         return items;
     }
 
-    /// <summary>The modelled keys of an INVENTORY_ITEM_STATE, with <paramref name="contents"/> for a container.</summary>
+    /// <summary>
+    /// The modelled keys of an INVENTORY_ITEM_STATE, with <paramref name="contents"/> for a container.
+    /// </summary>
     internal static SaveItem ItemOf(FcsRecord r, List<SaveItem>? contents = null) => new()
     {
         BaseId = r.Strings.GetValueOrDefault("base data sid", ""),
@@ -106,7 +136,9 @@ public static class SaveInventory
         Source = r,
     };
 
-    /// <summary>The records an INVENTORY_STATE reaches: its items and, through containers, their contents' states and items (not the state itself).</summary>
+    /// <summary>
+    /// The records an INVENTORY_STATE reaches: its items and, through containers, their contents' states and items (not the state itself).
+    /// </summary>
     internal static HashSet<string> Reachable(SaveFile file, FcsRecord inventory)
     {
         var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
@@ -127,14 +159,14 @@ public static class SaveInventory
     /// </summary>
     internal static FcsRecord ItemRecord(SaveItem item)
     {
-        var r = new FcsRecord { Type = (int)FcsRecordType.INVENTORY_ITEM_STATE, Name = "0" };
+        var r = new FcsRecord { Type = (int)FcsRecordType.InventoryItemState, Name = "0" };
         if (item.Source is { } s)
         {
             foreach (var (k, v) in s.Strings) r.Strings[k] = v;
             foreach (var (k, v) in s.Ints) r.Ints[k] = v;
             foreach (var (k, v) in s.Floats) r.Floats[k] = v;
             foreach (var (k, v) in s.Bools) r.Bools[k] = v;
-            foreach (var (k, v) in s.Vector3s) r.Vector3s[k] = v;
+            foreach (var (k, v) in s.Vector3S) r.Vector3S[k] = v;
         }
         else
         {
@@ -220,7 +252,7 @@ public static class SaveInventory
                 if (item.Contents is { } contents && depth < 4)
                 {
                     string? oldInner = item.Source is { Instances.Count: > 0 } s ? s.Instances[0].Target : null;
-                    var inner = Take(new FcsRecord { Type = (int)FcsRecordType.INVENTORY_STATE, Name = "0" }, oldInner);
+                    var inner = Take(new FcsRecord { Type = (int)FcsRecordType.InventoryState, Name = "0" }, oldInner);
                     r.Instances.Add(Link(1, inner.StringId));
                     Fill(inner, contents, depth + 1);
                 }

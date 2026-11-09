@@ -12,18 +12,20 @@ public class FcsRoundTripTests
     public void Synthetic_file_round_trips(FcsFileType type)
     {
         var file = new FcsFile { FileType = type, Author = "me", Description = "test", NextId = 42 };
+
         if (type == FcsFileType.V17)
         {
             file.Merge = new FcsMergeInfo(3, 1, [new FcsMergedMod("other.mod", 2, 3)]);
             file.DeleteRequests = [new FcsDeleteRequest("other.mod", 2, ["1-other.mod", "2-other.mod"])];
         }
+
         file.Dependencies.AddRange(["gamedata.base", "Newwworld.mod"]);
         var record = new FcsRecord { ByteSize = 1, Type = 19, Name = "Line", StringId = "1-test.mod", Flags = 0x13 };
         record.Bools["on"] = true;
         record.Floats["chance"] = 0.5f;
         record.Ints["count"] = -3;
-        record.Vector3s["offset"] = new Vector3(1, 2, 3);
-        record.Vector4s["colour"] = new Vector4(1, 2, 3, 4);
+        record.Vector3S["offset"] = new Vector3(1, 2, 3);
+        record.Vector4S["colour"] = new Vector4(1, 2, 3, 4);
         record.Strings["text"] = "hello";
         record.Filenames["mesh"] = "a.mesh";
         record.References["conditions"] = [new("2-test.mod", 1, 0, 0)];
@@ -39,17 +41,19 @@ public class FcsRoundTripTests
         Assert.Equal(["gamedata.base", "Newwworld.mod"], back.Dependencies);
         var r = Assert.Single(back.Records);
         Assert.Equal("1-test.mod", r.StringId);
-        Assert.Equal(new Vector4(1, 2, 3, 4), r.Vector4s["colour"]);
+        Assert.Equal(new Vector4(1, 2, 3, 4), r.Vector4S["colour"]);
         Assert.Equal(new FcsReference("2-test.mod", 1, 0, 0), Assert.Single(r.References["conditions"]));
         Assert.Equal("open", Assert.Single(Assert.Single(r.Instances).States));
-        Assert.Equal(new System.Numerics.Quaternion(0.1f, 0.2f, 0.3f, 0.9f), r.Instances[0].Rotation);
+        Assert.Equal(new Quaternion(0.1f, 0.2f, 0.3f, 0.9f), r.Instances[0].Rotation);
         Assert.True(r.IsModified && r.IsRenamed);
         Assert.Equal(42, back.NextId);
+
         if (type == FcsFileType.V17)
         {
             Assert.Equal(["1-other.mod", "2-other.mod"], Assert.Single(back.DeleteRequests!).Items);
             Assert.Equal(3u, back.Merge!.SaveCounter);
         }
+
         Assert.Equal(bytes, Write(back));
 
         // The record is last in the file, right after the header; its size field holds its real size.

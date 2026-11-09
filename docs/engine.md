@@ -1,9 +1,10 @@
 # Engine architecture
 
-Projects: Core installation; Data clean-room readers/typed game data; Simulation headless world;
-Navigation own navmesh; Engine WorldSession/time/input/camera; Rendering Vulkan/content/streaming;
-Rendering.Display window/device/presenter; Game host/UI; ModelViewer debug world/atlas; Tools surveys.
-GPU and simulation ownership stay separate. [Simulation contracts](simulation.md),
+Projects: Core installation, settings, localisation (shared with the launcher); Data clean-room readers, typed game data and pure rules;
+Simulation the headless world (systems, `Navigation/` own navmesh, saving, `Session/` tick clocks, `WorldBoot`), which never references Game;
+Game the executable `MeitouClient` (`Host/` WorldSession/input/camera, `Rendering/` Vulkan/content/streaming with `Display/` and `Metal/`,
+`Audio/`, `Ui/`, `Mods/` the code-mod loader); ModelViewer debug world/atlas; Tools surveys and mod-check. Folders are feature slices and
+namespaces follow them. GPU and simulation ownership stay separate. [Simulation contracts](simulation.md),
 [native renderer](renderer-native.md), [viewer controls](viewer.md).
 
 ## Loop, input and camera
@@ -24,8 +25,10 @@ settings and current key list belong in viewer. Quicksave F5/loadF9; cinematic F
 
 ## Host and loading
 
-GameHost partials own boot/interactive/offscreen, characters, saving, transitions, duel and battle;
-PlayerInterface owns picking/HUD/panels/commands. StandardSystems supplies order. NavAdapter
+`WorldBoot` reads a world's content on a worker with no window (navmesh, towns' buildings, population data, ragdoll rigs, animations);
+GameHost adds the code mods and the systems. GameHost partials keep boot, the Metal loop, loading, transitions and the character feed; each other feature is a class the host holds and makes in
+`CreateFeatures`: `GameLoop` (the Vulkan and headless run), `GameSound`, `GameSaves`, `TitleScreen`, the scenarios, `Host/WorldSync`, `Effects`, `DevTools`, `Editor`;
+PlayerInterface keeps the input entry points, selection, commands and shared UI helpers (core and `PlayerInterface.Ui.cs`); its windows, HUD panels, picking and pointer are classes it makes on first use (`Ui`, `Building`, `Title`, `Editor`). StandardSystems supplies order. NavAdapter
 bridges Navigation; never let UI/rendering duplicate simulation state.
 GUI executable attaches a caller's console; folder prompt creates its own when necessary.
 Native splash precedes Vulkan; worker loading and render-thread GPU steps keep the window
@@ -86,7 +89,7 @@ finished refine, a mismatched load, and `UnloadImpostor`/teardown (after the `Ne
 Cancel on window close. Helpers/services dispose/join with their owning scene/session.
 After warm-up, loading panels ease off the left/right edges over 0.7s while the loading image fades to the live scene and UI (Faithful: hidden at once, as the original).
 Input remains blocked through this reveal. A new game ends warm-up as soon as the squad's characters are drawable, skips the sky arrival and opens the
-character editor first (`GameHost.Editor`); once it closes, the loading screen returns and the world warms up as above. Sky loads dismiss only panels that were shown, keeping the sky flight visible.
+character editor first (`CharacterEditorHost`); once it closes, the loading screen returns and the world warms up as above. Sky loads dismiss only panels that were shown, keeping the sky flight visible.
 
 Meitou UI mode presents title controls over a live view of the real world; Faithful retains
 the original title image and loading screen. Advanced settings persist two independent scene-transition

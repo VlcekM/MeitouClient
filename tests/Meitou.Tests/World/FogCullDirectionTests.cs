@@ -1,12 +1,16 @@
 using System.Numerics;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The fog cull's bound by ray direction (<see cref="FogVolumes.HideDistanceByDirection"/>, docs/formats/fogfeatures.md "Fog cull by direction").</summary>
+/// <summary>
+/// The fog cull's bound by ray direction (<see cref="FogVolumes.HideDistanceByDirection"/>, docs/formats/fogfeatures.md "Fog cull by direction").
+/// </summary>
 public class FogCullDirectionTests
 {
-    /// <summary>The seven planes of "#140805Swamp[SOUTH]#140805" (fogfeatures.dat) as the shader gets them: tilted roof facets round Shark.</summary>
+    /// <summary>
+    /// The seven planes of "#140805Swamp[SOUTH]#140805" (fogfeatures.dat) as the shader gets them: tilted roof facets round Shark.
+    /// </summary>
     static readonly Vector4[] SwampSouth =
     [
         new(0.20565185f, 0.97862524f, 3.7252903E-08f, -5256.4976f), new(0.09747819f, 0.99523765f, 3.7252903E-08f, -1703.7759f),
@@ -16,14 +20,20 @@ public class FogCullDirectionTests
     ];
     const float SwampEdge = 0.001234568f, SwampDensity = 0.00022222222f;
 
-    /// <summary>The wide test block of <see cref="FogCullTests"/>: x and z within 50000, floor -2000, ceiling 3000, a tilted plane.</summary>
+    /// <summary>
+    /// The wide test block of <see cref="FogCullTests"/>: x and z within 50000, floor -2000, ceiling 3000, a tilted plane.
+    /// </summary>
     static readonly Vector4[] Wide =
     [
-        new(0, 1, 0, 3000), new(1, 0, 0, 50000), new(-1, 0, 0, 50000), new(0, 0, 1, 50000), new(0, 0, -1, 50000), new(0.0f, 0.1f, 0.995f, 60000), new(0, -1, 0, 2000),
+        new(0, 1, 0, 3000), new(1, 0, 0, 50000), new(-1, 0, 0, 50000), new(0, 0, 1, 50000), new(0, 0, -1, 50000), new(0.0f, 0.1f, 0.995f,
+                60000), new(0, -1, 0, 2000),
     ];
     const float WideEdge = 1f / 800, WideDensity = 1f / 4500;
 
-    /// <summary>The shader's <c>fogVolumeBlock</c> alpha for an eye inside (near = 0), along unit ray <paramref name="d"/> to a fragment <paramref name="dist"/> away.</summary>
+    /// <summary>
+    /// The shader's <c>fogVolumeBlock</c> alpha for an eye inside (near = 0), along unit ray <paramref name="d"/> to a fragment
+    /// <paramref name="dist"/> away.
+    /// </summary>
     static float Alpha(Vector4[] planes, float edgeBlur, float density, Vector3 eye, Vector3 d, float dist)
     {
         float far = dist;
@@ -48,14 +58,16 @@ public class FogCullDirectionTests
     {
         var rng = new Random(11);
         int solved = 0, rays = 0;
-        foreach (var (planes, edge, density, lowY, highY, spread) in new[] { (SwampSouth, SwampEdge, SwampDensity, -300, 2400, 8000), (Wide, WideEdge, WideDensity, -1500, 2900, 40000) })
+        foreach (var (planes, edge, density, lowY, highY, spread) in new[] { (SwampSouth, SwampEdge, SwampDensity, -300, 2400, 8000),
+                (Wide, WideEdge, WideDensity, -1500, 2900, 40000) })
             for (int trial = 0; trial < 60; trial++)
             {
                 var centre = planes == SwampSouth
                     ? new Vector3(-47500 + rng.Next(-spread, spread), rng.Next(lowY, highY), 49000 + rng.Next(-spread, spread))
                     : new Vector3(rng.Next(-spread, spread), rng.Next(lowY, highY), rng.Next(-spread, spread));
                 float far = rng.Next(8000, 60000);
-                if (FogVolumes.HideDistanceByDirection(planes, centre, FogVolumes.DirectionSolveMargin, edge, density, far, FogVolumes.DirectionSolveBudget) is not { } r) continue;
+                if (FogVolumes.HideDistanceByDirection(planes, centre, FogVolumes.DirectionSolveMargin, edge, density, far,
+                        FogVolumes.DirectionSolveBudget) is not { } r) continue;
                 solved++;
                 for (int k = 0; k < 400; k++)
                 {
@@ -63,7 +75,8 @@ public class FogCullDirectionTests
                     if (offset.Length() > 1) continue;
                     var eye = centre + offset * FogVolumes.DirectionSolveMargin;
                     if (planes.Any(p => p.W - (p.X * eye.X + p.Y * eye.Y + p.Z * eye.Z) <= 1)) continue;
-                    var d = Vector3.Normalize(new Vector3(rng.NextSingle() * 2 - 1, (rng.NextSingle() * 2 - 1) * (k % 2 == 0 ? 0.05f : 1), rng.NextSingle() * 2 - 1));
+                    var d = Vector3.Normalize(new Vector3(rng.NextSingle() * 2 - 1, (rng.NextSingle() * 2 - 1) * (k % 2 == 0 ? 0.05f : 1),
+                            rng.NextSingle() * 2 - 1));
                     // Fragments from R out to the far clip: the shader's own exit caps the path.
                     foreach (float t in new[] { 0f, 0.001f, 0.01f, 0.1f, 0.5f, 1f })
                     {

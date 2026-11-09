@@ -1,8 +1,13 @@
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Post;
+
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The benchmark harness's pure parts (docs/bench.md "Benchmark harness"): views, statistics, picture diff, toggles, lock, result files.</summary>
+/// <summary>
+/// The benchmark harness's pure parts (docs/bench.md "Benchmark harness"): views, statistics, picture diff, toggles, lock, result files.
+/// </summary>
 public class BenchHarnessTests
 {
     [Fact]
@@ -19,14 +24,18 @@ public class BenchHarnessTests
             values[i] = 10 + i * 0.05 + (blocks[i] % 2 == 0 ? 1 : 0) + rng.NextDouble() * 0.2;
         }
         var d = BenchStats.Pair(values, blocks, Enumerable.Repeat(true, n).ToArray())!;
+
         Assert.Equal(50, d.Pairs);
+
         // The drift adds 0.05 * 4 = 0.2 ms per block pair on top of the 1 ms step, constant in every pair: tight interval.
         Assert.InRange(d.Delta, 0.7, 0.9);
         Assert.True(d.Significant);
         Assert.True(d.Ci95 < 0.1);
+
         // Without a step the difference is not significant, and with every frame dropped there is nothing to pair.
         var noise = Enumerable.Range(0, n).Select(_ => 5 + rng.NextDouble()).ToArray();
         var single = Enumerable.Range(0, n).ToArray();
+
         Assert.False(BenchStats.Pair(noise, single, Enumerable.Repeat(true, n).ToArray())!.Significant);
         Assert.Null(BenchStats.Pair(noise, single, new bool[n]));
     }
@@ -35,6 +44,7 @@ public class BenchHarnessTests
     public void LowEndAppliesWhereItStandsAndLaterOptionsWin()
     {
         var o = WorldOptions.Parse(["--world", "--low-end", "--object-distance", "8000"])!;
+
         Assert.Equal(8000f, o.ObjectDistance);
         Assert.False(o.VSync);
         Assert.True(o.ShadowsOff);
@@ -43,7 +53,9 @@ public class BenchHarnessTests
         Assert.Equal((false, false, false), (o.Post.Ssao, o.Post.Fxaa, o.MeitouWater));
         Assert.Equal((UpscalerKind.Off, 0.83f), (o.Post.Upscale.Kind, o.Post.Upscale.Scale));
         Assert.Equal((true, 4), (o.Post.LowResParticles, o.Post.ParticleDivisor));
+
         var plain = WorldOptions.Parse(["--world"])!;
+
         Assert.Equal((true, false, 1f), (plain.VSync, plain.ShadowsOff, plain.ObjectLod));
     }
 
@@ -57,6 +69,7 @@ public class BenchHarnessTests
         b[4 + 1] = 5;      // pixel 1: 5
         b[8 + 2] = 40;     // pixel 2: 40
         var (r, heat) = PictureDiff.Compare(a, b, w, h);
+
         Assert.Equal((1L, 2L, 3L), (r.Over12, r.Over4, r.Over1));
         Assert.Equal(40, r.MaxDiff);
         Assert.Equal(46 / (3.0 * w * h), r.MeanDiff, 9);

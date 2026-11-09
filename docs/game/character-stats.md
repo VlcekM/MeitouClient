@@ -138,8 +138,11 @@ h -= 0.05 dt `bodypart degeneration rate` ChanceOfDeath degMult D 1.2 with D = c
 when h + b > 0; degMult lerps 1.7..0.03 by toughness and is 0 for a non-vital robotic part (robot race or limb replacement)
 and in any bed. Healing: while h < M, b > 0 and the limb is not crushed (state 3), min(b, 0.05 dt `heal rate mult` R), x250
 on a robotic part, moves from b to h. R = M/100 x the organic rate (robotic for a robot race or a replacement); a stump
-(state 1) has base HP 5 and R = 2 x the organic rate without M/100. Repair (a repair bed) moves 0.05 dt `resting heal rate
-mult` x its rate from w into b. Rig is held under 50 - (h - s); s falls 0.05 dt `stun recovery rate` `heal rate mult` R.
+(state 1) has base HP 5 and R = 2 x the organic rate without M/100. Repair (a repair bed): 0.05 dt `resting heal
+rate mult` x its rate comes off w (down to 0) and goes into b, held to at most M - h; with w at 0 it still goes into b, so the bed
+treats untreated damage too (**Observed**: a skeleton's limbs with wear only, damage only and both each gained HP at the same rate in a
+Skeleton Repair Bed, the last keeping its untreated gap until its wear was gone).
+Rig is held under 50 - (h - s); s falls 0.05 dt `stun recovery rate` `heal rate mult` R.
 
 ### Beds (`FUN_140652000`, **Verified** decompile)
 
@@ -241,14 +244,14 @@ Its look comes from race data, so a mod's race works the same: `blood colour` ti
 else flesh with a bone at the centre. **Observed** (headless probe of the base bodies): `human_male`, `human_female`, `bone_male` and hive `Stick_person` get one 18 to 22 triangle cap at
 neck height, `robot.mesh` a 5 triangle one; Skeleton MkII and Log Head none (their head is a separate shell, the body stays closed). A race without a Head part (No-Head MkII) is never decapitated.
 
-The head falls (`GameHost.SeveredHeads`, drawing only): when the renderer last drew the character with its head and it is now listed headless, the old look's
+The head falls (`Decapitation`, drawing only): when the renderer last drew the character with its head and it is now listed headless, the old look's
 `SeveredHead` (the body's head vertices only, instance flag 29, with hair, beard, hat and its own cap over the rim of its all-head triangles) keeps that frame's bones,
 taken at the cut (`CharacterRenderer.HoldPose`), turns about the head bone and drops (gravity 98.1, as the limbs) 3 to 7 units aside, thrown with the downing blow's ragdoll speed (with "Advanced ragdolls"; `CharacterSnapshot.Knockdown`, [ragdolls](ragdolls.md#initial-state); it then drifts and tumbles that way, spinning 0.1 rad/s faster per unit/s), its clock starting once its look
 is drawn. It lands 1.3 above the walkable ground (sandbox floor, terrain, building floor) or a body lying there (spheres round its bones, as last drawn; not its own
 neck and head, nothing above where it fell from). It is no item and not saved: a load or new game clears the heads (a corpse loaded headless drops none); past the
 dropped-items limit the oldest goes. Both caps are made with each person's body mesh on the loading worker (`CharacterContent.CapMesh`) and uploaded on first use.
 Saved as `meitou decapitated` ([save](../formats/save.md#limbs-medical_state-limbs)).
-The neck spurts (`GameHost.NeckSpurts`, drawing only; with the `Blood` setting on and `bleed rate` > 0): a mist at the cut, then 6 pulses 0.35 s apart, weaker
+The neck spurts (`Decapitation`, drawing only; with the `Blood` setting on and `bleed rate` > 0): a mist at the cut, then 6 pulses 0.35 s apart, weaker
 each time, of the `HackBlood-system` spray (and the `Bloodsplash01` mist; both in the race's `blood colour` when it is not the default 0x800000: the particles take that hue at their texture's brightness, `ParticleRenderer.Burst` recolour, also for luckyren bursts) along the spine (`Bip01 Spine2` to `Bip01 Neck` as drawn; while a pulse emits, its emitter is moved and turned with the neck each frame, `ParticleRenderer.MoveBurst`, so it follows the falling body), each leaving a splash decal in
 the race's `blood colour` up to 18 units off along it. Timed by the shown tick; not saved.
 
@@ -693,6 +696,9 @@ replaced, 3 crushed) and the fitted item (holder `FUN_1400cd3f0`; **Verified** b
 | all | `swimming mult`, `HP` (/`HP 1`), `unarmed damage bonus` (/`... 1`), `overall mult` | 23, part HP |
 | arms | `strength mult`, `dexterity mult`, `thievery mult` (applied to both 10 and 37), `ranged mult` | 1, 18, 10 and 37, 35 |
 | legs | `athletics mult`, `stealth mult` | 17, 16 |
+
+Part HP is `HP` to `HP 1` by quality (level x 0.01), rounded to the nearest 5, half up (**Verified**, `FUN_1400ce2d0` -> `FUN_1409b2310` with 5; 70..200 at level 95 gives 195).
+A race switched in the character creator keeps the prosthetics fitted at the start (Meitou, #360).
 
 ### Races
 

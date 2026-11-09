@@ -1,9 +1,11 @@
 using System.Numerics;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Tests.Navigation;
 
-/// <summary>The plane geometry the builder and queries share (<see cref="NavGeometry"/>).</summary>
+/// <summary>
+/// The plane geometry the builder and queries share (<see cref="NavGeometry"/>).
+/// </summary>
 public class NavGeometryTests
 {
     /// <summary>

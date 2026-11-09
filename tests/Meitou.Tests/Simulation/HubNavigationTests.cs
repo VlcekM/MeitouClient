@@ -3,9 +3,12 @@ using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Gameplay;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation;
 using Xunit.v3;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
@@ -21,7 +24,9 @@ public class HubNavigationTests
     public async Task A_long_move_order_from_the_hub_to_squin_loads_its_zones_on_the_way_and_arrives()
     {
         var install = GameInstall.Locate();
+
         Assert.SkipWhen(install is null, "Kenshi install not found");
+
         var db = InstallData.FullLoadOrder!;
         var levels = InstallData.Levels!;
         var dir = Path.Combine(Path.GetTempPath(), "meitou-longnav-" + Guid.NewGuid().ToString("N"));
@@ -60,8 +65,13 @@ public class HubNavigationTests
                     foreach (var z in wanted) loaded[z] = tick;
                     await Task.WhenAll(fresh.Select(z => (Task)nav.LoadZone(z)));
                     foreach (var (z, seen) in loaded.ToList())
-                        if (tick - seen > 900) { nav.UnloadZone(z); loaded.Remove(z); }
-                    if (fresh.Count > 0) world.Commands.Enqueue(new RepathCommand { Tick = world.Tick, Zones = fresh.ToHashSet() });
+                        if (tick - seen > 900)
+                        {
+                            nav.UnloadZone(z);
+                            loaded.Remove(z);
+                        }
+                    if (fresh.Count > 0)
+                        world.Commands.Enqueue(new RepathCommand { Tick = world.Tick, Zones = fresh.ToHashSet() });
                 }
                 world.RunTick();
                 var p = world.Characters.Previous[leader.Slot].Position;
@@ -69,10 +79,18 @@ public class HubNavigationTests
                 last = p;
                 float left = Vector2.Distance(new(p.X, p.Z), new(goal.X, goal.Z));
                 if (left < MovementSystem.ArriveRadius) break;
-                if (left < best - 50) { best = left; bestTick = tick; }
-                Assert.True(tick - bestTick < 30 * 120, $"no progress for 2 minutes at {p}, {left:0} from the goal (walked {walked:0} of a straight {straight:0})");
+                if (left < best - 50)
+                {
+                    best = left;
+                    bestTick = tick;
+                }
+
+                Assert.True(tick - bestTick < 30 * 120,
+                        $"no progress for 2 minutes at {p}, {left:0} from the goal (walked {walked:0} of a straight {straight:0})");
             }
-            Assert.True(Vector2.Distance(new(last.X, last.Z), new(goal.X, goal.Z)) < MovementSystem.ArriveRadius + 5, $"ended {last} for goal {goal} after {tick} ticks");
+
+            Assert.True(Vector2.Distance(new(last.X, last.Z), new(goal.X, goal.Z)) < MovementSystem.ArriveRadius + 5,
+                    $"ended {last} for goal {goal} after {tick} ticks");
             Assert.True(walked < straight * 1.5f, $"walked {walked:0} for a straight {straight:0}");
         }
         finally
@@ -82,14 +100,16 @@ public class HubNavigationTests
     }
 
     /// <summary>
-    /// The player's long route from the Hub to Stack takes the roads by the original's rule (Nameless, road preference 0.3), as the off-screen squads do
-    /// (docs/game/pathfinding.md "Roads": 34054 walked for 16898 straight, Observed); without a road preference it goes over the terrain.
+    /// The player's long route from the Hub to Stack takes the roads by the original's rule (Nameless, road preference 0.3), as the off-screen squads
+    /// do (docs/game/pathfinding.md "Roads": 34054 walked for 16898 straight, Observed); without a road preference it goes over the terrain.
     /// </summary>
     [Fact]
     public void A_long_route_from_the_hub_to_stack_follows_the_roads()
     {
         var install = GameInstall.Locate();
+
         Assert.SkipWhen(install is null, "Kenshi install not found");
+
         var db = InstallData.FullLoadOrder!;
         var levels = InstallData.Levels!;
         var dir = Path.Combine(Path.GetTempPath(), "meitou-roadnav-" + Guid.NewGuid().ToString("N"));
@@ -108,7 +128,9 @@ public class HubNavigationTests
             (float Walked, float OnRoad) Walk(float preference)
             {
                 var path = nav.Walkability.FindPath(hub, stack, new NavAgent { RoadPreference = preference });
+
                 Assert.True(path.Found);
+
                 float walked = 0;
                 int on = 0, samples = 0;
                 for (int k = 1; k < path.Points.Count; k++)
@@ -126,9 +148,14 @@ public class HubNavigationTests
             }
 
             var road = Walk(data.RoadPreferenceOf(data.PlayerFaction));
-            Assert.True(road.Walked > straight * 1.8f && road.OnRoad > 0.9f, $"by road: walked {road.Walked:0} for a straight {straight:0}, {road.OnRoad:P0} near a road");
+
+            Assert.True(road.Walked > straight * 1.8f && road.OnRoad > 0.9f,
+                    $"by road: walked {road.Walked:0} for a straight {straight:0}, {road.OnRoad:P0} near a road");
+
             var terrain = Walk(0);
-            Assert.True(terrain.Walked < straight * 1.3f && terrain.OnRoad < 0.5f, $"over the terrain: walked {terrain.Walked:0} for a straight {straight:0}, {terrain.OnRoad:P0} near a road");
+
+            Assert.True(terrain.Walked < straight * 1.3f && terrain.OnRoad < 0.5f,
+                    $"over the terrain: walked {terrain.Walked:0} for a straight {straight:0}, {terrain.OnRoad:P0} near a road");
         }
         finally
         {

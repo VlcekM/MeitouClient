@@ -261,7 +261,7 @@ Meitou: `NamePool`, rolled at spawn (`PopulationSystem.SpawnName`, `RngPurpose.N
 ## Character editor
 
 `CharacterEditWindow` (constructor `FUN_1405f4dd0(chars, mode, forceRaces)`, layout `Kenshi_CharacterEditor`). Facts **Observed** from the
-exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / `FinishCreation` commands (`Simulation/Editing`), `PlayerInterface.Editor`.
+exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / `FinishCreation` commands (`Simulation/Editing`), `CharacterEditorPanel`.
 
 - **Modes**: 0 new game (`FUN_140872e00`: every player character after the start's `squad` spawns, with the start's `force race`), 1 in play
   (dialogue `DA_CHARACTER_EDITOR` on the talking player character; `DA_JOIN_SQUAD_WITH_EDIT` and slave purchases on the recruits). Mode 1
@@ -352,7 +352,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   as the mix of the old and new values over 0.12 s, the interval of the throttled rebuild (`CharacterRenderer.Blend`): body shape, posture
   layers, face/body pose weights (morph set recomputed per frame in a scratch ring of `MorphArena`) and skin/hair colours; a look with another
   head, hair or clothes swaps at once. The original's own slider behaviour is **Unknown**.
-- **Meitou bar** (the `editorbar` switch, Meitou, optional and off by default, else the platform; both hosts; `EditorBar`, `GameHost.EditorBar`): instead of the stage, the world's whole pipeline, with the player's graphics settings, draws the base data's
+- **Meitou bar** (the `editorbar` switch, Meitou, optional and off by default, else the platform; both hosts; `EditorBar`, `CharacterEditorHost`): instead of the stage, the world's whole pipeline, with the player's graphics settings, draws the base data's
   Storm House (`3384-TwoStorey.mod`) with interior layout `Bar`, from records alone (parts, furniture, lamps; a runtime placement keyed `meitou:editor-bar`, `BuildingPlacement.Standalone`: no town's material, the part variants of a fixed place; barman from residents `44856-rebirth.mod`, patrons from The Hub's `bar squads`), the frame holding nothing of the world (`WorldObjectRenderer.Isolated`, `GiScene.SkipWorld`), 3000 above the highest ground round the edited character, in the interior view with every floor, at
   23:00 under a clear sky without weather particles, the water and its reflection off and the frame cut at 2500 (`WorldFrame.Gpu.ViewCap`: far plane and
   shadow cascades), short of the world 3000 below; headless 1280x960 Release: 4.0-4.2 ms a frame capped, 5-29 ms uncapped (**Observed**, noisy machine). The shown character stands at a fixed spot of the building's frame facing the counter; up to 5 other
@@ -385,7 +385,7 @@ IMPORT opens `Kenshi_OpenSaveFileDialog` titled "Import character" on the folder
 else "Error loading appearance file '{1}'. The file is in an old format or invalid." (`FUN_1405f4280`), and its look replaces the editor's;
 what the original does with another race in mode 1 is **Unknown**. **Verified** (FcsReader + FcsWriter on the install's 12 exports): all are
 type 15, one record, id 1, `1--INGAME`, name `default` or `0`, and round-trip byte-exact. Meitou (`CharacterDraft.Import`/`Export`,
-`PlayerInterface.Editor`): export writes that layout, overwriting a file of the same name; import sanitizes the file for its race and refuses a
+`CharacterEditorPanel`): export writes that layout, overwriting a file of the same name; import sanitizes the file for its race and refuses a
 race the editor doesn't offer (creation) or another race or sex (surgeon).
 **Observed** (native 1.0.68 editor import/export): an imported appearance with head `99184-Newwworld.mod` exports with a different head id and explicit neutral face-slider defaults.
 For rendering comparisons, use the native editor's exported result on both sides; importing the same input alone does not establish identical appearance data. The head fallback rule is **Unknown**.

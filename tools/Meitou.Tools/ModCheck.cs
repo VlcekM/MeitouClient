@@ -5,6 +5,8 @@ using Meitou.Data.Save;
 using Meitou.Data.World;
 using Meitou.Modding;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 
 /// <summary>
@@ -18,7 +20,9 @@ static class ModCheck
 {
     sealed record Options(string Save, int Ticks, int Threads, IReadOnlyList<string> ModFolders);
 
-    /// <summary>Per tick: the world's hash and each hashed system's, by label.</summary>
+    /// <summary>
+    /// Per tick: the world's hash and each hashed system's, by label.
+    /// </summary>
     sealed record Trace(List<ulong> World, List<Dictionary<string, ulong>> Systems)
     {
         public int Characters { get; set; }
@@ -27,7 +31,7 @@ static class ModCheck
     sealed record Setup(GameDatabase Db, PopulationData Data, IWalkability Walk);
 
     // The world being run, for the mods' Enqueue and Tick.
-    static World? current;
+    static World? s_current;
 
     public static int Run(GameInstall install, string[] args)
     {
@@ -99,7 +103,6 @@ static class ModCheck
         return [.. mods.Where(m => m.HasCode)];
     }
 
-    /// <summary>Running this command on purpose is the player's consent, so the launcher's allowed list is not asked.</summary>
     static ModHost? LoadMods(List<ModInfo> enabled, Setup setup)
     {
         if (enabled.Count == 0)
@@ -108,8 +111,7 @@ static class ModCheck
             return null;
         }
         Console.WriteLine($"mods      running the code of {string.Join(", ", enabled.Select(m => m.Name))}");
-        var allowed = enabled.Select(m => m.Name).ToHashSet(StringComparer.Ordinal);
-        var mods = ModHost.Load(new ModHostOptions(enabled, allowed, setup.Db, setup.Data, () => current));
+        var mods = ModHost.Load(new ModHostOptions(enabled, setup.Db, setup.Data, () => s_current));
         foreach (var notice in mods.Notices) Console.Error.WriteLine($"mods      {notice}");
         return mods.Mods.Count > 0 ? mods : null;
     }
@@ -131,15 +133,20 @@ static class ModCheck
         return 1;
     }
 
-    /// <summary>The parallel phases cut the slots into partitions of at least 32: under 64 characters they run as one partition.</summary>
+    /// <summary>
+    /// The parallel phases cut the slots into partitions of at least 32: under 64 characters they run as one partition.
+    /// </summary>
     static void ReportWorldSize(int characters)
     {
         Console.WriteLine($"world     {characters} characters at the end of a run");
         if (characters < 64)
-            Console.WriteLine("warning   under 64 characters the parallel phases run as one partition: thread mistakes cannot show; use a busier save");
+            Console.WriteLine("warning   under 64 characters the parallel phases run as one partition: thread mistakes cannot show; "
+                + "use a busier save");
     }
 
-    /// <summary>On a difference: the same comparison without mods. If the game alone differs too, the save shows a game fault, not only a mod's.</summary>
+    /// <summary>
+    /// On a difference: the same comparison without mods. If the game alone differs too, the save shows a game fault, not only a mod's.
+    /// </summary>
     static void CheckGameAlone(Options options, Setup setup, bool runToRun)
     {
         Console.WriteLine("baseline  the same runs without mods...");
@@ -161,12 +168,12 @@ static class ModCheck
         }).Systems;
         var settings = new WorldSettings { Seed = 1, Threads = threads, MinPartitionSize = 32, PublishSnapshots = false };
         using var world = new World(settings, walk, systems);
-        current = world;
+        s_current = world;
         SaveLoader.Load(world, save, setup.Data, new SaveLoadOptions { Appearances = setup.Data.Appearances });
         mods?.RestoreSaveData(world, save.ModData);
         Focus(world);
         try { return Record(world, options.Ticks, mods); }
-        finally { current = null; }
+        finally { s_current = null; }
     }
 
     static void Focus(World world)
@@ -205,7 +212,9 @@ static class ModCheck
     static string Label(ITickSystem system, ModHost? mods) =>
         mods?.OwnerOf(system) is { } owner ? $"mod {owner.ModId} system '{owner.Name}'" : system.GetType().Name;
 
-    /// <summary>Prints the first differing tick and the hashed systems that differ there; true when the runs agree.</summary>
+    /// <summary>
+    /// Prints the first differing tick and the hashed systems that differ there; true when the runs agree.
+    /// </summary>
     static bool Report(string what, Trace a, Trace b)
     {
         int tick = FirstDifference(a.World, b.World);

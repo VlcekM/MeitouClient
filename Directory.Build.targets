@@ -11,13 +11,15 @@
   <ItemGroup Condition="('$(MSBuildProjectName)' == 'Meitou.Game' or '$(MSBuildProjectName)' == 'Meitou.ModelViewer') and ('$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('win-')))">
     <!-- Wildcards, so only the files present are listed. -->
     <None Include="$(StreamlineRuntimePath)/sl.*.dll;$(StreamlineRuntimePath)/nvngx_dlss*.dll;$(StreamlineRuntimePath)/meitou_ngx*.dll;$(StreamlineRuntimePath)/NvLowLatencyVk*.dll;$(StreamlineRuntimePath)/amd_fidelityfx_vk*.dll"
-          Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+          Link="Native/%(Filename)%(Extension)" TargetPath="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Linux: the DLSS model and NGX's client library (libmeitou_ngx.so, tools/scripts/build-ngx-shim.sh) for Ngx.cs, the model in any version,
        and our Linux build of the FidelityFX library (libamd_fidelityfx_vk.so, with AMD's licence text) for FSR and frame generation. -->
   <ItemGroup Condition="('$(MSBuildProjectName)' == 'Meitou.Game' or '$(MSBuildProjectName)' == 'Meitou.ModelViewer') and Exists('$(StreamlineRuntimePath)') and ('$(RuntimeIdentifier)' == '' or $(RuntimeIdentifier.StartsWith('linux-')))">
-    <None Include="$(StreamlineRuntimePath)/libnvidia-ngx-dlss.so.*;$(StreamlineRuntimePath)/libmeitou_ngx*.so;$(StreamlineRuntimePath)/libamd_fidelityfx_vk*.so;$(StreamlineRuntimePath)/LICENSE-FidelityFX*.txt" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <None Include="$(StreamlineRuntimePath)/libnvidia-ngx-dlss.so.*;$(StreamlineRuntimePath)/libmeitou_ngx*.so;$(StreamlineRuntimePath)/libamd_fidelityfx_vk*.so;$(StreamlineRuntimePath)/LICENSE-FidelityFX*.txt" Link="Native/%(Filename)%(Extension)"
+         TargetPath="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

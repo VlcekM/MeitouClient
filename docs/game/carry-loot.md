@@ -312,6 +312,32 @@ These writes are direct, not through the setter. State 1 never takes this path. 
 
 **Verified** by disassembly of a Kenshi 1.0.65 `kenshi_x64.exe`, sha256 `504b362c…cd3e`. In that build, the setter is `FUN_1405a3eb0`, the rule is `FUN_1405a44c0`, and its only caller is the vtable-reached `FUN_1405a4750`. Its constants are 24.0, 4.0 and 12.0. The other addresses in this file come from another build.
 
+### A slave far from its owner escapes
+
+The same update (1.0.68 `FUN_1405a4f50`, **Verified** by decompile) makes a slave (state 1) an escaped slave (2) through the setter when all of these hold:
+- the status object's current town (`+0x88`, [below](#the-status-town)) is none, i.e. the slave is out of every town;
+- its owner handle (character `+0x328`) names a character that resolves, and the squared distance between them is above 12 500 000 (`DAT_1416f016c`, about 3 536).
+
+When the handle's character does not resolve, its platoon is looked up and the slave is measured to it the same way. A squad handle (0x5b) is resolved to its platoon. With neither found, the slave escapes unless `FUN_1404fe6e0` holds on the handle (meaning **Unknown**). A cage or a carry is not tested.
+
+Since the setter removes job 187 Obedient Slave, the slave then plans with its own lists. In the Rebirth hold (**Observed**, one slave), a slave sent to a workplace about 4 000 from its owner became an escaped slave and took its own 172 Getting in my cage, whose finder (`FUN_1408caaf0`) has no slave state test.
+
+### The status town
+
+The status object's current town (`+0x88`) is written by 1.0.68 `FUN_1405a51e0` just before it calls the status update above (**Verified** by decompile; the only
+writer in that code range). Distances are on the ground plane from the town's centre; a town's reach is its radius (Town vfunc `0x2a0`, Meitou `TownData.Radius`)
+times a factor, and a nest marker never holds anyone (`FUN_140926d50`). In order, the first that holds:
+1. the nearest town of the player's faction, within 1.25 x radius (`DAT_14168ba14`);
+2. the current town when there is one, within **1.5 x** radius (`DAT_14168ad18`), else the nearest town, within 1 x (`DAT_14167c308`): entering takes the radius,
+   leaving takes half again;
+3. for a town whose vfunc `0x230` and `0x2f0` hold (meaning **Unknown**, likely walls), a point it gives for the position (vfunc `0x308`) within 300;
+4. the nearest entry of the world's second town list (`FUN_140927ad0`; **Observed** to be the player towns), with step 2's factor;
+5. the town of the building the character stands in (Character vfunc `0x1d8`).
+
+How often it runs is **Unknown** (each AI update). **Observed** (Rebirth hold, radius 2 875): slaves working 2 350-2 590 from the centre and 3 600-3 950 from their
+owners stayed slaves all hour; one that walked past about 4 100 escaped. Meitou: `CharacterCold.StatusTown`, `AiSystem.StatusTownAt`, kept up by `ArrestSystem` on the
+spotting cadence; steps 3 and 5 are not modelled, step 1 reads the placed towns of the player's faction and step 4 the player towns.
+
 Loading can free an escaped slave at once, because the clock is restored to the minute while the stamp is not. **Observed** with a "The Slaves" save written right after New Game:
 - the save holds `ssct` 34.00063 and the clock day 1 10:00, which is 34.0 h;
 - both escaped player characters were free within 120 calendar seconds of the load, in 5 runs out of 5, read with the KenshiOracle probe.
@@ -368,4 +394,4 @@ Evidence scopes below apply only to their named sources/checks.
 - 4.4 The stolen flag (`FUN_14079e550(item, strict)`, **Observed**; answers part of the economy.md Unknown)
 - 4.6 Carrying people past witnesses (`FUN_1408549f0`, **Observed**)
 
-**Loot order window** (26, `Task_Loot_Order`, **Verified**, decompile): the start `FUN_140354dc0` opens the loot window (`FUN_140791830`, mode 3) and plays Character_Loot (Character_Inspect for a non-character); the update `FUN_140354ef0` counts updates and, after 5, ends the task once the window is closed (`FUN_1406e2df0` == 0); a character flag (+0x2b0) aborts it; the end `FUN_1403466a0` plays 'squat T' and sets the Hold point (CharStats +0x130). So the looter stays in the task, with no other task, while the window is open. Meitou: `CarrySystem.Loot` keeps the open-loot walker in the task while `PlayerState.OpenLoot` is its body (`LootStart.WindowHeld`) and ends it when the window closes (the 5-update minimum, the abort flag and the squat clip are not modelled).
+**Loot order window** (26, `Task_Loot_Order`, **Verified**, decompile): the start `FUN_140354dc0` opens the loot window (`FUN_140791830`, mode 3) and plays Character_Loot (Character_Inspect for a non-character); the update `FUN_140354ef0` counts updates and, after 5, ends the task once the window is closed (`FUN_1406e2df0` == 0); every update (from the first) aborts it while the looter's `+0x2b0` is set (a melee threat within 40, [combat](combat.md#fight-lifecycle-and-orders)); the end `FUN_1403466a0` plays 'squat T', sets the Hold point (CharStats +0x130) and has the interface close both windows (`FUN_140791890` sets interface `+0x5c`, on which the per-frame `FUN_1406ea070` closes the pair with `FUN_1406e53d0`). So the looter stays in the task, with no other task, while the window is open, and any end of the task closes it. Row 26 needs `isAtLocation` and lists no threat state, and the abort is in the task's update, which starts only at the body (**Verified**, row lists and the update); whether the plan's move provider tests a threat is **Unknown** ([ai-tasks](ai-tasks.md)); that the looter walks to the body through a fight is **Observed** (reporter, #372). That a character beside the body opens the window while paused (the task start runs from the order at once) is **Observed** only (reporter, #372). Meitou: the order's start beside the body opens the window at once, paused too (`CarrySystem.OpenAtBody`); farther away `CarrySystem.Loot` opens it on arrival; the looter then holds it (`LootStart.WindowHeld`, `CarrySystem.HoldWindow`) and ends the task when the window closes or `CombatSystem.ImmediateThreat` holds (ticks only, so never while paused); the task's end closes the window (`CloseHeldWindow`). The 5-update minimum and the squat clip are not modelled; whether the abort keeps the order queued is **Unknown** (Meitou drops it).

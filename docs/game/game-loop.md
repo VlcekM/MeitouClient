@@ -110,6 +110,23 @@ character's faction is the player's (Faction `+0x250` `isPlayer`), Character `+0
 (**Unknown**). Otherwise set when the character is in view (`+0x1a9`: within `npc range`, `DAT_1421334c8`, of the camera's node `FUN_1407f2a20`, and passing the
 visible-area and frustum tests) and its platoon tests pass (**Unknown** in detail). Meitou: `MedicalTimeBudget`, [character-stats](character-stats.md#time).
 
+### Update time off screen
+
+**Verified** (decompile, 1.0.68) and **Observed** (Frida on 1.0.65, the oracle-base-cage-blesse save at Rebirth, speed 1):
+- The mover update (`CharMovement` slot 0x58) is called only by Character slot 0xd8 `threadedUpdate` (`FUN_1405c7c30`, the runner's list `+0x1a8`), with the
+  character's `+0xc4` as its time. Slot 0xe0 `update` (`FUN_1405cf130`) writes `+0xc4` = `DAT_142133794` + `+0xc0` (0.01 when not above 0). `+0xc0` is the time
+  gathered since the character's last turn.
+- `+0xc0` gets the frame time in the character loop on a frame without a turn (budget B above), and **again** in the visibility pass `FUN_1405c9f60`
+  (called each frame by the job runner `FUN_140787940`) while the character is not in view (`+0x1a9` clear), unless the global `DAT_1421349c9` is set
+  (meaning **Unknown**).
+- So a character out of view moves, and runs every consumer of `+0xc4`, on twice the time.
+  - Observed: over 7.5 real seconds, the sum of `+0xc4` was 2.00 x the real time for the 121 characters out of view and 1.00 x for the 7 in view.
+  - The game clock ran 33 game seconds a real second, as above.
+  - Ground speed in clock time: walkers 0.9 instead of 0.45, joggers about 3.4 instead of 1.65.
+- The other consumers of `+0xc4` (`FUN_14050d920`, `FUN_1405b4770`, `FUN_14043aee0`, `FUN_140685090`, the sensing `FUN_140853de0`) are not read.
+- Meitou: `MovementSystem.Move` steps a character out of view (`MedicalClock.OnScreen` against `World.View`) on twice the tick time; with no camera
+  (headless worlds, tests) on the tick time. The other consumers keep the tick time (**gap**).
+
 ### Inactive characters
 
 `FUN_1405c9410` (a virtual of the logic tick, **Verified**): the zone record at the character's X/Z (vfunc `0xc8`; none, off the grid: nothing happens); a character that is not active (vfunc `0xf8`, flag `+0x608`) in a zone whose loaded flag holds (`FUN_140a090b0`) is activated (vfunc `0x200`, `FUN_1405cc310`: scene node, physics, lists), an active one in a zone that is not loaded is deactivated (vfunc `0x208`, `FUN_1405c9490`: clears the flag and releases the scene and physics objects). An inactive character is out of the active set the update walks, so it neither thinks, moves nor ages while its zone is unloaded, even when its platoon stays loaded (the platoon keeps relevance by its effective leader's place). Meitou: `World.MarkDormant` sets `CharacterHot.Dormant` from `World.LoadedZones` once a tick (none: everyone active); the AI think, movement, body, combat, first-aid, aggro scan and animation loops skip a dormant slot. Serial duties (carrying, captives, production) still look at it but act on tasks the frozen movement no longer advances.

@@ -7,19 +7,30 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class HeatHaze
 {
-    /// <summary>Per second (of the game-speed-scaled frame time) that <c>heatHaze</c> moves towards its target.</summary>
+    /// <summary>
+    /// Per second (of the game-speed-scaled frame time) that <c>heatHaze</c> moves towards its target.
+    /// </summary>
     public const float Rate = 1f / 3f;
 
-    /// <summary>The <c>view distance</c> in the install's <c>settings.cfg</c> (Observed 2026-10-08: 12000, the options slider's top; it read 5000 before 2026-10-06). The haze pass's depth is distance / D with D = 10 × this.</summary>
+    /// <summary>
+    /// The <c>view distance</c> in the install's <c>settings.cfg</c> (Observed 2026-10-08: 12000, the options slider's top; it read 5000 before
+    /// 2026-10-06). The haze pass's depth is distance / D with D = 10 × this.
+    /// </summary>
     public const float ViewDistanceSetting = 12000;
 
-    /// <summary>Game hours per real second at game speed 1 (SkyX's time multiplier 0.0091666…; docs/game/game-loop.md).</summary>
+    /// <summary>
+    /// Game hours per real second at game speed 1 (SkyX's time multiplier 0.0091666…; docs/game/game-loop.md).
+    /// </summary>
     public const double HoursPerSecond = 11.0 / 1200.0;
 
-    /// <summary>The value <c>heatHaze</c> moves towards: the weather's <c>heat haze</c> field × its strength s × saturate(6 · sunY).</summary>
+    /// <summary>
+    /// The value <c>heatHaze</c> moves towards: the weather's <c>heat haze</c> field × its strength s × saturate(6 · sunY).
+    /// </summary>
     public static float Target(float weatherHeatHaze, float strength, float sunY) => weatherHeatHaze * strength * Math.Clamp(6 * sunY, 0, 1);
 
-    /// <summary>One frame's step: by at most <see cref="Rate"/> × dt towards the target, landing on it when closer.</summary>
+    /// <summary>
+    /// One frame's step: by at most <see cref="Rate"/> × dt towards the target, landing on it when closer.
+    /// </summary>
     public static float Step(float current, float target, float dt)
     {
         float step = dt * Rate;

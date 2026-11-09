@@ -2,14 +2,17 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>Stat help read from the user's English gettext template, never embedded game text; shown in the active language when its catalog translates the paragraph.</summary>
+/// <summary>
+/// Stat help read from the user's English gettext template, never embedded game text; shown in the active language when its catalog translates the
+/// paragraph.
+/// </summary>
 public sealed class StatHelpCatalog
 {
     sealed record Entry(int[] Lines, string Text, int EnglishLength);
-    readonly List<Entry> entries = [];
+    readonly List<Entry> _entries = [];
     public sealed record Help(string Description, IReadOnlyList<string> Affected, IReadOnlyList<string> Training, string PhysicalEffect);
 
-    public string TextAt(int line) => entries.Where(e => e.Lines.Contains(line)).MaxBy(e => e.EnglishLength)?.Text ?? "";
+    public string TextAt(int line) => _entries.Where(e => e.Lines.Contains(line)).MaxBy(e => e.EnglishLength)?.Text ?? "";
 
     public static StatHelpCatalog Read(string? path) => From(PotTemplate.Read(path));
 
@@ -19,7 +22,7 @@ public sealed class StatHelpCatalog
         // The structure (which paragraph answers which stat) comes from the English template; the text shown is its translation when the language has one.
         foreach (var entry in template)
             if (entry.References.Where(r => r.File == "kenshi/statswindow.cpp").Select(r => r.Line).Distinct().ToArray() is { Length: > 0 } lines)
-                result.entries.Add(new(lines, Meitou.Localisation.Loc.Tr(entry.Id), entry.Id.Length));
+                result._entries.Add(new(lines, Loc.Tr(entry.Id), entry.Id.Length));
         return result;
     }
 
@@ -64,7 +67,7 @@ public sealed class StatHelpCatalog
             StatsEnumerated.Polearms => (955, 681, 684, 688, 0),
             _ => (0, 0, 0, 0, 0),
         };
-        string[] Between(int from, int to) => entries.SelectMany(e => e.Lines.Where(l => l > from && l < to).Select(l => (Line: l, e.Text)))
+        string[] Between(int from, int to) => _entries.SelectMany(e => e.Lines.Where(l => l > from && l < to).Select(l => (Line: l, e.Text)))
             .OrderBy(e => e.Line).Select(e => e.Text).Distinct().ToArray();
         return new(TextAt(description), Between(affected, training), Between(training, end + 1), TextAt(physical));
     }

@@ -14,15 +14,23 @@ namespace Meitou.Data.World;
 /// </remarks>
 public sealed class TerrainDecalStore
 {
-    /// <summary>The life a decal is made with, in seconds of game time.</summary>
+    /// <summary>
+    /// The life a decal is made with, in seconds of game time.
+    /// </summary>
     public const float NewLife = 99;
-    /// <summary>The largest a bleeding pool grows.</summary>
+    /// <summary>
+    /// The largest a bleeding pool grows.
+    /// </summary>
     public const float PoolMax = 2;
 
-    /// <summary>A bleeding character's pool: where it lies and how big it has grown (the game's <c>BleedToken</c>).</summary>
+    /// <summary>
+    /// A bleeding character's pool: where it lies and how big it has grown (the game's <c>BleedToken</c>).
+    /// </summary>
     record struct BleedToken(Vector2 At, float Size);
 
-    /// <summary>A cell's decals, where in the list the first pool at each place is (pools are found by place every tick) and the soonest any runs out.</summary>
+    /// <summary>
+    /// A cell's decals, where in the list the first pool at each place is (pools are found by place every tick) and the soonest any runs out.
+    /// </summary>
     sealed class Cell
     {
         public readonly List<TerrainDecal> Decals = [];
@@ -36,10 +44,14 @@ public sealed class TerrainDecalStore
             Decals.Add(d);
         }
 
-        /// <summary>The index of the first pool at the cell place (<paramref name="x"/>, <paramref name="z"/>), or −1.</summary>
+        /// <summary>
+        /// The index of the first pool at the cell place (<paramref name="x"/>, <paramref name="z"/>), or −1.
+        /// </summary>
         public int PoolAt(short x, short z) => Pools.TryGetValue(Place(x, z), out int i) ? i : -1;
 
-        /// <summary>Removes the decals that ran out by <paramref name="clock"/>; whether any did.</summary>
+        /// <summary>
+        /// Removes the decals that ran out by <paramref name="clock"/>; whether any did.
+        /// </summary>
         public bool Expire(float clock)
         {
             int removed = Decals.RemoveAll(d => d.Life <= clock);
@@ -58,75 +70,95 @@ public sealed class TerrainDecalStore
         static int Place(short x, short z) => (ushort)x | (ushort)z << 16;
     }
 
-    readonly (int Width, int Height)[][] sizes;
-    readonly Dictionary<uint, Cell> cells = [];
-    readonly Dictionary<uint, int> versions = [], rewrites = [];
+    readonly (int Width, int Height)[][] _sizes;
+    readonly Dictionary<uint, Cell> _cells = [];
+    readonly Dictionary<uint, int> _versions = [], _rewrites = [];
     // Per cell, the decals placed or grown since its last rewrite, in that order.
-    readonly Dictionary<uint, List<TerrainDecal>> appended = [];
-    readonly Dictionary<long, BleedToken> bleeds = [];
-    readonly List<uint> touched = [];
-    readonly List<uint> emptied = [];
-    int nextVersion;
-    float clock;
+    readonly Dictionary<uint, List<TerrainDecal>> _appended = [];
+    readonly Dictionary<long, BleedToken> _bleeds = [];
+    readonly List<uint> _touched = [];
+    readonly List<uint> _emptied = [];
+    int _nextVersion;
+    float _clock;
 
     /// <param name="sizes">For each <see cref="TerrainDecalType"/>, the sizes in texels of its folder's textures (the variants); a type without any makes no decals.</param>
     public TerrainDecalStore(IReadOnlyList<IReadOnlyList<(int Width, int Height)>> sizes)
     {
-        this.sizes = new (int, int)[4][];
-        for (int t = 0; t < 4; t++) this.sizes[t] = t < sizes.Count ? [.. sizes[t]] : [];
+        this._sizes = new (int, int)[4][];
+        for (int t = 0; t < 4; t++) this._sizes[t] = t < sizes.Count ? [.. sizes[t]] : [];
     }
 
-    /// <summary>Changes with every change of any cell.</summary>
+    /// <summary>
+    /// Changes with every change of any cell.
+    /// </summary>
     public int Version { get; private set; }
 
-    /// <summary>The cells that hold decals.</summary>
-    public IEnumerable<uint> Cells => cells.Keys;
+    /// <summary>
+    /// The cells that hold decals.
+    /// </summary>
+    public IEnumerable<uint> Cells => _cells.Keys;
 
     public int Count { get; private set; }
 
-    /// <summary>The game seconds the store has aged by (<see cref="Age"/>): the clock the stored decals' lives run out on.</summary>
-    public float Clock => clock;
+    /// <summary>
+    /// The game seconds the store has aged by (<see cref="Age"/>): the clock the stored decals' lives run out on.
+    /// </summary>
+    public float Clock => _clock;
 
-    /// <summary>The seconds of game time <paramref name="d"/> (one of <see cref="In"/> or <see cref="Appended"/>) has left; negative past its end.</summary>
-    public float LifeLeft(in TerrainDecal d) => d.Life - clock;
+    /// <summary>
+    /// The seconds of game time <paramref name="d"/> (one of <see cref="In"/> or <see cref="Appended"/>) has left; negative past its end.
+    /// </summary>
+    public float LifeLeft(in TerrainDecal d) => d.Life - _clock;
 
-    /// <summary>The decals of a cell (empty when it has none); their <see cref="TerrainDecal.Life"/> is on <see cref="Clock"/> (<see cref="LifeLeft"/>).</summary>
-    public ReadOnlySpan<TerrainDecal> In(uint key) => cells.TryGetValue(key, out var cell) ? CollectionsMarshal.AsSpan(cell.Decals) : default;
+    /// <summary>
+    /// The decals of a cell (empty when it has none); their <see cref="TerrainDecal.Life"/> is on <see cref="Clock"/> (<see cref="LifeLeft"/>).
+    /// </summary>
+    public ReadOnlySpan<TerrainDecal> In(uint key) => _cells.TryGetValue(key, out var cell) ? CollectionsMarshal.AsSpan(cell.Decals) : default;
 
-    /// <summary>A number that changes whenever <paramref name="key"/>'s decals change (0 for a cell that never had any).</summary>
-    public int CellVersion(uint key) => versions.GetValueOrDefault(key);
+    /// <summary>
+    /// A number that changes whenever <paramref name="key"/>'s decals change (0 for a cell that never had any).
+    /// </summary>
+    public int CellVersion(uint key) => _versions.GetValueOrDefault(key);
 
     /// <summary>
     /// A number that changes when decals leave <paramref name="key"/> (ageing, a new world): a texture of the cell must be drawn again from <see cref="In"/>. While it
     /// stays, the cell's changes are only additions: <see cref="Appended"/>, in order, drawn over what the texture holds (the original likely draws a cell's new decals onto
     /// its texture too: it clears it only for a new cell, docs/game/blood-decals.md).
     /// </summary>
-    public int CellRewrite(uint key) => rewrites.GetValueOrDefault(key);
+    public int CellRewrite(uint key) => _rewrites.GetValueOrDefault(key);
 
-    /// <summary>The decals placed in <paramref name="key"/> or grown there since its last rewrite (<see cref="CellRewrite"/>), oldest first.</summary>
-    public ReadOnlySpan<TerrainDecal> Appended(uint key) => appended.TryGetValue(key, out var log) ? CollectionsMarshal.AsSpan(log) : default;
+    /// <summary>
+    /// The decals placed in <paramref name="key"/> or grown there since its last rewrite (<see cref="CellRewrite"/>), oldest first.
+    /// </summary>
+    public ReadOnlySpan<TerrainDecal> Appended(uint key) => _appended.TryGetValue(key, out var log) ? CollectionsMarshal.AsSpan(log) : default;
 
-    /// <summary>Every decal and pool gone (a new world).</summary>
+    /// <summary>
+    /// Every decal and pool gone (a new world).
+    /// </summary>
     public void Clear()
     {
-        foreach (var key in cells.Keys) Rewrite(key);
-        cells.Clear();
-        appended.Clear();
-        bleeds.Clear();
+        foreach (var key in _cells.Keys) Rewrite(key);
+        _cells.Clear();
+        _appended.Clear();
+        _bleeds.Clear();
         Count = 0;
-        clock = 0;
+        _clock = 0;
     }
 
-    /// <summary>Every cell's copy of every decal, cell by cell, its life in seconds left (what a save holds).</summary>
-    public IEnumerable<TerrainDecal> All => cells.Values.SelectMany(cell => cell.Decals).Select(d => d with { Life = d.Life - clock });
+    /// <summary>
+    /// Every cell's copy of every decal, cell by cell, its life in seconds left (what a save holds).
+    /// </summary>
+    public IEnumerable<TerrainDecal> All => _cells.Values.SelectMany(cell => cell.Decals).Select(d => d with { Life = d.Life - _clock });
 
-    /// <summary>Decals as a save holds them, each into its own cell as it is (no placing again); one of no known type is skipped.</summary>
+    /// <summary>
+    /// Decals as a save holds them, each into its own cell as it is (no placing again); one of no known type is skipped.
+    /// </summary>
     public void Load(IEnumerable<TerrainDecal> decals)
     {
         foreach (var d in decals)
         {
-            if ((int)d.Type >= sizes.Length) continue;
-            var stored = d with { Life = clock + d.Life };
+            if ((int)d.Type >= _sizes.Length) continue;
+            var stored = d with { Life = _clock + d.Life };
             CellOf(d.Key).Add(stored);
             Count++;
             Append(d.Key, stored);
@@ -140,10 +172,10 @@ public sealed class TerrainDecalStore
     /// </summary>
     public void Add(TerrainDecalType type, Vector3 at, Vector2 direction, float size, uint abgr, float life, Random random)
     {
-        var variants = sizes[(int)type];
+        var variants = _sizes[(int)type];
         if (variants.Length == 0 || !(life > 0)) return;
         float angle = MathF.Atan2(direction.X, direction.Y);
-        Place(new TerrainDecal(0, type, (byte)random.Next(variants.Length), 0, 0, 0, 0, (short)(int)(angle * 1000), abgr, clock + life), new Vector2(at.X, at.Z), size);
+        Place(new TerrainDecal(0, type, (byte)random.Next(variants.Length), 0, 0, 0, 0, (short)(int)(angle * 1000), abgr, _clock + life), new Vector2(at.X, at.Z), size);
     }
 
     /// <summary>
@@ -155,14 +187,14 @@ public sealed class TerrainDecalStore
     {
         float grow = bleeding * dt * 0.2f;
         var here = new Vector2(at.X, at.Z);
-        if (!bleeds.TryGetValue(who, out var token)) token = new BleedToken(here, grow);
+        if (!_bleeds.TryGetValue(who, out var token)) token = new BleedToken(here, grow);
         else if (Vector2.DistanceSquared(token.At, here) <= 10) token.Size = MathF.Min(token.Size + grow / MathF.Max(1, token.Size * 10), PoolMax);
         else token = new BleedToken(here, grow);
-        bleeds[who] = token;
+        _bleeds[who] = token;
 
         uint key = TerrainDecalCells.Key(token.At.X, token.At.Y);
         var (lx, lz) = Local(key, token.At);
-        if (cells.TryGetValue(key, out var cell) && cell.PoolAt(lx, lz) is int i and >= 0)
+        if (_cells.TryGetValue(key, out var cell) && cell.PoolAt(lx, lz) is int i and >= 0)
         {
             var d = cell.Decals[i];
             var (w, h) = Texels(d);
@@ -174,8 +206,10 @@ public sealed class TerrainDecalStore
         Add(TerrainDecalType.Pool, new Vector3(token.At.X, at.Y, token.At.Y), new Vector2(random.NextSingle() - 0.5f, random.NextSingle() - 0.5f), token.Size, abgr, NewLife, random);
     }
 
-    /// <summary>The character has stopped bleeding or gone: its next pool starts anew.</summary>
-    public void Stanch(long who) => bleeds.Remove(who);
+    /// <summary>
+    /// The character has stopped bleeding or gone: its next pool starts anew.
+    /// </summary>
+    public void Stanch(long who) => _bleeds.Remove(who);
 
     /// <summary>
     /// Ages every decal by <paramref name="dt"/> seconds of game time (the scaled frame time: nothing while paused) and removes those whose life ran out, except
@@ -184,31 +218,31 @@ public sealed class TerrainDecalStore
     public void Age(float dt, Func<uint, bool> drawn)
     {
         if (dt <= 0 || Count == 0) return;
-        clock += dt;
-        emptied.Clear();
-        foreach (var (key, cell) in cells)
+        _clock += dt;
+        _emptied.Clear();
+        foreach (var (key, cell) in _cells)
         {
-            if (cell.Soonest > clock || drawn(key)) continue;
+            if (cell.Soonest > _clock || drawn(key)) continue;
             int before = cell.Decals.Count;
-            if (!cell.Expire(clock)) continue;
+            if (!cell.Expire(_clock)) continue;
             Count -= before - cell.Decals.Count;
-            touched.Add(key);
-            if (cell.Decals.Count == 0) emptied.Add(key);
+            _touched.Add(key);
+            if (cell.Decals.Count == 0) _emptied.Add(key);
         }
-        foreach (var key in emptied) { cells.Remove(key); appended.Remove(key); }
-        foreach (var key in touched) Rewrite(key);
-        touched.Clear();
+        foreach (var key in _emptied) { _cells.Remove(key); _appended.Remove(key); }
+        foreach (var key in _touched) Rewrite(key);
+        _touched.Clear();
     }
 
     Cell CellOf(uint key)
     {
-        if (!cells.TryGetValue(key, out var cell)) cells[key] = cell = new Cell();
+        if (!_cells.TryGetValue(key, out var cell)) _cells[key] = cell = new Cell();
         return cell;
     }
 
     (int Width, int Height) Texels(in TerrainDecal d)
     {
-        var variants = sizes[(int)d.Type];
+        var variants = _sizes[(int)d.Type];
         return d.Variant < variants.Length ? variants[d.Variant] : (0, 0);
     }
 
@@ -218,7 +252,9 @@ public sealed class TerrainDecalStore
         return ((short)(int)((at.X - x0) / TerrainDecalCells.Size * 1000), (short)(int)((at.Y - z0) / TerrainDecalCells.Size * 1000));
     }
 
-    /// <summary>The four corners of a decal of <paramref name="size"/> centred on <paramref name="at"/> (<c>FUN_1408dc6b0</c>'s quad).</summary>
+    /// <summary>
+    /// The four corners of a decal of <paramref name="size"/> centred on <paramref name="at"/> (<c>FUN_1408dc6b0</c>'s quad).
+    /// </summary>
     void Corners(in TerrainDecal d, Vector2 at, float size, Span<Vector2> corners)
     {
         var (w, h) = Texels(d);
@@ -294,24 +330,29 @@ public sealed class TerrainDecalStore
 
     void Touch(uint key)
     {
-        versions[key] = ++nextVersion;
-        Version = nextVersion;
+        _versions[key] = ++_nextVersion;
+        Version = _nextVersion;
     }
 
-    /// <summary>A decal added to (or grown in) <paramref name="key"/>'s list: drawn over what the cell's texture holds. A log much longer than the cell's list is dropped for a redraw.</summary>
+    /// <summary>
+    /// A decal added to (or grown in) <paramref name="key"/>'s list: drawn over what the cell's texture holds. A log much longer than the cell's list
+    /// is dropped for a redraw.
+    /// </summary>
     void Append(uint key, in TerrainDecal d)
     {
-        if (!appended.TryGetValue(key, out var log)) appended[key] = log = [];
+        if (!_appended.TryGetValue(key, out var log)) _appended[key] = log = [];
         log.Add(d);
-        if (log.Count > 2 * (cells.TryGetValue(key, out var cell) ? cell.Decals.Count : 0) + 64) Rewrite(key);
+        if (log.Count > 2 * (_cells.TryGetValue(key, out var cell) ? cell.Decals.Count : 0) + 64) Rewrite(key);
         else Touch(key);
     }
 
-    /// <summary>Decals left <paramref name="key"/> (or its log grew too long): its texture is drawn again from the list.</summary>
+    /// <summary>
+    /// Decals left <paramref name="key"/> (or its log grew too long): its texture is drawn again from the list.
+    /// </summary>
     void Rewrite(uint key)
     {
-        rewrites[key] = ++nextVersion;
-        if (appended.TryGetValue(key, out var log)) log.Clear();
+        _rewrites[key] = ++_nextVersion;
+        if (_appended.TryGetValue(key, out var log)) log.Clear();
         Touch(key);
     }
 }

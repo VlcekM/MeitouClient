@@ -2,10 +2,12 @@ using Meitou.Content;
 
 namespace Meitou.Data.Physics;
 
-/// <summary>Finds the collision (and other asset) files that records name by install-relative paths.</summary>
+/// <summary>
+/// Finds the collision (and other asset) files that records name by install-relative paths.
+/// </summary>
 public static class CollisionPaths
 {
-    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Stamp, Dictionary<string, string> Mods)> mods = new();
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime Stamp, Dictionary<string, string> Mods)> ModCache = new();
 
     /// <summary>
     /// <see cref="ModList.FindMods"/> of an install (local mods over Workshop ones), rescanned when its <c>mods</c> or Workshop folder changes,
@@ -15,9 +17,9 @@ public static class CollisionPaths
     {
         var stamp = Directory.GetLastWriteTimeUtc(install.ModsDirectory);
         if (install.WorkshopDirectory is { } workshop && Directory.GetLastWriteTimeUtc(workshop) is var w && w > stamp) stamp = w;
-        if (mods.TryGetValue(install.Root, out var cached) && cached.Stamp == stamp) return cached.Mods;
+        if (ModCache.TryGetValue(install.Root, out var cached) && cached.Stamp == stamp) return cached.Mods;
         var found = ModList.FindMods(install);
-        mods[install.Root] = (stamp, found);
+        ModCache[install.Root] = (stamp, found);
         return found;
     }
 

@@ -3,7 +3,22 @@ using Meitou.Data;
 using Meitou.Data.Characters;
 using Meitou.Data.Fcs;
 using Meitou.Data.Ogre;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gi;
+using Meitou.Game.Rendering.Impostors;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Rendering.Ui;
+using Meitou.Game.Rendering.Upscalers;
+using Meitou.Game.Rendering.Water;
 
 /// <summary>Builds the look of every ANIMAL_CHARACTER and of one character per person race and reports what cannot be drawn: a missing body mesh, skeleton or texture, an unreadable mesh.</summary>
 static class CharacterSurvey
@@ -16,8 +31,8 @@ static class CharacterSurvey
         var rigs = new CharacterRigs(db, FindMesh, n => assets.Find(n));
         bool verbose = args.Contains("-v");
         int ok = 0, bad = 0;
-        var records = db.Records.Values.Where(r => r.Type == FcsRecordType.ANIMAL_CHARACTER)
-            .Concat(db.Records.Values.Where(r => r.Type == FcsRecordType.CHARACTER).GroupBy(r => string.Join(",", r.GetReferences("race").Select(x => x.TargetStringId))).Select(g => g.First()))
+        var records = db.Records.Values.Where(r => r.Type == FcsRecordType.AnimalCharacter)
+            .Concat(db.Records.Values.Where(r => r.Type == FcsRecordType.Character).GroupBy(r => string.Join(",", r.GetReferences("race").Select(x => x.TargetStringId))).Select(g => g.First()))
             .ToList();
         foreach (var r in records)
         {
@@ -71,8 +86,8 @@ static class RecordDump
             foreach (var f in r.Ints.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (var f in r.Strings.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (var f in r.Filenames.OrderBy(f => f.Key)) Console.WriteLine($"  FILE {f.Key} = {f.Value}");
-            foreach (var f in r.Vector3s.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
-            foreach (var f in r.Vector4s.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
+            foreach (var f in r.Vector3S.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
+            foreach (var f in r.Vector4S.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (var f in r.Bools.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
             foreach (string list in r.ReferenceLists) Console.WriteLine($"  LIST {list}: " + string.Join(", ", r.GetReferences(list).Select(x => $"{db.Find(x.TargetStringId)?.Name ?? ("?" + x.TargetStringId)}[{db.Find(x.TargetStringId)?.Type}]={x.Values.Value0},{x.Values.Value1},{x.Values.Value2}")));
         }
@@ -88,14 +103,14 @@ static class ItemSurvey
         var db = GameDatabase.Load(LoadOrder.FromInstall(install));
         var assets = new AssetLocator(install);
         int ok = 0, bad = 0;
-        foreach (var item in db.Records.Values.Where(r => r.Type is FcsRecordType.ARMOUR or FcsRecordType.CONTAINER).OrderBy(r => r.Name, StringComparer.Ordinal))
+        foreach (var item in db.Records.Values.Where(r => r.Type is FcsRecordType.Armour or FcsRecordType.Container).OrderBy(r => r.Name, StringComparer.Ordinal))
         {
             foreach (string suffix in new[] { "", " female" })
             {
                 if (item.GetPath("mesh" + suffix).Length == 0) continue;
                 var problems = new List<string>();
                 var refs = item.GetReferences(suffix.Length > 0 && item.GetReferences("material female").Count > 0 ? "material female" : "material");
-                var specs = refs.OrderByDescending(r => r.Values.Value0).Select(r => db.Find(r.TargetStringId)).Where(s => s is { Type: FcsRecordType.MATERIAL_SPECS_CLOTHING or FcsRecordType.MATERIAL_SPEC or FcsRecordType.MATERIAL_SPECS_WEAPON }).ToList();
+                var specs = refs.OrderByDescending(r => r.Values.Value0).Select(r => db.Find(r.TargetStringId)).Where(s => s is { Type: FcsRecordType.MaterialSpecsClothing or FcsRecordType.MaterialSpec or FcsRecordType.MaterialSpecsWeapon }).ToList();
                 if (refs.Count == 0) problems.Add("no material list");
                 else if (specs.Count == 0) problems.Add($"no usable material record among {string.Join(", ", refs.Select(r => (db.Find(r.TargetStringId)?.Type.ToString() ?? "missing") + ":" + r.TargetStringId))}");
                 foreach (var spec in specs)
@@ -120,7 +135,7 @@ static class SpecSurvey
     public static int Run(GameInstall install)
     {
         var db = GameDatabase.Load(LoadOrder.FromInstall(install));
-        var groups = db.Records.Values.Where(r => r.Type == FcsRecordType.MATERIAL_SPECS_CLOTHING && r.GetPath("color map").Length > 0)
+        var groups = db.Records.Values.Where(r => r.Type == FcsRecordType.MaterialSpecsClothing && r.GetPath("color map").Length > 0)
             .GroupBy(r => (r.DefinedBy.EndsWith(".base") ? "base" : "mod", r.GetFloat("paint factor 1"), r.GetFloat("paint factor 2")))
             .OrderBy(g => g.Key);
         foreach (var g in groups) Console.WriteLine($"{g.Key.Item1} f1 {g.Key.Item2} f2 {g.Key.Item3}: {g.Count()}  e.g. {string.Join(", ", g.Take(3).Select(r => r.Name))}");

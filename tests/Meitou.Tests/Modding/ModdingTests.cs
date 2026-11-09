@@ -9,10 +9,14 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Modding;
 
-/// <summary>The code-mod contract (docs/modding.md): shared assemblies, system anchors, save sidecars, determinism with a mod system.</summary>
+/// <summary>
+/// The code-mod contract (docs/modding.md): shared assemblies, system anchors, save sidecars, determinism with a mod system.
+/// </summary>
 public class ModdingTests
 {
-    /// <summary>A mod system with state of its own: counts ticks and the characters it saw, hashed and saved.</summary>
+    /// <summary>
+    /// A mod system with state of its own: counts ticks and the characters it saw, hashed and saved.
+    /// </summary>
     sealed class CountingSystem : ITickSystem, IStateHashed
     {
         public long Seen;
@@ -29,7 +33,9 @@ public class ModdingTests
 
     enum Pace { Slow, Fast }
 
-    /// <summary>A mod's settings object: one property of each kind, and one that is not a setting.</summary>
+    /// <summary>
+    /// A mod's settings object: one property of each kind, and one that is not a setting.
+    /// </summary>
     sealed class OreSettings
     {
         [Setting("Ore per deposit", Hint = "How much a rock holds.", Min = 10, Max = 2000, Step = 10)]
@@ -89,11 +95,14 @@ public class ModdingTests
                 new CodeModManifest("ores", ModApi.Version, ["Ores.dll"], "Ores.Mod")),
             new ModRegistry(), null!, null!, () => null, saved);
 
-    /// <summary>A mod folder's copies of game assemblies are never loaded: the mod gets the game's (one Harmony, one set of engine types).</summary>
+    /// <summary>
+    /// A mod folder's copies of game assemblies are never loaded: the mod gets the game's (one Harmony, one set of engine types).
+    /// </summary>
     [Fact]
     public void A_mod_context_takes_the_game_assemblies_even_when_the_mod_folder_has_copies()
     {
         var folder = Directory.CreateTempSubdirectory("meitou-mod-").FullName;
+
         try
         {
             var harmony = typeof(Harmony).Assembly;
@@ -112,7 +121,9 @@ public class ModdingTests
         }
     }
 
-    /// <summary>Extension systems land at their anchors; the standard systems keep their order around them.</summary>
+    /// <summary>
+    /// Extension systems land at their anchors; the standard systems keep their order around them.
+    /// </summary>
     [Fact]
     public void Extension_systems_are_spliced_at_their_anchors()
     {
@@ -133,11 +144,14 @@ public class ModdingTests
         Assert.Equal(plain.Count + 2, spliced.Count);
     }
 
-    /// <summary>Mod sidecars go into meitou-mods/ with the save, come back on load and copy with a clone, so later saves keep them.</summary>
+    /// <summary>
+    /// Mod sidecars go into meitou-mods/ with the save, come back on load and copy with a clone, so later saves keep them.
+    /// </summary>
     [Fact]
     public void Mod_data_round_trips_through_a_save_folder()
     {
         var folder = Path.Combine(Path.GetTempPath(), "meitou-mod-save-" + Guid.NewGuid().ToString("N"));
+
         try
         {
             var game = new SaveBuilder().Game;
@@ -157,7 +171,9 @@ public class ModdingTests
         }
     }
 
-    /// <summary>A hashed mod system is part of the world's state hash, which agrees at 1 and 4 threads.</summary>
+    /// <summary>
+    /// A hashed mod system is part of the world's state hash, which agrees at 1 and 4 threads.
+    /// </summary>
     [Fact]
     public void A_mod_system_keeps_the_world_deterministic_and_hashed()
     {
@@ -224,7 +240,9 @@ public class ModdingTests
         Assert.True(refill.IsDefault);
     }
 
-    /// <summary>A setting the page cannot show refuses the mod with a reason that names it, rather than failing later.</summary>
+    /// <summary>
+    /// A setting the page cannot show refuses the mod with a reason that names it, rather than failing later.
+    /// </summary>
     [Fact]
     public void A_bad_setting_is_refused_with_a_reason()
     {

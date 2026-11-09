@@ -6,13 +6,13 @@ namespace Meitou.Compat.CharactersEmotions;
 /// </summary>
 sealed class Ini
 {
-    readonly List<(string Name, Dictionary<string, string> Keys)> sections = [];
+    readonly List<(string Name, Dictionary<string, string> Keys)> _sections = [];
 
     public static Ini Parse(IEnumerable<string> lines)
     {
         var ini = new Ini();
         var current = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        ini.sections.Add(("", current));
+        ini._sections.Add(("", current));
         foreach (string raw in lines)
         {
             string line = raw.Trim();
@@ -22,7 +22,7 @@ sealed class Ini
                 int end = line.IndexOf(']');
                 if (end < 0) continue;
                 current = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                ini.sections.Add((line[1..end].Trim(), current));
+                ini._sections.Add((line[1..end].Trim(), current));
                 continue;
             }
             int eq = line.IndexOf('=');
@@ -34,8 +34,8 @@ sealed class Ini
 
     /// <summary>The sections in file order (the unnamed head of the file first).</summary>
     public IEnumerable<(string Name, IReadOnlyDictionary<string, string> Keys)> Sections =>
-        sections.Select(s => (s.Name, (IReadOnlyDictionary<string, string>)s.Keys));
+        _sections.Select(s => (s.Name, (IReadOnlyDictionary<string, string>)s.Keys));
 
     public IReadOnlyDictionary<string, string>? Section(string name) =>
-        sections.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)).Keys;
+        _sections.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)).Keys;
 }

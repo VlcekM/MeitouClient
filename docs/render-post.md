@@ -55,10 +55,16 @@ scaled by −render size; inputs need sampled use, the output storage use, all l
 **Observed** (Linux, DLSS 310.9.16, RTX 4080 SUPER): preset 0 (`MEITOU_DLSS_PRESET` unset) gives the guide's defaults,
 K for Quality, M for Performance, L for Ultra Performance: each headless screenshot is byte-identical to the one with
 that preset set and differs from K's (repeat runs are identical).
+The Display page's "DLSS preset" (under Anti-aliasing/upscaling, shown only while that is DLSS) picks Default, J, K, L or M (Streamline/NGX 0, 10..13; `UpscaleOptions.DlssPresets`), applied at once
+(Streamline: options set again; NGX: feature remade); `MEITOU_DLSS_PRESET` overrides it. DLSS gets our exposure, not its own measure: a 1 x 1
+R32F (`PostProcess.UpscaleExposure.cs`) holding the composite's scale, `Exposure` x 0.55 / last frame's adapted luminance (the adaptation runs
+after the upscaler), tagged as Streamline's exposure buffer (13) / NGX's `ExposureTexture`, auto exposure off. NVIDIA's guide names auto exposure
+as a cause of ghosting in high-contrast scenes; the effect on foliage ghosting here is **Unknown** (not yet compared in play).
 
 ## Frame generation
 
-The `FrameGeneration` setting (off by default, read at start-up) presents through AMD's FSR 3 frame-interpolation swapchain
+The `FrameGeneration` setting (off by default, read at start-up) picks whose by `FrameGenerationVendor` (FSR 3 by default, or DLSS: "DLSS frame
+generation" below). FSR 3 presents through AMD's frame-interpolation swapchain
 (`Upscalers/FfxSwapchain.cs`) and interpolates one frame between each two rendered ones (`Upscalers/FrameGeneration.cs`), on top
 of TAA, FSR or DLSS. Library: `amd_fidelityfx_vk.dll` (AMD's prebuilt, Windows/Proton) or `libamd_fidelityfx_vk.so` (Linux:
 `tools/scripts/build-ffx-linux.sh`, AMD's SDK 1.1.4 source plus `tools/patches/fidelityfx-sdk-1.1.4-linux.patch`; AMD's
@@ -90,6 +96,42 @@ swapchain code needs Vulkan headers 1.3.237+, so the script uses Khronos' 1.3.29
   swapchain's pipelines, a descriptor pool size list that drops `STORAGE_BUFFER` (**Observed**, PR #133).
 - **Performance** (**Observed**, single runs, RTX 3070, PR #133): about 1.4 ms more per rendered frame (Proton, TAA),
   presented fps 1.5-1.75x that without it; for about 8 s after it starts the present is slow (31-60 fps).
+
+### DLSS frame generation
+
+NVIDIA's DLSS-G through Streamline 2.14.16 (Windows; `Upscalers/DlssFrameGeneration.cs`, guide: Streamline's `ProgrammingGuideDLSS_G.md`,
+`ProgrammingGuideManualHooking.md`, `ProgrammingGuideReflex.md`). One generated frame per rendered one: multi-frame generation is D3D12 only.
+- **Loading:** with the switch on and DLSS as the vendor (read at start-up; a change in the settings waits for a restart) `slInit` loads DLSS, DLSS-G, Reflex and PCL (`sl.dlss_g.dll`, `nvngx_dlssg.dll`, `sl.reflex.dll`, `sl.pcl.dll` beside
+  the interposer; missing ones are logged and frame generation stays off). Each feature's `slGetFeatureRequirements` is unioned: extensions,
+  1.2/1.3 features, graphics and compute queues (created after ours in the graphics family; `VulkanInfo` gets the first index after ours). Where
+  `slIsFeatureSupported` fails for DLSS-G, Reflex or PCL, DLSS-G is unloaded (`slSetFeatureLoaded`): loaded, it makes the swapchain render off-screen
+  even while off.
+- **Hooks** (manual hooking, `sl_hooks.h`): swapchain create/destroy/images/acquire, present and `vkDeviceWaitIdle` go through the interposer's
+  proxies; Streamline owns the real swapchain and presents from its own queue. Its `vkCreateWin32SurfaceKHR` hook records the window behind a
+  surface and calls through an instance table only `slSetVulkanInfo` fills (**Verified**, 2.14.16 `sl.interposer/vulkan/wrapper.cpp`; headless
+  probe: an access violation before, a surface after), so the window's surface is made again through it once the device is handed over and
+  replaces the first one (`VulkanDevice.ReplaceSurface`).
+- **Frame:** one frame token per rendered frame (`Streamline.BeginFrame` at the top of the game loop: `slReflexSleep`, then PCL markers simulation
+  start/end, render submit start/end, present start/end); DLSS upscaling uses the same token. Reflex low latency is on while DLSS-G is loaded.
+- **Viewports:** upscaling on viewport 0 with constants for the post chain's bottom-up images, DLSS-G on viewport 1 with top-down ones (no y
+  flip, motion scale −1, +1, jitter y negated). Whether DLSS-G accepts constants on another viewport than the upscaler's is **Unknown** (untested).
+- **Inputs** (all `eValidUntilPresent`): depth and motion copied flipped at the render size; the backbuffer before the interface (hudless) and
+  the interface layer (premultiplied RGBA8, `UIColorAndAlpha`) copied flipped at the display size. The window shows the finished picture.
+  User interface recomposition on; `eRetainResourcesWhenOff`; mode off under the loading screen and for screenshots.
+- **State:** `slDLSSGGetState` about once a second; status failures (resolution too low, Reflex not detected, constants invalid ...) are logged
+  when they change. `numFramesActuallyPresented` is the frames presented for the last rendered one (1 = none generated, 2 = one), not a count
+  since the previous call; the stats panel shows it as `x2 shown` beside the rendered rate.
+- **Loaded with the mode off** (**Observed**, play bench idle/orbit/pan, 2560x1440 window at render scale 1.0, GPU-bound, RTX 4070, 3 interleaved pairs,
+  2026-11-08): mean frame 11.2 / 12.7 / 11.6 ms not loaded against 11.4 / 13.0 / 10.8 loaded with the mode off: +0.2-0.3 ms at most, within noise;
+  the render thread's `driver-wait` +0.14 ms (Reflex). Under CPU-bound frames (1920x1080 at 0.67) run-to-run noise (±50%) hid any difference.
+- **Pointer:** with any frame generation the game's pointer is the window's cursor (its image cropped from its sheet at the drawn size, hot spot
+  on the mouse; `GameHost.SystemPointer`), not drawn in the interface: there it reaches the screen a held-back frame late and is interpolated.
+- **Observed** (headless device, RTX 4070, Streamline 2.14.16, 2026-11-08): DLSS-G, Reflex and PCL report supported; together with DLSS they ask
+  for 1 graphics and 2 compute queues, 1.3 `synchronization2`, and device extensions including `VK_NV_optical_flow` and `VK_NV_low_latency2`.
+  The list leaves out `VK_KHR_present_id`, which `VK_NV_low_latency2` requires (validation error): `VulkanDevice` adds it, with its feature, when
+  the device has a surface.
+- **Observed** (game window, same machine, 2026-11-08): "DLSS active" with no status failures; a one-off "Invalid backbuffer resource extent"
+  warning (it falls back to the whole backbuffer) and recurring "flipMetering FC feedback: 1" warnings.
 
 ## SSAO, fog and layers
 
@@ -165,12 +207,14 @@ nearest or farthest depth written to an R32F target beside it.
 **Observed** (the Eye's storm, quarter-size particles): the row of dark beads where the dust meets a dune ridge is fainter.
 The game's sprites are flat (texture × colour × vertex colour × the material's ambient factor) and not fogged, so a dust cloud had one
 brightness in sun and in shade, near and far, and showed through fog banks. With the same switch Meitou lights alpha sprites
-(`ParticleRenderer.Lit`): the sun's visibility at each fragment (one bilinear compare in its cascade) takes the light shafts' darkening
+(`ParticleRenderer.Lit`): the sun's visibility through each sprite's volume (eight bilinear compares at a cube half its size about its
+centre, one value per sprite) takes the light shafts' darkening
 (the sun's share of the light) where it is shadowed, a glow towards the sun (1 + 0.5 cos⁸) where it is not, then the haze and the
 placed fog volumes in front of each corner (`atmoApplyCoefficients`, `fogVolumesAccumulate`) as `colour · mul + add`; additive
 sprites take only the haze's and the volumes' `mul`. **Observed** (mec-tou-nu save): distant clouds fade into the haze like the land
 behind them, dust over shaded slopes darker; mec-tou-nu2 (Skinner's Roam, a fog bank): the dark dust that showed through it gone;
-the Hub at 14:00 within 0.7/255 (99th percentile).
+the Hub at 14:00 within 0.7/255 (99th percentile). Read per fragment instead, the shadow printed each tree's and rock's outline on
+every flat sprite: **Observed** (2026-11-07, dust over a cliff and a canyon, shafts off) as blurred, offset tree silhouettes in the dust.
 The Metal chain has no copy: its sprites stay hard-edged.
 
 Fog shading rate (`FogShadingRate`): build tile rates from completed scene depth/fog; frame N's
@@ -189,7 +233,12 @@ terrain can be original ambient-map colour rather than lamp/emissive input. Haze
 and sun; Meitou default strength0.5, game1, slider0..3.
 
 Weather particle resolution: off/quarter/half/auto/full; density multiplies emission and changes
-appearance/population, not just shading cost. Both chains draw the reduced-resolution particles twice, against each block's
+appearance/population, not just shading cost. Auto sends a technique's draw to the half or quarter target by its sprites' mean
+screen size (20 / 80 px), but only while each sprite keeps the pixels its texture needs (`ParticleTextureDetail`: the texture's side
+over its largest reduction, up to 32, that changes its premultiplied brightness by at most 10 %). **Observed** (the install's
+textures): soft dust and smoke (`Sand-Wisp`, `smoke_trans1`, `DustMite`) 16 px, `Snake-Wisps01` 128, ash flakes 128, the dust
+swirls' twig debris (`Ticker01`-`03`, 5 to 20 units, dark) 256, so the debris stays full size: a few flying close had sent the whole
+draw to quarter size, which blurred them into dark smudges (user report, Squin). Both chains draw the reduced-resolution particles twice, against each block's
 nearest depth and against its farthest (`ParticleTargetsFar`), and the composite and the reactive mask take, from each of the four
 nearest texels, both draws weighted bilinearly and by how close each draw's depth is to the pixel's (`ParticleUpsample`): on a
 ridge the near draw's, on the land behind it the far draw's, which holds what lies between them. A farthest-only reduction let dust
@@ -217,6 +266,11 @@ values, widened by the layer at the nearest and farthest surface of the 3 x 3 re
 alone, a pixel beside an outline whose four all fell on one side (as the jitter decides) clamped its history to that side and the outline
 kept a one-pixel staircase (**Observed**, mec-tou-nu save, still camera: hard steps, then intermediate shades as the upscaler's own edge). One surface per pixel (the nearest of the 2 x 2, before) put a hard pixel edge back on the upscaler's smooth
 outline wherever a ridge stood in front of the dust: a staircase. Off an outline the four agree, so drifting dust does not trail.
+On an outline (`outlineLayer`) the upscaler's pixel C already mixes the near surface with the far one without its dust, so a plain mix of the
+layers at the two surfaces let the bare far colour through: a line of sky colour round every ridge in front of dust (user report, 2026-11-08).
+There the layer is chosen so that "over" C gives b (near layer over R) + (1 - b) (far layer over K): R and K the mean scene colours of the 3 x 3
+render pixels on each side (depth split at the geometric mean), b C's share of R (C projected on K → R; the bilinear share where R and K look
+alike). Its colour gains b (1 - b) (far alpha - near alpha) (R - K), floored so the result stays non-negative. **Observed** (user, DLSS, 2026-11-08): the outline gone.
 **Observed** (mec-tou-nu save, DLSS, 1600 x 900): flicker between frames in the dust (99.9th percentile of the second difference) still
 camera 6.5 → 2.5/255, 0.25°-a-frame orbit 25 → 20.5; turning 1.5° and panning 30 units a frame, no trails. A vendor upscaler that fails
 that frame gets them in the scene before the TAA. Effect units beyond 4000 units are stepped at 20 Hz, beyond 9000 at 10 Hz (the cost);

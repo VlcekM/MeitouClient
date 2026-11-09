@@ -1,8 +1,11 @@
 using Meitou.Game;
+using Meitou.Game.Editor;
 
 namespace Meitou.Tests.Ui;
 
-/// <summary>The character editor's camera (<see cref="EditorOrbit"/>, docs/characters.md "Character editor", Preview): drag direction, zoom and the limits.</summary>
+/// <summary>
+/// The character editor's camera (<see cref="EditorOrbit"/>, docs/characters.md "Character editor", Preview): drag direction, zoom and the limits.
+/// </summary>
 public class EditorOrbitTests
 {
     [Fact]
@@ -17,7 +20,8 @@ public class EditorOrbitTests
         Assert.Equal(EditorOrbit.MinElevation, orbit.Elevation);
 
         // The wheel zooms within the limits of the mode.
-        foreach (var (head, near, far) in new[] { (false, EditorOrbit.BodyNear, EditorOrbit.BodyFar), (true, EditorOrbit.HeadNear, EditorOrbit.HeadFar) })
+        foreach (var (head, near, far) in new[] { (false, EditorOrbit.BodyNear, EditorOrbit.BodyFar),
+                (true, EditorOrbit.HeadNear, EditorOrbit.HeadFar) })
         {
             orbit.Reset(head);
             float start = orbit.Distance;

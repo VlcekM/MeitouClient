@@ -2,25 +2,39 @@ using System.Globalization;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>A MultiListBox column (MyGUI <c>addColumn</c>): its caption and width in layout pixels; a Fill column takes the width the others leave (MyGUI's Fill resizing policy), the rest are Fixed.</summary>
+/// <summary>
+/// A MultiListBox column (MyGUI <c>addColumn</c>): its caption and width in layout pixels; a Fill column takes the width the others leave (MyGUI's
+/// Fill resizing policy), the rest are Fixed.
+/// </summary>
 public sealed record UiColumn(string Caption, float Width, bool Fill = false);
 
 public sealed partial class UiBindings
 {
-    /// <summary>The columns of a MultiListBox by widget name; its rows are <see cref="Lists"/> items whose <see cref="UiListItem.Cells"/> hold one text per column.</summary>
+    /// <summary>
+    /// The columns of a MultiListBox by widget name; its rows are <see cref="Lists"/> items whose <see cref="UiListItem.Cells"/> hold one text per
+    /// column.
+    /// </summary>
     public Dictionary<string, IReadOnlyList<UiColumn>> Columns { get; } = new(StringComparer.Ordinal);
-    /// <summary>The sorted column and direction of a MultiListBox (the host overrides it once the user clicks a header).</summary>
+    /// <summary>
+    /// The sorted column and direction of a MultiListBox (the host overrides it once the user clicks a header).
+    /// </summary>
     public Dictionary<string, (int Column, bool Ascending)> Sorts { get; } = new(StringComparer.Ordinal);
-    /// <summary>The canvas of a ScrollView in pixels, for content sized at run time (else its <c>CanvasSize</c> property).</summary>
+    /// <summary>
+    /// The canvas of a ScrollView in pixels, for content sized at run time (else its <c>CanvasSize</c> property).
+    /// </summary>
     public Dictionary<string, (float Width, float Height)> Canvas { get; } = new(StringComparer.Ordinal);
-    /// <summary>ScrollViews whose scrolling the screen implements itself (the map): the generic canvas, bars and offsets leave them alone.</summary>
+    /// <summary>
+    /// ScrollViews whose scrolling the screen implements itself (the map): the generic canvas, bars and offsets leave them alone.
+    /// </summary>
     public HashSet<string> NativeScroll { get; } = new(StringComparer.Ordinal);
     /// <summary>
     /// The height of a control's text as the host's painter would draw it (wrapped to its width when it has <c>WordWrap</c>); null when the host measures no text, so an
     /// EditBox never shows its vertical bar.
     /// </summary>
     public Func<UiControl, float>? TextHeight { get; set; }
-    /// <summary>The ComboBox whose popup list is open (set by the host).</summary>
+    /// <summary>
+    /// The ComboBox whose popup list is open (set by the host).
+    /// </summary>
     public string? OpenCombo { get; set; }
 }
 
@@ -39,7 +53,9 @@ public static partial class MyGuiPresentation
     static bool IsBar(MyGuiWidget w) => w.Type == "ScrollBar" || w.UserStrings.GetValueOrDefault("LE_TargetWidgetType") == "ScrollBar";
     static string? PartText(UiBindings b, IReadOnlyDictionary<string, string> props) =>
         b.Text.Count > 0 && props.TryGetValue("TemplateOwner", out var o) && props.TryGetValue("TemplatePart", out var part) && part.Length > 0 ? b.Coded(o + "." + part) : null;
-    /// <summary>Where the children of a ScrollView's client are placed: the scrolled canvas rather than the client.</summary>
+    /// <summary>
+    /// Where the children of a ScrollView's client are placed: the scrolled canvas rather than the client.
+    /// </summary>
     static UiRect ChildParent(IReadOnlyDictionary<string, string> props, UiRect bounds) => props.TryGetValue("CanvasOrigin", out var s) ? UiRect.Parse(s) : bounds;
 
     static MyGuiWidget? PartOf(MyGuiWidget owner, string part)
@@ -53,7 +69,10 @@ public static partial class MyGuiPresentation
     static int IndexOfPart(List<UiControl> r, MyGuiWidget owner, string part) => PartOf(owner, part) is { } p ? r.FindLastIndex(c => c.Name == p.Name) : -1;
     static string CellOf(UiListItem item, int column) => item.Cells is { } cells ? column >= 0 && column < cells.Count ? cells[column] : "" : column <= 0 ? item.Caption : "";
 
-    /// <summary>The source indices of a list's rows in display order: as bound, or by the MultiListBox's sort column (MyGUI's default comparator is a plain string comparison of the cells).</summary>
+    /// <summary>
+    /// The source indices of a list's rows in display order: as bound, or by the MultiListBox's sort column (MyGUI's default comparator is a plain
+    /// string comparison of the cells).
+    /// </summary>
     public static int[] ListOrder(UiBindings b, string name)
     {
         if (!b.Lists.TryGetValue(name, out var items)) return [];
@@ -66,7 +85,9 @@ public static partial class MyGuiPresentation
         return order.ToArray();
     }
 
-    /// <summary>After a widget's children: the run-time content and geometry of the widgets that have it.</summary>
+    /// <summary>
+    /// After a widget's children: the run-time content and geometry of the widgets that have it.
+    /// </summary>
     static void AddWidgetContent(List<UiControl> result, UiBindings b, MyGuiWidget w, Dictionary<string, string> props, UiRect bounds, UiRect clip, bool enabled, float alpha,
         UiRect viewport, VisitWidget visit, List<Action> deferred)
     {
@@ -136,7 +157,9 @@ public static partial class MyGuiPresentation
     {
         int ci = IndexOfPart(result, w, "Client");
         var area = ci >= 0 ? result[ci].Bounds : bounds;
-        float line = w.UserStrings.TryGetValue("HeightLine", out var heightLine) && float.TryParse(heightLine, NumberStyles.Float, Inv, out float height) && height >= 1 ? height * b.TemplateScale : DefaultLine;
+        // A client-set LineHeight (pixels) wins over the skin's HeightLine (an ItemBox's cells are the client's size, the jobs list's int(24 x height / 1080)).
+        float line = props.TryGetValue("LineHeight", out var lineHeight) && float.TryParse(lineHeight, NumberStyles.Float, Inv, out float pixels) && pixels >= 1 ? pixels
+            : w.UserStrings.TryGetValue("HeightLine", out var heightLine) && float.TryParse(heightLine, NumberStyles.Float, Inv, out float height) && height >= 1 ? height * b.TemplateScale : DefaultLine;
         float content = items.Count * line, view = area.Height, max = content - view >= 1 ? content - view : 0;
         var barWidget = PartOf(w, "VScroll");
         int bi = barWidget is null ? -1 : result.FindLastIndex(c => c.Name == barWidget.Name);
@@ -165,7 +188,10 @@ public static partial class MyGuiPresentation
             if (row.Intersect(rowClip).Height <= 0) continue;
             var rowProperties = new Dictionary<string, string>
             {
-                ["ListOwner"] = scrollKey, ["ListCount"] = count, ["FontName"] = props.GetValueOrDefault("LineFont") ?? "Kenshi_StandardFont_Medium", ["TextAlign"] = "Left VCenter",
+                ["ListOwner"] = scrollKey,
+                ["ListCount"] = count,
+                ["FontName"] = props.GetValueOrDefault("LineFont") ?? "Kenshi_StandardFont_Medium",
+                ["TextAlign"] = "Left VCenter",
             };
             if (lineSkin is null) rowProperties["TextPadding"] = "4 2 4 2";
             if (lineSkin is null || props.ContainsKey("TextColour")) rowProperties["TextColour"] = ink;
@@ -244,7 +270,10 @@ public static partial class MyGuiPresentation
         result.RemoveRange(bi, n);
     }
 
-    /// <summary>A ScrollBar that no widget drives (a slider): positions run 0 to <c>Range</c> - 1, the host keeps the position (<see cref="UiBindings.ScrollOffsets"/>, else <c>RangePosition</c>, else the skin's thumb).</summary>
+    /// <summary>
+    /// A ScrollBar that no widget drives (a slider): positions run 0 to <c>Range</c> - 1, the host keeps the position
+    /// (<see cref="UiBindings.ScrollOffsets"/>, else <c>RangePosition</c>, else the skin's thumb).
+    /// </summary>
     static void FreeBar(List<UiControl> result, UiBindings b, MyGuiWidget w, Dictionary<string, string> props)
     {
         float? pos = b.ScrollOffsets.TryGetValue(w.Name, out float stored) ? stored : props.ContainsKey("RangePosition") ? Num(props, "RangePosition") : null;
@@ -354,7 +383,11 @@ public static partial class MyGuiPresentation
         if (y + length > viewport.Height) y = bounds.Y - length >= 0 ? bounds.Y - length : Math.Max(0, viewport.Height - length);
         var properties = new Dictionary<string, string>(list.Properties, StringComparer.Ordinal)
         {
-            ["ListSource"] = w.Name, ["ListSel"] = w.Name, ["ListScroll"] = w.Name + "@popup", ["RowAction"] = "mygui:combo", ["ListBar"] = "true",
+            ["ListSource"] = w.Name,
+            ["ListSel"] = w.Name,
+            ["ListScroll"] = w.Name + "@popup",
+            ["RowAction"] = "mygui:combo",
+            ["ListBar"] = "true",
         };
         properties.Remove("Visible"); properties.Remove("TemplateReferenceWidth"); properties.Remove("TemplateReferenceHeight");
         var popup = list with { Position = new(bounds.X, y, bounds.Width, length), RealPosition = false, Properties = properties };
@@ -389,11 +422,15 @@ public static partial class MyGuiPresentation
             b.Actions[button.Name] = $"mygui:sort:{w.Name}:{i}";
             if (button.DescendantsAndSelf().FirstOrDefault(n => n.Properties.GetValueOrDefault("TemplatePart") == "Image") is { } image)
                 b.Properties[image.Name] = new Dictionary<string, string>(b.Properties.GetValueOrDefault(image.Name) ?? new Dictionary<string, string>(), StringComparer.Ordinal)
-                    { ["ImageName"] = i == sortColumn ? ascending ? "Up" : "Down" : "None" };
+                { ["ImageName"] = i == sortColumn ? ascending ? "Up" : "Down" : "None" };
             visit(button, header.Bounds, headerClip, enabled, alpha);
             var list = CloneAs(listPrototype, name + "-list", new(x, 0, width, client.Bounds.Height), new Dictionary<string, string>
             {
-                ["ListSource"] = w.Name, ["ListSel"] = w.Name, ["ListScroll"] = w.Name, ["ListColumn"] = i.ToString(Inv), ["ListBar"] = i == columns.Count - 1 ? "true" : "false",
+                ["ListSource"] = w.Name,
+                ["ListSel"] = w.Name,
+                ["ListScroll"] = w.Name,
+                ["ListColumn"] = i.ToString(Inv),
+                ["ListBar"] = i == columns.Count - 1 ? "true" : "false",
             });
             visit(list, client.Bounds, clientClip, enabled, alpha);
             x += width;
@@ -401,7 +438,10 @@ public static partial class MyGuiPresentation
         props["ListKey"] = w.Name;
     }
 
-    /// <summary>A prototype widget (and its expanded parts) renamed to <paramref name="name"/> and placed at <paramref name="position"/> (pixels in its parent), with extra properties on the root.</summary>
+    /// <summary>
+    /// A prototype widget (and its expanded parts) renamed to <paramref name="name"/> and placed at <paramref name="position"/> (pixels in its
+    /// parent), with extra properties on the root.
+    /// </summary>
     static MyGuiWidget CloneAs(MyGuiWidget prototype, string name, UiRect position, IReadOnlyDictionary<string, string>? extra)
     {
         string from = prototype.Name;

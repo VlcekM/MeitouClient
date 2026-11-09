@@ -47,7 +47,8 @@ public class WorldObjectLayoutTests
             Assert.Equal(roll <= 40, kept.Count == 1);
         }
 
-        // Other groups: one roll per group (also with a single entry), over the total of every entry (0 counts as 100); the walk takes the first entry whose chance is not below the roll.
+        // Other groups: one roll per group (also with a single entry), over the total of every entry (0 counts as 100); the walk takes the first
+        // entry whose chance is not below the roll.
         for (uint seed = 0; seed < 50; seed++)
         {
             float roll = new BuildingRandom(seed).NextFloat(0, 25 + 100 + 30 + 75);
@@ -59,7 +60,8 @@ public class WorldObjectLayoutTests
         }
 
         // Groups are visited in ascending order, one draw each, group 0 first.
-        var order = WorldObjectLayout.ChooseParts([Part("g18", 18, 100), Part("g2", 2, 100), Part("g1", 1, 100), Part("z", 0, 0)], Exists, new BuildingRandom(0));
+        var order = WorldObjectLayout.ChooseParts([Part("g18", 18, 100), Part("g2", 2, 100), Part("g1", 1, 100), Part("z", 0, 0)], Exists,
+                new BuildingRandom(0));
         Assert.Equal(["z", "g1", "g2", "g18"], order.Select(p => p.TargetStringId));
     }
 
@@ -82,7 +84,8 @@ public class WorldObjectLayoutTests
             var buildingState = new BuildingState(state?.GetBool("destroyed") ?? false, towns.MaterialOf(towns.TownOf(state, b.Position)));
             var meshes = WorldObjectLayout.Building(db, record, b.InstanceId, b.Position, b.Rotation, buildingState);
             // The same position gives the same parts.
-            Assert.Equal(meshes.Select(m => m.Source.StringId), WorldObjectLayout.Building(db, record, "other id", b.Position, b.Rotation, buildingState).Select(m => m.Source.StringId));
+            Assert.Equal(meshes.Select(m => m.Source.StringId),
+                    WorldObjectLayout.Building(db, record, "other id", b.Position, b.Rotation, buildingState).Select(m => m.Source.StringId));
             if (meshes.Any(m => m.Owner != record)) withDoors++;
             if (meshes.Count == 0)
             {
@@ -91,7 +94,7 @@ public class WorldObjectLayoutTests
                 continue;
             }
             Assert.All(meshes, m => Assert.Contains(".mesh", m.MeshPath, StringComparison.Ordinal));
-            noMaterial += meshes.Count(m => m.Material is not { Type: FcsRecordType.MATERIAL_SPEC });
+            noMaterial += meshes.Count(m => m.Material is not { Type: FcsRecordType.MaterialSpec });
         }
         // Resource buildings are foliage companions (1,335 placements); one Ramp has no parts at all (Observed 2026-10-04).
         Assert.InRange(foliage, 1300, 1400);

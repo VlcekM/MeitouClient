@@ -6,11 +6,11 @@ namespace Meitou.Data.Characters;
 /// </summary>
 public sealed class MsvcRandom(uint seed)
 {
-    uint state = seed;
+    uint _state = seed;
 
     /// <summary>
-    /// A sequence for one of Meitou's per-look seeds (engine choice: the original seeds once from the clock and keeps one sequence): the seed scrambled first
-    /// (murmur3's finaliser), as neighbouring <c>srand</c> seeds start with nearly the same draws.
+    /// A sequence for one of Meitou's per-look seeds (engine choice: the original seeds once from the clock and keeps one sequence): the seed
+    /// scrambled first (murmur3's finaliser), as neighbouring <c>srand</c> seeds start with nearly the same draws.
     /// </summary>
     public static MsvcRandom FromSeed(int seed)
     {
@@ -23,20 +23,28 @@ public sealed class MsvcRandom(uint seed)
         return new MsvcRandom(h);
     }
 
-    /// <summary><c>rand()</c>: 0 to 32767.</summary>
+    /// <summary>
+    /// <c>rand()</c>: 0 to 32767.
+    /// </summary>
     public int Next()
     {
-        state = state * 214013 + 2531011;
-        return (int)(state >> 16 & 0x7FFF);
+        _state = _state * 214013 + 2531011;
+        return (int)(_state >> 16 & 0x7FFF);
     }
 
-    /// <summary><c>FUN_1409b1c10</c>: <c>rand() / 32768</c>, in [0, 1).</summary>
+    /// <summary>
+    /// <c>FUN_1409b1c10</c>: <c>rand() / 32768</c>, in [0, 1).
+    /// </summary>
     public float Unit() => (float)(Next() * (1.0 / 32768));
 
-    /// <summary><c>FUN_1409b1c80</c>: <c>rand() / 32768 × (max − min) + min</c>, in floats.</summary>
+    /// <summary>
+    /// <c>FUN_1409b1c80</c>: <c>rand() / 32768 × (max − min) + min</c>, in floats.
+    /// </summary>
     public float Range(float min, float max) => Next() * 3.0517578e-05f * (max - min) + min;
 
-    /// <summary><c>FUN_1409b3b40</c>: <c>min + (int)(rand() / 32768 × (max − min + 1))</c>, clamped to [min, max].</summary>
+    /// <summary>
+    /// <c>FUN_1409b3b40</c>: <c>min + (int)(rand() / 32768 × (max − min + 1))</c>, clamped to [min, max].
+    /// </summary>
     public int Int(int min, int max)
     {
         int value = min - (int)(Next() * -3.0517578e-05f * (max - min + 1));

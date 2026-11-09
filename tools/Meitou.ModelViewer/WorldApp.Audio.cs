@@ -1,6 +1,6 @@
-using Meitou.Audio;
-using Meitou.Rendering;
-using static Meitou.Rendering.WorldFrame;
+using Meitou.Game.Audio;
+using Meitou.Game.Rendering.Frame;
+using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 

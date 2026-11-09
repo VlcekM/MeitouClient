@@ -34,13 +34,15 @@ New-Item -ItemType Directory -Force $stage, $Cache | Out-Null
 
 # The game, the world viewer (meitou-viewer) and meitou-tools, self-contained (no .NET install needed) and not single-file: the runtime and our
 # Meitou.*.dll lie beside the executables, shared by all three (same build, same runtime), so code mods can reference and load them. A numeric
-# version goes into the assembly version too.
+# version goes into the assembly version too, and v<version> is the embedded game tag (BuildGitTag): the workflows tag the commit only after
+# packaging, so git describe would still find the previous tag.
 $numeric = if ($Version -match '^\d+(\.\d+){1,3}') { $Matches[0] } else { "0.0.0" }
 # meitou-tools joins them for modders: mod-check runs a save with code mods and compares the runs (docs/modding.md "Determinism check").
-$projects = @("src/Meitou.Game/Meitou.Game.csproj", "tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meitou.Tools/Meitou.Tools.csproj")
+# The game goes last: the viewer and meitou-tools reference it and bring copies of its runtimeconfig and deps, which its own publish then replaces.
+$projects = @("tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj", "tools/Meitou.Tools/Meitou.Tools.csproj", "src/Meitou.Game/Meitou.Game.csproj")
 foreach ($project in $projects) {
     dotnet publish (Join-Path $root $project) -c Release -r $Rid --self-contained true `
-        -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -o $stage
+        -p:DebugType=embedded -p:Version=$numeric -p:InformationalVersion=$Version -p:BuildGitTag=v$Version -o $stage
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish $project failed" }
 }
 # The Unix runtime packs carry native debug symbols (*.dbg, *.dwarf, *.dSYM; ~250 MB): not shipped.
@@ -79,10 +81,12 @@ if ($windows) {
     # The viewer loads Streamline only when started with DLSS chosen (the game loads it on every startup).
     Set-Content -Path (Join-Path $stage "meitou-viewer-dlss.bat") -Encoding ASCII -Value "@`"%~dp0meitou-viewer.exe`" --world --town `"The Hub`" --upscaler dlss %*`r`n@if errorlevel 1 pause"
 
-    # NVIDIA Streamline 2.14.16 (the headers src/Meitou.Rendering/Upscalers/Streamline.cs follows): the production (signed) plugins of bin/x64,
+    # NVIDIA Streamline 2.14.16 (the headers src/Meitou.Game/Rendering/Upscalers/Streamline.cs follows): the production (signed) plugins of bin/x64,
     # not bin/x64/development, and the DLSS runtime. Loaded next to the exe (Streamline.cs).
     $sl = Get-Archive "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.16/streamline-sdk-v2.14.16.zip"
-    Copy-Entries $sl @("bin/x64/sl.interposer.dll", "bin/x64/sl.common.dll", "bin/x64/sl.dlss.dll", "bin/x64/nvngx_dlss.dll", "bin/x64/NvLowLatencyVk.dll") $stage
+    # DLSS frame generation adds sl.dlss_g, its model nvngx_dlssg and Reflex (sl.reflex, sl.pcl), loaded only when the setting picks it (Streamline.cs).
+    Copy-Entries $sl @("bin/x64/sl.interposer.dll", "bin/x64/sl.common.dll", "bin/x64/sl.dlss.dll", "bin/x64/nvngx_dlss.dll", "bin/x64/NvLowLatencyVk.dll",
+        "bin/x64/sl.dlss_g.dll", "bin/x64/nvngx_dlssg.dll", "bin/x64/sl.reflex.dll", "bin/x64/sl.pcl.dll") $stage
     Copy-Entries $sl @("license.txt", "3rd-party-licenses.md", "bin/x64/nvngx_dlss.license.txt", "bin/x64/reflex.license.txt") (Join-Path $stage "licenses/NVIDIA") "streamline-"
 
     # AMD FidelityFX SDK 1.1.4 (the FidelityFX API headers FsrUpscaler.cs follows): its signed prebuilt Vulkan library.

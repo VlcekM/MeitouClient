@@ -9,12 +9,14 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed record SkyClock(float LatitudeDegrees, float Sunrise, float Sunset)
 {
-    /// <summary>The game's fallback when <c>sunset</c> is not after <c>sunrise</c>.</summary>
+    /// <summary>
+    /// The game's fallback when <c>sunset</c> is not after <c>sunrise</c>.
+    /// </summary>
     public static readonly SkyClock Fallback = new(0, 6, 20);
 
     public static SkyClock FromDatabase(GameDatabase db)
     {
-        var c = db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.CONSTANTS).FirstOrDefault();
+        var c = db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault();
         if (c is null) return Fallback;
         float rise = c.GetFloat("sunrise", 6), set = c.GetFloat("sunset", 20);
         if (set <= rise) (rise, set) = (Fallback.Sunrise, Fallback.Sunset);
@@ -75,29 +77,49 @@ public static class SkyAtmosphere
     /// <c>AtmosphereManager::_update</c> reads as the green wavelength.
     /// </summary>
     public static readonly Vector3 WaveLength = new(0.57f, 0.48f, 0.44f);
-    /// <summary>Mie anisotropy as SkyX's shaders use it (the cosine is taken towards the eye, so the negative value gives a lobe round the sun).</summary>
+    /// <summary>
+    /// Mie anisotropy as SkyX's shaders use it (the cosine is taken towards the eye, so the negative value gives a lobe round the sun).
+    /// </summary>
     public const float PhaseG = -0.991f;
-    /// <summary>SkyX's <c>uExposure</c>, the factor on the scattered light in HDR mode.</summary>
+    /// <summary>
+    /// SkyX's <c>uExposure</c>, the factor on the scattered light in HDR mode.
+    /// </summary>
     public const float Exposure = 1.4f;
     public const int Samples = 4;
 
-    /// <summary>Atmosphere thickness in SkyX units.</summary>
+    /// <summary>
+    /// Atmosphere thickness in SkyX units.
+    /// </summary>
     public const float Thickness = OuterRadius - InnerRadius;
-    /// <summary>SkyX's <c>uScaleDepth</c>: half the thickness.</summary>
+    /// <summary>
+    /// SkyX's <c>uScaleDepth</c>: half the thickness.
+    /// </summary>
     public const float ScaleDepth = Thickness / 2;
-    /// <summary>Density scale height in SkyX units: <c>1 / uScaleOverScaleDepth = thickness² / 2</c>.</summary>
+    /// <summary>
+    /// Density scale height in SkyX units: <c>1 / uScaleOverScaleDepth = thickness² / 2</c>.
+    /// </summary>
     public const float ScaleHeight = Thickness * Thickness / 2;
-    /// <summary>The height of SkyX's camera (its <c>uCameraPos.y</c>), above the planet's centre.</summary>
+    /// <summary>
+    /// The height of SkyX's camera (its <c>uCameraPos.y</c>), above the planet's centre.
+    /// </summary>
     public const float CameraY = InnerRadius + HeightPosition * Thickness;
     public const float KrESun = RayleighMultiplier * SunIntensity, KmESun = MieMultiplier * SunIntensity;
     public const float Kr4Pi = RayleighMultiplier * 4 * MathF.PI, Km4Pi = MieMultiplier * 4 * MathF.PI;
-    /// <summary><c>1 / wavelength⁴</c> per channel (SkyX's <c>uInvWaveLength</c>).</summary>
+    /// <summary>
+    /// <c>1 / wavelength⁴</c> per channel (SkyX's <c>uInvWaveLength</c>).
+    /// </summary>
     public static Vector3 InverseWaveLength4 => new(1 / MathF.Pow(WaveLength.X, 4), 1 / MathF.Pow(WaveLength.Y, 4), 1 / MathF.Pow(WaveLength.Z, 4));
-    /// <summary>Extinction per unit of density-weighted path, per channel: <c>invλ⁴ · Kr · 4π + Km · 4π</c>.</summary>
+    /// <summary>
+    /// Extinction per unit of density-weighted path, per channel: <c>invλ⁴ · Kr · 4π + Km · 4π</c>.
+    /// </summary>
     public static Vector3 Extinction => InverseWaveLength4 * Kr4Pi + new Vector3(Km4Pi);
-    /// <summary>Rayleigh optical depth of a vertical ray from sea level to space, per channel (<c>Kr · 4π · invλ⁴ · scaleDepth</c>).</summary>
+    /// <summary>
+    /// Rayleigh optical depth of a vertical ray from sea level to space, per channel (<c>Kr · 4π · invλ⁴ · scaleDepth</c>).
+    /// </summary>
     public static Vector3 RayleighZenithDepth => InverseWaveLength4 * (Kr4Pi * ScaleDepth);
-    /// <summary>Mie optical depth of a vertical ray (<c>Km · 4π · scaleDepth</c>).</summary>
+    /// <summary>
+    /// Mie optical depth of a vertical ray (<c>Km · 4π · scaleDepth</c>).
+    /// </summary>
     public const float MieZenithDepth = Km4Pi * ScaleDepth;
 }
 
@@ -109,10 +131,15 @@ public static class SkyAtmosphere
 /// </summary>
 public static class SkyXModel
 {
-    /// <summary>The lowest optical depth a sample may have (a viewer guard against the fit's runaway on steep downward rays, see <see cref="InScatter(Vector3, float, Vector3, out float)"/>).</summary>
+    /// <summary>
+    /// The lowest optical depth a sample may have (a viewer guard against the fit's runaway on steep downward rays, see
+    /// <see cref="InScatter(Vector3, float, Vector3, out float)"/>).
+    /// </summary>
     public const float OpticalFloor = -1;
 
-    /// <summary>O'Neil's scale function: the optical depth towards the top of the air at a zenith cosine, in units of the scale depth.</summary>
+    /// <summary>
+    /// O'Neil's scale function: the optical depth towards the top of the air at a zenith cosine, in units of the scale depth.
+    /// </summary>
     public static float Scale(float cos)
     {
         float x = 1 - cos;
@@ -151,10 +178,14 @@ public static class SkyXModel
 
     public static Vector3 InScatter(Vector3 ray, float length, Vector3 sun) => InScatter(ray, length, sun, out _);
 
-    /// <summary>SkyX's Rayleigh phase function, <c>0.75 (1 + 0.5 cos²)</c>.</summary>
+    /// <summary>
+    /// SkyX's Rayleigh phase function, <c>0.75 (1 + 0.5 cos²)</c>.
+    /// </summary>
     public static float RayleighPhase(float cos) => 0.75f * (1 + 0.5f * cos * cos);
 
-    /// <summary>SkyX's Mie phase function (Cornette-Shanks form) with the game's g; <paramref name="cos"/> as SkyX takes it, towards the eye.</summary>
+    /// <summary>
+    /// SkyX's Mie phase function (Cornette-Shanks form) with the game's g; <paramref name="cos"/> as SkyX takes it, towards the eye.
+    /// </summary>
     public static float MiePhase(float cos)
     {
         const float g = SkyAtmosphere.PhaseG, g2 = g * g;
@@ -191,15 +222,26 @@ public static class SkyXModel
 /// </summary>
 public static class KenshiHaze
 {
-    /// <summary>The <c>view distance</c> setting in the install's <c>settings.cfg</c> (Observed); its options slider is given 1500 and 12000, presumably the range (Observed).</summary>
+    /// <summary>
+    /// The <c>view distance</c> setting in the install's <c>settings.cfg</c> (Observed); its options slider is given 1500 and 12000, presumably the
+    /// range (Observed).
+    /// </summary>
     public const float ViewDistanceSetting = 5000;
-    /// <summary>The game's far distance D: <c>view distance × 10</c>, also its far clip.</summary>
+    /// <summary>
+    /// The game's far distance D: <c>view distance × 10</c>, also its far clip.
+    /// </summary>
     public static float FarDistance(float viewDistance) => viewDistance * 10;
-    /// <summary>The haze starts at <c>0.06 D</c> and is complete at <c>min(D, 0.6 D)</c> (pFogParams y and z).</summary>
+    /// <summary>
+    /// The haze starts at <c>0.06 D</c> and is complete at <c>min(D, 0.6 D)</c> (pFogParams y and z).
+    /// </summary>
     public const float StartFraction = 0.06f, EndFraction = 0.6f;
-    /// <summary>World units per SkyX unit for the fog's ray (<c>uSkydomeRadius</c> of <c>SkyXFogParams</c>, never set at run time).</summary>
+    /// <summary>
+    /// World units per SkyX unit for the fog's ray (<c>uSkydomeRadius</c> of <c>SkyXFogParams</c>, never set at run time).
+    /// </summary>
     public const float DomeRadius = 70000;
-    /// <summary>The fog's eye height in SkyX units: SkyX's camera.</summary>
+    /// <summary>
+    /// The fog's eye height in SkyX units: SkyX's camera.
+    /// </summary>
     public const float CameraY = SkyAtmosphere.CameraY;
 
     /// <summary>

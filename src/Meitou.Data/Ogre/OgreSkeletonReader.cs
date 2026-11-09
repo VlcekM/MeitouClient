@@ -3,23 +3,26 @@ using static Meitou.Data.Ogre.OgreSkeletonChunk;
 namespace Meitou.Data.Ogre;
 
 /// <summary>
-/// Reads Ogre <c>.skeleton</c> files, serializer versions 1.80 and 1.10 (everything Kenshi ships).
-/// Follows the structure of Ogre's own SkeletonSerializer (MIT): chunks are parsed field by field.
-/// Bone chunk lengths never count the bone's name, so they can't be used to step over a bone; Ogre
-/// only compares them against a fixed size to tell whether a scale follows.
+/// Reads Ogre <c>.skeleton</c> files, serializer versions 1.80 and 1.10 (everything Kenshi ships). Follows the structure of Ogre's own
+/// SkeletonSerializer (MIT): chunks are parsed field by field. Bone chunk lengths never count the bone's name, so they can't be used to step over a
+/// bone; Ogre only compares them against a fixed size to tell whether a scale follows.
 /// </summary>
 public static class OgreSkeletonReader
 {
-    public const string Version1_80 = "[Serializer_v1.80]";
-    public const string Version1_10 = "[Serializer_v1.10]";
+    public const string Version180 = "[Serializer_v1.80]";
+    public const string Version110 = "[Serializer_v1.10]";
 
-    /// <summary>Chunk header, handle, position and orientation; the name is not counted. Ogre's <c>calcBoneSizeWithoutScale</c>.</summary>
+    /// <summary>
+    /// Chunk header, handle, position and orientation; the name is not counted. Ogre's <c>calcBoneSizeWithoutScale</c>.
+    /// </summary>
     public const int BoneLengthWithoutScale = OgreStream.ChunkHeaderSize + 2 + 3 * 4 + 4 * 4;
 
-    /// <summary>Chunk header, time, rotation and translation. Ogre's <c>calcKeyFrameSizeWithoutScale</c>.</summary>
+    /// <summary>
+    /// Chunk header, time, rotation and translation. Ogre's <c>calcKeyFrameSizeWithoutScale</c>.
+    /// </summary>
     public const int KeyFrameLengthWithoutScale = OgreStream.ChunkHeaderSize + 4 + 4 * 4 + 3 * 4;
 
-    public static OgreSkeleton ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static OgreSkeleton ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     public static OgreSkeleton Read(byte[] data)
     {
@@ -27,7 +30,7 @@ public static class OgreSkeletonReader
         try
         {
             var skeleton = new OgreSkeleton { Version = s.ReadHeader() };
-            if (skeleton.Version is not (Version1_80 or Version1_10))
+            if (skeleton.Version is not (Version180 or Version110))
                 throw new OgreFormatException($"Unsupported skeleton version {skeleton.Version}.", 0);
 
             var bones = new Dictionary<ushort, OgreBone>();

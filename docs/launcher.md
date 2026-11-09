@@ -98,7 +98,7 @@ both osx RIDs on macOS) and attaches all four zips to the one `v<version>` relea
 Native dependencies off Windows:
 - Bundled from NuGet runtimes (**Verified** in the linux-x64 publish output): `libopenal.so`/`.dylib` (OpenAL Soft 1.23.1),
   `libglfw.so.3`/`.3.dylib` (GLFW 3.4), `libshaderc_shared`.
-- Only in the win-x64 zip: DLSS/Streamline 2.14.16 (`sl.*.dll`, `nvngx_dlss.dll`, `NvLowLatencyVk.dll`) and FSR (`amd_fidelityfx_vk.dll`),
+- Only in the win-x64 zip: DLSS/Streamline 2.14.16 (`sl.*.dll`, `nvngx_dlss.dll`, `nvngx_dlssg.dll`, `NvLowLatencyVk.dll`) and FSR (`amd_fidelityfx_vk.dll`),
   copied from the vendor SDK zips by `package-release.ps1`; both load via `NativeLibrary.TryLoad` and report a reason when missing. `FsrUpscaler` also loads the Vulkan loader by name (`vulkan-1.dll`, `libvulkan.1.dylib` on macOS).
 - Only in the linux-x64 zip: the DLSS model `libnvidia-ngx-dlss.so.310.9.16` (NVIDIA DLSS SDK 310.9.16, `lib/Linux_x86_64/rel`) and NGX's
   client library `libmeitou_ngx.so` (the SDK's static `libnvsdk_ngx.a`, linked by `tools/scripts/build-ngx-shim.sh`), with NVIDIA's licence,
@@ -182,7 +182,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   Traced), `Ambient occlusion type` (Off / SSAO / GTAO), `Global illumination` (Off / Probes / Probes + hybrid). The switches they stand for
   (`WorldFrame.ChoiceDrivenSwitches`) are not listed but stay saved; the game applies a saved choice after them at start, so the launcher's choice wins
   and an older file of switches alone keeps its look.
-- A section's `groups` (null in older schemas: flat rows) are the menu's features (`SettingsMenu.FeatureGroups`): one row headed by
+- A section's `groups` (null in older schemas: flat rows) are the menu's features (`FeatureGrouping.FeatureGroups`): one row headed by
   a setting (`header`) or a `title` and `description`, with an arrow folding its `members` under it (closed until opened; open ones stay
   open while the launcher runs), named without the feature's name they repeat, as in the game.
 - The Look row is the game's look bar: Faithful | Meitou, the preset (`looks.presets`, then the player's files), the changes from it
@@ -194,7 +194,7 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   `values`). A look is a set of `graphics` values, as the game's menu applies it: `looks.faithful` (every Faithful / Meitou effect
   switch off but the performance ones, the look sliders at the game's value) or `looks.meitou` with the preset's own values over them (the quality tier's
   switches are left to the tier). Choosing one writes them, so the rows show it at once and the game counts no change from it; at Low
-  the game still holds the tier's look switches off at start unless kept on (`SettingsMenu.ApplySavedPreset`). No `faithfulLook`
+  the game still holds the tier's look switches off at start unless kept on (`QualityTiers.ApplySavedPreset`). No `faithfulLook`
   reads Faithful when every switch Faithful turns off and Meitou turns on is saved off, as the game does (unsaved, not written back). A look slider's Default writes the look's value.
 - `presets` (null in older schemas: no row) is the Quality preset row over the top-level `graphicsPreset`. The game saves the preset its
   settings sit at (Custom when none) and at start applies a saved one they do not sit at (not under `--low-end`, `--benchmark-baseline`, `--meitou` or `--faithful`), so a preset chosen in
@@ -211,7 +211,8 @@ setting reaches the launcher with its release; the launcher knows none of them. 
   A failed detection is tried again at the next start.
 - Each setting has one control: a switch a Faithful (0) / Meitou (1) drop-down, a slider with `labels` a drop-down of them, a slider with `modes`
   (named values; render scale's Ultra performance 0.33 to DLAA 1.00) a drop-down of them and Custom with the slider under it, locked to the
-  mode's value but under Custom (the game's Display page alike; a value none of them reads Custom), any other slider a slider with a typed value; unsaved, a row shows the game's start value (`shown`). A look setting that differs from the look's
+  mode's value but under Custom (the game's Display page alike; a value none of them reads Custom), any other slider a slider with a typed value; unsaved, a row shows the game's start value (`shown`). A setting with `shownWhen` (`key`, `value`)
+  is shown only while that setting is at that value (the DLSS preset while anti-aliasing is DLSS; the game's Display page alike). A look setting that differs from the look's
   value has its name in brass and a Reset link that writes it, and so does its feature's header (for all of them, as in the game); quality and display settings are never marked (the Quality row reads Custom),
   as in the game's menu. Reset graphics, in a footer
   under the scrolling rows, removes `graphics`, `graphicsPreset`, `faithfulLook` and `lookPreset`. A top-level Default writes the schema's `default`.
@@ -254,23 +255,20 @@ interpolated string, which no translation could match.
 
 - Shown as the original launcher shows it: enabled mods in `mods.cfg` order first, then the rest after their header dependencies.
   Mods in a dependency cycle are kept at the end, where the original drops them. Mods not in `__mods.list` are new and start enabled.
-- Saving (Save, Play) writes `mods.cfg` (enabled `<name>.mod`, list order, CRLF) and `__mods.list` (every listed name, plus old
-  names not on disk). These are the files the original game reads, so the mod list applies to it too.
-- Discovery and the header reads run off the UI thread while the window opens; until they finish (or when they fail) Save, Play
-  and the preset buttons refuse, so an unloaded list never overwrites `mods.cfg`.
+- Every change to the list (a tick, a drag, a preset, Arrange, From save) and Play write `mods.cfg` (enabled `<name>.mod`, list
+  order, CRLF) and `__mods.list` (every listed name, plus old names not on disk). These are the files the original game reads, so the mod list applies to it too.
+- Discovery and the header reads run off the UI thread while the window opens; until they finish (or when they fail) Play and the
+  preset buttons refuse, and nothing is saved, so an unloaded list never overwrites `mods.cfg`.
 - A preset is a named, ordered list of names with enabled flags. Applying one reorders the list. Mods the preset doesn't name go
-  to the end, disabled, and mods it names that aren't on disk are reported. Applying doesn't save.
+  to the end, disabled, and mods it names that aren't on disk are reported. Applying saves.
 - From save lists the save folders (with `quick.save`) of Meitou's save root, the install's `save` and the per-user Kenshi save folder,
   newest first and labelled by root, and applies the chosen save's CAMERA `mods` list ([save](formats/save.md#camera-type-56-id-1051-the-world-record))
   as an all-enabled preset, without `base` and the core mods. `SaveModList` (Meitou.Core) reads it; **Verified** equal to
   `SaveCamera.Mods` on 22 of the owner's saves (0 to 180 mods).
 - A mod folder with `RE_Kenshi.json` is marked as a plugin mod whose DLLs Meitou ignores ([RE_Kenshi](formats/rekenshi.md)), unless it
   also has `meitou.json`: then only the code-mod note shows.
-- A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)). Play asks about the enabled code mods not decided
-  yet; the Code mods button beside Save mod list asks about every code mod in the list, so a choice can be changed or revoked. The
-  question has a box per mod (ticked: allowed now) and three answers: Data only all, Trust all, Apply (the ticks). Escape decides
-  nothing. Allowed names go to `trustedCodeMods` in `meitou.user.json` (kept by game releases since 2026-10-20, which keep unknown
-  keys); data-only names go to the launcher's `DataOnlyCodeMods`, so Play does not ask about them again.
+- A mod folder with `meitou.json` is marked as a code mod ([modding](modding.md)); enabled, its code runs, with no question
+  ([Trust](modding.md#trust)).
 - A code mod's row lists what it requires, loads after and conflicts with, and each refusal the game would make without its code
   (preliminary: DLLs and initialization are checked only at start); **Arrange** proposes an
   order meeting the enabled mods' code and `.mod` header dependencies, applied only when accepted and saved only by Save or Play; a

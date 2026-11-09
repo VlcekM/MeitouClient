@@ -10,51 +10,55 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class GroundHeights
 {
-    readonly HeightWindow window;
-    readonly ushort[]? coarse;
-    readonly int coarseSize;
-    readonly int coarseStep;
+    readonly HeightWindow _window;
+    readonly ushort[]? _coarse;
+    readonly int _coarseSize;
+    readonly int _coarseStep;
 
     public GroundHeights(HeightWindow window, ushort[]? coarse = null, int coarseSize = 0, int coarseStep = 8)
     {
-        this.window = window ?? throw new ArgumentNullException(nameof(window));
-        this.coarse = coarse;
-        this.coarseSize = coarseSize;
-        this.coarseStep = coarseStep;
+        this._window = window ?? throw new ArgumentNullException(nameof(window));
+        this._coarse = coarse;
+        this._coarseSize = coarseSize;
+        this._coarseStep = coarseStep;
     }
 
-    /// <summary>World height at X/Z, in world units.</summary>
+    /// <summary>
+    /// World height at X/Z, in world units.
+    /// </summary>
     public float HeightAt(float x, float z)
     {
-        double step = window.Step;
+        double step = _window.Step;
         var (col, row) = WorldLayout.ToSample(x, z);
-        double u = (col - window.Column0) / step, v = (row - window.Row0) / step;
-        if (u >= 0 && v >= 0 && u <= window.Columns - 1 && v <= window.Rows - 1)
+        double u = (col - _window.Column0) / step, v = (row - _window.Row0) / step;
+        if (u >= 0 && v >= 0 && u <= _window.Columns - 1 && v <= _window.Rows - 1)
         {
-            int i = Math.Min((int)u, window.Columns - 2), j = Math.Min((int)v, window.Rows - 2);
-            if (i < 0 || j < 0) return window.Height(Math.Max(i, 0), Math.Max(j, 0));
+            int i = Math.Min((int)u, _window.Columns - 2), j = Math.Min((int)v, _window.Rows - 2);
+            if (i < 0 || j < 0) return _window.Height(Math.Max(i, 0), Math.Max(j, 0));
             double fu = u - i, fv = v - j;
-            return (float)(window.Height(i, j) * (1 - fu) * (1 - fv) + window.Height(i + 1, j) * fu * (1 - fv) +
-                           window.Height(i, j + 1) * (1 - fu) * fv + window.Height(i + 1, j + 1) * fu * fv);
+            return (float)(_window.Height(i, j) * (1 - fu) * (1 - fv) + _window.Height(i + 1, j) * fu * (1 - fv) +
+                           _window.Height(i, j + 1) * (1 - fu) * fv + _window.Height(i + 1, j + 1) * fu * fv);
         }
-        if (coarse is null)
+        if (_coarse is null)
         {
-            int ci = Math.Clamp((int)Math.Round(u), 0, window.Columns - 1), cj = Math.Clamp((int)Math.Round(v), 0, window.Rows - 1);
-            return window.Height(ci, cj);
+            int ci = Math.Clamp((int)Math.Round(u), 0, _window.Columns - 1), cj = Math.Clamp((int)Math.Round(v), 0, _window.Rows - 1);
+            return _window.Height(ci, cj);
         }
-        double cu = Math.Clamp(col / coarseStep, 0, coarseSize - 1), cv = Math.Clamp(row / coarseStep, 0, coarseSize - 1);
-        int c = Math.Min((int)cu, coarseSize - 2), r = Math.Min((int)cv, coarseSize - 2);
+        double cu = Math.Clamp(col / _coarseStep, 0, _coarseSize - 1), cv = Math.Clamp(row / _coarseStep, 0, _coarseSize - 1);
+        int c = Math.Min((int)cu, _coarseSize - 2), r = Math.Min((int)cv, _coarseSize - 2);
         double a = cu - c, b = cv - r;
-        double h = coarse[r * coarseSize + c] * (1 - a) * (1 - b) + coarse[r * coarseSize + c + 1] * a * (1 - b) +
-                   coarse[(r + 1) * coarseSize + c] * (1 - a) * b + coarse[(r + 1) * coarseSize + c + 1] * a * b;
+        double h = _coarse[r * _coarseSize + c] * (1 - a) * (1 - b) + _coarse[r * _coarseSize + c + 1] * a * (1 - b) +
+                   _coarse[(r + 1) * _coarseSize + c] * (1 - a) * b + _coarse[(r + 1) * _coarseSize + c + 1] * a * b;
         return (float)(h * (WorldLayout.MaxHeight / ushort.MaxValue));
     }
 
-    /// <summary>Whether X/Z lies inside the full-resolution window.</summary>
+    /// <summary>
+    /// Whether X/Z lies inside the full-resolution window.
+    /// </summary>
     public bool InsideWindow(float x, float z)
     {
         var (col, row) = WorldLayout.ToSample(x, z);
-        double u = (col - window.Column0) / window.Step, v = (row - window.Row0) / window.Step;
-        return u >= 0 && v >= 0 && u <= window.Columns - 1 && v <= window.Rows - 1;
+        double u = (col - _window.Column0) / _window.Step, v = (row - _window.Row0) / _window.Step;
+        return u >= 0 && v >= 0 && u <= _window.Columns - 1 && v <= _window.Rows - 1;
     }
 }

@@ -11,9 +11,13 @@ public class GameplayDataTests
 
     static FcsRecord Faction(string id, int defaultRelation, params (string Target, int Value)[] explicitRelations)
     {
-        var r = new FcsRecord { StringId = id, Flags = New, Name = id, RecordType = FcsRecordType.FACTION };
+        var r = new FcsRecord { StringId = id, Flags = New, Name = id, RecordType = FcsRecordType.Faction };
         r.Ints["default relation"] = defaultRelation;
-        if (explicitRelations.Length > 0) r.References["relations"] = [.. explicitRelations.Select(e => new FcsReference(e.Target, e.Value, 0, 0))];
+        if (explicitRelations.Length > 0)
+        {
+            r.References["relations"] = [.. explicitRelations.Select(e => new FcsReference(e.Target, e.Value, 0, 0))];
+        }
+
         return r;
     }
 
@@ -35,7 +39,11 @@ public class GameplayDataTests
             Faction("3-t", 20, ("1-t", 75), ("3-t", -10), ("missing-t", 5)),
             Faction("4-t", 60, ("2-t", 0)));
         var rel = FactionRelations.Build(db);
-        int a = rel.IndexOf("1-t"), b = rel.IndexOf("2-t"), c = rel.IndexOf("3-t"), d = rel.IndexOf("4-t");
+        int a = rel.IndexOf("1-t");
+        int b = rel.IndexOf("2-t");
+        int c = rel.IndexOf("3-t");
+        int d = rel.IndexOf("4-t");
+
         Assert.Equal(100, rel.Get(a, a));
         Assert.Equal(-50, rel.Get(a, b));        // min(0, -50)
         Assert.Equal(-50, rel.Get(b, a));
@@ -51,7 +59,7 @@ public class GameplayDataTests
     [Fact]
     public void Constants_apply_the_loaders_rescalings_and_fall_back_to_the_editor_defaults()
     {
-        var r = new FcsRecord { StringId = "1-t", Flags = New, Name = "GLOBAL CONSTANTS", RecordType = FcsRecordType.CONSTANTS };
+        var r = new FcsRecord { StringId = "1-t", Flags = New, Name = "GLOBAL CONSTANTS", RecordType = FcsRecordType.Constants };
         r.Floats["bleed rate"] = 0.01f;
         r.Floats["exp gain multiplier"] = 3;
         r.Floats["xp rate athletics"] = 1;
@@ -68,7 +76,7 @@ public class GameplayDataTests
         Assert.Equal(0.05f, c.MinimumLockpickChance, 6);
         Assert.Equal(0.6f, c.MinDismantleMaterialsFraction, 6);
         Assert.Equal(0.2f, c.AppearanceRandomDeviation, 6);
-        Assert.Equal(20, c.WeightStrengthDiff1x);
+        Assert.Equal(20, c.WeightStrengthDiff1X);
         Assert.Equal(24, c.StarvationTime);   // the editor default: the record does not have the field
         Assert.Equal(GameConstants.Default.StarvationTime, c.StarvationTime);
         Assert.Equal(0.0005f * 0.1f, GameConstants.Default.BleedingClotRate, 9);
@@ -76,7 +84,9 @@ public class GameplayDataTests
     }
 }
 
-/// <summary>The same views against the installed game, with the probe values the docs quote.</summary>
+/// <summary>
+/// The same views against the installed game, with the probe values the docs quote.
+/// </summary>
 [Slow]
 public class GameplayInstallTests
 {
@@ -108,7 +118,8 @@ public class GameplayInstallTests
         Assert.Contains("walk upper sword", Names(AnimationArea.Upper, 14, sword));
         Assert.DoesNotContain("walk upper", Names(AnimationArea.Upper, 14, sword));
         Assert.Contains("run upper sword", Names(AnimationArea.Upper, 120, sword));
-        // Standing: the whole-body idles (the editor's six poses and "stand 1"); the sword idle only with a weapon in hand; squat is an action.
+        // Standing: the whole-body idles (the editor's six poses and "stand 1"); the sword idle only with a weapon in hand;
+        // squat is an action.
         var idles = lib.Idles(plain).Select(p => lib.Definitions[p.Index].Name).ToList();
         Assert.Contains("stand 1", idles);
         Assert.DoesNotContain("squat", idles);
@@ -120,8 +131,9 @@ public class GameplayInstallTests
     }
 
     /// <summary>
-    /// The installed buildings give the stats panel's class inputs (docs/game/ui-screens.md "Selected building"): a Bed's Healing bonus x8 and a Training Dummy MkII's Max Skill Level 10
-    /// from the output value <c>+0x1a4</c>; only the hydroponic farm draws an Efficiency line; a Ceiling Lamp in a building is indoors (slot 59), a Light Post I never.
+    /// The installed buildings give the stats panel's class inputs (docs/game/ui-screens.md "Selected building"): a Bed's Healing bonus x8
+    /// and a Training Dummy MkII's Max Skill Level 10 from the output value <c>+0x1a4</c>; only the hydroponic farm draws an Efficiency line;
+    /// a Ceiling Lamp in a building is indoors (slot 59), a Light Post I never.
     /// </summary>
     [Fact, Slow]
     public void The_installed_buildings_give_the_panel_class_inputs()
@@ -129,7 +141,9 @@ public class GameplayInstallTests
         var db = InstallData.BaseGame;
         Assert.SkipWhen(db is null, "Kenshi install not found");
         Meitou.Data.Gameplay.Construction.MachineData Machine(string name) =>
-            Meitou.Data.Gameplay.Construction.MachineData.From(db!, db!.Records.Values.First(r => r.Type == FcsRecordType.BUILDING && r.Name == name))!;
+            Data.Gameplay.Construction.MachineData.From(
+                db!,
+                db!.Records.Values.First(r => r.Type == FcsRecordType.Building && r.Name == name))!;
         Assert.Equal(8, Machine("Bed").OutputValue);
         Assert.Equal(10, (int)Machine("Training Dummy MkII").OutputValue - 1);
         Assert.True(Machine("Hydroponic Wheatstraw").Farm!.Indoor);

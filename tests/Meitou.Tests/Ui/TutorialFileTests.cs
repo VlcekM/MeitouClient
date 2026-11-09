@@ -1,8 +1,11 @@
 using Meitou.Game;
+using Meitou.Game.Tutorials;
 
 namespace Meitou.Tests.Ui;
 
-/// <summary><c>__tutorials.data</c> (docs/game/ui-screens.md section 7): the manager writes the active ids, then the pending ones, and reads them back.</summary>
+/// <summary>
+/// <c>__tutorials.data</c> (docs/game/ui-screens.md section 7): the manager writes the active ids, then the pending ones, and reads them back.
+/// </summary>
 public sealed class TutorialFileTests
 {
     [Fact]

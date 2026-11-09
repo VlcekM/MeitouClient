@@ -4,50 +4,76 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Data.Gameplay.Construction;
 using Meitou.Data.World;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
+using Meitou.Simulation.Towns;
 
 namespace Meitou.Simulation;
 
-/// <summary>The game's F10 debug menu and dev console (Meitou only, docs/game/ui-input.md "Debug menu", "Dev console"): cheats sent as commands, so they apply between ticks like any input.</summary>
+/// <summary>
+/// The game's F10 debug menu and dev console (Meitou only, docs/game/ui-input.md "Debug menu", "Dev console"): cheats sent as commands, so they apply
+/// between ticks like any input.
+/// </summary>
 public abstract record DebugCommand : SimCommand;
 
-/// <summary>Adds <see cref="Delta"/> cats to the player's money (negative takes it away, never below 0).</summary>
+/// <summary>
+/// Adds <see cref="Delta"/> cats to the player's money (negative takes it away, never below 0).
+/// </summary>
 public sealed record DebugMoney(long Delta) : DebugCommand;
 
-/// <summary>Puts the characters on the ground at <see cref="Target"/> (side by side, 10 units apart) and drops their orders.</summary>
+/// <summary>
+/// Puts the characters on the ground at <see cref="Target"/> (side by side, 10 units apart) and drops their orders.
+/// </summary>
 public sealed record DebugTeleport(IReadOnlyList<CharacterId> Characters, Vector3 Target) : DebugCommand;
 
-/// <summary>Heals the characters (<see cref="MedicalState.Heal"/>); with <see cref="Limbs"/> their lost and crushed limbs come back first (<see cref="MedicalState.RestoreLimbs"/>).</summary>
+/// <summary>
+/// Heals the characters (<see cref="MedicalState.Heal"/>); with <see cref="Limbs"/> their lost and crushed limbs come back first
+/// (<see cref="MedicalState.RestoreLimbs"/>).
+/// </summary>
 public sealed record DebugHeal(IReadOnlyList<CharacterId> Characters, bool Limbs = false) : DebugCommand;
 
-/// <summary>Sets every stat of the characters to 100.</summary>
+/// <summary>
+/// Sets every stat of the characters to 100.
+/// </summary>
 public sealed record DebugMaxSkills(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
 /// <summary>
-/// Turns the debug god mode on or off (<see cref="PlayerState.Godmode"/>). While on, every player character (also one recruited later) has all stats at <see cref="DebugCheats.GodStat"/>
-/// (10 x the game's maximum of 100) and is healed <see cref="DebugCheats.GodHealPerSecond"/> times a second; off, each gets back exactly the stats it had. Decisions: docs/procedures/playtest/agent-play-api.md, "godmode".
+/// Turns the debug god mode on or off (<see cref="PlayerState.Godmode"/>). While on, every player character (also one recruited later) has all stats
+/// at <see cref="DebugCheats.GodStat"/> (10 x the game's maximum of 100) and is healed <see cref="DebugCheats.GodHealPerSecond"/> times a second;
+/// off, each gets back exactly the stats it had. Decisions: docs/procedures/playtest/agent-play-api.md, "godmode".
 /// </summary>
 public sealed record DebugGodmode(bool On) : DebugCommand;
 
 /// <summary>
-/// Turns the debug guard on or off (<see cref="PlayerState.Guard"/>): while on, four times a second the hostile characters within <see cref="Radius"/> metres of the selected (else first) player character
-/// are killed as <c>kill --radius</c> kills (<see cref="DebugKillArea"/>; animals only with <see cref="Animals"/> or while one attacks a player character) and the player characters are healed as god mode heals them.
+/// Turns the debug guard on or off (<see cref="PlayerState.Guard"/>): while on, four times a second the hostile characters within
+/// <see cref="Radius"/> metres of the selected (else first) player character are killed as <c>kill --radius</c> kills (<see cref="DebugKillArea"/>;
+/// animals only with <see cref="Animals"/> or while one attacks a player character) and the player characters are healed as god mode heals them.
 /// </summary>
 public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false) : DebugCommand;
 
 /// <summary>
-/// A debug explosion at <see cref="At"/> (X, Z): every living character within <see cref="Radius"/> metres (not the player's own unless <see cref="Squad"/>) takes <see cref="Damage"/> cut damage falling off
-/// linearly with the distance (to 0.35 at the radius edge), is knocked out, and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
+/// A debug explosion at <see cref="At"/> (X, Z): every living character within <see cref="Radius"/> metres (not the player's own unless
+/// <see cref="Squad"/>) takes <see cref="Damage"/> cut damage falling off linearly with the distance (to 0.35 at the radius edge), is knocked out,
+/// and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
 /// </summary>
 public sealed record DebugExplode(Vector2 At, float Radius = 40, float Force = 100, float Damage = 40, bool Squad = false, string On = "", int Level = ExplodeLevels.Normal) : DebugCommand;
 
-/// <summary>The explosion's five strength levels (<c>explode --level</c>, F10 "Explosion level"): radius m / force / damage per level; the level only sets those three numbers, flags after it override them.</summary>
+/// <summary>
+/// The explosion's five strength levels (<c>explode --level</c>, F10 "Explosion level"): radius m / force / damage per level; the level only sets
+/// those three numbers, flags after it override them.
+/// </summary>
 public static class ExplodeLevels
 {
     public const int Normal = 3;
     public static readonly string[] Names = ["underkill", "light", "normal", "overkill", "ridiculous"];
 
-    /// <summary>The blast of a level; <paramref name="click"/> is the explode-on-click variant, whose normal level is larger (80 / 160 / 100).</summary>
+    /// <summary>
+    /// The blast of a level; <paramref name="click"/> is the explode-on-click variant, whose normal level is larger (80 / 160 / 100).
+    /// </summary>
     public static (float Radius, float Force, float Damage) Values(int level, bool click) => level switch
     {
         1 => (12, 35, 15),
@@ -57,7 +83,9 @@ public static class ExplodeLevels
         _ => click ? (80, 160, 100) : (40, 100, 40),
     };
 
-    /// <summary>A level from "1" to "5" or its name.</summary>
+    /// <summary>
+    /// A level from "1" to "5" or its name.
+    /// </summary>
     public static bool TryParse(string word, out int level)
     {
         level = 0;
@@ -70,7 +98,10 @@ public static class ExplodeLevels
     public static string Label(int level) => $"level {level} ({Names[Math.Clamp(level, 1, 5) - 1]})";
 }
 
-/// <summary>Who a radius kill hits, shared by the console's <c>kill --radius</c> and the guard: never a player character or the player's faction, never the dead, animals only when asked for.</summary>
+/// <summary>
+/// Who a radius kill hits, shared by the console's <c>kill --radius</c> and the guard: never a player character or the player's faction, never the
+/// dead, animals only when asked for.
+/// </summary>
 public static class DebugKillArea
 {
     public static bool Hits(bool isPlayer, int faction, int playerFaction, bool animal, bool dead, bool includeAnimals) =>
@@ -78,36 +109,51 @@ public static class DebugKillArea
 }
 
 /// <summary>
-/// One cut of <see cref="Cut"/> damage to each character: on the part whose template string id is <see cref="Part"/> (a character without one is skipped),
-/// else on a part chosen as a blow's is.
+/// One cut of <see cref="Cut"/> damage to each character: on the part whose template string id is <see cref="Part"/> (a character without one is
+/// skipped), else on a part chosen as a blow's is.
 /// </summary>
 public sealed record DebugDamage(IReadOnlyList<CharacterId> Characters, float Cut, string? Part = null) : DebugCommand;
 
-/// <summary>Makes every blow land on <see cref="Part"/> (template string id, name) from now on, or as usual when null (<see cref="BodyOptions.ForcedHitPart"/>).</summary>
+/// <summary>
+/// Makes every blow land on <see cref="Part"/> (template string id, name) from now on, or as usual when null
+/// (<see cref="BodyOptions.ForcedHitPart"/>).
+/// </summary>
 public sealed record DebugForceHits((string Id, string Name)? Part) : DebugCommand;
 
-/// <summary>Sets the <b>Global damage multiplier</b> (<see cref="BodyOptions.GlobalDamageMultiplier"/>) of the running world: blows and XP read it at once, a crossbow when it is next equipped.</summary>
+/// <summary>
+/// Sets the <b>Global damage multiplier</b> (<see cref="BodyOptions.GlobalDamageMultiplier"/>) of the running world: blows and XP read it at once, a
+/// crossbow when it is next equipped.
+/// </summary>
 public sealed record DebugDamageMultiplier(float Multiplier) : DebugCommand;
 
 /// <summary>
-/// Puts <see cref="Quantity"/> of item record <see cref="Record"/> on the character, at <see cref="Quality"/> (0 to 100) for the types that have one: one unit into its free
-/// equipment slot (<see cref="Items.InventoryCommands.TryEquip"/>), the rest into the inventory; what does not fit is dropped at the character's feet.
+/// Puts <see cref="Quantity"/> of item record <see cref="Record"/> on the character, at <see cref="Quality"/> (0 to 100) for the types that have one:
+/// one unit into its free equipment slot (<see cref="Items.InventoryCommands.TryEquip"/>), the rest into the inventory; what does not fit is dropped
+/// at the character's feet.
 /// </summary>
 public sealed record DebugGiveItem(CharacterId Character, string Record, int Quantity, int Quality = 0) : DebugCommand
 {
-    /// <summary>A weapon's exact grade (maker, model, level) in place of the <see cref="Grade"/> of its quality; null: by quality.</summary>
+    /// <summary>
+    /// A weapon's exact grade (maker, model, level) in place of the <see cref="Grade"/> of its quality; null: by quality.
+    /// </summary>
     public DebugWeaponGrade? Exact { get; init; }
 
-    /// <summary>Wear the unit even when its armour slot is taken: the worn item goes to the grids; with no room nothing changes and nothing is dropped (a message says so). A backpack goes into the attach slot when it is free.</summary>
+    /// <summary>
+    /// Wear the unit even when its armour slot is taken: the worn item goes to the grids; with no room nothing changes and nothing is dropped (a
+    /// message says so). A backpack goes into the attach slot when it is free.
+    /// </summary>
     public bool Equip { get; init; }
 
     /// <summary>
-    /// The record types whose items have a quality (grade): armour's is <see cref="Items.ItemInstance.Quality"/>, the others' the <see cref="Items.ItemInstance.Level"/> their stats read.
-    /// A weapon gets the model of <see cref="Grade"/> instead, so its name shows the grade.
+    /// The record types whose items have a quality (grade): armour's is <see cref="Items.ItemInstance.Quality"/>, the others' the
+    /// <see cref="Items.ItemInstance.Level"/> their stats read. A weapon gets the model of <see cref="Grade"/> instead, so its name shows the grade.
     /// </summary>
-    public static readonly FcsRecordType[] QualityTypes = [FcsRecordType.WEAPON, FcsRecordType.ARMOUR, FcsRecordType.CROSSBOW, FcsRecordType.LIMB_REPLACEMENT];
+    public static readonly FcsRecordType[] QualityTypes = [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Crossbow, FcsRecordType.LimbReplacement];
 
-    /// <summary>The <c>PLAYER_WEAPONS</c> model a weapon of <paramref name="quality"/> gets: the highest level at or below it, else the lowest (null without models).</summary>
+    /// <summary>
+    /// The <c>PLAYER_WEAPONS</c> model a weapon of <paramref name="quality"/> gets: the highest level at or below it, else the lowest (null without
+    /// models).
+    /// </summary>
     public static (string Model, string Name, int Level)? Grade(GameDatabase db, int quality)
     {
         var models = (db.Find(CraftBench.PlayerWeapons)?.GetReferences("weapon models") ?? [])
@@ -118,57 +164,91 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
         return (pick.Record!.StringId, pick.Record.Name, pick.Level);
     }
 
-    /// <summary>The record types an item can be made from.</summary>
+    /// <summary>
+    /// The record types an item can be made from.
+    /// </summary>
     public static readonly FcsRecordType[] ItemTypes =
-        [FcsRecordType.WEAPON, FcsRecordType.ARMOUR, FcsRecordType.ITEM, FcsRecordType.CONTAINER, FcsRecordType.BLUEPRINT, FcsRecordType.MAP_ITEM, FcsRecordType.CROSSBOW, FcsRecordType.LIMB_REPLACEMENT];
+        [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Item, FcsRecordType.Container, FcsRecordType.Blueprint, FcsRecordType.MapItem, FcsRecordType.Crossbow, FcsRecordType.LimbReplacement];
 }
 
 /// <summary>
-/// Removes the characters' bounties (every player character when <see cref="Characters"/> is empty): only <see cref="Faction"/>'s entry, or every entry when null.
-/// A character left without bounties is no longer recently wanted.
+/// Removes the characters' bounties (every player character when <see cref="Characters"/> is empty): only <see cref="Faction"/>'s entry, or every
+/// entry when null. A character left without bounties is no longer recently wanted.
 /// </summary>
 public sealed record DebugClearBounties(IReadOnlyList<CharacterId> Characters, int? Faction = null) : DebugCommand;
 
 /// <summary>
-/// Destroys carried items of a character (a test character: nothing is dropped, nothing moves to a container): <see cref="BackpackOnly"/> the worn backpack with everything in it; otherwise every item in
-/// every section (grids, worn clothing and weapons, backpack with contents) except prosthetic limbs and locked-on shackles.
+/// Destroys carried items of a character (a test character: nothing is dropped, nothing moves to a container): <see cref="BackpackOnly"/> the worn
+/// backpack with everything in it; otherwise every item in every section (grids, worn clothing and weapons, backpack with contents) except prosthetic
+/// limbs and locked-on shackles.
 /// </summary>
 public sealed record DebugStripItems(CharacterId Character, bool BackpackOnly) : DebugCommand;
 
-/// <summary>Kills the characters (<see cref="MedicalState.Kill"/>), as a lethal hit would: the medical state says dead, the body pass does the rest.</summary>
+/// <summary>
+/// Kills the characters (<see cref="MedicalState.Kill"/>), as a lethal hit would: the medical state says dead, the body pass does the rest.
+/// </summary>
 public sealed record DebugKill(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
-/// <summary>Knocks the characters out for <see cref="Seconds"/> seconds of character time (<see cref="MedicalState.KnockOut"/>; agent-playtest control channel: ko), standing them down as a blow's knock-out does.</summary>
+/// <summary>
+/// Knocks the characters out for <see cref="Seconds"/> seconds of character time (<see cref="MedicalState.KnockOut"/>; agent-playtest control
+/// channel: ko), standing them down as a blow's knock-out does.
+/// </summary>
 public sealed record DebugKnockOut(IReadOnlyList<CharacterId> Characters, float Seconds) : DebugCommand;
 
-/// <summary>Wakes the unconscious characters at once (<see cref="MedicalState.WakeUp"/>; agent-playtest control channel: wake); the dead and the conscious are left alone.</summary>
+/// <summary>
+/// Wakes the unconscious characters at once (<see cref="MedicalState.WakeUp"/>; agent-playtest control channel: wake); the dead and the conscious are
+/// left alone.
+/// </summary>
 public sealed record DebugWake(IReadOnlyList<CharacterId> Characters) : DebugCommand;
 
-/// <summary>Says <see cref="Text"/> over the character as a speech bubble (<see cref="World.Bark"/>; agent-playtest control channel: say); display only, nothing in the world changes.</summary>
+/// <summary>
+/// Says <see cref="Text"/> over the character as a speech bubble (<see cref="World.Bark"/>; agent-playtest control channel: say); display only,
+/// nothing in the world changes.
+/// </summary>
 public sealed record DebugSay(CharacterId Speaker, string Text) : DebugCommand;
 
-/// <summary>Finishes every research and repetition (<see cref="Construction.ResearchState.CompleteAll"/>).</summary>
+/// <summary>
+/// Finishes every research and repetition (<see cref="Construction.ResearchState.CompleteAll"/>).
+/// </summary>
 public sealed record DebugUnlockResearch : DebugCommand;
 
-/// <summary>Spawns a character of record <see cref="Record"/> (of the RACE <see cref="Race"/> when given: control channel `spawn-at --race`) at <see cref="At"/>, alone in a squad of the first faction hostile to the player (<see cref="PopulationSystem"/> applies it).</summary>
+/// <summary>
+/// Spawns a character of record <see cref="Record"/> (of the RACE <see cref="Race"/> when given: control channel `spawn-at --race`) at
+/// <see cref="At"/>, alone in a squad of the first faction hostile to the player (<see cref="PopulationSystem"/> applies it).
+/// </summary>
 public sealed record DebugSpawn(string Record, Vector2 At, string? Faction = null, string? Race = null) : DebugCommand;
 
 /// <summary>
-/// A building placed in the level editor (docs/game/level-editor.md "Simulation side"): <see cref="Building"/>, made by the host as the boot pass makes a level building
-/// (<see cref="TownBuildings.Builder"/>), joins the building list of the town with placement id <see cref="Town"/> and is registered as a loaded one (<see cref="TownEdits.Place"/>).
+/// A building placed in the level editor (docs/game/level-editor.md "Simulation side"): <see cref="Building"/>, made by the host as the boot pass
+/// makes a level building (<see cref="TownBuildings.Builder"/>), joins the building list of the town with placement id <see cref="Town"/> and is
+/// registered as a loaded one (<see cref="TownEdits.Place"/>).
 /// </summary>
 public sealed record DebugPlaceBuilding(string Town, TownBuilding Building) : DebugCommand;
 
-/// <summary>A weapon's maker (WEAPON_MANUFACTURER) and model (MATERIAL_SPECS_WEAPON) by record id or name, and its level; unset parts keep the item's.</summary>
+/// <summary>
+/// A weapon's maker (WEAPON_MANUFACTURER) and model (MATERIAL_SPECS_WEAPON) by record id or name, and its level; unset parts keep the item's.
+/// </summary>
 public sealed record DebugWeaponGrade(string? Maker, string? Model, int? Level)
 {
-    /// <summary>Sets <paramref name="item"/>'s company, material and level; false (with the reason in <paramref name="error"/>) when a record is not found.</summary>
+    /// <summary>
+    /// Sets <paramref name="item"/>'s company, material and level; false (with the reason in <paramref name="error"/>) when a record is not found.
+    /// </summary>
     public bool Apply(GameDatabase db, Items.ItemInstance item, out string error)
     {
         error = "";
         GameRecord? maker = null, model = null;
-        if (Maker is { Length: > 0 } && (maker = Find(db, Maker, FcsRecordType.WEAPON_MANUFACTURER)) is null) { error = $"no WEAPON_MANUFACTURER '{Maker}'"; return false; }
-        if (Model is { Length: > 0 } && (model = Find(db, Model, FcsRecordType.MATERIAL_SPECS_WEAPON)) is null) { error = $"no MATERIAL_SPECS_WEAPON '{Model}'"; return false; }
+        if (Maker is { Length: > 0 } && (maker = Find(db, Maker, FcsRecordType.WeaponManufacturer)) is null)
+        {
+            error = $"no WEAPON_MANUFACTURER '{Maker}'";
+            return false;
+        }
+
+        if (Model is { Length: > 0 } && (model = Find(db, Model, FcsRecordType.MaterialSpecsWeapon)) is null)
+        {
+            error = $"no MATERIAL_SPECS_WEAPON '{Model}'";
+            return false;
+        }
+
         if (maker is not null) item.CompanyId = maker.StringId;
         if (model is not null) item.MaterialId = model.StringId;
         if (Level is { } level) item.Level = level;
@@ -176,35 +256,56 @@ public sealed record DebugWeaponGrade(string? Maker, string? Model, int? Level)
     }
 
     static GameRecord? Find(GameDatabase db, string key, FcsRecordType type) =>
-        db.Find(key) is { } r && r.Type == type ? r : db.Records.Values.FirstOrDefault(x => x.Type == type && x.BaseName.Equals(key, StringComparison.OrdinalIgnoreCase));
+        db.Find(key) is { } r && r.Type == type
+            ? r
+            : db.Records.Values.FirstOrDefault(x => x.Type == type && x.BaseName.Equals(key, StringComparison.OrdinalIgnoreCase));
 }
 
-/// <summary>Lays a loose item of record <see cref="Record"/> (<see cref="Quantity"/> in a stack) on the ground at <see cref="At"/> turned <see cref="Yaw"/> radians (agent-playtest control channel: place-item).</summary>
+/// <summary>
+/// Lays a loose item of record <see cref="Record"/> (<see cref="Quantity"/> in a stack) on the ground at <see cref="At"/> turned <see cref="Yaw"/>
+/// radians (agent-playtest control channel: place-item).
+/// </summary>
 public sealed record DebugPlaceItem(string Record, int Quantity, Vector3 At, float Yaw) : DebugCommand
 {
-    /// <summary>A weapon's exact grade (the console's <c>--maker</c>, <c>--model</c>, <c>--level</c>).</summary>
+    /// <summary>
+    /// A weapon's exact grade (the console's <c>--maker</c>, <c>--model</c>, <c>--level</c>).
+    /// </summary>
     public DebugWeaponGrade? Exact { get; init; }
 }
 
-/// <summary>Puts items into the inventory of the container fixture <see cref="Container"/> (agent-playtest control channel: container-put); what does not fit is reported.</summary>
+/// <summary>
+/// Puts items into the inventory of the container fixture <see cref="Container"/> (agent-playtest control channel: container-put); what does not fit
+/// is reported.
+/// </summary>
 public sealed record DebugPutItem(string Container, string Record, int Quantity) : DebugCommand;
 
-/// <summary>A building cleared in the level editor, placed or loaded: leaves its town's list and registries (<see cref="TownEdits.Clear"/>). <see cref="Key"/> is its <see cref="TownBuilding.Key"/>.</summary>
+/// <summary>
+/// A building cleared in the level editor, placed or loaded: leaves its town's list and registries (<see cref="TownEdits.Clear"/>). <see cref="Key"/>
+/// is its <see cref="TownBuilding.Key"/>.
+/// </summary>
 public sealed record DebugClearBuilding(string Key) : DebugCommand;
 
 static class DebugCheats
 {
-    /// <summary>The value every stat gets in god mode: 10 x the normal maximum of 100.</summary>
+    /// <summary>
+    /// The value every stat gets in god mode: 10 x the normal maximum of 100.
+    /// </summary>
     public const float GodStat = 1000;
-    /// <summary>How often god mode heals: this many times a second (the tick is 1/30 s).</summary>
+    /// <summary>
+    /// How often god mode heals: this many times a second (the tick is 1/30 s).
+    /// </summary>
     public const int GodHealPerSecond = 5;
-    /// <summary>How often the guard kills and heals: this many times a second.</summary>
+    /// <summary>
+    /// How often the guard kills and heals: this many times a second.
+    /// </summary>
     public const int GuardPerSecond = 4;
 
     /// <summary>
-    /// The god mode's upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; the heal only on its cadence). Raises the stats of each living player character that is not yet raised, heals it
-    /// (<see cref="MedicalState.Heal"/>: parts, blood, wounds and bleeding, knock-out; stumps and crushed limbs come back; hunger refilled). A character that is dead, no longer a player character or
-    /// met while the mode is off gets its own stats back, so nothing raised outlives the mode, a death or a squad change; the save writes the kept values (<see cref="CharacterStats.WriteSave"/>).
+    /// The god mode's upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; the heal only on its cadence). Raises the stats of each living player
+    /// character that is not yet raised, heals it (<see cref="MedicalState.Heal"/>: parts, blood, wounds and bleeding, knock-out; stumps and crushed
+    /// limbs come back; hunger refilled). A character that is dead, no longer a player character or met while the mode is off gets its own stats
+    /// back, so nothing raised outlives the mode, a death or a squad change; the save writes the kept values
+    /// (<see cref="CharacterStats.WriteSave"/>).
     /// </summary>
     public static void GodTick(World world, PopulationData? data, CharacterAssembly? assembly, bool force = false)
     {
@@ -224,7 +325,9 @@ static class DebugCheats
         }
     }
 
-    /// <summary>The god mode's heal of one living player character, also the guard's: parts, limbs, blood, wounds, knock-out, hunger.</summary>
+    /// <summary>
+    /// The god mode's heal of one living player character, also the guard's: parts, limbs, blood, wounds, knock-out, hunger.
+    /// </summary>
     static void HealPlayer(World world, PopulationData? data, CharacterAssembly? assembly, CharacterTable table, int slot, CharacterCold cold, MedicalState medical)
     {
         var id = table.IdOf(slot);
@@ -237,8 +340,9 @@ static class DebugCheats
     }
 
     /// <summary>
-    /// The guard's upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; acts on its cadence): kills the hostile characters near the lead (the selected player character, else the first) through the
-    /// same <see cref="DebugKillArea"/> test and kill as <c>kill --radius</c>, then heals every living player character. A hostile animal that does not attack a player character is spared without <c>--animals</c>.
+    /// The guard's upkeep (<see cref="PlayerSystem.SlowWorld"/>, every tick; acts on its cadence): kills the hostile characters near the lead (the
+    /// selected player character, else the first) through the same <see cref="DebugKillArea"/> test and kill as <c>kill --radius</c>, then heals
+    /// every living player character. A hostile animal that does not attack a player character is spared without <c>--animals</c>.
     /// </summary>
     public static void GuardTick(World world, PopulationData? data, CharacterAssembly? assembly)
     {
@@ -277,7 +381,9 @@ static class DebugCheats
         if (victims.Count > 0) Kill(world, data, victims);
     }
 
-    /// <summary>One cut of damage to a character (a body part chosen as a blow's, or the named one); what a hit does only on its events is done here.</summary>
+    /// <summary>
+    /// One cut of damage to a character (a body part chosen as a blow's, or the named one); what a hit does only on its events is done here.
+    /// </summary>
     static bool Hurt(World world, PopulationData data, CharacterId id, float cut, string? partId)
     {
         var table = world.Characters;
@@ -293,13 +399,20 @@ static class DebugCheats
         return true;
     }
 
-    /// <summary>How long the explosion keeps a survivor out, in character seconds.</summary>
+    /// <summary>
+    /// How long the explosion keeps a survivor out, in character seconds.
+    /// </summary>
     const float ExplodeKnockOutSeconds = 30;
 
-    /// <summary>Damage and throw share at the radius edge (1 at the centre, linear between), so the whole radius is affected, not a small core.</summary>
+    /// <summary>
+    /// Damage and throw share at the radius edge (1 at the centre, linear between), so the whole radius is affected, not a small core.
+    /// </summary>
     internal const float ExplodeEdgeFalloff = 0.35f;
 
-    /// <summary>Smallest throw speed (world units/s) given to anyone in range, capped at the blast's own force: about 2.7 m of flight for a human, so the outer ring visibly moves.</summary>
+    /// <summary>
+    /// Smallest throw speed (world units/s) given to anyone in range, capped at the blast's own force: about 2.7 m of flight for a human, so the
+    /// outer ring visibly moves.
+    /// </summary>
     const float ExplodeMinThrow = 30;
 
     static void Explode(World world, PopulationData data, DebugExplode blast)
@@ -483,16 +596,20 @@ static class DebugCheats
             case DebugGiveItem give when data is not null:
                 if (!table.TryResolveNext(give.Character, out int owner) || table.Cold(owner)?.Inventory is not { } inventory) break;
                 if (data.Items.Create(give.Record, give.Quantity) is not { } item) { world.Post($"No item record {give.Record}."); break; }
-                if (give.Exact is { } exact && item.Type is FcsRecordType.WEAPON or FcsRecordType.CROSSBOW)
+                if (give.Exact is { } exact && item.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
                 {
-                    if (!exact.Apply(data.Db, item, out string bad)) { world.Post(bad); break; }
+                    if (!exact.Apply(data.Db, item, out string bad))
+                    {
+                        world.Post(bad);
+                        break;
+                    }
                 }
-                else if (item.Type == FcsRecordType.ARMOUR) (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
-                else if (item.Type == FcsRecordType.WEAPON && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
+                else if (item.Type == FcsRecordType.Armour) (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
+                else if (item.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
                     (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
                 else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
                 var wearer = table.Cold(owner);
-                if (give.Equip && item.Type == FcsRecordType.CONTAINER && item.Contents is not null)
+                if (give.Equip && item.Type == FcsRecordType.Container && item.Contents is not null)
                 {
                     // A backpack: worn in the attach slot when it is free (strip or `unequip backpack` first); never put into the grids or dropped.
                     if (inventory.Backpack is not null) { world.Post($"{item.Name} not worn: a backpack is already worn (remove it first); nothing dropped."); break; }
@@ -502,10 +619,11 @@ static class DebugCheats
                     break;
                 }
                 bool worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
-                if (!worn && give.Equip && item.Type is FcsRecordType.ARMOUR or FcsRecordType.ITEM && Items.InventoryCommands.IsEquipmentSection(item.EquipmentSection)
+                if (!worn && give.Equip && item.Type is FcsRecordType.Armour or FcsRecordType.Item && Items.InventoryCommands.IsEquipmentSection(item.EquipmentSection)
                     && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") && inventory.Items.Find(i => i.Section == item.EquipmentSection) is { } displaced)
                 {
-                    // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids; with no room nothing changes and nothing is dropped.
+                    // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids; with no room nothing
+                    // changes and nothing is dropped.
                     if (!inventory.HasRoomFor(displaced)) { world.Post($"{item.Name} not worn: the worn {displaced.Name} has no room in the grids (strip the inventory first); nothing dropped."); break; }
                     inventory.Items.Remove(displaced);
                     worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
@@ -527,7 +645,9 @@ static class DebugCheats
         }
     }
 
-    /// <summary>Clears the bounties of <see cref="DebugClearBounties"/>; returns how many entries went.</summary>
+    /// <summary>
+    /// Clears the bounties of <see cref="DebugClearBounties"/>; returns how many entries went.
+    /// </summary>
     static int ClearBounties(World world, DebugClearBounties clear)
     {
         int removed = 0;
@@ -548,7 +668,9 @@ static class DebugCheats
         return removed;
     }
 
-    /// <summary>The characters <paramref name="ids"/> names, else every player character.</summary>
+    /// <summary>
+    /// The characters <paramref name="ids"/> names, else every player character.
+    /// </summary>
     static IEnumerable<CharacterCold> BountyTargets(World world, IReadOnlyList<CharacterId> ids)
     {
         var table = world.Characters;

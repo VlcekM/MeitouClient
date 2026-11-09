@@ -7,7 +7,9 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Tests.Bodies;
 
-/// <summary>The probe tables of docs/game/character-stats.md as tests against the installed game (base load order).</summary>
+/// <summary>
+/// The probe tables of docs/game/character-stats.md as tests against the installed game (base load order).
+/// </summary>
 [Slow]
 public class BodyInstallTests
 {
@@ -21,21 +23,21 @@ public class BodyInstallTests
         Assert.Equal(10, character.GetInt("stats randomise"));
         Assert.False(character.Floats.ContainsKey("stats randomise"));
         var race = db.Find(character.GetReferences("race").First().TargetStringId)!;
-        var factory = new Meitou.Simulation.BodyFactory(db);
+        var factory = new BodyFactory(db);
         var a = factory.Create(race, character, 123, 1).Stats;
         var b = factory.Create(race, character, 123, 2).Stats;
         Assert.NotEqual(a[StatsEnumerated.MeleeAttack], b[StatsEnumerated.MeleeAttack]);
         Assert.NotEqual(a[StatsEnumerated.Strength], b[StatsEnumerated.Strength]);
     }
 
-    static GameDatabase? cached;
-    static readonly Lock gate = new();
+    static GameDatabase? s_cached;
+    static readonly Lock Gate = new();
 
     static GameDatabase Database()
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install!));
+        lock (Gate) return s_cached ??= GameDatabase.Load(LoadOrder.BaseGame(install!));
     }
 
     static RaceData Race(string stringId)
@@ -47,7 +49,7 @@ public class BodyInstallTests
     [Fact]
     public void The_nine_locational_damage_records_match_the_doc_table()
     {
-        var parts = Database().OfType(FcsRecordType.LOCATIONAL_DAMAGE).Select(BodyPartTemplate.From).ToDictionary(p => p.Name);
+        var parts = Database().OfType(FcsRecordType.LocationalDamage).Select(BodyPartTemplate.From).ToDictionary(p => p.Name);
         Assert.Equal(9, parts.Count);
         var head = parts["Head"];
         Assert.Equal((BodyPartType.Head, true, true, true, 1), (head.Type, head.Collapses, head.Vital, head.Severance, head.CollapsePart));
@@ -67,7 +69,11 @@ public class BodyInstallTests
         // The animals' forelegs are ARM parts that do not collapse.
         var foreleg = parts.Values.Where(p => p.Name.Contains("Foreleg")).ToList();
         Assert.Equal(2, foreleg.Count);
-        Assert.All(foreleg, p => { Assert.Equal(BodyPartType.Arm, p.Type); Assert.False(p.Collapses); });
+        Assert.All(foreleg, p =>
+        {
+            Assert.Equal(BodyPartType.Arm, p.Type);
+            Assert.False(p.Collapses);
+        });
     }
 
     [Fact]

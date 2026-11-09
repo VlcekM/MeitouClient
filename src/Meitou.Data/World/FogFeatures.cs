@@ -4,12 +4,16 @@ using Meitou.Content;
 
 namespace Meitou.Data.World;
 
-/// <summary>The shape of a placed fog volume (docs/formats/fogfeatures.md): the type byte of <c>fogfeatures.dat</c>.</summary>
+/// <summary>
+/// The shape of a placed fog volume (docs/formats/fogfeatures.md): the type byte of <c>fogfeatures.dat</c>.
+/// </summary>
 public enum FogFeatureType : byte
 {
     Sphere = 2,
     Beam = 3,
-    /// <summary>"Block" in the level editor (class <c>FogPlaneVolume</c>): the space inside seven planes.</summary>
+    /// <summary>
+    /// "Block" in the level editor (class <c>FogPlaneVolume</c>): the space inside seven planes.
+    /// </summary>
     Block = 4,
 }
 
@@ -23,12 +27,18 @@ public enum FogFeatureType : byte
 public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour, float Alpha, float Distance, float Edge,
     Vector3 Position, Vector3 End, float Radius, Vector4[] Planes)
 {
-    /// <summary>The shader's <c>density</c>: 1 / distance, 1 when the distance is not positive (the game's setter).</summary>
+    /// <summary>
+    /// The shader's <c>density</c>: 1 / distance, 1 when the distance is not positive (the game's setter).
+    /// </summary>
     public float Density => Distance > 0 ? 1f / Distance : 1f;
-    /// <summary>The shader's <c>edgeBlur</c>: 1 / edge.</summary>
+    /// <summary>
+    /// The shader's <c>edgeBlur</c>: 1 / edge.
+    /// </summary>
     public float EdgeBlur => 1f / Edge;
 
-    /// <summary>Whether a point is inside a block's seven planes.</summary>
+    /// <summary>
+    /// Whether a point is inside a block's seven planes.
+    /// </summary>
     public bool Contains(Vector3 p)
     {
         if (Type != FogFeatureType.Block) return false;
@@ -37,8 +47,10 @@ public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour
         return true;
     }
 
-    /// <summary>How far a point lies outside a block: the largest distance past one of its planes (a lower bound of the true distance; 0 inside,
-    /// infinity for a sphere or beam).</summary>
+    /// <summary>
+    /// How far a point lies outside a block: the largest distance past one of its planes (a lower bound of the true distance; 0 inside, infinity for
+    /// a sphere or beam).
+    /// </summary>
     public float DistanceOutside(Vector3 p)
     {
         if (Type != FogFeatureType.Block) return float.PositiveInfinity;
@@ -126,7 +138,9 @@ public static class FogFeatures
 {
     public const string RelativePath = "newland/land/fogfeatures.dat";
 
-    /// <summary>The install's file, or an empty list when it has none.</summary>
+    /// <summary>
+    /// The install's file, or an empty list when it has none.
+    /// </summary>
     public static IReadOnlyList<FogFeature> Load(GameInstall install)
     {
         string path = GameFiles.Resolve(Path.Combine(install.DataDirectory, RelativePath));
@@ -164,34 +178,34 @@ public static class FogFeatures
             switch (type)
             {
                 case FogFeatureType.Sphere:
-                {
-                    var p = V3(data, ref at);
-                    float radius = F(data, ref at);
-                    list.Add(new FogFeature(name, type, colour, alpha, distance, 0, p, p, radius, []));
-                    break;
-                }
-                case FogFeatureType.Beam:
-                {
-                    var p = V3(data, ref at);
-                    var end = V3(data, ref at);
-                    float radius = F(data, ref at), edge = F(data, ref at);
-                    list.Add(new FogFeature(name, type, colour, alpha, distance, edge, p, end, radius, []));
-                    break;
-                }
-                case FogFeatureType.Block:
-                {
-                    float edge = F(data, ref at);
-                    var planes = new Vector4[7];
-                    // Stored as (normal, d) and made Ogre::Plane(normal, -d), whose constant is d; the shader's w is minus the constant
-                    // (FUN_14010b6a0), so inside is dot(normal, p) < -d.
-                    for (int k = 0; k < 7; k++)
                     {
-                        var n = V3(data, ref at);
-                        planes[k] = new Vector4(n, -F(data, ref at));
+                        var p = V3(data, ref at);
+                        float radius = F(data, ref at);
+                        list.Add(new FogFeature(name, type, colour, alpha, distance, 0, p, p, radius, []));
+                        break;
                     }
-                    list.Add(new FogFeature(name, type, colour, alpha, distance, edge, Vector3.Zero, Vector3.Zero, 0, planes));
-                    break;
-                }
+                case FogFeatureType.Beam:
+                    {
+                        var p = V3(data, ref at);
+                        var end = V3(data, ref at);
+                        float radius = F(data, ref at), edge = F(data, ref at);
+                        list.Add(new FogFeature(name, type, colour, alpha, distance, edge, p, end, radius, []));
+                        break;
+                    }
+                case FogFeatureType.Block:
+                    {
+                        float edge = F(data, ref at);
+                        var planes = new Vector4[7];
+                        // Stored as (normal, d) and made Ogre::Plane(normal, -d), whose constant is d; the shader's w is minus the constant
+                        // (FUN_14010b6a0), so inside is dot(normal, p) < -d.
+                        for (int k = 0; k < 7; k++)
+                        {
+                            var n = V3(data, ref at);
+                            planes[k] = new Vector4(n, -F(data, ref at));
+                        }
+                        list.Add(new FogFeature(name, type, colour, alpha, distance, edge, Vector3.Zero, Vector3.Zero, 0, planes));
+                        break;
+                    }
                 default:
                     throw new FormatException($"fogfeatures: volume {i} ('{name}') has unknown type {(byte)type}");
             }

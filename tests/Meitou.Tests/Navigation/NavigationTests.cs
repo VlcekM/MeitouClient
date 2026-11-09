@@ -1,19 +1,24 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation;
 
 namespace Meitou.Tests.Navigation;
 
-/// <summary>Builder, pruner and queries on synthetic zones (no game install needed).</summary>
+/// <summary>
+/// Builder, pruner and queries on synthetic zones (no game install needed).
+/// </summary>
 public class NavigationTests
 {
     static readonly NavBuildSettings Settings = new() { Threads = 4 };
 
-    /// <summary>A zone with flat ground at the given height; add obstacles and seeds, then build.</summary>
+    /// <summary>
+    /// A zone with flat ground at the given height; add obstacles and seeds, then build.
+    /// </summary>
     sealed class Scene
     {
         public readonly ZoneGeometry G;
+
         public Scene(ZoneCoordinate zone, float groundY = 10)
         {
             var (ox, oz) = WorldLayout.ZoneOrigin(zone);
@@ -31,7 +36,9 @@ public class NavigationTests
         public float X0 => G.ZoneMin.X;
         public float Z0 => G.ZoneMin.Y;
 
-        /// <summary>A horizontal rectangle facing up.</summary>
+        /// <summary>
+        /// A horizontal rectangle facing up.
+        /// </summary>
         public void Quad(Vector3 min, Vector3 max, byte area)
         {
             int a = G.AddVertex(new(min.X, min.Y, min.Z)), b = G.AddVertex(new(max.X, min.Y, min.Z));
@@ -40,17 +47,22 @@ public class NavigationTests
             G.AddTriangle(a, c, b, area);
         }
 
-        /// <summary>A solid obstacle: the six faces as cutting triangles, outward-facing.</summary>
+        /// <summary>
+        /// A solid obstacle: the six faces as cutting triangles, outward-facing.
+        /// </summary>
         public void Box(Vector3 min, Vector3 max)
         {
             var v = new int[8];
             for (int i = 0; i < 8; i++) v[i] = G.AddVertex(new((i & 1) == 0 ? min.X : max.X, (i & 2) == 0 ? min.Y : max.Y, (i & 4) == 0 ? min.Z : max.Z));
+
             int[][] quads = [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4], [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]];
+
             foreach (var q in quads)
             {
                 G.AddTriangle(v[q[0]], v[q[1]], v[q[2]], NavArea.Null);
                 G.AddTriangle(v[q[0]], v[q[2]], v[q[3]], NavArea.Null);
             }
+
             G.Carvers.Add(new NavVolume([new(min.X, min.Z), new(max.X, min.Z), new(max.X, max.Z), new(min.X, max.Z)], min.Y, max.Y));
         }
 
@@ -67,6 +79,7 @@ public class NavigationTests
     {
         float l = 0;
         for (int i = 1; i < p.Count; i++) l += Vector3.Distance(p[i - 1], p[i]);
+
         return l;
     }
 
@@ -93,13 +106,16 @@ public class NavigationTests
         var path = Route(world, a, b);
         Assert.True(path.Found);
         Assert.True(Length(path.Points) > 800 + 30, $"length {Length(path.Points)}");   // round a corner: at least 832
+
         // No leg of the path passes through the box.
         for (int i = 1; i < path.Points.Count; i++)
+        {
             for (int k = 0; k <= 20; k++)
             {
                 var p = Vector3.Lerp(path.Points[i - 1], path.Points[i], k / 20f);
                 Assert.False(Math.Abs(p.X - cx) < 98 && Math.Abs(p.Z - cz) < 98, $"point {p}");
             }
+        }
     }
 
     [Fact]
@@ -117,6 +133,7 @@ public class NavigationTests
         Assert.InRange(Length(path.Points), Vector3.Distance(a, b) - 0.5f, Vector3.Distance(a, b) * 1.03f);
         Assert.True(world.TryGroundHeight(right.X0 + 100, right.Z0 + 100, out float h));
         Assert.InRange(h, 9, 11);
+
         // Removing a zone leaves the other usable and unlinked.
         var alone = world.Without(new ZoneCoordinate(32, 32));
         Assert.False(alone.Contains(new ZoneCoordinate(32, 32)));
@@ -129,6 +146,7 @@ public class NavigationTests
     {
         var s = new Scene(new(32, 32));
         float cx = s.X0 + 2300, cz = s.Z0 + 2300;
+
         // A wall across the whole zone with a 40-unit gate painted as a door.
         s.Box(new(s.X0 - 72, 0, cz - 10), new(cx - 20, 80, cz + 10));
         s.Box(new(cx + 20, 0, cz - 10), new(s.G.ZoneMax.X + 72, 80, cz + 10));
@@ -162,6 +180,7 @@ public class NavigationTests
         walk.SetWorld(world);
         Assert.True(walk.FindPath(a, b).Found);
         walk.Doors.Close("gate-1");
+
         // Shut out: the walker goes as near as it can on its side, and the rest is only provisional.
         var shut = walk.FindPath(a, b);
         Assert.True(shut.IsProvisional);
@@ -174,6 +193,7 @@ public class NavigationTests
         var s = new Scene(new(32, 32));
         float cx = s.X0 + 2300, cz = s.Z0 + 2300;
         Vector2[] hull = [new(cx - 60, cz - 40), new(cx + 60, cz - 40), new(cx + 60, cz + 40), new(cx - 60, cz + 40)];
+
         // The street side: the hull is a hole, walled all round except a doorway in the west wall, which is painted as the house's door.
         s.G.Carvers.Add(new NavVolume(hull, 0, 60));
         s.Box(new(cx - 66, 0, cz - 46), new(cx + 66, 60, cz - 40));
@@ -208,6 +228,7 @@ public class NavigationTests
 
         var inward = query.FindPath(street, room);
         Assert.True(inward.Found, "no way in");
+
         // Straight through the doorway, not through the walls, and the way back is the same.
         Assert.InRange(Length(inward.Points), 230, 260);
         Assert.All(inward.Points.Where(p => p.X > cx - 66 && p.X < cx - 60), p => Assert.InRange(p.Z, cz - 8, cz + 8));
@@ -222,7 +243,8 @@ public class NavigationTests
         Assert.True(query.FindPath(street, room).Found);
 
         // Cache round trip keeps the polygons and the door links.
-        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "meitou-nav-int-" + Guid.NewGuid().ToString("N"));
+        var dir = Path.Combine(Path.GetTempPath(), "meitou-nav-int-" + Guid.NewGuid().ToString("N"));
+
         try
         {
             var cache = new NavMeshCache(dir);
@@ -244,6 +266,7 @@ public class NavigationTests
         var s = new Scene(new(32, 32));
         float cx = s.X0 + 2300, cz = s.Z0 + 2300;
         Vector2[] hull = [new(cx - 60, cz - 40), new(cx + 60, cz - 40), new(cx + 60, cz + 40), new(cx - 60, cz + 40)];
+
         // A Hive hut: the hull is a hole in the street, walled all round except an open doorway in the west wall, with no door and no painter.
         s.G.Carvers.Add(new NavVolume(hull, 0, 60));
         s.Box(new(cx - 66, 0, cz - 46), new(cx + 66, 60, cz - 40));
@@ -270,6 +293,7 @@ public class NavigationTests
         var open = new NavQuery(NavWorld.Empty.With(NavInteriors.Combine(exterior, [new(inside, Doorless: true)]).WithoutPruned()));
         var inward = open.FindPath(street, room);
         Assert.True(inward.Found, "no way in");
+
         // Through the doorway, not over the walls, and back out.
         Assert.InRange(Length(inward.Points), 230, 260);
         Assert.All(inward.Points.Where(p => p.X > cx - 66 && p.X < cx - 60), p => Assert.InRange(p.Z, cz - 8, cz + 8));

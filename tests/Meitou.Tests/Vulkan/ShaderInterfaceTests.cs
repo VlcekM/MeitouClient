@@ -1,8 +1,10 @@
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Gpu.Shaders;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The location injection on hand-written shaders: qualifiers, arrays, matrices, comments, several names per declaration.</summary>
+/// <summary>
+/// The location injection on hand-written shaders: qualifiers, arrays, matrices, comments, several names per declaration.
+/// </summary>
 public class ShaderInterfaceTests
 {
     static readonly GlslProgramCompiler Compiler = new(new ShaderCompileOptions { UseDiskCache = false });

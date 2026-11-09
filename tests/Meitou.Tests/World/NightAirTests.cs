@@ -1,10 +1,13 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.World;
 
-/// <summary>Meitou's night air (docs/formats/sky.md "Night air"): the glow the haze fades the far land into at night and the sky shows above the horizon, and the water's planet glint.</summary>
+/// <summary>
+/// Meitou's night air (docs/formats/sky.md "Night air"): the glow the haze fades the far land into at night and the sky shows above the horizon, and
+/// the water's planet glint.
+/// </summary>
 public class NightAirTests
 {
     static readonly SkyPlanet Moon = SkyPlanet.All[0];
@@ -17,9 +20,9 @@ public class NightAirTests
     [InlineData(1)]    // dawn: it rises at +X
     public void The_far_haze_never_gets_brighter_than_it_was_at_the_horizon_through_twilight(int side)
     {
-        // The far land fades into the sunlit haze colour plus the night air. The sun crosses the horizon in 0.02° steps from 10° up to 40° down: looking along the
-        // sun's azimuth and away from it, the haze's target colour (KenshiHaze.Colour at 0.6 D plus the air at the horizon) must not exceed its brightness at the
-        // moment the sun is on the horizon (no brighter-than-dusk moment as the air comes in), and must not jump.
+        // The far land fades into the sunlit haze colour plus the night air. The sun crosses the horizon in 0.02° steps from 10° up to 40° down:
+        // looking along the sun's azimuth and away from it, the haze's target colour (KenshiHaze.Colour at 0.6 D plus the air at the horizon) must
+        // not exceed its brightness at the moment the sun is on the horizon (no brighter-than-dusk moment as the air comes in), and must not jump.
         const float far = 30000;
         foreach (float towards in new[] { 1f, -1f })
         {
@@ -36,7 +39,8 @@ public class NightAirTests
             for (float degrees = -9.98f; degrees <= 40; degrees += 0.02f)
             {
                 float b = Brightness(degrees, out _);
-                if (degrees >= 0) Assert.True(b <= atHorizon * 1.02f + 1e-6f, $"{degrees}° down, towards {towards}: {b} against {atHorizon} at the horizon");
+                if (degrees >= 0) Assert.True(b <= atHorizon * 1.02f + 1e-6f,
+                        $"{degrees}° down, towards {towards}: {b} against {atHorizon} at the horizon");
                 worstJump = MathF.Max(worstJump, MathF.Abs(b - last) / MathF.Max(MathF.Max(b, last), 1e-5f));
                 last = b;
             }

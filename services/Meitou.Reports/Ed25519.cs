@@ -35,7 +35,9 @@ static class Ed25519
         return Multiply(B, s).SameAs(Add(r, Multiply(a, k)));
     }
 
-    /// <summary>A point from its 32-byte encoding: y little-endian with the sign of x in the top bit; null when it is not on the curve.</summary>
+    /// <summary>
+    /// A point from its 32-byte encoding: y little-endian with the sign of x in the top bit; null when it is not on the curve.
+    /// </summary>
     static Point? Decode(ReadOnlySpan<byte> bytes)
     {
         Span<byte> copy = stackalloc byte[32];
@@ -111,7 +113,9 @@ static class Ed25519
     {
         public static readonly Point Identity = new(0, 1, 1, 0);
         public static Point Affine(BigInteger x, BigInteger y) => new(x, y, 1, Mod(x * y));
-        /// <summary>The same curve point, whatever the projective scale.</summary>
+        /// <summary>
+        /// The same curve point, whatever the projective scale.
+        /// </summary>
         public bool SameAs(Point o) => Mod(X * o.Z - o.X * Z).IsZero && Mod(Y * o.Z - o.Y * Z).IsZero;
     }
 }

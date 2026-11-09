@@ -8,7 +8,7 @@ public class GameDatabaseTests
 {
     const uint New = 0x10, Modified = 0x11, Renamed = 0x13;
 
-    static FcsRecord Record(string id, uint flags, string name = "thing", FcsRecordType type = FcsRecordType.ITEM) =>
+    static FcsRecord Record(string id, uint flags, string name = "thing", FcsRecordType type = FcsRecordType.Item) =>
         new() { StringId = id, Flags = flags, Name = name, RecordType = type };
 
     static FcsFile File(params FcsRecord[] records)
@@ -88,9 +88,9 @@ public class GameDatabaseTests
     [Fact]
     public void Mods_cfg_follows_the_game_rules()
     {
-        Assert.Equal(
-            ["A", "B.x", "A"],
-            LoadOrder.ParseModsCfg(["A.mod", "", " B.mod ", "B.x.mod", "#C.mod", "/C.mod", ";C.mod", "C.MOD", "C", "rebirth.mod", "Dialogue.mod", "A.mod"]));
+        string[] lines =
+        ["A.mod", "", " B.mod ", "B.x.mod", "#C.mod", "/C.mod", ";C.mod", "C.MOD", "C", "rebirth.mod", "Dialogue.mod", "A.mod",];
+        Assert.Equal(["A", "B.x", "A"], LoadOrder.ParseModsCfg(lines));
     }
 
     [Fact]
@@ -104,10 +104,18 @@ public class GameDatabaseTests
         var db = GameDatabase.Load(order);
 
         var files = order.Entries.Select(e => FcsReader.ReadFile(e.Path)).ToList();
-        var defined = files.SelectMany(f => f.Records).Where(r => !r.IsModified).Select(r => r.StringId).ToHashSet();
-        var everRemoved = files.SelectMany(f => f.Records).Where(r => r.IsRemoved).Select(r => r.StringId).ToHashSet();
+        var defined = files.SelectMany(f => f.Records)
+            .Where(r => !r.IsModified)
+            .Select(r => r.StringId)
+            .ToHashSet();
+        var everRemoved = files.SelectMany(f => f.Records)
+            .Where(r => r.IsRemoved)
+            .Select(r => r.StringId)
+            .ToHashSet();
         // The gear blueprints' research is made at load, one <id>.TECH.1 per ARMOUR, CONTAINER and CROSSBOW (GameDatabase.AddGearBlueprints).
-        defined.UnionWith(db.Records.Values.Where(r => r.Type is FcsRecordType.ARMOUR or FcsRecordType.CONTAINER or FcsRecordType.CROSSBOW).Select(r => r.StringId + ".TECH.1"));
+        defined.UnionWith(db.Records.Values
+            .Where(r => r.Type is FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.Crossbow)
+            .Select(r => r.StringId + ".TECH.1"));
 
         // Every surviving record was defined somewhere; every defined record either survives or was removed.
         Assert.All(db.Records.Keys, id => Assert.Contains(id, defined));
@@ -118,8 +126,12 @@ public class GameDatabaseTests
         Assert.All(db.Records.Values, r =>
         {
             foreach (var list in r.ReferenceLists)
+            {
                 foreach (var reference in r.GetReferences(list))
+                {
                     Assert.True(db.Find(reference.TargetStringId) is not null, $"{r.StringId} '{list}' -> {reference.TargetStringId}");
+                }
+            }
         });
     }
 }

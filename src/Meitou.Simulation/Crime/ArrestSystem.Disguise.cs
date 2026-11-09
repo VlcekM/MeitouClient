@@ -1,33 +1,52 @@
+using Meitou.Simulation.Factions;
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation.Items;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Crime;
 
-// Disguises (docs/game/perception.md "Disguise"): the clothing level of the player's characters, the lookers that see through it, and the faction a disguised character passes for.
+// Disguises (docs/game/perception.md "Disguise"): the clothing level of the player's characters, the lookers that see through it, and the faction a
+// disguised character passes for.
 public sealed partial class ArrestSystem
 {
-    /// <summary>A disguise counts while its level is above this and it is not blown (<c>FUN_1407c0520</c>, <b>Verified</b>).</summary>
+    /// <summary>
+    /// A disguise counts while its level is above this and it is not blown (<c>FUN_1407c0520</c>, <b>Verified</b>).
+    /// </summary>
     public const float DisguiseWorks = 0.6f;
-    /// <summary>A looker sees through a disguise within this distance (<c>SensoryData::disguiseMods</c>: 160000 squared, <b>Verified</b>).</summary>
+    /// <summary>
+    /// A looker sees through a disguise within this distance (<c>SensoryData::disguiseMods</c>: 160000 squared, <b>Verified</b>).
+    /// </summary>
     public const float DisguiseRange = 400;
-    /// <summary>The seconds a looker's tooltip mark lasts (<c>disguiseMods</c>' 14.0, <b>Verified</b>).</summary>
+    /// <summary>
+    /// The seconds a looker's tooltip mark lasts (<c>disguiseMods</c>' 14.0, <b>Verified</b>).
+    /// </summary>
     public const float MarkSeconds = 14;
-    /// <summary>The marks: the uniform is the looker's faction's, the looker's faction owns the slave, the looker's squad knows the character (a grudge).</summary>
+    /// <summary>
+    /// The marks: the uniform is the looker's faction's, the looker's faction owns the slave, the looker's squad knows the character (a grudge).
+    /// </summary>
     public const int SameFactionMark = 0, SlaveOwnerMark = 1, KnowsMeMark = 2;
 
-    /// <summary>The towns the location tests read (null: no town tests, every factor that needs one is left out).</summary>
+    /// <summary>
+    /// The towns the location tests read (null: no town tests, every factor that needs one is left out).
+    /// </summary>
     public PopulationData? Towns { get; set; }
 
-    readonly Dictionary<(CharacterId Looker, CharacterId Target), float> disguiseMeters = [];
+    readonly Dictionary<(CharacterId Looker, CharacterId Target), float> _disguiseMeters = [];
 
-    /// <summary>The faction a looker takes <paramref name="c"/> for: its uniform's while the disguise works (<see cref="DisguiseWorks"/>, not blown), else its own.</summary>
+    /// <summary>
+    /// The faction a looker takes <paramref name="c"/> for: its uniform's while the disguise works (<see cref="DisguiseWorks"/>, not blown), else its
+    /// own.
+    /// </summary>
     public static int SeenFaction(CharacterCold c) => c.DisguiseFaction >= 0 && c.DisguiseLevel > DisguiseWorks && c.RecentlyWanted <= 0 ? c.DisguiseFaction : c.Faction;
 
     /// <summary>
-    /// The clothing disguise (<c>AI::vfunc_9</c> <c>FUN_1405a51e0</c>, <b>Observed</b>): a uniform hat 0.4, a uniform body armour 0.4 (its faction replaces the hat's), uniform legs of
-    /// that same faction 0.2; the faction is the last uniform piece's. No body armour, no legs, or two pieces of different uniforms make it a tenth.
+    /// The clothing disguise (<c>AI::vfunc_9</c> <c>FUN_1405a51e0</c>, <b>Observed</b>): a uniform hat 0.4, a uniform body armour 0.4 (its faction
+    /// replaces the hat's), uniform legs of that same faction 0.2; the faction is the last uniform piece's. No body armour, no legs, or two pieces of
+    /// different uniforms make it a tenth.
     /// </summary>
     public (float Level, int Faction) DisguiseOf(Inventory? inv)
     {
@@ -58,9 +77,10 @@ public sealed partial class ArrestSystem
     }
 
     /// <summary>
-    /// Once a scan: the player's characters' disguise levels, the marks' countdown, and every NPC looker within <see cref="DisguiseRange"/> that sees a working disguise filling its meter
-    /// on it (<see cref="DisguiseSeconds"/>; the original's spot meter, <c>FUN_140856cb0</c>). A meter that was full before this look sees through it: with a bounty of the looker's faction the
-    /// looker fires event 44 BOUNTY_SPOTTED, else the disguise is blown for 250 s (<see cref="CharacterCold.RecentlyWanted"/>, the same status field). Unseen meters empty by dt / 260.
+    /// Once a scan: the player's characters' disguise levels, the marks' countdown, and every NPC looker within <see cref="DisguiseRange"/> that sees
+    /// a working disguise filling its meter on it (<see cref="DisguiseSeconds"/>; the original's spot meter, <c>FUN_140856cb0</c>). A meter that was
+    /// full before this look sees through it: with a bounty of the looker's faction the looker fires event 44 BOUNTY_SPOTTED, else the disguise is
+    /// blown for 250 s (<see cref="CharacterCold.RecentlyWanted"/>, the same status field). Unseen meters empty by dt / 260.
     /// </summary>
     void Disguise(World world, float seconds)
     {
@@ -86,29 +106,30 @@ public sealed partial class ArrestSystem
                 if (v <= 0) continue;
                 var key = (table.IdOf(w), target);
                 seen.Add(key);
-                float meter = disguiseMeters.GetValueOrDefault(key);
+                float meter = _disguiseMeters.GetValueOrDefault(key);
                 if (meter > 1)
                 {
                     SeeThrough(world, w, s, c, wc);
-                    disguiseMeters.Remove(key);
+                    _disguiseMeters.Remove(key);
                     break;
                 }
-                disguiseMeters[key] = meter + seconds / DisguiseSeconds(world, w, wc, target, c, v, secure);
+                _disguiseMeters[key] = meter + seconds / DisguiseSeconds(world, w, wc, target, c, v, secure);
             }
         }
-        foreach (var key in disguiseMeters.Keys.ToList())
+        foreach (var key in _disguiseMeters.Keys.ToList())
         {
             if (seen.Contains(key)) continue;
-            float left = disguiseMeters[key] - seconds / Orders.SpotForgetSeconds;
-            if (left <= 0 || !table.IsAlive(key.Looker) || !table.IsAlive(key.Target)) disguiseMeters.Remove(key);
-            else disguiseMeters[key] = left;
+            float left = _disguiseMeters[key] - seconds / Orders.SpotForgetSeconds;
+            if (left <= 0 || !table.IsAlive(key.Looker) || !table.IsAlive(key.Target)) _disguiseMeters.Remove(key);
+            else _disguiseMeters[key] = left;
         }
     }
 
     /// <summary>
-    /// The seconds a looker takes to see through a working disguise (<c>disguiseMods</c>, <b>Observed</b>; literals <b>Verified</b>): a = 5 + 40 x lerp(stealth, 1, 2) x level x the
-    /// factors (the uniform is the looker's faction's x 0.6, its faction owns the slave x 0.5, its squad has a grudge on the character x 0.5, the character is inside the walls of a town
-    /// that is not public x 0.75, the looker stands outside a friendly town of a real faction x 2); then the spot meter's time lerp(v, 5a, a) x lerp(f, 4, 1) with the looker's alertness f
+    /// The seconds a looker takes to see through a working disguise (<c>disguiseMods</c>, <b>Observed</b>; literals <b>Verified</b>): a = 5 + 40 x
+    /// lerp(stealth, 1, 2) x level x the factors (the uniform is the looker's faction's x 0.6, its faction owns the slave x 0.5, its squad has a
+    /// grudge on the character x 0.5, the character is inside the walls of a town that is not public x 0.75, the looker stands outside a friendly
+    /// town of a real faction x 2); then the spot meter's time lerp(v, 5a, a) x lerp(f, 4, 1) with the looker's alertness f
     /// (<see cref="Orders.SpotAlertness"/>). The looker's marks go on the character for the tooltip.
     /// </summary>
     float DisguiseSeconds(World world, int w, CharacterCold wc, CharacterId target, CharacterCold c, float v, bool secure)
@@ -126,7 +147,9 @@ public sealed partial class ArrestSystem
 
     static void Mark(CharacterCold c, int mark) => (c.DisguiseMarks ??= new float[3])[mark] = MarkSeconds;
 
-    /// <summary>A looker has seen through the disguise: event 44 when the character is wanted by the looker's faction, else blown for 250 s.</summary>
+    /// <summary>
+    /// A looker has seen through the disguise: event 44 when the character is wanted by the looker's faction, else blown for 250 s.
+    /// </summary>
     void SeeThrough(World world, int w, int s, CharacterCold c, CharacterCold wc)
     {
         if (c.Bounties?.BookedFor(Crimes.Factions.Relations, wc.Faction) is { Claimed: false, Amount: > 0 })
@@ -140,9 +163,9 @@ public sealed partial class ArrestSystem
     }
 
     /// <summary>
-    /// "In secure location" (<b>engine reading</b> of <c>disguiseMods</c>' test on the status object's town: the town is not public, <c>Town::isPublic</c>, and the character is inside its
-    /// walls, <c>amInsideTownWalls</c>): the town the point stands in is a placed one that is not public, or a player town that is not, and the point is inside its walls (the gate regions
-    /// where known, else the town).
+    /// "In secure location" (<b>engine reading</b> of <c>disguiseMods</c>' test on the status object's town: the town is not public,
+    /// <c>Town::isPublic</c>, and the character is inside its walls, <c>amInsideTownWalls</c>): the town the point stands in is a placed one that is
+    /// not public, or a player town that is not, and the point is inside its walls (the gate regions where known, else the town).
     /// </summary>
     public bool SecureLocation(World world, Vector3 at)
     {
@@ -156,8 +179,8 @@ public sealed partial class ArrestSystem
     }
 
     /// <summary>
-    /// The looker stands in a town of a real faction that is not the player's and is no nest, and is not hostile to that faction (<c>disguiseMods</c>' second test; the town is the one
-    /// the point stands in, <b>engine reading</b> of the status object's hysteresis).
+    /// The looker stands in a town of a real faction that is not the player's and is no nest, and is not hostile to that faction
+    /// (<c>disguiseMods</c>' second test; the town is the one the point stands in, <b>engine reading</b> of the status object's hysteresis).
     /// </summary>
     bool InFriendlyTown(World world, Vector3 at, int faction)
     {
@@ -172,9 +195,9 @@ public sealed partial class ArrestSystem
 
     void HashDisguise(ref StateHasher hasher)
     {
-        if (disguiseMeters.Count == 0) return;   // only while a looker watches a disguise, so worlds without them hash as before
+        if (_disguiseMeters.Count == 0) return;   // only while a looker watches a disguise, so worlds without them hash as before
         hasher.Add(0x4D747273);
-        hasher.Add(disguiseMeters.Count);
-        foreach (var ((looker, target), meter) in disguiseMeters.OrderBy(k => k.Key.Looker.Slot).ThenBy(k => k.Key.Target.Slot)) { hasher.Add(looker); hasher.Add(target); hasher.Add(meter); }
+        hasher.Add(_disguiseMeters.Count);
+        foreach (var ((looker, target), meter) in _disguiseMeters.OrderBy(k => k.Key.Looker.Slot).ThenBy(k => k.Key.Target.Slot)) { hasher.Add(looker); hasher.Add(target); hasher.Add(meter); }
     }
 }

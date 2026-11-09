@@ -1,6 +1,6 @@
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Ui;
+using Meitou.Game.Ui;
 
 namespace Meitou.Tests.Ui;
 
@@ -47,6 +47,7 @@ public class NativeUiTests
     {
         var host = new UiHost();
         int clicks = 0;
+
         Extension Make(string id) => new(id, r =>
         {
             string style = r.RegisterStyle("button", new() { Background = Vector4.One });
@@ -54,6 +55,7 @@ public class NativeUiTests
             string factory = r.RegisterControl("control", _ => new UiNode(r.Key("control"), UiNodeKind.Button) { Style = style, Action = action });
             r.Contribute(UiSlots.Overlay, c => c.CreateControl(factory));
         });
+
         var first = host.Register(Make("first"));
         using var second = host.Register(Make("second"));
         var before = host.Arrange(UiMode.Meitou, 800, 600, new(), Slots());

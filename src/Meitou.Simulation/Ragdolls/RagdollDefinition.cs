@@ -4,12 +4,16 @@ using Meitou.Data.Physics;
 
 namespace Meitou.Simulation.Ragdolls;
 
-/// <summary>A rigid transform: rotate, then move. <see cref="Then"/> composes as "this in the frame of <paramref name="outer"/>".</summary>
+/// <summary>
+/// A rigid transform: rotate, then move. <see cref="Then"/> composes as "this in the frame of <paramref name="outer"/>".
+/// </summary>
 public readonly record struct RigidTransform(Vector3 Position, Quaternion Rotation)
 {
     public static readonly RigidTransform Identity = new(Vector3.Zero, Quaternion.Identity);
 
-    /// <summary>This transform expressed in <paramref name="outer"/>'s parent frame (outer ∘ this).</summary>
+    /// <summary>
+    /// This transform expressed in <paramref name="outer"/>'s parent frame (outer ∘ this).
+    /// </summary>
     public RigidTransform Then(RigidTransform outer) =>
         new(Vector3.Transform(Position, outer.Rotation) + outer.Position, Quaternion.Normalize(outer.Rotation * Rotation));
 
@@ -31,12 +35,18 @@ public sealed class RagdollBody
     public required int Bone { get; init; }
     public required string Name { get; init; }
     public required PhysicsShapeType Type { get; init; }
-    /// <summary>Box: full extents. Sphere: X is the radius. Capsule: X the radius, Y the length between the cap centres.</summary>
+    /// <summary>
+    /// Box: full extents. Sphere: X is the radius. Capsule: X the radius, Y the length between the cap centres.
+    /// </summary>
     public Vector3 Size { get; init; }
-    /// <summary>Convex hull points in the body's frame (<see cref="PhysicsShapeType.Mesh"/>).</summary>
+    /// <summary>
+    /// Convex hull points in the body's frame (<see cref="PhysicsShapeType.Mesh"/>).
+    /// </summary>
     public Vector3[]? Hull { get; init; }
     public float Mass { get; init; } = 1;
-    /// <summary>The body in model space in the binding pose (scaled).</summary>
+    /// <summary>
+    /// The body in model space in the binding pose (scaled).
+    /// </summary>
     public RigidTransform Bind { get; init; }
     /// <summary>
     /// The bone in the body's frame, bone = <c>BoneInBody.Then(body)</c>: at the actor's origin (the file's actor position) with the skeleton's binding rotation, as the game
@@ -44,7 +54,9 @@ public sealed class RagdollBody
     /// Big-Bones skeleton, its Bip01 actor 24 from the bone.
     /// </summary>
     public RigidTransform BoneInBody { get; init; }
-    /// <summary>The actor's origin in model space in the binding pose (scaled).</summary>
+    /// <summary>
+    /// The actor's origin in model space in the binding pose (scaled).
+    /// </summary>
     public Vector3 Actor { get; init; }
 }
 
@@ -66,11 +78,16 @@ public sealed class RagdollJoint
     public float Low { get; init; }
     public float High { get; init; }
     public float Swing { get; init; }
-    /// <summary>A revolute joint's spring (the file's spring 1, flag set by the game's joint builder <c>@ 1401a81b0</c>): stiffness (torque per radian), damper (torque per rad/s) and the rest angle in radians; stiffness 0 when the joint has none.</summary>
+    /// <summary>
+    /// A revolute joint's spring (the file's spring 1, flag set by the game's joint builder <c>@ 1401a81b0</c>): stiffness (torque per radian),
+    /// damper (torque per rad/s) and the rest angle in radians; stiffness 0 when the joint has none.
+    /// </summary>
     public float SpringStiffness { get; init; }
     public float SpringDamper { get; init; }
     public float SpringTarget { get; init; }
-    /// <summary>The axis in A's and B's frames (the hinge or twist axis).</summary>
+    /// <summary>
+    /// The axis in A's and B's frames (the hinge or twist axis).
+    /// </summary>
     public Vector3 AxisA => Vector3.Transform(Vector3.UnitZ, BasisA);
     public Vector3 AxisB => Vector3.Transform(Vector3.UnitZ, BasisB);
 }
@@ -83,14 +100,24 @@ public sealed class RagdollDefinition
 {
     public required RagdollBody[] Bodies { get; init; }
     public required RagdollJoint[] Joints { get; init; }
-    /// <summary>By bone handle: the body moving it, -1 none.</summary>
+    /// <summary>
+    /// By bone handle: the body moving it, -1 none.
+    /// </summary>
     public required int[] BodyOfBone { get; init; }
-    /// <summary>The body the character's position follows while the whole body is a ragdoll: <c>Bip01</c>'s, else the first (docs/game/ragdolls.md "Per frame").</summary>
+    /// <summary>
+    /// The body the character's position follows while the whole body is a ragdoll: <c>Bip01</c>'s, else the first (docs/game/ragdolls.md "Per
+    /// frame").
+    /// </summary>
     public int Root { get; init; }
 
-    /// <summary>Where the character stands while its whole body is a ragdoll in <paramref name="pose"/>: the root actor's origin, which is its bone's (<see cref="RagdollBody.BoneInBody"/>).</summary>
+    /// <summary>
+    /// Where the character stands while its whole body is a ragdoll in <paramref name="pose"/>: the root actor's origin, which is its bone's
+    /// (<see cref="RagdollBody.BoneInBody"/>).
+    /// </summary>
     public Vector3 RootAt(ReadOnlySpan<RigidTransform> pose) => pose[Root].Apply(Bodies[Root].BoneInBody.Position);
-    /// <summary>By body: the bodies joined to it (bit per body index, the first 64), which it does not collide with (no file joint enables collision).</summary>
+    /// <summary>
+    /// By body: the bodies joined to it (bit per body index, the first 64), which it does not collide with (no file joint enables collision).
+    /// </summary>
     public required ulong[] Joined { get; init; }
 
     /// <summary>
@@ -139,8 +166,15 @@ public sealed class RagdollDefinition
             bodyOfBone[bone] = bodies.Count;
             bodies.Add(new RagdollBody
             {
-                Bone = bone, Name = actor.Name, Type = shape.Type, Size = size, Hull = points, Mass = actor.Mass > 0 ? actor.Mass : 1,
-                Bind = bind, BoneInBody = boneBind.Then(bind.Inverse()), Actor = boneBind.Position,
+                Bone = bone,
+                Name = actor.Name,
+                Type = shape.Type,
+                Size = size,
+                Hull = points,
+                Mass = actor.Mass > 0 ? actor.Mass : 1,
+                Bind = bind,
+                BoneInBody = boneBind.Then(bind.Inverse()),
+                Actor = boneBind.Position,
             });
         }
         if (bodies.Count == 0) return null;
@@ -157,16 +191,25 @@ public sealed class RagdollDefinition
             var normal = j.Normal - Vector3.Dot(j.Normal, axis) * axis;
             normal = normal.LengthSquared() > 1e-8f ? Vector3.Normalize(normal) : Perpendicular(axis);
             var basis = PhysicsAttachmentFile.FromColumns(normal, Vector3.Cross(axis, normal), axis);
-            var (A, B) = (bodies[a].Bind, bodies[b].Bind);
+            var (bindA, bindB) = (bodies[a].Bind, bodies[b].Bind);
             var anchor = j.Anchor * scale;
             float deg = MathF.PI / 180;
             joints.Add(new RagdollJoint
             {
-                Type = j.Type, A = a, B = b,
-                OffsetA = A.Inverse().Apply(anchor), OffsetB = B.Inverse().Apply(anchor),
-                BasisA = Quaternion.Normalize(Quaternion.Inverse(A.Rotation) * basis), BasisB = Quaternion.Normalize(Quaternion.Inverse(B.Rotation) * basis),
-                SpringStiffness = j.Type == PhysicsJointType.Revolute && j.Spring1 is { Spring: > 0 } ? j.Spring1.Value.Spring : 0, SpringDamper = j.Spring1?.Damper ?? 0, SpringTarget = (j.Spring1?.Target ?? 0) * deg,
-                Limits = j.LimitsOn, Low = Math.Min(j.Low, j.High) * deg, High = Math.Max(j.Low, j.High) * deg, Swing = Math.Clamp(j.Swing, 1, 179) * deg,
+                Type = j.Type,
+                A = a,
+                B = b,
+                OffsetA = bindA.Inverse().Apply(anchor),
+                OffsetB = bindB.Inverse().Apply(anchor),
+                BasisA = Quaternion.Normalize(Quaternion.Inverse(bindA.Rotation) * basis),
+                BasisB = Quaternion.Normalize(Quaternion.Inverse(bindB.Rotation) * basis),
+                SpringStiffness = j.Type == PhysicsJointType.Revolute && j.Spring1 is { Spring: > 0 } ? j.Spring1.Value.Spring : 0,
+                SpringDamper = j.Spring1?.Damper ?? 0,
+                SpringTarget = (j.Spring1?.Target ?? 0) * deg,
+                Limits = j.LimitsOn,
+                Low = Math.Min(j.Low, j.High) * deg,
+                High = Math.Max(j.Low, j.High) * deg,
+                Swing = Math.Clamp(j.Swing, 1, 179) * deg,
             });
             if (a < 64) joined[b] |= 1UL << a;
             if (b < 64) joined[a] |= 1UL << b;

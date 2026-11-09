@@ -45,6 +45,7 @@ public class BuildingSaveHeightTests
         var save = new SaveBuilder(1).Game;
         BuildingSave.Write(save, world, Player);
         var written = Saved(save, site.Id);
+
         Assert.Equal(instanceY, written.Instance.Position.Y);
         Assert.Equal(worldY, written.State.Floats["world Y pos"]);
     }
@@ -61,6 +62,7 @@ public class BuildingSaveHeightTests
         var save = new SaveBuilder(1).Game;
         BuildingSave.Write(save, world, Player);
         var written = Saved(save, child.Id);
+
         Assert.Equal(worldY, written.State.Floats["world Y pos"]);
         Assert.Equal(offset, written.State.Floats["player furniture Y offset"]);
         Assert.Equal(offset, written.Instance.Position.Y);
@@ -79,14 +81,17 @@ public class BuildingSaveHeightTests
         BuildingSave.Write(save, original, Player);
         Saved(save, parent.Id).State.Strings["owner faction ID"] = "town-owner";
         Saved(save, child.Id).State.Strings.Remove(BuildingSave.MeitouParent);
-        var db = Db(Rec("height-fixture", FcsRecordType.BUILDING));
+        var db = Db(Rec("height-fixture", FcsRecordType.Building));
         using var loaded = new SimWorld(new WorldSettings(), new Surfaces());
+
         Assert.Equal(1, BuildingSave.Read(save, loaded, db, Player, 0));
         Assert.Equal(BuildingKey.Of(parent.Zone, parent.Id), Assert.Single(loaded.Buildings.All).Parent);
+
         for (int n = 0; n < 2; n++)
         {
             BuildingSave.Write(save, loaded, Player);
             var written = Saved(save, child.Id);
+
             Assert.Equal(22, written.State.Floats["player furniture Y offset"]);
             Assert.Equal(Hand.Read(Saved(save, parent.Id).State, "handle"), Hand.Read(written.State, "isInsideBuilding"));
         }

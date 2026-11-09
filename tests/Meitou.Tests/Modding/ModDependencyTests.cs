@@ -33,13 +33,15 @@ public class ModDependencyTests
 
     static string Needs(string id) => $$""", "dependencies": ["{{id}}"]""";
 
-    static ModHost Load(IReadOnlyList<ModInfo> enabled, IReadOnlySet<string>? allowed = null, IReadOnlyList<ModInfo>? disabled = null)
+    static ModHost Load(IReadOnlyList<ModInfo> enabled, IReadOnlyList<ModInfo>? disabled = null)
     {
-        var options = new ModHostOptions(enabled, allowed ?? enabled.Select(m => m.Name).ToHashSet(), null!, null!, () => null, Disabled: disabled);
+        var options = new ModHostOptions(enabled, null!, null!, () => null, Disabled: disabled);
         return ModHost.Load(options);
     }
 
-    /// <summary>A tiny assembly that is not on the game's list, as a framework DLL would be.</summary>
+    /// <summary>
+    /// A tiny assembly that is not on the game's list, as a framework DLL would be.
+    /// </summary>
     static byte[] EmitLibrary(string name)
     {
         var builder = new PersistedAssemblyBuilder(new AssemblyName(name), typeof(object).Assembly);
@@ -70,7 +72,9 @@ public class ModDependencyTests
         Assert.Same(framework.GetType("MeitouTestFramework.Ledger"), shared.GetType("MeitouTestFramework.Ledger"));
     }
 
-    /// <summary>Each refusal before code is opened names its fix; a refused dependency cascades with its reason; a disabled one says so.</summary>
+    /// <summary>
+    /// Each refusal before code is opened names its fix; a refused dependency cascades with its reason; a disabled one says so.
+    /// </summary>
     [Fact]
     public void The_loader_refuses_missing_disabled_later_and_refused_dependencies()
     {
@@ -117,6 +121,7 @@ public class ModDependencyTests
     {
         static CodeModManifest Built(string range) =>
             new("m", 2, ["m.dll"], "X.Y", null, null) { GameVersion = CodeModVersionRange.Parse(range) };
+
         static CodeModVersion V(string text) => CodeModVersion.TryParse(text, out var v) ? v : throw new ArgumentException(text);
 
         Assert.Null(CodeModChecks.GameVersionProblem(Built(">=0.16.1"), V("0.16.1-nightly.20261106")));
@@ -129,8 +134,8 @@ public class ModDependencyTests
     }
 
     /// <summary>
-    /// The launcher and the loader judge against what loads, not what is merely enabled: a refused (here untrusted) mod neither takes its id nor
-    /// conflicts, and a dependent names the mod that would have served.
+    /// The launcher and the loader judge against what loads, not what is merely enabled: a refused (here missing a dependency) mod neither takes its
+    /// id nor conflicts, and a dependent names the mod that would have served.
     /// </summary>
     [Fact]
     public void A_refused_mod_blocks_no_later_one_in_the_launcher_or_the_loader()
@@ -138,18 +143,17 @@ public class ModDependencyTests
         using var mods = new ModsFolder();
         ModInfo[] list =
         [
-            mods.Add("Old", Manifest("old")),
-            mods.Add("Rival", Manifest("rival", extra: """, "incompatible": ["x"]""")),
+            mods.Add("Old", Manifest("old", extra: Needs("absent"))),
+            mods.Add("Rival", Manifest("rival", extra: """, "incompatible": ["x"], "dependencies": ["absent"]""")),
             mods.Add("Twin", Manifest("old")),
             mods.Add("Needy", Manifest("needy", extra: Needs("old"))),
             mods.Add("X", Manifest("x")),
         ];
-        var trusted = new HashSet<string> { "Twin", "Needy", "X" };
 
-        var launcher = CodeModChecks.Check([.. list.Select(m => CodeModDependencies.ReadEntry(m, enabled: true))], trusted);
-        var host = Load(list, trusted);
+        var launcher = CodeModChecks.Check([.. list.Select(m => CodeModDependencies.ReadEntry(m, enabled: true))]);
+        var host = Load(list);
 
-        Assert.Empty(launcher);
+        Assert.Equal(["Old", "Rival"], launcher.Keys.Order());
         Assert.Contains("old.dll is missing", host.Refused["Twin"]);   // past the id check, to its (absent) code
         Assert.Contains("x.dll is missing", host.Refused["X"]);
         Assert.Contains("needs Twin ('old'), which is refused: old.dll is missing", host.Refused["Needy"]);

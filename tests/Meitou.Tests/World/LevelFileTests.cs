@@ -23,6 +23,7 @@ public class LevelFileTests
 
         var formats = new Dictionary<int, int>();
         int trailers = 0, wideTrailers = 0;
+
         foreach (var path in LevelFiles(install!))
         {
             var bytes = File.ReadAllBytes(path);
@@ -37,6 +38,7 @@ public class LevelFileTests
             if (file.Trailer is { Length: > 0 } t && file.TrailerEntryInts == 1)
                 Assert.True(t.SequenceEqual(t.Order()) && t.All(v => v > 0), $"{path}: trailer is not ascending positive ints");
         }
+
         Assert.Equal(715, formats.Values.Sum());
         Assert.Equal(new Dictionary<int, int> { [10] = 2, [13] = 4, [15] = 680, [16] = 29 }, formats);
         Assert.Equal(657, trailers);
@@ -59,19 +61,20 @@ public class LevelFileTests
         var buildings = world.Buildings().ToList();
         Assert.Equal(11708, buildings.Count);
         Assert.All(buildings, b => Assert.Equal(b.Zone, WorldLayout.ZoneOf(b.Position.X, b.Position.Z)));
+
         // The other building-list entries sit at the origin and point at records of their own zone file.
         var local = world.BuildingListEntries().Where(e => e.TargetsZoneRecord).ToList();
         Assert.All(local, e => Assert.Equal(Vector3.Zero, e.Position));
-        Assert.All(local, e => Assert.Equal(FcsRecordType.INVENTORY_STATE, world.Zones[e.Zone].Find(e.BuildingId)!.Type));
+        Assert.All(local, e => Assert.Equal(FcsRecordType.InventoryState, world.Zones[e.Zone].Find(e.BuildingId)!.Type));
 
         // Targets resolve against the merged game data, except three buildings that no base file defines.
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var missing = buildings.Select(b => b.BuildingId).Where(id => db.Find(id) is null).Distinct().Order().ToList();
         Assert.Equal(["97576-Newwworld.mod", "97577-Newwworld.mod", "97578-Newwworld.mod"], missing);
-        Assert.All(buildings.Where(b => db.Find(b.BuildingId) is not null), b => Assert.Equal(FcsRecordType.BUILDING, db.Find(b.BuildingId)!.Type));
+        Assert.All(buildings.Where(b => db.Find(b.BuildingId) is not null), b => Assert.Equal(FcsRecordType.Building, db.Find(b.BuildingId)!.Type));
         var towns = world.Towns().ToList();
         Assert.Equal(304, towns.Count);
-        Assert.All(towns, t => Assert.Equal(FcsRecordType.TOWN, db.Find(t.TownId)?.Type));
+        Assert.All(towns, t => Assert.Equal(FcsRecordType.Town, db.Find(t.TownId)?.Type));
 
         // A town's GAMESTATE_TOWN lists the zone its placement lies in (when it lists any).
         var townZones = world.TownZones();

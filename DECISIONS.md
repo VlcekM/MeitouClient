@@ -9,8 +9,8 @@ Current choices; implementation details belong in the linked references.
   stateless seeded rolls; agreement across worker counts. [docs/simulation.md](docs/simulation.md).
 - **Ownership:** `WorldSession` owns clocks, input, camera and world; GPU state belongs to Rendering.
   Navigation uses DotRecast and our cache; Havok is a reference. [docs/engine.md](docs/engine.md).
-- **Rendering:** Vulkan only; native API/Core/compiler in `Meitou.Rendering/Gpu/`, windowing in
-  `Meitou.Rendering.Display`. Retain `LegacyProgram` and `GlConventions` while needed. Images use
+- **Rendering:** Vulkan only; native API/Core/compiler in `Meitou.Game/Rendering/Gpu/`, windowing in
+  `Meitou.Game/Rendering/Display/`. Retain `LegacyProgram` and `GlConventions` while needed. Images use
   GENERAL. Require bindless descriptor indexing and multi-draw indirect; no native-model fallback.
   [docs/renderer-native.md](docs/renderer-native.md). Scene depth: one reversed 32-bit float buffer, 0..1 clip depth, far =
   view distance; shadow and preview targets conventional ([docs/renderer-native.md](docs/renderer-native.md) "Depth").

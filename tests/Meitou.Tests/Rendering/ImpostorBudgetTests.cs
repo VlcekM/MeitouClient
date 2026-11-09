@@ -1,9 +1,11 @@
-using Meitou.Rendering;
-using Meitou.Rendering.Impostors;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Impostors;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The impostor atlas budget rule and the far-mip arithmetic (docs/impostors.md section 10): pure functions, no GPU.</summary>
+/// <summary>
+/// The impostor atlas budget rule and the far-mip arithmetic (docs/impostors.md section 10): pure functions, no GPU.
+/// </summary>
 public class ImpostorBudgetTests
 {
     [Fact]
@@ -12,14 +14,19 @@ public class ImpostorBudgetTests
         // BushTree01-like: radius 626, 256 pixel frames, 7 levels.
         float radius = 626;
         int atTransition = FoliageRenderer.SkipFor(256, 7, radius, 4000);
+
         Assert.Equal(0, atTransition);   // 361 pixels at 4000 units: the largest level
+
         int previous = atTransition;
         for (float distance = 4000; distance <= 1024000; distance *= 2)
         {
             int skip = FoliageRenderer.SkipFor(256, 7, radius, distance);
+
             Assert.True(skip >= previous && skip <= previous + 1, $"{distance}: {previous} -> {skip}");
+
             previous = skip;
         }
+
         Assert.Equal(6, previous);   // never past the smallest level (4 x 4 pixels a frame)
         Assert.Equal(1, FoliageRenderer.SkipFor(256, 7, radius, 16000));
     }
@@ -33,7 +40,8 @@ public class ImpostorBudgetTests
         ImpostorTexture Map(ImpostorMap map, ImpostorEncoding encoding) => new()
         {
             Map = map, Encoding = encoding,
-            Levels = Enumerable.Range(0, levels).Select(l => (ReadOnlyMemory<byte>)new byte[ImpostorTexture.LevelBytes(encoding, (grid * frame) >> l)]).ToArray(),
+            Levels = Enumerable.Range(0,
+                    levels).Select(l => (ReadOnlyMemory<byte>)new byte[ImpostorTexture.LevelBytes(encoding, (grid * frame) >> l)]).ToArray(),
         };
         var atlas = new ImpostorAtlas
         {
@@ -41,6 +49,7 @@ public class ImpostorBudgetTests
             Textures = [Map(ImpostorMap.Albedo, ImpostorEncoding.Bc1), Map(ImpostorMap.Normal, ImpostorEncoding.Bc5)],
         };
         for (int skip = 0; skip < levels; skip++)
+
             Assert.Equal(ImpostorTextures.BytesFor(atlas, skip, skip + 1), FoliageRenderer.AtlasBytes(frame, grid, skip));
     }
 }

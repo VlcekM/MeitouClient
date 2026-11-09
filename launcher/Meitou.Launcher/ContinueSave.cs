@@ -9,22 +9,27 @@ namespace Meitou.Launcher;
 public sealed partial class MainWindow
 {
     // Options that pick the game's start themselves; the game refuses --load beside the others.
-    static readonly string[] StartOptions = ["--load", "--continue", "--new-game", "--no-population", "--duel", "--sandbox", "--battle", "--terrain-sandbox"];
+    static readonly string[] StartOptions = ["--load", "--continue", "--new-game", "--no-population", "--duel", "--sandbox", "--battle",
+            "--terrain-sandbox"];
 
     async void Continue_Click(object? sender, RoutedEventArgs e) => await StartGame(continueSave: true);
 
-    /// <summary>Shows Continue with the newest save's name while there is a save (rescanned when the window is activated).</summary>
+    /// <summary>
+    /// Shows Continue with the newest save's name while there is a save (rescanned when the window is activated).
+    /// </summary>
     async Task RefreshContinueAsync()
     {
-        var slot = install is { } gameInstall ? await Task.Run(() => NewestSave(gameInstall)) : null;
+        var slot = _install is { } gameInstall ? await Task.Run(() => NewestSave(gameInstall)) : null;
         ContinueButton.IsVisible = slot is not null;
+
         // Its fixed least width (the footer not moving between Play texts) would crowd the footer beside Continue.
         PlayButton.MinWidth = slot is null ? 312 : 0;
-        if (download is null) ShowPlayText();
+        if (_download is null) ShowPlayText();
         if (slot is null) return;
 
         ContinueSaveText.Text = slot.Name;
-        ToolTip.SetTip(ContinueButton, Tr("Load the newest save, {1} ({2}); its mods must be the enabled ones", slot.Name, slot.ModifiedUtc.ToLocalTime().ToString("g")));
+        ToolTip.SetTip(ContinueButton, Tr("Load the newest save, {1} ({2}); its mods must be the enabled ones", slot.Name,
+                slot.ModifiedUtc.ToLocalTime().ToString("g")));
     }
 
     static SaveModSlot? NewestSave(GameInstall gameInstall)
@@ -39,17 +44,19 @@ public sealed partial class MainWindow
         }
     }
 
-    /// <summary>The newest save when its mods are the enabled ones; else null, with the reason in the status.</summary>
+    /// <summary>
+    /// The newest save when its mods are the enabled ones; else null, with the reason in the status.
+    /// </summary>
     async Task<SaveModSlot?> ContinueTarget(GameInstall gameInstall)
     {
         if (!ModsReady()) return null;
-        if (SplitArguments(config.LaunchArguments).FirstOrDefault(StartOptions.Contains) is { } option)
+        if (SplitArguments(_config.LaunchArguments).FirstOrDefault(StartOptions.Contains) is { } option)
         {
             Status(Tr("Launch arguments have {1}, which picks the start itself: remove it to continue a save.", option));
             return null;
         }
 
-        var enabled = mods.Where(m => m.Enabled).Select(m => m.Name).ToList();
+        var enabled = _mods.Where(m => m.Enabled).Select(m => m.Name).ToList();
         try
         {
             var (slot, problem) = await Task.Run(() => CheckNewestSave(gameInstall, enabled));
@@ -66,8 +73,10 @@ public sealed partial class MainWindow
     // The newest save, or null and why it can't be continued.
     static (SaveModSlot? Slot, string? Problem) CheckNewestSave(GameInstall gameInstall, List<string> enabled)
     {
-        if (SaveModList.Scan(SaveModList.Roots(gameInstall)).FirstOrDefault() is not { } slot) return (null, Tr("No save to continue."));
-        if (SaveModList.Read(slot.Folder) is not { } saved) return (null, Tr("The save '{1}' has no mod list.", slot.Name));
+        if (SaveModList.Scan(SaveModList.Roots(gameInstall)).FirstOrDefault() is not { } slot)
+            return (null, Tr("No save to continue."));
+        if (SaveModList.Read(slot.Folder) is not { } saved)
+            return (null, Tr("The save '{1}' has no mod list.", slot.Name));
 
         return ModDifferences(saved, enabled) is { } differences
             ? (null, Tr("The save '{1}' was made with other mods ({2}); Mods > From save applies its list.", slot.Name, differences))

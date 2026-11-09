@@ -6,26 +6,16 @@
     <Project Path="services/Meitou.Reports/Meitou.Reports.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/Meitou.Audio/Meitou.Audio.csproj" />
-    <Project Path="src/Meitou.Compat.CharactersEmotions/Meitou.Compat.CharactersEmotions.csproj" />
     <Project Path="src/Meitou.Core/Meitou.Core.csproj" />
     <Project Path="src/Meitou.Data/Meitou.Data.csproj" />
-    <Project Path="src/Meitou.Engine/Meitou.Engine.csproj" />
     <Project Path="src/Meitou.Game/Meitou.Game.csproj" />
-    <Project Path="src/Meitou.Metal.Host/Meitou.Metal.Host.csproj" />
-    <Project Path="src/Meitou.Metal/Meitou.Metal.csproj" />
-    <Project Path="src/Meitou.MetalSpike/Meitou.MetalSpike.csproj" />
-    <Project Path="src/Meitou.Modding/Meitou.Modding.csproj" />
-    <Project Path="src/Meitou.Navigation/Meitou.Navigation.csproj" />
-    <Project Path="src/Meitou.Rendering.Display/Meitou.Rendering.Display.csproj" />
-    <Project Path="src/Meitou.Rendering/Meitou.Rendering.csproj" />
     <Project Path="src/Meitou.Simulation/Meitou.Simulation.csproj" />
-    <Project Path="src/Meitou.Ui/Meitou.Ui.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Meitou.Tests/Meitou.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tools/Meitou.MetalHost/Meitou.MetalHost.csproj" />
     <Project Path="tools/Meitou.ModelViewer/Meitou.ModelViewer.csproj" />
     <Project Path="tools/Meitou.Tools/Meitou.Tools.csproj" />
   </Folder>

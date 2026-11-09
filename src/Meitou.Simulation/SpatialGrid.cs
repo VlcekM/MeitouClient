@@ -10,39 +10,49 @@ namespace Meitou.Simulation;
 /// </summary>
 public sealed class SpatialGrid
 {
-    readonly float cellSize;
-    (long Cell, int Slot)[] entries = [];
-    int count;
+    readonly float _cellSize;
+    (long Cell, int Slot)[] _entries = [];
+    int _count;
 
     public SpatialGrid(float cellSize)
     {
         if (!(cellSize > 0)) throw new ArgumentOutOfRangeException(nameof(cellSize));
-        this.cellSize = cellSize;
+
+        this._cellSize = cellSize;
     }
 
-    public float CellSize => cellSize;
+    public float CellSize => _cellSize;
 
     internal void Build(ReadOnlySpan<CharacterHot> state)
     {
-        if (entries.Length < state.Length) entries = new (long, int)[Math.Max(state.Length, entries.Length * 2)];
-        count = 0;
+        if (_entries.Length < state.Length) _entries = new (long, int)[Math.Max(state.Length, _entries.Length * 2)];
+
+        _count = 0;
+
         for (int i = 0; i < state.Length; i++)
         {
             if (!state[i].Alive) continue;
-            entries[count++] = (CellOf(state[i].Position.X, state[i].Position.Z), i);
+
+            _entries[_count++] = (CellOf(state[i].Position.X, state[i].Position.Z), i);
         }
+
         // (cell, slot) pairs are unique, so the sort is total and its result does not depend on the algorithm.
-        Array.Sort(entries, 0, count);
+        Array.Sort(_entries, 0, _count);
     }
 
-    long CellOf(float x, float z) => Pack((int)MathF.Floor(x / cellSize), (int)MathF.Floor(z / cellSize));
+    long CellOf(float x, float z) => Pack((int)MathF.Floor(x / _cellSize), (int)MathF.Floor(z / _cellSize));
 
-    /// <summary>The cell column and row of a point (the cell <see cref="Build"/> files it in).</summary>
-    internal (int X, int Z) Cell(Vector3 at) => ((int)MathF.Floor(at.X / cellSize), (int)MathF.Floor(at.Z / cellSize));
+    /// <summary>
+    /// The cell column and row of a point (the cell <see cref="Build"/> files it in).
+    /// </summary>
+    internal (int X, int Z) Cell(Vector3 at) => ((int)MathF.Floor(at.X / _cellSize), (int)MathF.Floor(at.Z / _cellSize));
 
-    /// <summary>The cells <see cref="Query"/> visits for a circle: a character is visited exactly when its <see cref="Cell"/> lies in this range.</summary>
+    /// <summary>
+    /// The cells <see cref="Query"/> visits for a circle: a character is visited exactly when its <see cref="Cell"/> lies in this range.
+    /// </summary>
     internal CellRange Range(float x, float z, float radius) =>
-        new((int)MathF.Floor((x - radius) / cellSize), (int)MathF.Floor((x + radius) / cellSize), (int)MathF.Floor((z - radius) / cellSize), (int)MathF.Floor((z + radius) / cellSize));
+        new((int)MathF.Floor((x - radius) / _cellSize), (int)MathF.Floor((x + radius) / _cellSize), (int)MathF.Floor((z - radius) / _cellSize),
+            (int)MathF.Floor((z + radius) / _cellSize));
 
     internal readonly record struct CellRange(int X0, int X1, int Z0, int Z1)
     {
@@ -58,8 +68,9 @@ public sealed class SpatialGrid
     /// </summary>
     public void Query<TState>(float x, float z, float radius, ref TState state, QueryVisitor<TState> visit)
     {
-        int x0 = (int)MathF.Floor((x - radius) / cellSize), x1 = (int)MathF.Floor((x + radius) / cellSize);
-        int z0 = (int)MathF.Floor((z - radius) / cellSize), z1 = (int)MathF.Floor((z + radius) / cellSize);
+        int x0 = (int)MathF.Floor((x - radius) / _cellSize), x1 = (int)MathF.Floor((x + radius) / _cellSize);
+        int z0 = (int)MathF.Floor((z - radius) / _cellSize), z1 = (int)MathF.Floor((z + radius) / _cellSize);
+
         // The cells of one column (cx) with cz ascending are adjacent in the sorted entries, so one search per run finds the first and a scan to
         // the last visits them in the same order as a search per cell would. The packed cz is unsigned, so negative rows sort after the others:
         // a column crossing cz = 0 is two runs, the negative one first.
@@ -76,19 +87,21 @@ public sealed class SpatialGrid
 
     void Run<TState>(long first, long last, ref TState state, QueryVisitor<TState> visit)
     {
-        for (int i = FirstOf(first); i < count && entries[i].Cell <= last; i++) visit(entries[i].Slot, ref state);
+        for (int i = FirstOf(first); i < _count && _entries[i].Cell <= last; i++) visit(_entries[i].Slot, ref state);
     }
 
     public delegate void QueryVisitor<TState>(int slot, ref TState state);
 
     int FirstOf(long key)
     {
-        int lo = 0, hi = count;
+        int lo = 0, hi = _count;
+
         while (lo < hi)
         {
             int mid = (lo + hi) >>> 1;
-            if (entries[mid].Cell < key) lo = mid + 1; else hi = mid;
+            if (_entries[mid].Cell < key) lo = mid + 1; else hi = mid;
         }
+
         return lo;
     }
 }

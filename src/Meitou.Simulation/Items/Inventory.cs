@@ -6,8 +6,9 @@ using Meitou.Data.Gameplay;
 namespace Meitou.Simulation.Items;
 
 /// <summary>
-/// A character's inventory: its items in sections, with their grid cells. The main section is a grid of <see cref="MainWidth"/> x <see cref="MainHeight"/> cells (the
-/// size observed in the vanilla inventory screenshot, docs/game/ui-screens.md); a backpack's contents are an inventory of the CONTAINER's storage size. Only serial phases change it.
+/// A character's inventory: its items in sections, with their grid cells. The main section is a grid of <see cref="MainWidth"/> x
+/// <see cref="MainHeight"/> cells (the size observed in the vanilla inventory screenshot, docs/game/ui-screens.md); a backpack's contents are an
+/// inventory of the CONTAINER's storage size. Only serial phases change it.
 /// </summary>
 public sealed class Inventory(int width, int height)
 {
@@ -19,20 +20,25 @@ public sealed class Inventory(int width, int height)
     public int Height { get; } = height;
     public List<ItemInstance> Items { get; } = [];
 
-    /// <summary>The worn backpack, if any.</summary>
+    /// <summary>
+    /// The worn backpack, if any.
+    /// </summary>
     public ItemInstance? Backpack => Items.Find(i => i.Section == "backpack_attach");
 
-    /// <summary>The weight of everything in this inventory (not including a carried person or fitted prosthetics, which vanilla keeps outside the inventory).</summary>
+    /// <summary>
+    /// The weight of everything in this inventory (not including a carried person or fitted prosthetics, which vanilla keeps outside the inventory).
+    /// </summary>
     public float ContentWeight()
     {
         float w = 0;
-        foreach (var i in Items) if (!InventoryCommands.IsLimbSection(i.Section)) w += i.Weight;
+        foreach (var i in Items)
+            if (!InventoryCommands.IsLimbSection(i.Section)) w += i.Weight;
         return w;
     }
 
     /// <summary>
-    /// <see cref="ContentWeight()"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in the section it came from
-    /// (<c>FUN_140749160</c>), times the worn bag's factor when that is the bag's contents.
+    /// <see cref="ContentWeight()"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in
+    /// the section it came from (<c>FUN_140749160</c>), times the worn bag's factor when that is the bag's contents.
     /// </summary>
     public float ContentWeight(HeldItem? held)
     {
@@ -42,7 +48,9 @@ public sealed class Inventory(int width, int height)
         return w + held.Item.Weight * factor;
     }
 
-    /// <summary>First cell where a w x h footprint fits among the items of <paramref name="section"/>, or false.</summary>
+    /// <summary>
+    /// First cell where a w x h footprint fits among the items of <paramref name="section"/>, or false.
+    /// </summary>
     public bool FindCell(string section, int w, int h, out int x, out int y)
     {
         for (y = 0; y + h <= Height; y++)
@@ -53,15 +61,20 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
-    /// The rectangles the grid is split into (a building shop's stock, one per stock container, <see cref="Trading.Shop.ForBuilding"/>): an item lies wholly inside one, the cells outside
-    /// them hold nothing. Null: the whole grid is one.
+    /// The rectangles the grid is split into (a building shop's stock, one per stock container, <see cref="Trading.Shop.ForBuilding"/>): an item lies
+    /// wholly inside one, the cells outside them hold nothing. Null: the whole grid is one.
     /// </summary>
     public IReadOnlyList<GridRegion>? Regions { get; init; }
 
-    /// <summary>Whether a w x h footprint at (x, y) lies inside one of the <see cref="Regions"/> (always without them).</summary>
+    /// <summary>
+    /// Whether a w x h footprint at (x, y) lies inside one of the <see cref="Regions"/> (always without them).
+    /// </summary>
     public bool InRegion(int x, int y, int w, int h) => Regions is not { } regions || regions.Any(r => r.Contains(x, y, w, h));
 
-    /// <summary>Whether a w x h footprint at (x, y) of <paramref name="section"/> overlaps no item and lies inside one of the <see cref="Regions"/> (other bounds are the caller's to check).</summary>
+    /// <summary>
+    /// Whether a w x h footprint at (x, y) of <paramref name="section"/> overlaps no item and lies inside one of the <see cref="Regions"/> (other
+    /// bounds are the caller's to check).
+    /// </summary>
     public bool IsFree(string section, int x, int y, int w, int h)
     {
         if (!InRegion(x, y, w, h)) return false;
@@ -73,16 +86,23 @@ public sealed class Inventory(int width, int height)
         return true;
     }
 
-    /// <summary>A backpack's contents: the CONTAINER's <c>stackable bonus minimum</c> and <c>stackable bonus mult</c> (1 and 1 for a character's own grid), see <see cref="LimitOf"/>.</summary>
+    /// <summary>
+    /// A backpack's contents: the CONTAINER's <c>stackable bonus minimum</c> and <c>stackable bonus mult</c> (1 and 1 for a character's own grid),
+    /// see <see cref="LimitOf"/>.
+    /// </summary>
     public int StackBonusMinimum { get; init; } = 1;
     public float StackBonusMult { get; init; } = 1;
-    /// <summary>A storage limited to listed items (a resource store's <c>storage limit</c>): its stacks start from 1 instead of the record's <c>stackable</c> (<see cref="LimitOf"/>).</summary>
+    /// <summary>
+    /// A storage limited to listed items (a resource store's <c>storage limit</c>): its stacks start from 1 instead of the record's <c>stackable</c>
+    /// (<see cref="LimitOf"/>).
+    /// </summary>
     public bool Limited { get; init; }
 
     /// <summary>
-    /// How many units of <paramref name="item"/> one cell of this inventory holds (<c>FUN_1407466b0</c>, <b>Observed</b>): its <see cref="ItemInstance.StackLimit"/> (1 in a
-    /// <see cref="Limited"/> storage), with this inventory's bonus applied (<see cref="ItemInfo.StackLimitIn"/>; a bag with mult 5 holds five of an item that does not stack elsewhere,
-    /// <b>Observed</b>); 1 for the types that never stack (<see cref="InventoryCommands.NeverStacks"/>).
+    /// How many units of <paramref name="item"/> one cell of this inventory holds (<c>FUN_1407466b0</c>, <b>Observed</b>): its
+    /// <see cref="ItemInstance.StackLimit"/> (1 in a <see cref="Limited"/> storage), with this inventory's bonus applied
+    /// (<see cref="ItemInfo.StackLimitIn"/>; a bag with mult 5 holds five of an item that does not stack elsewhere, <b>Observed</b>); 1 for the types
+    /// that never stack (<see cref="InventoryCommands.NeverStacks"/>).
     /// </summary>
     public int LimitOf(ItemInstance item)
     {
@@ -93,11 +113,12 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
-    /// Puts an item in, honouring the stack limit of each inventory (<see cref="LimitOf"/>): first it tops up stacks of the same record and quality in the main grid, then in the
-    /// backpack; what is left takes the first free cells of <c>main</c>, then of the backpack, at most a full stack per cell (the item itself goes into the last cell, split-off
-    /// copies into the others). True when every unit found a place; otherwise what did not fit stays in <paramref name="item"/>'s <see cref="ItemInstance.Quantity"/> (the caller
-    /// keeps or drops it) and the units placed stay placed. Units with a buyback receipt top up only stacks of the same trade and direction; with no free cell left they join plain
-    /// stacks too and lose the receipt (docs/simulation.md, trading).
+    /// Puts an item in, honouring the stack limit of each inventory (<see cref="LimitOf"/>): first it tops up stacks of the same record and quality
+    /// in the main grid, then in the backpack; what is left takes the first free cells of <c>main</c>, then of the backpack, at most a full stack per
+    /// cell (the item itself goes into the last cell, split-off copies into the others). True when every unit found a place; otherwise what did not
+    /// fit stays in <paramref name="item"/>'s <see cref="ItemInstance.Quantity"/> (the caller keeps or drops it) and the units placed stay placed.
+    /// Units with a buyback receipt top up only stacks of the same trade and direction; with no free cell left they join plain stacks too and lose
+    /// the receipt (docs/simulation.md, trading).
     /// </summary>
     public bool Add(ItemInstance item)
     {
@@ -109,8 +130,9 @@ public sealed class Inventory(int width, int height)
     }
 
     /// <summary>
-    /// Whether one unit of <paramref name="item"/> would find a place in <see cref="Add"/> (a dry run, nothing changes): a stack of it in the main grid or the backpack with room
-    /// left, or a free cell in either. The state <c>gotInventoryRoomForResources</c> (82, <c>FUN_14059bd80</c>: the inventory, else the worn backpack's).
+    /// Whether one unit of <paramref name="item"/> would find a place in <see cref="Add"/> (a dry run, nothing changes): a stack of it in the main
+    /// grid or the backpack with room left, or a free cell in either. The state <c>gotInventoryRoomForResources</c> (82, <c>FUN_14059bd80</c>: the
+    /// inventory, else the worn backpack's).
     /// </summary>
     public bool HasRoomFor(ItemInstance item) => Room(this, "main", item) || Backpack?.Contents is { } bag && Room(bag, "backpack_content", item);
 
@@ -119,26 +141,29 @@ public sealed class Inventory(int width, int height)
         int limit = inv.LimitOf(item);
         if (limit > 1)
             foreach (var other in inv.Items)
-                if (other.Section == section && SameStack(other, item) && other.Contents is null && other.Quantity < limit) return true;
+                if (other.Section == section && SameStack(other, item) && other.Contents is null && other.Quantity < limit)
+                    return true;
         return inv.FindCell(section, item.Width, item.Height, out _, out _);
     }
 
     /// <summary>
-    /// Whether two items may share a stack: same record, material and quality (as <see cref="InventoryCommands.Stackable"/>, <c>FUN_140715560</c>), stolen mark, death and unique
-    /// flags. The material keeps blueprints of different researches apart: they share their look record (#354).
+    /// Whether two items may share a stack: same record, material and quality (as <see cref="InventoryCommands.Stackable"/>, <c>FUN_140715560</c>),
+    /// stolen mark, death and unique flags. The material keeps blueprints of different researches apart: they share their look record (#354).
     /// </summary>
-    static bool SameStack(ItemInstance a, ItemInstance b) => a.Record == b.Record && a.MaterialId == b.MaterialId && a.Quality == b.Quality && a.Mark == b.Mark
+    static bool SameStack(ItemInstance a, ItemInstance b) => a.Record == b.Record && a.MaterialId == b.MaterialId && a.Quality == b.Quality
+            && a.Mark == b.Mark
         && a.Death == b.Death && a.Unique == b.Unique;
 
     /// <summary>
-    /// The original's auto-add into one section (<c>FUN_14074c8b0</c>): tops up the stacks of <paramref name="section"/> first, then takes the first free cells row by row from the top, left to
-    /// right, a full stack per cell. True when every unit found a place; what did not fit stays in <paramref name="item"/>.
+    /// The original's auto-add into one section (<c>FUN_14074c8b0</c>): tops up the stacks of <paramref name="section"/> first, then takes the first
+    /// free cells row by row from the top, left to right, a full stack per cell. True when every unit found a place; what did not fit stays in
+    /// <paramref name="item"/>.
     /// </summary>
     public bool AddTo(string section, ItemInstance item) => TopUp(this, item, false, section) || Place(this, section, item);
 
     /// <summary>
-    /// Moves units of <paramref name="item"/> into stacks of <paramref name="into"/> with room left (of <paramref name="section"/>, else of its grids; <paramref name="dropReceipt"/>:
-    /// plain stacks too); true when none are left.
+    /// Moves units of <paramref name="item"/> into stacks of <paramref name="into"/> with room left (of <paramref name="section"/>, else of its
+    /// grids; <paramref name="dropReceipt"/>: plain stacks too); true when none are left.
     /// </summary>
     static bool TopUp(Inventory into, ItemInstance item, bool dropReceipt, string? section = null)
     {
@@ -160,7 +185,9 @@ public sealed class Inventory(int width, int height)
         return false;
     }
 
-    /// <summary>Puts the units of <paramref name="item"/> into free cells of <paramref name="into"/>, a full stack per cell; true when none are left.</summary>
+    /// <summary>
+    /// Puts the units of <paramref name="item"/> into free cells of <paramref name="into"/>, a full stack per cell; true when none are left.
+    /// </summary>
     static bool Place(Inventory into, string section, ItemInstance item)
     {
         int limit = into.LimitOf(item);
@@ -177,19 +204,23 @@ public sealed class Inventory(int width, int height)
         return false;
     }
 
-    /// <summary>Every item of this inventory and of the backpack, in order.</summary>
+    /// <summary>
+    /// Every item of this inventory and of the backpack, in order.
+    /// </summary>
     public IEnumerable<ItemInstance> All()
     {
         foreach (var i in Items)
         {
             yield return i;
-            if (i.Contents is { } bag) foreach (var inner in bag.All()) yield return inner;
+            if (i.Contents is { } bag)
+                foreach (var inner in bag.All()) yield return inner;
         }
     }
 
     /// <summary>
-    /// The items the windows list, each with its index in <see cref="All"/> (the number the drag tokens carry): this inventory's own and the worn backpack's contents. The contents of a
-    /// container carried in the grid are not listed (their cells would draw over the worn bag's in its window; the original opens only the worn backpack's grid).
+    /// The items the windows list, each with its index in <see cref="All"/> (the number the drag tokens carry): this inventory's own and the worn
+    /// backpack's contents. The contents of a container carried in the grid are not listed (their cells would draw over the worn bag's in its window;
+    /// the original opens only the worn backpack's grid).
     /// </summary>
     public IEnumerable<(int Index, ItemInstance Item)> Shown()
     {
@@ -207,8 +238,9 @@ public sealed class Inventory(int width, int height)
         }
     }
 
-
-    /// <summary>Removes one unit of an item (the whole item when it is the last), wherever it is.</summary>
+    /// <summary>
+    /// Removes one unit of an item (the whole item when it is the last), wherever it is.
+    /// </summary>
     public bool RemoveOne(ItemInstance item)
     {
         if (Items.Contains(item))
@@ -222,7 +254,9 @@ public sealed class Inventory(int width, int height)
         return false;
     }
 
-    /// <summary>Removes an item whole (every unit of its stack), wherever it is (this inventory or the backpack).</summary>
+    /// <summary>
+    /// Removes an item whole (every unit of its stack), wherever it is (this inventory or the backpack).
+    /// </summary>
     public bool Remove(ItemInstance item)
     {
         if (Items.Remove(item)) return true;
@@ -257,11 +291,15 @@ public sealed class Inventory(int width, int height)
     }
 }
 
-/// <summary>A rectangle of an inventory's cells (<see cref="Inventory.Regions"/>).</summary>
+/// <summary>
+/// A rectangle of an inventory's cells (<see cref="Inventory.Regions"/>).
+/// </summary>
 public readonly record struct GridRegion(int X, int Y, int Width, int Height)
 {
     public bool Contains(int x, int y, int w, int h) => x >= X && y >= Y && x + w <= X + Width && y + h <= Y + Height;
 
-    /// <summary>Whether <paramref name="item"/>'s top-left cell lies inside.</summary>
+    /// <summary>
+    /// Whether <paramref name="item"/>'s top-left cell lies inside.
+    /// </summary>
     public bool Holds(ItemInstance item) => item.X >= X && item.X < X + Width && item.Y >= Y && item.Y < Y + Height;
 }

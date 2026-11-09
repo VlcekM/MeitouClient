@@ -1,0 +1,407 @@
+using Meitou.Game.Rendering.Water;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Terrain;
+
+namespace Meitou.Game.Rendering.Frame;
+
+/// <summary>
+/// One feature that can look as the game ships it (<b>Faithful</b>) or with Meitou's improvement (<b>Meitou</b>, the
+/// default), chosen per feature: the remaster switches. Separate from the game's own graphics settings (draw distances,
+/// shadow quality...), which keep their meaning in both. Reads and writes the live options through its delegates.
+/// </summary>
+public sealed class Enhancement(string id, string name, string faithful, string meitou, Func<bool> get, Action<bool> set, string note, Func<string>? liveMeitou = null, bool optional = false)
+{
+    /// <summary>
+    /// The command-line name (<c>--meitou ao,haze</c>).
+    /// </summary>
+    public string Id { get; } = id;
+    public string Name { get; } = name;
+
+    /// <summary>
+    /// What each choice amounts to, in a word or two (shown next to it: "Faithful (off)").
+    /// </summary>
+    public string Faithful { get; } = faithful;
+    public string Meitou => liveMeitou?.Invoke() ?? meitou;
+
+    public bool IsMeitou { get => get(); set => set(value); }
+
+    /// <summary>
+    /// A sentence on the difference (what the game does, what Meitou changes).
+    /// </summary>
+    public string Note { get; } = note;
+
+    /// <summary>An optional effect (<see cref="Toggle.Optional"/>): off in the Meitou look too, so <c>all</c> and the Meitou key leave it off; the player or its own id turns it on.</summary>
+    public bool Optional { get; } = optional;
+
+    /// <summary>"Faithful (off)" or "Meitou (SSAO)".</summary>
+    public string State => IsMeitou ? $"Meitou ({Meitou})" : $"Faithful ({Faithful})";
+}
+
+public static class Enhancements
+{
+    #region Constants
+
+    public const float MeitouHazeStrength = 0.93f;
+
+    /// <summary>
+    /// The Meitou <c>planetshine</c> switch's strength: a multiple of the physical value (<see cref="Meitou.Data.World.Planetshine"/>; the Tab slider
+    /// moves it). The physical light is a hundredth of a percent to a fifth of a percent of the game's noon sun, against a game night ambient that is
+    /// a quarter of the noon sun's: 60 brings the planet's light on a face turned to it to about the ambient's level at the brightest part of the
+    /// night (docs/formats/sky.md).
+    /// </summary>
+    public const float MeitouPlanetshineStrength = 60f;
+
+    /// <summary>
+    /// The Meitou <c>heathaze</c> switch's scale on the heat haze (Faithful: 1, the game's): far objects shimmer but stay readable.
+    /// </summary>
+    public const float MeitouHeatHazeStrength = 0.5f;
+
+    /// <summary>
+    /// The Meitou shadows' default shadow distance (the game's is 5000, its slider ends at 9000), and the most the
+    /// <c>--shadow-range</c> option takes with them.
+    /// </summary>
+    public const float MeitouShadowRange = 10000, MeitouShadowRangeMax = 15000;
+
+    /// <summary>
+    /// The Meitou <c>reach</c> switch's defaults (docs/render-objects.md, "Draw distance"): objects at full detail out
+    /// to 20000, huge landmarks out to 150000, and the terrain LOD's pixel error 16 (Faithful: 12000 and
+    /// <see cref="WorldRenderOptions.DefaultTerrainPixelError"/>, 10, what the viewer drew before the switch).
+    /// </summary>
+    public const float MeitouObjectDistance = 20000, MeitouLandmarkDistance = 150000, MeitouTerrainPixelError = 16;
+    public const float FaithfulObjectDistance = 12000;
+
+    #endregion
+
+    #region Switch list
+
+    /// <summary>
+    /// The switches, in key order (Shift+F1 upwards in the game, the Tab panel's checkboxes in the viewer), over the
+    /// post-processing options and the haze strength (docs/formats/post-processing.md and sky.md for what the game does).
+    /// </summary>
+    public static IReadOnlyList<Enhancement> Create(PostOptions post, Func<bool> meitouHaze, Action<bool> setMeitouHaze,
+        Func<bool> meitouShadows, Action<bool> setMeitouShadows, Func<bool> meitouRange, Action<bool> setMeitouRange,
+        Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach,
+        Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod, Action<bool> setFoliageLod,
+        Func<bool>? gi = null, Action<bool>? setGi = null, Func<bool>? nightHaze = null, Action<bool>? setNightHaze = null,
+        Func<bool>? planetshine = null, Action<bool>? setPlanetshine = null, Func<bool>? stars = null, Action<bool>? setStars = null,
+        Func<bool>? clouds = null, Action<bool>? setClouds = null, Func<bool>? cloudShadows = null, Action<bool>? setCloudShadows = null,
+        Func<bool>? cloudFog = null, Action<bool>? setCloudFog = null,
+        Func<bool>? interiorGi = null, Action<bool>? setInteriorGi = null, Func<bool>? characterLod = null, Action<bool>? setCharacterLod = null,
+        Func<bool>? skin = null, Action<bool>? setSkin = null, Func<bool>? interiorLamps = null, Action<bool>? setInteriorLamps = null,
+        Func<bool>? icons = null, Action<bool>? setIcons = null, Func<bool>? blood = null, Action<bool>? setBlood = null,
+        Func<bool>? bloodSurfaces = null, Action<bool>? setBloodSurfaces = null, Func<bool>? tracers = null, Action<bool>? setTracers = null,
+        Func<bool>? chars2 = null, Action<bool>? setChars2 = null) =>
+    [
+        new("ao", "Ambient occlusion", "off", "SSAO",
+            () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
+        new("dither", "Dithering", "off", "on",
+            () => post.Dither, v => post.Dither = v, "against banding in smooth gradients; the game has none"),
+        new("haze", "Haze", "strength 1", $"strength {MeitouHazeStrength}",
+            meitouHaze, setMeitouHaze, "lighter haze keeps far mountains visible"),
+        new("aa", "Anti-aliasing", "FXAA", "temporal",
+            () => post.Upscale.Kind != UpscalerKind.Off,
+            v =>
+            {
+                post.Upscale.Kind = v ? post.Upscale.Preferred : UpscalerKind.Off;
+                if (!v) post.Fxaa = true;
+            },
+            "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)",
+            () => post.Upscale.Preferred.ToString().ToUpperInvariant()),
+        new("shadows", "Shadows", "CSM", "soft, far terrain",
+            meitouShadows, setMeitouShadows,
+            "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly "
+                + "with contact-hardening penumbrae, blends the cascades, and lets mountains shadow the land out to the horizon"),
+        new("range", "Foliage ranges", "per layer", "by size",
+            meitouRange, setMeitouRange,
+            "the game ends all of a layer's meshes at one range (1000 x foliage range for most: trees, ruins, junk and litter alike); "
+                + "Meitou draws large meshes (trees, ruins, wrecks, rock stacks) far, medium ones (junk, boulders, bushes) midway and "
+                + "small ones (litter, small plants) near, each class with its own Tab slider"),
+        new("impostors", "Far impostors", "off", "billboards",
+            impostors, setImpostors,
+            "the game draws every foliage mesh in full out to its range; "
+                + "Meitou draws large and medium meshes beyond the impostor distance (Tab slider) as baked billboards, "
+                + "crossfaded, which also stand in as shadow casters far out"),
+        new("reach", "Draw distances", "game-like", "farther",
+            meitouReach, setMeitouReach,
+            $"Faithful keeps the viewer's old defaults (objects at full detail to {FaithfulObjectDistance:0}, "
+                + $"terrain error {WorldRenderOptions.DefaultTerrainPixelError:0} px); "
+                + $"Meitou draws objects to {MeitouObjectDistance:0}, "
+                + $"lets the terrain be coarser ({MeitouTerrainPixelError:0} px) and draws huge "
+                + $"landmarks (giant wrecks, skeletons, towers) out to {MeitouLandmarkDistance:0} (Tab sliders; the landmarks need Meitou at start)"),
+        new("water", "Water", "flat", "waves and surf",
+            meitouWater, setMeitouWater,
+            "the game's water is a flat plane with scrolled normal maps; Meitou adds wind-driven waves, breakers that roll in along the depth, "
+                + "break into foam and run up the beach, and foam on the crests (visual only: the water stays at its height for the game)"),
+        new("particles", "Weather particles", "full size", "low resolution",
+            () => post.LowResParticles, v => post.LowResParticles = v,
+            "the game draws every dust, ash and rain sprite at the full picture size, "
+                + "which is a fill-rate cost when big sprites pile up (a dust storm); "
+                + "Meitou draws the alpha and additive ones into a quarter-area (half per axis) target and blends it back, "
+                + "depth-aware, for a fraction of the cost"),
+        new("lod", "Foliage levels", "full detail", "generated levels",
+            foliageLod, setFoliageLod,
+            "the game draws every foliage mesh at full detail, and TERRAIN-mode rocks and plants (some thousands of triangles each) "
+                + "have no LOD levels; Meitou makes coarser levels at load (quadric edge collapse, kept in a disk cache) and picks one "
+                + "per instance by how many pixels (shadow texels) its deviation would show"),
+        new("gi", "Indirect light", "flat ambient", "ray-traced probes",
+            gi ?? (() => false), setGi ?? (_ => { }),
+            "the game lights every surface's shadow side with one flat sky ambient per biome; "
+                + "Meitou traces rays from a grid of probes around the camera (needs a GPU with ray tracing; --no-gi leaves it out), "
+                + "so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"),
+        new("tonemap", "Tone map and grade", "clip", "hybrid, graded",
+            () => post.ToneMapping, v => post.ToneMapping = v,
+            "the game has no tone curve (bright skies and sunlit sand clip flat at white) and no grading; "
+                + "Meitou blends the clip with ACES (the Tab slider sets the share, 0.75) so highlights roll off, "
+                + "then grades saturation 1.06 and contrast 1.05"),
+        new("shafts", "Light shafts", "flat haze", "shadowed haze",
+            () => post.LightShafts, v => post.LightShafts = v,
+            "the game lights its haze and weather fog the same everywhere, so shadows end at the ground; "
+                + "Meitou darkens the air the sun does not reach (a froxel grid of shadow samples along the view), "
+                + "so mountains, rock stacks and buildings cast shafts through the haze and the fog (docs/render-shafts.md)"),
+        new("heathaze", "Heat haze", "strength 1", $"strength {MeitouHeatHazeStrength}",
+            () => post.MeitouHeatHaze, v => post.MeitouHeatHaze = v,
+            "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; "
+                + "Meitou halves it (the Tab slider sets any strength)"),
+        new("night", "Night air", "black haze", "airglow",
+            nightHaze ?? (() => false), setNightHaze ?? (_ => { }),
+            "the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black "
+                + "against a black sky and only the land round the camera stays lit; "
+                + "Meitou gives the air a faint glow of its own (airglow, and the planet's light scattered by the air, "
+                + "darker when the planet is a crescent): "
+                + "the far land fades into it, and the sky shows the same glow above the horizon, falling off with height, "
+                + "so ridges stand against it and the stars keep their contrast (docs/formats/sky.md, \"Night air\")"),
+        new("planetshine", "Planetshine", "flat night", "planet light",
+            planetshine ?? (() => false), setPlanetshine ?? (_ => { }),
+            "the game lights the night land with a flat, directionless ambient; "
+                + "Meitou lets the big planet light it, as a sunlit sphere would (its phase, colour and size decide how much; "
+                + "the Tab slider scales it), "
+                + "from its fixed direction, with the shadows, "
+                + "the water's glint and the probes' light following (docs/formats/sky.md \"Planetshine\")"),
+        new("stars", "Night sky", "starfield texture", "procedural",
+            stars ?? (() => false), setStars ?? (_ => { }),
+            "the game lays one 4096 pixel starfield texture over the dome (blobby purple stars, a smeared brown nebula, "
+                + "blurred when it is magnified); "
+                + "Meitou draws point stars (a few thousand naked-eye ones and a faint background, colours from blackbody temperatures, "
+                + "one or two pixels wide at any resolution), turning about the sun's axis once a game day, "
+                + "dimming and reddening towards the horizon, the low ones twinkling (docs/formats/sky.md, \"Meitou night sky\")"),
+        new("nightgrade", "Night grading", "none", "scotopic blue",
+            () => post.NightGrade, v => post.NightGrade = v,
+            "the game has no grading, so night is the day's saturated browns and oranges, darkened; "
+                + "Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), "
+                + "keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"),
+        new("clouds", "Clouds", "flat", "volumetric",
+            clouds ?? (() => false), setClouds ?? (_ => { }),
+            "the game uses a flat cloud texture; "
+                + "Meitou ray marches a procedural cloud volume with rounded shapes, light absorption, sunlit edges and shaded interiors, "
+                + "lit by the sun and by the planet at night; coverage and wind follow the existing weather, "
+                + "with separate temporal histories for the sky and water reflections (docs/render-clouds.md)"),
+        new("cloudshadows", "Cloud shadows", "none", "on the land",
+            cloudShadows ?? (() => false), setCloudShadows ?? (_ => { }),
+            "the game's clouds cast no shadows; "
+                + "Meitou anchors the cloud layer to the world (1.2 km up, so the clouds also drift past as the camera moves) "
+                + "and dims the sun on the land and the water under it, the shadows sweeping over the ground with the wind "
+                + "(docs/formats/clouds.md, \"Meitou cloud shadows\")"),
+        new("cloudfog", "Cloud shadows in fog", "full", "faded",
+            cloudFog ?? (() => false), setCloudFog ?? (_ => { }),
+            "with Cloud shadows on, Meitou weakens them as the camera nears a placed fog volume and drops them inside one; "
+                + "otherwise the cloud shadows darken the already dim fog, "
+                + "and places like the swamp or the Deadlands get too dark (docs/render-clouds.md)"),
+        new("interiorgi", "Indoor GI", "original ambient", "bounced light",
+            interiorGi ?? (() => false), setInteriorGi ?? (_ => { }),
+            "with Indirect light enabled, use bounced light indoors; turn this off to keep the original ambient on room surfaces, "
+                + "furniture and indoor characters while outdoor GI stays enabled"),
+        new("charlod", "Character levels", "the meshes' own", "generated levels",
+            characterLod ?? (() => true), setCharacterLod ?? (_ => { }),
+            "the game draws a character's meshes with their files' own LOD levels (one reduced level at 200 or 400 units for some, "
+                + "none for most: human_female, hair cuts, weapons) by the distance_sphere rule; "
+                + "Meitou makes four reductions of every mesh at load and picks one by how many pixels its deviation would show, "
+                + "with coarser levels in the shadow maps (docs/characters.md \"LOD of character meshes\")"),
+        new("skin", "Skin", "plain", "subsurface",
+            skin ?? (() => false), setSkin ?? (_ => { }),
+            "the game lights skin as it lights stone, so the sun's terminator on a face or arm is a hard grey edge; "
+                + "Meitou lets the light spread under bare skin (pre-integrated scattering from a measured skin profile, "
+                + "by how tightly the surface curves), "
+                + "so the edge softens and warms to red, in the world and on the Meitou stage and portraits; "
+                + "clothing, hair, animals and robots stay as they were (docs/character-renderer.md \"Skin\")"),
+        new("interiorlamps", "Interior lamps", "night only", "day and night",
+            interiorLamps ?? (() => false), setInteriorLamps ?? (_ => { }),
+            "the game lights its ceiling lamps and other light buildings only at night, indoors too, so rooms are dim by day; "
+                + "Meitou keeps the lamps of buildings' interior layouts lit all day, outdoor lamps stay night-only (docs/render-lights.md)"),
+        new("icons", "Item icons", "the game's", "supersampled",
+            icons ?? (() => false), setIcons ?? (_ => { }),
+            "the game draws an inventory item's icon from its mesh with one sample a pixel (jagged edges, shimmering fine detail) "
+                + "and shows the pictures it saved before; Meitou draws each one supersampled 4 x 4, as the enhanced portraits, "
+                + "and keeps its own pictures (docs/game/ui-screens.md \"Item icons\")"),
+        new("blood", "Blood cells", "8 nearest", $"up to {TerrainDecalRenderer.MaxSlots}",
+            blood ?? (() => false), setBlood ?? (_ => { }),
+            $"the game draws the blood of only the 8 terrain cells (288 units square) nearest the camera, "
+                + $"so a big battle's blood ends at a straight cell edge and the cells past it dry up unseen; "
+                + $"Meitou draws every cell within Decal Range, up to {TerrainDecalRenderer.MaxSlots} (docs/game/blood-decals.md)"),
+        new("bloodsurfaces", "Blood on surfaces", "terrain only", "walls, floors, objects",
+            bloodSurfaces ?? (() => false), setBloodSurfaces ?? (_ => { }),
+            "the game leaves blood only on the terrain, so a fight beside a wall or inside a building marks nothing there; "
+                + "Meitou also sprays splashes over walls, buildings, rocks and other static objects, "
+                + "and leaves pools and drips on floors, never up a wall (docs/game/blood-decals.md \"Blood on surfaces\")"),
+        // The ground relief's settings are static (GroundRelief), so these two need no delegates. The labels are the saved keys of the on/off toggles
+        // they replace.
+        new("parallax", "Ground parallax", "off", "relief march",
+            () => GroundRelief.ParallaxActive, v => GroundRelief.ParallaxActive = v,
+            "the game's ground is flat, its normal maps only shading it; "
+                + "Meitou marches the view ray through a height made from each layer's normal map near the eye, "
+                + "and toward the sun for a self-shadow (docs/render-terrain.md \"Ground relief\")"),
+        new("displace", "Ground displacement (tessellation)", "off", "tessellated",
+            () => GroundRelief.DisplaceActive, v => GroundRelief.DisplaceActive = v,
+            "the game's ground is its height map's mesh; "
+                + "Meitou tessellates the ground near the eye and raises it by the same relief "
+                + "(needs tessellation shaders; visual only: characters walk on the undisplaced ground)"),
+        new("weld", "Mesh welding", "per-face tangents", "welded, averaged tangents",
+            () => MeshWeld.Enabled, v => MeshWeld.Enabled = v,
+            "stores the game's 3D models more compactly, so they take about half the video memory and look practically the same; "
+                + "in detail, the game's meshes store most corners once for every triangle that uses them, each copy "
+                + "with its own triangle's tangent; "
+                + "Meitou merges the copies that differ only in that tangent into one vertex with their averaged tangent, "
+                + "so meshes keep about 60% fewer vertices (object meshes at The Hub take 50 MB of video memory instead of 98) "
+                + "and the bump lighting barely changes (tangents move 4° on average); applies to "
+                + "meshes loaded after the change (docs/render-objects.md)"),
+        new("tracers", "Bolt tracers", "none", "streaks",
+            tracers ?? (() => false), setTracers ?? (_ => { }),
+            "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; "
+                + "Meitou draws a faint streak behind it that grows out of the crossbow and shrinks into where the bolt stops; "
+                + "drawn with the particles, so none with --no-particles (docs/game/combat.md \"Bolt visuals\")"),
+        new("fog", "Fog", "hard-edged, flat", "soft, lit",
+            () => post.MeitouFog, v => post.MeitouFog = v,
+            "the game's dust and smoke sprites cut straight into the ground and walls they cross (all but its mist and steam, which fade; Faithful draws those hard-edged too); Meitou fades each sprite out over the last stretch before a surface (a quarter of its size, 0.2 to 30 m), so dust clouds meet the ground softly; the game's sprites are also flat and not fogged (one brightness in sun and shade, near and far, seen through fog banks), Meitou darkens dust and smoke where the sun is shadowed, brightens them towards the sun and puts the haze and the fog volumes in front of them over them; and it fades each effect out before the distance it stops being simulated at, where its whole cloud popped in and out (docs/render-post.md \"Fog\")"),
+        new("contact", "Contact shadows", "off", "on",
+            () => post.ContactShadows, v => post.ContactShadows = v,
+            "the game's shadows stop at the cascades' resolution, so small objects float; Meitou adds short sun shadows from the depth, at full resolution, on characters too (armour layers, hair over the face). Off by default: a screen-space guess (what the screen does not show casts nothing); for GPUs without ray tracing, where Traced sun shadows are not available"),
+        new("gihybrid", "Hybrid GI", "off", "on",
+            () => post.GiHybrid, v => post.GiHybrid = v,
+            "the probes' grid leaves many probes inside walls, where they only go dark; Meitou moves them out of the geometry, lets the clouds shade the bounced light and the light shafts, and adds a world-space cache of short traced rays, small cells near the eye, for the fine indirect light the probes are too coarse for (corners, under tables) (--gi-hybrid picks the parts; docs/render-gi.md \"Hybrid GI\")"),
+        new("chars2", "Character shading", "plain", "hair, cloth, skin, eyes",
+            chars2 ?? (() => false), setChars2 ?? (_ => { }),
+            "the game lights hair and cloth as it lights stone; Meitou draws two highlights along the strands and a soft sheen on the edges of cloth and a little on leather, and skin glows past its shadows and through ears and fingers held against the light, eyes show a small catchlight instead of a mirror of the landscape, and everything wets in the rain, in the sun and under lamps (docs/character-renderer.md \"Hair, cloth, skin and eyes\")"),
+        // Off by default, added last so the Shift+F keys do not move: not yet seen on a GPU.
+        new("trails", "Ground trails", "off", "footprints",
+            () => TerrainTrails.Enabled, v => TerrainTrails.Enabled = v,
+            "the game's characters leave nothing on the ground; Meitou presses footprints and drag marks into sand, mud, snow and, lightly, dirt near the camera, shaded as a normal and a height with the ground relief; wind and rain wear them away (visual only: not saved; docs/render-terrain.md \"Ground trails\")"),
+        new("contactfoam", "Water contact foam, wakes and ripples", "off", "foam, waves",
+            () => WaterContact.Enabled, v => WaterContact.Enabled = v,
+            "the game's water meets what stands in it without a mark; Meitou clings foam to rocks, posts and legs at the waterline, from the scene's depth behind the surface, and the posed bodies of the characters and animals in the water near the camera push a simulated surface: legs raise bow waves and ripples that spread, slow in the shallows, stop at the shore and leave a wake with foam behind (Vulkan; needs the depth the refraction copies; docs/render-water.md \"Contact foam, wakes and ripples\")"),
+        new("motionblur", "Motion blur", "off", "shutter blur",
+            () => post.MotionBlur, v => post.MotionBlur = v,
+            "the game has no motion blur; Meitou rebuilds a film shutter's blur from the upscaler's motion vectors for the free and cinematic cameras (needs a temporal upscaler; the sky stays sharp; docs/render-post.md \"Motion blur\")",
+            optional: true),
+        new("dof", "Depth of field", "off", "thin lens",
+            () => post.DepthOfField, v => post.DepthOfField = v,
+            "the game keeps everything in focus; Meitou blurs what is away from the focus as a real lens does, by the field of view, the f-number and the distance, for the free and cinematic cameras (the cinema's keys can set focus and aperture; docs/render-post.md \"Depth of field\")",
+            optional: true),
+        new("gtao", "Ground-truth occlusion", "SSAO", "GTAO",
+            () => post.Gtao, v => post.Gtao = v,
+            "the Ambient occlusion switch's method (it needs that switch on): Meitou's SSAO is a cheap estimate; GTAO searches each pixel's horizon, measures how much sky it really sees, and keeps the colour of the light that bounces in a corner. Costs more; off by default"),
+        new("lampshadows", "Lamp shadows", "off", "traced",
+            () => post.LampShadows, v => post.LampShadows = v,
+            "the game's lamps shine through walls and everything else that stands in their way; Meitou traces a ray from each surface to the lamps that light it most and takes the light of the blocked ones back off, so buildings, rocks, plants, grass and characters cast lamp shadows (needs a GPU with ray tracing and Indirect light on; characters cast them but do not receive them; docs/render-lights.md \"Traced lamp shadows\")"),
+        new("ssr", "Reflections", "sky only", "traced",
+            () => post.Ssr, v => post.Ssr = v,
+            "the game's glossy and rain-wet surfaces reflect one fixed sky picture, indoors and under a roof too; Meitou replaces it with what they really mirror (the screen, then a traced ray where the device has them, the sky past both), fading with roughness, and darkens the sky's reflection where the probes see no sky. Water keeps its own reflection. Off by default: not yet seen on a GPU"),
+        new("traced", "Traced sun shadows", "cascades", "ray-traced",
+            () => post.TracedSun, v => post.TracedSun = v,
+            "the game's sun shadows come from cascaded maps, soft or blocky by their texels; Meitou traces a ray to the sun from every lit pixel at every distance, softened by the sun's real size, the same every frame: a shadow is as sharp as it is close to its caster, characters shadow themselves exactly and grass shadows the ground (needs a GPU with ray tracing and Indirect light; off by default)"),
+        new("previewsun", "Portrait and editor sun", "key light", "fixed sun",
+            () => Characters.PreviewStudio.Sun, v => Characters.PreviewStudio.Sun = v,
+            "the game lights its portraits and the character editor with a plain key light and nothing else; Meitou sets a fixed warm sun high on one side, a cool sky over warm sand, the sun's shadow on the character itself and the occlusion of its folds, the same whatever the hour (with Meitou's tone map, grade or anti-aliasing on; docs/character-renderer.md \"Meitou stage and portraits\")"),
+        new("editorbar", "Character editor bar", "platform", "bar",
+            () => Characters.PreviewStudio.Bar, v => Characters.PreviewStudio.Bar = v,
+            "the game stands the character being edited on a platform over bare ground; Meitou can stand it in a bar at night instead, drawn with your graphics settings",
+            optional: true),
+    ];
+
+    #endregion
+
+    #region Applying
+
+    /// <summary>
+    /// <c>--meitou</c> / <c>--faithful &lt;all|id,id...&gt;</c>: turns those switches to Meitou or to Faithful.
+    /// </summary>
+    public static void Apply(IReadOnlyList<Enhancement> switches, string list, bool meitou)
+    {
+        foreach (var id in list.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (id == "all")
+            {
+                foreach (var e in switches.Where(e => !meitou || !e.Optional)) e.IsMeitou = meitou;
+                continue;
+            }
+            var match = switches.FirstOrDefault(e => e.Id == id)
+                ?? throw new ArgumentException($"unknown feature '{id}' ({string.Join(", ", switches.Select(e => e.Id))} or all)");
+            match.IsMeitou = meitou;
+        }
+    }
+
+    #endregion
+}
+
+/// <summary>
+/// The one key that turns Meitou off and on (F1 in the viewer, Shift+F1 in the game): every switch Faithful, then back to the ones that were Meitou
+/// before (all of them when they started Faithful). The Tab panel's checkboxes set them one by one.
+/// </summary>
+public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
+{
+    bool[]? _before;
+
+    /// <summary>
+    /// The sweep's next switch (-1: no sweep) and when it flips (<see cref="System.Diagnostics.Stopwatch"/> ticks).
+    /// </summary>
+    int _sweep = -1;
+    long _sweepNext;
+
+    /// <summary>
+    /// Any switch is Meitou.
+    /// </summary>
+    public bool On => switches.Any(e => e.IsMeitou);
+
+    /// <summary>
+    /// Flips Meitou off or back on; returns the console line saying which.
+    /// </summary>
+    public string Toggle()
+    {
+        if (On)
+        {
+            _before = [.. switches.Select(e => e.IsMeitou)];
+            foreach (var e in switches) e.IsMeitou = false;
+        }
+        else
+        {
+            for (int i = 0; i < switches.Count; i++) switches[i].IsMeitou = _before?[i] ?? !switches[i].Optional;
+        }
+        return On
+            ? $"meitou    on: {string.Join(", ", switches.Where(e => e.IsMeitou).Select(e => e.Id))}"
+            : "meitou    off, every switch Faithful (the game as it ships)";
+    }
+
+    /// <summary>
+    /// Starts (or stops) a sweep: every switch flips in turn (Meitou to Faithful and back the other way), one a second (the viewer's Ctrl+F1).
+    /// </summary>
+    public string Sweep()
+    {
+        if (_sweep >= 0) { _sweep = -1; return "meitou    sweep stopped"; }
+        if (switches.Count == 0) return "meitou    no switches to sweep";
+        (_sweep, _sweepNext) = (0, System.Diagnostics.Stopwatch.GetTimestamp());
+        return $"meitou    sweep: {switches.Count} switches flip in turn, 1 s apart (Ctrl+F1 stops)";
+    }
+
+    /// <summary>
+    /// Flips the sweep's next switch when its second has come; the console line, or null.
+    /// </summary>
+    public string? TickSweep()
+    {
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (_sweep < 0 || now < _sweepNext) return null;
+        var e = switches[_sweep];
+        e.IsMeitou = !e.IsMeitou;
+        string line = $"meitou    sweep {_sweep + 1}/{switches.Count}: {e.Id} {(e.IsMeitou ? "Meitou" : "Faithful")}";
+        _sweepNext = now + System.Diagnostics.Stopwatch.Frequency;
+        if (++_sweep == switches.Count) _sweep = -1;
+        return line;
+    }
+}

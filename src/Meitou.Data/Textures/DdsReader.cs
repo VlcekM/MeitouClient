@@ -17,7 +17,7 @@ public static class DdsReader
     public const uint FlagDepth = 0x800000;
 
     // DDS_PIXELFORMAT.flags
-    const uint PfAlphaPixels = 0x1, PfAlpha = 0x2, PfFourCC = 0x4, PfRgb = 0x40, PfYuv = 0x200, PfLuminance = 0x20000;
+    const uint PfAlphaPixels = 0x1, PfAlpha = 0x2, PfFourCc = 0x4, PfRgb = 0x40, PfYuv = 0x200, PfLuminance = 0x20000;
 
     // caps2
     const uint Caps2Cubemap = 0x200, Caps2Volume = 0x200000;
@@ -26,9 +26,11 @@ public static class DdsReader
     const uint Dx10MiscTextureCube = 0x4;
     const int Dx10DimensionTexture3D = 4;
 
-    public static DdsFile ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static DdsFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
-    /// <summary>Parses the headers and lays out every surface. Throws <see cref="DdsFormatException"/> on bad or unsupported data.</summary>
+    /// <summary>
+    /// Parses the headers and lays out every surface. Throws <see cref="DdsFormatException"/> on bad or unsupported data.
+    /// </summary>
     public static DdsFile Read(byte[] data) => Parse(data.AsSpan(), data.Length, data);
 
     /// <summary>
@@ -95,7 +97,10 @@ public static class DdsReader
         return read;
     }
 
-    /// <summary>The headers in <paramref name="span"/> (at least the headers) of a file of <paramref name="fileLength"/> bytes, whose bytes are <paramref name="data"/> (empty when only the headers were read).</summary>
+    /// <summary>
+    /// The headers in <paramref name="span"/> (at least the headers) of a file of <paramref name="fileLength"/> bytes, whose bytes are
+    /// <paramref name="data"/> (empty when only the headers were read).
+    /// </summary>
     static DdsFile Parse(ReadOnlySpan<byte> span, long fileLength, byte[] data)
     {
         if (span.Length < 4 + HeaderSize) throw new DdsFormatException($"File too short for a DDS header ({span.Length} bytes).");
@@ -109,7 +114,7 @@ public static class DdsReader
         int mipCount = (flags & FlagMipMapCount) != 0 && U32(span, 28) > 0 ? checked((int)U32(span, 28)) : 1;
         // DDS_PIXELFORMAT at 76: size, flags, fourCC, bitCount, r, g, b, a masks
         uint pfFlags = U32(span, 80);
-        uint fourCC = U32(span, 84);
+        uint fourCc = U32(span, 84);
         int bitCount = (int)U32(span, 88);
         uint rMask = U32(span, 92), gMask = U32(span, 96), bMask = U32(span, 100), aMask = U32(span, 104);
         uint caps2 = U32(span, 112);
@@ -122,13 +127,13 @@ public static class DdsReader
         if (cube && images == 0) images = 6; // some writers set only DDSCAPS2_CUBEMAP
         DdsFormat format;
         DdsPixelMasks? masks = null;
-        string? fourCCText = null;
+        string? fourCcText = null;
         int? dxgi = null;
 
-        if ((pfFlags & PfFourCC) != 0)
+        if ((pfFlags & PfFourCc) != 0)
         {
-            fourCCText = Encoding.ASCII.GetString(span.Slice(84, 4));
-            if (fourCCText == "DX10")
+            fourCcText = Encoding.ASCII.GetString(span.Slice(84, 4));
+            if (fourCcText == "DX10")
             {
                 if (span.Length < headerEnd + Dx10HeaderSize) throw new DdsFormatException("File too short for the DX10 header.");
                 dxgi = (int)U32(span, headerEnd);
@@ -143,7 +148,7 @@ public static class DdsReader
             }
             else
             {
-                format = fourCCText switch
+                format = fourCcText switch
                 {
                     "DXT1" => DdsFormat.Bc1,
                     "DXT2" or "DXT3" => DdsFormat.Bc2,
@@ -151,7 +156,7 @@ public static class DdsReader
                     "ATI1" or "BC4U" => DdsFormat.Bc4,
                     "ATI2" or "BC5U" => DdsFormat.Bc5,
                     "RXGB" => DdsFormat.Rxgb,
-                    _ => throw new DdsFormatException($"Unsupported FourCC '{Printable(fourCCText, fourCC)}'."),
+                    _ => throw new DdsFormatException($"Unsupported FourCC '{Printable(fourCcText, fourCc)}'."),
                 };
             }
         }
@@ -183,13 +188,27 @@ public static class DdsReader
 
         return new DdsFile
         {
-            Data = data, Width = width, Height = height, Depth = depth, MipCount = mipCount, ImageCount = images,
-            IsCubemap = cube, IsVolume = volume, Format = format, FourCC = fourCCText, DxgiFormat = dxgi, Masks = masks,
-            HeaderFlags = flags, HeaderSize = headerEnd, Surfaces = surfaces,
+            Data = data,
+            Width = width,
+            Height = height,
+            Depth = depth,
+            MipCount = mipCount,
+            ImageCount = images,
+            IsCubemap = cube,
+            IsVolume = volume,
+            Format = format,
+            FourCc = fourCcText,
+            DxgiFormat = dxgi,
+            Masks = masks,
+            HeaderFlags = flags,
+            HeaderSize = headerEnd,
+            Surfaces = surfaces,
         };
     }
 
-    /// <summary>Bytes of one 2D surface (one depth slice) of <paramref name="width"/>×<paramref name="height"/>.</summary>
+    /// <summary>
+    /// Bytes of one 2D surface (one depth slice) of <paramref name="width"/>×<paramref name="height"/>.
+    /// </summary>
     public static long SurfaceSize(DdsFormat format, DdsPixelMasks? masks, int width, int height)
     {
         long blocks = (long)((width + 3) / 4) * ((height + 3) / 4);

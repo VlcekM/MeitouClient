@@ -2,21 +2,25 @@ using Meitou.Data.Audio;
 
 namespace Meitou.Tests.Audio;
 
-/// <summary>The Wwise bank reader against the install's 24 banks in data/audio (docs/formats/wwise-bnk.md).</summary>
+/// <summary>
+/// The Wwise bank reader against the install's 24 banks in data/audio (docs/formats/wwise-bnk.md).
+/// </summary>
 [Slow]
 public class WwiseBankInstallTests
 {
     static readonly string[] Biomes = ["Ashlands", "Boneyard", "Canyons", "Coast", "Desert", "Forest", "Jungle", "Plains", "Swamplands", "Tarsands"];
 
-    static readonly Lazy<List<(string Name, WwiseBank Bank)>?> banks = new(() => InstallData.Install is { } install
-        ? Directory.GetFiles(Path.Combine(install.DataDirectory, "audio"), "*.bnk").Order(StringComparer.OrdinalIgnoreCase)
-            .Select(f => (Path.GetFileNameWithoutExtension(f), WwiseBank.ReadFile(f))).ToList()
+    static readonly Lazy<List<(string Name, WwiseBank Bank)>?> BankCache = new(() => InstallData.Install is { } install
+        ? Directory.GetFiles(Path.Combine(install.DataDirectory, "audio"), "*.bnk")
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .Select(f => (Path.GetFileNameWithoutExtension(f), WwiseBank.ReadFile(f)))
+            .ToList()
         : null);
 
     static List<(string Name, WwiseBank Bank)> Banks()
     {
-        Assert.SkipWhen(banks.Value is null, "Kenshi install not found");
-        return banks.Value!;
+        Assert.SkipWhen(BankCache.Value is null, "Kenshi install not found");
+        return BankCache.Value!;
     }
 
     static WwiseBank Bank(string name) => Banks().Single(b => b.Name == name).Bank;
@@ -46,6 +50,7 @@ public class WwiseBankInstallTests
             WwiseObjectType.Attenuation, WwiseObjectType.FxShareSet, WwiseObjectType.FxCustom, WwiseObjectType.AuxBus];
         int count = 0;
         foreach (var (name, bank) in Banks().Where(b => b.Bank.Version == WwiseBank.DecodedVersion))
+        {
             foreach (var o in bank.Objects)
             {
                 if (o is WwiseRawObject raw)
@@ -54,7 +59,9 @@ public class WwiseBankInstallTests
                     Assert.DoesNotContain(raw.Type, decoded);
                 }
                 else count++;
+
                 if (o is not WwiseSound s) continue;
+
                 // Every sound plays a WEM embedded in its own bank at the stored file offset.
                 Assert.Equal(0, s.Source.StreamType);
                 if (!s.Source.IsVorbis)
@@ -62,12 +69,15 @@ public class WwiseBankInstallTests
                     Assert.Equal(0x00650002u, s.Source.PluginId); // the silence source: no media
                     continue;
                 }
+
                 Assert.Equal(bank.Id, s.Source.FileId);
                 var media = bank.FindMedia(s.Source.SourceId);
                 Assert.True(media is not null, $"{name} sound {s.Id:X8} has no media {s.Source.SourceId:X8}");
                 Assert.Equal(media.Value.Offset, (int)s.Source.Offset);
                 Assert.Equal(media.Value.Length, (int)s.Source.Size);
             }
+        }
+
         Assert.Equal(3260, count); // with the buses, the 687 music objects, attenuations, effects and aux buses
     }
 
@@ -78,17 +88,23 @@ public class WwiseBankInstallTests
         {
             var bank = Bank($"SFX_Amb_{biome}");
             var events = bank.Objects.OfType<WwiseEvent>().Select(e => e.Id).ToHashSet();
-            Assert.Equal(new HashSet<uint> { WwiseHash.Id($"Enter_{biome}_Day"), WwiseHash.Id($"Enter_{biome}_Night"), WwiseHash.Id($"Leave_{biome}") }, events);
+            var expected = new HashSet<uint> { WwiseHash.Id($"Enter_{biome}_Day"), WwiseHash.Id($"Enter_{biome}_Night"), WwiseHash.Id($"Leave_{biome}") };
+            Assert.Equal(expected, events);
             foreach (var time in new[] { "Day", "Night" })
             {
-                var plays = bank.Find<WwiseEvent>(WwiseHash.Id($"Enter_{biome}_{time}"))!.Actions.Select(a => bank.Find<WwiseAction>(a)!)
-                    .Where(a => a.Kind == WwiseActionKind.Play).ToList();
+                var plays = bank.Find<WwiseEvent>(WwiseHash.Id($"Enter_{biome}_{time}"))!.Actions
+                    .Select(a => bank.Find<WwiseAction>(a)!)
+                    .Where(a => a.Kind == WwiseActionKind.Play)
+                    .ToList();
                 Assert.NotEmpty(plays);
                 Assert.All(plays, p => Assert.Equal(bank.Id, p.BankId));
             }
         }
+
         var indoors = Bank("SFX_Amb_Indoors_Bank").Objects.OfType<WwiseEvent>().Select(e => e.Id).ToHashSet();
-        Assert.Equal(new HashSet<uint> { WwiseHash.Id("Enter_Building"), WwiseHash.Id("Enter_Building_Big"), WwiseHash.Id("Leave_Building") }, indoors);
+        var indoorEvents = new HashSet<uint> { WwiseHash.Id("Enter_Building"), WwiseHash.Id("Enter_Building_Big"), WwiseHash.Id("Leave_Building") };
+        Assert.Equal(indoorEvents, indoors);
+
         // The weather bank has the rain and wind start events but no wind stop.
         var weather = Bank("SFX_Amb_Weather_Bank").Objects.OfType<WwiseEvent>().Select(e => e.Id).ToHashSet();
         Assert.Contains(WwiseHash.Id("Weather_Rain_Start"), weather);

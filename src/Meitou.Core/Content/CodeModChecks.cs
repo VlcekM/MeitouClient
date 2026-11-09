@@ -1,12 +1,16 @@
 namespace Meitou.Content;
 
-/// <summary>The code-mod API range a game runs (docs/modding.md "Versioning"); <c>ModApi</c> in Meitou.Modding mirrors these for mods.</summary>
+/// <summary>
+/// The code-mod API range a game runs (docs/modding.md "Versioning"); <c>ModApi</c> in Meitou.Modding mirrors these for mods.
+/// </summary>
 public static class CodeModApi
 {
     public const int Newest = 2;
     public const int Oldest = 1;
 
-    /// <summary>The first API whose manifests may use <c>dependencies</c>, <c>loadAfter</c>, <c>incompatible</c> and <c>gameVersion</c>.</summary>
+    /// <summary>
+    /// The first API whose manifests may use <c>dependencies</c>, <c>loadAfter</c>, <c>incompatible</c> and <c>gameVersion</c>.
+    /// </summary>
     public const int Dependencies = 2;
 }
 
@@ -16,28 +20,34 @@ public static class CodeModApi
 /// </summary>
 public sealed class CodeModPass
 {
-    readonly List<(string Name, CodeModManifest Manifest)> loaded = [];
-    readonly Dictionary<string, string> refused = new(StringComparer.Ordinal);
+    readonly List<(string Name, CodeModManifest Manifest)> _loaded = [];
+    readonly Dictionary<string, string> _refused = new(StringComparer.Ordinal);
 
-    /// <summary>The reason each refused mod did not load, by mod name.</summary>
-    public IReadOnlyDictionary<string, string> Refusals => refused;
+    /// <summary>
+    /// The reason each refused mod did not load, by mod name.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Refusals => _refused;
 
-    public void Loaded(string name, CodeModManifest manifest) => loaded.Add((name, manifest));
+    public void Loaded(string name, CodeModManifest manifest) => _loaded.Add((name, manifest));
 
-    public void Refused(string name, string reason) => refused[name] = reason;
+    public void Refused(string name, string reason) => _refused[name] = reason;
 
-    /// <summary>The loaded mod with this manifest id, if any.</summary>
+    /// <summary>
+    /// The loaded mod with this manifest id, if any.
+    /// </summary>
     public (string Name, CodeModManifest Manifest)? LoadedWithId(string id)
     {
-        foreach (var mod in loaded)
+        foreach (var mod in _loaded)
             if (mod.Manifest.Id == id) return mod;
         return null;
     }
 
-    /// <summary>The first loaded mod that matches.</summary>
+    /// <summary>
+    /// The first loaded mod that matches.
+    /// </summary>
     public (string Name, CodeModManifest Manifest)? FirstLoaded(Func<CodeModManifest, bool> match)
     {
-        foreach (var mod in loaded)
+        foreach (var mod in _loaded)
             if (match(mod.Manifest)) return mod;
         return null;
     }
@@ -66,7 +76,9 @@ public static class CodeModChecks
         return lines;
     }
 
-    /// <summary>The API range, and the API 2 keys an older manifest may not use.</summary>
+    /// <summary>
+    /// The API range, and the API 2 keys an older manifest may not use.
+    /// </summary>
     public static string? ApiProblem(CodeModManifest manifest)
     {
         if (manifest.ApiVersion is < CodeModApi.Oldest or > CodeModApi.Newest)
@@ -83,29 +95,37 @@ public static class CodeModChecks
     /// </summary>
     public static string? GameVersionProblem(CodeModManifest manifest, CodeModVersion? game)
     {
-        if (manifest.GameVersion is not { } range || game is not { } version || range.Contains(version.Release)) return null;
+        if (manifest.GameVersion is not { } range || game is not { } version || range.Contains(version.Release))
+            return null;
         return $"built for Meitou {range}; this is {version}";
     }
 
-    /// <summary>A <c>loadAfter</c> mod that is enabled but later in the list.</summary>
+    /// <summary>
+    /// A <c>loadAfter</c> mod that is enabled but later in the list.
+    /// </summary>
     public static string? LoadAfterProblem(CodeModManifest manifest, int self, IReadOnlyList<CodeModEntry> list)
     {
         foreach (var id in manifest.LoadAfter)
         {
             int at = CodeModDependencies.IndexOf(id, list);
-            if (at > self && list[at].Enabled) return $"must load after {list[at].Name} ('{id}'); move {list[at].Name} above it in the mod list";
+            if (at > self && list[at].Enabled)
+                return $"must load after {list[at].Name} ('{id}'); move {list[at].Name} above it in the mod list";
         }
         return null;
     }
 
-    /// <summary>A loaded mod that conflicts with this one (declared by either side); the later of the two is refused.</summary>
+    /// <summary>
+    /// A loaded mod that conflicts with this one (declared by either side); the later of the two is refused.
+    /// </summary>
     static string? ConflictProblem(CodeModManifest manifest, CodeModPass pass)
     {
         if (pass.FirstLoaded(manifest.ConflictsWith) is not { } rival) return null;
         return $"is incompatible with {rival.Name} ('{rival.Manifest.Id}'), which loads first; disable one of them";
     }
 
-    /// <summary>A loaded mod with the same id.</summary>
+    /// <summary>
+    /// A loaded mod with the same id.
+    /// </summary>
     static string? DuplicateProblem(CodeModManifest manifest, CodeModPass pass) =>
         pass.LoadedWithId(manifest.Id) is { } twin ? $"id '{manifest.Id}' is taken by mod {twin.Name}, which loads first" : null;
 
@@ -116,13 +136,15 @@ public static class CodeModChecks
     /// </summary>
     static string? DependencyProblem(CodeModDependency dependency, int self, IReadOnlyList<CodeModEntry> list, CodeModPass pass)
     {
-        if (pass.LoadedWithId(dependency.Id) is { } loaded) return VersionProblem(dependency, loaded.Name, loaded.Manifest.Version);
+        if (pass.LoadedWithId(dependency.Id) is { } loaded)
+            return VersionProblem(dependency, loaded.Name, loaded.Manifest.Version);
         int earlier = LastEnabledBefore(dependency.Id, self, list);
         int at = CodeModDependencies.IndexOf(dependency.Id, list);
         if (earlier < 0 && at > self && list[at].Enabled)
             return $"needs {list[at].Name} ('{dependency.Id}'), which loads after it; move {list[at].Name} above it in the mod list";
         if (dependency.Optional) return null;
-        if (earlier >= 0) return $"needs {list[earlier].Name} ('{dependency.Id}'), which is refused: {WhyRefused(list[earlier].Name, pass)}";
+        if (earlier >= 0)
+            return $"needs {list[earlier].Name} ('{dependency.Id}'), which is refused: {WhyRefused(list[earlier].Name, pass)}";
         if (at >= 0) return $"needs {list[at].Name} ('{dependency.Id}'), which is not enabled";
         return $"needs code mod '{dependency.Id}', which is not installed";
     }
@@ -135,7 +157,9 @@ public static class CodeModChecks
 
     static string WhyRefused(string name, CodeModPass pass) => pass.Refusals.GetValueOrDefault(name) ?? "it did not load";
 
-    /// <summary>The last enabled mod before <paramref name="self"/> with this id (the one that would have served); -1 when none.</summary>
+    /// <summary>
+    /// The last enabled mod before <paramref name="self"/> with this id (the one that would have served); -1 when none.
+    /// </summary>
     static int LastEnabledBefore(string id, int self, IReadOnlyList<CodeModEntry> list)
     {
         for (int i = Math.Min(self, list.Count) - 1; i >= 0; i--)
@@ -145,11 +169,11 @@ public static class CodeModChecks
 
     /// <summary>
     /// The launcher's preliminary check: for each enabled code mod, in load order, the reasons the game would refuse it that are known without its
-    /// code, by mod name. A mod with a problem, or not allowed to run code when <paramref name="trusted"/> is given, will not load, so it serves no
+    /// code, by mod name. A mod with a problem will not load, so it serves no
     /// dependent and blocks no later mod. Passing does not promise a mod runs: its DLLs and initialization are checked only at start.
     /// </summary>
     public static Dictionary<string, List<string>> Check(
-        IReadOnlyList<CodeModEntry> list, IReadOnlySet<string>? trusted = null, CodeModVersion? game = null)
+        IReadOnlyList<CodeModEntry> list, CodeModVersion? game = null)
     {
         var problems = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var pass = new CodeModPass();
@@ -165,7 +189,6 @@ public static class CodeModChecks
                 problems[entry.Name] = lines;
                 pass.Refused(entry.Name, lines[0]);
             }
-            else if (trusted is not null && !trusted.Contains(entry.Name)) pass.Refused(entry.Name, "it is not allowed to run code");
             else pass.Loaded(entry.Name, entry.Manifest!);
         }
         return problems;

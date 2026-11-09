@@ -9,12 +9,12 @@ namespace Meitou.Tests.Characters;
 
 public class CharacterAppearanceTests
 {
-    static GameDatabase? cached;
-    static readonly Lock gate = new();
+    static GameDatabase? s_cached;
+    static readonly Lock Gate = new();
 
     static GameDatabase Database(GameInstall install)
     {
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
+        lock (Gate) return s_cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
     }
 
     static string DataFile(GameInstall install, params string[] parts) => Path.Combine([install.DataDirectory, .. parts]);
@@ -37,8 +37,12 @@ public class CharacterAppearanceTests
         foreach (var actor in phs.Actors)
         {
             var (position, rotation) = Derived(skeleton, skeleton.Bones.Single(b => b.Name == actor.Bone).Handle);
-            Assert.True(Vector3.Distance(position, actor.BonePosition) < 0.01f, $"{actor.Name}: {position} vs {actor.BonePosition}");
-            Assert.True(MathF.Abs(Quaternion.Dot(rotation, actor.BoneRotation)) > 0.9999f, $"{actor.Name}: {rotation} vs {actor.BoneRotation}");
+            Assert.True(
+                Vector3.Distance(position, actor.BonePosition) < 0.01f,
+                $"{actor.Name}: {position} vs {actor.BonePosition}");
+            Assert.True(
+                MathF.Abs(Quaternion.Dot(rotation, actor.BoneRotation)) > 0.9999f,
+                $"{actor.Name}: {rotation} vs {actor.BoneRotation}");
         }
         // The hip point sits beside the pelvis at hip height.
         Assert.InRange(phs.Actors[0].Points[0].Position.Y, 10f, 11f);
@@ -65,16 +69,24 @@ public class CharacterAppearanceTests
         Assert.NotNull(c.Head);
         var worn = c.Parts.Where(p => p.Mode == AttachMode.SharedSkeleton).ToList();
         Assert.Contains(worn, p => p.Slot == AttachSlot.Hat);
-        Assert.Contains(worn, p => p.Slot == AttachSlot.Boots && p.Record.Name == "Samurai Boots"); // Wooden Sandals (0, 400): quantity 0 never spawns
-        // The weapon in hand comes as its sheathed mesh and its drawn bare blade and sheath; the renderer shows one set by the fight.
+        // Wooden Sandals (0, 400): quantity 0 never spawns.
+        Assert.Contains(worn, p => p.Slot == AttachSlot.Boots && p.Record.Name == "Samurai Boots");
+
+        // The weapon in hand comes as its sheathed mesh and its drawn bare blade and sheath;
+        // the renderer shows one set by the fight.
         var weapon = Assert.Single(c.Parts, p => p.Mode == AttachMode.Bone && p.Shown == WeaponShown.BackSheathed);
-        Assert.Equal("back", weapon.Point); // Horse Chopper (1, 100, 0): val1 ≠ 0 is the back pool
+
+        // Horse Chopper (1, 100, 0): val1 ≠ 0 is the back pool.
+        Assert.Equal("back", weapon.Point);
         Assert.Equal(["hands", "back"], c.Parts.Where(p => p.Shown == WeaponShown.BackDrawn).Select(p => p.Point));
         Assert.True(c.AttachmentPoints.ContainsKey("hip"));
         Assert.Equal("Bip01 Prop2", c.AttachmentPoints["hands"].Bone);
     }
 
-    /// <summary>The editor's EXPORT writes a body file in the game's layout that IMPORT reads back into another character's draft unchanged (docs/characters.md "Import and export").</summary>
+    /// <summary>
+    /// The editor's EXPORT writes a body file in the game's layout that IMPORT reads back into another character's draft unchanged
+    /// (docs/characters.md "Import and export").
+    /// </summary>
     [Fact]
     [Slow]
     public void Exported_look_imports_back_unchanged()
@@ -91,7 +103,7 @@ public class CharacterAppearanceTests
         var file = FcsReader.Read(stream);
         Assert.Equal(FcsFileType.V15, file.FileType);
         var exported = Assert.Single(file.Records);
-        Assert.Equal((FcsRecordType.CHARACTER_APPEARANCE, 1, "1--INGAME"), (exported.RecordType, exported.Id, exported.StringId));
+        Assert.Equal((FcsRecordType.CharacterAppearance, 1, "1--INGAME"), (exported.RecordType, exported.Id, exported.StringId));
 
         var other = AppearanceFile.Read(DataFile(install, "character", "bodies", "Beep.bod2")).Record;
         var target = new CharacterDraft(db, install.Root, other, "Beep");
@@ -100,11 +112,14 @@ public class CharacterAppearanceTests
         Assert.Equal(source.Female, target.Female);
         Assert.Equal(source.Record.Floats, target.Record.Floats);
         Assert.Equal(source.Record.Strings, target.Record.Strings);
-        Assert.Equal(source.Record.Vector3s, target.Record.Vector3s);
+        Assert.Equal(source.Record.Vector3S, target.Record.Vector3S);
         Assert.Equal(other.StringId, target.Record.StringId);
     }
 
-    /// <summary>A prosthetic built from a <see cref="LoadoutLimb"/> shows its item's colour, else the wearer's scheme, like clothing (docs/characters.md "Clothing colours", #279).</summary>
+    /// <summary>
+    /// A prosthetic built from a <see cref="LoadoutLimb"/> shows its item's colour, else the wearer's scheme, like clothing
+    /// (docs/characters.md "Clothing colours", #279).
+    /// </summary>
     [Fact]
     [Slow]
     public void A_prosthetic_limb_takes_its_item_colour_else_the_wearers_scheme()
@@ -112,11 +127,12 @@ public class CharacterAppearanceTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
         var db = Database(install);
-        var faction = db.OfType(FcsRecordType.FACTION).First(f => Meitou.Data.Gameplay.ItemColours.Of(db, f) is not null);
-        var scheme = Meitou.Data.Gameplay.ItemColours.Of(db, faction)!;
-        var own = db.OfType(FcsRecordType.COLOR_DATA).First(c => c.StringId != scheme.StringId);
-        var prosthetic = db.OfType(FcsRecordType.LIMB_REPLACEMENT).First(l => Meitou.Data.Gameplay.ItemColours.Of(db, l) is null && l.GetPath("mesh").Length > 0);
-        var race = db.OfType(FcsRecordType.RACE).First(r => r.Name == "Greenlander");
+        var faction = db.OfType(FcsRecordType.Faction).First(f => Data.Gameplay.ItemColours.Of(db, f) is not null);
+        var scheme = Data.Gameplay.ItemColours.Of(db, faction)!;
+        var own = db.OfType(FcsRecordType.ColorData).First(c => c.StringId != scheme.StringId);
+        var prosthetic = db.OfType(FcsRecordType.LimbReplacement)
+            .First(l => Data.Gameplay.ItemColours.Of(db, l) is null && l.GetPath("mesh").Length > 0);
+        var race = db.OfType(FcsRecordType.Race).First(r => r.Name == "Greenlander");
         var loadout = CharacterGenerator.Generate(db, install.Root, race, 1, female: false, faction);
         loadout.Limbs[0] = new LoadoutLimb(2, prosthetic, 0, own);
         loadout.Limbs[1] = new LoadoutLimb(2, prosthetic);

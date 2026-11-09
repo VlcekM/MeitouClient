@@ -48,7 +48,8 @@ public class ObjectLodTests
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var world = WorldLevelData.LoadBaseGame(install!);
         var towns = DistantTowns.Find(install!, db, world);
-        // 89 baked meshes; 88 belong to a town with the distant mesh flag (Observed 2026-10-04: 75 of 88 equal, the rest differ by buildings the nearest-town rule assigns differently).
+        // 89 baked meshes; 88 belong to a town with the distant mesh flag (Observed 2026-10-04: 75 of 88 equal, the rest differ by buildings the
+        // nearest-town rule assigns differently).
         Assert.InRange(towns.Count, 85, 89);
         Assert.Contains(towns, t => t.Name == "The Hub" && t.Handle == 2);
         Assert.All(towns, t => Assert.True(File.Exists(t.MeshPath)));
@@ -74,7 +75,8 @@ public class ObjectLodTests
             // One submesh, position + normal + uv + colour, as the game's builder lays out its vertices.
             var sub = Assert.Single(mesh.SubMeshes);
             var vd = sub.VertexData ?? mesh.SharedVertexData!;
-            Assert.Equal([OgreVertexSemantic.Position, OgreVertexSemantic.Normal, OgreVertexSemantic.TextureCoordinates, OgreVertexSemantic.Diffuse], vd.Elements.OrderBy(e => e.Offset).Select(e => e.Semantic));
+            Assert.Equal([OgreVertexSemantic.Position, OgreVertexSemantic.Normal, OgreVertexSemantic.TextureCoordinates, OgreVertexSemantic.Diffuse],
+                    vd.Elements.OrderBy(e => e.Offset).Select(e => e.Semantic));
             int fileTriangles = sub.Indices.Indices.Length / 3, sum = 0;
             var bounds = mesh.Bounds!.Value;
             foreach (var (record, position) in byTown.GetValueOrDefault(t.InstanceId) ?? [])
@@ -89,12 +91,14 @@ public class ObjectLodTests
                 buildings++;
                 // Vertices are relative to the town's position, Y included: every building lies inside the mesh's bounds (with its size).
                 var local = position - t.Position;
-                if (local.X >= bounds.Min.X - 300 && local.X <= bounds.Max.X + 300 && local.Y >= bounds.Min.Y - 300 && local.Y <= bounds.Max.Y + 300 &&
+                if (local.X >= bounds.Min.X - 300 && local.X <= bounds.Max.X + 300 && local.Y >= bounds.Min.Y - 300 && local.Y <= bounds.Max.Y + 300
+                        &&
                     local.Z >= bounds.Min.Z - 300 && local.Z <= bounds.Max.Z + 300) inside++;
             }
             if (sum == fileTriangles) equal++;
         }
-        // The nearest-town rule reproduces the baked batches: the triangle counts agree for most towns (Observed 2026-10-04: 75 of 88 equal, the rest differ by buildings the nearest-town rule assigns differently).
+        // The nearest-town rule reproduces the baked batches: the triangle counts agree for most towns (Observed 2026-10-04: 75 of 88 equal, the rest
+        // differ by buildings the nearest-town rule assigns differently).
         Assert.True(equal > towns.Count * 0.6, $"{equal} of {towns.Count} towns' triangle counts equal their buildings' distant meshes");
         Assert.True(inside > buildings * 0.9, $"{inside} of {buildings} buildings inside their town's mesh bounds");
         // The Hub exactly.
@@ -111,7 +115,7 @@ public class ObjectLodTests
         Assert.SkipWhen(install is null, $"No Kenshi install configured ({GameInstall.EnvironmentVariable}).");
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         int withLod = 0, checkedMeshes = 0;
-        foreach (var part in db.OfType(FcsRecordType.BUILDING_PART).Take(400))
+        foreach (var part in db.OfType(FcsRecordType.BuildingPart).Take(400))
         {
             var name = part.GetPath("phs or mesh");
             if (!name.EndsWith(".mesh", StringComparison.OrdinalIgnoreCase)) continue;
@@ -120,7 +124,8 @@ public class ObjectLodTests
             var levels = MeshLod.Levels(OgreMeshReader.ReadFile(file));
             checkedMeshes++;
             if (levels.Count > 1) withLod++;
-            for (int i = 1; i < levels.Count; i++) Assert.True(levels[i].Distance > levels[i - 1].Distance, $"{name}: level {i} at {levels[i].Distance}");
+            for (int i = 1; i < levels.Count; i++) Assert.True(levels[i].Distance > levels[i - 1].Distance,
+                    $"{name}: level {i} at {levels[i].Distance}");
         }
         Assert.True(checkedMeshes > 100);
         Assert.True(withLod > 0);

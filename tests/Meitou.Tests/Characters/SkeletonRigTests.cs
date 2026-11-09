@@ -12,14 +12,17 @@ public class SkeletonRigTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "needs the Kenshi install");
+
         var path = Directory.EnumerateFiles(install!.DataDirectory, "*.skeleton", SearchOption.AllDirectories)
             .FirstOrDefault(p => Path.GetFileName(p).Equals("male_skeleton.skeleton", StringComparison.OrdinalIgnoreCase));
         Assert.SkipWhen(path is null, "no male_skeleton.skeleton");
+
         var rig = new SkeletonRig(OgreSkeletonReader.ReadFile(path!));
         var scratch = rig.Rent();
         var skin = new Matrix4x4[rig.BoneCount];
         scratch.Pose(null, [], skin);
         rig.Return(scratch);
+
         foreach (var h in rig.Order)
         {
             var m = skin[h];

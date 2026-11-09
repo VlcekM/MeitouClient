@@ -1,6 +1,11 @@
 using System.Reflection;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu.Shaders;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Water;
 
 namespace Meitou.Tests.Vulkan;
 
@@ -10,14 +15,18 @@ public class ShaderCompilerTests
 
     static string Private(Type type, string name)
     {
-        var f = type.GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static) ?? throw new InvalidOperationException($"{type.Name}.{name} not found");
+        var f = type.GetField(name, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static)
+                ?? throw new InvalidOperationException($"{type.Name}.{name} not found");
         return (string)f.GetValue(null)!;
     }
 
-    /// <summary>Every pair the renderers link (WorldGl.Program calls), built the way the renderers build them.</summary>
+    /// <summary>
+    /// Every pair the renderers link (WorldGl.Program calls), built the way the renderers build them.
+    /// </summary>
     public static IEnumerable<(string Name, string Vertex, string Fragment)> Pairs()
     {
-        foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.SsaoApply), nameof(PostProcessShaders.Composite),
+        foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.SsaoApply),
+                nameof(PostProcessShaders.Composite),
                      nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt), nameof(PostProcessShaders.Fxaa), nameof(PostProcessShaders.HeatHaze) })
             yield return ("post " + f, PostProcessShaders.Vertex, Private(typeof(PostProcessShaders), f));
         yield return ("cloud march", PostProcessShaders.Vertex, VolumetricCloudShaders.March);

@@ -433,10 +433,19 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   10% chance of its knockout timer (+0x4f8 = MedicalSystem +0xa0) being set to 10.0: knocked down again for 10 s (**Verified**). The targeting path sets the call's last flag (r9b = 1 in the disassembly), the hit path
   clears it. With the flag, when the target is the player's, or the attacker is the player's and the target is not yet aware of it, the call
   is ignored unless both are in the same building and on the same floor and the target has a clear line to the attacker. So targeting a
-  player's character through a wall, or an unaware NPC from another floor, alerts nobody until a blow lands. Meitou: `CombatSystem.Alerts`, taken by
+  player's character through a wall, or an unaware NPC from another floor, alerts nobody until a blow lands. The line test (`FUN_1408533a0`) is a ray between
+  the eyes with no length limit, so distance never matters. The melee callers are the CombatClass target setters (`FUN_140665580`, `FUN_140665650`,
+  `FUN_1406681e0`; the deciding state `FUN_14060c8b0` sets the target at the pick, before any chase), the swing start (`FUN_1402b4570`, flag clear)
+  and the stealth knock-out (`FUN_14034cd80`). A shooter never comes here: the ranged controller's target setter (`FUN_1404371f0`) only sends "stop"
+  to the old target (the shot handler with its flag clear, `FUN_1406657d0` only; its one other call, `FUN_1405c68a0`, drives the shooter's own movement object), so the
+  new target learns nothing at the pick. Each shot fired (`FUN_14043a730`) and each bolt hit (`FUN_140439c90`) calls the shot handler `FUN_140999d50` on the target with
+  the flag set: the forced sense of the shooter with the alarm flag (`FUN_140858f40`, 1), sneaking off (`FUN_1405ca9a0`, 0), the squad's TEMP_ENEMY tag
+  (`FUN_1406744a0`, 4), and with its fight off (+0x130) and not getting up (+0x278) a replan; no knock-down roll and no stand from staying low (**Verified**, decompile; the only writer of 10.0 to +0x4f8 is
+  `FUN_140999f00`). So crossbowmen picking or shooting a character that gets up never knock it down, and a target learns of a shooter at its first shot. Meitou:
+  `CombatSystem.Alerts` for a melee attacker, the first shot since the pick for a shooter (`RetaliationSystem.AlertsNow`; the bowman's alert adds `AggroSystem.Alarm`), taken by
   `RetaliationSystem` the same tick (it ends sneaking, makes the attacker a threat of the target at once, `AggroSystem.Force`, and asks an NPC's AI to think at the next tick); same place by `SightMap.PlaceOf`, same floor as within 20 units of height inside, a terrain and
-  building line between the eyes; aware = fighting the attacker or hit by it (engine readings). The 10% knock-down: `CombatSystem.UnderAttackGettingUp`, from the alert and
-  from a landed blow outside a fight. A landed blow or bolt on an NPC with its fight off, not getting up, asks its AI to think again (`CombatSystem.HitReplan`).
+  building line between the eyes; aware = fighting the attacker or hit by it (engine readings). The 10% knock-down: `CombatSystem.UnderAttackGettingUp`, from the alert of
+  an attacker not in ranged mode (`CombatSlot.Ranged`) and from a landed melee blow outside a fight; a bolt's stagger skips it. A landed blow or bolt on an NPC with its fight off, not getting up, asks its AI to think again (`CombatSystem.HitReplan`).
 - **Threats.** The perception pass (`SensoryData::addToThreatsAndFlockingList`) looks at each sensed live character of another faction: its
   state broadcast's intended aggression adds to +0x90; when its intended target (+0x68) passes `AITaskSytem::intendsToAttackTarget` (prone
   state < 3 and its fight on; on Hold with the fight off, only within 40), a target that is the looker puts it on the threats list
@@ -512,7 +521,7 @@ Meitou (`CombatSystem.HasSlot` / `MayJoin`, `Fighting.Steer`):
   Rescue buttons, Pick up, Kidnap, Loot, Stealth KO, Put down, Operate, Prospect, Build, Repair, Dismantle, the bed, lock, shackle, cage, door and force orders, item pick-up,
   containers and Put in cage end the fight (`TaskStart.Start`,
   [simulation](../simulation.md#task-starts)) and act (whether the rows of Pick up, Rest, Build 2, Repair 95, Dismantle 96 and Operate 87 test a threat is **Unknown**). The Loot order (26, `Task_Loot_Order` update) ends when a
-  threat is within 40 (+0x2b0). Rows refused while a threat is within 40: Shooting, 146 Turret gunner,
+  threat is within 40 (+0x2b0), once at the body; the walk to it does not ([carry-loot](carry-loot.md)). Rows refused while a threat is within 40: Shooting, 146 Turret gunner,
   123/290 Bashing gate, 272 Smashing, 164 Following and talking; 248 Attacking Squad needs no threat at all. There is no pickpocket verb on a
   standing character: stealing from a person is Loot on one that is down or asleep ([verbs](ui-input.md#context-menu-verbs)), after a Stealth KO
   ([below](#stealth-knock-out)) or a knockout.
@@ -798,7 +807,7 @@ Order 228 "Stealth KO" (verb list `FUN_14079b2d0`), `Task_StealthKO` (vtable slo
 Meitou: the point is 1 behind the target's facing; "senses" (`CarrySystem.Senses`) = the target's spot meter on the attacker is full, or it fights the attacker (stand-in for the seen flag), tested every tick of the walk and of the swing, a hit ending the task silently (a target fighting someone else, or the attacker's own combat state, does not: **Verified**, `FUN_14034cd80` has neither test; Meitou's `CombatSystem.Engage` still replaces an attacker's task by Attack); heard = the target's sneaking hearing roll on the attacker's last step before the swing (`CharacterCold.KnockoutHeard`, engine reading of the pass cadence);
 the fight zero: the target fighting, fighting the attacker, having spotted it or having heard it (an entry exists), and some looker's meter on the attacker filling (`AggroSystem.Unseen`); the 0.07 and No XP rules as above (the 0.5 uses `CarrySystem.Asleep`: in a bed, or the Rest task with the Sleep behaviour as stand-in; a Rest order alone gives 1; aware: the same entry stand-in; **Verified** `FUN_14034cd80`: No XP is a miss on a fighting target whose entry for the attacker exists, `FUN_140855960` with its seen/heard check off); the Assault is `CrimeSystem.SetPending` at the roll. A miss defers
 `DialogueEvent` 56, `AggroSystem.Alarm` (the hearing alarm only: the spot meter is not forced), the two TEMP ENEMY tags and a defensive `AttackOrder` (no assault booked for it) for an NPC target; a player character's target is told of the attacker (`CarrySystem.Engage`: forced sense, replan) and the decision step's `CarrySystem.EngagedDefence` answers unless an order runs ([decision step](../simulation.md#decision-step)), an engine stand-in for the threats list.
-The result floats as `FloaterKind.StealthHit` / `StealthMiss` (queued only while the floaters option is on, unlike the original) and, for a player attacker, is also a notice with the chance. The verb shows the chance; a quick right click on an NPC while sneaking gives it.
+The result floats as `FloaterKind.StealthHit` / `StealthMiss` (shown whatever the floaters option, as the original) and, for a player attacker, is also a notice with the chance. The verb shows the chance, and so does the label over the `knockout` pointer ([pointer chance label](ui-input.md#pointer-chance-label)); a quick right click on an NPC while sneaking gives it.
 Order 229 "Stealth Kill" shares the task but nothing issues it (no row, no use of 229; **Observed**).
 
 ## Validation

@@ -37,7 +37,7 @@ version. Layout data: [zones](../formats/zones.md) (`interiors.level`, `serialis
 
 ## Meitou
 
-F10 → Tools → "Interior editor..." (`GameHost.InteriorEditor.cs`). Read only.
+F10 → Tools → "Interior editor..." (`InteriorEditorHost`). Read only.
 
 - Shows the selected level building (left click; the panel follows a new selection; a player's site
   has no layouts), its type's interior or exterior layouts (Tab) including those of `shares interiors with`,

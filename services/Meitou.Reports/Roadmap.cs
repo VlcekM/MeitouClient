@@ -3,7 +3,9 @@ using System.Text.Json.Serialization;
 
 namespace Meitou.Reports;
 
-/// <summary>A roadmap row as the site's <c>/roadmap.json</c> lists it.</summary>
+/// <summary>
+/// A roadmap row as the site's <c>/roadmap.json</c> lists it.
+/// </summary>
 sealed record RoadmapRow(string Id, string System, string Category, string Status);
 
 sealed record RoadmapFile(List<RoadmapRow> Rows);
@@ -18,8 +20,14 @@ sealed record GithubRelease(
 /// Which reports count: none from before <see cref="Since"/>, and a Broken one only while no full release came out after its build
 /// (<see cref="Builds"/> and <see cref="Published"/> pair each game release's version with its publish time; a build that is not a
 /// release, such as a self-built one, is dated by the report itself). <see cref="NewestFull"/> is null before any full release.
+/// <see cref="Latest"/>: the newest game versions, for the game's feedback form.
 /// </summary>
-sealed record Window(DateTimeOffset Since, DateTimeOffset? NewestFull, string[] Builds, DateTimeOffset[] Published);
+sealed record Window(DateTimeOffset Since, DateTimeOffset? NewestFull, string[] Builds, DateTimeOffset[] Published, Latest Latest);
+
+/// <summary>
+/// The version (no <c>v</c>) of the newest full game release and of the newest game release of any kind, nightlies included; null for none.
+/// </summary>
+sealed record Latest(string? Release, string? Any);
 
 /// <summary>
 /// The roadmap's rows (from the site, so reports can only name a real row) and the report window: reports older than two full game
@@ -27,33 +35,36 @@ sealed record Window(DateTimeOffset Since, DateTimeOffset? NewestFull, string[] 
 /// </summary>
 sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> log)
 {
-    static readonly TimeSpan RowsFor = TimeSpan.FromMinutes(10), ReleasesFor = TimeSpan.FromHours(1);
-    readonly SemaphoreSlim gate = new(1, 1);
-    Dictionary<string, RoadmapRow> rows = [];
-    DateTimeOffset rowsAt = DateTimeOffset.MinValue, releasesAt = DateTimeOffset.MinValue;
-    Window window = new(DateTimeOffset.UtcNow.AddDays(-90), null, [], []);
+    static readonly TimeSpan RowsFor = TimeSpan.FromMinutes(10), ReleasesFor = TimeSpan.FromMinutes(10);
+    readonly SemaphoreSlim _gate = new(1, 1);
+    Dictionary<string, RoadmapRow> _rows = [];
+    DateTimeOffset _rowsAt = DateTimeOffset.MinValue, _releasesAt = DateTimeOffset.MinValue;
+    Window _window = new(DateTimeOffset.UtcNow.AddDays(-90), null, [], [], new(null, null));
 
     public async Task<IReadOnlyDictionary<string, RoadmapRow>> Rows()
     {
-        if (DateTimeOffset.UtcNow - rowsAt < RowsFor) return rows;
-        await gate.WaitAsync();
+        if (DateTimeOffset.UtcNow - _rowsAt < RowsFor) return _rows;
+        await _gate.WaitAsync();
         try
         {
-            if (DateTimeOffset.UtcNow - rowsAt < RowsFor) return rows;
+            if (DateTimeOffset.UtcNow - _rowsAt < RowsFor) return _rows;
             string text = await http.GetStringAsync(config.RoadmapUrl);
             var list = config.RoadmapUrl.AbsolutePath.EndsWith(".json", StringComparison.Ordinal)
                 ? System.Text.Json.JsonSerializer.Deserialize(text, ReportsJson.Default.RoadmapFile)?.Rows ?? []
                 : ParseSource(text);
-            if (list.Count > 0) rows = list.ToDictionary(r => r.Id);
-            rowsAt = DateTimeOffset.UtcNow;
+            if (list.Count > 0) _rows = list.ToDictionary(r => r.Id);
+            _rowsAt = DateTimeOffset.UtcNow;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
             log.LogWarning("Roadmap rows from {Url} not read: {Error}", config.RoadmapUrl, e.Message);
-            rowsAt = DateTimeOffset.UtcNow - RowsFor + TimeSpan.FromMinutes(1);   // retry in a minute, keep the old list
+            _rowsAt = DateTimeOffset.UtcNow - RowsFor + TimeSpan.FromMinutes(1);   // retry in a minute, keep the old list
         }
-        finally { gate.Release(); }
-        return rows;
+        finally
+        {
+            _gate.Release();
+        }
+        return _rows;
     }
 
     /// <summary>
@@ -85,11 +96,11 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
     /// </summary>
     public async Task<Window> Window()
     {
-        if (DateTimeOffset.UtcNow - releasesAt < ReleasesFor) return window;
-        await gate.WaitAsync();
+        if (DateTimeOffset.UtcNow - _releasesAt < ReleasesFor) return _window;
+        await _gate.WaitAsync();
         try
         {
-            if (DateTimeOffset.UtcNow - releasesAt < ReleasesFor) return window;
+            if (DateTimeOffset.UtcNow - _releasesAt < ReleasesFor) return _window;
             using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{config.Repo}/releases?per_page=100");
             request.Headers.UserAgent.ParseAdd("meitou-reports");
             using var response = await http.SendAsync(request);
@@ -97,17 +108,21 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
             var game = (await response.Content.ReadFromJsonAsync(ReportsJson.Default.ListGithubRelease) ?? [])
                 .Where(r => r.Tag.StartsWith('v') && !r.Draft && r.Published is not null).ToList();
             var full = game.Where(r => !r.Prerelease).OrderByDescending(r => r.Published).ToList();
-            window = new(full.Count >= 2 ? full[1].Published!.Value : DateTimeOffset.MinValue, full.FirstOrDefault()?.Published,
-                game.Select(r => r.Tag[1..]).ToArray(), game.Select(r => r.Published!.Value).ToArray());
-            releasesAt = DateTimeOffset.UtcNow;
+            var latest = new Latest(full.FirstOrDefault()?.Tag[1..], game.MaxBy(r => r.Published)?.Tag[1..]);
+            _window = new(full.Count >= 2 ? full[1].Published!.Value : DateTimeOffset.MinValue, full.FirstOrDefault()?.Published,
+                game.Select(r => r.Tag[1..]).ToArray(), game.Select(r => r.Published!.Value).ToArray(), latest);
+            _releasesAt = DateTimeOffset.UtcNow;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
             log.LogWarning("Releases not read: {Error}", e.Message);
-            releasesAt = DateTimeOffset.UtcNow - ReleasesFor + TimeSpan.FromMinutes(5);
+            _releasesAt = DateTimeOffset.UtcNow - ReleasesFor + TimeSpan.FromMinutes(5);
         }
-        finally { gate.Release(); }
-        return window;
+        finally
+        {
+            _gate.Release();
+        }
+        return _window;
     }
 
     /// <summary>
@@ -121,9 +136,16 @@ sealed partial class Roadmap(HttpClient http, Config config, ILogger<Roadmap> lo
         {
             if (!rows.TryGetValue(s.Row, out var row)) continue;
             if (row.Status == "untested" && (s.Works >= 3 || s.TrustedWorks))
-                list.Add(new(row.Id, row.System, row.Status, "works", s.TrustedWorks ? "a trusted tester saw it work" : $"{s.Works} people saw it work"));
+            {
+                string worksText = s.TrustedWorks ? "a trusted tester saw it work" : $"{s.Works} people saw it work";
+                list.Add(new(row.Id, row.System, row.Status, "works", worksText));
+            }
+
             if (s.Broken > 0)
-                list.Add(new(row.Id, row.System, row.Status, "look", $"{s.Broken} broken report{(s.Broken == 1 ? "" : "s")}, newest on {s.LastBuild}"));
+            {
+                string lookText = $"{s.Broken} broken report{(s.Broken == 1 ? "" : "s")}, newest on {s.LastBuild}";
+                list.Add(new(row.Id, row.System, row.Status, "look", lookText));
+            }
         }
         return list;
     }

@@ -35,7 +35,9 @@ public class CharacterShapeTests
         var input = new CharacterShapeInput { Sliders = body.Floats.ToDictionary(), Female = body.Female };
         Assert.All(CharacterShape.Sliders, s => Assert.True(body.Floats.ContainsKey(s), $"Ruka.bod2 has no '{s}'"));
         var r = CharacterShape.Compute(input, _ => true);
-        float h = body.Get("Height") / 100, frame = body.Get("Frame") / 100, hips = body.Get("Hips") / 100;
+        float h = body.Get("Height") / 100;
+        float frame = body.Get("Frame") / 100;
+        float hips = body.Get("Hips") / 100;
         Near(new Vector3(hips * frame, h, hips * frame), r.BoneSize["Bip01 Pelvis"], "pelvis");
         Assert.Equal(h + body.Get("Leg length") / 100 - 1, r.MovementScale, 1e-5f);
         float headSize = body.Get("Head size") / 100;

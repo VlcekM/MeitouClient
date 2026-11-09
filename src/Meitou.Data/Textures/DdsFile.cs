@@ -6,16 +6,22 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public sealed class DdsFile
 {
-    /// <summary>The whole file (surfaces are slices of it).</summary>
+    /// <summary>
+    /// The whole file (surfaces are slices of it).
+    /// </summary>
     public required byte[] Data { get; init; }
 
     public int Width { get; init; }
     public int Height { get; init; }
 
-    /// <summary>Depth of a volume texture; 1 otherwise.</summary>
+    /// <summary>
+    /// Depth of a volume texture; 1 otherwise.
+    /// </summary>
     public int Depth { get; init; } = 1;
 
-    /// <summary>Mip levels per image, including the full-size level (at least 1).</summary>
+    /// <summary>
+    /// Mip levels per image, including the full-size level (at least 1).
+    /// </summary>
     public int MipCount { get; init; } = 1;
 
     /// <summary>
@@ -29,34 +35,63 @@ public sealed class DdsFile
 
     public DdsFormat Format { get; init; }
 
-    /// <summary>The legacy pixel-format FourCC (e.g. <c>DXT5</c>), or null for an uncompressed legacy format.</summary>
-    public string? FourCC { get; init; }
+    /// <summary>
+    /// The legacy pixel-format FourCC (e.g. <c>DXT5</c>), or null for an uncompressed legacy format.
+    /// </summary>
+    public string? FourCc { get; init; }
 
-    /// <summary>The DXGI format number from the DX10 header, or null without one.</summary>
+    /// <summary>
+    /// The DXGI format number from the DX10 header, or null without one.
+    /// </summary>
     public int? DxgiFormat { get; init; }
 
-    /// <summary>Channel layout of <see cref="DdsFormat.Uncompressed"/> data; null for other formats.</summary>
+    /// <summary>
+    /// Channel layout of <see cref="DdsFormat.Uncompressed"/> data; null for other formats.
+    /// </summary>
     public DdsPixelMasks? Masks { get; init; }
 
-    /// <summary>Header flags (<c>DDSD_*</c>) as stored.</summary>
+    /// <summary>
+    /// Header flags (<c>DDSD_*</c>) as stored.
+    /// </summary>
     public uint HeaderFlags { get; init; }
 
-    /// <summary>Size of the headers: 128 (magic + header), or 148 with a DX10 header.</summary>
+    /// <summary>
+    /// Size of the headers: 128 (magic + header), or 148 with a DX10 header.
+    /// </summary>
     public int HeaderSize { get; init; }
 
-    /// <summary>Surfaces in file order: image by image, each image's mip levels from largest to smallest.</summary>
+    /// <summary>
+    /// Surfaces in file order: image by image, each image's mip levels from largest to smallest.
+    /// </summary>
     public required IReadOnlyList<DdsSurface> Surfaces { get; init; }
 
-    /// <summary>Bytes after the last surface (0 for a well-formed file).</summary>
+    /// <summary>
+    /// Bytes after the last surface (0 for a well-formed file).
+    /// </summary>
     public int TrailingBytes => Data.Length - (Surfaces.Count == 0 ? HeaderSize : Surfaces[^1].Offset + Surfaces[^1].Length);
 
     public DdsSurface Surface(int image, int level) => Surfaces[image * MipCount + level];
 
-    /// <summary>The same file over other bytes, with surfaces laid out in them (<see cref="DdsReader.ReadKept"/>).</summary>
+    /// <summary>
+    /// The same file over other bytes, with surfaces laid out in them (<see cref="DdsReader.ReadKept"/>).
+    /// </summary>
     internal DdsFile WithData(byte[] data, IReadOnlyList<DdsSurface> surfaces) => new()
     {
-        Data = data, Width = Width, Height = Height, Depth = Depth, MipCount = MipCount, ImageCount = ImageCount, IsCubemap = IsCubemap, IsVolume = IsVolume,
-        Format = Format, FourCC = FourCC, DxgiFormat = DxgiFormat, Masks = Masks, HeaderFlags = HeaderFlags, HeaderSize = HeaderSize, Surfaces = surfaces,
+        Data = data,
+        Width = Width,
+        Height = Height,
+        Depth = Depth,
+        MipCount = MipCount,
+        ImageCount = ImageCount,
+        IsCubemap = IsCubemap,
+        IsVolume = IsVolume,
+        Format = Format,
+        FourCc = FourCc,
+        DxgiFormat = DxgiFormat,
+        Masks = Masks,
+        HeaderFlags = HeaderFlags,
+        HeaderSize = HeaderSize,
+        Surfaces = surfaces,
     };
 
     public ReadOnlySpan<byte> SurfaceData(DdsSurface surface) => Data.AsSpan(surface.Offset, surface.Length);
@@ -71,28 +106,48 @@ public sealed class DdsFile
 /// <param name="Length">Size of the data in bytes.</param>
 public readonly record struct DdsSurface(int Image, int Level, int Width, int Height, int Depth, int Offset, int Length);
 
-/// <summary>Pixel layouts the reader understands.</summary>
+/// <summary>
+/// Pixel layouts the reader understands.
+/// </summary>
 public enum DdsFormat
 {
-    /// <summary>BC1 / DXT1: 8-byte blocks of 4×4 pixels, colour with optional 1-bit alpha.</summary>
+    /// <summary>
+    /// BC1 / DXT1: 8-byte blocks of 4×4 pixels, colour with optional 1-bit alpha.
+    /// </summary>
     Bc1,
-    /// <summary>BC2 / DXT3 (also DXT2): 16-byte blocks, explicit 4-bit alpha.</summary>
+    /// <summary>
+    /// BC2 / DXT3 (also DXT2): 16-byte blocks, explicit 4-bit alpha.
+    /// </summary>
     Bc2,
-    /// <summary>BC3 / DXT5 (also DXT4): 16-byte blocks, interpolated alpha.</summary>
+    /// <summary>
+    /// BC3 / DXT5 (also DXT4): 16-byte blocks, interpolated alpha.
+    /// </summary>
     Bc3,
-    /// <summary>BC4 / ATI1: 8-byte blocks, one interpolated channel.</summary>
+    /// <summary>
+    /// BC4 / ATI1: 8-byte blocks, one interpolated channel.
+    /// </summary>
     Bc4,
-    /// <summary>BC5 / ATI2: 16-byte blocks, two interpolated channels (typically a normal map's X and Y).</summary>
+    /// <summary>
+    /// BC5 / ATI2: 16-byte blocks, two interpolated channels (typically a normal map's X and Y).
+    /// </summary>
     Bc5,
-    /// <summary>BC7 / BPTC (DXGI 97-99): 16-byte blocks, eight modes, high quality colour with alpha.</summary>
+    /// <summary>
+    /// BC7 / BPTC (DXGI 97-99): 16-byte blocks, eight modes, high quality colour with alpha.
+    /// </summary>
     Bc7,
-    /// <summary>"RXGB": BC3 blocks whose red channel is stored in alpha (the xGBR normal-map swizzle); decoded as BC3 with R and A swapped and A = 255.</summary>
+    /// <summary>
+    /// "RXGB": BC3 blocks whose red channel is stored in alpha (the xGBR normal-map swizzle); decoded as BC3 with R and A swapped and A = 255.
+    /// </summary>
     Rxgb,
-    /// <summary>Uncompressed pixels with channel bit masks (<see cref="DdsFile.Masks"/>), 8 to 32 bits per pixel.</summary>
+    /// <summary>
+    /// Uncompressed pixels with channel bit masks (<see cref="DdsFile.Masks"/>), 8 to 32 bits per pixel.
+    /// </summary>
     Uncompressed,
 }
 
-/// <summary>Channel bit masks of an uncompressed format. A zero mask means the channel is absent.</summary>
+/// <summary>
+/// Channel bit masks of an uncompressed format. A zero mask means the channel is absent.
+/// </summary>
 /// <param name="Luminance">True when <see cref="Red"/> is a luminance (grey) channel.</param>
 public sealed record DdsPixelMasks(int BitCount, uint Red, uint Green, uint Blue, uint Alpha, bool Luminance = false)
 {

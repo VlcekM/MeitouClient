@@ -19,6 +19,16 @@ drop-in replacement that runs original content and mods unchanged.
   narration, progress diaries, completed plans, merge history or raw benchmark logs. Keep one
   authoritative description per fact and link to it; Git retains historical implementation details.
 
+## Layout
+
+- `src`: Core (shared with the launcher), Data (formats and pure rules), Simulation (the headless world: never references Game), Game
+  (the executable `MeitouClient`). Tests, tools and the viewer reference Game. Metal code compiles where `MeitouMetal` is set (macOS).
+- Folders are feature slices and the namespace follows the folder (`Simulation/Population` is `Meitou.Simulation.Population`); a
+  project's kernel types sit at its root. `Game/Mods` keeps `Meitou.Modding` until the mod contract moves to Simulation.
+- Never name a folder like a type: the namespace captures the name (`World`, `Orders`, `Inventory` are types).
+- Don't add partial files to a class: a feature with state of its own is its own class. `partial` is for platform splits
+  (`GameHost.Metal.cs`); the existing partial hosts are being broken up.
+
 ## Game assets
 
 - Never commit original game files or content dumps. `.gitignore` blocks asset extensions.
@@ -42,6 +52,23 @@ drop-in replacement that runs original content and mods unchanged.
 - The mod editor is .NET: `ilspycmd -p -o <dir outside the repo> "<Kenshi>/forgotten construction set.exe"`
   (`dotnet tool install -g ilspycmd`). Its `GameData` class is the reference for the `.mod` format.
 
+## Code style
+
+- Keep methods short: one job each, roughly a screen at most. Split a longer method into named steps (its body reads as a list of
+  calls), and split one you're editing when it has grown past that. Keep every comment that records a fact next to its code.
+- Regions: a class with more than one responsibility gets one `#region` per responsibility, not nested. A region's fields and
+  constants sit at its top, then its entry points, then their private steps; never fields between or after methods. A region whose
+  state no other region touches becomes a class of its own.
+- Doc comments: `/// <summary>`, the text, `/// </summary>` on separate lines, for every member including fields; the text
+  wrapped at ~150. A summary sits directly on its member, never above a `//` comment or another member.
+- Whitespace: a blank line between logical groups (setup, each decision, each group of side effects, the return); a comment that
+  opens a group has a blank line before it. One statement per line.
+- `if`: a short single-statement body stays on the `if` line (`if (x is null) return;`, the line ~120 at most); a longer one
+  goes on the next line; a body of more statements, or spanning lines, goes in braces on their own lines. `try`/`catch`/`finally`
+  bodies always in braces on their own lines. Guard clauses first, then the main path unindented.
+- Lines: wrap past ~150, preferably by naming a local; a repeated long expression becomes a helper. A lambda longer than a line
+  becomes a named method (method group) or a statement lambda laid out like a method. Chained `?:` and LINQ calls one per line.
+
 ## Code mods
 
 - Contract: [docs/modding.md](docs/modding.md) and [docs/modding-dependencies.md](docs/modding-dependencies.md). A change to
@@ -52,6 +79,6 @@ drop-in replacement that runs original content and mods unchanged.
 - Get the user's explicit approval before adding tests, including new cases in existing tests.
   Explain briefly what they would catch and why existing coverage is insufficient; wait for approval.
 
-`dotnet build`, `dotnet test`, `dotnet run --project tools/Meitou.Tools`. Warnings are errors. Tests that need the game, a GPU or
+`dotnet build`, `dotnet test`, `dotnet run --project tools/Meitou.Tools`. Warnings are errors. Naming follows `.editorconfig` and the build enforces it (IDE1006): private fields `_camelCase`, private static `s_camelCase`, static readonly and non-private fields PascalCase, locals, parameters and local constants camelCase; Metal-only code is checked by the `-p:MeitouMetal=true` build. Tests that need the game, a GPU or
 long runs are marked `[Slow]`; tests that assert a timing are marked `[Bench]` (they fail on a loaded machine). The quick run while
 iterating is `dotnet test --filter "Category!=Slow&Category!=Bench"`; the full run before committing.

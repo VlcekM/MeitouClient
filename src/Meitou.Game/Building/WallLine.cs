@@ -3,17 +3,26 @@ using Meitou.Data.Gameplay.Construction;
 
 namespace Meitou.Game.Building;
 
-/// <summary>One piece of a wall line: a BUILDING (the wall, a short piece, a connector or a wedge) standing at its start point, facing along its own +Z.</summary>
+/// <summary>
+/// One piece of a wall line: a BUILDING (the wall, a short piece, a connector or a wedge) standing at its start point, facing along its own +Z.
+/// </summary>
 public readonly record struct WallPiece(BuildingBuildData Data, Vector3 Position, Quaternion Rotation);
 
-/// <summary>A link point a line can snap to: where it is, the wall's direction there (horizontal) and the original's code (1 free end, 2 free start, 3 joined start or end).</summary>
+/// <summary>
+/// A link point a line can snap to: where it is, the wall's direction there (horizontal) and the original's code (1 free end, 2 free start, 3 joined
+/// start or end).
+/// </summary>
 public readonly record struct WallSnap(Vector3 Point, Vector3 Direction, int Code)
 {
-    /// <summary>A line that starts on another wall's start runs backwards (<b>Verified</b>: reversed = code &amp; 2).</summary>
+    /// <summary>
+    /// A line that starts on another wall's start runs backwards (<b>Verified</b>: reversed = code &amp; 2).
+    /// </summary>
     public bool Reverses => (Code & 2) != 0;
 }
 
-/// <summary>A placed or queued wall's two link points with their directions and how many other walls touch each.</summary>
+/// <summary>
+/// A placed or queued wall's two link points with their directions and how many other walls touch each.
+/// </summary>
 public sealed class WallLink(Vector3 start, Vector3 end, Vector3 startDirection, Vector3 endDirection)
 {
     public Vector3 Start { get; } = start;
@@ -25,41 +34,67 @@ public sealed class WallLink(Vector3 start, Vector3 end, Vector3 startDirection,
 }
 
 /// <summary>
-/// Kenshi's wall lines (docs/game/buildings-production.md "Walls", <c>PreviewBuilding_Wall</c>): the link points of walls, the snap search, the bend pieces at a snapped joint and the
-/// straight run that splits a line into the wall's pieces over the terrain. Pure over its inputs; the build mode in <c>PlayerInterface.Build.cs</c> drives it.
+/// Kenshi's wall lines (docs/game/buildings-production.md "Walls", <c>PreviewBuilding_Wall</c>): the link points of walls, the snap search, the bend
+/// pieces at a snapped joint and the straight run that splits a line into the wall's pieces over the terrain. Pure over its inputs; the build mode in
+/// <c>BuildMode</c> drives it.
 /// </summary>
 public static class WallLine
 {
-    /// <summary>Snap radius outdoors (<b>Verified</b>; 25 inside a building, not built).</summary>
+    /// <summary>
+    /// Snap radius outdoors (<b>Verified</b>; 25 inside a building, not built).
+    /// </summary>
     public const float SnapRadius = 90;
-    /// <summary>Two link points closer than the square root of this are joined (<b>Verified</b>).</summary>
+    /// <summary>
+    /// Two link points closer than the square root of this are joined (<b>Verified</b>).
+    /// </summary>
     public const float JoinDistanceSquared = 10;
-    /// <summary>A line is at most this long (<b>Verified</b>).</summary>
+    /// <summary>
+    /// A line is at most this long (<b>Verified</b>).
+    /// </summary>
     public const float MaxRun = 10000;
-    /// <summary>A piece fits when its length is below what remains plus this (<b>Verified</b>), so the last may overshoot by up to it.</summary>
+    /// <summary>
+    /// A piece fits when its length is below what remains plus this (<b>Verified</b>), so the last may overshoot by up to it.
+    /// </summary>
     public const float PieceTolerance = 10;
-    /// <summary>The run stops when less than this remains (<b>Verified</b>).</summary>
+    /// <summary>
+    /// The run stops when less than this remains (<b>Verified</b>).
+    /// </summary>
     public const float StopDistance = 10;
-    /// <summary>At most this many pieces in a run (<b>Verified</b>).</summary>
+    /// <summary>
+    /// At most this many pieces in a run (<b>Verified</b>).
+    /// </summary>
     public const int MaxPieces = 500;
-    /// <summary>A joint bending more than this (degrees) gets a short piece over a crest or a wedge in a valley (<b>Verified</b>).</summary>
+    /// <summary>
+    /// A joint bending more than this (degrees) gets a short piece over a crest or a wedge in a valley (<b>Verified</b>).
+    /// </summary>
     public const float BendDegrees = 10;
-    /// <summary>At a snapped joint one extra short piece per this many degrees of turn (<b>Verified</b>).</summary>
+    /// <summary>
+    /// At a snapped joint one extra short piece per this many degrees of turn (<b>Verified</b>).
+    /// </summary>
     public const float BendStepDegrees = 60;
-    /// <summary>A connector's end direction is turned this much about +Y (<b>Verified</b>).</summary>
+    /// <summary>
+    /// A connector's end direction is turned this much about +Y (<b>Verified</b>).
+    /// </summary>
     public const float ConnectorTurnDegrees = 48;
-    /// <summary>Near a snapped joint (pieces within <see cref="JointRun"/> of it) walls with a link point within <see cref="JointReach"/> of it do not block (<b>Observed</b>).</summary>
+    /// <summary>
+    /// Near a snapped joint (pieces within <see cref="JointRun"/> of it) walls with a link point within <see cref="JointReach"/> of it do not block
+    /// (<b>Observed</b>).
+    /// </summary>
     public const float JointReach = 20, JointRun = 120;
 
     const int Connector = 1, Wedge = 2, Single = 3;
 
     // ---- link points ----
 
-    /// <summary>A wall's start (its position) and end (position + rotation x (0, 0, link length)).</summary>
+    /// <summary>
+    /// A wall's start (its position) and end (position + rotation x (0, 0, link length)).
+    /// </summary>
     public static (Vector3 Start, Vector3 End) Ends(BuildingBuildData wall, Vector3 position, Quaternion rotation) =>
         (position, position + Vector3.Transform(new Vector3(0, 0, wall.LinkLength), Normalised(rotation)));
 
-    /// <summary>The link points of the walls (records with <c>links together</c>), with the join counts (<b>Verified</b>, <c>FUN_1404289f0</c>).</summary>
+    /// <summary>
+    /// The link points of the walls (records with <c>links together</c>), with the join counts (<b>Verified</b>, <c>FUN_1404289f0</c>).
+    /// </summary>
     public static List<WallLink> Links(IEnumerable<(BuildingBuildData Data, Vector3 Position, Quaternion Rotation)> walls)
     {
         var links = new List<WallLink>();
@@ -68,7 +103,9 @@ public static class WallLine
             if (!data.LinksTogether) continue;
             var (start, end) = Ends(data, position, rotation);
             var dir = Horizontal(Vector3.Transform(Vector3.UnitZ, Normalised(rotation)));
-            var endDir = data.LinkType == Connector ? Vector3.Transform(dir, Quaternion.CreateFromAxisAngle(Vector3.UnitY, ConnectorTurnDegrees * MathF.PI / 180)) : dir;
+            var endDir = dir;
+            if (data.LinkType == Connector)
+                endDir = Vector3.Transform(dir, Quaternion.CreateFromAxisAngle(Vector3.UnitY, ConnectorTurnDegrees * MathF.PI / 180));
             links.Add(new WallLink(start, end, dir, endDir));
         }
         for (int i = 0; i < links.Count; i++)
@@ -76,15 +113,20 @@ public static class WallLine
             {
                 if (i == j) continue;
                 var (a, b) = (links[i], links[j]);
-                if (Vector3.DistanceSquared(a.Start, b.Start) < JoinDistanceSquared || Vector3.DistanceSquared(a.Start, b.End) < JoinDistanceSquared) a.JoinsAtStart++;
-                if (Vector3.DistanceSquared(a.End, b.Start) < JoinDistanceSquared || Vector3.DistanceSquared(a.End, b.End) < JoinDistanceSquared) a.JoinsAtEnd++;
+                if (Vector3.DistanceSquared(a.Start, b.Start) < JoinDistanceSquared
+                    || Vector3.DistanceSquared(a.Start, b.End) < JoinDistanceSquared)
+                    a.JoinsAtStart++;
+                if (Vector3.DistanceSquared(a.End, b.Start) < JoinDistanceSquared
+                    || Vector3.DistanceSquared(a.End, b.End) < JoinDistanceSquared)
+                    a.JoinsAtEnd++;
             }
         return links;
     }
 
     /// <summary>
-    /// The nearest link point to <paramref name="at"/> in X/Z (<b>Verified</b>, <c>FUN_140427950</c>): a free point scores its distance squared minus the radius squared, a joined one its
-    /// distance squared, below the radius squared; so free points snap within radius x sqrt 2 and win. The best one is kept only when its code shares a bit with <paramref name="mask"/>.
+    /// The nearest link point to <paramref name="at"/> in X/Z (<b>Verified</b>, <c>FUN_140427950</c>): a free point scores its distance squared minus
+    /// the radius squared, a joined one its distance squared, below the radius squared; so free points snap within radius x sqrt 2 and win. The best
+    /// one is kept only when its code shares a bit with <paramref name="mask"/>.
     /// </summary>
     public static WallSnap? Find(IReadOnlyList<WallLink> links, Vector3 at, int mask = 3, float radius = SnapRadius)
     {
@@ -108,9 +150,10 @@ public static class WallLine
     // ---- laying a line ----
 
     /// <summary>
-    /// The pieces of a line from <paramref name="start"/> to <paramref name="end"/> (<b>Verified</b> unless the docs say otherwise, <c>FUN_14042af70</c>, <c>FUN_14042a4b0</c>,
-    /// <c>FUN_140429cc0</c>): bend pieces at a snapped start and end, then the straight run between. Unsnapped ends carry the player's height offset already. The run is laid twice when
-    /// the end is snapped, the second time with each piece shortened by the first run's overshoot over its count so it closes on the point (engine reading).
+    /// The pieces of a line from <paramref name="start"/> to <paramref name="end"/> (<b>Verified</b> unless the docs say otherwise,
+    /// <c>FUN_14042af70</c>, <c>FUN_14042a4b0</c>, <c>FUN_140429cc0</c>): bend pieces at a snapped start and end, then the straight run between.
+    /// Unsnapped ends carry the player's height offset already. The run is laid twice when the end is snapped, the second time with each piece
+    /// shortened by the first run's overshoot over its count so it closes on the point (engine reading).
     /// </summary>
     public static List<WallPiece> Layout(BuildingBuildData master, Func<string, BuildingBuildData?> data, Func<float, float, float> ground,
         Vector3 start, WallSnap? startSnap, Vector3 end, WallSnap? endSnap, bool reversed)
@@ -132,13 +175,17 @@ public static class WallLine
         return pieces;
     }
 
-    /// <summary>The pieces a line may use (<b>Verified</b>): the wall and its subsections with a length, longest first; the connector and the wedge apart.</summary>
+    /// <summary>
+    /// The pieces a line may use (<b>Verified</b>): the wall and its subsections with a length, longest first; the connector and the wedge apart.
+    /// </summary>
     sealed class PieceSet
     {
         public readonly List<BuildingBuildData> Pieces = [];
         public readonly bool[] Used = new bool[64];
         public BuildingBuildData? Connector, Wedge;
-        /// <summary>The wall's <c>max slope</c> and <c>building height</c> (the wall object's +0x88 and +0x8c).</summary>
+        /// <summary>
+        /// The wall's <c>max slope</c> and <c>building height</c> (the wall object's +0x88 and +0x8c).
+        /// </summary>
         public float MaxSlope, Height;
         public BuildingBuildData Shortest => Pieces[^1];
         public BuildingBuildData Longest => Pieces[0];
@@ -164,8 +211,9 @@ public static class WallLine
     }
 
     /// <summary>
-    /// The pieces at a snapped joint (<c>FUN_140429cc0</c>): the turn from the snap direction to the line, one short piece per <see cref="BendStepDegrees"/> (none when the shortest piece is a
-    /// single), each turned an equal share; a connector at each joint on one side of the turn. Returns where the line goes on from.
+    /// The pieces at a snapped joint (<c>FUN_140429cc0</c>): the turn from the snap direction to the line, one short piece per
+    /// <see cref="BendStepDegrees"/> (none when the shortest piece is a single), each turned an equal share; a connector at each joint on one side of
+    /// the turn. Returns where the line goes on from.
     /// </summary>
     static Vector3 Bend(PieceSet set, List<WallPiece> pieces, Vector3 point, Vector3 direction, Vector3 other, bool reversed)
     {
@@ -194,9 +242,9 @@ public static class WallLine
     }
 
     /// <summary>
-    /// The straight run (<c>FUN_14042a4b0</c>): a terrain profile at half the longest piece, smoothed downward; the first piece shorter than what remains plus <see cref="PieceTolerance"/>
-    /// ends on the profile (the height offset blended from the start's to the end's), a short piece over each crest and a wedge in each valley above <see cref="BendDegrees"/>. Returns the
-    /// signed overshoot past the end along the line.
+    /// The straight run (<c>FUN_14042a4b0</c>): a terrain profile at half the longest piece, smoothed downward; the first piece shorter than what
+    /// remains plus <see cref="PieceTolerance"/> ends on the profile (the height offset blended from the start's to the end's), a short piece over
+    /// each crest and a wedge in each valley above <see cref="BendDegrees"/>. Returns the signed overshoot past the end along the line.
     /// </summary>
     static float Run(PieceSet set, List<WallPiece> pieces, Func<float, float, float> ground, Vector3 start, Vector3 end, bool reversed, float stretch)
     {
@@ -253,7 +301,8 @@ public static class WallLine
             // A rising piece steeper than the wall's max slope is not placed: the run goes on straight (FUN_14042a4b0 -> FUN_14042a2b0) and ends.
             if (p.Y > cur.Y && Angle(dir, d) > set.MaxSlope)
             {
-                cur = Straight(set, pieces, smoothed, Segment(Vector3.Dot(new Vector3(cur.X - start.X, 0, cur.Z - start.Z), dir)), cur, before, reversed);
+                var fromStart = new Vector3(cur.X - start.X, 0, cur.Z - start.Z);
+                cur = Straight(set, pieces, smoothed, Segment(Vector3.Dot(fromStart, dir)), cur, before, reversed);
                 break;
             }
 
@@ -293,9 +342,11 @@ public static class WallLine
     }
 
     /// <summary>
-    /// The straight continuation past a slope that is too steep (<c>FUN_14042a2b0</c>, <b>Verified</b>): along the previous piece's direction, the profile points from <paramref name="from"/> on are
-    /// scanned for how far the line stands above the ground; the scan stops at the first point where the ground rises <c>building height</c> - 10 above the line (<see cref="Rise"/>), else at the point
-    /// of greatest rise. Pieces of the longest length follow the line for as long as half a piece is less than the distance left (a single only once). Returns where the last one ends.
+    /// The straight continuation past a slope that is too steep (<c>FUN_14042a2b0</c>, <b>Verified</b>): along the previous piece's direction, the
+    /// profile points from <paramref name="from"/> on are scanned for how far the line stands above the ground; the scan stops at the first point
+    /// where the ground rises <c>building height</c> - 10 above the line (<see cref="Rise"/>), else at the point of greatest rise. Pieces of the
+    /// longest length follow the line for as long as half a piece is less than the distance left (a single only once). Returns where the last one
+    /// ends.
     /// </summary>
     static Vector3 Straight(PieceSet set, List<WallPiece> pieces, Vector3[] profile, int from, Vector3 cur, Vector3 before, bool reversed)
     {
@@ -327,15 +378,22 @@ public static class WallLine
         return cur;
     }
 
-    /// <summary>The constant a straight continuation compares the line's height over the ground with (<c>DAT_14167fad4</c>, <b>Verified</b> 10).</summary>
+    /// <summary>
+    /// The constant a straight continuation compares the line's height over the ground with (<c>DAT_14167fad4</c>, <b>Verified</b> 10).
+    /// </summary>
     const float Rise = 10;
 
     // ---- small geometry ----
 
-    /// <summary>A piece at <paramref name="from"/> facing <paramref name="to"/> (<b>Verified</b>, <c>FUN_1404278b0</c>): +Z towards the target (pitching with the slope), +X level.</summary>
+    /// <summary>
+    /// A piece at <paramref name="from"/> facing <paramref name="to"/> (<b>Verified</b>, <c>FUN_1404278b0</c>): +Z towards the target (pitching with
+    /// the slope), +X level.
+    /// </summary>
     public static WallPiece Facing(BuildingBuildData data, Vector3 from, Vector3 to) => new(data, from, LookRotation(to - from));
 
-    /// <summary>The rotation whose +Z is <paramref name="forward"/> and whose +X is level (Y x Z).</summary>
+    /// <summary>
+    /// The rotation whose +Z is <paramref name="forward"/> and whose +X is level (Y x Z).
+    /// </summary>
     public static Quaternion LookRotation(Vector3 forward)
     {
         if (forward.LengthSquared() < 1e-9f) return Quaternion.Identity;
@@ -348,7 +406,9 @@ public static class WallLine
         return Quaternion.Normalize(Quaternion.CreateFromRotationMatrix(m));
     }
 
-    /// <summary>Whether a placed piece is within <see cref="JointRun"/> of a joint, and so may overlap walls whose link point is at that joint.</summary>
+    /// <summary>
+    /// Whether a placed piece is within <see cref="JointRun"/> of a joint, and so may overlap walls whose link point is at that joint.
+    /// </summary>
     public static bool NearJoint(WallPiece piece, Vector3 joint)
     {
         var (a, b) = Ends(piece.Data, piece.Position, piece.Rotation);
@@ -359,7 +419,9 @@ public static class WallLine
     }
 
     static float Angle(Vector3 a, Vector3 b) =>
-        a.LengthSquared() < 1e-9f || b.LengthSquared() < 1e-9f ? 0 : MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1, 1)) * 180 / MathF.PI;
+        a.LengthSquared() < 1e-9f || b.LengthSquared() < 1e-9f
+            ? 0
+            : MathF.Acos(Math.Clamp(Vector3.Dot(Vector3.Normalize(a), Vector3.Normalize(b)), -1, 1)) * 180 / MathF.PI;
 
     static Vector3 Horizontal(Vector3 v)
     {

@@ -2,7 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Data.Fcs;
 
-/// <summary>Writes <see cref="FcsFile"/>s in the same layout <see cref="FcsReader"/> reads.</summary>
+/// <summary>
+/// Writes <see cref="FcsFile"/>s in the same layout <see cref="FcsReader"/> reads.
+/// </summary>
 public static class FcsWriter
 {
     public static void WriteFile(FcsFile file, string path)
@@ -19,6 +21,7 @@ public static class FcsWriter
     {
         using var w = new FcsBinaryWriter(stream, lossless);
         w.Write((int)file.FileType);
+
         if (file.FileType == FcsFileType.V17)
         {
             var header = new MemoryStream();
@@ -34,6 +37,7 @@ public static class FcsWriter
 
         w.Write(file.NextId);
         w.Write(file.Records.Count);
+
         foreach (var record in file.Records)
             WriteRecord(w, record, keepByteSizes, lossless);
     }
@@ -96,8 +100,8 @@ public static class FcsWriter
         WriteMap(w, record.Bools, (w, v) => w.Write((byte)(v ? 1 : 0)));
         WriteMap(w, record.Floats, (w, v) => w.Write(v));
         WriteMap(w, record.Ints, (w, v) => w.Write(v));
-        WriteMap(w, record.Vector3s, WriteVector3);
-        WriteMap(w, record.Vector4s, WriteVector4);
+        WriteMap(w, record.Vector3S, WriteVector3);
+        WriteMap(w, record.Vector4S, WriteVector4);
         WriteMap(w, record.Strings, WriteString);
         WriteMap(w, record.Filenames, WriteString);
 
@@ -140,17 +144,25 @@ public static class FcsWriter
 
     static void WriteVector3(BinaryWriter w, Vector3 v)
     {
-        w.Write(v.X); w.Write(v.Y); w.Write(v.Z);
+        w.Write(v.X);
+        w.Write(v.Y);
+        w.Write(v.Z);
     }
 
     static void WriteVector4(BinaryWriter w, Vector4 v)
     {
-        w.Write(v.X); w.Write(v.Y); w.Write(v.Z); w.Write(v.W);
+        w.Write(v.X);
+        w.Write(v.Y);
+        w.Write(v.Z);
+        w.Write(v.W);
     }
 
     static void WriteRotation(BinaryWriter w, Quaternion q)
     {
-        w.Write(q.W); w.Write(q.X); w.Write(q.Y); w.Write(q.Z);
+        w.Write(q.W);
+        w.Write(q.X);
+        w.Write(q.Y);
+        w.Write(q.Z);
     }
 
     static void WriteString(BinaryWriter w, string s)

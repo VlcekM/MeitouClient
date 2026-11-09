@@ -190,7 +190,9 @@ player order gets it up (1 when sneaking), as does a thief's watcher noticing.
   event 0x18. Without the order the get-up only says 0x17 / 0x18.
 - Meitou: `MedicalState.PlayingDead` (not saved): a knockout that ends while `MedicalContext.PlayDead` is set keeps the
   character `Unconscious` (so everyone treats it as down) with no timer. The get-up line (`DialogueSystem.SeeGettingUp`) is 23 / 25 / 24 by these counts. `BodySystem.Schedule` sets it serially from the last
-  tick by the character's senses' counts (`BodySystem.Senses`, [senses](perception.md#senses); the character looks while playing dead or about to wake, faded counts would always read safe); the waking window is Act's longest step, so a far character is asked too; a player
+  tick by the character's senses' counts (`BodySystem.Senses`, [senses](perception.md#senses); the character looks while playing dead or about to wake, faded counts would always read safe); the waking window is Act's longest step, so a far character is asked too. A vital part or
+  the blood ends a knockout on the tick it heals, which no window foresees: one whose senses faded (`SenseBlock.Faded`, not carried
+  or a slave) is held down, unconscious, until its next look (`MedicalContext.GetUpUnasked`, engine choice), then asked; a player
   order standing it up grants the toughness (`BodySystem.GotUpByOrder`); animals never play dead. Rechecked every 15 ticks
   (engine choice). `MedicalState.StandUp` ends it. Health header: `HudText.HealthWord`.
 
@@ -228,6 +230,10 @@ legs included, is pinned to the animation. The carried body's scene node is **no
 carry placement of [carry-loot](carry-loot.md) sets it each frame. The pick-up attach (`FUN_1405ced90`) clears the active mask (`+0x2f8` = 0) and the CARRY_MODE request then rebuilds the ragdoll from the
 animated pose; put-down / drop (`FUN_1405ce9c0(0)`) requests CARRY_MODE off, the medical tick requests WHOLE again for a still-unconscious body. Meitou: `RagdollSystem` (`Simulates`, `Rebuild`) does the
 same; the limbs that swing are the forearms and the head, so a body's upper arms and legs follow only the `carry me` clip (`play speed` 0.006: almost still).
+Where the release leaves the scene node, which the new WHOLE ragdoll is built at, is **Unknown** (`FUN_1405ce1e0` not traced past the detach and the clip stop). Meitou (engine choice)
+starts the pinned bodies of a body set down or dropped from the placement it hung in (`Ragdoll.HungIn`), so it falls from the shoulder (issue #327). Re-placing the `carry me` pose upright at the body's new position hung the trunk up to 10 units under the floor.
+**Observed**, headless put-down on the upper floor of an Outpost s-IV in zone 47.16, before and after the change: 5 of 13 bodies started 1 to 8 under the floor and froze there (the
+two-sided floor held them under it); now all 13 start 10 to 15 above it and rest 0.3 to 2.4 above it.
 The animal's pinned body is matched by **bone**, not by actor name: `FUN_1405b8720` keys its pin map by the bone names it hands to `disableBone`. **Verified** (probe of the shipped
 `.phs` files): Bonedog `dog1.phs`, River Raptor, Small Spider, Spider and Skimmer name their root actor `Actor` (bone `Bip01`), and the Bonedog, River Raptor and Small Spider have no `carry bone`, so
 their root fallback `Bip01` is that actor; matched by name, nothing would be pinned and the carried body would fall off the shoulder. Meitou: `RagdollSystem.CarryBoneOf` (a bone handle).

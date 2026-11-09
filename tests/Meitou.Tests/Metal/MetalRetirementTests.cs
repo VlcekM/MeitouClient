@@ -1,5 +1,5 @@
 #if MEITOU_METAL
-using Meitou.Metal;
+using Meitou.Game.Rendering.Metal;
 
 namespace Meitou.Tests.MetalBackend;
 

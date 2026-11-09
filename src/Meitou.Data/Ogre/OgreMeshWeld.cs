@@ -4,14 +4,16 @@ using System.Runtime.InteropServices;
 namespace Meitou.Data.Ogre;
 
 /// <summary>
-/// Welds a mesh's vertices that differ only in their tangent frame: the base game's meshes carry per-face tangents, so most corners are stored once per
-/// triangle (docs/formats/ogre-mesh.md, "Vertex sharing"). Vertices with the same bytes in every other element, the same bone assignments, the same pose
-/// offsets and the same handedness become one, whose tangent (and binormal) is the normalized sum of theirs. The submesh's indices, its generated LOD
-/// levels, bone assignments and poses are renumbered to match. Not lossless: the tangents change by a few degrees on average.
+/// Welds a mesh's vertices that differ only in their tangent frame: the base game's meshes carry per-face tangents, so most corners are stored once
+/// per triangle (docs/formats/ogre-mesh.md, "Vertex sharing"). Vertices with the same bytes in every other element, the same bone assignments, the
+/// same pose offsets and the same handedness become one, whose tangent (and binormal) is the normalized sum of theirs. The submesh's indices, its
+/// generated LOD levels, bone assignments and poses are renumbered to match. Not lossless: the tangents change by a few degrees on average.
 /// </summary>
 public static class OgreMeshWeld
 {
-    /// <summary>Welds every submesh with vertices of its own in place; returns the number of vertices removed. A mesh with shared vertices is left as it is.</summary>
+    /// <summary>
+    /// Welds every submesh with vertices of its own in place; returns the number of vertices removed. A mesh with shared vertices is left as it is.
+    /// </summary>
     public static int Apply(OgreMesh mesh)
     {
         if (mesh.SharedVertexData is not null) return 0;
@@ -27,7 +29,8 @@ public static class OgreMeshWeld
         var tangent = data.Find(OgreVertexSemantic.Tangent);
         var binormal = data.Find(OgreVertexSemantic.Binormal);
         var normal = data.Find(OgreVertexSemantic.Normal);
-        if (tangent is not null && tangent.Type is not (OgreVertexElementType.Float3 or OgreVertexElementType.Float4)) return 0;
+        if (tangent is not null && tangent.Type is not (OgreVertexElementType.Float3 or OgreVertexElementType.Float4))
+            return 0;
         if (binormal is not null && binormal.Type != OgreVertexElementType.Float3) return 0;
         if (normal is not null && normal.Type != OgreVertexElementType.Float3) return 0;
         int n = (int)data.VertexCount;
@@ -36,7 +39,10 @@ public static class OgreMeshWeld
 
         // Each vertex's bone assignments in a fixed order: one sort, then its range by a running count.
         var assignments = sub.BoneAssignments.Where(a => a.VertexIndex < n).ToArray();
-        Array.Sort(assignments, (a, b) => a.VertexIndex != b.VertexIndex ? a.VertexIndex.CompareTo(b.VertexIndex) : a.BoneIndex != b.BoneIndex ? a.BoneIndex.CompareTo(b.BoneIndex) : a.Weight.CompareTo(b.Weight));
+        Array.Sort(assignments, (a, b) =>
+            a.VertexIndex != b.VertexIndex ? a.VertexIndex.CompareTo(b.VertexIndex)
+            : a.BoneIndex != b.BoneIndex ? a.BoneIndex.CompareTo(b.BoneIndex)
+            : a.Weight.CompareTo(b.Weight));
         var boneStart = new int[n + 1];
         foreach (var a in assignments) boneStart[a.VertexIndex + 1]++;
         for (int v = 0; v < n; v++) boneStart[v + 1] += boneStart[v];
@@ -55,7 +61,8 @@ public static class OgreMeshWeld
         int length = 0;
         void Put(ReadOnlySpan<byte> bytes)
         {
-            if (length + bytes.Length > key.Length) Array.Resize(ref key, Math.Max(key.Length * 2, length + bytes.Length));
+            if (length + bytes.Length > key.Length)
+                Array.Resize(ref key, Math.Max(key.Length * 2, length + bytes.Length));
             bytes.CopyTo(key.AsSpan(length));
             length += bytes.Length;
         }
@@ -74,20 +81,28 @@ public static class OgreMeshWeld
             scratch[0] = Handedness(v, normals, tangents0, binormals0, tangent?.Type == OgreVertexElementType.Float4);
             Put(scratch[..1]);
             for (int b = boneStart[v]; b < boneStart[v + 1]; b++)
-                {
-                    BitConverter.TryWriteBytes(scratch, assignments[b].BoneIndex); Put(scratch[..2]);
-                    BitConverter.TryWriteBytes(scratch, assignments[b].Weight); Put(scratch);
-                }
+            {
+                BitConverter.TryWriteBytes(scratch, assignments[b].BoneIndex);
+                Put(scratch[..2]);
+                BitConverter.TryWriteBytes(scratch, assignments[b].Weight);
+                Put(scratch);
+            }
             if (poseEntries.TryGetValue((uint)v, out var moves))
                 foreach (var (p, m) in moves)
                 {
-                    BitConverter.TryWriteBytes(scratch, p); Put(scratch);
-                    var offset = m.Offset; var turn = m.Normal;
+                    BitConverter.TryWriteBytes(scratch, p);
+                    Put(scratch);
+                    var offset = m.Offset;
+                    var turn = m.Normal;
                     Put(MemoryMarshal.AsBytes(new ReadOnlySpan<Vector3>(ref offset)));
                     Put(MemoryMarshal.AsBytes(new ReadOnlySpan<Vector3>(ref turn)));
                 }
             var k = key.AsSpan(0, length);
-            if (!lookup.TryGetValue(k, out int g)) { lookup[k] = g = first.Count; first.Add(v); }
+            if (!lookup.TryGetValue(k, out int g))
+            {
+                lookup[k] = g = first.Count;
+                first.Add(v);
+            }
             remap[v] = (uint)g;
         }
         int count = first.Count;
@@ -113,13 +128,17 @@ public static class OgreMeshWeld
             var done = new Dictionary<OgreIndexBuffer, OgreIndexBuffer>(ReferenceEqualityComparer.Instance);
             foreach (var level in lod.Levels)
                 if (s < level.Faces.Count && level.Faces[s].Buffer is { } buffer)
-                    level.Faces[s] = level.Faces[s] with { Buffer = done.TryGetValue(buffer, out var made) ? made : done[buffer] = Remapped(buffer, remap) };
+                    level.Faces[s] = level.Faces[s] with
+                    {
+                        Buffer = done.TryGetValue(buffer, out var made) ? made : done[buffer] = Remapped(buffer, remap)
+                    };
         }
         bool Kept(uint v) => v < n && first[(int)remap[v]] == v;
         int w = 0;
         var weights = sub.BoneAssignments;
         for (int i = 0; i < weights.Count; i++)
-            if (Kept(weights[i].VertexIndex)) weights[w++] = weights[i] with { VertexIndex = remap[weights[i].VertexIndex] };
+            if (Kept(weights[i].VertexIndex))
+                weights[w++] = weights[i] with { VertexIndex = remap[weights[i].VertexIndex] };
         weights.RemoveRange(w, weights.Count - w);
         foreach (var pose in poses)
         {
@@ -132,7 +151,9 @@ public static class OgreMeshWeld
         return n - count;
     }
 
-    /// <summary>1 when the frame is left-handed (a Float4 tangent's w below 0, or the binormal against cross(normal, tangent)), else 0.</summary>
+    /// <summary>
+    /// 1 when the frame is left-handed (a Float4 tangent's w below 0, or the binormal against cross(normal, tangent)), else 0.
+    /// </summary>
     static byte Handedness(int v, Column? normal, Column? tangent, Column? binormal, bool tangentW)
     {
         if (tangent is not { } t) return 0;
@@ -165,10 +186,13 @@ public static class OgreMeshWeld
         }
     }
 
-    /// <summary>One float element's place in its buffer, looked up once.</summary>
+    /// <summary>
+    /// One float element's place in its buffer, looked up once.
+    /// </summary>
     readonly record struct Column(byte[] Data, int Stride, int Offset)
     {
-        public static Column? Of(OgreVertexData data, OgreVertexElement? e) => e is null ? null : new Column(data.Buffers[e.Source].Data, data.Buffers[e.Source].VertexSize, e.Offset);
+        public static Column? Of(OgreVertexData data, OgreVertexElement? e) =>
+            e is null ? null : new Column(data.Buffers[e.Source].Data, data.Buffers[e.Source].VertexSize, e.Offset);
         public float Float(int v, int component) => BitConverter.ToSingle(Data, v * Stride + Offset + component * 4);
         public Vector3 Vector(int v) => MemoryMarshal.Read<Vector3>(Data.AsSpan(v * Stride + Offset, 12));
     }
@@ -176,7 +200,8 @@ public static class OgreMeshWeld
     static OgreIndexBuffer Remapped(OgreIndexBuffer buffer, uint[] remap)
     {
         var indices = new uint[buffer.Indices.Length];
-        for (int i = 0; i < indices.Length; i++) indices[i] = buffer.Indices[i] < remap.Length ? remap[buffer.Indices[i]] : buffer.Indices[i];
+        for (int i = 0; i < indices.Length; i++)
+            indices[i] = buffer.Indices[i] < remap.Length ? remap[buffer.Indices[i]] : buffer.Indices[i];
         return buffer with { Indices = indices };
     }
 

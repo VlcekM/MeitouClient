@@ -8,6 +8,11 @@ namespace Meitou.Content;
 /// </summary>
 public sealed class GameInstall
 {
+    /// <summary>
+    /// The game's exe names: Steam's, then GOG's (<c>kenshi_GOG_x64.exe</c>, #336).
+    /// </summary>
+    static readonly string[] ExecutableNames = ["kenshi_x64.exe", "kenshi_GOG_x64.exe"];
+
     public const string EnvironmentVariable = "KENSHI_PATH";
     public const string LocalConfigFile = "meitou.local.json";
 
@@ -18,10 +23,9 @@ public sealed class GameInstall
     public string ModsDirectory => Path.Combine(Root, "mods");
     public string SaveDirectory => Path.Combine(Root, "save");
 
-    /// <summary>The game's exe names: Steam's, then GOG's (<c>kenshi_GOG_x64.exe</c>, #336).</summary>
-    static readonly string[] ExecutableNames = ["kenshi_x64.exe", "kenshi_GOG_x64.exe"];
-
-    /// <summary>The install's game exe: the first of <see cref="ExecutableNames"/> that exists, else the Steam name (missing).</summary>
+    /// <summary>
+    /// The install's game exe: the first of <see cref="ExecutableNames"/> that exists, else the Steam name (missing).
+    /// </summary>
     public string Executable =>
         ExecutableNames.Select(name => Path.Combine(Root, name)).FirstOrDefault(File.Exists) ?? Path.Combine(Root, ExecutableNames[0]);
 
@@ -35,13 +39,16 @@ public sealed class GameInstall
         {
             var common = Path.GetDirectoryName(Path.GetFullPath(Root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             var steamapps = common is null ? null : Path.GetDirectoryName(common);
-            if (steamapps is null || !string.Equals(Path.GetFileName(common), "common", StringComparison.OrdinalIgnoreCase)) return null;
+            if (steamapps is null || !string.Equals(Path.GetFileName(common), "common", StringComparison.OrdinalIgnoreCase))
+                return null;
             var dir = Path.Combine(steamapps, "workshop", "content", "233860");
             return Directory.Exists(dir) ? dir : null;
         }
     }
 
-    /// <summary>True when <paramref name="root"/> looks like a Kenshi install.</summary>
+    /// <summary>
+    /// True when <paramref name="root"/> looks like a Kenshi install.
+    /// </summary>
     public static bool IsValid(string root) =>
         Directory.Exists(Path.Combine(root, "data")) &&
         File.Exists(Path.Combine(root, "data", "gamedata.base"));
@@ -55,11 +62,11 @@ public sealed class GameInstall
     }
 
     /// <summary>
-    /// Finds the install from <c>KENSHI_PATH</c>, then <c>meitou.local.json</c> (<c>{"kenshiPath": "..."}</c>)
-    /// in the working directory or next to the executable, or in one of their parent directories (so a test or tool run
-    /// from <c>bin/</c> finds the repository root's file), then the per-user <c>meitou/config.json</c> in <c>XDG_CONFIG_HOME</c> (Linux, macOS), then a Steam install (<c>steamapps/common/Kenshi</c> in any of the
-    /// libraries Steam lists), then the other launchers' installs (<see cref="GameInstallSources"/>: GOG, Heroic, Lutris, Bottles, Wine prefixes).
-    /// The folder the executable sits in and the one above it are tried before Steam. Returns null when none is found.
+    /// Finds the install from <c>KENSHI_PATH</c>, then <c>meitou.local.json</c> (<c>{"kenshiPath": "..."}</c>) in the working directory or next to
+    /// the executable, or in one of their parent directories (so a test or tool run from <c>bin/</c> finds the repository root's file), then the
+    /// per-user <c>meitou/config.json</c> in <c>XDG_CONFIG_HOME</c> (Linux, macOS), then a Steam install (<c>steamapps/common/Kenshi</c> in any of
+    /// the libraries Steam lists), then the other launchers' installs (<see cref="GameInstallSources"/>: GOG, Heroic, Lutris, Bottles, Wine
+    /// prefixes). The folder the executable sits in and the one above it are tried before Steam. Returns null when none is found.
     /// </summary>
     public static GameInstall? Locate()
     {
@@ -99,7 +106,8 @@ public sealed class GameInstall
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
                 {
-                    if (GameInstallSources.UserConfigFile(Environment.GetEnvironmentVariable) is not { } userConfig) throw;
+                    if (GameInstallSources.UserConfigFile(Environment.GetEnvironmentVariable) is not { } userConfig)
+                        throw;
                     Directory.CreateDirectory(Path.GetDirectoryName(userConfig)!);
                     SaveConfigFile(userConfig, line);
                     Console.WriteLine($"Saved to {userConfig}.");
@@ -119,15 +127,18 @@ public sealed class GameInstall
         foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
             for (var dir = new DirectoryInfo(start); dir is not null; dir = dir.Parent)
                 yield return ReadLocalConfig(Path.Combine(dir.FullName, LocalConfigFile));
-        if (GameInstallSources.UserConfigFile(Environment.GetEnvironmentVariable) is { } userConfig) yield return ReadLocalConfig(userConfig);
+        if (GameInstallSources.UserConfigFile(Environment.GetEnvironmentVariable) is { } userConfig)
+            yield return ReadLocalConfig(userConfig);
         // The folder this executable sits in, or the one above it (a build dropped into the game's folder).
         yield return AppContext.BaseDirectory;
         yield return Path.GetDirectoryName(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         foreach (var library in SteamLibraries())
         {
             yield return Path.Combine(library, "steamapps", "common", "Kenshi");
+
             // An install under another folder name: Steam's own record of it (appmanifest_233860.acf, the Kenshi app).
-            if (GameInstallSources.SteamInstallDirectory(Path.Combine(library, "steamapps")) is { } installDir) yield return installDir;
+            if (GameInstallSources.SteamInstallDirectory(Path.Combine(library, "steamapps")) is { } installDir)
+                yield return installDir;
         }
         foreach (var path in GameInstallSources.Launchers()) yield return path;
     }
@@ -158,7 +169,10 @@ public sealed class GameInstall
         {
             yield return steam;
             string text;
-            try { text = File.ReadAllText(Path.Combine(steam, "steamapps", "libraryfolders.vdf")); }
+            try
+            {
+                text = File.ReadAllText(Path.Combine(steam, "steamapps", "libraryfolders.vdf"));
+            }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { continue; }
             foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "\"path\"\\s+\"([^\"]+)\""))
                 yield return m.Groups[1].Value.Replace(@"\\", @"\");
@@ -170,15 +184,21 @@ public sealed class GameInstall
         if (OperatingSystem.IsWindows())
         {
             string? steam;
-            try { steam = Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string; }
+            try
+            {
+                steam = Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string;
+            }
             catch (Exception e) when (e is System.Security.SecurityException or IOException or UnauthorizedAccessException) { steam = null; }
             if (!string.IsNullOrEmpty(steam)) yield return steam;
         }
         else if (OperatingSystem.IsLinux())
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
             // Steam itself installs to ~/.local/share/Steam whatever XDG_DATA_HOME says, so both are tried.
-            var candidates = new[] { Path.Combine(GameInstallSources.Xdg.From(home, Environment.GetEnvironmentVariable).DataHome, "Steam"), Path.Combine(home, ".local/share/Steam"), Path.Combine(home, ".steam/steam"), Path.Combine(home, ".var/app/com.valvesoftware.Steam/.local/share/Steam") };
+            var candidates = new[] { Path.Combine(GameInstallSources.Xdg.From(home, Environment.GetEnvironmentVariable).DataHome, "Steam"),
+                    Path.Combine(home, ".local/share/Steam"), Path.Combine(home, ".steam/steam"), Path.Combine(home,
+                            ".var/app/com.valvesoftware.Steam/.local/share/Steam") };
             foreach (var steam in candidates.Distinct())
                 if (Directory.Exists(steam)) yield return steam;
         }
@@ -193,11 +213,13 @@ public sealed class GameInstall
     static string? ReadLocalConfig(string file)
     {
         if (!File.Exists(file)) return null;
+
         // A broken file (an interrupted save) is skipped, so the other sources and the prompt still run.
         try
         {
             using var doc = JsonDocument.Parse(File.ReadAllText(file));
-            return doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("kenshiPath", out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
+            return doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("kenshiPath", out var p)
+                    && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { return null; }
     }

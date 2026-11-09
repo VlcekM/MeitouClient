@@ -6,7 +6,10 @@ using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The night sky (docs/formats/sky.md "Stars" and "Planets"): the starfield's dome mapping and shift, the two planets (the Meitou night air is in NightAirTests).</summary>
+/// <summary>
+/// The night sky (docs/formats/sky.md "Stars" and "Planets"): the starfield's dome mapping and shift, the two planets (the Meitou night air is in
+/// NightAirTests).
+/// </summary>
 public class NightSkyTests
 {
     [Fact]

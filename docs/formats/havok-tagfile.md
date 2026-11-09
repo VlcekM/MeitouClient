@@ -26,7 +26,9 @@ parse to the end with the rules below.
 
 `data/newland/land/navtiles/tileX.Y.hkt` is zone X.Y. Root `namedVariants`: `NavMesh` (`hkaiNavMesh` v14), `Graph`
 (`hkaiDirectedGraphExplicitCost`), `Mediator` (`hkaiStaticTreeNavMeshQueryMediator`), `Hash` (`hkStringObject`, hex); then per interior
-the same four plus `Info` (`uidhex;x;y;z`, world units) after its mesh. **Verified** (5244 groups, 1249 interiors).
+`NavMesh`, `Graph`, `Mediator`, `Info` (`uidhex;x;y;z`, world units), `Hash` (its building's interior hash, [pathfinding](../game/pathfinding.md)).
+**Verified** (5244 groups, 1249 interiors; the order in tiles 20.32 and 50.24, where each interior's `Hash` equals the hash of the placement its faces lie in:
+19 of 19 placements matched in each).
 - `hkaiNavMesh`: `faces` (`startEdgeIndex`, `numEdges`, `startUserEdgeIndex` −1, `clusterIndex`), `edges` (`a`, `b` vertex, `oppositeEdge`,
   `oppositeFace` −1 at an end, `flags` 4 on the sample), `vertices` vec4, `streamingSets` (per neighbour tile: `thisUid`, `oppositeUid`,
   `meshConnections` face/edge pairs joined across), `faceData` / `edgeData` (stride 1), `aabb`.

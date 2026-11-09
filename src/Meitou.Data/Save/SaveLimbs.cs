@@ -12,10 +12,14 @@ public static class SaveLimbs
     public const string Key = "limbs";
     public const int Slots = 4;
 
-    /// <summary>The state of <paramref name="slot"/> in a packed <c>limbs</c> value.</summary>
+    /// <summary>
+    /// The state of <paramref name="slot"/> in a packed <c>limbs</c> value.
+    /// </summary>
     public static int StateOf(int bits, int slot) => (bits >> (2 * slot)) & 3;
 
-    /// <summary>The prosthetic item of each slot (null where the list names none or its record is missing).</summary>
+    /// <summary>
+    /// The prosthetic item of each slot (null where the list names none or its record is missing).
+    /// </summary>
     public static SaveItem?[] Read(SaveFile file, FcsRecord medical)
     {
         var items = new SaveItem?[Slots];
@@ -23,7 +27,7 @@ public static class SaveLimbs
         var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
         foreach (var r in file.Records) byId.TryAdd(r.StringId, r);
         foreach (var x in refs)
-            if ((uint)x.Value0 < Slots && byId.TryGetValue(x.TargetStringId, out var r) && r.RecordType == FcsRecordType.INVENTORY_ITEM_STATE)
+            if ((uint)x.Value0 < Slots && byId.TryGetValue(x.TargetStringId, out var r) && r.RecordType == FcsRecordType.InventoryItemState)
                 items[x.Value0] = SaveInventory.ItemOf(r);
         return items;
     }

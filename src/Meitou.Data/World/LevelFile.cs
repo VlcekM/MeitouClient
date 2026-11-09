@@ -12,7 +12,9 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class LevelFile
 {
-    /// <summary>FCS file type number from the first int32: 10, 13, 15 or 16 in the base game (17 is accepted too).</summary>
+    /// <summary>
+    /// FCS file type number from the first int32: 10, 13, 15 or 16 in the base game (17 is accepted too).
+    /// </summary>
     public int Format { get; init; }
 
     /// <summary>
@@ -27,7 +29,9 @@ public sealed class LevelFile
     /// </summary>
     public int[]? Trailer { get; set; }
 
-    /// <summary>Int32 values per trailer entry: 1 in formats 15 and 16, 2 in the legacy format 13 files.</summary>
+    /// <summary>
+    /// Int32 values per trailer entry: 1 in formats 15 and 16, 2 in the legacy format 13 files.
+    /// </summary>
     public int TrailerEntryInts { get; set; } = 1;
 
     /// <summary>
@@ -38,7 +42,7 @@ public sealed class LevelFile
 
     public bool IsLegacy => Format < 15;
 
-    public static LevelFile ReadFile(string path) => Read(File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path)));
+    public static LevelFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     public static LevelFile Read(byte[] bytes)
     {
@@ -74,7 +78,9 @@ public sealed class LevelFile
         return (values, entryInts);
     }
 
-    /// <summary>Writes formats 15 and 16 in the same layout they were read from.</summary>
+    /// <summary>
+    /// Writes formats 15 and 16 in the same layout they were read from.
+    /// </summary>
     public void Write(Stream stream)
     {
         if (IsLegacy)
@@ -141,8 +147,8 @@ public sealed class LevelFile
             Map(r, record.Ints, r => r.ReadInt32());
             if (format > 8)
             {
-                Map(r, record.Vector3s, r => new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
-                Map(r, record.Vector4s, r => new Vector4(r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
+                Map(r, record.Vector3S, r => new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
+                Map(r, record.Vector4S, r => new Vector4(r.ReadSingle(), r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
             }
             Map(r, record.Strings, Str);
             Map(r, record.Filenames, Str);

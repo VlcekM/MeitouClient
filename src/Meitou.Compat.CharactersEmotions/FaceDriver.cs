@@ -21,13 +21,13 @@ sealed class FaceDriver(EmotionConfig config, CharactersEmotionsSettings setting
     /// <summary>The hunger value below which the character is hungry (BodyStatus.Hunger, 3 fed to 0 starving; docs/game/character-stats.md "Hunger").</summary>
     const float HungryBelow = 2.5f;
 
-    readonly Dictionary<CharacterId, State> states = [];
-    readonly HashSet<CharacterId> hits = [];
-    readonly object gate = new();
-    readonly ConditionalWeakTable<IReadOnlySet<string>, Support> supports = new();
-    readonly HashSet<CharacterId> reported = [];
-    long activeStamp;
-    int active;
+    readonly Dictionary<CharacterId, State> _states = [];
+    readonly HashSet<CharacterId> _hits = [];
+    readonly object _gate = new();
+    readonly ConditionalWeakTable<IReadOnlySet<string>, Support> _supports = new();
+    readonly HashSet<CharacterId> _reported = [];
+    long _activeStamp;
+    int _active;
 
     sealed record Support(bool Base, bool Anim);
 
@@ -87,21 +87,21 @@ sealed class FaceDriver(EmotionConfig config, CharactersEmotionsSettings setting
 
     /// <summary>MEITOU_EMOTIONS_TRACE=1 logs the situation, the animation layers and the weights of the player's characters when they change (diagnostics).</summary>
     static readonly bool Trace = Environment.GetEnvironmentVariable("MEITOU_EMOTIONS_TRACE") == "1";
-    string lastTrace = "";
+    string _lastTrace = "";
 
     void TraceFrame(State st, CharacterSnapshot c, double now)
     {
         string line = $"{c.Name}: {st.Situation} layers=[{string.Join(", ", c.Animations.Where(l => l.Weight > 0.05f).Select(l => $"{l.Name}@{l.Weight:0.0}"))}] out=[{string.Join(", ", Enumerable.Range(0, st.Output.Count).Select(i => $"{st.Output.Keys[i]}={st.Output.Values[i]:0.00}"))}]";
-        if (line == lastTrace) return;
-        lastTrace = line;
+        if (line == _lastTrace) return;
+        _lastTrace = line;
         log($"t={now:0.00} {line}");
     }
 
     /// <summary>The hits the world resolved since the last frame: their victims show the attacked expression.</summary>
     public void NoteHits(IReadOnlyList<CombatHit> list)
     {
-        lock (gate)
-            foreach (var hit in list) hits.Add(hit.Victim);
+        lock (_gate)
+            foreach (var hit in list) _hits.Add(hit.Victim);
     }
 
     public void Update(in FaceFrame frame, FaceWeights face)
@@ -110,11 +110,11 @@ sealed class FaceDriver(EmotionConfig config, CharactersEmotionsSettings setting
         if (c.Body is not { } body || face.Available is not { } available) return;
         bool mine = c.IsPlayer && (!settings.OnlySelectedCharacter || c.Selected);
         if (!mine && !(settings.IncludeOthers && !settings.OnlySelectedCharacter)) return;
-        var support = supports.GetValue(available, set => new Support(
+        var support = _supports.GetValue(available, set => new Support(
             config.Required.All(set.Contains), config.AnimRequired.Length > 0 && config.AnimRequired.All(set.Contains)));
         if (!support.Base)
         {
-            if ((c.IsPlayer || Trace) && reported.Add(c.Id)) log($"{c.Name}: no expressions, its body mesh lacks shape keys ({string.Join(", ", config.Required.Where(k => !available.Contains(k)))})");
+            if ((c.IsPlayer || Trace) && _reported.Add(c.Id)) log($"{c.Name}: no expressions, its body mesh lacks shape keys ({string.Join(", ", config.Required.Where(k => !available.Contains(k)))})");
             return;
         }
 
@@ -130,8 +130,8 @@ sealed class FaceDriver(EmotionConfig config, CharactersEmotionsSettings setting
             Evaluate(st, c, body);
             st.NextCheck = now + (settings.CheckFrequency + st.Random() * settings.CheckRandomize) / 1000.0;
         }
-        lock (gate)
-            if (hits.Count > 0 && hits.Remove(c.Id)) st.AttackedAt = now;
+        lock (_gate)
+            if (_hits.Count > 0 && _hits.Remove(c.Id)) st.AttackedAt = now;
 
         // The situation: attacked rides over the others for a moment and fades.
         float attacked = 0;
@@ -187,34 +187,34 @@ sealed class FaceDriver(EmotionConfig config, CharactersEmotionsSettings setting
     bool Admit(CharacterId id, string name, bool player, float distance, out State st)
     {
         long stamp = Stopwatch.GetTimestamp();
-        if (stamp - activeStamp > Stopwatch.Frequency / 2)
+        if (stamp - _activeStamp > Stopwatch.Frequency / 2)
         {
-            activeStamp = stamp;
-            active = 0;
+            _activeStamp = stamp;
+            _active = 0;
             List<CharacterId>? gone = null;
-            foreach (var (key, state) in states)
+            foreach (var (key, state) in _states)
             {
                 if (stamp - state.Seen > Stopwatch.Frequency * 2) (gone ??= []).Add(key);
-                else active++;
+                else _active++;
             }
-            if (gone is not null) foreach (var key in gone) states.Remove(key);
+            if (gone is not null) foreach (var key in gone) _states.Remove(key);
         }
-        if (states.TryGetValue(id, out st!)) { (st.Seen, st.Distance) = (stamp, distance); return true; }
-        if (!player && active >= settings.NumberOfCharacters)
+        if (_states.TryGetValue(id, out st!)) { (st.Seen, st.Distance) = (stamp, distance); return true; }
+        if (!player && _active >= settings.NumberOfCharacters)
         {
             // Over the limit: the nearest to the camera keep their faces; this one takes the place of the farthest other's if it is nearer.
             CharacterId? farthest = null;
             float far = distance;
-            foreach (var (key, state) in states)
+            foreach (var (key, state) in _states)
                 if (!state.Player && state.Distance > far) (farthest, far) = (key, state.Distance);
             if (farthest is not { } evicted) return false;
-            states.Remove(evicted);
-            active--;
+            _states.Remove(evicted);
+            _active--;
         }
-        active++;
+        _active++;
         st = new State { Seen = stamp, Player = player, Distance = distance, Rng = ((ulong)id.Slot * 2654435761UL + (ulong)id.Generation * 40503UL + 0x9E3779B97F4A7C15UL) | 1 };
-        states[id] = st;
-        if (reported.Add(id)) log($"{name}: expressions on");
+        _states[id] = st;
+        if (_reported.Add(id)) log($"{name}: expressions on");
         return true;
     }
 

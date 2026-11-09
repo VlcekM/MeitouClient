@@ -6,15 +6,26 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class WeatherRamps
 {
-    /// <summary>Wetness rises by 0.01 per second while below the target.</summary>
+    /// <summary>
+    /// Wetness rises by 0.01 per second while below the target.
+    /// </summary>
     public const float WetnessRise = 0.01f;
-    /// <summary>Wetness dries by 0.005 per second, only when the target is 0; with a target above the current wetness it rises, below it (a lighter rain) it holds.</summary>
+    /// <summary>
+    /// Wetness dries by 0.005 per second, only when the target is 0; with a target above the current wetness it rises, below it (a lighter rain) it
+    /// holds.
+    /// </summary>
     public const float WetnessDry = 0.005f;
-    /// <summary>Dust rises by 0.017 × target per second (about a minute to full).</summary>
+    /// <summary>
+    /// Dust rises by 0.017 × target per second (about a minute to full).
+    /// </summary>
     public const float DustRise = 0.017f;
-    /// <summary>Dust falls by 0.001 per second (about 17 minutes from 1 to 0).</summary>
+    /// <summary>
+    /// Dust falls by 0.001 per second (about 17 minutes from 1 to 0).
+    /// </summary>
     public const float DustFall = 0.001f;
-    /// <summary>The slope value moves towards the weather's <c>dust slope</c> by 0.1 per second.</summary>
+    /// <summary>
+    /// The slope value moves towards the weather's <c>dust slope</c> by 0.1 per second.
+    /// </summary>
     public const float DustSlopeRate = 0.1f;
 
     public static float Wetness(float current, float target, float dt)

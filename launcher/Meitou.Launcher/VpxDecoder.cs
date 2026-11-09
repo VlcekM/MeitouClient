@@ -11,12 +11,12 @@ sealed unsafe partial class VpxDecoder : IDisposable
     const int DecoderAbiVersion = 12; // VPX_DECODER_ABI_VERSION: 3 + VPX_CODEC_ABI_VERSION (4 + VPX_IMAGE_ABI_VERSION 5)
     const int ImgFmtHighBitDepth = 0x800;
 
-    readonly IntPtr context = Marshal.AllocHGlobal(128); // vpx_codec_ctx_t: 56 bytes on 64-bit platforms
-    bool open;
+    readonly IntPtr _context = Marshal.AllocHGlobal(128); // vpx_codec_ctx_t: 56 bytes on 64-bit platforms
+    bool _open;
 
     public VpxDecoder(string codec)
     {
-        new Span<byte>((void*)context, 128).Clear();
+        new Span<byte>((void*)_context, 128).Clear();
         var iface = codec switch
         {
             "V_VP8" => vpx_codec_vp8_dx(),
@@ -24,17 +24,22 @@ sealed unsafe partial class VpxDecoder : IDisposable
             _ => throw new NotSupportedException($"video codec {codec}"),
         };
         var config = new DecoderConfig { Threads = (uint)Math.Clamp(Environment.ProcessorCount / 2, 1, 4) };
-        int error = vpx_codec_dec_init_ver(context, iface, &config, new CLong(0), DecoderAbiVersion);
+        int error = vpx_codec_dec_init_ver(_context, iface, &config, new CLong(0), DecoderAbiVersion);
         if (error != 0) throw new InvalidOperationException($"libvpx could not start ({error})");
-        open = true;
+        _open = true;
     }
 
-    /// <summary>True when libvpx can be loaded (it is linked into published launchers; Debug builds look for it beside the executable).</summary>
+    /// <summary>
+    /// True when libvpx can be loaded (it is linked into published launchers; Debug builds look for it beside the executable).
+    /// </summary>
     public static bool Available
     {
         get
         {
-            try { return vpx_codec_vp8_dx() != 0; }
+            try
+            {
+                return vpx_codec_vp8_dx() != 0;
+            }
             catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; }
         }
     }
@@ -46,10 +51,10 @@ sealed unsafe partial class VpxDecoder : IDisposable
     public (int Width, int Height)? Decode(ReadOnlySpan<byte> frame, ref byte[] bgra, bool convert = true)
     {
         fixed (byte* data = frame)
-            if (vpx_codec_decode(context, data, (uint)frame.Length, 0, new CLong(0)) != 0) return null;
+            if (vpx_codec_decode(_context, data, (uint)frame.Length, 0, new CLong(0)) != 0) return null;
         IntPtr iterator = 0;
         (int, int)? size = null;
-        for (Image* image; (image = vpx_codec_get_frame(context, &iterator)) != null;)
+        for (Image* image; (image = vpx_codec_get_frame(_context, &iterator)) != null;)
         {
             if (!convert || (image->Format & ImgFmtHighBitDepth) != 0) continue;
             int width = (int)image->DisplayWidth, height = (int)image->DisplayHeight;
@@ -60,7 +65,9 @@ sealed unsafe partial class VpxDecoder : IDisposable
         return size;
     }
 
-    /// <summary>Y'CbCr (BT.601, studio range, the VP8/VP9 default) to BGRA, rows split across cores.</summary>
+    /// <summary>
+    /// Y'CbCr (BT.601, studio range, the VP8/VP9 default) to BGRA, rows split across cores.
+    /// </summary>
     static void ToBgra(Image* image, byte[] bgra, int width, int height)
     {
         byte* y = image->PlaneY, u = image->PlaneU, v = image->PlaneV;
@@ -88,9 +95,9 @@ sealed unsafe partial class VpxDecoder : IDisposable
 
     public void Dispose()
     {
-        if (open) vpx_codec_destroy(context);
-        open = false;
-        Marshal.FreeHGlobal(context);
+        if (_open) vpx_codec_destroy(_context);
+        _open = false;
+        Marshal.FreeHGlobal(_context);
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -99,7 +106,9 @@ sealed unsafe partial class VpxDecoder : IDisposable
         public uint Threads, Width, Height;
     }
 
-    /// <summary><c>vpx_image_t</c>, up to the planes and strides.</summary>
+    /// <summary>
+    /// <c>vpx_image_t</c>, up to the planes and strides.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Image
     {
@@ -112,7 +121,8 @@ sealed unsafe partial class VpxDecoder : IDisposable
     const string Vpx = "vpx";
     [LibraryImport(Vpx)] private static partial IntPtr vpx_codec_vp8_dx();
     [LibraryImport(Vpx)] private static partial IntPtr vpx_codec_vp9_dx();
-    [LibraryImport(Vpx)] private static partial int vpx_codec_dec_init_ver(IntPtr context, IntPtr iface, DecoderConfig* config, CLong flags, int version);
+    [LibraryImport(Vpx)] private static partial int vpx_codec_dec_init_ver(IntPtr context, IntPtr iface, DecoderConfig* config, CLong flags,
+            int version);
     [LibraryImport(Vpx)] private static partial int vpx_codec_decode(IntPtr context, byte* data, uint size, IntPtr userData, CLong deadline);
     [LibraryImport(Vpx)] private static partial Image* vpx_codec_get_frame(IntPtr context, IntPtr* iterator);
     [LibraryImport(Vpx)] private static partial int vpx_codec_destroy(IntPtr context);

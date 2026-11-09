@@ -11,7 +11,10 @@ public class HungerTests
     {
         var m = Healthy();
         var events = new List<MedicalEvent>();
-        Run(m, Context(toughness: 0), 200 / MedicalState.GameHoursPerSecond, step: 0.25f / MedicalState.GameHoursPerSecond, events);   // 200 game hours
+        // 200 game hours
+        float seconds = 200 / MedicalState.GameHoursPerSecond;
+        float step = 0.25f / MedicalState.GameHoursPerSecond;
+        Run(m, Context(toughness: 0), seconds, step: step, events);
         Assert.True(m.Dead);
         Assert.Equal(DeathCause.Starvation, m.Cause);
         Assert.Contains(events, e => e.Kind == MedicalEventKind.KnockedOut);
@@ -66,7 +69,8 @@ public class BloodAndKoTests
     [Fact]
     public void Wounds_clot_and_blood_recovers_once_bleeding_stops()
     {
-        var race = new RaceData { StringId = "x", HungerRate = 0, Anatomy = Human.Anatomy };   // never hungry, so 4000 seconds can pass
+        // Never hungry, so 4000 seconds can pass.
+        var race = new RaceData { StringId = "x", HungerRate = 0, Anatomy = Human.Anatomy };
         var m = Healthy(race);
         var ctx = Context(race);
         m.ApplyHit(LArm, new HitDamage(20, 0, 0), ctx);   // wound 20 x 0.001 = 0.02
@@ -86,7 +90,10 @@ public class BloodAndKoTests
 
 public class LegCollapseTests
 {
-    /// <summary>A body whose right leg has flesh <paramref name="flesh"/>, bandage <paramref name="bandage"/> and rig <paramref name="rig"/>, ticked once so it holds the KO point of toughness 50.</summary>
+    /// <summary>
+    /// A body whose right leg has flesh <paramref name="flesh"/>, bandage <paramref name="bandage"/> and rig <paramref name="rig"/>,
+    /// ticked once so it holds the KO point of toughness 50.
+    /// </summary>
     static MedicalState Leg(float flesh, float bandage = 0, float rig = 0, LimbState limb = LimbState.Original)
     {
         var m = Healthy();
@@ -144,7 +151,9 @@ public class DeterminismTests
     }
 }
 
-/// <summary>Every toughness read of the medical code is stat x stats multiplier through an unclamped lerp (docs/game/character-stats.md "coma point").</summary>
+/// <summary>
+/// Every toughness read of the medical code is stat x stats multiplier through an unclamped lerp (docs/game/character-stats.md "coma point").
+/// </summary>
 public class ToughnessReadTests
 {
     [Fact]

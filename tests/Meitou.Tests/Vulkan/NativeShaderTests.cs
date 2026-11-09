@@ -1,13 +1,18 @@
 using System.Runtime.InteropServices;
 
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Terrain;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The native model's shader text (docs/renderer-native.md 3.3, <see cref="NativeShaders"/>): the ported shared text compiles with
-/// strict rules, keeps every body, and its blocks match the C# structs.</summary>
+/// <summary>
+/// The native model's shader text (docs/renderer-native.md 3.3, <see cref="NativeShaders"/>): the ported shared text compiles with strict rules,
+/// keeps every body, and its blocks match the C# structs.
+/// </summary>
 public class NativeShaderTests
 {
     static VulkanDevice? TryCreate()
@@ -18,7 +23,9 @@ public class NativeShaderTests
 
     static readonly Dictionary<string, string> Model = new() { ["uModel"] = "mat4(1.0)" };
 
-    /// <summary>Each shared native variant with a vertex or fragment partner, as a consumer pairs them.</summary>
+    /// <summary>
+    /// Each shared native variant with a vertex or fragment partner, as a consumer pairs them.
+    /// </summary>
     static IEnumerable<(string Name, string Vertex, string Fragment, Type Push)> Variants()
     {
         string mesh = NativeShaders.MeshVertex(Model);
@@ -36,21 +43,27 @@ public class NativeShaderTests
         yield return ("foliage mesh", FoliageShaders.MeshVertexNative(), FoliageShaders.MeshFragmentNative(), typeof(MeshPush));
         yield return ("foliage mesh depth", FoliageShaders.MeshVertexNative(), FoliageShaders.MeshDepthNative(), typeof(MeshPush));
         yield return ("foliage grass", FoliageShaders.GrassVertexNative(), FoliageShaders.GrassFragmentNative(), typeof(GrassPush));
-        yield return ("foliage grass motion", FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(), typeof(GrassPush));
+        yield return ("foliage grass motion", FoliageShaders.GrassMotionVertexNative(), FoliageShaders.GrassMotionFragmentNative(),
+                typeof(GrassPush));
         // Objects (step O): the buildings' dithered cross-fade on the shared mesh text, with their own push block.
         yield return ("objects", BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), typeof(ObjectPush));
         yield return ("objects depth", BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), typeof(ObjectPush));
         // The terrain (step O): the patches, the TERRAIN-mode meshes, and their shadow depth.
         yield return ("terrain patch", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(), typeof(TerrainPush));
-        yield return ("terrain patch no normal", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(normalMaps: false), typeof(TerrainPush));
+        yield return ("terrain patch no normal", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(normalMaps: false),
+                typeof(TerrainPush));
         yield return ("terrain patch cut", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(interiorCut: true), typeof(TerrainPush));
-        yield return ("terrain patch cut no normal", TerrainShaders.PatchVertexNative(), TerrainShaders.FragmentNative(interiorCut: true, normalMaps: false), typeof(TerrainPush));
+        yield return ("terrain patch cut no normal", TerrainShaders.PatchVertexNative(),
+                TerrainShaders.FragmentNative(interiorCut: true, normalMaps: false), typeof(TerrainPush));
         yield return ("terrain patch depth", TerrainShaders.PatchVertexNative(), TerrainShaders.DepthFragmentNative(), typeof(TerrainPush));
         yield return ("terrain patch prepass", TerrainShaders.PatchVertexNative(), TerrainShaders.PrepassFragmentNative(), typeof(TerrainPush));
         yield return ("terrain mesh", TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(), typeof(TerrainPush));
-        yield return ("terrain mesh no normal", TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(normalMaps: false), typeof(TerrainPush));
-        yield return ("terrain mesh solid no normal", TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentSolidNative(normalMaps: false), typeof(TerrainPush));
-        yield return ("terrain mesh depth", TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(), typeof(TerrainPush));
+        yield return ("terrain mesh no normal", TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentNative(normalMaps: false),
+                typeof(TerrainPush));
+        yield return ("terrain mesh solid no normal", TerrainShaders.MeshVertexNative(), TerrainShaders.MeshFragmentSolidNative(normalMaps: false),
+                typeof(TerrainPush));
+        yield return ("terrain mesh depth", TerrainShaders.MeshInstancedDepthVertexNative(), TerrainShaders.DepthFragmentNative(),
+                typeof(TerrainPush));
     }
 
     [Fact]
@@ -81,7 +94,8 @@ public class NativeShaderTests
                         {
                             string field = char.ToUpperInvariant(m.Name[0]) + m.Name[1..];
                             Assert.True(type.GetField(field) is not null, $"{name}: {b.Name}.{m.Name} has no C# field {field}");
-                            Assert.True((int)Marshal.OffsetOf(type, field) == m.Offset, $"{name}: {b.Name}.{m.Name} at {m.Offset}, C# {Marshal.OffsetOf(type, field)}");
+                            Assert.True((int)Marshal.OffsetOf(type, field) == m.Offset,
+                                    $"{name}: {b.Name}.{m.Name} at {m.Offset}, C# {Marshal.OffsetOf(type, field)}");
                         }
                         Assert.True(b.Size <= Marshal.SizeOf(type), $"{name}: {b.Name} is {b.Size} bytes, C# {Marshal.SizeOf(type)}");
                     }

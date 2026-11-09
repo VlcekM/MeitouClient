@@ -35,14 +35,19 @@ public static class ResidentHomes
         return list;
     }
 
-    /// <summary>The town's <c>default resident</c> (first entry), else (without <c>residents override</c>) the faction's; null when neither names one or the town has no faction.</summary>
+    /// <summary>
+    /// The town's <c>default resident</c> (first entry), else (without <c>residents override</c>) the faction's; null when neither names one or the
+    /// town has no faction.
+    /// </summary>
     public static RecordLink? DefaultResident(TownData town, FactionData? faction) =>
         faction is null ? null
         : town.DefaultResident.Count > 0 ? town.DefaultResident[0]
         : !town.ResidentsOverride && faction.DefaultResident.Count > 0 ? faction.DefaultResident[0] : null;
 
-    /// <summary>A SQUAD_TEMPLATE or UNIQUE_SQUAD_TEMPLATE record.</summary>
-    public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SQUAD_TEMPLATE or FcsRecordType.UNIQUE_SQUAD_TEMPLATE };
+    /// <summary>
+    /// A SQUAD_TEMPLATE or UNIQUE_SQUAD_TEMPLATE record.
+    /// </summary>
+    public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SquadTemplate or FcsRecordType.UniqueSquadTemplate };
 
     /// <summary>
     /// Houses the town's resident entries in <paramref name="buildings"/> (those that can house, are not <paramref name="playerFactionId"/>'s in the level data and not among
@@ -79,7 +84,9 @@ public static class ResidentHomes
         return [.. buildings.Where(Candidate).OrderBy(b => KeyHash(b.Key)).ThenBy(b => b.Key, StringComparer.Ordinal)];
     }
 
-    /// <summary>FNV-1a over the key's characters: stable across runs and platforms.</summary>
+    /// <summary>
+    /// FNV-1a over the key's characters: stable across runs and platforms.
+    /// </summary>
     static ulong KeyHash(string key)
     {
         ulong h = 14695981039346656037UL;
@@ -100,8 +107,12 @@ public static class ResidentHomes
             var t = SquadTemplate.From(record);
             entries.Add(new Entry
             {
-                Id = link.Id, Template = t, Count = link.V0, Priority = link.V1 == 100 ? 0 : link.V1,
-                Preferred = [.. t.Buildings.Select(b => b.Id)], Disliked = [.. t.BuildingDislike.Select(b => b.Id)],
+                Id = link.Id,
+                Template = t,
+                Count = link.V0,
+                Priority = link.V1 == 100 ? 0 : link.V1,
+                Preferred = [.. t.Buildings.Select(b => b.Id)],
+                Disliked = [.. t.BuildingDislike.Select(b => b.Id)],
             });
         }
         return entries;

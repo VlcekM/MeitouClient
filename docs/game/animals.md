@@ -146,6 +146,9 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
 - A new animal's inventory (`FUN_14062a130`, slot 0x2c0, **Observed**; the grid size **Verified**, :79-107): a 5 x 4 `backpack_attach` section, the main grid `inventory w` x
   `inventory h` (each below 1 becomes 4 and 8 on its own: w=6, h=0 gives 6 x 8; neither set 4 x 8), then every `backpack` list entry is made and added equipped, whatever its values (Pack Bull's
   entry is (0, 0, 0)); a saved inventory replaces this. Pack Beast and Pack Bull carry their CONTAINER this way.
+- The main grid is shut while the animal lives (`CharacterAnimal` vtable slot 48 `FUN_1405cc630`, **Observed**): `main` is enabled only when the flag at +0x5bc (taken to be dead) is set,
+  or the animal is not of the player's faction (`FUN_1407916d0`) and is down (vfunc 0x30); the animal window (`FUN_14014f570`) leaves a disabled `main` out. When slot 48 runs is
+  **Unknown**. Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it; what is in it can still be taken out.
 - Nothing else ties the bag to the squad: it is an ordinary inventory (feeding from squad mates reads it, [simulation](../simulation.md#items-and-eating)).
 
 Meitou: `ItemFactory.AddAnimalBackpacks`.

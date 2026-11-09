@@ -9,7 +9,10 @@ using BepuUtilities.Memory;
 
 namespace Meitou.Simulation.Ragdolls;
 
-/// <summary>What a body is to the collision filter: its ragdoll (a running number, 0 for none) and its index there, and the bodies of the same ragdoll joined to it.</summary>
+/// <summary>
+/// What a body is to the collision filter: its ragdoll (a running number, 0 for none) and its index there, and the bodies of the same ragdoll joined
+/// to it.
+/// </summary>
 internal struct BodyTag
 {
     public int Ragdoll;
@@ -54,11 +57,13 @@ internal struct ContactRules : INarrowPhaseCallbacks
     public void Dispose() => Tags.Dispose();
 }
 
-/// <summary>Gravity and the damping of a simulated ragdoll body (docs/game/ragdolls.md: linear 0.05, angular 0.01 per second, gravity 98.1 units/s² down).</summary>
+/// <summary>
+/// Gravity and the damping of a simulated ragdoll body (docs/game/ragdolls.md: linear 0.05, angular 0.01 per second, gravity 98.1 units/s² down).
+/// </summary>
 internal struct Integration : IPoseIntegratorCallbacks
 {
-    Vector3Wide gravityDt;
-    Vector<float> linear, angular, maxSpeedSquared, maxSpinSquared;
+    Vector3Wide _gravityDt;
+    Vector<float> _linear, _angular, _maxSpeedSquared, _maxSpinSquared;
 
     public readonly AngularIntegrationMode AngularIntegrationMode => AngularIntegrationMode.Nonconserving;
     public readonly bool AllowSubstepsForUnconstrainedBodies => false;
@@ -68,24 +73,24 @@ internal struct Integration : IPoseIntegratorCallbacks
 
     public void PrepareForIntegration(float dt)
     {
-        gravityDt = Vector3Wide.Broadcast(new Vector3(0, -RagdollPhysics.Gravity * dt, 0));
-        linear = new Vector<float>(1 / (1 + RagdollPhysics.LinearDamping * dt));
-        angular = new Vector<float>(1 / (1 + RagdollPhysics.AngularDamping * dt));
-        maxSpeedSquared = new Vector<float>(RagdollPhysics.MaxSpeed * RagdollPhysics.MaxSpeed);
-        maxSpinSquared = new Vector<float>(RagdollPhysics.MaxSpin * RagdollPhysics.MaxSpin);
+        _gravityDt = Vector3Wide.Broadcast(new Vector3(0, -RagdollPhysics.Gravity * dt, 0));
+        _linear = new Vector<float>(1 / (1 + RagdollPhysics.LinearDamping * dt));
+        _angular = new Vector<float>(1 / (1 + RagdollPhysics.AngularDamping * dt));
+        _maxSpeedSquared = new Vector<float>(RagdollPhysics.MaxSpeed * RagdollPhysics.MaxSpeed);
+        _maxSpinSquared = new Vector<float>(RagdollPhysics.MaxSpin * RagdollPhysics.MaxSpin);
     }
 
     public void IntegrateVelocity(Vector<int> bodyIndices, Vector3Wide position, QuaternionWide orientation, BodyInertiaWide localInertia, Vector<int> integrationMask,
         int workerIndex, Vector<float> dt, ref BodyVelocityWide velocity)
     {
-        velocity.Linear = (velocity.Linear + gravityDt) * linear;
-        velocity.Angular *= angular;
+        velocity.Linear = (velocity.Linear + _gravityDt) * _linear;
+        velocity.Angular *= _angular;
         // A body is never faster than the ground can catch (see RagdollPhysics.MaxSpeed): a joint pushed past its limits would otherwise fling a limb through the terrain.
         var speedSquared = Vector3Wide.Dot(velocity.Linear, velocity.Linear);
-        var keep = Vector.ConditionalSelect(Vector.GreaterThan(speedSquared, maxSpeedSquared), Vector.SquareRoot(maxSpeedSquared / speedSquared), Vector<float>.One);
+        var keep = Vector.ConditionalSelect(Vector.GreaterThan(speedSquared, _maxSpeedSquared), Vector.SquareRoot(_maxSpeedSquared / speedSquared), Vector<float>.One);
         velocity.Linear *= keep;
         var spinSquared = Vector3Wide.Dot(velocity.Angular, velocity.Angular);
-        velocity.Angular *= Vector.ConditionalSelect(Vector.GreaterThan(spinSquared, maxSpinSquared), Vector.SquareRoot(maxSpinSquared / spinSquared), Vector<float>.One);
+        velocity.Angular *= Vector.ConditionalSelect(Vector.GreaterThan(spinSquared, _maxSpinSquared), Vector.SquareRoot(_maxSpinSquared / spinSquared), Vector<float>.One);
     }
 }
 
@@ -97,7 +102,9 @@ internal struct Integration : IPoseIntegratorCallbacks
 internal sealed class RagdollPhysics : IDisposable
 {
     public const float Gravity = 98.1f, LinearDamping = 0.05f, AngularDamping = 0.01f, Friction = 1;
-    /// <summary>The largest speed a contact pushes bodies apart with (engine choice: 2 m/s).</summary>
+    /// <summary>
+    /// The largest speed a contact pushes bodies apart with (engine choice: 2 m/s).
+    /// </summary>
     public const float RecoverySpeed = 20;
     /// <summary>
     /// The fastest a body may move, in units per second, and the speculative margin of its collidable. The ground is a one-sided triangle mesh: a body that gets more than its own
@@ -105,12 +112,20 @@ internal sealed class RagdollPhysics : IDisposable
     /// a whole tick of the fastest motion (engine choice; 20 m/s is a fall of 20 m, far more than any in the game, and only a joint gone wrong gets there).
     /// </summary>
     public const float MaxSpeed = 200, SpeculativeMargin = 8;
-    /// <summary>The fastest a body may turn, in radians per second: PhysX's default NX_MAX_ANGULAR_VELOCITY (7), which the game leaves: its bodies' own maximum is -1 (= the global one) and the SDK parameter is never set (docs/game/ragdolls.md "Limits of motion").</summary>
+    /// <summary>
+    /// The fastest a body may turn, in radians per second: PhysX's default NX_MAX_ANGULAR_VELOCITY (7), which the game leaves: its bodies' own
+    /// maximum is -1 (= the global one) and the SDK parameter is never set (docs/game/ragdolls.md "Limits of motion").
+    /// </summary>
     public const float MaxSpin = 7;
 
-    /// <summary>The collidable of a ragdoll body of <paramref name="shape"/>.</summary>
+    /// <summary>
+    /// The collidable of a ragdoll body of <paramref name="shape"/>.
+    /// </summary>
     public static CollidableDescription Collidable(TypedIndex shape) => new(shape, SpeculativeMargin);
-    /// <summary>Solver substeps per tick and velocity iterations per substep: 4 substeps at 30 Hz is 120 Hz, finer than PhysX's 1/60 s maximum step (engine choice).</summary>
+    /// <summary>
+    /// Solver substeps per tick and velocity iterations per substep: 4 substeps at 30 Hz is 120 Hz, finer than PhysX's 1/60 s maximum step (engine
+    /// choice).
+    /// </summary>
     const int Substeps = 4, Iterations = 2;
     /// <summary>
     /// Constraint batches before Bepu puts a body's further constraints in its sequential fallback batch (its default is 64). Bepu 2.4.0 throws in the narrow phase's flush
@@ -121,16 +136,18 @@ internal sealed class RagdollPhysics : IDisposable
 
     public readonly BufferPool Pool = new();
     public readonly BepuPhysics.Simulation Simulation;
-    readonly CollidableProperty<BodyTag> tags;
+    readonly CollidableProperty<BodyTag> _tags;
 
     public RagdollPhysics()
     {
-        tags = new CollidableProperty<BodyTag>(Pool);
-        Simulation = BepuPhysics.Simulation.Create(Pool, new ContactRules { Tags = tags }, new Integration(), new SolveDescription(Iterations, Substeps, FallbackBatches));
+        _tags = new CollidableProperty<BodyTag>(Pool);
+        Simulation = BepuPhysics.Simulation.Create(Pool, new ContactRules { Tags = _tags }, new Integration(), new SolveDescription(Iterations, Substeps, FallbackBatches));
         Simulation.Deterministic = true;
     }
 
-    /// <summary>The longest step the original's physics takes (<c>FUN_1407dd060</c>: <c>DAT_1416fb690</c> = 0.04 s, <b>Verified</b>).</summary>
+    /// <summary>
+    /// The longest step the original's physics takes (<c>FUN_1407dd060</c>: <c>DAT_1416fb690</c> = 0.04 s, <b>Verified</b>).
+    /// </summary>
     public const float MaxStep = 0.04f;
 
     /// <summary>
@@ -139,7 +156,10 @@ internal sealed class RagdollPhysics : IDisposable
     /// </summary>
     public static float StepOf(float tickSeconds, float speed) => MathF.Min(tickSeconds / (speed >= 1 ? speed : 1), MaxStep);
 
-    /// <summary>Steps the bodies, on <paramref name="threads"/> when given (<see cref="BepuPhysics.Simulation.Deterministic"/> is on, so the result does not depend on them).</summary>
+    /// <summary>
+    /// Steps the bodies, on <paramref name="threads"/> when given (<see cref="BepuPhysics.Simulation.Deterministic"/> is on, so the result does not
+    /// depend on them).
+    /// </summary>
     public void Step(float dt, IThreadDispatcher? threads = null) => Simulation.Timestep(dt, threads);
 
     /// <summary>
@@ -149,10 +169,10 @@ internal sealed class RagdollPhysics : IDisposable
     /// </summary>
     public static void WarmUpOnce()
     {
-        if (Interlocked.Exchange(ref warmed, 1) == 0) Task.Run(WarmUp);
+        if (Interlocked.Exchange(ref s_warmed, 1) == 0) Task.Run(WarmUp);
     }
 
-    static int warmed;
+    static int s_warmed;
 
     static void WarmUp()
     {
@@ -160,7 +180,7 @@ internal sealed class RagdollPhysics : IDisposable
         {
             // Declared first so it outlives the physics: the pair cache keeps worker caches in the dispatcher's thread pools, read by every later
             // step (single-threaded too) and freed when the simulation is disposed (disposed first, it was a use after free: a rare crash).
-            using var threads = new BepuUtilities.ThreadDispatcher(Math.Clamp(Environment.ProcessorCount / 2, 2, 4));
+            using var threads = new ThreadDispatcher(Math.Clamp(Environment.ProcessorCount / 2, 2, 4));
             using var physics = new RagdollPhysics();
             var simulation = physics.Simulation;
             physics.Cover(new Vector3(16, 0, 16), 20, new WarmUpEnvironment(), 0);
@@ -216,39 +236,48 @@ internal sealed class RagdollPhysics : IDisposable
         catch (Exception e) { Console.Error.WriteLine($"warning   the ragdoll warm-up failed: {e.Message}"); }
     }
 
-    /// <summary>The warm-up's ground (gently waved) and building (a box standing on it).</summary>
+    /// <summary>
+    /// The warm-up's ground (gently waved) and building (a box standing on it).
+    /// </summary>
     sealed class WarmUpEnvironment : IRagdollEnvironment
     {
         public float GroundHeight(float x, float z, float nearY) => 0.3f * MathF.Sin(0.4f * x) * MathF.Cos(0.3f * z);
 
         public bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles)
         {
-            Vector3 P(int i) => new(i & 1, (i >> 1) & 1, (i >> 2) & 1);
+            static Vector3 P(int i) => new(i & 1, (i >> 1) & 1, (i >> 2) & 1);
             int[] faces = [0, 1, 3, 0, 3, 2, 4, 6, 7, 4, 7, 5, 0, 4, 5, 0, 5, 1, 2, 3, 7, 2, 7, 6, 0, 2, 6, 0, 6, 4, 1, 5, 7, 1, 7, 3];
             foreach (int i in faces) triangles.Add(new Vector3(14, 0, 14) + P(i) * new Vector3(6, 4, 6));
             return true;
         }
     }
 
-    public ref BodyTag Tag(BodyHandle body) => ref tags[body];
+    public ref BodyTag Tag(BodyHandle body) => ref _tags[body];
 
     public BodyHandle AddBody(in BodyDescription description, BodyTag tag)
     {
         var handle = Simulation.Bodies.Add(description);
-        tags.Allocate(handle) = tag;
+        _tags.Allocate(handle) = tag;
         return handle;
     }
 
     // ---- static tiles ----
 
-    /// <summary>Tile edge and ground sample spacing in world units (engine choice: a 32-unit tile of 2-unit cells, 512 triangles).</summary>
+    /// <summary>
+    /// Tile edge and ground sample spacing in world units (engine choice: a 32-unit tile of 2-unit cells, 512 triangles).
+    /// </summary>
     /// <summary>
     /// A tile's ground is a mesh of <see cref="Cell"/>-unit cells (the heightmap's samples are 18 units apart: finer cells only tessellate the same bilinear patches). Engine choice:
     /// the Bepu mesh build is nearly all of a tile's cost, 0.45 ms at 2-unit cells (512 triangles), and a zone's downed characters arriving together asked for 80-100 tiles in one tick.
     /// </summary>
     public const float TileSize = RagdollSystem.TileSize, Cell = 4;
-    /// <summary>A tile no moving body has needed for this many ticks is removed.</summary>
-    /// <summary>Ticks a tile outlives its last use (engine choice: a minute, so a camera flight back to a zone finds the tiles its bodies used; a tile is a few KB).</summary>
+    /// <summary>
+    /// A tile no moving body has needed for this many ticks is removed.
+    /// </summary>
+    /// <summary>
+    /// Ticks a tile outlives its last use (engine choice: a minute, so a camera flight back to a zone finds the tiles its bodies used; a tile is a
+    /// few KB).
+    /// </summary>
     const int TileLife = 1800;
 
     sealed class Tile
@@ -256,18 +285,23 @@ internal sealed class RagdollPhysics : IDisposable
         public StaticHandle Ground, Buildings;
         public TypedIndex GroundShape, BuildingShape;
         public bool HasBuildings, BuildingsPending;
-        /// <summary>The environment's <see cref="IRagdollEnvironment.Generation"/> the buildings were asked at.</summary>
+        /// <summary>
+        /// The environment's <see cref="IRagdollEnvironment.Generation"/> the buildings were asked at.
+        /// </summary>
         public int Generation;
         public long Used;
     }
 
-    readonly Dictionary<(int X, int Z), Tile> tiles = [];
-    readonly List<(int X, int Z)> stale = [];
-    readonly List<Vector3> gathered = [];
+    readonly Dictionary<(int X, int Z), Tile> _tiles = [];
+    readonly List<(int X, int Z)> _stale = [];
+    readonly List<Vector3> _gathered = [];
 
-    public int TileCount => tiles.Count;
+    public int TileCount => _tiles.Count;
 
-    /// <summary>A tile's building mesh counts this many tile units of the budget: a town tile's is 2 ms against a ground mesh's 0.12 (**Observed**, headless flight probe).</summary>
+    /// <summary>
+    /// A tile's building mesh counts this many tile units of the budget: a town tile's is 2 ms against a ground mesh's 0.12 (**Observed**, headless
+    /// flight probe).
+    /// </summary>
     public const int BuildingUnits = 4;
 
     /// <summary>
@@ -281,11 +315,11 @@ internal sealed class RagdollPhysics : IDisposable
         for (int x = x0; x <= x1; x++)
             for (int z = z0; z <= z1; z++)
             {
-                if (!tiles.TryGetValue((x, z), out var tile))
+                if (!_tiles.TryGetValue((x, z), out var tile))
                 {
                     if (budget <= 0) continue;
                     budget--;
-                    tiles[(x, z)] = tile = MakeTile(x, z, centre.Y, environment, ref budget);
+                    _tiles[(x, z)] = tile = MakeTile(x, z, centre.Y, environment, ref budget);
                 }
                 else
                 {
@@ -297,7 +331,9 @@ internal sealed class RagdollPhysics : IDisposable
             }
     }
 
-    /// <summary>As <see cref="Cover(Vector3, float, IRagdollEnvironment, long, ref int)"/> without a budget (the warm-up, tests).</summary>
+    /// <summary>
+    /// As <see cref="Cover(Vector3, float, IRagdollEnvironment, long, ref int)"/> without a budget (the warm-up, tests).
+    /// </summary>
     public void Cover(Vector3 centre, float reach, IRagdollEnvironment environment, long tick)
     {
         int budget = int.MaxValue;
@@ -313,23 +349,25 @@ internal sealed class RagdollPhysics : IDisposable
         var (x0, x1, z0, z1) = Span(centre, reach);
         for (int x = x0; x <= x1; x++)
             for (int z = z0; z <= z1; z++)
-                if (!tiles.TryGetValue((x, z), out var tile) || tile.BuildingsPending) return false;
+                if (!_tiles.TryGetValue((x, z), out var tile) || tile.BuildingsPending) return false;
         return true;
     }
 
     static (int X0, int X1, int Z0, int Z1) Span(Vector3 centre, float reach) =>
         ((int)MathF.Floor((centre.X - reach) / TileSize), (int)MathF.Floor((centre.X + reach) / TileSize), (int)MathF.Floor((centre.Z - reach) / TileSize), (int)MathF.Floor((centre.Z + reach) / TileSize));
 
-    /// <summary>Removes the tiles not used for a while.</summary>
+    /// <summary>
+    /// Removes the tiles not used for a while.
+    /// </summary>
     public void Sweep(long tick)
     {
-        stale.Clear();
-        foreach (var (key, tile) in tiles) if (tick - tile.Used > TileLife) stale.Add(key);
-        stale.Sort();
-        foreach (var key in stale)
+        _stale.Clear();
+        foreach (var (key, tile) in _tiles) if (tick - tile.Used > TileLife) _stale.Add(key);
+        _stale.Sort();
+        foreach (var key in _stale)
         {
-            RemoveTile(tiles[key]);
-            tiles.Remove(key);
+            RemoveTile(_tiles[key]);
+            _tiles.Remove(key);
         }
     }
 
@@ -360,24 +398,27 @@ internal sealed class RagdollPhysics : IDisposable
         return tile;
     }
 
-    /// <summary>The buildings' triangles of a tile, once they are all known (until then the tile has ground only and asks again); true when a mesh was built (the budget's charge).</summary>
+    /// <summary>
+    /// The buildings' triangles of a tile, once they are all known (until then the tile has ground only and asks again); true when a mesh was built
+    /// (the budget's charge).
+    /// </summary>
     bool AddBuildings(Tile tile, Vector3 origin, IRagdollEnvironment environment)
     {
-        gathered.Clear();
-        tile.BuildingsPending = !environment.Buildings(origin, origin + new Vector3(TileSize, 0, TileSize), gathered);
+        _gathered.Clear();
+        tile.BuildingsPending = !environment.Buildings(origin, origin + new Vector3(TileSize, 0, TileSize), _gathered);
         if (tile.BuildingsPending) return false;
-        if (gathered.Count < 3)
+        if (_gathered.Count < 3)
         {
             if (!tile.HasBuildings) return false;
             RemoveBuildings(tile);
             return true;
         }
         // Both faces of every triangle: the files' windings are not trusted, and a body may meet a wall or floor from either side.
-        int count = gathered.Count / 3;
+        int count = _gathered.Count / 3;
         Pool.Take<Triangle>(count * 2, out var building);
         for (int i = 0; i < count; i++)
         {
-            Vector3 a = gathered[3 * i] - origin, b = gathered[3 * i + 1] - origin, c = gathered[3 * i + 2] - origin;
+            Vector3 a = _gathered[3 * i] - origin, b = _gathered[3 * i + 1] - origin, c = _gathered[3 * i + 2] - origin;
             building[2 * i] = new Triangle(a, b, c);
             building[2 * i + 1] = new Triangle(a, c, b);
         }
@@ -418,16 +459,27 @@ internal sealed class RagdollPhysics : IDisposable
 public interface IRagdollEnvironment
 {
     float GroundHeight(float x, float z, float nearY);
-    /// <summary>Changes whenever the buildings' collision changed (a building placed, removed or ruined at run time): tiles built from an older one are built again.</summary>
+    /// <summary>
+    /// Changes whenever the buildings' collision changed (a building placed, removed or ruined at run time): tiles built from an older one are built
+    /// again.
+    /// </summary>
     int Generation => 0;
-    /// <summary>Adds the triangles (three points each, world space, any winding) of the building collision between <paramref name="min"/> and <paramref name="max"/> (X and Z).</summary>
+    /// <summary>
+    /// Adds the triangles (three points each, world space, any winding) of the building collision between <paramref name="min"/> and
+    /// <paramref name="max"/> (X and Z).
+    /// </summary>
     /// <returns>False while some of them are not known yet (being read): the tile asks again.</returns>
     bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles);
-    /// <summary>The triangles of collision groups 23..26 only (passable parts, buildings paths ignore) between the corners, what the weather's shelter ray tests; the same meaning of the result. Environments without them answer with the ordinary buildings.</summary>
+    /// <summary>
+    /// The triangles of collision groups 23..26 only (passable parts, buildings paths ignore) between the corners, what the weather's shelter ray
+    /// tests; the same meaning of the result. Environments without them answer with the ordinary buildings.
+    /// </summary>
     bool Roofs(Vector3 min, Vector3 max, List<Vector3> triangles) => Buildings(min, max, triangles);
 }
 
-/// <summary>The stand-in environment: the world's walkable ground, no buildings.</summary>
+/// <summary>
+/// The stand-in environment: the world's walkable ground, no buildings.
+/// </summary>
 public sealed class WalkabilityEnvironment(IWalkability walkability) : IRagdollEnvironment
 {
     public float GroundHeight(float x, float z, float nearY) => walkability.GroundHeight(x, z, nearY);

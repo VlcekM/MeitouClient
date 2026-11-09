@@ -1,27 +1,36 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Game;
-using Meitou.Rendering;
+using Meitou.Game.Effects;
 
 namespace Meitou.Tests.Game;
 
-/// <summary>The birds' rules of the original's <c>BirdManager</c> (docs/game/birds.md): spawning against the amounts in range, the return to the kind's cells, the attractors.</summary>
+/// <summary>
+/// The birds' rules of the original's <c>BirdManager</c> (docs/game/birds.md): spawning against the amounts in range,
+/// the return to the kind's cells, the attractors.
+/// </summary>
 public sealed class BirdFlocksTests
 {
     static readonly Vector3 Away = new(-3000, 0, -3000);
 
     static BirdFlockData Kind(int count = 6, int amount = 6) => new()
     {
-        Id = "birds", Mesh = "bird.mesh", SpawnCount = count, Speed = 300, Height = 800, ContourStrength = 1, Distance = 500000, Flocking = true,
-        SpawnHeightMin = 0, SpawnHeightMax = 4000, Amounts = new Dictionary<string, int> { ["g"] = amount },
+        Id = "birds", Mesh = "bird.mesh", SpawnCount = count, Speed = 300, Height = 800, ContourStrength = 1, Distance = 500000,
+        Flocking = true, SpawnHeightMin = 0, SpawnHeightMax = 4000, Amounts = new Dictionary<string, int> { ["g"] = amount },
     };
 
-    /// <summary>One weather cell (32, 32: x and z from 0 to 4608) lists the kind.</summary>
+    /// <summary>
+    /// One weather cell (32, 32: x and z from 0 to 4608) lists the kind.
+    /// </summary>
     static string? OneCell(int cx, int cz) => cx == 32 && cz == 32 ? "g" : null;
 
     static void Run(BirdFlocks birds, float seconds, Action? each = null)
     {
-        for (float t = 0; t < seconds; t += 0.05f) { birds.Update(0.05f, Away, Away, null); each?.Invoke(); }
+        for (float t = 0; t < seconds; t += 0.05f)
+        {
+            birds.Update(0.05f, Away, Away, null);
+            each?.Invoke();
+        }
     }
 
     [Fact]

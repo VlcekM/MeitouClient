@@ -583,7 +583,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   - Meitou (`NestFurniture`, `PopulationCamps.cs`): all of it when a nest's zone activates, removed when it unloads (NPCs in its cages let out); a
     `spawn in town centre` town's when it is made, kept (again when its TOWN record changed). Its own rolls keyed by the camp's place; the navmesh query
     is the walkability at the centre's height within 60. The items are loose ground items, laid once per camp in this world and only in a zone the
-    loaded save has no file of. A nest's cage of a kidnapper's faction is always a candidate, and a standing nest is a town for the fogman worship finder
+    loaded save has no file of. Its pieces are fixtures: cages, locked containers and beds (a bandit camp's Camp Beds, #362). A nest's cage of a kidnapper's faction is always a candidate, and a standing nest is a town for the fogman worship finder
     (nest markers skipped). Not modelled: the dedupe of a town's saved pieces (Meitou makes them again, not saving them).
 - **Homeless squads** (area tick `FUN_1408f9240`, every 2 s, per island): the island's load (sum over its loaded sectors of intact +
   0.5 × not-intact squads, [counts](#off-screen-world) above; clamped to [0, 2] for a sector with its own town or the town flag `FUN_1408f62e0` / +0x30) is compared with `FUN_1408f5ca0`, the sum of P × `homeless spawn
@@ -647,6 +647,7 @@ Meitou: [ground items](../simulation.md#items-and-eating).
   is moved the same way; neither: the town position. Meitou: `TownExit` serves the patrols and the intruder errand 274 (`TownDutySystem.Outside`; placed towns by their level buildings, a player town by its complete sites; the point's cache is **Unknown**, not modelled). A town without buildings: a door point of the object under the town position
   (`FUN_1409b2ab0`, a ray from 1000 above), else the position. So bandits never aim inside a walled town, the Hub included (its two
   `Defensive Gate IV` are ruins in the level data; a ruin has no door ([locks](locks.md#doors)), so the wall branch applies, skipping the first wall, a `Defensive Wall IV Connector` without `interior`; **Observed**).
+  The point still lies within the town radius (2500), so the squad counts as in the town and its loot goals walk it in through the ruined gates (**Observed**, headless, Rebirth save: Dust Bandit roamers at the Hub's west gate run LOOT_THE_DEAD inside the walls).
   The move: `CharMovement::setPatrolInput` (`FUN_14065eaa0`, vtable +0xa0) in mode 3 (a `PatrolInfo` with a biome group) draws the point
   above and sends the character to it exactly; it redraws (up to 10 times) only a point whose ground is present and below 95 when the
   byte at +0x79 of the object at Character +0x2e0 is set (a race flag, water below 95: **Observed**), else accepts it (**Verified**). The
@@ -835,7 +836,7 @@ every message {1} is the campaign's name and {2} the target town's (the cancel m
   the polarity of the import handle test; other readers of `unique` (`FUN_14067b070` dialogue conditions, `FUN_1407609e0` / `FUN_140761550`) not opened.
 - Town overrides: what sets the ZoneManager +8 byte; the buildinglist entry field tested in `FUN_1409fe340` ([town overrides](#town-overrides)).
 - The direction of the town waypoint's 200 offset and whether `Town::setup` runs for the Null town type ([patrol task](#off-screen-world)).
-- Patrol routes: `Task_PatrolTown` and `GoOutOnPatrol*` were not decoded here (`Task_Patrol` is above; class mapping: [ai-tasks.md](ai-tasks.md#tasktype-to-task-class); packages: [ai.md](ai.md#signal-functions-and-the-package-classes)); no fixed route data
+- Patrol routes: `GoOutOnPatrol*` was not decoded here (`Task_Patrol` is above, `Task_PatrolTown` in [town goals](ai-tasks.md#town-goals); class mapping: [ai-tasks.md](ai-tasks.md#tasktype-to-task-class); packages: [ai.md](ai.md#signal-functions-and-the-package-classes)); no fixed route data
   was found in FCS records (squad templates only name `AI packages`; `patrol approaches towns` is a bool).
 
 ## Expression reference

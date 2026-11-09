@@ -213,8 +213,14 @@ TownBase, Town, Nest and TownNull, caller **Unknown**), which seeds `rand()` fro
   slope up to the record's `max slope`, at a random yaw, made by the building factory (`FUN_140930120`, `FUN_14057cc70`) with their +0x241 flag set. **Not modelled**: a nest's
   Prisoner Poles (cages) are what the Fog Islands' fogmen carry their victims to ([#132](https://github.com/VlcekM/MeitouClient/issues/132)).
 - Persistence: the items are saved with the nest as their `persist` handle ([save](save.md)); the buildings are not saved.
-Meitou (`PopulationSystem.ScatterNest`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
-items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more.
+- A resident template's `nest` (a TOWN link on SQUAD_TEMPLATE) has its `loot spawn` laid at the town that lists the template in `residents` (**Observed**, METARU: The Old
+  Prison holds 16 loose items with the town's own `persist` handle, all from the lists of `nest armoury ruin`, the `nest` of its resident `ruin- tech loot`; the Infested Lab's 17
+  match `nest spiders`, the `nest` of `Ancient Lab n.5 empty spiders`; neither TOWN has lists of its own). How the exe reaches the field is **Unknown**: the string "nest" does
+  not appear in the decompile. Whether such a nest's `debris building` and meshes are stood up, and the reach, are **Unknown**. Base data (gamedata.base, Newwworld, Dialogue, rebirth): 47 templates name a `nest`, e.g.
+  the Old Empire Watchtowers' `ruin- tech loot` (issue #347).
+Meitou (`PopulationSystem.StandCamp`, **Engine choices**: its own random stream, loot reach): the first load of a nest the save does not name lays the eggs and the loot as ground
+items kept apart from the ground item limit; a nest loaded again, and one a save names, lay nothing more. A town lays its residents' nests' items once when first made in a
+zone the save has no file of, round its centre, as its own camp's (`PopulationSystem.ResidentNestDrops`); their buildings and meshes are not stood up.
 
 ## Open questions
 

@@ -11,7 +11,9 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Combat;
 
-/// <summary>Headless fights through the combat system: a duel resolves, deterministically at any thread count.</summary>
+/// <summary>
+/// Headless fights through the combat system: a duel resolves, deterministically at any thread count.
+/// </summary>
 public class DuelTests(ITestOutputHelper output)
 {
     static string Summary(SimWorld world, CombatSystem combat, CharacterId a, CharacterId b)
@@ -37,7 +39,9 @@ public class DuelTests(ITestOutputHelper output)
         Assert.Contains(combat.Log, e => e.Outcome == BlowOutcome.Blocked || e.Outcome == BlowOutcome.Dodged);
     }
 
-    /// <summary>The most attackers holding a slot at the target at once (a swing with a blow to come), over <paramref name="ticks"/> or until it is down.</summary>
+    /// <summary>
+    /// The most attackers holding a slot at the target at once (a swing with a blow to come), over <paramref name="ticks"/> or until it is down.
+    /// </summary>
     static int MostAtOnce(SimWorld world, CombatSystem combat, CharacterId target, CharacterId[] attackers, int ticks)
     {
         int most = 0;
@@ -55,11 +59,14 @@ public class DuelTests(ITestOutputHelper output)
         foreach (int slots in new[] { 1, 2 })
         {
             using var world = NewWorld(5, 1, out var combat, new CombatOptions { AttackSlots = slots });
-            var target = Spawn(world, new Combatant { Name = "target", Toughness = 100, Defence = 90, Attack = 10, WeaponSkill = 10 }, new Vector3(1000, 150, 1000));
+            var targetFighter = new Combatant { Name = "target", Toughness = 100, Defence = 90, Attack = 10, WeaponSkill = 10 };
+            var target = Spawn(world, targetFighter, new Vector3(1000, 150, 1000));
             var attackers = Enumerable.Range(0, 5).Select(k => Spawn(world, new Combatant { Attack = 20, WeaponSkill = 20 },
                 new Vector3(1000 + 12 * MathF.Cos(k * MathF.Tau / 5), 150, 1000 + 12 * MathF.Sin(k * MathF.Tau / 5)))).ToArray();
             world.Commands.Enqueue(new AttackOrder(attackers, target) { Tick = 0 });
-            // It fights back: blocks and lost initiative rolls are where same-tick asks used to slip past the count. Weakly: its cuts sweep the ring (the attack zone), and strong ones keep the attackers staggered.
+
+            // It fights back: blocks and lost initiative rolls are where same-tick asks used to slip past the count.
+            // Weakly: its cuts sweep the ring (the attack zone), and strong ones keep the attackers staggered.
             world.Commands.Enqueue(new AttackOrder([target], attackers[0]) { Tick = 0 });
             Assert.Equal(slots, MostAtOnce(world, combat, target, attackers, 300));
             if (slots != 1) continue;
@@ -71,7 +78,9 @@ public class DuelTests(ITestOutputHelper output)
 
     // ------------------------------------------------------------------ determinism
 
-    /// <summary>40 duels and 20 two-on-one scuffles in a grid: enough characters for the world to cut the slots into several partitions.</summary>
+    /// <summary>
+    /// 40 duels and 20 two-on-one scuffles in a grid: enough characters for the world to cut the slots into several partitions.
+    /// </summary>
     static SimWorld Crowd(ulong seed, int threads, out CombatSystem combat)
     {
         var world = NewWorld(seed, threads, out combat, minPartition: 4);

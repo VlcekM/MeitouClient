@@ -10,13 +10,19 @@ namespace Meitou.Data.Physics;
 /// </summary>
 public static class CollisionTriangulator
 {
-    /// <summary>Sides of the capsule prism.</summary>
+    /// <summary>
+    /// Sides of the capsule prism.
+    /// </summary>
     public const int CapsuleSides = 16;
 
-    /// <summary>Exporter space to Ogre/Kenshi space: (x, y, z) → (x, z, −y), a −90° rotation about X.</summary>
+    /// <summary>
+    /// Exporter space to Ogre/Kenshi space: (x, y, z) → (x, z, −y), a −90° rotation about X.
+    /// </summary>
     public static Vector3 ToWorldAxes(Vector3 p) => new(p.X, p.Z, -p.Y);
 
-    /// <summary>Appends the shape's triangles (outward-facing under <c>cross(v1 - v0, v2 - v0)</c>) to the lists. Returns the number of triangles added.</summary>
+    /// <summary>
+    /// Appends the shape's triangles (outward-facing under <c>cross(v1 - v0, v2 - v0)</c>) to the lists. Returns the number of triangles added.
+    /// </summary>
     public static int Triangulate(CollisionShape shape, List<Vector3> vertices, List<int> indices)
     {
         int before = indices.Count;

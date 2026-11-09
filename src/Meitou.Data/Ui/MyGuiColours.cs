@@ -5,7 +5,7 @@ namespace Meitou.Data.Ui;
 
 public static class MyGuiColours
 {
-    static IReadOnlyDictionary<string, string> palette = new Dictionary<string, string>();
+    static IReadOnlyDictionary<string, string> s_palette = new Dictionary<string, string>();
 
     /// <summary>
     /// The named colours of <c>gui/colours/kenshi_colours.xml</c> (Main, Secondary, Title, Bad, Good, Alert, ...) as "r g b" strings. A mod's file (Dark UI) replaces the game's,
@@ -17,11 +17,13 @@ public static class MyGuiColours
         if (path is not null && File.Exists(path))
             foreach (var property in MyGuiReader.ReadFile(path).Elements("Property"))
                 if (property.Attribute("key")?.Value is { } key && property.Attribute("value")?.Value is { } value && Hex(value) is { } rgb) read[key] = rgb;
-        palette = read;
+        s_palette = read;
     }
 
-    /// <summary>The colour named <paramref name="key"/> in the palette, else <paramref name="gameHex"/> (the game's own value, as "rrggbb").</summary>
-    public static string Named(string key, string gameHex) => palette.GetValueOrDefault(key) ?? Hex(gameHex)!;
+    /// <summary>
+    /// The colour named <paramref name="key"/> in the palette, else <paramref name="gameHex"/> (the game's own value, as "rrggbb").
+    /// </summary>
+    public static string Named(string key, string gameHex) => s_palette.GetValueOrDefault(key) ?? Hex(gameHex)!;
 
     static string? Hex(string value)
     {
@@ -36,7 +38,9 @@ public static class MyGuiColours
         return string.Join(' ', n.Select(f => f.ToString("0.###", CultureInfo.InvariantCulture)));
     }
 
-    /// <summary>The palette's Secondary: the text default (dark ink on the game's parchment, grey in Dark UI).</summary>
+    /// <summary>
+    /// The palette's Secondary: the text default (dark ink on the game's parchment, grey in Dark UI).
+    /// </summary>
     public static string InkText => Named("Secondary", "140806");
     public static Vector4 Ink => Parse(InkText, default);
     public static Vector4 Parse(string? value, Vector4 fallback)
@@ -73,9 +77,9 @@ public static class MyGuiColours
         return colour;
     }
 
-    static MyGuiResources? inkOwner;
-    static readonly Dictionary<string, string?> inkCache = new(StringComparer.Ordinal);
-    static readonly Vector4 gameSecondary = Parse(Hex("140806"), default);
+    static MyGuiResources? s_inkOwner;
+    static readonly Dictionary<string, string?> InkCache = new(StringComparer.Ordinal);
+    static readonly Vector4 GameSecondary = Parse(Hex("140806"), default);
     /// <summary>
     /// The ink of the text that sits on <paramref name="template"/> (a template or skin name): <see cref="TemplateText"/> when a skin mod recoloured it (it differs from the game's
     /// Secondary), else the palette's <see cref="InkText"/>, so a mod that changes only the palette (Dark UI) still recolours the text. The lookup is cached per name
@@ -84,14 +88,14 @@ public static class MyGuiColours
     public static string TemplateInk(MyGuiResources resources, string template)
     {
         string? found;
-        lock (inkCache)
+        lock (InkCache)
         {
-            if (!ReferenceEquals(inkOwner, resources)) { inkCache.Clear(); inkOwner = resources; }
-            if (!inkCache.TryGetValue(template, out found))
+            if (!ReferenceEquals(s_inkOwner, resources)) { InkCache.Clear(); s_inkOwner = resources; }
+            if (!InkCache.TryGetValue(template, out found))
             {
                 found = TemplateText(resources, template);
-                if (found is not null && Vector3.DistanceSquared(Parse(found, default).AsVector3(), gameSecondary.AsVector3()) < 1e-5f) found = null;
-                inkCache[template] = found;
+                if (found is not null && Vector3.DistanceSquared(Parse(found, default).AsVector3(), GameSecondary.AsVector3()) < 1e-5f) found = null;
+                InkCache[template] = found;
             }
         }
         return found ?? InkText;

@@ -1,9 +1,11 @@
 using System.Runtime.CompilerServices;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Rendering.Characters;
 
 namespace Meitou.Tests.Characters;
 
-/// <summary>The C# structs the character shaders read must match the GLSL layouts byte for byte (std430 / vertex rows / push constants).</summary>
+/// <summary>
+/// The C# structs the character shaders read must match the GLSL layouts byte for byte (std430 / vertex rows / push constants).
+/// </summary>
 public class CharacterLayoutTests
 {
     [Fact]

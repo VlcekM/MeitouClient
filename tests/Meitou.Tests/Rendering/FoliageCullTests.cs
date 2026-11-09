@@ -2,7 +2,8 @@ using Meitou.Data.World;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.Rendering;
 
@@ -12,7 +13,9 @@ namespace Meitou.Tests.Rendering;
 /// </summary>
 public class FoliageCullTests
 {
-    /// <summary>The cull as it was before A1 (FoliageRenderer.CullZones, master cec04c8), for comparisons.</summary>
+    /// <summary>
+    /// The cull as it was before A1 (FoliageRenderer.CullZones, master cec04c8), for comparisons.
+    /// </summary>
     static class Old
     {
         public static float Distance(Vector2 p, Vector2 eye) => Vector2.Distance(p, eye);
@@ -20,7 +23,8 @@ public class FoliageCullTests
         public static bool SphereVisible(Vector4[] planes, Vector3 centre, float radius)
         {
             foreach (var p in planes)
-                if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z)) return false;
+                if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z))
+                    return false;
             return true;
         }
     }
@@ -69,6 +73,7 @@ public class FoliageCullTests
             float range = 4000 + f * 300, band = range < 5000 ? Math.Min(range * 0.1f, range * 0.25f) : range * 0.1f;
             var groupRange = FoliageGroupRange.Of(range, band);
             FoliageCull.CullGroup(records, groupRange, new Vector2(eye.X, eye.Z), view.Set(planes), record: true, output);
+
             // The old loop, instance by instance, in order.
             int visible = 0, inRange = 0;
             for (int i = 0; i < records.Length; i++)
@@ -77,18 +82,24 @@ public class FoliageCullTests
                 float d = Old.Distance(new Vector2(r.Ground.X, r.Ground.Y), new Vector2(eye.X, eye.Z));
                 if (d >= range) continue;
                 float w = Old.Fade(range, band, d);
+
                 Assert.Equal(i, output.InRange[inRange]);
                 Assert.True(UlpDistance(w, output.InRangeFade[inRange]) <= 1);
+
                 inRange++;
                 var c = Vector3.Transform(centre, r.Transform);
                 if (!Old.SphereVisible(planes, c, radius * r.Ground.Z)) continue;
                 var expected = r.Transform;
                 var got = output.Visible[visible++];
+
                 Assert.Equal(expected.Translation, got.Translation);
                 Assert.True(UlpDistance(w >= 0.999f ? 2 : w, got.M14) <= 1);
+
                 got.M14 = 0;
+
                 Assert.Equal(expected, got);
             }
+
             Assert.Equal(inRange, output.InRangeCount);
             Assert.Equal(visible, output.Count);
             Assert.True(visible > 0 && visible < inRange, $"the view should cut the set: {visible} of {inRange}");
@@ -125,10 +136,13 @@ public class FoliageCullTests
                 float d = Vector2.Distance(new Vector2(w.M41, w.M43), eye);
                 bool mesh = mi < meshes.Length && meshes[mi].Translation == w.Translation;
                 bool impostor = ii < impostors.Length && impostors[ii].Translation == w.Translation;
+
                 Assert.True(mesh || impostor, $"an instance at {d} is in neither part");
+
                 if (mesh && impostor)
                 {
                     both++;
+
                     Assert.True(meshes[mi].M14 > 0 && meshes[mi].M14 < 1, $"in the band at {d}: mesh fade {meshes[mi].M14}");
                     Assert.Equal(-meshes[mi].M14, impostors[ii].M14);
                 }
@@ -139,11 +153,14 @@ public class FoliageCullTests
                 if (mesh) mi++;
                 if (impostor) ii++;
             }
+
             Assert.Equal(meshes.Length, mi);
             Assert.Equal(impostors.Length, ii);
             Assert.True(both > 0, "some instances should be in the band");
+
             // One part only: the other is not emitted, the asked one unchanged.
             FoliageCull.CullGroup(records, split, eye, all, record: false, output, FoliageCull.ImpostorPart);
+
             Assert.Equal(0, output.Count);
             Assert.Equal(impostors.Length, output.ImpostorCount);
         }
@@ -154,9 +171,11 @@ public class FoliageCullTests
         var records = new FoliageInstanceRecord[count];
         for (int i = 0; i < count; i++)
         {
-            var p = new Vector3(around.X + (float)(random.NextDouble() * 2 - 1) * spread, (float)(random.NextDouble() * 500), around.Y + (float)(random.NextDouble() * 2 - 1) * spread);
+            var p = new Vector3(around.X + (float)(random.NextDouble() * 2 - 1) * spread, (float)(random.NextDouble() * 500),
+                    around.Y + (float)(random.NextDouble() * 2 - 1) * spread);
             float scale = (float)(0.4 + random.NextDouble() * 2);
-            var t = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromYawPitchRoll((float)random.NextDouble() * 6.28f, 0.1f, 0) * Matrix4x4.CreateTranslation(p);
+            var t = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromYawPitchRoll((float)random.NextDouble() * 6.28f, 0.1f,
+                    0) * Matrix4x4.CreateTranslation(p);
             records[i] = new FoliageInstanceRecord { Transform = t, Ground = new Vector4(p.X, p.Z, scale, 0) };
         }
         return records;

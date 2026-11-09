@@ -5,73 +5,92 @@ using Meitou.Data.World;
 namespace Meitou.Game.Building;
 
 /// <summary>
-/// What the level editor changed in the level data (docs/game/level-editor.md): buildings it placed and level-data buildings it cleared, by key. <see cref="Save"/> writes them as
-/// the zone files of a mod's <c>leveldata/</c> folder; nothing of the original's files is touched.
+/// What the level editor changed in the level data (docs/game/level-editor.md): buildings it placed and level-data buildings it cleared, by key.
+/// <see cref="Save"/> writes them as the zone files of a mod's <c>leveldata/</c> folder; nothing of the original's files is touched.
 /// </summary>
 public sealed class LevelEdits
 {
-    /// <summary>The mod the editor saves into, a folder of <c>mods/</c> made by Meitou (Meitou's choice; the original saves into a mod picked from the active ones).</summary>
+    /// <summary>
+    /// The mod the editor saves into, a folder of <c>mods/</c> made by Meitou (Meitou's choice; the original saves into a mod picked from the active
+    /// ones).
+    /// </summary>
     public const string ModName = "Meitou Level Editor";
 
-    /// <summary>A file in the mod folder that marks it as Meitou's: a folder of that name without it is someone else's and is never written.</summary>
+    /// <summary>
+    /// A file in the mod folder that marks it as Meitou's: a folder of that name without it is someone else's and is never written.
+    /// </summary>
     public const string MarkerFile = "meitou-level-editor.txt";
 
-    readonly Dictionary<string, BuildingPlacement> added = new(StringComparer.Ordinal);
-    readonly Dictionary<string, BuildingPlacement> cleared = new(StringComparer.Ordinal);
-    readonly Dictionary<ZoneCoordinate, int> nextId = [];
+    readonly Dictionary<string, BuildingPlacement> _added = new(StringComparer.Ordinal);
+    readonly Dictionary<string, BuildingPlacement> _cleared = new(StringComparer.Ordinal);
+    readonly Dictionary<ZoneCoordinate, int> _nextId = [];
 
-    public IReadOnlyCollection<BuildingPlacement> Added => added.Values;
-    public IReadOnlyCollection<BuildingPlacement> Cleared => cleared.Values;
-    public bool IsCleared(string key) => cleared.ContainsKey(key);
-    public bool IsEmpty => added.Count == 0 && cleared.Count == 0;
+    public IReadOnlyCollection<BuildingPlacement> Added => _added.Values;
+    public IReadOnlyCollection<BuildingPlacement> Cleared => _cleared.Values;
+    public bool IsCleared(string key) => _cleared.ContainsKey(key);
+    public bool IsEmpty => _added.Count == 0 && _cleared.Count == 0;
 
     /// <summary>
-    /// A new building at <paramref name="position"/> (absolute height): its instance id is <c>&lt;n&gt;-zone&lt;x&gt;.&lt;z&gt;-INGAME</c>, n counting on from the zone's highest
-    /// <c>nextId</c> (the original's form for an id made in game, docs/formats/zones.md "Placement keys"), its state id the instance id with <c>-S23</c>.
+    /// A new building at <paramref name="position"/> (absolute height): its instance id is <c>&lt;n&gt;-zone&lt;x&gt;.&lt;z&gt;-INGAME</c>, n
+    /// counting on from the zone's highest <c>nextId</c> (the original's form for an id made in game, docs/formats/zones.md "Placement keys"), its
+    /// state id the instance id with <c>-S23</c>.
     /// </summary>
-    public BuildingPlacement Add(string record, Vector3 position, Quaternion rotation, float ground, WorldLevelData levels, string? interiorLayout = null, string? exteriorLayout = null)
+    public BuildingPlacement Add(string record, Vector3 position, Quaternion rotation, float ground, WorldLevelData levels, string? interiorLayout = null,
+        string? exteriorLayout = null)
     {
         var zone = WorldLayout.ZoneOf(position.X, position.Z);
-        int n = nextId.TryGetValue(zone, out int next) ? next : levels.ZoneInfo.TryGetValue(zone, out var info) ? info.NextId : 1;
+        int n = _nextId.TryGetValue(zone, out int next) ? next : levels.ZoneInfo.TryGetValue(zone, out var info) ? info.NextId : 1;
         string id;
         do id = $"{n++}-zone{zone.X}.{zone.Y}-INGAME";
         while (levels.Zones.TryGetValue(zone, out var db) && db.Records.Values.Any(r => r.Instances.ContainsKey(id)));
-        nextId[zone] = n;
-        var placement = new BuildingPlacement(zone, id, record, new Vector3(position.X, position.Y - ground, position.Z), rotation, StateIdOf(id), position.Y) { InteriorLayout = interiorLayout, ExteriorLayout = exteriorLayout };
-        added[placement.Key] = placement;
+        _nextId[zone] = n;
+        var at = new Vector3(position.X, position.Y - ground, position.Z);
+        var placement = new BuildingPlacement(zone, id, record, at, rotation, StateIdOf(id), position.Y)
+        {
+            InteriorLayout = interiorLayout,
+            ExteriorLayout = exteriorLayout,
+        };
+        _added[placement.Key] = placement;
         return placement;
     }
 
-    /// <summary>Clears a building: one placed here is forgotten (true), a level-data one is noted for the save (false). Null when it was cleared already.</summary>
+    /// <summary>
+    /// Clears a building: one placed here is forgotten (true), a level-data one is noted for the save (false). Null when it was cleared already.
+    /// </summary>
     public bool? Clear(BuildingPlacement placement)
     {
-        if (added.Remove(placement.Key)) return true;
-        return cleared.TryAdd(placement.Key, placement) ? false : null;
+        if (_added.Remove(placement.Key)) return true;
+        return _cleared.TryAdd(placement.Key, placement) ? false : null;
     }
 
     public void Forget()
     {
-        added.Clear();
-        cleared.Clear();
-        nextId.Clear();
+        _added.Clear();
+        _cleared.Clear();
+        _nextId.Clear();
     }
 
     /// <summary>
-    /// The zone file that adds <paramref name="placement"/> to the level data, as the saved mod holds it (<see cref="Save"/>): its state and its building-list entry. Merged into the
-    /// running world's level data with <see cref="WorldLevelData.ApplyEdit"/>, the building is then a level building like one read at load.
+    /// The zone file that adds <paramref name="placement"/> to the level data, as the saved mod holds it (<see cref="Save"/>): its state and its
+    /// building-list entry. Merged into the running world's level data with <see cref="WorldLevelData.ApplyEdit"/>, the building is then a level
+    /// building like one read at load.
     /// </summary>
     public static FcsFile PlacedFile(BuildingPlacement placement, string recordName) => EditFile(placement, recordName, cleared: false);
 
-    /// <summary>The zone file that clears <paramref name="placement"/>: an entry of its id with no target, which empties the instance of the layers before.</summary>
+    /// <summary>
+    /// The zone file that clears <paramref name="placement"/>: an entry of its id with no target, which empties the instance of the layers before.
+    /// </summary>
     public static FcsFile ClearedFile(BuildingPlacement placement) => EditFile(placement, "", cleared: true);
 
-    /// <summary>The zone file that puts a level building cleared earlier back (its state record was never taken out of the zone).</summary>
+    /// <summary>
+    /// The zone file that puts a level building cleared earlier back (its state record was never taken out of the zone).
+    /// </summary>
     public static FcsFile RestoredFile(BuildingPlacement placement) => EditFile(placement, "", cleared: false, withState: false);
 
     static FcsFile EditFile(BuildingPlacement p, string recordName, bool cleared, bool withState = true)
     {
         var data = new FcsFile { FileType = FcsFileType.V15 };
-        var list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Name = "0", StringId = WorldLevelData.BuildingListId };
+        var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Name = "0", StringId = WorldLevelData.BuildingListId };
         data.Records.Add(list);
         var instance = new FcsInstance { Id = p.InstanceId, Target = cleared ? "" : p.BuildingId, Position = p.Position, Rotation = p.Rotation };
         if (!cleared)
@@ -83,12 +102,17 @@ public sealed class LevelEdits
         return data;
     }
 
-    static string StateIdOf(string instance) => instance + "-S" + ((int)FcsRecordType.GAMESTATE_BUILDING).ToString("x", System.Globalization.CultureInfo.InvariantCulture);
+    static string StateIdOf(string instance)
+    {
+        string type = ((int)FcsRecordType.GamestateBuilding).ToString("x", System.Globalization.CultureInfo.InvariantCulture);
+        return instance + "-S" + type;
+    }
 
     /// <summary>
-    /// Writes one <c>zone.X.Y.zone</c> per zone with an edit into <paramref name="folder"/> (the mod's <c>leveldata/</c>), merged over what an earlier save left there: a placed building
-    /// is a <c>0-buildinglist</c> entry with its GAMESTATE_BUILDING state, a cleared one an entry of the same id with no target (the merge rule that removes an instance, docs/formats/zones.md).
-    /// The zone's slot list (<see cref="ZoneLevelInfo.Slots"/>) is written as the trailer, because a layer without one empties it. Returns the zones written.
+    /// Writes one <c>zone.X.Y.zone</c> per zone with an edit into <paramref name="folder"/> (the mod's <c>leveldata/</c>), merged over what an
+    /// earlier save left there: a placed building is a <c>0-buildinglist</c> entry with its GAMESTATE_BUILDING state, a cleared one an entry of the
+    /// same id with no target (the merge rule that removes an instance, docs/formats/zones.md). The zone's slot list
+    /// (<see cref="ZoneLevelInfo.Slots"/>) is written as the trailer, because a layer without one empties it. Returns the zones written.
     /// </summary>
     public IReadOnlyList<ZoneCoordinate> Save(string folder, WorldLevelData levels, Func<string, string> recordName)
     {
@@ -103,30 +127,35 @@ public sealed class LevelEdits
         return zones;
     }
 
-    /// <summary>The session's edits as one zone file per edited zone, in the saved mod's form but without an earlier file to merge over: what a game save stores (docs/game/level-editor.md "In the game save").</summary>
+    /// <summary>
+    /// The session's edits as one zone file per edited zone, in the saved mod's form but without an earlier file to merge over: what a game save
+    /// stores (docs/game/level-editor.md "In the game save").
+    /// </summary>
     public SortedDictionary<ZoneCoordinate, byte[]> Snapshot(WorldLevelData levels, Func<string, string> recordName)
     {
-        var files = new SortedDictionary<ZoneCoordinate, byte[]>(Comparer<ZoneCoordinate>.Create((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
+        var order = Comparer<ZoneCoordinate>.Create((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y));
+        var files = new SortedDictionary<ZoneCoordinate, byte[]>(order);
         foreach (var zone in EditedZones()) files[zone] = ZoneBytes(zone, new FcsFile { FileType = FcsFileType.V15 }, levels, recordName);
         return files;
     }
 
-    List<ZoneCoordinate> EditedZones() => [.. added.Values.Concat(cleared.Values).Select(p => p.Zone).Distinct().OrderBy(z => z.Y).ThenBy(z => z.X)];
+    List<ZoneCoordinate> EditedZones() =>
+        [.. _added.Values.Concat(_cleared.Values).Select(p => p.Zone).Distinct().OrderBy(z => z.Y).ThenBy(z => z.X)];
 
     byte[] ZoneBytes(ZoneCoordinate zone, FcsFile data, WorldLevelData levels, Func<string, string> recordName)
     {
         var list = data.Records.FirstOrDefault(r => r.StringId == WorldLevelData.BuildingListId);
         if (list is null)
         {
-            list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Name = "0", StringId = WorldLevelData.BuildingListId };
+            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Name = "0", StringId = WorldLevelData.BuildingListId };
             data.Records.Add(list);
         }
-        foreach (var p in cleared.Values.Where(p => p.Zone == zone))
+        foreach (var p in _cleared.Values.Where(p => p.Zone == zone))
         {
             Put(list, new FcsInstance { Id = p.InstanceId, Target = "", Position = p.Position, Rotation = p.Rotation });
             if (p.StateId is { } state) data.Records.RemoveAll(r => r.StringId == state);
         }
-        foreach (var p in added.Values.Where(p => p.Zone == zone))
+        foreach (var p in _added.Values.Where(p => p.Zone == zone))
         {
             var instance = new FcsInstance { Id = p.InstanceId, Target = p.BuildingId, Position = p.Position, Rotation = p.Rotation };
             instance.States.Add(p.StateId!);
@@ -138,7 +167,7 @@ public sealed class LevelEdits
         data.Records.Remove(list);
         data.Records.Add(list);
         foreach (var r in data.Records) if (r.ByteSize == 0) r.ByteSize = 1;   // the writer then puts the real size
-        int highest = nextId.GetValueOrDefault(zone);
+        int highest = _nextId.GetValueOrDefault(zone);
         data.NextId = Math.Max(data.NextId, Math.Max(highest, levels.ZoneInfo.TryGetValue(zone, out var info) ? info.NextId : 0));
         using var stream = new MemoryStream();
         FcsWriter.Write(data, stream);
@@ -157,8 +186,8 @@ public sealed class LevelEdits
     }
 
     /// <summary>
-    /// Reads a zone file made by <see cref="Snapshot"/>: the buildings it places (with the height from their state) and the keys of the level buildings it clears. A file that does not
-    /// read gives nothing.
+    /// Reads a zone file made by <see cref="Snapshot"/>: the buildings it places (with the height from their state) and the keys of the level
+    /// buildings it clears. A file that does not read gives nothing.
     /// </summary>
     public static (List<BuildingPlacement> Placed, List<string> ClearedKeys) ReadSnapshot(ZoneCoordinate zone, byte[] bytes)
     {
@@ -177,26 +206,40 @@ public sealed class LevelEdits
                     continue;
                 }
                 string? stateId = i.States.FirstOrDefault();
-                float? worldY = stateId is not null && states.TryGetValue(stateId, out var state) && state.Floats.TryGetValue("world Y pos", out float y) ? y : null;
-                string? interior = stateId is not null && states.TryGetValue(stateId, out var layoutState) && layoutState.Strings.TryGetValue("interior layout name", out string? il) && il.Length > 0 ? il : null;
-                string? exterior = stateId is not null && states.TryGetValue(stateId, out var layoutState2) && layoutState2.Strings.TryGetValue("exterior layout name", out string? el) && el.Length > 0 ? el : null;
-                placed.Add(new BuildingPlacement(zone, i.Id, i.Target, i.Position, i.Rotation, stateId, worldY) { InteriorLayout = interior, ExteriorLayout = exterior });
+                float? worldY = stateId is not null && states.TryGetValue(stateId, out var state)
+                    && state.Floats.TryGetValue("world Y pos", out float y) ? y : null;
+                string? interior = stateId is not null && states.TryGetValue(stateId, out var layoutState)
+                    && layoutState.Strings.TryGetValue("interior layout name", out string? il) && il.Length > 0 ? il : null;
+                string? exterior = stateId is not null && states.TryGetValue(stateId, out var layoutState2)
+                    && layoutState2.Strings.TryGetValue("exterior layout name", out string? el) && el.Length > 0 ? el : null;
+                placed.Add(new BuildingPlacement(zone, i.Id, i.Target, i.Position, i.Rotation, stateId, worldY)
+                {
+                    InteriorLayout = interior,
+                    ExteriorLayout = exterior,
+                });
             }
         return (placed, clearedKeys);
     }
 
-    /// <summary>Takes a building read from a game save back among the session's edits (the level data and the world are told by the host), so the next save and Save Mod hold it again.</summary>
+    /// <summary>
+    /// Takes a building read from a game save back among the session's edits (the level data and the world are told by the host), so the next save
+    /// and Save Mod hold it again.
+    /// </summary>
     public void Restore(BuildingPlacement placement)
     {
-        added[placement.Key] = placement;
+        _added[placement.Key] = placement;
         int dash = placement.InstanceId.IndexOf('-');
-        if (dash > 0 && int.TryParse(placement.InstanceId.AsSpan(0, dash), out int n)) nextId[placement.Zone] = Math.Max(nextId.GetValueOrDefault(placement.Zone), n + 1);
+        if (dash > 0 && int.TryParse(placement.InstanceId.AsSpan(0, dash), out int n))
+            _nextId[placement.Zone] = Math.Max(_nextId.GetValueOrDefault(placement.Zone), n + 1);
     }
 
-    /// <summary>The placed building's state: complete, not destroyed, its absolute height (the keys a level building's state carries; the full set a save writes is in docs/formats/zones.md).</summary>
+    /// <summary>
+    /// The placed building's state: complete, not destroyed, its absolute height (the keys a level building's state carries; the full set a save
+    /// writes is in docs/formats/zones.md).
+    /// </summary>
     static FcsRecord State(BuildingPlacement p, string name)
     {
-        var state = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Name = "0", StringId = p.StateId! };
+        var state = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Name = "0", StringId = p.StateId! };
         state.Bools["is complete"] = true;
         state.Bools["destroyed"] = false;
         state.Floats["world Y pos"] = p.WorldY ?? p.Position.Y;

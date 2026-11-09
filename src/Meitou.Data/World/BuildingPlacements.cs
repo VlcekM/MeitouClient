@@ -2,7 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Data.World;
 
-/// <summary>A building placement with what the world needs to place it: its record, its absolute position and whether its state says it is destroyed.</summary>
+/// <summary>
+/// A building placement with what the world needs to place it: its record, its absolute position and whether its state says it is destroyed.
+/// </summary>
 public readonly record struct ResolvedBuilding(BuildingPlacement Placement, GameRecord Record, Vector3 Position, bool Destroyed);
 
 /// <summary>
@@ -12,7 +14,9 @@ public readonly record struct ResolvedBuilding(BuildingPlacement Placement, Game
 /// </summary>
 public static class BuildingPlacements
 {
-    /// <summary>Overlay existing placements by world key, without duplicating buildings whose zone-local ids repeat.</summary>
+    /// <summary>
+    /// Overlay existing placements by world key, without duplicating buildings whose zone-local ids repeat.
+    /// </summary>
     public static IEnumerable<BuildingPlacement> Overlay(IEnumerable<BuildingPlacement> original, IReadOnlyList<BuildingPlacement> changes) =>
         changes.Count == 0 ? original : OverlayWith(original, changes);
 
@@ -23,7 +27,9 @@ public static class BuildingPlacements
         foreach (var p in changes) if (replacements.ContainsKey(p.Key)) yield return p;
     }
 
-    /// <summary>The resolved placement; null for an unplaced one (position 0) or one whose building record does not exist.</summary>
+    /// <summary>
+    /// The resolved placement; null for an unplaced one (position 0) or one whose building record does not exist.
+    /// </summary>
     public static ResolvedBuilding? Resolve(BuildingPlacement b, GameDatabase db, WorldLevelData levels, Func<double, double, float> terrainHeight)
     {
         if (b.Position == Vector3.Zero) return null;

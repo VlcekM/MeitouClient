@@ -1,10 +1,12 @@
-using Meitou.Audio;
+using Meitou.Game.Audio;
 using Meitou.Data.Audio;
 using Meitou.Data.World;
 
 namespace Meitou.Tests.Audio;
 
-/// <summary>The bank player and the ambience rules, mixed offline against the install's banks (docs/audio.md).</summary>
+/// <summary>
+/// The bank player and the ambience rules, mixed offline against the install's banks (docs/audio.md).
+/// </summary>
 [Slow]
 public class WwisePlayerInstallTests
 {
@@ -17,7 +19,9 @@ public class WwisePlayerInstallTests
         return new WwisePlayer(library, Path.Combine(install.DataDirectory, "audio"), AudioSystem.SampleRate);
     }
 
-    /// <summary>Mixes <paramref name="seconds"/> and returns the RMS of the last second.</summary>
+    /// <summary>
+    /// Mixes <paramref name="seconds"/> and returns the RMS of the last second.
+    /// </summary>
     static double Run(WwisePlayer player, double seconds)
     {
         var block = new float[AudioOutput.BlockFrames * 2];
@@ -99,7 +103,10 @@ public class WwisePlayerInstallTests
     {
         using var player = Player();
         var director = new AmbienceDirector(player);
-        var input = new AmbienceInput { Biome = Ambience.Desert, Hour = 12, Sunrise = 5, Sunset = 23, EyeAboveGround = 100, RealSeconds = 1 / 60.0 };
+        var input = new AmbienceInput
+        {
+            Biome = Ambience.Desert, Hour = 12, Sunrise = 5, Sunset = 23, EyeAboveGround = 100, RealSeconds = 1 / 60.0,
+        };
         director.Update(input);
         // The bank loads on a worker (the director asked for it; the same task comes back) and the event waits for it.
         await player.LoadBank("SFX_Amb_Desert").WaitAsync(TestContext.Current.CancellationToken);

@@ -4,15 +4,19 @@ using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Save;
 using Meitou.Simulation;
 using Meitou.Simulation.Ai;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Kidnap;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 using Meitou.Tests.Combat;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>A loaded slave's owner and master from the save's <c>slaver</c> handle (docs/formats/save.md "Slave state").</summary>
+/// <summary>
+/// A loaded slave's owner and master from the save's <c>slaver</c> handle (docs/formats/save.md "Slave state").
+/// </summary>
 public class SlaveMasterLoadTests
 {
     static readonly Vector3 Centre = new(2000, 150, 2000);
@@ -32,7 +36,9 @@ public class SlaveMasterLoadTests
         return (owner, slave);
     }
 
-    /// <summary>The character as loaded from <paramref name="source"/>: its save link and, read from its state record, its slave state.</summary>
+    /// <summary>
+    /// The character as loaded from <paramref name="source"/>: its save link and, read from its state record, its slave state.
+    /// </summary>
     static CharacterCold Loaded(SaveCharacter source, PopulationData data)
     {
         var cold = new Combatant { Name = source.Name }.MakeCold();
@@ -73,12 +79,14 @@ public class SlaveMasterLoadTests
         var slaveCold = Loaded(slave, data);
         Spawn(world, slaveCold, slaveSquad);
         world.RunTicks(41);
+
         Assert.Equal((-1, -1), (slaveCold.SlaveOwner, slaveCold.SlaveMaster));
         Assert.False(slaveCold.Save!.Slaver.IsNull);
 
         var ownerSquad = NewSquad(world, city);
         Spawn(world, Loaded(owner, data), ownerSquad);
         world.RunTicks(21);
+
         Assert.Equal((city, ownerSquad.Id), (slaveCold.SlaveOwner, slaveCold.SlaveMaster));
         Assert.True(slaveCold.Save.Slaver.IsNull);
 
@@ -90,6 +98,7 @@ public class SlaveMasterLoadTests
         var keyedSquad = NewSquad(world, city);
         Spawn(world, Loaded(keyedOwner, data), keyedSquad);
         world.RunTicks(21);
+
         Assert.Equal((player, keyedSquad.Id), (keyedCold.SlaveOwner, keyedCold.SlaveMaster));
 
         // A slave freed before its owner is found drops the handle.
@@ -98,13 +107,14 @@ public class SlaveMasterLoadTests
         Spawn(world, freedCold, slaveSquad);
         freedCold.SlaveState = 0;
         world.RunTicks(21);
+
         Assert.True(freedCold.Save!.Slaver.IsNull);
         Assert.Equal(-1, freedCold.SlaveMaster);
     }
 
     static AiGoal CageGoal(int start, int end)
     {
-        var task = new AiTask("t", "cage", TaskType.SLAVE_GET_IN_MY_MASTERS_CAGE, TaskPriority.NonUrgent, TaskTargetType.Specific, TaskEndEvent.Nothing);
+        var task = new AiTask("t", "cage", TaskType.SlaveGetInMyMastersCage, TaskPriority.NonUrgent, TaskTargetType.Specific, TaskEndEvent.Nothing);
         return new AiGoal(task, start, end, 1);
     }
 
@@ -116,8 +126,8 @@ public class SlaveMasterLoadTests
     }
 
     /// <summary>
-    /// A slave of <paramref name="faction"/> by <paramref name="cage"/>, its own squad running <paramref name="own"/>, obeying <paramref name="master"/>
-    /// (-1: none).
+    /// A slave of <paramref name="faction"/> by <paramref name="cage"/>, its own squad running <paramref name="own"/>, obeying
+    /// <paramref name="master"/> (-1: none).
     /// </summary>
     static CharacterId Slave(SimWorld world, int faction, Blackboard own, Fixture cage, int master)
     {

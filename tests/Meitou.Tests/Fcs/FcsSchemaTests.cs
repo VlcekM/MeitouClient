@@ -19,12 +19,14 @@ public class FcsSchemaTests
         var schema = FcsSchema.Load(Path.Combine(install!.Root, "fcs.def"));
         var keysByType = new Dictionary<int, HashSet<string>>();
         foreach (var file in new[] { "gamedata.base", "Newwworld.mod", "Dialogue.mod", "rebirth.mod" })
+        {
             foreach (var r in FcsReader.ReadFile(Path.Combine(install.DataDirectory, file)).Records)
             {
                 if (!keysByType.TryGetValue(r.Type, out var keys)) keysByType[r.Type] = keys = [];
-                keys.UnionWith(r.Bools.Keys.Concat(r.Floats.Keys).Concat(r.Ints.Keys).Concat(r.Vector3s.Keys)
-                    .Concat(r.Vector4s.Keys).Concat(r.Strings.Keys).Concat(r.Filenames.Keys).Concat(r.References.Keys));
+                keys.UnionWith(r.Bools.Keys.Concat(r.Floats.Keys).Concat(r.Ints.Keys).Concat(r.Vector3S.Keys)
+                    .Concat(r.Vector4S.Keys).Concat(r.Strings.Keys).Concat(r.Filenames.Keys).Concat(r.References.Keys));
             }
+        }
 
         foreach (var type in Enum.GetValues<FcsRecordType>())
         {

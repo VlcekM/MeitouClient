@@ -35,7 +35,7 @@ insert_final_newline = false
 [*.{cs,vb}]
 
 # Organize usings
-dotnet_separate_import_directive_groups = true
+dotnet_separate_import_directive_groups = false
 dotnet_sort_system_directives_first = true
 file_header_template = unset
 
@@ -79,7 +79,7 @@ dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
 dotnet_style_prefer_simplified_interpolation = true:suggestion
 
 # Field preferences
-dotnet_style_readonly_field = true:warning
+dotnet_style_readonly_field = true:suggestion
 
 # Parameter preferences
 dotnet_code_quality_unused_parameters = all:suggestion
@@ -118,7 +118,7 @@ csharp_style_conditional_delegate_call = true:suggestion
 
 # Modifier preferences
 csharp_prefer_static_anonymous_function = true:suggestion
-csharp_prefer_static_local_function = true:warning
+csharp_prefer_static_local_function = true:suggestion
 csharp_preferred_modifier_order = public,private,protected,internal,file,const,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:suggestion
 csharp_style_prefer_readonly_struct = true:suggestion
 csharp_style_prefer_readonly_struct_member = true:suggestion
@@ -135,6 +135,9 @@ csharp_style_prefer_top_level_statements = true:silent
 csharp_prefer_simple_default_expression = true:suggestion
 csharp_style_deconstructed_variable_declaration = true:suggestion
 csharp_style_implicit_object_creation_when_type_is_apparent = true:suggestion
+# ReSharper: target-typed new() also where the type is not visible on the line (its "Missing type specification")
+resharper_object_creation_when_type_evident = target_typed
+resharper_object_creation_when_type_not_evident = target_typed
 csharp_style_inlined_variable_declaration = true:suggestion
 csharp_style_prefer_index_operator = true:suggestion
 csharp_style_prefer_local_over_anonymous_function = true:suggestion
@@ -387,3 +390,7 @@ dotnet_naming_style.s_camelcase.required_suffix =
 dotnet_naming_style.s_camelcase.word_separator = 
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
+
+# Naming is enforced by the build (EnforceCodeStyleInBuild in Directory.Build.props): a name breaking the rules above is an error.
+[*.cs]
+dotnet_diagnostic.IDE1006.severity = warning

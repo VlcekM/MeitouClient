@@ -1,8 +1,11 @@
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
+
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The memory-pressure guard's state machine (<see cref="VramGuard"/>), driven by injected memory fractions and a fake clock.</summary>
+/// <summary>
+/// The memory-pressure guard's state machine (<see cref="VramGuard"/>), driven by injected memory fractions and a fake clock.
+/// </summary>
 public class VramGuardTests
 {
     const ulong Budget = 10_000;
@@ -15,7 +18,9 @@ public class VramGuardTests
 
         public Rig() => Guard = new VramGuard(() => ((ulong)(Fraction * Budget), Budget), () => Now, Log.Add);
 
-        /// <summary>Runs <paramref name="seconds"/> of frames (60 a second) at the given use.</summary>
+        /// <summary>
+        /// Runs <paramref name="seconds"/> of frames (60 a second) at the given use.
+        /// </summary>
         public void Run(double seconds, double fraction)
         {
             Fraction = fraction;
@@ -29,16 +34,21 @@ public class VramGuardTests
         var r = new Rig();
         r.Run(2, 0.5);
         r.Run(0.3, 0.92);
+
         Assert.True(r.Guard.Pressure);
         Assert.False(r.Guard.Streaming);
         Assert.Equal(1, r.Guard.Activations);
         Assert.Equal(VramGuard.StepDown, r.Guard.RangeScale, 4);   // the first step at once
         Assert.InRange(r.Guard.ExcessBytes, 1190, 1210);   // 92% less the low mark's 80% of 10,000
+
         r.Run(3, 0.92);
+
         Assert.True(r.Guard.RangeScale < 0.6f && r.Guard.RangeScale > 0.4f, $"scale {r.Guard.RangeScale}");
         Assert.Contains("streaming paused", r.Guard.Status);
+
         // Down to the floor and no further.
         r.Run(60, 0.95);
+
         Assert.Equal(VramGuard.MinScale, r.Guard.RangeScale, 4);
         Assert.Equal(VramGuard.MinScale, r.Guard.LowestScale, 4);
     }
@@ -49,24 +59,37 @@ public class VramGuardTests
         var r = new Rig();
         r.Run(2, 0.95);
         float clamped = r.Guard.RangeScale;
+
         Assert.True(clamped < 1f);
+
         // Between the low mark and the high mark pressure stays (hysteresis).
         r.Run(5, 0.85);
+
         Assert.True(r.Guard.Pressure);
+
         // Under the low mark streaming resumes, but the ranges stay while the use is above the recovery mark.
         r.Run(10, 0.78);
+
         Assert.False(r.Guard.Pressure);
         Assert.True(r.Guard.Streaming);
         Assert.Equal(0, r.Guard.ExcessBytes);
+
         float held = r.Guard.RangeScale;
+
         Assert.True(held <= clamped);
         Assert.Contains("recovering", r.Guard.Status);
+
         // Calm under 74%: four seconds of rest, then 4% a second.
         r.Run(3, 0.60);
+
         Assert.Equal(held, r.Guard.RangeScale);
+
         r.Run(3, 0.60);
+
         Assert.True(r.Guard.RangeScale > held);
+
         r.Run(120, 0.60);
+
         Assert.Equal(1f, r.Guard.RangeScale);
         Assert.False(r.Guard.Active);
     }

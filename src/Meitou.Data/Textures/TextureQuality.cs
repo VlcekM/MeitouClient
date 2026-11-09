@@ -8,14 +8,20 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public static class TextureQuality
 {
-    /// <summary>The value when the key is missing (High).</summary>
+    /// <summary>
+    /// The value when the key is missing (High).
+    /// </summary>
     public const int Default = 1;
     public const int Maximum = 4;
 
-    /// <summary>The level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly). The tools and tests that do not set it keep 0: nothing dropped.</summary>
+    /// <summary>
+    /// The level (0 Maximum, 1 High, 2 Medium, 3 Low, 4 Fugly). The tools and tests that do not set it keep 0: nothing dropped.
+    /// </summary>
     public static int Level { get; set; }
 
-    /// <summary>The options' labels, indexed by level.</summary>
+    /// <summary>
+    /// The options' labels, indexed by level.
+    /// </summary>
     public static readonly string[] Labels = ["Maximum", "High", "Medium", "Low", "Fugly"];
 
     /// <summary>
@@ -36,7 +42,9 @@ public static class TextureQuality
         return Math.Max(n, 0);
     }
 
-    /// <summary><see cref="LevelsToDrop(string, string, int)"/> at the current <see cref="Level"/>.</summary>
+    /// <summary>
+    /// <see cref="LevelsToDrop(string, string, int)"/> at the current <see cref="Level"/>.
+    /// </summary>
     public static int LevelsToDrop(string name, string group) => LevelsToDrop(name, group, Level);
 
     /// <summary>
@@ -52,7 +60,7 @@ public static class TextureQuality
     /// </summary>
     public static DdsFile DropTopMips(DdsFile dds, int levels)
     {
-        if (levels <= 0 || dds.FourCC is not { } fourCC || !fourCC.StartsWith("DXT", StringComparison.Ordinal) || dds.DxgiFormat is not null
+        if (levels <= 0 || dds.FourCc is not { } fourCc || !fourCc.StartsWith("DXT", StringComparison.Ordinal) || dds.DxgiFormat is not null
             || dds.IsCubemap || dds.IsVolume || dds.ImageCount != 1 || dds.Surfaces.Count < dds.MipCount) return dds;
         int drop = 0, w = dds.Width, h = dds.Height, mips = dds.MipCount;
         while (drop < levels && mips >= 2 && w >= 5 && h >= 5)
@@ -68,9 +76,21 @@ public static class TextureQuality
             surfaces.Add(dds.Surfaces[i] with { Level = i - drop });
         return new DdsFile
         {
-            Data = dds.Data, Width = w, Height = h, Depth = 1, MipCount = mips, ImageCount = 1, IsCubemap = false, IsVolume = false,
-            Format = dds.Format, FourCC = dds.FourCC, DxgiFormat = null, Masks = dds.Masks, HeaderFlags = dds.HeaderFlags,
-            HeaderSize = dds.HeaderSize, Surfaces = surfaces,
+            Data = dds.Data,
+            Width = w,
+            Height = h,
+            Depth = 1,
+            MipCount = mips,
+            ImageCount = 1,
+            IsCubemap = false,
+            IsVolume = false,
+            Format = dds.Format,
+            FourCc = dds.FourCc,
+            DxgiFormat = null,
+            Masks = dds.Masks,
+            HeaderFlags = dds.HeaderFlags,
+            HeaderSize = dds.HeaderSize,
+            Surfaces = surfaces,
         };
     }
 }

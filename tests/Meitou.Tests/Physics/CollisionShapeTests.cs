@@ -9,15 +9,21 @@ public class CollisionShapeTests
     public void Convex_hull_of_random_points_is_closed_and_outward()
     {
         var rng = new Random(5);
-        var pts = Enumerable.Range(0, 60).Select(_ => new Vector3((float)rng.NextDouble() * 10, (float)rng.NextDouble() * 4, (float)rng.NextDouble() * 6)).ToArray();
+        var pts = Enumerable.Range(0,
+                60).Select(_ => new Vector3((float)rng.NextDouble() * 10, (float)rng.NextDouble() * 4, (float)rng.NextDouble() * 6)).ToArray();
         var tris = ConvexHull.Triangles(pts);
+
         Assert.NotEmpty(tris);
+
         // Closed: every directed edge has its reverse once.
         var edges = new HashSet<(int, int)>();
         for (int t = 0; t < tris.Length; t += 3)
             foreach (var e in new[] { (tris[t], tris[t + 1]), (tris[t + 1], tris[t + 2]), (tris[t + 2], tris[t]) })
+
                 Assert.True(edges.Add(e));
+
         foreach (var (a, b) in edges) Assert.Contains((b, a), edges);
+
         // Every point is on the inner side of every face.
         for (int t = 0; t < tris.Length; t += 3)
         {
@@ -31,8 +37,11 @@ public class CollisionShapeTests
     {
         // Rows (0 1 0), (-1 0 0), (0 0 1): x' = y, y' = -x. Then translate by (1, 2, 3).
         var a = Pose.Parse("0 1 0  -1 0 0  0 0 1  1 2 3");
+
         Assert.Equal(new Vector3(4 + 1, -5 + 2, 3), a.Apply(new(5, 4, 0)));
+
         var shift = Pose.Parse("1 0 0  0 1 0  0 0 1  10 0 0");
+
         Assert.Equal(a.Apply(shift.Apply(new(1, 1, 1))), a.Compose(shift).Apply(new(1, 1, 1)));
         Assert.Equal(shift.Apply(a.Apply(new(1, 1, 1))), shift.Compose(a).Apply(new(1, 1, 1)));
     }
@@ -45,10 +54,17 @@ public class CollisionShapeTests
         bytes.AddRange("NXS\u0001MESH"u8.ToArray());
         void I(int v) => bytes.AddRange(BitConverter.GetBytes(v));
         void F(float v) => bytes.AddRange(BitConverter.GetBytes(v));
-        I(1); I(0x0A); F(0.001f); I(0xFF); F(0); I(3); I(1);
+        I(1);
+        I(0x0A);
+        F(0.001f);
+        I(0xFF);
+        F(0);
+        I(3);
+        I(1);
         foreach (var f in new float[] { 0, 0, 0, 1, 0, 0, 0, 1, 0 }) F(f);
         bytes.AddRange([0, 1, 2]);
         var mesh = CookedMeshReader.ReadTriangleMesh(bytes.ToArray());
+
         Assert.Equal(3, mesh.Vertices.Length);
         Assert.Equal([0, 1, 2], mesh.Indices);
     }

@@ -33,6 +33,7 @@ chars, required for Broken), source `web|discord|launcher`, reporter, trusted, g
 |---|---|---|
 | `GET /summary` | public | per row since the cutoff: distinct works / broken, trusted works, newest verdict, build, time |
 | `GET /proposals` | public | the status changes the rules suggest |
+| `GET /latest` | public | `{release, any}`: the newest full game release's version and the newest of any kind (nightlies included), no `v` |
 | `POST /reports` | public | `{row, verdict, build, platform, modded, note, source, turnstile?, log?}` |
 | `POST /discord` | Discord | interactions endpoint, Ed25519-signed |
 | `GET /reports?since&row&limit`, `GET /reports/{id}/log`, `DELETE /reports/{id}`, `POST /discord/register` | admin | `Authorization: Bearer REPORTS_ADMIN_TOKEN` |
@@ -46,13 +47,17 @@ the last `X-Forwarded-For` entry. Port 8080.
 ## Feedback
 
 The game's FEEDBACK button (top right in both UI modes, title included; the Interface setting "Feedback button" (`UserConfig.FeedbackButton`,
-default on) hides it during play except with the Esc menu open; `PlayerInterface.Feedback.cs`, `GameHost.Feedback.cs`,
+default on) hides it during play except with the Esc menu open; `FeedbackPanel`, `FeedbackCapture`,
 `FeedbackSender.cs`) opens a modal form: title (required, 100 chars), text (5000), and ticks for a screenshot, a navmesh screenshot, a save and log.txt (it
 can show folder names), and the player's Discord name (64 chars, ticked by default). The ticks and the name are kept in meitou.user.json
 (`feedback`) and saved on each send. The screenshot is the frame after the press, drawn without the game menu and what it opens, the form, the settings
 panel, debug overlays and pointer; PNG (rows filtered), scaled to at most 2560 × 1440 and then by 0.75 until under 4.5 MB: GitHub's image proxy refuses images over 5 MB (**Verified** on a feedback issue: a 7.7 MB screenshot showed "Content length exceeded"; that 1440p frame is 5.6 MB filtered, 3.3 MB at 1080p), so the service links a picture over 5,000,000 bytes (from older games) instead of embedding it. The save is made only when Send is pressed (only
 in a game), into a temporary folder, zipped and deleted after; over 95 MB zipped it is refused before anything is sent. The log is the whole
-log.txt, gzipped. The navmesh screenshot (off by default, in a game only) is made when Send is pressed: Meitou's debug view (`GameHost.NavOverlay.cs`) is switched on, the navmesh of the zones round the camera (ring 1) loads, and once the view is built one more frame is kept like the screenshot (form hidden), then the view goes back; it gives up after 10-30 s and the report goes without it. The camera's location (target, eye, yaw, pitch, boom, as text) is always sent from a game and shown as a "Camera:" line in the issue; outside a game there is none. **Observed** (built, not yet run against the live service). Also sent: `BuildVersion` tag and commit, platform (as the launcher), the load order's data files.
+log.txt, gzipped. Opening the form also asks the service's `GET /latest` for the newest game versions (`LatestRelease.cs`, the answer reused for 15
+minutes; the service reads GitHub's releases at most every 10 minutes, so players never meet GitHub's rate limit); a nightly compares with
+the newest release of any kind, a release with the newest full release (SemVer, `CodeModVersion`). When a
+newer one is out, the form says so in red and Send first asks the player to update and check there ("Send anyway" sends); offline, rate-limited or
+an untagged build, nothing is shown. The navmesh screenshot (off by default, in a game only) is made when Send is pressed: Meitou's debug view (`DebugOverlays`) is switched on, the navmesh of the zones round the camera (ring 1) loads, and once the view is built one more frame is kept like the screenshot (form hidden), then the view goes back; it gives up after 10-30 s and the report goes without it. The camera's location (target, eye, yaw, pitch, boom, as text) is always sent from a game and shown as a "Camera:" line in the issue; outside a game there is none. **Observed** (built, not yet run against the live service). Also sent: `BuildVersion` tag and commit, platform (as the launcher), the load order's data files.
 
 Service side (`Feedback.cs`, table `feedback`): `POST /feedback` (JSON form, which attachments follow) returns a 32-hex token; each
 attachment is `PUT /feedback/{token}/{screenshot|navmesh|save|log}` with the raw body (save at most 95,000,000 bytes, others 16 MiB: Cloudflare

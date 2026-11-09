@@ -8,12 +8,12 @@ namespace Meitou.Tests.Characters;
 
 public class CharacterGeneratorTests
 {
-    static GameDatabase? cached;
-    static readonly Lock gate = new();
+    static GameDatabase? s_cached;
+    static readonly Lock Gate = new();
 
     static GameDatabase Database(GameInstall install)
     {
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
+        lock (Gate) return s_cached ??= GameDatabase.Load(LoadOrder.BaseGame(install));
     }
 
     static string Limits(GameInstall install, string file) => Path.Combine(install.DataDirectory, "editor", file);
@@ -30,7 +30,9 @@ public class CharacterGeneratorTests
         var head = male.Ranges.Single(r => r.Name == "Head size");
         Assert.Equal(2, head.Variation); // random_variation 10 % of 20
         var cheeks = male.Ranges.Single(r => r.Name == "Cheekbones");
-        Assert.Equal(("wide_cheekbones", "narrow_cheekbones", 0, AppearanceCategory.Face), (cheeks.Target, cheeks.TargetOpposite, cheeks.Mid, cheeks.Category));
+        Assert.Equal(
+            ("wide_cheekbones", "narrow_cheekbones", 0, AppearanceCategory.Face),
+            (cheeks.Target, cheeks.TargetOpposite, cheeks.Mid, cheeks.Category));
         Assert.Equal(-1, cheeks.Group);
         var skin = male.Colours.Single(c => c.Name == "Skin Tone");
         Assert.Equal((6, 0, 50, 25), (skin.Colours.Count, skin.Min, skin.Max, skin.Mid));
@@ -52,7 +54,7 @@ public class CharacterGeneratorTests
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
         var db = Database(install);
-        var faction = CharacterAppearance.Find(db, "Dust Bandits", FcsRecordType.FACTION)!;
+        var faction = CharacterAppearance.Find(db, "Dust Bandits", FcsRecordType.Faction)!;
         var limits = AppearanceLimits.Read(Limits(install, "editor_data_human.xml"), false, 0.4f)!;
         var heads = new HashSet<string>();
         var skins = new HashSet<Vector3>();
@@ -94,8 +96,10 @@ public class CharacterGeneratorTests
 
             // The sliders of a race with editor_data_human.xml stay within its mid ± variation; the face is one of "morph num" faces.
             if (l.Race.GetPath("editor limits").EndsWith("editor_data_human.xml", StringComparison.OrdinalIgnoreCase))
+            {
                 foreach (var r in limits.Ranges.Where(r => r.Target is null && r.Category is AppearanceCategory.Face or AppearanceCategory.Body))
                     Assert.InRange(l.Appearance.Get(r.Name, float.NaN), r.Mid - r.Variation, r.Mid + r.Variation);
+            }
             Assert.InRange(l.MorphIndex, 0, 4);
             heads.Add(l.Appearance.HeadId!);
             skins.Add(l.Appearance.SkinTone!.Value);

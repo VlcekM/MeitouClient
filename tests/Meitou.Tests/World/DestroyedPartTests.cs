@@ -5,16 +5,19 @@ using Meitou.Tests.Gameplay;
 
 namespace Meitou.Tests.World;
 
-/// <summary>How a destroyed building lays out its parts (FUN_14055f6e0:144-176).</summary>
+/// <summary>
+/// How a destroyed building lays out its parts (FUN_14055f6e0:144-176).
+/// </summary>
 public class DestroyedPartTests
 {
-    static FcsRecord Part(string id, Action<FcsRecord> fill) => EconomyTests.Rec(id, FcsRecordType.BUILDING_PART, fill);
+    static FcsRecord Part(string id, Action<FcsRecord> fill) => EconomyTests.Rec(id, FcsRecordType.BuildingPart, fill);
 
     [Fact]
     public void Upper_parts_without_a_destroyed_mesh_stay_as_collision_only()
     {
         var db = EconomyTests.Db(
-            EconomyTests.Rec("b", FcsRecordType.BUILDING, r => r.References["parts"] = [new("ground", 0, 0, 0), new("upper", 0, 0, 0), new("stairs", 0, 0, 0), new("ruined", 0, 0, 0)]),
+            EconomyTests.Rec("b", FcsRecordType.Building,
+                    r => r.References["parts"] = [new("ground", 0, 0, 0), new("upper", 0, 0, 0), new("stairs", 0, 0, 0), new("ruined", 0, 0, 0)]),
             Part("ground", r => { r.Filenames["phs or mesh"] = "g.mesh"; r.Filenames["xml collision"] = "g.xml"; }),
             Part("upper", r => { r.Filenames["phs or mesh"] = "u.mesh"; r.Filenames["xml collision"] = "u.xml"; r.Ints["building floor"] = 1; }),
             Part("stairs", r => { r.Filenames["phs or mesh"] = "s.mesh"; r.Bools["is stairs"] = true; }),

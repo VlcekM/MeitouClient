@@ -6,14 +6,18 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Combat;
 
-/// <summary>Rules of the fight loop beyond the formulas: reach, staggering, orders, the animation stance, and the downed.</summary>
+/// <summary>
+/// Rules of the fight loop beyond the formulas: reach, staggering, orders, the animation stance, and the downed.
+/// </summary>
 public class FightRulesTests
 {
     [Fact]
     public void A_knocked_out_fighter_cannot_react_and_the_fight_ends()
     {
         using var world = NewWorld(6, 1, out var combat);
-        var (a, b) = Pair(world, new Combatant { Attack = 100, WeaponSkill = 100, Dexterity = 100, Strength = 100, Quality = 1 }, new Combatant { Defence = 0, Toughness = 1, Attack = 1, WeaponSkill = 1 });
+        var strong = new Combatant { Attack = 100, WeaponSkill = 100, Dexterity = 100, Strength = 100, Quality = 1 };
+        var weak = new Combatant { Defence = 0, Toughness = 1, Attack = 1, WeaponSkill = 1 };
+        var (a, b) = Pair(world, strong, weak);
         RunToEnd(world, a, b);
         Assert.True(Down(world, b));
         Assert.False(Down(world, a));
@@ -28,7 +32,9 @@ public class FightRulesTests
         Assert.False(world.Characters.Cold(a.Slot)!.InCombat);
     }
 
-    /// <summary>A, ordered onto B (its task target), with C attacking it from the other side; each of another faction, standing where it is put.</summary>
+    /// <summary>
+    /// A, ordered onto B (its task target), with C attacking it from the other side; each of another faction, standing where it is put.
+    /// </summary>
     static (CharacterId A, CharacterId B, CharacterId C) Three(SimWorld world, float far)
     {
         CharacterId Put(int faction, float x)
@@ -37,7 +43,9 @@ public class FightRulesTests
             cold.Faction = faction;
             return world.Characters.Spawn(new CharacterHot { Position = new Vector3(1000 + x, 150, 1000), Health = 100 }, cold, 0);
         }
-        CharacterId a = Put(0, 0), b = Put(1, far), c = Put(2, -14);
+        CharacterId a = Put(0, 0);
+        CharacterId b = Put(1, far);
+        CharacterId c = Put(2, -14);
         world.Commands.Enqueue(new AttackOrder([a], b) { Tick = world.Tick });
         world.Commands.Enqueue(new AttackOrder([c], a) { Tick = world.Tick });
         return (a, b, c);

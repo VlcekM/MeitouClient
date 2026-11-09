@@ -2,7 +2,10 @@ using Meitou.Simulation.Construction;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>The height difference below which a worker has arrived at a building (<c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>, docs/game/buildings-production.md "Work distance").</summary>
+/// <summary>
+/// The height difference below which a worker has arrived at a building (<c>AI::isWithinChoppingRange</c> <c>FUN_14059c6d0</c>,
+/// docs/game/buildings-production.md "Work distance").
+/// </summary>
 public class SiteReachTests
 {
     [Fact]

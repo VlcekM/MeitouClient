@@ -13,19 +13,21 @@ public sealed class WeatherAreas
     public const int Cells = 64;
     public const float CellSize = 4608f;
     public const int PixelsPerCell = 4;
-    /// <summary>The cell index of world coordinate 0 on each axis: <c>cell = floor(coord / 4608) + 32</c>.</summary>
+    /// <summary>
+    /// The cell index of world coordinate 0 on each axis: <c>cell = floor(coord / 4608) + 32</c>.
+    /// </summary>
     public const int Origin = 32;
     public const string RelativePath = "newland/land/areasmap.tga";
 
-    readonly int[] colours;
-    int[]? pixels;
-    int pixelSide;
+    readonly int[] _colours;
+    int[]? _pixels;
+    int _pixelSide;
 
     /// <param name="colours">Row-major (z, then x), 64 × 64 entries, 0xRRGGBB.</param>
     public WeatherAreas(int[] colours)
     {
         if (colours.Length != Cells * Cells) throw new ArgumentException($"Expected {Cells * Cells} cells.", nameof(colours));
-        this.colours = colours;
+        this._colours = colours;
     }
 
     /// <summary>
@@ -33,11 +35,14 @@ public sealed class WeatherAreas
     /// <c>resourceExists</c> then <c>Image::load</c> there, so an enabled mod's <c>newland/land/areasmap.tga</c> replaces it), else <c>data/newland/land/areasmap.tga</c>.
     /// </summary>
     public static WeatherAreas Load(GameInstall install) =>
-        FromTga(File.ReadAllBytes(Meitou.Data.Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps") ?? Path.Combine(install.DataDirectory, RelativePath)));
+        FromTga(File.ReadAllBytes(Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps") ?? Path.Combine(install.DataDirectory, RelativePath)));
 
     public static WeatherAreas FromTga(ReadOnlySpan<byte> tga) => FromImage(TgaReader.Read(tga));
 
-    /// <summary>Takes each cell's colour from the pixel at the cell's centre (<b>Observed</b>: 3051 of the 4096 4 × 4 blocks are one colour; the rest sit on region borders).</summary>
+    /// <summary>
+    /// Takes each cell's colour from the pixel at the cell's centre (<b>Observed</b>: 3051 of the 4096 4 × 4 blocks are one colour; the rest sit on
+    /// region borders).
+    /// </summary>
     public static WeatherAreas FromImage(RgbaImage image)
     {
         if (image.Width % Cells != 0 || image.Height % Cells != 0) throw new FormatException($"The areas map is {image.Width} x {image.Height}, not a multiple of {Cells}.");
@@ -52,13 +57,13 @@ public sealed class WeatherAreas
         var areas = new WeatherAreas(colours);
         if (image.Width == image.Height)
         {
-            areas.pixelSide = image.Width;
-            areas.pixels = new int[image.Width * image.Height];
+            areas._pixelSide = image.Width;
+            areas._pixels = new int[image.Width * image.Height];
             for (int z = 0; z < image.Height; z++)
                 for (int x = 0; x < image.Width; x++)
                 {
                     var (r, g, b, _) = image[x, z];
-                    areas.pixels[z * image.Width + x] = r << 16 | g << 8 | b;
+                    areas._pixels[z * image.Width + x] = r << 16 | g << 8 | b;
                 }
         }
         return areas;
@@ -70,13 +75,15 @@ public sealed class WeatherAreas
     /// </summary>
     public int? PixelColourAt(float x, float z)
     {
-        if (pixels is null) return null;
-        float span = Cells * CellSize / pixelSide;
-        int px = Math.Clamp((int)((x + MapOrigin) / span), 0, pixelSide - 1), pz = Math.Clamp((int)((z + MapOrigin) / span), 0, pixelSide - 1);
-        return pixels[pz * pixelSide + px];
+        if (_pixels is null) return null;
+        float span = Cells * CellSize / _pixelSide;
+        int px = Math.Clamp((int)((x + MapOrigin) / span), 0, _pixelSide - 1), pz = Math.Clamp((int)((z + MapOrigin) / span), 0, _pixelSide - 1);
+        return _pixels[pz * _pixelSide + px];
     }
 
-    /// <summary>The cell holding a world position (may lie outside 0..63 for positions off the map).</summary>
+    /// <summary>
+    /// The cell holding a world position (may lie outside 0..63 for positions off the map).
+    /// </summary>
     public static (int X, int Z) CellOf(float x, float z) => ((int)MathF.Floor(x / CellSize) + Origin, (int)MathF.Floor(z / CellSize) + Origin);
 
     /// <summary>
@@ -92,14 +99,20 @@ public sealed class WeatherAreas
 
     public static bool InMap(int cx, int cz) => (uint)cx < Cells && (uint)cz < Cells;
 
-    /// <summary>The colour (0xRRGGBB) of a cell, or -1 outside the map.</summary>
-    public int ColourOf(int cx, int cz) => InMap(cx, cz) ? colours[cz * Cells + cx] : -1;
+    /// <summary>
+    /// The colour (0xRRGGBB) of a cell, or -1 outside the map.
+    /// </summary>
+    public int ColourOf(int cx, int cz) => InMap(cx, cz) ? _colours[cz * Cells + cx] : -1;
 
-    /// <summary>The cell's rectangle in world units: minimum X, minimum Z, maximum X, maximum Z.</summary>
+    /// <summary>
+    /// The cell's rectangle in world units: minimum X, minimum Z, maximum X, maximum Z.
+    /// </summary>
     public static (float MinX, float MinZ, float MaxX, float MaxZ) CellRect(int cx, int cz) =>
         ((cx - Origin) * CellSize, (cz - Origin) * CellSize, (cx - Origin + 1) * CellSize, (cz - Origin + 1) * CellSize);
 
-    /// <summary>The squared distance in the ground plane from a position to a cell's rectangle (0 inside it).</summary>
+    /// <summary>
+    /// The squared distance in the ground plane from a position to a cell's rectangle (0 inside it).
+    /// </summary>
     public static float DistanceSquaredToCell(int cx, int cz, float x, float z)
     {
         var (minX, minZ, maxX, maxZ) = CellRect(cx, cz);
@@ -107,8 +120,10 @@ public sealed class WeatherAreas
         return dx * dx + dz * dz;
     }
 
-    /// <summary>The region of a cell; cells outside the map and colours without a BIOME_GROUP are in <see cref="WeatherData.None"/>.</summary>
-    public RegionDef RegionOf(WeatherData data, int cx, int cz) => InMap(cx, cz) ? data.RegionOfColour(colours[cz * Cells + cx]) : data.None;
+    /// <summary>
+    /// The region of a cell; cells outside the map and colours without a BIOME_GROUP are in <see cref="WeatherData.None"/>.
+    /// </summary>
+    public RegionDef RegionOf(WeatherData data, int cx, int cz) => InMap(cx, cz) ? data.RegionOfColour(_colours[cz * Cells + cx]) : data.None;
 
     public RegionDef RegionAt(WeatherData data, float x, float z)
     {

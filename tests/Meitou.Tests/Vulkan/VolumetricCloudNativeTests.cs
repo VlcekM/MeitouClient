@@ -1,8 +1,10 @@
 using System.Numerics;
-using Meitou.Rendering;
 using Meitou.Data.World;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Sky;
 using Vk = Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;
@@ -26,7 +28,7 @@ public class VolumetricCloudNativeTests
                     sky.CloudDensityInput = 0.5f;
                     sky.Eye = new Vector3(-50000, 2000, 3000);
                     sky.Prepare(Vector3.Normalize(new Vector3(0.3f, 0.8f, 0.2f)), sky.Eye.Y, 50000);
-                    using var target = ctx.CreateTexture(new TextureDesc(Meitou.Rendering.Gpu.InternalFormat.Rgba8, 96, 64,
+                    using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, 96, 64,
                         Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "cloud test picture"));
                     var view = Matrix4x4.CreateLookAt(Vector3.Zero, Vector3.Normalize(new Vector3(0, 0.4f, -1)), Vector3.UnitY);
                     var vp = view * DepthConvention.Perspective(1.0f, 1.5f, 1, 1000);
@@ -41,7 +43,9 @@ public class VolumetricCloudNativeTests
                         cmd.BeginRendering(targets.Rendering);
                         ctx.BeginHostPass((CommandList)cmd, targets, DrawState.Scene(targets.Formats));
                         sky.Draw(vp, SkyColours.For(Vector3.UnitY));
-                        ctx.EndHostPass(cmd); cmd.EndRendering(); ctx.EndNative(cmd);
+                        ctx.EndHostPass(cmd);
+                        cmd.EndRendering();
+                        ctx.EndNative(cmd);
                         ctx.Finish();
                     }
                     Draw(96, 64, false);
@@ -49,7 +53,8 @@ public class VolumetricCloudNativeTests
                     sky.CloudDensityInput = 0;
                     Draw(96, 64, false);
                     byte[] clear = ctx.ReadBack(target, 4);
-                    Assert.True(cloudy.Where((b, i) => Math.Abs(b - clear[i]) > 4).Count() > 100, "The volume must change the rendered sky without game assets");
+                    Assert.True(cloudy.Where((b, i) => Math.Abs(b - clear[i]) > 4).Count() > 100,
+                            "The volume must change the rendered sky without game assets");
                     // --clouds intentionally overrides weather; clearing it restores weather control immediately.
                     sky.CloudCoverage = 0.5f;
                     Draw(96, 64, false);
@@ -60,11 +65,14 @@ public class VolumetricCloudNativeTests
                     Assert.Equal(clear, ctx.ReadBack(target, 4));
                     sky.CloudDensityInput = null;
                     sky.Weather = SkyWeather.Default with { Name = "overcast", CloudDensity = 0.9f };
-                    Draw(80, 48, true); Draw(80, 48, true);
-                    Draw(120, 80, false); Draw(120, 80, false);
+                    Draw(80, 48, true);
+                    Draw(80, 48, true);
+                    Draw(120, 80, false);
+                    Draw(120, 80, false);
                     sky.LitClouds = false;
                     Draw(120, 80, false);
-                    sky.LitClouds = true; sky.CloudShadows = false;
+                    sky.LitClouds = true;
+                    sky.CloudShadows = false;
                     Draw(96, 64, false);
                     Assert.Contains(ctx.ReadBack(target, 4), b => b > 0);
 
@@ -101,8 +109,11 @@ public class VolumetricCloudNativeTests
                     referenceCmd.BeginRendering(referenceTargets.Rendering);
                     referenceState.Record(referenceCmd, referenceTargets);
                     referenceCmd.BindPipeline(segment.Get(referenceState, referenceTargets.Formats, null));
-                    reference.Flush(referenceCmd); referenceCmd.Draw(3); referenceCmd.EndRendering();
-                    ctx.EndNative(referenceCmd); ctx.Finish();
+                    reference.Flush(referenceCmd);
+                    referenceCmd.Draw(3);
+                    referenceCmd.EndRendering();
+                    ctx.EndNative(referenceCmd);
+                    ctx.Finish();
                     byte[] expected = ctx.ReadBack(target, 4);
                     Assert.True(horizon.Where((b, i) => Math.Abs(b - expected[i]) > 1).Count() == 0,
                         "Volumetric horizon differs from fully hazed terrain");

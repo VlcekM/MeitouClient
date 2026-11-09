@@ -2,7 +2,9 @@ using System.Text;
 
 namespace Meitou.Content;
 
-/// <summary>A save slot the launcher can take a mod list from: a folder holding <c>quick.save</c>, under the root labelled <paramref name="Source"/>.</summary>
+/// <summary>
+/// A save slot the launcher can take a mod list from: a folder holding <c>quick.save</c>, under the root labelled <paramref name="Source"/>.
+/// </summary>
 public sealed record SaveModSlot(string Name, string Folder, DateTime ModifiedUtc, string Source);
 
 /// <summary>
@@ -15,7 +17,9 @@ public static class SaveModList
     const int CameraType = 56;
     const int MaxCount = 64 * 1024 * 1024;
 
-    /// <summary>The folders the game lists saves from: Meitou's own, the install's <c>save</c> folder and the original's per-user one.</summary>
+    /// <summary>
+    /// The folders the game lists saves from: Meitou's own, the install's <c>save</c> folder and the original's per-user one.
+    /// </summary>
     public static IReadOnlyList<(string Folder, string Label)> Roots(GameInstall install)
     {
         string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -23,7 +27,9 @@ public static class SaveModList
             (Path.Combine(local, "kenshi", "save"), "Kenshi user")];
     }
 
-    /// <summary>The save slots under <paramref name="roots"/>, newest first; a folder found twice is listed once.</summary>
+    /// <summary>
+    /// The save slots under <paramref name="roots"/>, newest first; a folder found twice is listed once.
+    /// </summary>
     public static IReadOnlyList<SaveModSlot> Scan(IEnumerable<(string Folder, string Label)> roots)
     {
         var found = new Dictionary<string, SaveModSlot>(StringComparer.OrdinalIgnoreCase);

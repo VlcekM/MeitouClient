@@ -3,7 +3,9 @@ using System.Text;
 
 namespace Meitou.Data.Fcs;
 
-/// <summary>Reads <see cref="FcsFile"/>s. Layout: docs/formats/fcs-mod.md.</summary>
+/// <summary>
+/// Reads <see cref="FcsFile"/>s. Layout: docs/formats/fcs-mod.md.
+/// </summary>
 public static class FcsReader
 {
     /// <summary>
@@ -24,7 +26,8 @@ public static class FcsReader
 
     public static FcsFile Read(Stream stream) => Read(stream, lossless: false);
 
-    /// <param name="lossless">Decode strings with <see cref="LosslessUtf8"/> (bytes that are not UTF-8 are kept) instead of failing on them; save files need it.</param>
+    /// <param name="lossless">Decode strings with <see cref="LosslessUtf8"/> (bytes that are not UTF-8 are kept) instead of failing on them; save
+    /// files need it.</param>
     public static FcsFile Read(Stream stream, bool lossless)
     {
         using var r = new FcsBinaryReader(stream, lossless);
@@ -107,8 +110,8 @@ public static class FcsReader
         });
         ReadMap(r, record.Floats, r => r.ReadSingle());
         ReadMap(r, record.Ints, r => r.ReadInt32());
-        ReadMap(r, record.Vector3s, r => new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
-        ReadMap(r, record.Vector4s, ReadVector4);
+        ReadMap(r, record.Vector3S, r => new Vector3(r.ReadSingle(), r.ReadSingle(), r.ReadSingle()));
+        ReadMap(r, record.Vector4S, ReadVector4);
         ReadMap(r, record.Strings, ReadString);
         ReadMap(r, record.Filenames, ReadString);
 
@@ -143,7 +146,8 @@ public static class FcsReader
     static void ReadMap<T>(BinaryReader r, OrderedDictionary<string, T> map, Func<BinaryReader, T> readValue)
     {
         int count = ReadCount(r);
-        map.EnsureCapacity(count);   // grown once: a heavy mod list's hundreds of thousands of maps grew by doubling, garbage that held the loading up in collections
+        // grown once: a heavy mod list's hundreds of thousands of maps grew by doubling, garbage that held the loading up in collections
+        map.EnsureCapacity(count);
         for (int n = count; n > 0; n--)
         {
             long at = r.BaseStream.Position;
@@ -166,11 +170,16 @@ public static class FcsReader
     {
         int length = ReadCount(r);
         if (length == 0) return "";
-        // Most are short keys and names: read on the stack rather than into an array each (BinaryReader reads no further than asked, so the stream is where it left off).
+
+        // Most are short keys and names: read on the stack rather than into an array each (BinaryReader reads no further than asked, so the stream is
+        // where it left off).
         Span<byte> bytes = length <= 1024 ? stackalloc byte[length] : new byte[length];
         r.BaseStream.ReadExactly(bytes);
         if (r is FcsBinaryReader { Lossless: true }) return LosslessUtf8.GetString(bytes);
-        try { return Encoding.GetString(bytes); }
+        try
+        {
+            return Encoding.GetString(bytes);
+        }
         catch (DecoderFallbackException e) { throw new FcsFormatException("String is not valid UTF-8.", r.BaseStream.Position - length, e); }
     }
 

@@ -2,7 +2,9 @@ using StbImageSharp;
 
 namespace Meitou.Data.Textures;
 
-/// <summary>A decoded texture: one or more mip levels (largest first) of the first image, as RGBA8.</summary>
+/// <summary>
+/// A decoded texture: one or more mip levels (largest first) of the first image, as RGBA8.
+/// </summary>
 /// <param name="Source">The DDS file when the texture came from one (for its format and other images).</param>
 public sealed record LoadedTexture(IReadOnlyList<RgbaImage> Levels, DdsFile? Source)
 {
@@ -18,7 +20,7 @@ public static class TextureLoader
 {
     public static LoadedTexture LoadFile(string path, bool allMips = true)
     {
-        var bytes = File.ReadAllBytes(Meitou.Content.GameFiles.Resolve(path));
+        var bytes = File.ReadAllBytes(Content.GameFiles.Resolve(path));
         if (bytes.Length >= 4 && BitConverter.ToUInt32(bytes, 0) == DdsReader.Magic)
             return FromDds(DdsReader.Read(bytes), allMips);
         return new LoadedTexture([LoadImage(bytes)], null);
@@ -32,7 +34,9 @@ public static class TextureLoader
         return new LoadedTexture(levels, dds);
     }
 
-    /// <summary>Decodes a PNG / TGA / JPEG / BMP image to RGBA8, rows top to bottom.</summary>
+    /// <summary>
+    /// Decodes a PNG / TGA / JPEG / BMP image to RGBA8, rows top to bottom.
+    /// </summary>
     public static RgbaImage LoadImage(byte[] bytes)
     {
         StbImage.stbi_set_flip_vertically_on_load(0);

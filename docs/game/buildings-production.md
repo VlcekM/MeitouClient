@@ -151,6 +151,13 @@ score and the 0.75 falloff spread them). Work distance: [below](#work-distance).
 100 copper rocks, 140 hybrid stone mines. Which tasks reach their building through `isAtLocation` is **Observed** only through
 the goal conditions (the call is virtual). Meitou applies the height limit above wherever it applies the reach range of the same function: builders, fetchers, machine operators, haulers and corpse carriers (`SiteReach.AtHeight`; rocks and turret posts keep their own arrival test).
 
+Meitou's NPC town workers (189, 190, and a player slave's work, `AiSystem.AtWork`): within the building functionality's `use range` (30
+without one) of the building's position, doubled once its velocity is nearly 0, so a worker held off by the rock short of the reach has arrived
+(standing in for the touching test; the usage nodes of `getPositionMarker` are not read: engine choice). **Observed** (Meitou, Rebirth, before
+this rule: a fixed 30): every worker that reached its mine stood 57 to 71 units from the mine's position with its walk never over, and never mined;
+with it (the mines' `use range` 40) all 15 that reached their rock work at its clip. They still gather at the same point of each rock, where the
+original's spread round it (the usage nodes).
+
 Meitou (`SiteReach`): builders 40 (walls 60), operators and storage fetches the `use range`, doubled once stopped, measured
 to the building's footprint hull (engine choice standing in for touching; a building without collision uses its parts' bounds
 hull) or, unknown, its position. A rock's operator has arrived inside its mesh's footprint (the convex hull of its vertices

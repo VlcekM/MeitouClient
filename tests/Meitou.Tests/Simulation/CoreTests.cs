@@ -15,6 +15,7 @@ public class CoreTests
         {
             var hits = new int[100 + round];
             pool.ForEach(hits.Length, i => Interlocked.Increment(ref hits[i]));
+
             Assert.All(hits, h => Assert.Equal(1, h));
         }
         pool.ForEach(0, _ => throw new InvalidOperationException());
@@ -27,18 +28,24 @@ public class CoreTests
         var a = t.Spawn(new CharacterHot(), new CharacterCold(), 0);
         var b = t.Spawn(new CharacterHot(), new CharacterCold(), 0);
         var c = t.Spawn(new CharacterHot(), new CharacterCold(), 0);   // grows past the first capacity
+
         Assert.Equal([0, 1, 2], new[] { a.Slot, b.Slot, c.Slot });
         Assert.Equal(3, t.Count);
         Assert.True(t.Remove(a));
         Assert.True(t.Remove(c));
         Assert.False(t.Remove(a));
         Assert.False(t.IsAlive(a));
+
         var d = t.Spawn(new CharacterHot(), new CharacterCold(), 0);
+
         Assert.Equal(2, d.Slot);
         Assert.Equal(1, d.Generation);
+
         var e = t.Spawn(new CharacterHot(), new CharacterCold(), 0);
+
         Assert.Equal(0, e.Slot);
         Assert.Equal(1, e.Generation);
+
         // The old id names nothing, though its slot is alive again.
         Assert.False(t.IsAlive(a));
         Assert.True(t.IsAlive(e));
@@ -66,17 +73,19 @@ public class CoreTests
             list.Sort(EffectBuffer.Order);
             return list;
         }
+
         // Sources emit together, so the cuts fall between sources: (5,1) | (2,1),(2,1) | rest, or all in one.
         var a = Collect([1, 3]);
         var b = Collect([]);
+
         Assert.Equal(a.Select(e => (e.Target, e.Source, e.Sequence)), b.Select(e => (e.Target, e.Source, e.Sequence)));
         Assert.Equal([(0, 9, 0), (1, 2, 0), (1, 2, 1), (1, 5, 0), (4, 3, 0)], a.Select(e => (e.Target, e.Source, e.Sequence)));
     }
 
     /// <summary>
-    /// Character snapshots are reused, a set of three in turn (docs/simulation.md "Snapshots"). A slot's object that held a selected, knocked-out player character and is
-    /// refilled for a plain NPC matches the same NPC's in a world where the slot held a plain one; a paused publish leaves the previous snapshot's characters alone.
-    /// Catches a property the fill forgets to write, and the ring writing into the shown pair.
+    /// Character snapshots are reused, a set of three in turn (docs/simulation.md "Snapshots"). A slot's object that held a selected, knocked-out
+    /// player character and is refilled for a plain NPC matches the same NPC's in a world where the slot held a plain one; a paused publish leaves
+    /// the previous snapshot's characters alone. Catches a property the fill forgets to write, and the ring writing into the shown pair.
     /// </summary>
     [Fact]
     public void A_reused_character_snapshot_carries_nothing_over_and_a_paused_publish_keeps_the_previous()
@@ -86,7 +95,7 @@ public class CoreTests
             var world = new Meitou.Simulation.World(new WorldSettings { Seed = 3 }, new OpenGroundWalkability(SyntheticTown.Ground));
             CharacterId Add(Vector3 at, Action<CharacterCold> shape)
             {
-                var cold = new Meitou.Tests.Combat.Combatant().MakeCold();
+                var cold = new Combat.Combatant().MakeCold();
                 shape(cold);
                 return world.Characters.Spawn(new CharacterHot { Position = at }, cold, 0);
             }
@@ -102,7 +111,9 @@ public class CoreTests
             world.RunTicks(3);   // every buffer of the set holds the first one
             world.Characters.Remove(first);
             var npc = Add(new(180, 300, 100), c => (c.Faction, c.Name) = (2, "npc"));
+
             Assert.Equal(first.Slot, npc.Slot);
+
             world.RunTicks(3);
             return (world.Snapshot.Characters.Single(c => c.Id == npc), world);
         }
@@ -110,6 +121,7 @@ public class CoreTests
         using var worldA = a;
         var (expected, b) = Npc(heavy: false);
         using var worldB = b;
+
         Assert.Equivalent(expected, reused, strict: true);
 
         // Paused publishes: the previous snapshot keeps its characters while the current one moves on.
@@ -121,6 +133,7 @@ public class CoreTests
             a.Commands.Enqueue(new InspectCommand(CharacterId.None) { Tick = a.Tick });   // a paused publish needs a command due
             a.ApplyPausedInterfaceCommands();
         }
+
         Assert.Same(previous, a.PreviousSnapshot);
         Assert.Equal("own", own.Name);
         Assert.Equal("renamed", a.Snapshot.Characters.Single(x => x.Id == own.Id).Name);

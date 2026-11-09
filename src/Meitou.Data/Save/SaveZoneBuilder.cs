@@ -14,7 +14,9 @@ namespace Meitou.Data.Save;
 /// </summary>
 public static partial class SaveZoneBuilder
 {
-    /// <summary>The <c>version</c> of every saved building state (<b>Observed</b>: 270 in all 36561 states of the owner's saves).</summary>
+    /// <summary>
+    /// The <c>version</c> of every saved building state (<b>Observed</b>: 270 in all 36561 states of the owner's saves).
+    /// </summary>
     public const int StateVersion = 270;
 
     /// <summary>
@@ -26,11 +28,11 @@ public static partial class SaveZoneBuilder
         if (levelZone?.Find(WorldLevelData.BuildingListId) is not { } levelList) return null;
         var file = new SaveFile();
         int nextId = Math.Max(info?.NextId ?? 0, 0);
-        var list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Name = "0", StringId = WorldLevelData.BuildingListId };
+        var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Name = "0", StringId = WorldLevelData.BuildingListId };
 
         // The handles of the zone's level buildings: an `internalbuildings-<k>` handle is kept only when it names one of them (most name generated furniture that is not written).
         var handles = new HashSet<(int I, int S)>();
-        foreach (var s in levelZone.OfType(FcsRecordType.GAMESTATE_BUILDING))
+        foreach (var s in levelZone.OfType(FcsRecordType.GamestateBuilding))
             if (s.Ints.ContainsKey("handleI")) handles.Add((s.GetInt("handleI"), s.GetInt("handleS")));
 
         var slots = new SortedSet<int>(info?.Slots ?? []);
@@ -42,14 +44,14 @@ public static partial class SaveZoneBuilder
                 list.Instances.Add(new FcsInstance { Id = id, Target = "" });
                 continue;
             }
-            if (gameData.Find(instance.Target) is not { Type: FcsRecordType.BUILDING } building) continue;
+            if (gameData.Find(instance.Target) is not { Type: FcsRecordType.Building } building) continue;
             var entry = new FcsInstance { Id = id, Target = instance.Target, Position = instance.Position, Rotation = instance.Rotation };
             string? stateId = null;
             foreach (var sid in instance.States.Distinct(StringComparer.Ordinal))
             {
                 var state = levelZone.Find(sid);
-                if (state?.Type == FcsRecordType.INVENTORY_STATE && state.Instances.Count > 0) entry.States.Add(sid);
-                else if (state?.Type == FcsRecordType.GAMESTATE_BUILDING && stateId is null) stateId = sid;
+                if (state?.Type == FcsRecordType.InventoryState && state.Instances.Count > 0) entry.States.Add(sid);
+                else if (state?.Type == FcsRecordType.GamestateBuilding && stateId is null) stateId = sid;
             }
             if (stateId is not null && written.Add(stateId))
             {
@@ -77,7 +79,7 @@ public static partial class SaveZoneBuilder
     /// </summary>
     public static FcsRecord StateFromLevel(GameRecord level, GameRecord building, IReadOnlySet<(int I, int S)> zoneHandles, int id)
     {
-        var r = new FcsRecord { Type = (int)FcsRecordType.GAMESTATE_BUILDING, Id = id, Name = "0", StringId = level.StringId };
+        var r = new FcsRecord { Type = (int)FcsRecordType.GamestateBuilding, Id = id, Name = "0", StringId = level.StringId };
         foreach (var (k, v) in level.Bools)
             if (k is not ("is public night" or "is outside")) r.Bools[k] = v;
         foreach (var (k, v) in level.Floats) r.Floats[k] = v;
@@ -93,8 +95,8 @@ public static partial class SaveZoneBuilder
             if (!zoneHandles.Contains((level.GetInt(p + "I"), level.GetInt(p + "S")))) continue;
             new Hand(level.GetInt(p + "TYPE"), level.GetInt(p + "C"), level.GetInt(p + "CS"), level.GetInt(p + "I"), level.GetInt(p + "S")).Write(r, $"internalbuildings-{kept++}");
         }
-        foreach (var (k, v) in level.Vector3s) r.Vector3s[k] = v;
-        foreach (var (k, v) in level.Vector4s) r.Vector4s[k] = v;
+        foreach (var (k, v) in level.Vector3S) r.Vector3S[k] = v;
+        foreach (var (k, v) in level.Vector4S) r.Vector4S[k] = v;
         foreach (var (k, v) in level.Strings) r.Strings[k] = v;
 
         if (!r.Ints.ContainsKey("flags"))

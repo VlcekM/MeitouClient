@@ -12,10 +12,14 @@ namespace Meitou.Data.Save;
 /// </summary>
 public static class SaveWeather
 {
-    /// <summary>Game-speed seconds per game minute (1200/11 s per game hour, docs/game/game-loop.md): <c>_w_wi_time</c> counts them.</summary>
+    /// <summary>
+    /// Game-speed seconds per game minute (1200/11 s per game hour, docs/game/game-loop.md): <c>_w_wi_time</c> counts them.
+    /// </summary>
     public const double SecondsPerGameMinute = 20.0 / 11.0;
 
-    /// <summary>The region id → key prefix entries of a BIOMES record (a prefix is an integer; the region's own keys start with it and '_').</summary>
+    /// <summary>
+    /// The region id → key prefix entries of a BIOMES record (a prefix is an integer; the region's own keys start with it and '_').
+    /// </summary>
     public static IEnumerable<(string RegionId, string Prefix)> Prefixes(FcsRecord biomes)
     {
         foreach (var (key, value) in biomes.Strings)
@@ -23,7 +27,9 @@ public static class SaveWeather
                 yield return (key, value);
     }
 
-    /// <summary>The regions the record has a weather for (a region without <c>_w_w_id</c> or <c>_w_wi_start</c> is left out: it keeps the schedule it has).</summary>
+    /// <summary>
+    /// The regions the record has a weather for (a region without <c>_w_w_id</c> or <c>_w_wi_start</c> is left out: it keeps the schedule it has).
+    /// </summary>
     public static List<WeatherRegionSnapshot> Read(FcsRecord biomes)
     {
         var list = new List<WeatherRegionSnapshot>();
@@ -33,7 +39,7 @@ public static class SaveWeather
             int end = biomes.Ints.GetValueOrDefault(p + "_w_wi_end", start);
             int t0 = biomes.Ints.GetValueOrDefault(p + "_w_wi_bu_t_s"), t1 = biomes.Ints.GetValueOrDefault(p + "_w_wi_bu_t_e");
             float speed = biomes.Floats.GetValueOrDefault(p + "_w_wi_speed");
-            var dir = biomes.Vector3s.GetValueOrDefault(p + "_w_wi_dir", Vector3.UnitX);
+            var dir = biomes.Vector3S.GetValueOrDefault(p + "_w_wi_dir", Vector3.UnitX);
             float heading = MathF.Atan2(dir.Z, dir.X);
             // The last wind change: from (speed, angle) at t0 to the targets at t1 (a finished one the game loaded has both times 0); without its keys, the current wind held.
             var wind = biomes.Floats.ContainsKey(p + "_w_wi_bu_a_e")
@@ -71,7 +77,7 @@ public static class SaveWeather
             biomes.Ints[p + "_w_s_end"] = r.SeasonEndDay;
             biomes.Strings[p + "_w_w_id"] = r.WeatherId;
             biomes.Floats[p + "_w_wi_speed"] = speed;
-            biomes.Vector3s[p + "_w_wi_dir"] = new Vector3(direction.X, 0, direction.Y);
+            biomes.Vector3S[p + "_w_wi_dir"] = new Vector3(direction.X, 0, direction.Y);
             biomes.Floats[p + "_w_wi_time"] = (float)(Math.Max(0, now.Minutes - r.WeatherStartMinute) * SecondsPerGameMinute);
             biomes.Ints[p + "_w_wi_start"] = Minute(r.WeatherStartMinute);
             biomes.Ints[p + "_w_wi_end"] = Minute(r.WeatherEndMinute);

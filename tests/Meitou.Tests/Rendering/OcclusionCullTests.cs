@@ -1,14 +1,16 @@
 using System.Numerics;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
 
 namespace Meitou.Tests.Rendering;
 
 /// <summary>
-/// The foliage occlusion cull's rule (<c>HizOccluded</c> / <c>HizRegion</c> in <see cref="FoliageShaders.CullCompute"/>, docs/formats/foliage.md "Occlusion
-/// culling"), written out here on the CPU against a synthetic scene: whenever it says a sphere is hidden by the previous frame's depth, every ray from an
-/// eye that has moved (up to the step the rule was given) to the sphere is stopped by a surface of the scene. The depth is drawn with the sub-pixel jitter
-/// of the real one. A conservative rule may say "visible" for a hidden sphere (the tests count how often it says "hidden" so they are not empty).
+/// The foliage occlusion cull's rule (<c>HizOccluded</c> / <c>HizRegion</c> in <see cref="FoliageShaders.CullCompute"/>, docs/formats/foliage.md
+/// "Occlusion culling"), written out here on the CPU against a synthetic scene: whenever it says a sphere is hidden by the previous frame's depth,
+/// every ray from an eye that has moved (up to the step the rule was given) to the sphere is stopped by a surface of the scene. The depth is drawn
+/// with the sub-pixel jitter of the real one. A conservative rule may say "visible" for a hidden sphere (the tests count how often it says "hidden"
+/// so they are not empty).
 /// </summary>
 public class OcclusionCullTests
 {
@@ -17,7 +19,9 @@ public class OcclusionCullTests
 
     internal sealed record Occluder(Vector3 Centre, float Radius);
 
-    /// <summary>The camera: position and view axes (view-space x = right, y = up, forward = -back).</summary>
+    /// <summary>
+    /// The camera: position and view axes (view-space x = right, y = up, forward = -back).
+    /// </summary>
     internal readonly record struct Camera(Vector3 Eye, Vector3 Right, Vector3 Up, Vector3 Back)
     {
         public static Camera Look(Vector3 eye, float yaw, float pitch)
@@ -29,7 +33,10 @@ public class OcclusionCullTests
         }
     }
 
-    /// <summary>The nearest hit of the segment from <paramref name="from"/> towards <paramref name="to"/> (up to <paramref name="to"/>) with the scene: a sphere or the ground (y = 0).</summary>
+    /// <summary>
+    /// The nearest hit of the segment from <paramref name="from"/> towards <paramref name="to"/> (up to <paramref name="to"/>) with the scene: a
+    /// sphere or the ground (y = 0).
+    /// </summary>
     static float? Hit(IReadOnlyList<Occluder> scene, Vector3 from, Vector3 to)
     {
         var d = to - from;
@@ -51,7 +58,9 @@ public class OcclusionCullTests
         return best < length ? best : null;
     }
 
-    /// <summary>The view distance (along the view axis) at pixel (x, y), the ray through its centre moved by (jx, jy) pixels; 1e9 for the sky.</summary>
+    /// <summary>
+    /// The view distance (along the view axis) at pixel (x, y), the ray through its centre moved by (jx, jy) pixels; 1e9 for the sky.
+    /// </summary>
     internal static float DepthAt(IReadOnlyList<Occluder> scene, in Camera cam, int x, int y, float jx, float jy)
     {
         float tx = ((x + 0.5f + jx) / W * 2 - 1) * TanX, ty = ((y + 0.5f + jy) / H * 2 - 1) * TanY;
@@ -61,7 +70,9 @@ public class OcclusionCullTests
         return t is { } hit ? hit * Vector3.Dot(dir, -cam.Back) : 1e9f;
     }
 
-    /// <summary>The pyramid of <c>HizPyramid</c>: level 0 takes 4 x 4 pixels, each next level 2 x 2 texels (least, most).</summary>
+    /// <summary>
+    /// The pyramid of <c>HizPyramid</c>: level 0 takes 4 x 4 pixels, each next level 2 x 2 texels (least, most).
+    /// </summary>
     internal sealed class Pyramid
     {
         public readonly List<(int W, int H)> Sizes = HizPyramid.Levels(W, H);
@@ -106,7 +117,9 @@ public class OcclusionCullTests
             }
         }
 
-        /// <summary><c>HizRegion</c>.</summary>
+        /// <summary>
+        /// <c>HizRegion</c>.
+        /// </summary>
         public bool Region(Vector4 r, out float least, out float most)
         {
             (least, most) = (float.MaxValue, 0);
@@ -126,7 +139,9 @@ public class OcclusionCullTests
             return true;
         }
 
-        /// <summary><c>HizOccluded</c>, for the sphere in the world, the camera the depth was drawn from and the eye's step <paramref name="delta"/>.</summary>
+        /// <summary>
+        /// <c>HizOccluded</c>, for the sphere in the world, the camera the depth was drawn from and the eye's step <paramref name="delta"/>.
+        /// </summary>
         public bool Occluded(in Camera cam, Vector3 centre, float radius, float delta)
         {
             var d = centre - cam.Eye;
@@ -137,7 +152,8 @@ public class OcclusionCullTests
             float tx1 = MathF.Max(MathF.Max((xc - radius) / zn, (xc - radius) / zf), MathF.Max((xc + radius) / zn, (xc + radius) / zf));
             float ty0 = MathF.Min(MathF.Min((yc - radius) / zn, (yc - radius) / zf), MathF.Min((yc + radius) / zn, (yc + radius) / zf));
             float ty1 = MathF.Max(MathF.Max((yc - radius) / zn, (yc - radius) / zf), MathF.Max((yc + radius) / zn, (yc + radius) / zf));
-            var rect = new Vector4((0.5f + 0.5f * tx0 / TanX) * W - 1, (0.5f + 0.5f * ty0 / TanY) * H - 1, (0.5f + 0.5f * tx1 / TanX) * W + 1, (0.5f + 0.5f * ty1 / TanY) * H + 1);
+            var rect = new Vector4((0.5f + 0.5f * tx0 / TanX) * W - 1, (0.5f + 0.5f * ty0 / TanY) * H - 1, (0.5f + 0.5f * tx1 / TanX) * W + 1,
+                    (0.5f + 0.5f * ty1 / TanY) * H + 1);
             float f = H * 0.5f / TanY, pad = 0;
             for (int i = 0; i < 3; i++)
             {
@@ -160,8 +176,9 @@ public class OcclusionCullTests
     }
 
     /// <summary>
-    /// Random scenes: spheres in front of the camera and the ground, the depth drawn with a jitter, a sphere behind them. Whenever the rule says hidden, rays
-    /// from the drawing eye and from eyes up to the step away to points of the sphere (its centre, its box's near corner side and random points) hit the scene first.
+    /// Random scenes: spheres in front of the camera and the ground, the depth drawn with a jitter, a sphere behind them. Whenever the rule says
+    /// hidden, rays from the drawing eye and from eyes up to the step away to points of the sphere (its centre, its box's near corner side and random
+    /// points) hit the scene first.
     /// </summary>
     [Fact]
     public void A_sphere_the_rule_calls_hidden_is_hidden_from_every_eye_within_the_step()
@@ -199,19 +216,24 @@ public class OcclusionCullTests
                     {
                         var target = p == 0 ? centre : centre + RandomUnit(random) * radius * (float)Math.Cbrt(random.NextDouble());
                         rays++;
+
                         Assert.True(Hit(scene, moved, target) is not null,
+
                             $"trial {trial}: hidden call, delta {delta}, eye moved to {moved}, ray to {target} (sphere {centre} radius {radius}) is not stopped");
                     }
                 }
             }
         }
+
         Assert.True(hiddenCalls > 100, $"{hiddenCalls} of {decided} spheres called hidden: the scenes do not exercise the rule");
         Assert.True(rays > 10000);
     }
 }
 
-/// <summary>The pyramid's kernels (<c>HizShaders</c>) against the CPU's: odd picture sizes, a scene depth (in <see cref="DepthConvention"/>'s
-/// convention) that is cleared in places.</summary>
+/// <summary>
+/// The pyramid's kernels (<c>HizShaders</c>) against the CPU's: odd picture sizes, a scene depth (in <see cref="DepthConvention"/>'s convention) that
+/// is cleared in places.
+/// </summary>
 public class HizPyramidGpuTests
 {
     [Fact]
@@ -219,10 +241,17 @@ public class HizPyramidGpuTests
     public unsafe void The_kernels_build_the_least_and_greatest_distance_of_every_block_at_every_level()
     {
         Silk.NET.Vulkan.Vk.GetApi();
-        Meitou.Rendering.Gpu.Core.VulkanDevice? d;
-        try { d = Meitou.Rendering.Gpu.Core.VulkanDevice.Create(new Meitou.Rendering.Gpu.Core.VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
-        catch (Exception e) when (e is Meitou.Rendering.Gpu.Core.VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { d = null; }
+        Meitou.Game.Rendering.Gpu.Core.VulkanDevice? d;
+        try { d = Meitou.Game.Rendering.Gpu.Core.VulkanDevice.Create(new Meitou.Game.Rendering.Gpu.Core.VulkanDeviceOptions { Validation = true,
+                SyncValidation = true }); }
+        catch (Exception e)
+            when (e is Meitou.Game.Rendering.Gpu.Core.VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
+        {
+            d = null;
+        }
+
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+
         foreach (var (w, h) in new[] { (1000, 700), (1280, 720), (63, 37), (4, 4), (2049, 513) })
         {
             var random = new Random(w * 31 + h);
@@ -237,16 +266,16 @@ public class HizPyramidGpuTests
             }
             var levels = HizPyramid.Levels(w, h);
             int total = levels.Sum(l => l.W * l.H);
-            using (var ctx = new Meitou.Rendering.Gpu.GpuContext(d!))
+            using (var ctx = new GpuContext(d!))
             {
                 ctx.EnsureFrame();
-                var desc = new Meitou.Rendering.Gpu.TextureDesc(InternalFormat.R32f, w, h, Use: Meitou.Rendering.Gpu.TextureUse.Sampled | Meitou.Rendering.Gpu.TextureUse.TransferDst, Name: "hiz test depth");
+                var desc = new TextureDesc(InternalFormat.R32F, w, h, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "hiz test depth");
                 using var depthTexture = ctx.Frame.PreFrame.CreateTexture(desc);
                 var region = new PixelRect(0, 0, (uint)w, (uint)h);
                 ctx.Uploads.Write(depthTexture, 0, 0, region, System.Runtime.InteropServices.MemoryMarshal.AsBytes(depth.AsSpan()));
                 using var hiz = new HizPyramid(ctx);
                 hiz.Build(ctx.Frame.PreFrame, depthTexture, planes, w, h, Vector3.Zero, Matrix4x4.Identity, 0.8f, 16f / 9);
-                using var readback = Meitou.Rendering.Gpu.ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
+                using var readback = ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
                 ctx.Frame.PreFrame.CopyBuffer(hiz.Storage!.Handle, readback.Handle, new GpuBufferCopy(0, 0, (ulong)total * 8));
                 ctx.EndFrame();
                 d!.Frames.WaitAll();
@@ -259,7 +288,8 @@ public class HizPyramidGpuTests
                     {
                         float least = float.MaxValue, most = 0;
                         for (int y = ty * 4; y < Math.Min(ty * 4 + 4, h); y++)
-                            for (int x = tx * 4; x < Math.Min(tx * 4 + 4, w); x++) { least = MathF.Min(least, z[y * w + x]); most = MathF.Max(most, z[y * w + x]); }
+                            for (int x = tx * 4; x < Math.Min(tx * 4 + 4, w); x++) { least = MathF.Min(least, z[y * w + x]); most = MathF.Max(most,
+                                    z[y * w + x]); }
                         level0[ty * levels[0].W + tx] = (least, most);
                     }
                 var previous = level0;
@@ -276,7 +306,8 @@ public class HizPyramidGpuTests
                                 for (int dy = 0; dy < 2; dy++)
                                     for (int dx = 0; dx < 2; dx++)
                                     {
-                                        var s = previous[Math.Min(y * 2 + dy, levels[l - 1].H - 1) * levels[l - 1].W + Math.Min(x * 2 + dx, levels[l - 1].W - 1)];
+                                        var s = previous[Math.Min(y * 2 + dy, levels[l - 1].H - 1) * levels[l - 1].W + Math.Min(x * 2 + dx,
+                                                levels[l - 1].W - 1)];
                                         least = MathF.Min(least, s.Item1);
                                         most = MathF.Max(most, s.Item2);
                                     }
@@ -285,7 +316,10 @@ public class HizPyramidGpuTests
                     for (int i = 0; i < lw * lh; i++)
                     {
                         float gl = got[(offset + i) * 2], gm = got[(offset + i) * 2 + 1];
-                        Assert.True(MathF.Abs(gl - current[i].Item1) <= 2e-3f * current[i].Item1 + 1e-3f && MathF.Abs(gm - current[i].Item2) <= 2e-3f * current[i].Item2 + 1e-3f,
+
+                        Assert.True(MathF.Abs(gl - current[i].Item1) <= 2e-3f * current[i].Item1 + 1e-3f
+                                && MathF.Abs(gm - current[i].Item2) <= 2e-3f * current[i].Item2 + 1e-3f,
+
                             $"{w} x {h}, level {l} texel {i}: GPU ({gl}, {gm}), CPU {current[i]}");
                     }
                     offset += lw * lh;
@@ -293,7 +327,9 @@ public class HizPyramidGpuTests
                 }
             }
         }
+
         Assert.True(d!.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
+
         d.Dispose();
     }
 }

@@ -16,7 +16,9 @@ public static class ConvexHull
         public bool Dead;
     }
 
-    /// <summary>The hull's triangles as indices into <paramref name="points"/>; empty when the points are (nearly) flat, collinear or fewer than four.</summary>
+    /// <summary>
+    /// The hull's triangles as indices into <paramref name="points"/>; empty when the points are (nearly) flat, collinear or fewer than four.
+    /// </summary>
     public static int[] Triangles(Vector3[] points, float epsilon = 1e-3f)
     {
         int n = points.Length;

@@ -1,6 +1,6 @@
 # Sky, light and atmosphere
 
-Part of the world view of `meitou-viewer` (and the game, which shares `src/Meitou.Rendering`); options, keys and the rest of the world mode are in [viewer.md](viewer.md#options-and-modes).
+Part of the world view of `meitou-viewer` (and the game, which shares `src/Meitou.Game/Rendering`); options, keys and the rest of the world mode are in [viewer.md](viewer.md#options-and-modes).
 
 - **Sky, light and atmosphere** (`SkyRenderer`, `AtmosphereShaders`, `SkyClock`, `SkyXModel`, `KenshiHaze`, `KenshiLighting`,
   `AmbientMap`; facts in [formats/sky.md](formats/sky.md) and [formats/lighting.md](formats/lighting.md)): the sun follows the

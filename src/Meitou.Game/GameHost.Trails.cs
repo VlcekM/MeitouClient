@@ -1,9 +1,24 @@
+using Meitou.Game.Audio;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Audio;
 using Meitou.Data.World;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gi;
+using Meitou.Game.Rendering.Impostors;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Rendering.Ui;
+using Meitou.Game.Rendering.Upscalers;
+using Meitou.Game.Rendering.Water;
+using Meitou.Game.Rendering.Gpu;
 using Meitou.Simulation;
 
 namespace Meitou.Game;
@@ -23,14 +38,14 @@ sealed partial class GameHost
     /// <summary>How deep packed dirt takes a mark, against sand, mud and snow.</summary>
     const float DirtMark = 0.45f;
 
-    IGpuContext? trailContext;
-    World? trailsFor;
-    int trailFrame;
-    long trailLast;
+    IGpuContext? _trailContext;
+    World? _trailsFor;
+    int _trailFrame;
+    long _trailLast;
 
     /// <summary>The real seconds since the last frame the trails were updated (0 on the first), for the capsule speeds.</summary>
-    float trailDt;
-    readonly Dictionary<long, Walker> walkers = [];
+    float _trailDt;
+    readonly Dictionary<long, Walker> _walkers = [];
 
     /// <summary>A character's last frame: where its body was, its capsules' contacts (<see cref="BodyContact"/>) and the way walked since the last fallback mark.</summary>
     struct Walker
@@ -47,50 +62,50 @@ sealed partial class GameHost
     /// <summary>Once a frame, before the world is drawn: the marks the characters near what the camera looks at press this frame (the renderer's window is centred there).</summary>
     void UpdateTrails()
     {
-        if (!TerrainTrails.Enabled || trailContext is null || scene.Database is not { } db)
+        if (!TerrainTrails.Enabled || _trailContext is null || Scene.Database is not { } db)
         {
-            walkers.Clear();
+            _walkers.Clear();
             return;
         }
-        var trails = gpu.Trails ??= new TerrainTrailRenderer(trailContext);
-        var ground = groundSurfaces ??= new GroundSurfaces(install, db);
-        if (!ReferenceEquals(trailsFor, session.World))
+        var trails = Gpu.Trails ??= new TerrainTrailRenderer(_trailContext);
+        var ground = Sound.GroundSurfacesOf(db);
+        if (!ReferenceEquals(_trailsFor, Session.World))
         {
-            trailsFor = session.World;
+            _trailsFor = Session.World;
             trails.Clear();
-            walkers.Clear();
+            _walkers.Clear();
         }
-        trailFrame++;
+        _trailFrame++;
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        trailDt = trailLast == 0 ? 0 : Math.Clamp((now - trailLast) / (float)System.Diagnostics.Stopwatch.Frequency, 0.0005f, 0.1f);
-        trailLast = now;
+        _trailDt = _trailLast == 0 ? 0 : Math.Clamp((now - _trailLast) / (float)System.Diagnostics.Stopwatch.Frequency, 0.0005f, 0.1f);
+        _trailLast = now;
         IndexPrevious();
-        var focus = camera.Target;
-        float alpha = session.SimulationAlpha;
-        foreach (var c in session.CurrentSnapshot.Characters)
+        var focus = Camera.Target;
+        float alpha = Session.SimulationAlpha;
+        foreach (var c in Session.CurrentSnapshot.Characters)
         {
             var flat = new Vector2(c.Position.X - focus.X, c.Position.Z - focus.Z);
             if (flat.LengthSquared() > TerrainTrailRenderer.Reach * TerrainTrailRenderer.Reach || c.Appearance is null) continue;
             if (!c.CarriedBy.IsNone || c.InBed || c.Imprisoned) continue;
-            WalkTrail(trails, ground, c, previousById.TryGetValue(c.Id, out var before) ? Meitou.Engine.Time.Interp.Lerp(before.Position, c.Position, alpha) : c.Position);
+            WalkTrail(trails, ground, c, PreviousById.TryGetValue(c.Id, out var before) ? Meitou.Simulation.Session.Interp.Lerp(before.Position, c.Position, alpha) : c.Position);
         }
-        if (trailFrame % 256 == 0)
-            foreach (var (key, w) in walkers)
-                if (w.Frame != trailFrame) walkers.Remove(key);
+        if (_trailFrame % 256 == 0)
+            foreach (var (key, w) in _walkers)
+                if (w.Frame != _trailFrame) _walkers.Remove(key);
     }
 
     /// <summary>One character's frame: its posed body against the ground, or, with no pose, a crawler's furrow (a foot's print needs the body that makes it).</summary>
     void WalkTrail(TerrainTrailRenderer trails, GroundSurfaces ground, CharacterSnapshot c, Vector3 body)
     {
         long key = DrawKey(c.Id);
-        ref var w = ref CollectionsMarshal.GetValueRefOrAddDefault(walkers, key, out bool known);
-        bool continues = known && w.Frame == trailFrame - 1;
+        ref var w = ref CollectionsMarshal.GetValueRefOrAddDefault(_walkers, key, out bool known);
+        bool continues = known && w.Frame == _trailFrame - 1;
         var moved = new Vector2(body.X - w.Body.X, body.Z - w.Body.Z);
-        (w.Body, w.Frame) = (body, trailFrame);
+        (w.Body, w.Frame) = (body, _trailFrame);
         float stepped = moved.Length();
         bool animal = c.Appearance!.Animal is not null;
         bool lying = c.Down || c.StayingLow || c.Ragdoll is not null || c.Body is { Crawling: true };
-        if (BodyContact(trails, ground, key, ref w, body, stepped > 1e-4f && continues ? moved / stepped : Vector2.Zero, animal, !lying, continues && trailDt > 0 ? stepped / trailDt : 0, continues)) return;
+        if (BodyContact(trails, ground, key, ref w, body, stepped > 1e-4f && continues ? moved / stepped : Vector2.Zero, animal, !lying, continues && _trailDt > 0 ? stepped / _trailDt : 0, continues)) return;
         if (!continues || stepped < 1e-4f) return;
         var along = moved / stepped;
         if (c.Down || c.StayingLow || c.Body is { Crawling: true }) Drag(trails, ground, ref w, body, along, stepped);
@@ -107,7 +122,7 @@ sealed partial class GameHost
     /// <summary>Queues a mark where the ground takes one: soft, above the water, and right under what pressed it (not from a floor or a roof).</summary>
     void Press(TerrainTrailRenderer trails, GroundSurfaces ground, Vector3 at, in TrailStamp stamp)
     {
-        float height = gpu.Terrain.HeightAt(stamp.Centre.X, stamp.Centre.Y);
+        float height = Gpu.Terrain.HeightAt(stamp.Centre.X, stamp.Centre.Y);
         if (at.Y - height > MarkAboveGround || height < WorldWater.Height) return;
         float soft = ground.At(stamp.Centre.X, stamp.Centre.Y) switch
         {
@@ -121,7 +136,7 @@ sealed partial class GameHost
     /// <summary>How far above the water a character's feet may be and still reach it (a body lying in it, a leg stepping in).</summary>
     const float WaterReachAbove = 2;
 
-    readonly List<WaterBody> waterBodies = [];
+    readonly List<WaterBody> _waterBodies = [];
 
     /// <summary>
     /// Once a frame: the posed bodies near what the camera looks at that reach into the water, for the <c>contactfoam</c> switch's waves (docs/render-water.md
@@ -129,17 +144,17 @@ sealed partial class GameHost
     /// </summary>
     void UpdateWakes()
     {
-        if (!WaterContact.Enabled || gpu.Water?.Ripples is not { } ripples || gpu.Characters is not { } characters) return;
-        var focus = camera.Target;
+        if (!WaterContact.Enabled || Gpu.Water?.Ripples is not { } ripples || Gpu.Characters is not { } characters) return;
+        var focus = Camera.Target;
         ripples.Begin(focus);
         float reach = WaterRipples.Reach + 20;
-        foreach (var c in session.CurrentSnapshot.Characters)
+        foreach (var c in Session.CurrentSnapshot.Characters)
         {
             if (MathF.Abs(c.Position.X - focus.X) > reach || MathF.Abs(c.Position.Z - focus.Z) > reach) continue;
             if (c.Position.Y > WorldWater.Height + WaterReachAbove || c.Appearance is null) continue;
-            waterBodies.Clear();
-            characters.WaterCapsules(DrawKey(c.Id), WorldWater.Height, WaterRipples.BodyDepth, waterBodies);
-            ripples.AddBody(CollectionsMarshal.AsSpan(waterBodies));
+            _waterBodies.Clear();
+            characters.WaterCapsules(DrawKey(c.Id), WorldWater.Height, WaterRipples.BodyDepth, _waterBodies);
+            ripples.AddBody(CollectionsMarshal.AsSpan(_waterBodies));
         }
     }
 }

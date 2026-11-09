@@ -5,7 +5,9 @@ using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The weather data and scheduler (docs/formats/weather.md): calendar, choice, wind, fog, and the camera side. Quick tests use hand-made definitions.</summary>
+/// <summary>
+/// The weather data and scheduler (docs/formats/weather.md): calendar, choice, wind, fog, and the camera side. Quick tests use hand-made definitions.
+/// </summary>
 public class WeatherTests
 {
     // ---- hand-made definitions ----
@@ -45,7 +47,9 @@ public class WeatherTests
         };
     }
 
-    /// <summary>Two regions split at x = 0: cells 0..31 are "West" (colour 1), 32..63 "East" (colour 2).</summary>
+    /// <summary>
+    /// Two regions split at x = 0: cells 0..31 are "West" (colour 1), 32..63 "East" (colour 2).
+    /// </summary>
     static WeatherWorld TwoRegionWorld(WeatherDef west, WeatherDef east, int seed = 1)
     {
         var colours = new int[WeatherAreas.Cells * WeatherAreas.Cells];
@@ -60,8 +64,11 @@ public class WeatherTests
 
     static readonly FrameTimes Second = new(1, 1, 1);
 
-    /// <summary>The numbers of a state (records of definitions compare their lists by reference).</summary>
-    static object Key(WeatherState s) => (s.Weather.Name, s.RegionName, s.Strength, s.WindDirection, s.WindSpeed, s.SkyColourMultiplier, s.CloudDensity, s.CloudDrift, s.FogEnabled,
+    /// <summary>
+    /// The numbers of a state (records of definitions compare their lists by reference).
+    /// </summary>
+    static object Key(WeatherState s) => (s.Weather.Name, s.RegionName, s.Strength, s.WindDirection, s.WindSpeed, s.SkyColourMultiplier,
+            s.CloudDensity, s.CloudDrift, s.FogEnabled,
         s.FogColour, s.FogDistance, s.Rain, s.Wetness, s.DustAmount, s.HeatHaze);
 
     // ---- calendar ----
@@ -123,9 +130,12 @@ public class WeatherTests
         var towns = InstallData.Levels!.Towns().Select(t => (Name: db.Find(t.TownId)?.Name ?? "", t.Position)).ToList();
         (string Town, string Region)[] expected =
         [
-            ("The Hub", "Border Zone"), ("Squin", "Border Zone"), ("Rebirth", "Rebirth"), ("Heng", "Heng"), ("Bast", "Bast"), ("Flats Lagoon", "Flats Lagoon"),
-            ("Mongrel", "Fog Islands"), ("Ashland Dome I", "Ashlands"), ("Ashland Dome II", "Ashlands"), ("Ashland Dome III", "Ashlands"), ("Tower of Abuse", "Venge"),
-            ("Heft", "The Great Desert"), ("Stoat", "The Great Desert"), ("Shark", "The Swamp"), ("Swamp Village", "The Swamp"), ("Admag", "Stenn Desert"),
+            ("The Hub", "Border Zone"), ("Squin", "Border Zone"), ("Rebirth", "Rebirth"), ("Heng", "Heng"), ("Bast", "Bast"), ("Flats Lagoon",
+                    "Flats Lagoon"),
+            ("Mongrel", "Fog Islands"), ("Ashland Dome I", "Ashlands"), ("Ashland Dome II", "Ashlands"), ("Ashland Dome III",
+                    "Ashlands"), ("Tower of Abuse", "Venge"),
+            ("Heft", "The Great Desert"), ("Stoat", "The Great Desert"), ("Shark", "The Swamp"), ("Swamp Village", "The Swamp"), ("Admag",
+                    "Stenn Desert"),
         ];
         foreach (var (town, region) in expected)
         {
@@ -163,7 +173,7 @@ public class WeatherTests
             foreach (float wind in new float[] { 0, 10, 20, 30, 40, 55, 100, 700 })
                 Assert.Equal(expected[w.Name], w.FogDistanceAt(wind));
         // The loader's rule against the raw record, and "update time 0 means never".
-        foreach (var raw in db.OfType(FcsRecordType.WEATHER))
+        foreach (var raw in db.OfType(FcsRecordType.Weather))
         {
             var w = data.Weathers.First(x => x.StringId == raw.StringId);
             if (raw.GetFloat("fog wind min") == raw.GetFloat("fog wind max"))
@@ -183,7 +193,7 @@ public class WeatherTests
         Assert.Equal(66, data.Regions.Count(r => !r.HasNoSeasons));
 
         // A season with no weather gets Default with limits 0..1; a season with a time-limited weather gets Default appended with weight 0.
-        var empty = db.OfType(FcsRecordType.SEASON).Where(s => s.GetReferences("weathers").Count == 0).ToList();
+        var empty = db.OfType(FcsRecordType.Season).Where(s => s.GetReferences("weathers").Count == 0).ToList();
         Assert.NotEmpty(empty);
         foreach (var raw in empty)
         {
@@ -192,7 +202,8 @@ public class WeatherTests
             Assert.Equal((0f, 1f), (s.StrengthLimitMin, s.StrengthLimitMax));
         }
         var windowed = data.Seasons.Where(s => s.Weathers.Any(w => w.Weather.HasTimeWindow)).ToList();
-        Assert.Equal(["Desert Calm hot 0.6", "venge beams"], windowed.SelectMany(s => s.Weathers).Select(w => w.Weather).Where(w => w.HasTimeWindow).Select(w => w.Name).Distinct().Order());
+        Assert.Equal(["Desert Calm hot 0.6", "venge beams"],
+                windowed.SelectMany(s => s.Weathers).Select(w => w.Weather).Where(w => w.HasTimeWindow).Select(w => w.Name).Distinct().Order());
         Assert.All(windowed, s => Assert.Equal(("Default", 0), (s.Weathers[^1].Weather.Name, s.Weathers[^1].Weight)));
 
         // Season lengths and names per region, and the venge beams window.
@@ -200,7 +211,8 @@ public class WeatherTests
         Assert.Equal("75/25", Lengths("Desert"));
         Assert.Equal(["Desert Blasts", "Desert Summer"], data.FindRegion("Desert")!.Seasons.Select(s => s.Season.Name));
         Assert.Equal("33/17/50", Lengths("Skinner's Roam"));
-        Assert.Equal(["Clear Times", "Clear AND Storm Mix SHORTSEASON", "Dust Storm Approach"], data.FindRegion("Skinner's Roam")!.Seasons.Select(s => s.Season.Name));
+        Assert.Equal(["Clear Times", "Clear AND Storm Mix SHORTSEASON", "Dust Storm Approach"],
+                data.FindRegion("Skinner's Roam")!.Seasons.Select(s => s.Season.Name));
         Assert.Equal("50/50", Lengths("Cannibal Plains"));
         Assert.Equal("91/9", Lengths("Spider Plains"));
         Assert.Equal(["south coast", "purple desert"], data.FindRegion("Spider Plains")!.Seasons.Select(s => s.Season.Name));
@@ -221,7 +233,8 @@ public class WeatherTests
         WeatherWorld Run(int seed, List<WeatherState>? log)
         {
             var world = WeatherWorld.Create(db, install!, seed, WeatherTime.At(0));
-            var path = new[] { new Vector3(-50979, 0, 2932), new Vector3(94355, 0, 94196), new Vector3(23826, 0, 17893), new Vector3(8698, 0, -13295) };
+            var path = new[] { new Vector3(-50979, 0, 2932), new Vector3(94355, 0, 94196), new Vector3(23826, 0, 17893),
+                    new Vector3(8698, 0, -13295) };
             for (int minute = 0; minute < 365 * 1440 / 2; minute += 5)
             {
                 var camera = path[minute / (1440 * 20) % path.Length] + new Vector3(minute % 400, 0, 0);
@@ -238,7 +251,8 @@ public class WeatherTests
         }
         var a = new List<WeatherState>();
         var b = new List<WeatherState>();
-        var first = Run(11, a); var second = Run(11, b);
+        var first = Run(11, a);
+        var second = Run(11, b);
         Assert.Equal(a.Select(Key), b.Select(Key));
         Assert.True(first.Snapshot().SequenceEqual(second.Snapshot()));
         Assert.True(a.Select(s => s.Weather.Name).Distinct().Count() > 5);

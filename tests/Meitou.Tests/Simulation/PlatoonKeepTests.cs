@@ -1,8 +1,12 @@
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>The campaign half of the original's platoon keep test (FUN_1407ec570): held by a campaign record that is not in phase 2, and not in spawn mode 3.</summary>
+/// <summary>
+/// The campaign half of the original's platoon keep test (FUN_1407ec570): held by a campaign record that is not in phase 2, and not in spawn mode 3.
+/// </summary>
 public class PlatoonKeepTests
 {
     static Platoon Of(CampaignInstance? campaign, bool replacedHome = false) =>

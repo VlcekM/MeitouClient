@@ -7,12 +7,14 @@ using Npgsql;
 var builder = WebApplication.CreateBuilder(args);
 var config = Config.Load(builder.Configuration);
 builder.Services.AddSingleton(config);
+
 // The slim builder: the basic types and no reflection; TLS is opt-in there and the database is reached over it.
 builder.Services.AddSingleton(new NpgsqlSlimDataSourceBuilder(config.ConnectionString).EnableTransportSecurity().EnableArrays().Build());
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.TypeInfoResolverChain.Insert(0, ReportsJson.Default));
 builder.Services.AddSingleton<Store>();
 builder.Services.AddHttpClient();
-builder.Services.AddSingleton(sp => new Roadmap(sp.GetRequiredService<IHttpClientFactory>().CreateClient(), config, sp.GetRequiredService<ILogger<Roadmap>>()));
+builder.Services.AddSingleton(sp => new Roadmap(sp.GetRequiredService<IHttpClientFactory>().CreateClient(), config,
+        sp.GetRequiredService<ILogger<Roadmap>>()));
 builder.Services.AddSingleton<Intake>();
 builder.Services.AddSingleton<Discord>();
 builder.Services.AddSingleton<GithubAuth>();
@@ -21,9 +23,12 @@ builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.WithOrigins(config.Origi
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    o.AddPolicy("post", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => new() { PermitLimit = 10, Window = TimeSpan.FromMinutes(10) }));
-    // A feedback report is up to five requests (start, three files, send); the 10 a day per person is counted on the forms.
-    o.AddPolicy("feedback", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => new() { PermitLimit = 30, Window = TimeSpan.FromMinutes(10) }));
+    o.AddPolicy("post", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => new() { PermitLimit = 10,
+            Window = TimeSpan.FromMinutes(10) }));
+
+    // A feedback report is up to five requests (start, three files, send); the 20 a day per person is counted on the forms.
+    o.AddPolicy("feedback", ctx => RateLimitPartition.GetFixedWindowLimiter(ClientIp(ctx), _ => new() { PermitLimit = 60,
+            Window = TimeSpan.FromMinutes(10) }));
 });
 
 var app = builder.Build();
@@ -41,6 +46,13 @@ app.MapGet("/summary", async (Store store, Roadmap roadmap, HttpResponse respons
     var window = await roadmap.Window();
     response.Headers.CacheControl = "public, max-age=60";
     return new Summary(window.Since, await store.Summary(window));
+});
+
+// Public: the newest game versions (full release, and any kind), for the game's feedback form; GitHub is read at most every 10 minutes.
+app.MapGet("/latest", async (Roadmap roadmap, HttpResponse response) =>
+{
+    response.Headers.CacheControl = "public, max-age=300";
+    return (await roadmap.Window()).Latest;
 });
 
 // Public: the status changes the reports suggest; a person approves them on the roadmap.
@@ -65,13 +77,15 @@ app.MapPost("/feedback", async (HttpContext ctx, FeedbackBody body, Feedback fee
     return error is null ? Results.Ok(new FeedbackCreated(token!)) : Results.BadRequest(new Refused(error));
 }).RequireRateLimiting("feedback");
 app.MapPut("/feedback/{token}/{kind}", async (HttpRequest request, string token, string kind, Feedback feedback) =>
-    await feedback.Upload(token, kind, request) is { } refused ? Results.Json(new Refused(refused.Error), ReportsJson.Default.Refused, statusCode: refused.Status) : Results.NoContent())
+    await feedback.Upload(token, kind, request) is { } refused ? Results.Json(new Refused(refused.Error), ReportsJson.Default.Refused,
+            statusCode: refused.Status) : Results.NoContent())
     .RequireRateLimiting("feedback");
 app.MapPost("/feedback/{token}/send", async (string token, Feedback feedback) =>
 {
     var (issue, error) = await feedback.Submit(token);
     return issue is not null ? Results.Ok(issue) : Results.BadRequest(new Refused(error!));
 }).RequireRateLimiting("feedback");
+
 // The issue's links: public, the token is the secret. The log is stored gzipped and sent as such for the browser to unpack.
 app.MapGet("/feedback/{token}/{file}", (string token, string file, Feedback feedback, HttpResponse response) =>
 {
@@ -85,7 +99,8 @@ app.MapGet("/feedback/{token}/{file}", (string token, string file, Feedback feed
 
 // Admin (Authorization: Bearer REPORTS_ADMIN_TOKEN): the raw reports, a report's log, removing spam, registering the Discord commands.
 var admin = app.MapGroup("").AddEndpointFilter(async (ctx, next) =>
-    config.AdminToken is { } token && ctx.HttpContext.Request.Headers.Authorization.ToString() == $"Bearer {token}" ? await next(ctx) : Results.Unauthorized());
+    config.AdminToken is { } token
+            && ctx.HttpContext.Request.Headers.Authorization.ToString() == $"Bearer {token}" ? await next(ctx) : Results.Unauthorized());
 admin.MapGet("/reports", async (Store store, DateTimeOffset? since, string? row, int? limit) =>
     await store.List(since ?? DateTimeOffset.UtcNow.AddDays(-7), row, Math.Clamp(limit ?? 500, 1, 5000)));
 admin.MapGet("/reports/{id:long}/log", async (Store store, long id) =>
@@ -104,7 +119,8 @@ app.MapPost("/discord", async (HttpRequest request, Discord discord) =>
     using var buffer = new MemoryStream();
     await request.Body.CopyToAsync(buffer);
     var body = buffer.ToArray();
-    if (!discord.Verify(request.Headers["X-Signature-Ed25519"], request.Headers["X-Signature-Timestamp"], body)) return Results.Unauthorized();
+    if (!discord.Verify(request.Headers["X-Signature-Ed25519"], request.Headers["X-Signature-Timestamp"], body))
+        return Results.Unauthorized();
     return Results.Text((await discord.Handle(JsonNode.Parse(body)!)).ToJsonString(), "application/json");
 });
 
@@ -133,17 +149,26 @@ static async Task<bool> Turnstile(IHttpClientFactory http, string secret, string
     catch (HttpRequestException) { return false; }
 }
 
-/// <summary>The JSON body of <c>POST /reports</c>.</summary>
-sealed record ReportBody(string? Row, string? Verdict, string? Build, string? Platform, bool? Modded, string? Note, string? Source, string? Turnstile, string? Log);
+/// <summary>
+/// The JSON body of <c>POST /reports</c>.
+/// </summary>
+sealed record ReportBody(string? Row, string? Verdict, string? Build, string? Platform, bool? Modded, string? Note, string? Source, string? Turnstile,
+        string? Log);
 
-/// <summary><c>GET /summary</c>: the counts per row since the cutoff.</summary>
+/// <summary>
+/// <c>GET /summary</c>: the counts per row since the cutoff.
+/// </summary>
 sealed record Summary(DateTimeOffset Since, List<RowSummary> Rows);
 
-/// <summary><c>POST /reports</c> answers: the stored report's id, or why it was refused.</summary>
+/// <summary>
+/// <c>POST /reports</c> answers: the stored report's id, or why it was refused.
+/// </summary>
 sealed record Recorded(long? Id);
 sealed record Refused(string Error);
 
-/// <summary>Every type that crosses the wire as JSON: Native AOT has no reflection-based serializer, so each is generated here.</summary>
+/// <summary>
+/// Every type that crosses the wire as JSON: Native AOT has no reflection-based serializer, so each is generated here.
+/// </summary>
 [JsonSourceGenerationOptions(System.Text.Json.JsonSerializerDefaults.Web)]
 [JsonSerializable(typeof(ReportBody))]
 [JsonSerializable(typeof(Summary))]
@@ -153,6 +178,7 @@ sealed record Refused(string Error);
 [JsonSerializable(typeof(Refused))]
 [JsonSerializable(typeof(RoadmapFile))]
 [JsonSerializable(typeof(List<GithubRelease>))]
+[JsonSerializable(typeof(Latest))]
 [JsonSerializable(typeof(FeedbackBody))]
 [JsonSerializable(typeof(FeedbackCreated))]
 [JsonSerializable(typeof(FeedbackIssue))]

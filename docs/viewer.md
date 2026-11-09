@@ -38,7 +38,7 @@ Water reflection0..4 determines included classes. Texture quality0..4 skips mips
 quarter particles, no reflection/shadows/AO/AA, flat water, scale0.83, anisotropy1, textureLow3,
 material distance15000, VSync off. It is a tunable preset, not an automatic hardware guarantee.
 --benchmark-baseline: a 1920x1080 window, no GI, ground parallax or tessellation, no upscaler, SMAA at scale 1, texture quality 1; the game adds the Medium tier
-(SettingsMenu.ApplyBenchmarkBaseline). In the game a --low-end or --benchmark-baseline run neither applies nor overwrites the sliders and switches saved in `meitou.user.json`.
+(QualityTiers.ApplyBenchmarkBaseline). In the game a --low-end or --benchmark-baseline run neither applies nor overwrites the sliders and switches saved in `meitou.user.json`.
 
 ## Keys
 
@@ -99,4 +99,4 @@ Meitou only. Open it from the F10 debug menu's Tools row. It works like the F10 
 - **Navmesh:** the existing Shift+F11 view (off, Meitou's, the original's, both); the row steps it.
 - Drawn like the navmesh view: over the finished picture, sorted against the scene depth.
 - **Why it exists:** picking is a ray against one convex hull of all of a building's collision shapes (docs/game/ui-input.md "Building picking and selection"), so a concave building is clickable over its whole hull. The green shapes and the cyan mesh show how much tighter per-shape picking would be.
-- Code: `GameHost.Inspector.cs` (menu, keys), `PlayerInterface.Inspector.cs` (panel, geometry), `GameHost.NavOverlay.cs` (`UpdateInspectorOverlay`), `BuildingFootprint.Shapes` and `BuildingFootprints.Mesh` (per-shape hulls, collision triangles), `WorldFrame` (`InspectorOverlay`). Not covered: the buildings' visual meshes, characters, items, the navmesh polygon under the cursor, terrain or object collision other than level-data buildings and the placed sites.
+- Code: `DebugMenu` (menu, keys), `PickInspector` (panel, geometry), `DebugOverlays` (`UpdateInspectorOverlay`), `BuildingFootprint.Shapes` and `BuildingFootprints.Mesh` (per-shape hulls, collision triangles), `WorldFrame` (`InspectorOverlay`). Not covered: the buildings' visual meshes, characters, items, the navmesh polygon under the cursor, terrain or object collision other than level-data buildings and the placed sites.

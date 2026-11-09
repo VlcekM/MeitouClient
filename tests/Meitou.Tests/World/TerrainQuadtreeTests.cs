@@ -37,7 +37,8 @@ public class TerrainQuadtreeTests
         var nodes = new List<TerrainNode>();
         q.Select(eye, FlatBounds(), null, nodes);
         // Squares drawn (whole nodes or quarters) cover the world exactly once.
-        var squares = nodes.Select(n => n.Quadrant < 0 ? (n.Level, X: n.X0, Z: n.Z0, S: n.Size) : (n.Level, X: n.X0 + (n.Quadrant & 1) * n.Size / 2, Z: n.Z0 + (n.Quadrant >> 1) * n.Size / 2, S: n.Size / 2)).ToList();
+        var squares = nodes.Select(n => n.Quadrant < 0 ? (n.Level, X: n.X0, Z: n.Z0, S: n.Size)
+                : (n.Level, X: n.X0 + (n.Quadrant & 1) * n.Size / 2, Z: n.Z0 + (n.Quadrant >> 1) * n.Size / 2, S: n.Size / 2)).ToList();
         Assert.Equal((double)WorldLayout.WorldSize * WorldLayout.WorldSize, squares.Sum(s => s.S * s.S), 1);
         // Below the eye, the finest level whose range reaches the ground is drawn (level 0 when the eye is low).
         int finest = Enumerable.Range(0, q.LevelCount).First(l => q.Ranges[l] > y);
@@ -56,8 +57,16 @@ public class TerrainQuadtreeTests
                 for (int k = 1; k < 2 * q.GridCells * a.S / q.NodeSize(a.Level); k += 2)
                 {
                     double px, pz;
-                    if (touchX) { px = Math.Abs(a.X + a.S - b.X) < 1e-6 ? a.X + a.S : a.X; pz = a.Z + k * spacing; if (pz <= b.Z || pz >= b.Z + b.S) continue; }
-                    else { pz = Math.Abs(a.Z + a.S - b.Z) < 1e-6 ? a.Z + a.S : a.Z; px = a.X + k * spacing; if (px <= b.X || px >= b.X + b.S) continue; }
+                    if (touchX)
+                    {
+                        px = Math.Abs(a.X + a.S - b.X) < 1e-6 ? a.X + a.S : a.X;
+                        pz = a.Z + k * spacing;
+                        if (pz <= b.Z || pz >= b.Z + b.S) continue;
+                    }
+                    else { pz = Math.Abs(a.Z + a.S - b.Z) < 1e-6 ? a.Z + a.S : a.Z; px = a.X
+                            + k * spacing;
+                            if (px <= b.X || px >= b.X + b.S) continue;
+                            }
                     float d = Vector3.Distance(eye, new Vector3((float)px, 0, (float)pz));
                     Assert.Equal(1f, q.Morph(a.Level, d));
                 }
@@ -66,8 +75,16 @@ public class TerrainQuadtreeTests
                 for (int k = 1; k < 2 * q.GridCells; k += 2)
                 {
                     double px, pz;
-                    if (touchX) { px = Math.Abs(a.X + a.S - b.X) < 1e-6 ? b.X : b.X + b.S; pz = b.Z + k * coarse; if (pz <= a.Z || pz >= a.Z + a.S) continue; }
-                    else { pz = Math.Abs(a.Z + a.S - b.Z) < 1e-6 ? b.Z : b.Z + b.S; px = b.X + k * coarse; if (px <= a.X || px >= a.X + a.S) continue; }
+                    if (touchX)
+                    {
+                        px = Math.Abs(a.X + a.S - b.X) < 1e-6 ? b.X : b.X + b.S;
+                        pz = b.Z + k * coarse;
+                        if (pz <= a.Z || pz >= a.Z + a.S) continue;
+                    }
+                    else { pz = Math.Abs(a.Z + a.S - b.Z) < 1e-6 ? b.Z : b.Z + b.S; px = b.X
+                            + k * coarse;
+                            if (px <= a.X || px >= a.X + a.S) continue;
+                            }
                     float d = Vector3.Distance(eye, new Vector3((float)px, 0, (float)pz));
                     Assert.Equal(0f, q.Morph(b.Level, d));
                 }

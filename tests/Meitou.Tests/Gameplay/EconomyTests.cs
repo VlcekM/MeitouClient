@@ -4,7 +4,9 @@ using Meitou.Data.Gameplay.Economy;
 
 namespace Meitou.Tests.Gameplay;
 
-/// <summary>Item prices (docs/game/economy.md sections 3 and 4) on synthetic records, against the worked examples of section 4.6.</summary>
+/// <summary>
+/// Item prices (docs/game/economy.md sections 3 and 4) on synthetic records, against the worked examples of section 4.6.
+/// </summary>
 public class EconomyTests
 {
     const uint New = 0x10;
@@ -26,7 +28,7 @@ public class EconomyTests
         return db;
     }
 
-    static FcsRecord Armour(string id, int cls, int material, int value, int slot) => Rec(id, FcsRecordType.ARMOUR, r =>
+    static FcsRecord Armour(string id, int cls, int material, int value, int slot) => Rec(id, FcsRecordType.Armour, r =>
     {
         r.Ints["class"] = cls;
         r.Ints["material type"] = material;
@@ -40,8 +42,8 @@ public class EconomyTests
     public void Weapons_and_armour_match_the_worked_examples()
     {
         var db = Db(
-            Rec("katana-t", FcsRecordType.WEAPON, r => r.Ints["value"] = 500),
-            Rec("edgewalkers-t", FcsRecordType.WEAPON_MANUFACTURER, r => r.Floats["price mod"] = 1.4f),
+            Rec("katana-t", FcsRecordType.Weapon, r => r.Ints["value"] = 500),
+            Rec("edgewalkers-t", FcsRecordType.WeaponManufacturer, r => r.Floats["price mod"] = 1.4f),
             Armour("samurai-t", 3, 3, 100, 5),
             Armour("chain-t", 2, 2, 12000, 8));
         var katana = db.Find("katana-t")!;
@@ -78,13 +80,13 @@ public class EconomyTests
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
         var db = InstallData.BaseGame!;
         Assert.Equal(PriceConstants.BaseGame, PriceConstants.FromDatabase(db));   // section 3: the base values every fallback uses
-        var katana = db.OfType(FcsRecordType.WEAPON).Single(r => r.Name == "Katana");
+        var katana = db.OfType(FcsRecordType.Weapon).Single(r => r.Name == "Katana");
         Assert.Equal(500, katana.GetInt("value"));
         Assert.Equal(17500, ItemValue.Of(db, katana, 50, true, PriceConstants.BaseGame));
-        var samurai = db.OfType(FcsRecordType.ARMOUR).First(r => r.Name == "Samurai Armour");
+        var samurai = db.OfType(FcsRecordType.Armour).First(r => r.Name == "Samurai Armour");
         Assert.Equal(9270, ItemValue.Of(db, samurai, 50, true, PriceConstants.BaseGame));
-        var goods = db.OfType(FcsRecordType.VENDOR_LIST).Single(r => r.Name == "all trade goods");
+        var goods = db.OfType(FcsRecordType.VendorList).Single(r => r.Name == "all trade goods");
         Assert.Equal(75, VendorList.From(db, goods).Entries.Count);   // 7.2: the items that get a market factor
-        Assert.Contains(db.OfType(FcsRecordType.SQUAD_TEMPLATE), r => Meitou.Data.Gameplay.SquadTemplate.From(r).HasShop);
+        Assert.Contains(db.OfType(FcsRecordType.SquadTemplate), r => Data.Gameplay.SquadTemplate.From(r).HasShop);
     }
 }

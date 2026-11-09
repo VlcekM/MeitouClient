@@ -1,10 +1,13 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The Meitou clouds (docs/formats/clouds.md "Meitou clouds"): the game's cloud layer lit by a key light through its depth, with a phase and the sky's ambient.</summary>
+/// <summary>
+/// The Meitou clouds (docs/formats/clouds.md "Meitou clouds"): the game's cloud layer lit by a key light through its depth, with a phase and the
+/// sky's ambient.
+/// </summary>
 public class MeitouCloudsTests
 {
     [Fact]
@@ -25,9 +28,10 @@ public class MeitouCloudsTests
     }
 
     /// <summary>
-    /// Every switch is wired in both lists: the options' (<c>--meitou</c> / <c>--faithful</c>, which must read back what is set) and the live one the viewer's Tab panel
-    /// and F1 use. A switch left out of a list falls back to <see cref="Enhancements.Create"/>'s stand-in, which always reads Faithful and ignores a set
-    /// (the clouds and cloud shadows were missing from the live list on 2026-10-11: their checkboxes could not be turned on).
+    /// Every switch is wired in both lists: the options' (<c>--meitou</c> / <c>--faithful</c>, which must read back what is set) and the live one the
+    /// viewer's Tab panel and F1 use. A switch left out of a list falls back to <see cref="Enhancements.Create"/>'s stand-in, which always reads
+    /// Faithful and ignores a set (the clouds and cloud shadows were missing from the live list on 2026-10-11: their checkboxes could not be turned
+    /// on).
     /// </summary>
     [Fact]
     public void Every_switch_is_wired_in_the_options_and_the_live_list()

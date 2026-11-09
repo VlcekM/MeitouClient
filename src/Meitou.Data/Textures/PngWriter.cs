@@ -3,7 +3,9 @@ using System.IO.Compression;
 
 namespace Meitou.Data.Textures;
 
-/// <summary>Minimal PNG encoder (8-bit RGBA) for screenshots: each row takes the filter that leaves the smallest sum of residuals (the PNG spec's heuristic).</summary>
+/// <summary>
+/// Minimal PNG encoder (8-bit RGBA) for screenshots: each row takes the filter that leaves the smallest sum of residuals (the PNG spec's heuristic).
+/// </summary>
 public static class PngWriter
 {
     public static void Write(string path, int width, int height, ReadOnlySpan<byte> rgba)
@@ -46,7 +48,10 @@ public static class PngWriter
         Chunk(file, "IEND", []);
     }
 
-    /// <summary>The row through PNG filter <paramref name="f"/> (none, sub, up, average, Paeth; 4 bytes a pixel) into <paramref name="output"/>; returns the sum of the residuals as signed bytes.</summary>
+    /// <summary>
+    /// The row through PNG filter <paramref name="f"/> (none, sub, up, average, Paeth; 4 bytes a pixel) into <paramref name="output"/>; returns the
+    /// sum of the residuals as signed bytes.
+    /// </summary>
     static long Filter(int f, ReadOnlySpan<byte> row, ReadOnlySpan<byte> above, byte[] output)
     {
         long sum = 0;

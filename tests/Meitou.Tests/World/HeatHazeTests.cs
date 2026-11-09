@@ -6,7 +6,9 @@ using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The heat haze's amount and inputs (docs/formats/weather.md and post-processing.md "Heat haze").</summary>
+/// <summary>
+/// The heat haze's amount and inputs (docs/formats/weather.md and post-processing.md "Heat haze").
+/// </summary>
 public class HeatHazeTests
 {
     [Fact]
@@ -19,7 +21,7 @@ public class HeatHazeTests
         Assert.Equal(0f, SkyWeather.Find(db, null)!.HeatHaze);
         Assert.Equal(0.6f, SkyWeather.Find(db, "Desert Calm hot 0.6")!.HeatHaze, 4);
         Assert.Equal(1f, SkyWeather.Find(db, "venge beams")!.HeatHaze, 4);
-        Assert.Equal(19, db.OfType(FcsRecordType.WEATHER).Count(w => w.GetFloat("heat haze") > 0));
+        Assert.Equal(19, db.OfType(FcsRecordType.Weather).Count(w => w.GetFloat("heat haze") > 0));
         // The shader's two maps: 2048² BC1 with a full mip chain.
         foreach (var name in new[] { "FlowHAZE.dds", "Perturber.dds" })
         {

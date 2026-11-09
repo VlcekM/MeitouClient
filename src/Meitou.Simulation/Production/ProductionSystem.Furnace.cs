@@ -7,14 +7,24 @@ namespace Meitou.Simulation.Production;
 // The item furnace (docs/game/buildings-production.md "Item furnace"): FurnaceBuilding burns whatever lies in its input grid into its output (Raw Iron), by the metal the items hold.
 public sealed partial class ProductionSystem
 {
-    /// <summary>The furnace's input grid (<b>Verified</b>, <c>FurnaceBuilding::setupFromData</c> <c>FUN_14029f980</c>): section <c>in1</c>, 12 x 7 cells, stacks at least 10.</summary>
+    /// <summary>
+    /// The furnace's input grid (<b>Verified</b>, <c>FurnaceBuilding::setupFromData</c> <c>FUN_14029f980</c>): section <c>in1</c>, 12 x 7 cells,
+    /// stacks at least 10.
+    /// </summary>
     public const int FurnaceWidth = 12, FurnaceHeight = 7, FurnaceStackMinimum = 10;
-    /// <summary>The ITEM whose ingredient amounts are the iron in an item (<b>Verified</b>, the literal in <c>FurnaceBuilding::getIronAmountInItem</c> <c>FUN_1402a5750</c>).</summary>
+    /// <summary>
+    /// The ITEM whose ingredient amounts are the iron in an item (<b>Verified</b>, the literal in <c>FurnaceBuilding::getIronAmountInItem</c>
+    /// <c>FUN_1402a5750</c>).
+    /// </summary>
     public const string RawIron = "1866-gamedata.base";
-    /// <summary>The LOCATIONAL_DAMAGE entry whose <c>part coverage</c> counts 1.5 times in an armour's total coverage (<b>Observed</b>, <c>FUN_14082fd80</c>).</summary>
+    /// <summary>
+    /// The LOCATIONAL_DAMAGE entry whose <c>part coverage</c> counts 1.5 times in an armour's total coverage (<b>Observed</b>, <c>FUN_14082fd80</c>).
+    /// </summary>
     const string WeightedPart = "101-gamedata.quack";
 
-    /// <summary>An empty furnace grid (<see cref="FurnaceWidth"/> x <see cref="FurnaceHeight"/>, stacks at least <see cref="FurnaceStackMinimum"/>).</summary>
+    /// <summary>
+    /// An empty furnace grid (<see cref="FurnaceWidth"/> x <see cref="FurnaceHeight"/>, stacks at least <see cref="FurnaceStackMinimum"/>).
+    /// </summary>
     static Inventory FurnaceGrid() => new(FurnaceWidth, FurnaceHeight) { StackBonusMinimum = FurnaceStackMinimum };
 
     /// <summary>
@@ -46,7 +56,7 @@ public sealed partial class ProductionSystem
             return;
         }
         m.Status = 2;
-        float amount = m.Yield * m.Data.Rate * WorkFactor(world, m) * dt * constants.ProductionSpeed * Settings.ProductionOption;
+        float amount = m.Yield * m.Data.Rate * WorkFactor(world, m) * dt * _constants.ProductionSpeed * Settings.ProductionOption;
         if (amount == 0) return;
         m.BurnLevel -= amount;
         output.Progress += amount;
@@ -58,7 +68,9 @@ public sealed partial class ProductionSystem
         world.Machines.Touch();
     }
 
-    /// <summary>The metal of a furnace grid (<c>FUN_140299820</c>, the panel's <c>Total Metals:</c>): the sum of <see cref="MetalOf"/> over its items.</summary>
+    /// <summary>
+    /// The metal of a furnace grid (<c>FUN_140299820</c>, the panel's <c>Total Metals:</c>): the sum of <see cref="MetalOf"/> over its items.
+    /// </summary>
     public float FurnaceMetal(Inventory grid)
     {
         float total = 0;
@@ -72,15 +84,15 @@ public sealed partial class ProductionSystem
     /// </summary>
     float MetalOf(ItemInstance item)
     {
-        if (db.Find(item.Record) is not { } r) return 0;
+        if (_db.Find(item.Record) is not { } r) return 0;
         switch (item.Type)
         {
-            case FcsRecordType.ITEM:
+            case FcsRecordType.Item:
                 return r.GetReferences("ingredients").Count > 0 ? IronIn(r, 0) * item.Quantity * 0.5f : 0;
-            case FcsRecordType.ARMOUR:
+            case FcsRecordType.Armour:
                 if (r.GetInt("material type") is not (2 or 3)) return 0;
                 return TotalCoverage(r) * 0.01f * (1 - r.GetFloat("fabrics amount", 0.2f)) * 2;
-            case FcsRecordType.WEAPON:
+            case FcsRecordType.Weapon:
                 return Math.Clamp(item.UnitWeight * 0.2f, 0.5f, 5);
             default:
                 return 0;
@@ -98,7 +110,7 @@ public sealed partial class ProductionSystem
         foreach (var r in record.GetReferences("ingredients"))
         {
             if (r.TargetStringId == RawIron) iron += r.Values.Value0 * 0.01f;
-            else if (db.Find(r.TargetStringId) is { } ingredient) iron += IronIn(ingredient, depth + 1);
+            else if (_db.Find(r.TargetStringId) is { } ingredient) iron += IronIn(ingredient, depth + 1);
         }
         return iron;
     }

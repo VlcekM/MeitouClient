@@ -14,10 +14,14 @@ namespace Meitou.Data.World;
 /// <param name="ComesOut">BUILDING <c>door comes out</c> (signed).</param>
 public readonly record struct DoorLeaf(int Axis, float Distance, float Speed, float ComesOut)
 {
-    /// <summary>The navmesh counts a door as open from this open amount on (docs/game/locks.md "Doors", <b>Verified</b>).</summary>
+    /// <summary>
+    /// The navmesh counts a door as open from this open amount on (docs/game/locks.md "Doors", <b>Verified</b>).
+    /// </summary>
     public const float NavOpen = 0.6f;
 
-    /// <summary>The fields of a door's BUILDING record (the fcs.def defaults when absent: axis 0, 30 units, 1 per second, no step out).</summary>
+    /// <summary>
+    /// The fields of a door's BUILDING record (the fcs.def defaults when absent: axis 0, 30 units, 1 per second, no step out).
+    /// </summary>
     public static DoorLeaf Of(GameRecord door) =>
         new(Math.Clamp(door.GetInt("door axis"), 0, 2), door.GetFloat("door move dist", 30), door.GetFloat("door move speed", 1), door.GetFloat("door comes out"));
 
@@ -48,18 +52,27 @@ public readonly record struct DoorLeaf(int Axis, float Distance, float Speed, fl
 /// </summary>
 public readonly record struct DoorFrame(Vector3 X, Vector3 Y, Vector3 Z, Vector3 HalfExtents, Vector3 Centre)
 {
-    /// <summary>An unrotated box with no size at the origin (a door part without a collision box).</summary>
+    /// <summary>
+    /// An unrotated box with no size at the origin (a door part without a collision box).
+    /// </summary>
     public static DoorFrame Default { get; } = Of(Pose.Identity, Vector3.Zero);
 
-    /// <summary>The frame of a box shape with pose <paramref name="pose"/> (its actor's and its own, composed) and half extents <paramref name="halfExtents"/>.</summary>
+    /// <summary>
+    /// The frame of a box shape with pose <paramref name="pose"/> (its actor's and its own, composed) and half extents
+    /// <paramref name="halfExtents"/>.
+    /// </summary>
     public static DoorFrame Of(Pose pose, Vector3 halfExtents) => new(
         CollisionTriangulator.ToWorldAxes(pose.Rotate(Vector3.UnitX)), CollisionTriangulator.ToWorldAxes(pose.Rotate(Vector3.UnitY)),
         CollisionTriangulator.ToWorldAxes(pose.Rotate(Vector3.UnitZ)), halfExtents, CollisionTriangulator.ToWorldAxes(pose.Translation));
 
-    /// <summary>The first box of a door part's collision file, or <see cref="Default"/> when it has none.</summary>
+    /// <summary>
+    /// The first box of a door part's collision file, or <see cref="Default"/> when it has none.
+    /// </summary>
     public static DoorFrame Of(CollisionFile? file) =>
         file?.Shapes.FirstOrDefault(s => s.Kind == CollisionShapeKind.Box) is { } box ? Of(box.Pose, box.HalfExtents) : Default;
 
-    /// <summary>The box's local axis <paramref name="axis"/> (0 X, 1 Y, 2 Z).</summary>
+    /// <summary>
+    /// The box's local axis <paramref name="axis"/> (0 X, 1 Y, 2 Z).
+    /// </summary>
     public Vector3 Axis(int axis) => axis switch { 0 => X, 1 => Y, _ => Z };
 }

@@ -10,7 +10,9 @@ namespace Meitou.Data.Save;
 /// </summary>
 public static class SaveDecals
 {
-    /// <summary>The decals of <paramref name="record"/>; an instance whose type is not one of the four is skipped.</summary>
+    /// <summary>
+    /// The decals of <paramref name="record"/>; an instance whose type is not one of the four is skipped.
+    /// </summary>
     public static List<TerrainDecal> Read(FcsRecord record)
     {
         var decals = new List<TerrainDecal>(record.Instances.Count);
@@ -19,7 +21,9 @@ public static class SaveDecals
         return decals;
     }
 
-    /// <summary>Replaces <paramref name="record"/>'s instances and <c>total</c> with <paramref name="decals"/>.</summary>
+    /// <summary>
+    /// Replaces <paramref name="record"/>'s instances and <c>total</c> with <paramref name="decals"/>.
+    /// </summary>
     public static void Write(FcsRecord record, IEnumerable<TerrainDecal> decals)
     {
         record.Instances.Clear();

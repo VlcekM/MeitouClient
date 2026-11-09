@@ -3,14 +3,18 @@ using Meitou.Data.Fcs;
 
 namespace Meitou.Data.World;
 
-/// <summary>LIGHT <c>type</c> (fcs_enums.def <c>LightType</c>): the game makes an Ogre point light or spot light of it.</summary>
+/// <summary>
+/// LIGHT <c>type</c> (fcs_enums.def <c>LightType</c>): the game makes an Ogre point light or spot light of it.
+/// </summary>
 public enum WorldLightType
 {
     Point = 0,
     Spot = 1,
 }
 
-/// <summary>LIGHT <c>effect</c> (fcs_enums.def <c>LightEffect</c>); see <see cref="WorldLights.EffectFactor"/>.</summary>
+/// <summary>
+/// LIGHT <c>effect</c> (fcs_enums.def <c>LightEffect</c>); see <see cref="WorldLights.EffectFactor"/>.
+/// </summary>
 public enum WorldLightEffect
 {
     None = 0,
@@ -19,12 +23,19 @@ public enum WorldLightEffect
     Shimmer = 3,
 }
 
-/// <summary>When the game shows a building's lights (docs/formats/lights.md, "When a light is on").</summary>
+/// <summary>
+/// When the game shows a building's lights (docs/formats/lights.md, "When a light is on").
+/// </summary>
 public enum WorldLightRule
 {
-    /// <summary>A light of a building outdoors (lamp posts, campfires, turret lamps, houses' own lights): drawn only while the daylight factor is at most 0.1.</summary>
+    /// <summary>
+    /// A light of a building outdoors (lamp posts, campfires, turret lamps, houses' own lights): drawn only while the daylight factor is at most 0.1.
+    /// </summary>
     Night,
-    /// <summary>A light of interior furniture standing in a building (slot 59 set): shown and hidden with the building's on state (day and night alike).</summary>
+
+    /// <summary>
+    /// A light of interior furniture standing in a building (slot 59 set): shown and hidden with the building's on state (day and night alike).
+    /// </summary>
     WhenBuildingOn,
 }
 
@@ -45,7 +56,8 @@ public enum WorldLightRule
 /// <param name="LightId">The LIGHT record's string id.</param>
 /// <param name="BuildingId">The BUILDING record that owns the light.</param>
 /// <param name="PlacementId">The placement (its <see cref="BuildingKey"/>, plus "/layout item id" for layout objects).</param>
-/// <param name="PowerOn">The placed building's GAMESTATE_BUILDING <c>power on</c> when its state has one (null for layout objects and states without it); what it does to the lights is Unknown.</param>
+/// <param name="PowerOn">The placed building's GAMESTATE_BUILDING <c>power on</c> when its state has one (null for layout objects and states without
+/// it); what it does to the lights is Unknown.</param>
 public sealed record WorldLight(
     Vector3 Position,
     Vector3 Colour,
@@ -66,83 +78,141 @@ public sealed record WorldLight(
     bool? PowerOn = null);
 
 /// <summary>
-/// The world's light list (docs/formats/lights.md): the LIGHT instances of every placed building, of the buildings' doors and of their
-/// exterior (and optionally interior) layout objects, placed by <see cref="WorldObjectLayout.Building(GameDatabase, GameRecord, string, Vector3, Quaternion, BuildingState?, List{PlacedLight}?, List{PlacedEffect}?)"/>,
+/// The world's light list (docs/formats/lights.md): the LIGHT instances of every placed building, of the buildings' doors and of their exterior (and
+/// optionally interior) layout objects, placed by
+/// <see cref="WorldObjectLayout.Building(GameDatabase, GameRecord, string, Vector3, Quaternion, BuildingState?, List{PlacedLight}?, List{PlacedEffect}?)"/>,
 /// plus the game's shading formulas for them.
 /// </summary>
 public static class WorldLights
 {
-    /// <summary>BuildingFunction.BF_LIGHT: the game makes such a building a light building (class BCTYPE_LIGHT), whose lights are night-only.</summary>
+    /// <summary>
+    /// BuildingFunction.BF_LIGHT: the game makes such a building a light building (class BCTYPE_LIGHT), whose lights are night-only.
+    /// </summary>
     public const int LightFunction = 15;
 
-    /// <summary>The light pass draws a night-only light while the daylight factor is at most this.</summary>
+    /// <summary>
+    /// The light pass draws a night-only light while the daylight factor is at most this.
+    /// </summary>
     public const float NightDaylightLimit = 0.1f;
 
-    /// <summary>Hours over which the daylight factor ramps at sunrise and at sunset: the exe's 1/12 is a fraction of the day (<c>GameClock.RampHours</c>).</summary>
+    /// <summary>
+    /// Hours over which the daylight factor ramps at sunrise and at sunset: the exe's 1/12 is a fraction of the day (<c>GameClock.RampHours</c>).
+    /// </summary>
     public const float DaylightRampHours = 2;
 
-    /// <summary>The lights of every placed building of the world. Destroyed buildings give none (Unknown in the game).</summary>
+    /// <summary>
+    /// The lights of every placed building of the world. Destroyed buildings give none (Unknown in the game).
+    /// </summary>
     /// <param name="layouts">Building layouts (from <c>interiors.level</c>) for the lights of exterior/interior layout objects; null skips them.</param>
     /// <param name="includeInteriors">Also the interior layouts' lights (furniture inside buildings), flagged <see cref="WorldLight.Interior"/>.</param>
-    public static IReadOnlyList<WorldLight> ForWorld(GameDatabase db, WorldLevelData levels, Func<double, double, float> terrainHeight,
-        BuildingLayouts? layouts = null, bool includeInteriors = true)
+    public static IReadOnlyList<WorldLight> ForWorld(
+        GameDatabase db,
+        WorldLevelData levels,
+        Func<double, double, float> terrainHeight,
+        BuildingLayouts? layouts = null,
+        bool includeInteriors = true)
     {
         var result = new List<WorldLight>();
         foreach (var b in levels.Buildings())
+        {
             if (BuildingPlacements.Resolve(b, db, levels, terrainHeight) is { } resolved)
                 result.AddRange(ForBuilding(db, levels, resolved, layouts, includeInteriors));
+        }
+
         return result;
     }
 
-    /// <summary>The lights of one resolved placement (see <see cref="BuildingPlacements.Resolve"/>), for per-zone use.</summary>
-    public static List<WorldLight> ForBuilding(GameDatabase db, WorldLevelData levels, ResolvedBuilding building, BuildingLayouts? layouts = null,
+    /// <summary>
+    /// The lights of one resolved placement (see <see cref="BuildingPlacements.Resolve"/>), for per-zone use.
+    /// </summary>
+    public static List<WorldLight> ForBuilding(
+        GameDatabase db,
+        WorldLevelData levels,
+        ResolvedBuilding building,
+        BuildingLayouts? layouts = null,
         bool includeInteriors = true)
     {
         var result = new List<WorldLight>();
         if (building.Destroyed) return result;
+
         var b = building.Placement;
-        var state = b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
+        var state = FindState(levels, b);
         bool? powerOn = state is not null && state.Bools.TryGetValue("power on", out var on) ? on : null;
         var placed = new List<PlacedLight>();
         WorldObjectLayout.Building(db, building.Record, b.InstanceId, building.Position, b.Rotation, new BuildingState { Identity = b.Key }, placed);
         foreach (var p in placed) result.Add(FromPlaced(p, interior: false, powerOn));
+
+        // A standalone placement (the character editor's bar) has no state record; its layouts are named by the placement.
         if (layouts is null) return result;
         AddLayout(db, layouts, building, b.LayoutName(state, exterior: true), exterior: true, result);
-        if (includeInteriors && !b.WithoutInterior) AddLayout(db, layouts, building, b.LayoutName(state, exterior: false), exterior: false, result);
+        if (includeInteriors && !b.WithoutInterior)
+        {
+            string interiorLayout = b.LayoutName(state, exterior: false);
+            AddLayout(db, layouts, building, interiorLayout, exterior: false, result);
+        }
+
         return result;
+    }
+
+    /// <summary>
+    /// The placement's state record (its <c>StateId</c> in the state zone's table), or null when it has none.
+    /// </summary>
+    static GameRecord? FindState(WorldLevelData levels, BuildingPlacement b)
+    {
+        if (b.StateId is null) return null;
+        if (!levels.Zones.TryGetValue(b.StateZone ?? b.Zone, out var zoneDb)) return null;
+
+        return zoneDb.Find(b.StateId);
     }
 
     static void AddLayout(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding building, string name, bool exterior, List<WorldLight> result)
     {
         if (name.Length == 0 || layouts.Find(building.Record, name, exterior) is not { } layout) return;
+
         foreach (var item in layouts.Items(layout, building.Placement))
         {
             var (at, rotation) = BuildingLayouts.Place(building.Position, building.Placement.Rotation, item);
             var placed = new List<PlacedLight>();
-            WorldObjectLayout.Building(db, item.Building, $"{building.Placement.InstanceId}/{item.InstanceId}", at, rotation,
-                new BuildingState { Identity = $"{building.Placement.Key}/{item.InstanceId}" }, placed);
-            foreach (var p in placed) result.Add(FromPlaced(p, interior: !exterior, powerOn: null, indoors: !exterior && IsIndoors(item.Building, true)));
+            string instanceId = $"{building.Placement.InstanceId}/{item.InstanceId}";
+            var state = new BuildingState { Identity = $"{building.Placement.Key}/{item.InstanceId}" };
+            WorldObjectLayout.Building(db, item.Building, instanceId, at, rotation, state, placed);
+            bool indoors = !exterior && IsIndoors(item.Building, true);
+            foreach (var p in placed) result.Add(FromPlaced(p, interior: !exterior, powerOn: null, indoors: indoors));
         }
     }
 
     /// <summary>
-    /// Building slot 59 (<c>isIndoors</c>, <c>FUN_140547530</c>) is set: a BUILDING with <c>is interior furniture</c> standing in a building (<paramref name="inBuilding"/>: furniture of an
-    /// interior layout, or a site with a parent). Such a light building works and lights by day too.
+    /// Building slot 59 (<c>isIndoors</c>, <c>FUN_140547530</c>) is set: a BUILDING with <c>is interior furniture</c> standing in a building
+    /// (<paramref name="inBuilding"/>: furniture of an interior layout, or a site with a parent). Such a light building works and lights by day too.
     /// </summary>
     public static bool IsIndoors(GameRecord building, bool inBuilding) => inBuilding && building.GetBool("is interior furniture");
 
     /// <summary>
-    /// A placed LIGHT instance as a <see cref="WorldLight"/>; <paramref name="powerOn"/> is the owner's state <c>power on</c>, if any. Every building's lights are night-only unless it is
-    /// <paramref name="indoors"/> (<see cref="IsIndoors"/>; the builder <c>FUN_140815420</c> flags a light when slot 59 is null or the building is outside furniture, which an exterior
-    /// layout item and a building outside never are indoors).
+    /// A placed LIGHT instance as a <see cref="WorldLight"/>; <paramref name="powerOn"/> is the owner's state <c>power on</c>, if any. Every
+    /// building's lights are night-only unless it is <paramref name="indoors"/> (<see cref="IsIndoors"/>; the builder <c>FUN_140815420</c> flags a
+    /// light when slot 59 is null or the building is outside furniture, which an exterior layout item and a building outside never are indoors).
     /// </summary>
-    public static WorldLight FromPlaced(PlacedLight p, bool interior, bool? powerOn = null, bool indoors = false) =>
-        FromRecord(p.Light, p.Position, p.Direction, p.Power, indoors ? WorldLightRule.WhenBuildingOn : WorldLightRule.Night, p.PlacementId, p.Owner.StringId,
-            interior, p.Holder.Type == FcsRecordType.BUILDING_PART ? p.Holder.GetInt("building floor") : 0, powerOn);
+    public static WorldLight FromPlaced(PlacedLight p, bool interior, bool? powerOn = null, bool indoors = false)
+    {
+        var rule = indoors ? WorldLightRule.WhenBuildingOn : WorldLightRule.Night;
+        int floor = p.Holder.Type == FcsRecordType.BuildingPart ? p.Holder.GetInt("building floor") : 0;
+        return FromRecord(p.Light, p.Position, p.Direction, p.Power, rule, p.PlacementId, p.Owner.StringId, interior, floor, powerOn);
+    }
 
-    /// <summary>A LIGHT record at <paramref name="position"/> with its rolled <paramref name="power"/>; <paramref name="ownerId"/> is the record that carries it.</summary>
-    public static WorldLight FromRecord(GameRecord light, Vector3 position, Vector3 direction, float power, WorldLightRule rule, string placementId, string ownerId,
-        bool interior = false, int floor = 0, bool? powerOn = null) => new(
+    /// <summary>
+    /// A LIGHT record at <paramref name="position"/> with its rolled <paramref name="power"/>; <paramref name="ownerId"/> is the record that carries it.
+    /// </summary>
+    public static WorldLight FromRecord(
+        GameRecord light,
+        Vector3 position,
+        Vector3 direction,
+        float power,
+        WorldLightRule rule,
+        string placementId,
+        string ownerId,
+        bool interior = false,
+        int floor = 0,
+        bool? powerOn = null) => new(
             position,
             Colour(light.GetInt("diffuse", 0xFFFFFF)),
             power,
@@ -160,7 +230,10 @@ public static class WorldLights
             ownerId,
             placementId,
             powerOn);
-    /// <summary>A packed 0xRRGGBB int as (r, g, b) / 255, as Ogre's <c>ColourValue::setAsARGB</c> unpacks it.</summary>
+
+    /// <summary>
+    /// A packed 0xRRGGBB int as (r, g, b) / 255, as Ogre's <c>ColourValue::setAsARGB</c> unpacks it.
+    /// </summary>
     public static Vector3 Colour(int rgb) => new Vector3((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF) / 255f;
 
     /// <summary>
@@ -171,6 +244,7 @@ public static class WorldLights
     public static float Attenuation(float distance, float radius)
     {
         if (radius <= 0 || distance >= radius) return 0;
+
         float x = Math.Clamp(distance / radius, 0, 1);
         if (x < 0.649f) return 0.2f + 0.8f * (1 - x) * (1 - x) * (1 - x);
         if (x < 0.8f) return 0.242f - 3 * (x - 0.6f) * (x - 0.6f);
@@ -184,10 +258,13 @@ public static class WorldLights
     /// </summary>
     public static float SpotFactor(float cosAngle, float innerAngle, float outerAngle, float falloff)
     {
-        float inner = MathF.Min(innerAngle, outerAngle), outer = MathF.Max(innerAngle, outerAngle);
-        float cosInner = MathF.Cos(inner * 0.5f), cosOuter = MathF.Cos(outer * 0.5f);
+        float inner = MathF.Min(innerAngle, outerAngle);
+        float outer = MathF.Max(innerAngle, outerAngle);
+        float cosInner = MathF.Cos(inner * 0.5f);
+        float cosOuter = MathF.Cos(outer * 0.5f);
         if (cosAngle <= cosOuter) return 0;
         if (cosInner - cosOuter < 1e-5f) return 1;
+
         float t = Math.Clamp((cosAngle - cosOuter) / (cosInner - cosOuter), 0, 1);
         return Math.Clamp(MathF.Pow(t, falloff > 0 ? falloff : 1), 0, 1);
     }
@@ -205,17 +282,21 @@ public static class WorldLights
 
     /// <summary>
     /// The game's daylight factor at <paramref name="hour"/>: 0 outside [sunrise, sunset], 1 inside, ramping linearly over
-    /// <see cref="DaylightRampHours"/> after sunrise and before sunset (Observed, <c>FUN_14066cb50</c>; the bounds are the CONSTANTS <c>sunrise</c>/<c>sunset</c>).
+    /// <see cref="DaylightRampHours"/> after sunrise and before sunset (Observed, <c>FUN_14066cb50</c>; the bounds are the CONSTANTS
+    /// <c>sunrise</c>/<c>sunset</c>).
     /// </summary>
     public static float DaylightFactor(float hour, float sunrise, float sunset)
     {
         if (hour < sunrise || hour > sunset) return 0;
         if (hour < sunrise + DaylightRampHours) return (hour - sunrise) / DaylightRampHours;
         if (hour > sunset - DaylightRampHours) return (sunset - hour) / DaylightRampHours;
+
         return 1;
     }
 
-    /// <summary>Whether the game draws <paramref name="light"/> at <paramref name="daylight"/> (<see cref="DaylightFactor"/>) with its building on or off.</summary>
+    /// <summary>
+    /// Whether the game draws <paramref name="light"/> at <paramref name="daylight"/> (<see cref="DaylightFactor"/>) with its building on or off.
+    /// </summary>
     public static bool IsLit(WorldLight light, float daylight, bool buildingOn = true) =>
         light.Intensity > 0 && light.Rule switch
         {

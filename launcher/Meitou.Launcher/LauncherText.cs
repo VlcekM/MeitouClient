@@ -14,33 +14,49 @@ namespace Meitou.Launcher;
 /// </summary>
 static class LauncherText
 {
-    static GettextCatalog catalog = GettextCatalog.Empty;
+    /// <summary>
+    /// Combo boxes whose items the layout writes as labels (the Mac renderer and memory choices), not data like the language list.
+    /// </summary>
+    static readonly HashSet<string> LabelCombos = ["RendererBox", "MetalBudgetBox"];
+
+    static GettextCatalog s_catalog = GettextCatalog.Empty;
+
     // Translated text -> its English source, over every catalog loaded so far: a control first seen with a translated text (made after a
     // language switch) can still be turned back to English.
-    static readonly Dictionary<string, string> sources = new(StringComparer.Ordinal);
+    static readonly Dictionary<string, string> Sources = new(StringComparer.Ordinal);
 
-    /// <summary>The active locale code (<c>en_GB</c>, <c>pt_BR</c>, ...).</summary>
+    /// <summary>
+    /// The active locale code (<c>en_GB</c>, <c>pt_BR</c>, ...).
+    /// </summary>
     public static string Code { get; private set; } = GameLanguage.DefaultCode;
 
-    /// <summary>Loads <paramref name="code"/>'s catalog (none for English); <paramref name="install"/> is where the override file is looked for.</summary>
+    /// <summary>
+    /// Loads <paramref name="code"/>'s catalog (none for English); <paramref name="install"/> is where the override file is looked for.
+    /// </summary>
     public static void Use(string code, GameInstall? install)
     {
         Code = code;
-        catalog = code == GameLanguage.DefaultCode ? GettextCatalog.Empty : MeitouTranslations.Load(code, LocaleFolder(install, code));
-        foreach (var (english, translated) in catalog.Messages) sources.TryAdd(translated, english);
+        s_catalog = code == GameLanguage.DefaultCode ? GettextCatalog.Empty : MeitouTranslations.Load(code, LocaleFolder(install, code));
+        foreach (var (english, translated) in s_catalog.Messages) Sources.TryAdd(translated, english);
     }
 
-    /// <summary><c>locale/&lt;code&gt;</c> of the Kenshi folder, where a <c>meitou.po</c> overrides the built-in texts; null without a folder.</summary>
+    /// <summary>
+    /// <c>locale/&lt;code&gt;</c> of the Kenshi folder, where a <c>meitou.po</c> overrides the built-in texts; null without a folder.
+    /// </summary>
     public static string? LocaleFolder(GameInstall? install, string code) => install is null ? null : Path.Combine(install.Root, "locale", code);
 
-    /// <summary>The English source of <paramref name="text"/> when it is a translation, else <paramref name="text"/> itself.</summary>
-    public static string Source(string text) => sources.GetValueOrDefault(text, text);
+    /// <summary>
+    /// The English source of <paramref name="text"/> when it is a translation, else <paramref name="text"/> itself.
+    /// </summary>
+    public static string Source(string text) => Sources.GetValueOrDefault(text, text);
 
-    /// <summary><paramref name="text"/> in the active language, or its English when it has no translation.</summary>
+    /// <summary>
+    /// <paramref name="text"/> in the active language, or its English when it has no translation.
+    /// </summary>
     public static string Translate(string text)
     {
         string english = Source(text);
-        return catalog.Find(english) ?? english;
+        return s_catalog.Find(english) ?? english;
     }
 
     /// <summary>
@@ -50,12 +66,11 @@ static class LauncherText
     /// </summary>
     public static string Translate(string text, params object?[] args) => Loc.Format(Translate(text), args);
 
-    /// <summary>A control whose text or items are data (a list, the release notes, the news, the newest save's name), not a label.</summary>
+    /// <summary>
+    /// A control whose text or items are data (a list, the release notes, the news, the newest save's name), not a label.
+    /// </summary>
     static bool HoldsData(Control control) => control is ComboBox or ListBox
         or ContentControl { Name: "ReleaseNotes" } or StackPanel { Name: "NewsPanel" } or TextBlock { Name: "ContinueSaveText" };
-
-    /// <summary>Combo boxes whose items the layout writes as labels (the Mac renderer and memory choices), not data like the language list.</summary>
-    static readonly HashSet<string> LabelCombos = ["RendererBox", "MetalBudgetBox"];
 
     /// <summary>
     /// Translates the label items of <paramref name="combo"/>. The closed box shows the content its selected item had when chosen, so a new
@@ -86,8 +101,10 @@ static class LauncherText
         void Visit(Control control)
         {
             if (!seen.Add(control)) return;
+
             // A placeholder is a label too, even on a control whose items hold data (a combo box's list, a text box's text).
-            if (control is TextBox textBox && textBox.PlaceholderText is { } placeholder) textBox.PlaceholderText = Translate(placeholder);
+            if (control is TextBox textBox && textBox.PlaceholderText is { } placeholder)
+                textBox.PlaceholderText = Translate(placeholder);
             else if (control is ComboBox combo)
             {
                 if (combo.PlaceholderText is { } hint) combo.PlaceholderText = Translate(hint);

@@ -44,7 +44,9 @@ public static class CookedMeshReader
         return new CookedMesh(vertices, indices);
     }
 
-    /// <summary>The convex mesh's hull vertices. The <c>CVHL</c> block is found by its tag (a <c>CLHL</c> block precedes it).</summary>
+    /// <summary>
+    /// The convex mesh's hull vertices. The <c>CVHL</c> block is found by its tag (a <c>CLHL</c> block precedes it).
+    /// </summary>
     public static CookedMesh ReadConvex(ReadOnlySpan<byte> data)
     {
         if (!data.StartsWith(ConvexMagic)) throw new InvalidDataException("Not a cooked convex mesh (NXS CVXM)");

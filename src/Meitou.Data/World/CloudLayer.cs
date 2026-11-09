@@ -10,32 +10,55 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class CloudLayer
 {
-    /// <summary>Plane height (<c>uHeight</c>) and texture scale (<c>uScale</c>): the cloud point is <c>d · 100 / d.y</c>, the texture coordinate its xz × 0.001.</summary>
+    /// <summary>
+    /// Plane height (<c>uHeight</c>) and texture scale (<c>uScale</c>): the cloud point is <c>d · 100 / d.y</c>, the texture coordinate its xz ×
+    /// 0.001.
+    /// </summary>
     public const float Height = 100, Scale = 0.001f;
-    /// <summary><c>uDistanceAttenuation</c>: the horizon band fades in over 0.1 of <c>d.y</c> above this (<c>h = saturate(10 · saturate(d.y − 0.05))</c>).</summary>
+    /// <summary>
+    /// <c>uDistanceAttenuation</c>: the horizon band fades in over 0.1 of <c>d.y</c> above this (<c>h = saturate(10 · saturate(d.y − 0.05))</c>).
+    /// </summary>
     public const float DistanceAttenuation = 0.05f;
-    /// <summary><c>uCloudLayerHeightVolume</c> and <c>uCloudLayerVolumetricDisplacement</c>: the fake volume of the second lookup.</summary>
+    /// <summary>
+    /// <c>uCloudLayerHeightVolume</c> and <c>uCloudLayerVolumetricDisplacement</c>: the fake volume of the second lookup.
+    /// </summary>
     public const float HeightVolume = 0.25f, VolumetricDisplacement = 0.01f;
-    /// <summary><c>uDensityMultiplier</c>.</summary>
+    /// <summary>
+    /// <c>uDensityMultiplier</c>.
+    /// </summary>
     public const float DensityMultiplier = 3;
-    /// <summary>The wind offset's texture scale (the shader's <c>uWindDirection × 0.00005</c>).</summary>
+    /// <summary>
+    /// The wind offset's texture scale (the shader's <c>uWindDirection × 0.00005</c>).
+    /// </summary>
     public const float WindScale = 0.00005f;
-    /// <summary>The second lookup of <c>Clouds.dds</c> is shifted by this in texture space; the tile texture adds <c>0.1 ×</c> its red to the density.</summary>
+    /// <summary>
+    /// The second lookup of <c>Clouds.dds</c> is shifted by this in texture space; the tile texture adds <c>0.1 ×</c> its red to the density.
+    /// </summary>
     public static readonly Vector2 SecondLookupShift = new(0.2f, 0.6f);
     public const float TileWeight = 0.1f;
-    /// <summary>The floor of <c>getColorAt(+Z) · skyMult</c> in <c>zenithLight</c>, the sky controller's offset 0xb8, set when the sky is created.</summary>
+    /// <summary>
+    /// The floor of <c>getColorAt(+Z) · skyMult</c> in <c>zenithLight</c>, the sky controller's offset 0xb8, set when the sky is created.
+    /// </summary>
     public static readonly Vector3 ZenithFloor = new(0.001f, 0.001f, 0.0015f);
 
-    /// <summary><c>DensityOffset = 1.4 c − 0.8</c>, with c (the weather's cloud density) clamped to 0..1 as the sky controller does.</summary>
+    /// <summary>
+    /// <c>DensityOffset = 1.4 c − 0.8</c>, with c (the weather's cloud density) clamped to 0..1 as the sky controller does.
+    /// </summary>
     public static float DensityOffset(float c) => 1.4f * Math.Clamp(c, 0, 1) - 0.8f;
 
-    /// <summary><c>Darkness = pow(clamp(c − 0.5, 0, 1), 0.3)</c>.</summary>
+    /// <summary>
+    /// <c>Darkness = pow(clamp(c − 0.5, 0, 1), 0.3)</c>.
+    /// </summary>
     public static float Darkness(float c) => MathF.Pow(Math.Clamp(Math.Clamp(c, 0, 1) - 0.5f, 0, 1), 0.3f);
 
-    /// <summary>The alpha near the horizon (and below it), <c>saturate(DensityOffset + 0.5)</c>; also <c>horizonClouds.a</c>.</summary>
+    /// <summary>
+    /// The alpha near the horizon (and below it), <c>saturate(DensityOffset + 0.5)</c>; also <c>horizonClouds.a</c>.
+    /// </summary>
     public static float HorizonAlpha(float c) => Math.Clamp(DensityOffset(c) + 0.5f, 0, 1);
 
-    /// <summary>The horizon band's weight <c>h</c> at the dome direction's height <paramref name="y"/>: 0 up to 0.05, 1 from 0.15.</summary>
+    /// <summary>
+    /// The horizon band's weight <c>h</c> at the dome direction's height <paramref name="y"/>: 0 up to 0.05, 1 from 0.15.
+    /// </summary>
     public static float HorizonBand(float y) => Math.Clamp(10 * Math.Clamp(y - DistanceAttenuation, 0, 1), 0, 1);
 
     /// <summary>
@@ -93,7 +116,10 @@ public static class CloudLayer
     public static (double X, double Z) Advance((double X, double Z) offset, Vector2 velocity, float dt) =>
         (offset.X + (double)velocity.X * dt, offset.Z + (double)velocity.Y * dt);
 
-    /// <summary>The offset's texture shift, wrapped to 0..1 (the textures repeat with period 1, so the shader gets the same picture with float precision kept).</summary>
+    /// <summary>
+    /// The offset's texture shift, wrapped to 0..1 (the textures repeat with period 1, so the shader gets the same picture with float precision
+    /// kept).
+    /// </summary>
     public static Vector2 TextureShift((double X, double Z) offset)
     {
         static float Wrap(double v) { double w = v - Math.Floor(v); return (float)w; }

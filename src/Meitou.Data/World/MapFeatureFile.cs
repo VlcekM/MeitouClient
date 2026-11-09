@@ -14,7 +14,9 @@ public sealed class MapFeatureFile
     public const string RelativePath = "newland/land/features.dat";
     static readonly byte[] Magic = "MF01"u8.ToArray();
 
-    /// <summary>Placements per zone; index <c>y * 64 + x</c> (<see cref="ZoneOf"/>). Zones without features are empty.</summary>
+    /// <summary>
+    /// Placements per zone; index <c>y * 64 + x</c> (<see cref="ZoneOf"/>). Zones without features are empty.
+    /// </summary>
     public List<List<MapFeature>> Zones { get; } = [];
 
     public static ZoneCoordinate ZoneOf(int index) => new(index % WorldLayout.ZoneCount, index / WorldLayout.ZoneCount);

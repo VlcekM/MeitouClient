@@ -2,7 +2,9 @@ using System.Globalization;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>Resolve ResourceLayout skins and their Client regions without rewriting the source layout.</summary>
+/// <summary>
+/// Resolve ResourceLayout skins and their Client regions without rewriting the source layout.
+/// </summary>
 public static partial class MyGuiTemplates
 {
     public static MyGuiLayout Expand(MyGuiLayout layout, MyGuiResources resources) => new(layout.Version,

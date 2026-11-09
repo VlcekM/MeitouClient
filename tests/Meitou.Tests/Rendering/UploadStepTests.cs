@@ -1,4 +1,5 @@
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Terrain;
+
 
 namespace Meitou.Tests.Rendering;
 
@@ -24,9 +25,12 @@ public class UploadStepTests
         q.Add(() => { clock.Now += 10; ran++; }, "big");
         q.Add(() => { clock.Now += 10; ran++; }, "big");
         q.Run(2);
+
         Assert.Equal(1, ran);
         Assert.Equal(1, q.Count);
+
         q.Run(2);
+
         Assert.Equal(2, ran);
         Assert.Equal(0, q.Count);
     }
@@ -39,18 +43,21 @@ public class UploadStepTests
         void Heavy() => clock.Now += 3;
         q.Add(Heavy, "heavy");
         q.Run(2);   // learns that heavy costs 3 ms
+
         Assert.Equal(3, q.ExpectedMs("heavy"), 6);
 
         for (int i = 0; i < 3; i++) q.Add(Small, "small");
         q.Add(Heavy, "heavy");
         q.Add(Small, "small");
         q.Run(2);
+
         // The three small ones (0.3 ms) ran; heavy (3 ms) would end at 3.3 ms, more than the slack past the budget: it and the last small one wait.
         Assert.Equal(2, q.Count);
         Assert.StartsWith("small, small, small, ", q.LastRun);
         Assert.DoesNotContain("heavy", q.LastRun);
 
         q.Run(2);
+
         // Now heavy is first and runs; the budget is gone after it.
         Assert.StartsWith("heavy", q.LastRun);
         Assert.Equal(1, q.Count);

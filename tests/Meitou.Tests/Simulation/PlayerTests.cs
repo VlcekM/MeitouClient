@@ -1,6 +1,8 @@
 using System.Numerics;
 using Meitou.Data.Gameplay;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
@@ -19,7 +21,8 @@ public class PlayerTests
         var db = SyntheticTown.Database();
         var data = SyntheticTown.Data(db);
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
-        var systems = SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Player | StandardParts.Movement, new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 5 });
+        var systems = SyntheticTown.Standard(data, walk, StandardParts.Population | StandardParts.Player | StandardParts.Movement,
+                new PopulationSettings { CheckEveryTicks = 1, UnloadGraceSeconds = 5 });
         var population = systems.Population!;
         var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false }, walk, systems.Systems);
         var squad = population.StartPlayer(world, NewGameStart.From(db.Find("40-t")!));
@@ -51,7 +54,9 @@ public class PlayerTests
             ran = target;
             hashes.Add(w.StateHash());
         }
+
         Assert.Equal(6, hashes.Distinct().Count());   // the state moves between every checkpoint
+
         return hashes;
     }
 
@@ -61,10 +66,13 @@ public class PlayerTests
         using var g = Start();
         var first = g.Squad.Members[0];
         g.World.RunTicks(2);
+
         Assert.Equal([first], g.World.Player.Selection);
+
         g.World.Characters.Cold(first.Slot)!.DiedTick = g.World.Tick;
         g.World.RunTicks(2);
         var chosen = Assert.Single(g.World.Player.Selection);
+
         Assert.NotEqual(first, chosen);
         Assert.True(g.World.Characters.Cold(chosen.Slot) is { IsPlayer: true, DiedTick: < 0 });
     }

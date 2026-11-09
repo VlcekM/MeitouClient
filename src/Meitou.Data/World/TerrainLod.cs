@@ -18,7 +18,9 @@ public readonly record struct TerrainLod(float PixelScale, float PixelError, flo
     /// </summary>
     public const float Roughness = 2f;
 
-    /// <summary>Where in a level's distance band its vertices start sliding onto the coarser grid (the last 30% morph).</summary>
+    /// <summary>
+    /// Where in a level's distance band its vertices start sliding onto the coarser grid (the last 30% morph).
+    /// </summary>
     public const float MorphFraction = 0.7f;
 
     /// <summary>
@@ -31,13 +33,20 @@ public readonly record struct TerrainLod(float PixelScale, float PixelError, flo
     /// </summary>
     public const float MinimumGap = 2.5f;
 
-    /// <summary>Pixels per world unit at distance 1 for a picture <paramref name="height"/> pixels high and a vertical field of view in radians.</summary>
+    /// <summary>
+    /// Pixels per world unit at distance 1 for a picture <paramref name="height"/> pixels high and a vertical field of view in radians.
+    /// </summary>
     public static float ProjectionScale(float height, float fieldOfView) => height / (2 * MathF.Tan(fieldOfView / 2));
 
-    /// <summary>The allowed error at a distance: <see cref="PixelError"/> up to <see cref="RampStart"/>, <see cref="FarPixelError"/> from twice it, the game's ramp in between.</summary>
+    /// <summary>
+    /// The allowed error at a distance: <see cref="PixelError"/> up to <see cref="RampStart"/>, <see cref="FarPixelError"/> from twice it, the game's
+    /// ramp in between.
+    /// </summary>
     public float Threshold(float distance) => PixelError / Factor(distance);
 
-    /// <summary>The game's factor on the metric, 1 âˆ’ t + t Ã— near / far with t = (d âˆ’ D) / D clamped to 0..1 (settings.md).</summary>
+    /// <summary>
+    /// The game's factor on the metric, 1 âˆ’ t + t Ã— near / far with t = (d âˆ’ D) / D clamped to 0..1 (settings.md).
+    /// </summary>
     float Factor(float distance)
     {
         if (!(FarPixelError > PixelError) || RampStart <= 0) return 1;
@@ -45,7 +54,9 @@ public readonly record struct TerrainLod(float PixelScale, float PixelError, flo
         return 1 - t + t * (PixelError / FarPixelError);
     }
 
-    /// <summary>The distance within which a node whose height error is <paramref name="error"/> world units is split.</summary>
+    /// <summary>
+    /// The distance within which a node whose height error is <paramref name="error"/> world units is split.
+    /// </summary>
     public float SplitDistance(double error)
     {
         double ke = PixelScale * error;

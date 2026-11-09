@@ -1,7 +1,7 @@
 # Pathfinding and movement
 
 Kenshi NavMesh/Havok/CharMovement research, scoped binary/log/file evidence below. Runtime uses
-our DotRecast builder (`Meitou.Navigation`), not proprietary Havok SDK. [Collision](../formats/collision.md),
+our DotRecast builder (`Meitou.Simulation.Navigation`), not proprietary Havok SDK. [Collision](../formats/collision.md),
 [terrain](../formats/terrain.md), [stats](character-stats.md), [simulation](../simulation.md#navmesh).
 
 ## Space and tile layout
@@ -53,6 +53,14 @@ used by 17 templates (mostly rebirth.mod: wolf, beak and landbat packs, bordergu
 the requested mode outright with it (after the AI package's mode and the carrier rule, before the slave rule `FUN_1405c8aa0` = 2 that forces run), and the move-task start `FUN_140332390` replaces only the package's mode, then
 takes the larger of the result and an explicit task mode when both are not 4 (so it never lowers an explicit mode); the carrier rule raises walk to jog (mode 0 to 1) in both. Meitou (`MovementSystem`, `Squad.ForceSpeed`): the raise
 every NPC member's walk or jog mode gets (the rule both readers share); lowering by the selector is not applied (**Unknown** which of the two a given walk uses in Meitou's single mode). The slave rule is not modelled here.
+
+### Running after a moving target
+
+Task_Move's update (`FUN_140354600`, Task_Move vtable `0x10`, **Verified**) runs every frame. It re-aims at its target (`FUN_1405c68a0`, which applies the mover's own mode),
+then, when the target is a character (vfunc `0x20` = 1) whose current speed (Character vfunc `0x48` `FUN_1405c83d0`: the mover's `+0xb8`) is above 20 (`DAT_141683188`),
+sets the mover to mode 2, run. The mode setter (`FUN_140665150`, CharMovement vfunc `0xa8`) gives `+0xbc` the race walk speed for 0, 55 for 1, 999 for 2 and 3.
+**Observed** (Frida on 1.0.65, Rebirth): workmasters run after a jogging slave and walk again once it stops. Meitou: `SpeedMode.Chasing`, used by the Shout job's
+walk to its slave (188, `move_on_free_will` toward it). Meitou's other walks aim at positions; which of them the original makes a Task_Move toward a character is **Unknown**.
 
 ### Bodies in the way
 
@@ -207,7 +215,7 @@ the centre); others the plain group speed.
 
 ## Own builder
 
-DotRecast: cells2,height1,tile 288 cells (576 units),edges 24 cells,watershed regions,agent18/climb5,ground/water/door areas (interiors: one tile,
+DotRecast: cells2,height0.5,tile 288 cells (576 units),edges 24 cells,watershed regions,agent18/climb5,ground/water/door areas (interiors: one tile,
 monotone regions, edges 24 cells; [Search cost](#search-cost)). Build asynchronously,
 cache tiles and gate population on readiness. Query A* through portal clearance (radius per wall end; tile-border, seam
 and area-change ends are open) and water/door costs. **Observed** (zone 18.39, `meitou-tools navmesh`): a Swamp Village
@@ -260,6 +268,12 @@ triangulation drop it). An unseeded surface reached only over such a step is the
 has no faces there (its stair faces end at x 49395). Over 10 zones (`--compare`, `--compare-interiors`) area against the original is unchanged within
 0.1 % and kept polygons grow 0..0.4 %; with a 26° limit Ancient Lab `28.60`'s spiral stair top (28°) was cut from its floor. Which field of the
 original's generation edge matching rejects such joins is **Unknown** (its alignment values were not read; the stitch's are in the Generator table).
+The same alignment test cuts links with no step, where two surfaces cross at one height (a ramp rising past a ledge's side). **Observed** (zone 23.22,
+Stephouse `560-Newwworld-INGAME`, `--survey-interiors 23,22 --border`): its outer steps (`Steps02`, 781..836) rose along the south wall past the wall top
+(792..797) and joined it, so the walls' tops were walkable; ours-only area there 7724 → 728, 15 zones' `--compare` unchanged within 0.1 %.
+**Cell height 0.5** (engine choice): a span's top is its surface rounded up to a cell, so at height 1 a 5.9 step could come out as the 5-cell climb.
+**Observed** (zone 23.22, Y-House `554-Newwworld-INGAME`): its walkable wall top, 5.9 above the upper floor, joined it; ours-only area 22840 → 1540. A
+climb of 4 cells instead cut Squin's rock top (18.35, RockOut_Rock at 1709) from the hillside it meets (orig-only 1115 → 7369); build time unchanged (zones 18.35, 42.22).
 **Interiors are one tile** (engine choice): in the zone's 48-cell tiles a stair across a tile line inside a building comes out cut (Stack's Longhouse
 `19.29:6-`; the two tiles' contours put their vertices at different heights along the ramp). **Winding**: Recast's clockwise polygons are flipped by the sign of all polygons' summed area (`ZoneNavMeshBuilder.ClockwiseOverall`); the first polygon's float area alone came out wrong for Snailhouse Lagoon's interior (zone 35.42, `36-Newwworld-INGAME`), which stayed clockwise, so no point was inside it and walkers stood only within edge tolerance (**Observed**, headless probe of a save: stuck at its door before, out to the street after). **Interior coverage**: `meitou-tools navmesh --compare-interiors`
 counts an original tile's interior face covered when a kept polygon within 12 of its centre's height lies over the centre or within 3 units of it
@@ -354,7 +368,7 @@ the fog camps' `Mafic_HugeRockSlabs` by the nest markers south of Mongrel have n
 was before features were gathered). Their collision is a triangle mesh, mostly open at the bottom
 (gravel piles: 24 open edges; Hub cliff blocks closed). Engine choice: a feature's triangle mesh is a `NavMeshSolid`; a walkable span is removed when the
 nearest of its triangles above the span's floor (more than 1 over it, at the cell's middle) faces up, so the span sees its back; an overhang's underside faces
-down and keeps the ground under it. `hidden` features keep their collision (above), as in Meitou. **Observed** (`--compare`,
+down and keeps the ground under it. A single-sided top (Rebirth's `Trestle_Bridge001`, a deck with no underside) also keeps the ground under it unless the mesh walls the span in: at least 4 of 8 horizontal rays, 1 over the span's floor, hit the mesh (engine choice). **Observed** (`--compare 22,19`, the bridge's zone): original-only 921 → 446 samples, ours-only 8,587 → 8,594; 21.19, 23.22, 34.46, 13.12, 21.32, 20.32, 18.35, 19.29, 14.22 unchanged. Before it the deck's ground was cut, so Rebirth's east and west halves joined only round the north (a path of 12,149 for 603 across at z -56,150, where the original's slaves cross; now 603). `hidden` features keep their collision (above), as in Meitou. **Observed** (`--compare`,
 before → after): ours-only area 21.19 19.1 → 10.7 %, 23.22 10.6 → 6.6 %, 34.46 3.7 → 2.6 %, 13.12 3.6 → 1.9 %, 21.32 5.8 → 4.8 %, 20.32 3.8 → 3.4 %;
 original-only 20.32 1.6 → 0.6 %, 18.35 1.1 → 0.3 %, 21.19 1.4 → 0.3 %; 19.29, 21.42, 21.31, 10.31, 20.29 unchanged. **Observed**
 (`--feature-tops`: samples every 8 units where a feature's top face is walkable and 12+ over the terrain, with a polygon within 8): the original walks
@@ -454,6 +468,20 @@ i.e. its connected edge at 783 above our hull's top 773, our door at 696: a diff
 original's exterior has the door landing at ~121 outside the hull, ours only a pruned sliver at 121..123 beside deep water. Were either rebuilt, the
 original's stitch (10 in height, 2 apart, Generator) could not join our geometry either: their door steps are 12..17, as in `48.13:12-` (step 12..15),
 which the original leaves unconnected.
+**Observed** (tile 50.24, Lost Town; hashes computed from the level placements): of its 19 buildings the tile has `29-`, `33-` and `47-` standing and
+`17-` ruined, the reverse of their level states; Y-House `17-Newwworld-INGAME`, the town's only intact building (level `destroyed` false, residents
+`_totally empty`, not `building ruined`), has only a ruin's ground-floor group (`180633`, 41 faces), so the original rebuilds its interior intact at
+load (no group has its intact hash); against the tile its upper floors counted as ours only (86,396 units²), not a fault of our mesh. So
+`--survey-interiors` skips a standing placement whose tile group is filed under its ruin hash (`OriginalNavTiles.InteriorHash`; it leaves out the
+contents, which a ruin has none of).
+**Observed** (zone 45.9, Y-House `3-Dialogue-INGAME`, tilted ~7°, `--survey-interiors`): its wall top joined the upper floor through a near-seam
+whose ends were 5.5 apart (the slack was still the half of a 1-unit cell); with half of 0.5 the band is cut off and pruned, ours only 29,548 → 8,068.
+The rest was its central roof cap (walkable top 1177.7, sides ~25°, a cutting riser of ~64° below them): Recast's low-obstacle filter walked
+the riser's cells, whose cutting tops stood exactly the climb over the floor beside them, so they climbed floor 1157.4 → 1162.4 → the cap's slope
+at 1166.4; the original has no faces on the riser and a hole over the cap, the ground floor beneath. **Low obstacles** (engine choice,
+`FilterLowHangingWalkableObstacles`): a cutting top is walked only under the climb (9 cells, 4.5), not at it: 45.9's ours only 8,068 → 1,860;
+over 15 zones (`--compare`) ours only −371, original only +139 (0.5 %); towns' interiors ours only −19.3k, original only +1.75k. Without the
+filter the towns' ours only falls 70.6k but original only rises 9.1k, so some low obstacle the original walks over (which, **Unknown**) needs it.
 **Unseeded interiors** (engine choice): an interior is joined whatever its own pruning kept, to exterior polygons the exterior's pruning kept, and
 every region joined to a kept polygon is kept (`NavInteriors.CarryKeep`, not over narrow exterior edges: "Narrow portals"); exterior polygons stay
 limited to kept ones, else a door joined to a pruned landing satisfied the door and skipped the doorway's kept ground (Storm House Lagoon `40.41:10-`,
@@ -475,7 +503,7 @@ agents had no way up; with the seam, ground (-47000,125,48100) reaches the room 
 An edge pair also joins when the stretch of it within the climb is at least `SeamClimbCells` (2 cells) long, the other end being higher (a corner takes
 its highest neighbouring cell's height; engine choice; Storm House `27.22:1821-`, above). Such a pair also needs the two polygons' own surfaces (the height samples of each one's region nearest the edge's cells) within the climb along `SeamClimbCells` of it, since the corner within it can be the artifact (engine choice). **Observed** (zone 28.60, `--path`, Ancient Lab with TwoStorey): its upper floor (553) and its spiral stair share a 40-unit edge along the stairwell with the stair 8..17 below, joined because the stair's corner took the floor's height; paths dropped off the floor's edge (552→537). Now (-16649,131186) → (-16740,131120) `--from-y 553 --to-y 492` goes round to the stair's top (437 for 371). Storm House `27.22:1821-` and `--compare-interiors` 27.22, 28.60, 28.43, 21.42, 18.39 are unchanged; `--compare` over 10 zones changes one kept polygon (47.16). The original's cached interior has a floor face and a stair face 1 apart in X/Z and 18 in height there; whether it joins them: **Unknown**. Contour simplification also leaves near-miss T seams (one edge against two whose middle vertex is off its line). Open edges of one tile left
 unjoined are linked (`Links`, not `Neighbours`) when they run opposite, share one end in X/Z (so floors either side of a thin wall stay apart),
-lie within 1.5 of each other's line at both ends of the overlap, and are within climb + 0.5 there, by the edges' own heights or else by both polygons' surfaces (own-region samples, interpolated) at every cell along the overlap: Recast simplifies contours in X/Z only, so a long edge from flat ground up a stair runs straight in height and misses the stair beside it by a step (engine choice). **Observed** (zone 14.23, Longhouse `14.23:78-`, west door stair): the stair's lower polygon (an 88-unit edge along z -37652, 1506 to 1536) against the upper stair's edge from (-82306,1515) was 12 off by the edge, 4 at most by the surfaces; unjoined, radius-4 walkers could not reach the door (the town's residents searched 300-600 ms for its cabinet again and again), now (-82140,-37692) → (-82157,-37664) goes round to it (818). Near-miss joins in 14.23, 27.22, 21.42, 20.32, 42.22, 18.39 grew 10-20 % (28.60 none); hub path pins unchanged. A* portals for such links take the overlap
+lie within 1.5 of each other's line at both ends of the overlap, and are within the climb and half a height cell there (stitched vertices stand half a cell under their span's top; 5.25 since cells are 0.5), by the edges' own heights or else by both polygons' surfaces (own-region samples, interpolated) at every cell along the overlap: Recast simplifies contours in X/Z only, so a long edge from flat ground up a stair runs straight in height and misses the stair beside it by a step (engine choice). **Observed** (zone 14.23, Longhouse `14.23:78-`, west door stair): the stair's lower polygon (an 88-unit edge along z -37652, 1506 to 1536) against the upper stair's edge from (-82306,1515) was 12 off by the edge, 4 at most by the surfaces; unjoined, radius-4 walkers could not reach the door (the town's residents searched 300-600 ms for its cabinet again and again), now (-82140,-37692) → (-82157,-37664) goes round to it (818). Near-miss joins in 14.23, 27.22, 21.42, 20.32, 42.22, 18.39 grew 10-20 % (28.60 none); hub path pins unchanged. A* portals for such links take the overlap
 with the door joins' 6 gap when no facing edge is within 0.2. **Observed** (zone 18.39, `meitou-tools navmesh`): the Swamp Village stair foot's edge
 (-62220,108,34088 → -62208,105,34086) against two edges meeting at (-62216,106,34086) joins both; the path (-62218,34080) → (-62216,34148)
 `--to-y 140` climbs through that vertex (length 83) instead of detouring to the tile line x−62208 (97). **Observed** (after the terrain diagonal change, the same path from z 34080 exactly on a polygon edge): 153, the funnel from a start on its first portal's line swung out to that portal's end; `NavQuery.Pull` drops a first portal the start lies on, 82. **Observed** (576-unit tiles, watershed regions): 101, by the tile line again (x−62208 is still one).
@@ -796,14 +824,14 @@ from the settings (`FUN_140dda150`, not traced). Meitou: building shapes walkabl
 
 ### Meitou debug view
 
-Shift+F11 in the game (`GameHost.NavOverlay.cs`, `NavmeshOverlayRenderer`) steps off, Meitou's mesh, the original's cached exterior tiles
+Shift+F11 in the game (`DebugOverlays`, `NavmeshOverlayRenderer`) steps off, Meitou's mesh, the original's cached exterior tiles
 (`OriginalNavTiles`, [tagfile](../formats/havok-tagfile.md#navmesh-tiles)), both; for the zones the walkers use now (`NavmeshWalkability.World`), 3 (original 4) units
 above the mesh, over the finished picture and fainter where the scene hides it. Meitou: polygons cyan (door polygons blue, seed-pruned red), mesh ends
 yellow. Original: polygons magenta, ends orange, edges joined to the next tile violet. Rebuilt on a worker when the world or view changes.
 **Observed** (Hub, zone 20.32): the original's polygons are large and simplified, building footprints are holes (interiors separate), and rock and cliff
 cuts follow the blocky 36-unit terrain grid (generator inputs, terrain). The original has no such view (`rebuild_navmesh` Ctrl+Shift+F11 only rebuilds).
 
-F11's `[ ] paths` checkbox (`GameHost.Paths.cs`) draws, over everything and still with F11 closed, the path of each selected or inspected character
+F11's `[ ] paths` checkbox (`DebugOverlays`) draws, over everything and still with F11 closed, the path of each selected or inspected character
 (`CharacterSnapshot.Path`, from its feet): navmesh legs green, the provisional long-range part (`PathExact`) orange, the next waypoint white, the end red.
 
 ### Dropped orders
@@ -855,7 +883,7 @@ The original labels the walkable ground by the gates (**Verified** structure, de
 - **Readers in play**: the spawn-inside-walls repair of a squad's activation (`FUN_1404ffad0`, **Verified**, [factions](factions-squads-towns.md#town-residents)); DESTINATION_NOT_BLOCKED_BY_FORTIFICATIONS ([gates](locks.md#cutting-and-breaking-285--185-cut-286--186-break)), the run-away score
   ([combat](combat.md)). Wall termites reads the pass's town list but is disabled ([walls](buildings-production.md#walls)).
 
-Meitou (`Meitou.Navigation/NavGateRegions`, engine reading): gates are buildings with `is wall gate` or a BF_GATE functionality
+Meitou (`Meitou.Simulation/Navigation/NavGateRegions`, engine reading): gates are buildings with `is wall gate` or a BF_GATE functionality
 (`TownBuildings.IsGate`); their door polygons (named by the building, `ZoneNavMesh.DoorIds`) are the boundaries. From each polygon beside a gate's door
 polygons a flood spreads over kept polygons, across zone links, never into a gate's door; it is a walled region (codes from 1, gates in instance id order)
 when it stays within 4000 (X/Z) of its start, under 200 000 polygons and away from the loaded world's edge, else code 0, as is every polygon no flood

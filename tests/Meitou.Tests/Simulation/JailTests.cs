@@ -5,12 +5,16 @@ using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Ai;
 using Meitou.Data.Gameplay.Bodies;
 using Meitou.Simulation;
+using Meitou.Simulation.Aggro;
 using Meitou.Simulation.Ai;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Carrying;
 using Meitou.Simulation.Combat;
 using Meitou.Simulation.Crime;
+using Meitou.Simulation.Factions;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
 using Meitou.Tests.Combat;
 using static Meitou.Tests.Bodies.BodyFixtures;
 using static Meitou.Tests.Combat.CombatFixtures;
@@ -19,15 +23,19 @@ using SimWorld = Meitou.Simulation.World;
 namespace Meitou.Tests.Simulation;
 
 /// <summary>
-/// The jail beyond the arrest itself, on the scripted town of <see cref="ArrestTests"/> (two cages, city that books bounties): the release round, the lift out of a cage, the bounty claim and
-/// bail, and the bounty hunters (docs/simulation.md "Cages, beds and locks", "Arrest and jail"; docs/game/economy.md 11.4, 11.5, 11.8; docs/game/locks.md).
+/// The jail beyond the arrest itself, on the scripted town of <see cref="ArrestTests"/> (two cages, city that books bounties): the release round, the
+/// lift out of a cage, the bounty claim and bail, and the bounty hunters (docs/simulation.md "Cages, beds and locks", "Arrest and jail";
+/// docs/game/economy.md 11.4, 11.5, 11.8; docs/game/locks.md).
 /// </summary>
 public class JailTests
 {
     static readonly Vector3 Centre = new(2000, 150, 2000);
-    static readonly RaceData Person = new() { StringId = "17-c", Name = "Greenlander", StatMultipliers = Human.StatMultipliers, Anatomy = Human.Anatomy, Carriable = true };
+    static readonly RaceData Person = new() { StringId = "17-c", Name = "Greenlander", StatMultipliers = Human.StatMultipliers,
+            Anatomy = Human.Anatomy, Carriable = true };
 
-    /// <summary>The town's cages are at +200 (A) and -200 (B) on X. <paramref name="locks"/>: the lock system's rounds run (they free a served prisoner).</summary>
+    /// <summary>
+    /// The town's cages are at +200 (A) and -200 (B) on X. <paramref name="locks"/>: the lock system's rounds run (they free a served prisoner).
+    /// </summary>
     sealed class Jail : IDisposable
     {
         public SimWorld World { get; }
@@ -37,35 +45,37 @@ public class JailTests
         public Fixture CageB { get; }
         public int City { get; }
         public int Hunters { get; }
-        readonly Squad playerSquad;
-        readonly FactionRelations relations;
+        readonly Squad _playerSquad;
+        readonly FactionRelations _relations;
 
         public Jail(bool locks = false)
         {
-            var hunters = SyntheticTown.Rec("56-a", FcsRecordType.FACTION, "hunters");
+            var hunters = SyntheticTown.Rec("56-a", FcsRecordType.Faction, "hunters");
             hunters.Ints["fundamental type"] = (int)FundamentalType.Adventurer;
             hunters.References["legal system"] = [SyntheticTown.Ref("50-a")];
             var data = ArrestTests.Town([hunters]);
-            relations = data.Relations;
+            _relations = data.Relations;
             City = data.FactionIndex("50-a");
             Hunters = data.FactionIndex("56-a");
-            var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths, new CombatOptions { SelfApproach = false, TickMedical = false }) { Relations = relations };
-            var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = relations };
-            var crime = new CrimeSystem(relations);
+            var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
+                    new CombatOptions { SelfApproach = false, TickMedical = false }) { Relations = _relations };
+            var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = _relations };
+            var crime = new CrimeSystem(_relations);
             combat.Crimes = crime;
             carry.Crimes = crime;
             Arrest = new ArrestSystem(crime, BaseGame, new ArrestSettings { RecordLog = true }) { Carry = carry };
             var walk = new OpenGroundWalkability((_, _) => 150);
             var systems = new List<ITickSystem>
             {
-                new PlayerSystem(), new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, combat,
-                new RetaliationSystem(combat), new AggroSystem(relations), crime, Arrest,
+                new PlayerSystem(), new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry,
+                        combat,
+                new RetaliationSystem(combat), new AggroSystem(_relations), crime, Arrest,
             };
             if (locks) systems.Add(Locks = new LockSystem(BaseGame, BodyOptions.Default) { Crimes = crime });
             World = new SimWorld(new WorldSettings { Seed = 31, PublishSnapshots = false, MinPartitionSize = 1 }, walk, systems);
             World.Fixtures.RegisterSite(World, data, 0);
-            playerSquad = new Squad { Id = 1000, TemplateId = "p", Faction = relations.PlayerFaction };
-            World.Squads.Add(playerSquad);
+            _playerSquad = new Squad { Id = 1000, TemplateId = "p", Faction = _relations.PlayerFaction };
+            World.Squads.Add(_playerSquad);
             CageA = World.Fixtures.Find("0.0:cageA")!;
             CageB = World.Fixtures.Find("0.0:cageB")!;
         }
@@ -75,44 +85,55 @@ public class JailTests
         public CharacterCold Cold(CharacterId id) => World.Characters.Cold(id.Slot)!;
         public Vector3 Where(CharacterId id) => World.Characters.Previous[id.Slot].Position;
 
-        /// <summary>A policeman of the city (<paramref name="mind"/>: the AI holds him, so a lock round may take him) or any NPC of <paramref name="faction"/> and class.</summary>
-        public CharacterId Npc(Vector2 at, int faction, FundamentalType type, Combatant stats, bool mind = false, int bounty = 0, Vector2? face = null)
+        /// <summary>
+        /// A policeman of the city (<paramref name="mind"/>: the AI holds him, so a lock round may take him) or any NPC of <paramref name="faction"/>
+        /// and class.
+        /// </summary>
+        public CharacterId Npc(Vector2 at, int faction, FundamentalType type, Combatant stats, bool mind = false, int bounty = 0,
+                Vector2? face = null)
         {
             var cold = stats.MakeCold();
             cold.Race = Person;
             cold.Faction = faction;
             cold.NpcClass = type;
-            var squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = faction, Town = 0, HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 500 };
+            var squad = new Squad { Id = World.Squads.NextId(), TemplateId = "t", Faction = faction, Town = 0,
+                    HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 500 };
             World.Squads.Add(squad);
             cold.SquadId = squad.Id;
             if (mind) cold.Ai = new AiMind { Squad = squad };
             if (bounty > 0) cold.Bounties = new BountyLedger();
             if (bounty > 0) cold.Bounties!.Get(City, "city").Amount = bounty;
             float yaw = face is { } f ? MathF.Atan2(f.X - at.X, f.Y - at.Y) : 0;
-            var id = World.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Yaw = yaw, Task = (byte)CharacterTask.Idle }, cold, 0);
+            var id = World.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60,
+                    WalkSpeed = 15, Yaw = yaw, Task = (byte)CharacterTask.Idle }, cold, 0);
             squad.Members.Add(id);
             squad.Leader = id;
             return id;
         }
 
-        /// <summary>A player character, wanted by the city for <paramref name="bounty"/> when that is above 0.</summary>
+        /// <summary>
+        /// A player character, wanted by the city for <paramref name="bounty"/> when that is above 0.
+        /// </summary>
         public CharacterId Hero(Vector2 at, string name, Combatant stats, int bounty = 0)
         {
             var cold = stats.MakeCold(name);
             cold.Race = Person;
-            cold.Faction = relations.PlayerFaction;
+            cold.Faction = _relations.PlayerFaction;
             cold.IsPlayer = true;
             cold.NpcClass = FundamentalType.Adventurer;
-            cold.SquadId = playerSquad.Id;
+            cold.SquadId = _playerSquad.Id;
             if (bounty > 0) (cold.Bounties = new BountyLedger()).Get(City, "city").Amount = bounty;
-            var id = World.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Yaw = MathF.PI }, cold, 0);
-            playerSquad.Members.Add(id);
+            var id = World.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60,
+                    WalkSpeed = 15, Yaw = MathF.PI }, cold, 0);
+            _playerSquad.Members.Add(id);
             return id;
         }
 
         public void Say(SimCommand c) => World.Commands.Enqueue(c);
 
-        /// <summary>Runs up to <paramref name="max"/> ticks until <paramref name="done"/>; the tick it became true (the check is after each tick), or fails.</summary>
+        /// <summary>
+        /// Runs up to <paramref name="max"/> ticks until <paramref name="done"/>; the tick it became true (the check is after each tick), or fails.
+        /// </summary>
         public long RunUntil(Func<bool> done, int max, string what)
         {
             for (int t = 0; t < max; t++)
@@ -134,14 +155,18 @@ public class JailTests
     {
         using var j = new Jail(locks: true);
         var police = j.Npc(new Vector2(-100, 0), j.City, FundamentalType.LawEnforcement, Strong, mind: true);
+
         // Only a holder of goal 211 frees prisoners (FUN_1408cf3c0): in every role list, always in its hours.
-        var free = new AiGoal(new AiTask("t", "free", TaskType.POLICE_FREE_PRISONERS_WHEN_DONE, TaskPriority.Urgent, TaskTargetType.Specific, TaskEndEvent.Nothing), 0, 100, 1);
+        var free = new AiGoal(new AiTask("t", "free", TaskType.PoliceFreePrisonersWhenDone, TaskPriority.Urgent, TaskTargetType.Specific,
+                TaskEndEvent.Nothing), 0, 100, 1);
         var board = new Blackboard([new(0, new AiPackage { Id = "police", Name = "police", Roles = [[free], [free], [free], [], []] })]);
         board.Update();
         j.World.Squads.Find(j.Cold(police).SquadId)!.Ai = board;
         var hero = j.Hero(new Vector2(200, 30), "hero", Weak, bounty: 5000);
+
         Assert.True(j.World.Fixtures.Imprison(j.World, hero, j.CageA));
         Assert.True(j.CageA.Lock!.Locked);
+
         // The sentence (100 hours for 5000) is served: 1 hour from game hour 0.
         j.Cold(hero).SentenceStart = 0;
         j.Cold(hero).SentenceLength = 1;
@@ -160,7 +185,8 @@ public class JailTests
         Assert.True(round);
         Assert.InRange(freed, 300, (long)(LockSystem.ReleaseTimeout / j.World.TickSeconds) - 1);
         Assert.True(Vector2.Distance(new Vector2(start.X, start.Z), new Vector2(at.X, at.Z)) > 150);
-        Assert.True(Vector2.Distance(new Vector2(at.X, at.Z), new Vector2(j.CageA.Position.X, j.CageA.Position.Z)) <= j.CageA.UseRange + LockSystem.Reach + 1);
+        Assert.True(Vector2.Distance(new Vector2(at.X, at.Z),
+                new Vector2(j.CageA.Position.X, j.CageA.Position.Z)) <= j.CageA.UseRange + LockSystem.Reach + 1);
         Assert.False(j.CageA.Lock.Locked);
         Assert.True(j.CageA.Occupant.IsNone);
         Assert.Null(j.Cold(hero).Bounties?.Of(j.City));
@@ -175,12 +201,16 @@ public class JailTests
         var prisoner = j.Hero(new Vector2(200, 0), "prisoner", Weak);
         j.Cold(prisoner).Medical!.KnockOut(100000);   // an awake body is set down again at once (CarrySystem), so the lifted one is out cold
         var lifter = j.Hero(new Vector2(200, 30), "lifter", Weak);
+
         Assert.True(j.World.Fixtures.Imprison(j.World, prisoner, j.CageA));
+
         j.CageA.Lock!.Level = 50;   // locked (by the caging) and a level that holds it
+
         Assert.True(j.CageA.Lock.EffectivelyLocked);
 
         j.Say(new PickUpOrder([lifter], prisoner) { Tick = j.World.Tick });
         j.World.RunTicks(90);
+
         Assert.True(j.Cold(lifter).Carrying.IsNone);
         Assert.True(j.Cold(prisoner).IsImprisoned);
         Assert.Null(j.Cold(lifter).Pending);
@@ -188,7 +218,9 @@ public class JailTests
         j.World.Fixtures.SetLocked(j.CageA, false);
         j.Say(new PickUpOrder([lifter], prisoner) { Tick = j.World.Tick });
         j.RunUntil(() => j.Cold(lifter).Carrying == prisoner, 300, "the lift");
-        // The lifter is booked for code 7 (against the cage owner); the freed one gets no crime (its code 0xc is set while still held, which the setter refuses) but is an escaped prisoner.
+
+        // The lifter is booked for code 7 (against the cage owner); the freed one gets no crime (its code 0xc is set while still held, which the
+        // setter refuses) but is an escaped prisoner.
         Assert.Equal(CrimeCode.Terrorism, j.Cold(lifter).Pending?.Code);
         Assert.Equal(7, (int)j.Cold(lifter).Pending!.Code);
         Assert.Equal(j.City, j.Cold(lifter).Pending!.VictimFaction);
@@ -222,13 +254,16 @@ public class JailTests
 
         // Bail: twice the bounty; for an NPC of at least 2000 (a 700 bounty in the other cage).
         Assert.Equal(3000, j.Arrest.BailFor(j.World, j.Cold(captive)));
+
         var small = j.Npc(new Vector2(-200, 30), j.City, FundamentalType.Civilian, new Combatant(), bounty: 700);
+
         Assert.True(j.World.Fixtures.Imprison(j.World, small, j.CageB));
         Assert.Equal(ArrestSystem.MinNpcBail, j.Arrest.BailFor(j.World, j.Cold(small)));
 
         j.World.Player.Money = 5000;
         j.Say(new PayBailOrder(captive) { Tick = j.World.Tick });
         j.World.RunTicks(2);
+
         Assert.Equal(2000, j.World.Player.Money);
         Assert.Null(j.Cold(captive).Bounties);
         Assert.False(j.Cold(captive).IsImprisoned);
@@ -249,7 +284,9 @@ public class JailTests
         var hunter = j.Npc(new Vector2(0, 60), j.Hunters, FundamentalType.Adventurer, Strong, face: Vector2.Zero);
 
         j.RunUntil(() => j.Arrest.Log.Any(e => e.Kind == ArrestEventKind.Hunt), 120, "the hunt");
+
         Assert.Equal(5000, j.Arrest.Log.First(e => e.Kind == ArrestEventKind.Hunt).Amount);
+
         j.RunUntil(() => j.Arrest.Log.Any(e => e.Kind == ArrestEventKind.HuntOver), 3000, "the end of the hunt");
 
         Assert.True(j.Cold(hero).Medical!.Incapacitated && !j.Cold(hero).Medical!.Dead);
@@ -258,7 +295,9 @@ public class JailTests
         Assert.Empty(j.Arrest.Arrests);
         Assert.Empty(j.Arrest.Cagings);
         Assert.False(j.Cold(hunter).Engaged);
+
         var hunt = Assert.Single(j.Arrest.Hunts);
+
         Assert.Equal((hunter, hero), (hunt.Hunter, hunt.Target));
         Assert.InRange(hunt.Rest, 1, new ArrestSettings().HuntRestSeconds);
     }

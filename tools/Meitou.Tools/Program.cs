@@ -28,6 +28,7 @@ return args switch
     ["image-diff", var a, var b] =>ImageDiff.Run(a, b, null),
     ["image-diff", var a, var b, var d] => ImageDiff.Run(a, b, d),
     ["mod-check", .. var checkArgs] => WithInstall(i => ModCheck.Run(i, checkArgs)),
+    ["icons", .. var iconArgs] => WithInstall(i => IconExport.Run(i, iconArgs)),
     ["world-map", var png] => WithInstall(i => WorldSurvey.RenderMap(i, png)),
     ["world-map", var png, var step] => WithInstall(i => WorldSurvey.RenderMap(i, png, int.Parse(step))),
     _ => Usage(),
@@ -63,6 +64,9 @@ static int Usage()
         meitou-tools mod-check <save folder> [--ticks n] [--threads n] [--mod <mod folder>]...
                            load the save headless with the enabled code mods, or the --mod folders (running their code), and compare the state hash
                            per tick over two one-thread runs and a run on n threads (defaults 600, 4): where they differ, and which hashed systems
+        meitou-tools icons <folder> [--enhanced] [--mods]  write every item's inventory icon to the folder, the drawn ones named as the game saves them
+                           (<item>.<material>[.<colour>].png), the others <item>.png, and icons.json listing them; --enhanced draws them supersampled,
+                           --mods uses the install's load order instead of the base game
         meitou-tools world-map <png> [step]  render a top-down world map (every step-th height sample, default 16)
         """);
     return 2;
@@ -141,7 +145,7 @@ static int Load(GameInstall install)
 static int Armour(GameInstall install, string name)
 {
     var db = GameDatabase.Load(LoadOrder.FromInstall(install));
-    foreach (var r in db.Records.Values.Where(r => r.Name == name && r.Type == FcsRecordType.ARMOUR))
+    foreach (var r in db.Records.Values.Where(r => r.Name == name && r.Type == FcsRecordType.Armour))
     {
         Console.WriteLine($"{r.StringId} {r.Name} defined by {r.DefinedBy}, modified by {string.Join(", ", r.ModifiedBy)}");
         foreach (var f in r.Floats.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
@@ -151,7 +155,8 @@ static int Armour(GameInstall install, string name)
         string platoons = Path.Combine(install.Root, "save", "quicksave", "platoon");
         if (!Directory.Exists(platoons)) continue;
         foreach (string file in Directory.EnumerateFiles(platoons, "*.platoon"))
-            foreach (var s in Meitou.Data.Save.SaveFile.ReadFile(file).Records.Where(x => x.RecordType == FcsRecordType.INVENTORY_ITEM_STATE && x.Strings.GetValueOrDefault("base data sid") == r.StringId))
+            foreach (var s in Meitou.Data.Save.SaveFile.ReadFile(file).Records.Where(x => x.RecordType == FcsRecordType.InventoryItemState
+                    && x.Strings.GetValueOrDefault("base data sid") == r.StringId))
                 Console.WriteLine($"  SAVED {Path.GetFileName(file)} quality {s.Floats.GetValueOrDefault("quality")} level {s.Ints.GetValueOrDefault("level")} section {s.Strings.GetValueOrDefault("section")} material {s.Strings.GetValueOrDefault("material sid")}");
     }
     return 0;

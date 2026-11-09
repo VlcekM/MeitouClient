@@ -1,5 +1,5 @@
 using System.Numerics;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Tests.World;
 
@@ -9,7 +9,9 @@ namespace Meitou.Tests.World;
 /// </summary>
 public class CloudFogSkipTests
 {
-    /// <summary>The view direction of a point in NDC for a camera looking along +x, pitched up, vertical field of view 50 degrees.</summary>
+    /// <summary>
+    /// The view direction of a point in NDC for a camera looking along +x, pitched up, vertical field of view 50 degrees.
+    /// </summary>
     static Vector3 Ray(Vector2 ndc, float pitch, float aspect)
     {
         float tanY = MathF.Tan(25 * MathF.PI / 180), tanX = tanY * aspect;
@@ -19,10 +21,14 @@ public class CloudFogSkipTests
         return Vector3.Normalize(forward + right * (ndc.X * tanX) + up * (ndc.Y * tanY));
     }
 
-    /// <summary>What the fog volume pass leaves of the sky behind one block (the eye inside it), at the far clip as for a pixel with no geometry.</summary>
+    /// <summary>
+    /// What the fog volume pass leaves of the sky behind one block (the eye inside it), at the far clip as for a pixel with no geometry.
+    /// </summary>
     static float Transmittance(Vector3 eye, Vector3 d) => 1f - FogCullTests.Alpha(FogCullTests.Block(), eye, d, 50000);
 
-    /// <summary>VolumetricCloudShaders.March's fogHidesSky: the texel's own ray and the four at the corners of the reach, all with nothing left.</summary>
+    /// <summary>
+    /// VolumetricCloudShaders.March's fogHidesSky: the texel's own ray and the four at the corners of the reach, all with nothing left.
+    /// </summary>
     static bool Hidden(Vector3 eye, Vector2 ndc, Vector2 reach, float pitch, float aspect)
     {
         Span<Vector2> offsets = [Vector2.Zero, new(1, -1), new(-1, -1), new(1, 1), new(-1, 1)];
@@ -50,7 +56,11 @@ public class CloudFogSkipTests
             {
                 var ndc = new Vector2((x + 0.5f) / width * 2 - 1, (y + 0.5f) / height2 * 2 - 1);
                 if (Ray(ndc, pitch, aspect).Y <= 0) continue;   // the march's slab is above the eye: no work below the horizon
-                if (!Hidden(eye, ndc, reach, pitch, aspect)) { marched++; continue; }
+                if (!Hidden(eye, ndc, reach, pitch, aspect))
+                {
+                    marched++;
+                    continue;
+                }
                 hidden++;
                 for (int j = 0; j <= 8; j++)
                     for (int i = 0; i <= 8; i++)

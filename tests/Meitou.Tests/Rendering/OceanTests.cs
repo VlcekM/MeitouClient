@@ -1,14 +1,16 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Water;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The Meitou water's FFT ocean (docs/render-water.md "Meitou water"): the spectrum on the CPU, and the GPU's evolve, inverse FFT and
-/// assembly against a single wave worked out by hand.</summary>
+/// <summary>
+/// The Meitou water's FFT ocean (docs/render-water.md "Meitou water"): the spectrum on the CPU, and the GPU's evolve, inverse FFT and assembly
+/// against a single wave worked out by hand.
+/// </summary>
 public class OceanTests
 {
     const int N = 64;
@@ -23,6 +25,7 @@ public class OceanTests
                 {
                     var t = s[c][y * N + x];
                     var m = s[c][(N - y) % N * N + (N - x) % N];
+
                     // zw holds conj(h0(-k)), which is the mirror texel's own h0 conjugated.
                     Assert.Equal(m.X, t.Z);
                     Assert.Equal(-m.Y, t.W);
@@ -34,20 +37,25 @@ public class OceanTests
     static VulkanDevice? TryCreate()
     {
         try { return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
+        catch (Exception e)
+            when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
         {
             return null;
         }
     }
 
-    /// <summary>One wave per cascade: h0(k) = A at a chosen texel, its mirror holding the conjugate. The GPU must give
-    /// Dy = 2A cos(k·x − ωt) and Dx = −2A k̂x sin(k·x − ωt) (the crests drawn together) at every texel.</summary>
+    /// <summary>
+    /// One wave per cascade: h0(k) = A at a chosen texel, its mirror holding the conjugate. The GPU must give Dy = 2A cos(k·x − ωt) and Dx = −2A k̂x
+    /// sin(k·x − ωt) (the crests drawn together) at every texel.
+    /// </summary>
     [Fact]
     [Slow]
     public void Gpu_transform_gives_the_wave_worked_out_by_hand()
     {
         using var d = TryCreate();
+
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+
         (int X, int Y, float A)[] bins = [(N / 2 + 3, N / 2 + 1, 0.8f), (N / 2 - 2, N / 2 + 5, 0.5f), (N / 2 + 1, N / 2 - 4, 0.3f)];
         var spectrum = new Vector4[3][];
         for (int c = 0; c < 3; c++)
@@ -94,8 +102,10 @@ public class OceanTests
                         }
                 }
             }
+
             Assert.Equal(2, ocean.Dispatched);
         }
+
         Assert.True(d!.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
     }
 }

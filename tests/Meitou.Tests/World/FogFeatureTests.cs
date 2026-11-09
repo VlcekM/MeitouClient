@@ -2,18 +2,23 @@ using System.Numerics;
 using System.Text;
 using Meitou.Content;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Tests.World;
 
-/// <summary>docs/formats/fogfeatures.md: the placed fog volumes of <c>fogfeatures.dat</c>.</summary>
+/// <summary>
+/// docs/formats/fogfeatures.md: the placed fog volumes of <c>fogfeatures.dat</c>.
+/// </summary>
 public class FogFeatureTests
 {
     static void Floats(BinaryWriter w, params float[] values) { foreach (var v in values) w.Write(v); }
 
     static void Name(BinaryWriter w, string name) { w.Write((byte)name.Length); w.Write(Encoding.Latin1.GetBytes(name)); }
 
-    /// <summary>A file with one of each type; the block is the box 0..1000 in x and z under a roof at 500, as the game stores planes: (normal, d) with inside n·p &lt; -d.</summary>
+    /// <summary>
+    /// A file with one of each type; the block is the box 0..1000 in x and z under a roof at 500, as the game stores planes: (normal, d) with inside
+    /// n·p &lt; -d.
+    /// </summary>
     static byte[] SampleFile()
     {
         using var ms = new MemoryStream();
@@ -47,10 +52,12 @@ public class FogFeatureTests
         var list = FogFeatures.Read(SampleFile());
         Assert.Equal(3, list.Count);
         var ball = list[0];
-        Assert.Equal(("ball", FogFeatureType.Sphere, new Vector3(10, 20, 30), 400f, 2000f), (ball.Name, ball.Type, ball.Position, ball.Radius, ball.Distance));
+        Assert.Equal(("ball", FogFeatureType.Sphere, new Vector3(10, 20, 30), 400f, 2000f),
+                (ball.Name, ball.Type, ball.Position, ball.Radius, ball.Distance));
         Assert.Equal(new Vector3(1, 0.5f, 0.25f), ball.Colour);
         var beam = list[1];
-        Assert.Equal((FogFeatureType.Beam, new Vector3(0, -100, 0), new Vector3(0, 900, 0), 5000f, 1000f), (beam.Type, beam.Position, beam.End, beam.Radius, beam.Edge));
+        Assert.Equal((FogFeatureType.Beam, new Vector3(0, -100, 0), new Vector3(0, 900, 0), 5000f, 1000f),
+                (beam.Type, beam.Position, beam.End, beam.Radius, beam.Edge));
         var block = list[2];
         Assert.Equal(FogFeatureType.Block, block.Type);
         Assert.Equal(1f / 2000, block.Density, 6);

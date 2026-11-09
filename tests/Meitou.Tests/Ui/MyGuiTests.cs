@@ -45,6 +45,7 @@ public class MyGuiTests
     public void CoordinatesAreInvariantAndInvalidXmlIsRejected()
     {
         var previous = CultureInfo.CurrentCulture;
+
         try
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("sk-SK");
@@ -54,7 +55,10 @@ public class MyGuiTests
             Assert.Throws<XmlException>(() => MyGuiReader.ParseLayout("<!DOCTYPE MyGUI [<!ENTITY x 'secret'>]><MyGUI type='Layout'/>"));
             Assert.Throws<InvalidDataException>(() => MyGuiReader.ParseLayout("<MyGUI type='Resource'/>"));
         }
-        finally { CultureInfo.CurrentCulture = previous; }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
     }
 
     [Theory]
@@ -71,6 +75,7 @@ public class MyGuiTests
     {
         string directory = Path.Combine(Path.GetTempPath(), "meitou-ui-" + Guid.NewGuid());
         Directory.CreateDirectory(directory);
+
         try
         {
             File.WriteAllText(Path.Combine(directory, "init.xml"), "<MyGUI type='List'><List file='skin.xml'/><List file='skin.xml'/></MyGUI>");
@@ -92,7 +97,10 @@ public class MyGuiTests
             Assert.Equal("0 0 0", resources.Skins["Text"].Parts[0].StateProperties!["normal"]["colour"]);
             Assert.Equal("1", resources.Skins["Text"].Parts[0].StateProperties!["normal"]["shift"]);
         }
-        finally { Directory.Delete(directory, recursive: true); }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     [Fact, Trait("Category", "Slow")]
@@ -100,12 +108,13 @@ public class MyGuiTests
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "No Kenshi install configured.");
-        var resources = OgreScriptResources.ForInstall(install, Meitou.Data.LoadOrder.FromInstall(install));
+        var resources = OgreScriptResources.ForInstall(install, Data.LoadOrder.FromInstall(install));
         var ui = MyGuiResources.Load("kenshi_init.xml", name => resources.Find(name));
         Assert.Contains("Middle", ui.Layers);
         Assert.Contains("Kenshi_Button1Skin", ui.Skins.Keys);
         Assert.Equal("0 0 0", ui.Skins["Kenshi_TextBoxEmptySkin"].Parts.First(p => p.Type == "SimpleText").StateProperties!["normal"]["colour"]);
         string directory = Path.Combine(install.DataDirectory, "gui", "layout");
+
         foreach (string file in Directory.EnumerateFiles(directory, "*.layout", SearchOption.AllDirectories))
         {
             var expanded = MyGuiTemplates.Expand(MyGuiReader.ReadLayout(file), ui);
@@ -113,6 +122,7 @@ public class MyGuiTests
             var arranged = MyGuiPresentation.Arrange(expanded, 1600, 900, new(), ui.Layers);
             Assert.All(arranged, c => Assert.True(float.IsFinite(c.Bounds.X + c.Bounds.Y + c.Bounds.Width + c.Bounds.Height)));
         }
+
         var hud = MyGuiReader.ReadLayout(resources.Find("Kenshi_MainPanel.layout")!);
         Assert.NotNull(hud.Find("TimeSpeedButton4"));
         Assert.NotNull(hud.Find("MoneyAmountText"));

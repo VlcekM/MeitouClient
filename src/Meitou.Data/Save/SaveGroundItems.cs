@@ -5,16 +5,25 @@ using Meitou.Data.Fcs;
 
 namespace Meitou.Data.Save;
 
-/// <summary>A loose item of a zone file's <c>1-itemlist</c>: the list entry (position, rotation) and its ITEM record read as an item (docs/formats/save.md "Zone files").</summary>
+/// <summary>
+/// A loose item of a zone file's <c>1-itemlist</c>: the list entry (position, rotation) and its ITEM record read as an item (docs/formats/save.md
+/// "Zone files").
+/// </summary>
 public sealed record SaveGroundItem(FcsInstance Instance, FcsRecord Record, SaveItem Item);
 
-/// <summary>Reads and writes the <c>1-itemlist</c> of a zone file (docs/formats/save.md "Zone files", loose items).</summary>
+/// <summary>
+/// Reads and writes the <c>1-itemlist</c> of a zone file (docs/formats/save.md "Zone files", loose items).
+/// </summary>
 public static partial class SaveGroundItems
 {
-    /// <summary>The string id of the list (<b>Observed</b>: every sample zone file with loose items).</summary>
+    /// <summary>
+    /// The string id of the list (<b>Observed</b>: every sample zone file with loose items).
+    /// </summary>
     public const string ListId = "1-itemlist";
 
-    /// <summary>The zone's loose items in list order; entries whose target is missing or no ITEM are skipped.</summary>
+    /// <summary>
+    /// The zone's loose items in list order; entries whose target is missing or no ITEM are skipped.
+    /// </summary>
     public static List<SaveGroundItem> Read(SaveZone zone)
     {
         var found = new List<SaveGroundItem>();
@@ -22,7 +31,7 @@ public static partial class SaveGroundItems
         var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
         foreach (var r in zone.File.Records) byId.TryAdd(r.StringId, r);
         foreach (var i in list.Instances)
-            if (byId.TryGetValue(i.Target, out var r) && r.RecordType == FcsRecordType.ITEM) found.Add(new SaveGroundItem(i, r, SaveInventory.ItemOf(r)));
+            if (byId.TryGetValue(i.Target, out var r) && r.RecordType == FcsRecordType.Item) found.Add(new SaveGroundItem(i, r, SaveInventory.ItemOf(r)));
         return found;
     }
 
@@ -37,10 +46,10 @@ public static partial class SaveGroundItems
         if (zone.ItemList is { } old)
         {
             var targets = old.Instances.Select(i => i.Target).ToHashSet(StringComparer.Ordinal);
-            file.Records.RemoveAll(r => ReferenceEquals(r, old) || (r.RecordType == FcsRecordType.ITEM && targets.Contains(r.StringId)));
+            file.Records.RemoveAll(r => ReferenceEquals(r, old) || (r.RecordType == FcsRecordType.Item && targets.Contains(r.StringId)));
         }
         if (items.Count + kept.Count == 0) return;
-        var list = new FcsRecord { Type = (int)FcsRecordType.INSTANCE_COLLECTION, Id = NextNumber(file), Name = "0", StringId = ListId };
+        var list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0", StringId = ListId };
         string suffix = string.Create(CultureInfo.InvariantCulture, $"-zone{zone.Coordinate.X}.{zone.Coordinate.Y}-INGAME");
         int n = LastNumber(file, items, kept, suffix);
         var taken = new HashSet<string>(StringComparer.Ordinal);
@@ -76,7 +85,7 @@ public static partial class SaveGroundItems
     public static FcsRecord GroundRecord(SaveItem item)
     {
         var r = SaveInventory.ItemRecord(item);
-        r.Type = (int)FcsRecordType.ITEM;
+        r.Type = (int)FcsRecordType.Item;
         if (item.Source is null) r.Strings.Remove("uniform");
         r.Strings["section"] = "";
         r.Bools["in inventory"] = false;

@@ -12,10 +12,11 @@ namespace Meitou.Content;
 public static class GameFiles
 {
     static readonly bool Fold = !OperatingSystem.IsWindows();
+
     // Folder -> its entries by name ignoring case, and the folder's write time when it was listed: a name that is not in the listing makes it
     // read again if the folder has changed since (the install is normally read-only while the game runs, so this is rare).
     sealed record Listing(DateTime Stamp, Dictionary<string, string> Entries);
-    static readonly ConcurrentDictionary<string, Listing> listings = new(StringComparer.Ordinal);
+    static readonly ConcurrentDictionary<string, Listing> Listings = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The path that exists: <paramref name="path"/> itself, else the same path with each part matched ignoring case; <paramref name="path"/>
@@ -24,15 +25,20 @@ public static class GameFiles
     public static string Resolve(string path)
     {
         if (!Fold || path.Length == 0) return path;
+
         // Walk even when the path exists: on macOS and Windows the file system ignores case, and the caller wants the spelling on disk
         // (the upstream test pins it; a record may name a file in another case than the install).
         return Walk(path) ?? path;
     }
 
-    /// <summary>Whether a file exists at the path, ignoring the case of its parts.</summary>
+    /// <summary>
+    /// Whether a file exists at the path, ignoring the case of its parts.
+    /// </summary>
     public static bool Exists(string path) => File.Exists(Resolve(path));
 
-    /// <summary>The folder at the path (ignoring the case of its parts), or null when there is none.</summary>
+    /// <summary>
+    /// The folder at the path (ignoring the case of its parts), or null when there is none.
+    /// </summary>
     public static string? ExistingDirectory(string path)
     {
         var resolved = Resolve(path);
@@ -59,10 +65,10 @@ public static class GameFiles
 
     static bool Find(string folder, string name, out string real)
     {
-        var listing = listings.GetOrAdd(folder, List);
+        var listing = Listings.GetOrAdd(folder, List);
         if (listing.Entries.TryGetValue(name, out real!)) return true;
         if (Directory.GetLastWriteTimeUtc(folder) == listing.Stamp) return false;
-        listings[folder] = listing = List(folder);
+        Listings[folder] = listing = List(folder);
         return listing.Entries.TryGetValue(name, out real!);
     }
 

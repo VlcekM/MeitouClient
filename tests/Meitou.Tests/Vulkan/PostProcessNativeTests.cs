@@ -1,12 +1,15 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Post;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The post-processing chain's native targets (docs/renderer-native.md 8, phase 8 stage 2): named allocations, a resize, the exposure readback.</summary>
+/// <summary>
+/// The post-processing chain's native targets (docs/renderer-native.md 8, phase 8 stage 2): named allocations, a resize, the exposure readback.
+/// </summary>
 [Collection("StageClock")]
 public unsafe class PostProcessNativeTests
 {

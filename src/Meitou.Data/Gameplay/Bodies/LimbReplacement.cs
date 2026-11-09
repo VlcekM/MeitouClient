@@ -1,10 +1,10 @@
 namespace Meitou.Data.Gameplay.Bodies;
 
 /// <summary>
-/// A LIMB_REPLACEMENT record: a prosthetic limb (docs/game/character-stats.md "Limb replacements and robots", <b>Verified</b>, 28 base records).
-/// Each multiplier is stored twice, <c>X mult</c> at the lowest quality and <c>X mult 1</c> at the highest, and the item's quality grade
-/// interpolates by the item's <c>level</c> (t = level x 0.01, not the save's <c>quality</c> float): HP, unarmed bonus and swimming linearly, the skill
-/// multipliers by <see cref="GradeCurve"/>. Every method takes t; <see cref="SlotOf"/> names a slot's section.
+/// A LIMB_REPLACEMENT record: a prosthetic limb (docs/game/character-stats.md "Limb replacements and robots", <b>Verified</b>, 28 base records). Each
+/// multiplier is stored twice, <c>X mult</c> at the lowest quality and <c>X mult 1</c> at the highest, and the item's quality grade interpolates by
+/// the item's <c>level</c> (t = level x 0.01, not the save's <c>quality</c> float): HP, unarmed bonus and swimming linearly, the skill multipliers by
+/// <see cref="GradeCurve"/>. Every method takes t; <see cref="SlotOf"/> names a slot's section.
 /// </summary>
 public sealed record LimbReplacement
 {
@@ -12,7 +12,9 @@ public sealed record LimbReplacement
 
     public required string StringId { get; init; }
     public string Name { get; init; } = "";
-    /// <summary><c>slot</c>: 50 left arm, 51 right arm, 52 left leg, 53 right leg.</summary>
+    /// <summary>
+    /// <c>slot</c>: 50 left arm, 51 right arm, 52 left leg, 53 right leg.
+    /// </summary>
     public int Slot { get; init; }
     public float CraftTimeHours { get; init; }
     public float HpLow { get; init; }
@@ -27,10 +29,14 @@ public sealed record LimbReplacement
     public float StrengthHigh { get; init; } = 1;
     public float DexterityLow { get; init; } = 1;
     public float DexterityHigh { get; init; } = 1;
-    /// <summary><c>thievery mult</c>, applied to both thieving (10) and lockpicking (37).</summary>
+    /// <summary>
+    /// <c>thievery mult</c>, applied to both thieving (10) and lockpicking (37).
+    /// </summary>
     public float ThieveryLow { get; init; } = 1;
     public float ThieveryHigh { get; init; } = 1;
-    /// <summary><c>ranged mult</c> (stat 35, crossbows).</summary>
+    /// <summary>
+    /// <c>ranged mult</c> (stat 35, crossbows).
+    /// </summary>
     public float RangedLow { get; init; } = 1;
     public float RangedHigh { get; init; } = 1;
     public float AthleticsLow { get; init; } = 1;
@@ -38,12 +44,16 @@ public sealed record LimbReplacement
     public float StealthLow { get; init; } = 1;
     public float StealthHigh { get; init; } = 1;
 
-    /// <summary>The slot as the 0 left arm, 1 right arm, 2 left leg, 3 right leg index of <see cref="BodyPartTemplate.LimbSlot"/>.</summary>
+    /// <summary>
+    /// The slot as the 0 left arm, 1 right arm, 2 left leg, 3 right leg index of <see cref="BodyPartTemplate.LimbSlot"/>.
+    /// </summary>
     public int LimbSlot => Slot - FirstSlot;
 
     public bool IsLeg => LimbSlot is 2 or 3;
 
-    /// <summary>The inventory section of a fitted prosthetic in limb slot 0 to 3 (the save's <c>section</c>; strings of <c>FUN_1400d04d0</c>).</summary>
+    /// <summary>
+    /// The inventory section of a fitted prosthetic in limb slot 0 to 3 (the save's <c>section</c>; strings of <c>FUN_1400d04d0</c>).
+    /// </summary>
     public static string SlotOf(int limbSlot) => limbSlot switch
     {
         0 => "left_arm_replace",
@@ -52,15 +62,22 @@ public sealed record LimbReplacement
         _ => "right_leg_replace",
     };
 
-    /// <summary>The part's base HP with this limb fitted at quality <paramref name="t"/> (replaces the race's base HP for that slot).</summary>
-    public float Hp(float t) => Lerp(HpLow, HpHigh, t);
+    /// <summary>
+    /// The part's base HP with this limb fitted at quality <paramref name="t"/> (replaces the race's base HP for that slot): <c>HP</c> to <c>HP
+    /// 1</c>, rounded to the nearest 5, half up (<b>Verified</b>, the limb item's setup <c>FUN_1400ce2d0</c> passes it to <c>FUN_1409b2310</c> with
+    /// 5: floor((hp + 2.5) / 5) x 5; a Masterwork lifter arm's 193.5 is 195, #360).
+    /// </summary>
+    public float Hp(float t) => (float)(Math.Floor((Lerp(HpLow, HpHigh, t) + 2.5) / 5) * 5);
 
-    /// <summary>The unarmed damage bonus at quality <paramref name="t"/>, truncated to an int as the original stores it.</summary>
+    /// <summary>
+    /// The unarmed damage bonus at quality <paramref name="t"/>, truncated to an int as the original stores it.
+    /// </summary>
     public int UnarmedDamageBonus(float t) => (int)Lerp(UnarmedDamageBonusLow, UnarmedDamageBonusHigh, t);
 
     /// <summary>
-    /// The multiplier this limb applies to a stat (1 when it has none, <c>FUN_1400cd780</c>): swimming lerps by <paramref name="t"/> like HP; strength,
-    /// dexterity, thieving and lockpicking (the same field), crossbows, athletics and stealth follow <see cref="GradeCurve"/> of the level round(t x 100).
+    /// The multiplier this limb applies to a stat (1 when it has none, <c>FUN_1400cd780</c>): swimming lerps by <paramref name="t"/> like HP;
+    /// strength, dexterity, thieving and lockpicking (the same field), crossbows, athletics and stealth follow <see cref="GradeCurve"/> of the level
+    /// round(t x 100).
     /// </summary>
     public float Multiplier(StatsEnumerated stat, float t)
     {
@@ -79,8 +96,9 @@ public sealed record LimbReplacement
     }
 
     /// <summary>
-    /// A skill multiplier at item level <paramref name="level"/> (<c>FUN_1400cd500</c>, docs/game/character-stats.md "Limb replacements and robots", <b>Verified</b>):
-    /// a field that turns a penalty into a bonus (low &lt; 1 &lt;= high) is 1 at level 40, rising from low at level 5 and on to high at 95; any other lerps by level x 0.01.
+    /// A skill multiplier at item level <paramref name="level"/> (<c>FUN_1400cd500</c>, docs/game/character-stats.md "Limb replacements and robots",
+    /// <b>Verified</b>): a field that turns a penalty into a bonus (low &lt; 1 &lt;= high) is 1 at level 40, rising from low at level 5 and on to
+    /// high at 95; any other lerps by level x 0.01.
     /// </summary>
     public static float GradeCurve(int level, float low, float high)
     {
@@ -115,16 +133,26 @@ public sealed record LimbReplacement
             Name = r.Name,
             Slot = RecordReading.Int(r, "slot", 0),
             CraftTimeHours = RecordReading.Float(r, "craft time hrs", 0),
-            HpLow = hp.Low, HpHigh = hp.High,
-            UnarmedDamageBonusLow = unarmed.Low, UnarmedDamageBonusHigh = unarmed.High,
-            OverallMultLow = overall.Low, OverallMultHigh = overall.High,
-            SwimmingLow = swim.Low, SwimmingHigh = swim.High,
-            StrengthLow = str.Low, StrengthHigh = str.High,
-            DexterityLow = dex.Low, DexterityHigh = dex.High,
-            ThieveryLow = thief.Low, ThieveryHigh = thief.High,
-            RangedLow = ranged.Low, RangedHigh = ranged.High,
-            AthleticsLow = ath.Low, AthleticsHigh = ath.High,
-            StealthLow = stealth.Low, StealthHigh = stealth.High,
+            HpLow = hp.Low,
+            HpHigh = hp.High,
+            UnarmedDamageBonusLow = unarmed.Low,
+            UnarmedDamageBonusHigh = unarmed.High,
+            OverallMultLow = overall.Low,
+            OverallMultHigh = overall.High,
+            SwimmingLow = swim.Low,
+            SwimmingHigh = swim.High,
+            StrengthLow = str.Low,
+            StrengthHigh = str.High,
+            DexterityLow = dex.Low,
+            DexterityHigh = dex.High,
+            ThieveryLow = thief.Low,
+            ThieveryHigh = thief.High,
+            RangedLow = ranged.Low,
+            RangedHigh = ranged.High,
+            AthleticsLow = ath.Low,
+            AthleticsHigh = ath.High,
+            StealthLow = stealth.Low,
+            StealthHigh = stealth.High,
         };
     }
 }

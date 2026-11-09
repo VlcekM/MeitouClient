@@ -26,7 +26,9 @@ public sealed class FoliageMesh
     public string? Normal2 { get; init; }
     public string? LeavesTexture { get; init; }
     public string? LeavesNormal { get; init; }
-    /// <summary>MapFeatureMode: 0 UV_MAPPED, 1 TRIPLANAR, 2 TERRAIN, 3 DUAL_TEXTURE, 4 FOLIAGE, 5 DUAL_TRIPLANAR, 6 EMISSIVE.</summary>
+    /// <summary>
+    /// MapFeatureMode: 0 UV_MAPPED, 1 TRIPLANAR, 2 TERRAIN, 3 DUAL_TEXTURE, 4 FOLIAGE, 5 DUAL_TRIPLANAR, 6 EMISSIVE.
+    /// </summary>
     public int MaterialType { get; init; }
     public int AlphaThreshold { get; init; } = 128;
     public int LeavesAlphaThreshold { get; init; } = 80;
@@ -55,17 +57,27 @@ public sealed class FoliageMesh
     public float RoadAvoidance { get; init; } = 10;
     public float GrassSpot { get; init; }
     public float WindFactor { get; init; } = 1;
-    /// <summary>The BUILDING of <c>building type</c> (mineable resources), null for plain foliage.</summary>
+    /// <summary>
+    /// The BUILDING of <c>building type</c> (mineable resources), null for plain foliage.
+    /// </summary>
     public GameRecord? BuildingType { get; init; }
-    /// <summary>Child meshes (<c>meshes</c>) placed around every placed copy of this one.</summary>
+    /// <summary>
+    /// Child meshes (<c>meshes</c>) placed around every placed copy of this one.
+    /// </summary>
     public List<FoliageMesh> Children { get; } = [];
 
-    /// <summary>Lower bound of the scale draw: <c>clamp(2 × min height, 0.01, 10)</c>.</summary>
+    /// <summary>
+    /// Lower bound of the scale draw: <c>clamp(2 × min height, 0.01, 10)</c>.
+    /// </summary>
     public float MinScale => Math.Max(Math.Min(MinHeight * 2, FoliageLayout.MaxScale), FoliageLayout.MinScale);
-    /// <summary>Upper bound of the scale draw: <c>clamp(2 × max height, 0.01, 10)</c>.</summary>
+    /// <summary>
+    /// Upper bound of the scale draw: <c>clamp(2 × max height, 0.01, 10)</c>.
+    /// </summary>
     public float MaxScale => Math.Max(Math.Min(MaxHeight * 2, FoliageLayout.MaxScale), FoliageLayout.MinScale);
 
-    /// <summary>A mesh's material looks: FOLIAGE clips on the normal map's alpha and is double-sided (runtime-materials.md).</summary>
+    /// <summary>
+    /// A mesh's material looks: FOLIAGE clips on the normal map's alpha and is double-sided (runtime-materials.md).
+    /// </summary>
     public bool IsFoliageMaterial => MaterialType == 4;
 
     public static FoliageMesh FromRecord(GameRecord r, GameDatabase db, Dictionary<string, FoliageMesh> cache)
@@ -115,13 +127,15 @@ public sealed class FoliageMesh
         };
         cache[r.StringId] = m;
         foreach (var c in r.GetReferences("meshes"))
-            if (db.Find(c.TargetStringId) is { Type: FcsRecordType.FOLIAGE_MESH } child)
+            if (db.Find(c.TargetStringId) is { Type: FcsRecordType.FoliageMesh } child)
                 m.Children.Add(FromRecord(child, db, cache));
         return m;
     }
 }
 
-/// <summary>A GRASS record (docs/formats/foliage.md, "Grass").</summary>
+/// <summary>
+/// A GRASS record (docs/formats/foliage.md, "Grass").
+/// </summary>
 public sealed class FoliageGrass
 {
     public GameRecord? Record { get; init; }
@@ -147,14 +161,20 @@ public sealed class FoliageGrass
     public float BlackoutNoiseScale { get; init; } = 10;
     public float BlackoutZeroCutoff { get; init; } = 0.57f;
 
-    /// <summary>Quad size bounds the game gives the grass loader: min width/height × 9, max × 17.</summary>
+    /// <summary>
+    /// Quad size bounds the game gives the grass loader: min width/height × 9, max × 17.
+    /// </summary>
     public float QuadMinWidth => MinWidth * 9;
     public float QuadMinHeight => MinHeight * 9;
     public float QuadMaxWidth => MaxWidth * 17;
     public float QuadMaxHeight => MaxHeight * 17;
-    /// <summary>Grass per square unit at full coverage (grass density setting 1): <c>density × 0.005</c>.</summary>
+    /// <summary>
+    /// Grass per square unit at full coverage (grass density setting 1): <c>density × 0.005</c>.
+    /// </summary>
     public float PerSquareUnit => Density * 0.005f;
-    /// <summary>Sway amplitude in units: <c>wind factor × 3</c>.</summary>
+    /// <summary>
+    /// Sway amplitude in units: <c>wind factor × 3</c>.
+    /// </summary>
     public float SwayLength => WindFactor * 3;
 
     public static FoliageGrass FromRecord(GameRecord r)
@@ -188,7 +208,9 @@ public sealed class FoliageGrass
     }
 }
 
-/// <summary>A FOLIAGE_LAYER record: meshes with their count per zone, or grass types with their coverage channel.</summary>
+/// <summary>
+/// A FOLIAGE_LAYER record: meshes with their count per zone, or grass types with their coverage channel.
+/// </summary>
 public sealed class FoliageLayer
 {
     public GameRecord? Record { get; init; }
@@ -198,7 +220,9 @@ public sealed class FoliageLayer
     public List<(FoliageGrass Grass, int Channel)> Grass { get; } = [];
     public bool Wind { get; init; }
     public FoliageVisibility Visibility { get; init; } = FoliageVisibility.Medium;
-    /// <summary><c>lod range</c> × 10 (0 when unset).</summary>
+    /// <summary>
+    /// <c>lod range</c> × 10 (0 when unset).
+    /// </summary>
     public float LodRange { get; init; }
 
     public bool IsGrass => Grass.Count > 0;
@@ -209,7 +233,9 @@ public sealed class FoliageLayer
     /// </summary>
     public float Range => FoliageLayout.VisibilityRange(IsGrass || Wind ? (FoliageVisibility)Math.Min((int)Visibility, 2) : Visibility);
 
-    /// <summary>Length of the fade between detail levels: 100 units for wind layers, 10 for the others.</summary>
+    /// <summary>
+    /// Length of the fade between detail levels: 100 units for wind layers, 10 for the others.
+    /// </summary>
     public float Transition => Wind ? 100 : 10;
 
     public static FoliageLayer FromRecord(GameRecord r, GameDatabase db, Dictionary<string, FoliageMesh> meshCache)
@@ -224,16 +250,18 @@ public sealed class FoliageLayer
             LodRange = r.GetInt("lod range") * 10f,
         };
         foreach (var g in r.GetReferences("grass"))
-            if (db.Find(g.TargetStringId) is { Type: FcsRecordType.GRASS } grass)
+            if (db.Find(g.TargetStringId) is { Type: FcsRecordType.Grass } grass)
                 layer.Grass.Add((FoliageGrass.FromRecord(grass), g.Values.Value0));
         foreach (var m in r.GetReferences("meshes"))
-            if (db.Find(m.TargetStringId) is { Type: FcsRecordType.FOLIAGE_MESH } mesh)
+            if (db.Find(m.TargetStringId) is { Type: FcsRecordType.FoliageMesh } mesh)
                 layer.Meshes.Add((FoliageMesh.FromRecord(mesh, db, meshCache), m.Values.Value0));
         return layer;
     }
 }
 
-/// <summary>The foliage layers of every biome, by the biome's <c>index</c> colour (BIOMES <c>foliage</c>, in list order).</summary>
+/// <summary>
+/// The foliage layers of every biome, by the biome's <c>index</c> colour (BIOMES <c>foliage</c>, in list order).
+/// </summary>
 public sealed class FoliageCatalog
 {
     public Dictionary<uint, List<FoliageLayer>> ByBiome { get; } = [];
@@ -245,14 +273,14 @@ public sealed class FoliageCatalog
     public static FoliageCatalog Load(GameDatabase db)
     {
         var c = new FoliageCatalog();
-        foreach (var b in db.OfType(FcsRecordType.BIOMES).OrderBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var b in db.OfType(FcsRecordType.Biomes).OrderBy(r => r.StringId, StringComparer.Ordinal))
         {
             uint index = (uint)b.GetInt("index") & 0xFFFFFF;
             if (c.ByBiome.ContainsKey(index)) continue; // the first record of a colour wins, as BiomeTerrain.ByIndex
             var list = new List<FoliageLayer>();
             foreach (var f in b.GetReferences("foliage"))
             {
-                if (db.Find(f.TargetStringId) is not { Type: FcsRecordType.FOLIAGE_LAYER } lr) continue;
+                if (db.Find(f.TargetStringId) is not { Type: FcsRecordType.FoliageLayer } lr) continue;
                 if (!c.Layers.TryGetValue(lr.StringId, out var layer)) c.Layers[lr.StringId] = layer = FoliageLayer.FromRecord(lr, db, c.Meshes);
                 list.Add(layer);
             }

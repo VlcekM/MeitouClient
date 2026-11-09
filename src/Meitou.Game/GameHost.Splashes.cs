@@ -1,11 +1,26 @@
+using Meitou.Game.Audio;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Meitou.Audio;
 using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.Particles;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gi;
+using Meitou.Game.Rendering.Impostors;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Rendering.Ui;
+using Meitou.Game.Rendering.Upscalers;
+using Meitou.Game.Rendering.Water;
 using Meitou.Simulation;
 
 namespace Meitou.Game;
@@ -38,14 +53,14 @@ sealed partial class GameHost
     /// <summary>The <c>contactfoam</c> splash: how high above the water a foot's ground may lie and still be wet, and the deepest foot bone that splashes the field.</summary>
     const float WetGround = 0.05f, SplashDeepest = 6;
 
-    GroundEvent[]?[]? definitionGround;
-    bool[]? definitionAnyEvents;
-    Dictionary<uint, WaterEffect[]>? waterEffects;
-    WaterEffect[] emptyBiomeWater = [];
-    readonly Dictionary<long, Splasher> splashers = [];
-    World? splashesFor;
-    int splashFrame;
-    Vector4[] splashPlanes = [];
+    GroundEvent[]?[]? _definitionGround;
+    bool[]? _definitionAnyEvents;
+    Dictionary<uint, WaterEffect[]>? _waterEffects;
+    WaterEffect[] _emptyBiomeWater = [];
+    readonly Dictionary<long, Splasher> _splashers = [];
+    World? _splashesFor;
+    int _splashFrame;
+    Vector4[] _splashPlanes = [];
 
     sealed class Splasher
     {
@@ -56,44 +71,44 @@ sealed partial class GameHost
     /// <summary>Once a frame, after the wave field's bodies (<see cref="UpdateWakes"/>): the ground events the characters' dominant clips passed since the last frame.</summary>
     void UpdateSplashes()
     {
-        if (gpu.Particles is not { } particles || scene.Database is not { } db || animationLibrary is not { } library || gpu.Characters is not { } characters) return;
-        if (definitionGround is null) LoadGroundEvents(db, library, particles);
-        if (!ReferenceEquals(splashesFor, session.World))
+        if (Gpu.Particles is not { } particles || Scene.Database is not { } db || AnimationLibrary is not { } library || Gpu.Characters is not { } characters) return;
+        if (_definitionGround is null) LoadGroundEvents(db, library, particles);
+        if (!ReferenceEquals(_splashesFor, Session.World))
         {
-            splashesFor = session.World;
-            splashers.Clear();
+            _splashesFor = Session.World;
+            _splashers.Clear();
         }
-        splashFrame++;
-        splashPlanes = Meitou.Rendering.WorldCamera.FrustumPlanes(camera.View * camera.Projection(birdAspect, camera.Near, camera.ViewDistance));
-        for (int i = 0; i < splashPlanes.Length; i++) splashPlanes[i] /= new Vector3(splashPlanes[i].X, splashPlanes[i].Y, splashPlanes[i].Z).Length();
+        _splashFrame++;
+        _splashPlanes = Meitou.Game.Rendering.Frame.WorldCamera.FrustumPlanes(Camera.View * Camera.Projection(_frameAspect, Camera.Near, Camera.ViewDistance));
+        for (int i = 0; i < _splashPlanes.Length; i++) _splashPlanes[i] /= new Vector3(_splashPlanes[i].X, _splashPlanes[i].Y, _splashPlanes[i].Z).Length();
         IndexPrevious();
-        var eye = camera.Eye;
-        float alpha = session.SimulationAlpha, tick = session.World.TickSeconds;
-        foreach (var c in session.CurrentSnapshot.Characters)
+        var eye = Camera.Eye;
+        float alpha = Session.SimulationAlpha, tick = Session.World.TickSeconds;
+        foreach (var c in Session.CurrentSnapshot.Characters)
         {
             if (c.Appearance is null || Vector3.DistanceSquared(c.Position, eye) > SplashReach * SplashReach) continue;
             var position = c.Position;
             float speed = 0;
-            if (previousById.TryGetValue(c.Id, out var before))
+            if (PreviousById.TryGetValue(c.Id, out var before))
             {
-                position = Meitou.Engine.Time.Interp.Lerp(before.Position, c.Position, alpha);
+                position = Meitou.Simulation.Session.Interp.Lerp(before.Position, c.Position, alpha);
                 speed = new Vector2(c.Position.X - before.Position.X, c.Position.Z - before.Position.Z).Length() / tick;
             }
             long key = DrawKey(c.Id);
-            ref var s = ref CollectionsMarshal.GetValueRefOrAddDefault(splashers, key, out _);
+            ref var s = ref CollectionsMarshal.GetValueRefOrAddDefault(_splashers, key, out _);
             s ??= new Splasher();
-            s.Frame = splashFrame;
+            s.Frame = _splashFrame;
             // Only the heaviest clip that carries events fires them (FUN_1405b5c30), the same cursor as the sounds' (FUN_140064690: one list, each event its own fire).
             int dominant = -1;
             for (int k = 0; k < c.Animations.Count; k++)
             {
                 int d = c.Animations[k].Definition;
-                if ((uint)d < (uint)definitionAnyEvents!.Length && definitionAnyEvents[d] && (dominant < 0 || c.Animations[k].Weight > c.Animations[dominant].Weight)) dominant = k;
+                if ((uint)d < (uint)_definitionAnyEvents!.Length && _definitionAnyEvents[d] && (dominant < 0 || c.Animations[k].Weight > c.Animations[dominant].Weight)) dominant = k;
             }
             for (int k = 0; k < c.Animations.Count; k++)
             {
                 var layer = c.Animations[k];
-                if ((uint)layer.Definition >= (uint)definitionGround!.Length || definitionGround[layer.Definition] is not { } events) continue;
+                if ((uint)layer.Definition >= (uint)_definitionGround!.Length || _definitionGround[layer.Definition] is not { } events) continue;
                 int at = s.Cursors.FindIndex(x => x.Definition == layer.Definition);
                 if (at < 0)
                 {
@@ -101,22 +116,22 @@ sealed partial class GameHost
                     at = s.Cursors.Count - 1;
                 }
                 var cursor = s.Cursors[at].Cursor;
-                cursor.Update(events, Math.Clamp(ClipFraction(layer, library.Definitions[layer.Definition].Loop), 0, 1), k == dominant,
+                cursor.Update(events, Math.Clamp(Audio.GameSound.ClipFraction(layer, library.Definitions[layer.Definition].Loop), 0, 1), k == dominant,
                     ev => GroundEffect(particles, characters, key, ev, position, speed));
-                s.Cursors[at] = (layer.Definition, cursor, splashFrame);
+                s.Cursors[at] = (layer.Definition, cursor, _splashFrame);
             }
-            s.Cursors.RemoveAll(x => x.Frame != splashFrame);
+            s.Cursors.RemoveAll(x => x.Frame != _splashFrame);
         }
-        if (splashFrame % 256 == 0)
-            foreach (var (key, s) in splashers)
-                if (s.Frame != splashFrame) splashers.Remove(key);
+        if (_splashFrame % 256 == 0)
+            foreach (var (key, s) in _splashers)
+                if (s.Frame != _splashFrame) _splashers.Remove(key);
     }
 
     /// <summary>
     /// One ground event (<c>FUN_140065330</c>): at the bone (the character's position without one), under the water the biome's entry for the depth and speed, at the surface;
     /// only inside the frustum (<c>FUN_140a08c00</c>). With <c>contactfoam</c> a foot on wet ground splashes the wave field too.
     /// </summary>
-    void GroundEffect(ParticleRenderer particles, Meitou.Rendering.Characters.CharacterRenderer characters, long key, GroundEvent ev, Vector3 position, float speed)
+    void GroundEffect(ParticleRenderer particles, Meitou.Game.Rendering.Characters.CharacterRenderer characters, long key, GroundEvent ev, Vector3 position, float speed)
     {
         var point = ev.Bone.Length > 0 && characters.BonePosition(key, ev.Bone) is { } bone && bone.Y != 0 ? bone : position;
         if (!float.IsFinite(point.X) || !float.IsFinite(point.Y) || !float.IsFinite(point.Z)) return;
@@ -126,10 +141,10 @@ sealed partial class GameHost
         string? fired = depth >= 0 ? WaterEffectAt(point, depth, speed) : null;
         if (fired is not null) particles.Burst(fired, surface, Quaternion.Identity, SplashEmitSeconds);
         if (!WaterContact.Enabled || ev.Bone.Length == 0 || depth > SplashDeepest) return;
-        float ground = gpu.Terrain.HeightAt(point.X, point.Z);
+        float ground = Gpu.Terrain.HeightAt(point.X, point.Z);
         if (!float.IsFinite(ground) || ground > WorldWater.Height - WetGround || point.Y - ground > 4) return;   // dry, or a floor above the water
         float strength = Math.Clamp(speed / 50, 0.5f, 1) * Math.Clamp(1 - depth / SplashDeepest, 0.3f, 1);
-        gpu.Water?.Ripples?.AddSplash(new Vector2(point.X, point.Z), strength);
+        Gpu.Water?.Ripples?.AddSplash(new Vector2(point.X, point.Z), strength);
         // Water too shallow to reach the ankle bone: the game shows nothing; the biome's shallowest splash.
         if (fired is null && WaterEffectAt(point, 0, speed) is { } shallow) particles.Burst(shallow, surface, Quaternion.Identity, SplashEmitSeconds);
     }
@@ -137,7 +152,7 @@ sealed partial class GameHost
     /// <summary>The biome's <c>water effects</c> entry with the greatest depth at most <paramref name="depth"/>, then the greatest speed at most <paramref name="speed"/>; null for none.</summary>
     string? WaterEffectAt(Vector3 point, float depth, float speed)
     {
-        var effects = groundSurfaces?.BiomeAt(point.X, point.Z) is { } biome && waterEffects!.TryGetValue(biome, out var found) ? found : emptyBiomeWater;
+        var effects = Sound.Ground?.BiomeAt(point.X, point.Z) is { } biome && _waterEffects!.TryGetValue(biome, out var found) ? found : _emptyBiomeWater;
         int bestDepth = -1, bestSpeed = -1;
         string? system = null;
         foreach (var e in effects)
@@ -148,7 +163,7 @@ sealed partial class GameHost
 
     bool InSplashFrustum(Vector3 p)
     {
-        foreach (var plane in splashPlanes)
+        foreach (var plane in _splashPlanes)
             if (plane.X * p.X + plane.Y * p.Y + plane.Z * p.Z + plane.W < -SplashFrustumMargin) return false;
         return true;
     }
@@ -159,8 +174,8 @@ sealed partial class GameHost
     /// </summary>
     void LoadGroundEvents(GameDatabase db, Meitou.Data.Gameplay.AnimationLibrary library, ParticleRenderer particles)
     {
-        animationSounds ??= AnimationSoundEvents.FromDatabase(db);
-        groundSurfaces ??= new GroundSurfaces(install, db);
+        var animationSounds = Sound.AnimationSoundsOf(db);
+        Sound.GroundSurfacesOf(db);
         var ground = new GroundEvent[]?[library.Definitions.Count];
         var any = new bool[ground.Length];
         for (int i = 0; i < ground.Length; i++)
@@ -169,7 +184,7 @@ sealed partial class GameHost
             if (db.Find(library.Definitions[i].Id) is { } record)
                 foreach (var reference in record.GetReferences("events"))
                 {
-                    if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.ANIMATION_EVENT } def || !def.GetBool("ground effect")) continue;
+                    if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.AnimationEvent } def || !def.GetBool("ground effect")) continue;
                     var ev = new GroundEvent(def.StringId, def.GetString("bone"), reference.Values.Value0 * 0.01f);
                     list ??= [];
                     // A sorted insert that skips the same event at the same time (FUN_140064870).
@@ -180,23 +195,23 @@ sealed partial class GameHost
             ground[i] = list is null ? null : [.. list];
             any[i] = list is not null || animationSounds.Of(library.Definitions[i].Id) is { Length: > 0 };
         }
-        (definitionGround, definitionAnyEvents) = (ground, any);
+        (_definitionGround, _definitionAnyEvents) = (ground, any);
 
-        waterEffects = [];
+        _waterEffects = [];
         var systems = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var r in db.OfType(FcsRecordType.BIOMES).OrderBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var r in db.OfType(FcsRecordType.Biomes).OrderBy(r => r.StringId, StringComparer.Ordinal))
         {
             var list = new List<WaterEffect>();
             foreach (var reference in r.GetReferences("water effects"))
-                if (db.Find(reference.TargetStringId) is { Type: FcsRecordType.EFFECT } effect && EffectRecord.From(effect, db).ParticleSystem is { Length: > 0 } system)
+                if (db.Find(reference.TargetStringId) is { Type: FcsRecordType.Effect } effect && EffectRecord.From(effect, db).ParticleSystem is { Length: > 0 } system)
                 {
                     list.Add(new WaterEffect(reference.Values.Value0, reference.Values.Value1, system));
                     systems.Add(system);
                 }
-            waterEffects.TryAdd((uint)r.GetInt("index") & 0xFFFFFF, [.. list]);
-            if (r.StringId == "EMPTY" || r.Name == "EMPTY") emptyBiomeWater = [.. list];
+            _waterEffects.TryAdd((uint)r.GetInt("index") & 0xFFFFFF, [.. list]);
+            if (r.StringId == "EMPTY" || r.Name == "EMPTY") _emptyBiomeWater = [.. list];
         }
         particles.PrepareBursts([.. systems]);
-        Console.WriteLine($"water     splashes: {ground.Count(g => g is not null)} clips with ground events; water effects {string.Join(", ", waterEffects.Values.SelectMany(x => x).Distinct().Select(e => $"{e.System} at depth {e.Depth} speed {e.Speed}"))}");
+        Console.WriteLine($"water     splashes: {ground.Count(g => g is not null)} clips with ground events; water effects {string.Join(", ", _waterEffects.Values.SelectMany(x => x).Distinct().Select(e => $"{e.System} at depth {e.Depth} speed {e.Speed}"))}");
     }
 }

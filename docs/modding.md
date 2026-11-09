@@ -3,8 +3,8 @@
 **Status: implemented, code-mod API version 2 (1 still runs; 2 adds [dependencies](modding-dependencies.md)).** Meitou's own in-process loader,
 Lib.Harmony shipped by the game as the sanctioned patching library, and a registration surface kept to the cases where a patch would silently
 break an invariant. No BepInEx.
-The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Modding` (contract and
-loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks).
+The RE_Kenshi decision ([rekenshi](formats/rekenshi.md)) stands and its DLLs stay ignored. Code: `src/Meitou.Game/Mods` (contract and
+loader), `GameMods` (host wiring), `SimulationExtensions` (engine hooks).
 
 ## Why this shape
 
@@ -21,8 +21,10 @@ loader), `GameHost.Mods.cs` (host wiring), `SimulationExtensions` (engine hooks)
 
 ## Writing a mod
 
-A class library for `net10.0` referencing the release's `Meitou.Modding.dll`, `Meitou.Simulation.dll`, `Meitou.Core.dll`,
-`Meitou.Data.dll` (and `Meitou.Ui.dll` for interface work) and `0Harmony.dll`, all with `Private="false"`: the game supplies them.
+A class library for `net10.0` referencing the release's `MeitouClient.dll` (the game: the mod contract `Meitou.Modding`, the interface
+`Meitou.Game.Ui`), `Meitou.Simulation.dll`, `Meitou.Core.dll`, `Meitou.Data.dll` and `0Harmony.dll`, all with `Private="false"`: the game
+supplies them. Releases after v0.17.1 ship these four Meitou assemblies, not the earlier eleven, and most namespaces follow folders
+(`Meitou.Simulation.Population`, `Meitou.Game.Rendering.Terrain`): a code mod built against v0.17.1 or earlier must be rebuilt.
 
 ```csharp
 public sealed class MyMod : IMod
@@ -59,10 +61,9 @@ only when the data mod it names is installed and enabled in `mods.cfg`, directly
 
 ## Trust
 
-A workshop DLL is arbitrary code running as the user, as with RE_Kenshi. No sandboxing: .NET has none. The game loads a code mod's code
-only when its mod name is in `trustedCodeMods` of `meitou.user.json` (`UserConfig.TrustedCodeMods`); otherwise its data loads, its
-code does not, and the game shows a notice. The launcher's Play asks for each enabled code mod not yet allowed ([launcher](launcher.md)).
-The game itself cannot ask: mods initialize on the boot worker before the interface exists.
+A workshop DLL is arbitrary code running as the user, as with RE_Kenshi. No sandboxing: .NET has none. Installing and enabling a code mod
+is the consent, as in RimWorld: the game loads every enabled code mod's code, with no allow list or question. An older game's
+`trustedCodeMods` in `meitou.user.json` is no longer read.
 
 ## Loading
 
@@ -82,7 +83,9 @@ The game itself cannot ask: mods initialize on the boot worker before the interf
 - Constraint: the game stays a JIT publish, never `PublishTrimmed`, `PublishAot` or single-file. **Verified**
   (`tools/scripts/package-release.ps1`): the game publishes self-contained with `Meitou.*.dll` beside the executable, and `meitou-tools`
   with it. **Observed** (2026-11-04, win-x64 publish of the three programs into one folder): `0Harmony.dll` and `Meitou.Modding.dll` are
-  there, the game's 228 files are byte-identical to a game-only publish, and the published `meitou-tools.exe mod-check` runs.
+  there, the game's 228 files are byte-identical to a game-only publish, and the published `meitou-tools.exe mod-check` runs. Since the four-project layout
+  (2026-11-08) the viewer and `meitou-tools` reference the game and bring copies of its runtimeconfig and deps, so the game publishes last;
+  **Observed** (win-x64, tools then game into one folder): `MeitouClient.runtimeconfig.json` is the game's own.
 
 ## Lifecycle
 
@@ -145,7 +148,7 @@ holds refuses the second mod.
   `DebugCommandContext` (field, selection, camera target, tick, `Enqueue`) on the host thread while a tick may be in flight, so it must
   not touch the world; it returns the status line, and a throw shows as the status.
 - **Settings:** `AddSettings(object)`, once per mod: the object's public get/set properties marked `[Setting(label, Hint, Min, Max, Step, Options)]`
-  (`ModSettings.cs`) become one group, in declaration order, on the Settings screen's Mod settings page ([native UI](native-ui.md#settings)): `bool`
+  (`ModSettings.cs`) become one group, in declaration order, under the mod's row on the Settings screen's Mods page ([native UI](native-ui.md#settings)): `bool`
   an Off | On switch, `int`/`float`/`double` a slider (Min and Max required; Step 0 = 1 for `int`, a hundredth of the range otherwise), an enum or a
   `string` with Options a list. Another type, a number without a range, a list whose value is not one of its options, a struct (the page would
   change a copy) or no marked property refuses the mod. The player's values are kept in `meitou.user.json` (`modSettings`: mod id, key, invariant
@@ -183,8 +186,7 @@ headless with the enabled code mods, or only the `--mod` folders (their code; th
 it three times: twice on one thread and once on `--threads` (default 4), for `--ticks` (default 600). It compares `World.StateHash`
 after every tick and reports the first differing tick of each pair and the `IStateHashed` systems that differ there, a mod's by id and
 name. One-thread runs differing points at unseeded randomness or the clock; thread counts differing, at a threading mistake. On a
-difference it runs the game without mods: if that differs too, the fault is the game's. Running the command is consent to run the mods'
-code, so `trustedCodeMods` is not consulted.
+difference it runs the game without mods: if that differs too, the fault is the game's.
 
 - Walkability is the open terrain, not the navmesh (whose zones load on threads), paths are answered in the tick and the population works
   in it, so runs repeat; the world differs from play in where characters walk.

@@ -4,39 +4,63 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.Gameplay;
 
 /// <summary>
-/// A NEW_GAME_STARTOFF record, one entry of the new-game screen (docs/game/ui-screens.md section 3, <b>Verified</b> by probe: 13 records
-/// in the install, 8 from the base data and 5 from <c>rebirth.mod</c>): the starting cash, the squad the player begins with and the
-/// towns it may begin in. What the original does with each field beyond showing it is partly <b>Unknown</b> (economy.md: the hand-over of
-/// <see cref="Money"/> into the purse was not traced).
+/// A NEW_GAME_STARTOFF record, one entry of the new-game screen (docs/game/ui-screens.md section 3, <b>Verified</b> by probe: 13 records in the
+/// install, 8 from the base data and 5 from <c>rebirth.mod</c>): the starting cash, the squad the player begins with and the towns it may begin in.
+/// What the original does with each field beyond showing it is partly <b>Unknown</b> (economy.md: the hand-over of <see cref="Money"/> into the purse
+/// was not traced).
 /// </summary>
 public sealed record NewGameStart
 {
+    string? _baseName;
+
     public required string Id { get; init; }
     public required string Name { get; init; }
-    /// <summary>The name in the data files (<see cref="GameRecord.BaseName"/>), so a start is found by its English name in any language.</summary>
-    public string BaseName { get => baseName ?? Name; init => baseName = value; }
-    string? baseName;
-    /// <summary><c>money</c>: "Starting cash".</summary>
+
+    /// <summary>
+    /// The name in the data files (<see cref="GameRecord.BaseName"/>), so a start is found by its English name in any language.
+    /// </summary>
+    public string BaseName { get => _baseName ?? Name; init => _baseName = value; }
+
+    /// <summary>
+    /// <c>money</c>: "Starting cash".
+    /// </summary>
     public int Money { get; init; }
-    /// <summary><c>start pos X</c> and <c>start pos Z</c>: the place the squad stands when <see cref="ForceStartPos"/> is set; otherwise unused (the town is drawn from <see cref="Towns"/>).</summary>
+
+    /// <summary>
+    /// <c>start pos X</c> and <c>start pos Z</c>: the place the squad stands when <see cref="ForceStartPos"/> is set; otherwise unused (the town is
+    /// drawn from <see cref="Towns"/>).
+    /// </summary>
     public Vector2 StartPosition { get; init; }
     public bool ForceStartPos { get; init; }
     public string Description { get; init; } = "";
     public string Difficulty { get; init; } = "";
     public string Style { get; init; } = "";
-    /// <summary><c>squad</c>: SQUAD_TEMPLATE records (a squad each) or CHARACTER records (one character each).</summary>
+
+    /// <summary>
+    /// <c>squad</c>: SQUAD_TEMPLATE records (a squad each) or CHARACTER records (one character each).
+    /// </summary>
     public IReadOnlyList<RecordLink> Squad { get; init; } = [];
-    /// <summary><c>town</c>: the towns the start may be in; one placement of any of them is drawn.</summary>
+
+    /// <summary>
+    /// <c>town</c>: the towns the start may be in; one placement of any of them is drawn.
+    /// </summary>
     public IReadOnlyList<RecordLink> Towns { get; init; } = [];
-    /// <summary><c>faction relations</c>: each sets that faction's relation with the player to v0, both ways.</summary>
+
+    /// <summary>
+    /// <c>faction relations</c>: each sets that faction's relation with the player to v0, both ways.
+    /// </summary>
     public IReadOnlyList<RecordLink> FactionRelations { get; init; } = [];
     public IReadOnlyList<RecordLink> Research { get; init; } = [];
-    /// <summary><c>force race</c>: the races the character creation is limited to.</summary>
+
+    /// <summary>
+    /// <c>force race</c>: the races the character creation is limited to.
+    /// </summary>
     public IReadOnlyList<RecordLink> ForceRace { get; init; } = [];
 
     public static NewGameStart From(GameRecord r)
     {
         IReadOnlyList<RecordLink> Links(string list) => [.. r.GetReferences(list).Select(RecordLink.From)];
+
         return new NewGameStart
         {
             Id = r.StringId,
@@ -56,14 +80,21 @@ public sealed record NewGameStart
         };
     }
 
-    /// <summary>The start-offs of the database, in its order.</summary>
-    public static List<NewGameStart> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.NEW_GAME_STARTOFF).Select(From)];
+    /// <summary>
+    /// The start-offs of the database, in its order.
+    /// </summary>
+    public static List<NewGameStart> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.NewGameStartoff).Select(From)];
 
-    /// <summary>The standard start of the base game (difficulty "Default", the one with the Wanderer squad).</summary>
+    /// <summary>
+    /// The standard start of the base game (difficulty "Default", the one with the Wanderer squad).
+    /// </summary>
     public const string DefaultName = "Wanderer";
 
-    /// <summary>Finds a start by name (case-insensitive; the shown or the data-file name) or string id.</summary>
+    /// <summary>
+    /// Finds a start by name (case-insensitive; the shown or the data-file name) or string id.
+    /// </summary>
     public static NewGameStart? Find(IEnumerable<NewGameStart> starts, string nameOrId) =>
-        starts.FirstOrDefault(s => s.Id == nameOrId) ?? starts.FirstOrDefault(s => string.Equals(s.Name, nameOrId, StringComparison.OrdinalIgnoreCase))
+        starts.FirstOrDefault(s => s.Id == nameOrId)
+        ?? starts.FirstOrDefault(s => string.Equals(s.Name, nameOrId, StringComparison.OrdinalIgnoreCase))
         ?? starts.FirstOrDefault(s => string.Equals(s.BaseName, nameOrId, StringComparison.OrdinalIgnoreCase));
 }

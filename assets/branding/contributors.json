@@ -8,8 +8,8 @@
     "areas": "New game, Linux, Picking"
   },
   "rockchinq": {
-    "commits": 12,
-    "areas": "Towns, trading, New game"
+    "commits": 13,
+    "areas": "Town houses, Town repairs, Shopkeeper routines, Trading and buyback, Character stats, New-game options, Build orders"
   },
   "hazzael": {
     "commits": 6,
@@ -24,16 +24,16 @@
     "areas": "Metal rendering, Materials, Seat interaction, Mesh paths"
   },
   "crockmr": {
-    "commits": 26,
-    "areas": "Slaves, Prisoners, Saves"
+    "commits": 38,
+    "areas": "Slaver AI, Slave escape, Town guards, Navmesh, Medical treatment, Save loading, Sleep goals, Squads, Prisoner cages, Workplaces"
   },
   "dmlen": {
-    "commits": 1,
-    "areas": "Projectile tracers"
+    "commits": 3,
+    "areas": "Benchmarks, Crossbow tracers"
   },
   "lucasskrewer": {
-    "commits": 6,
-    "areas": "Benchmarks, Animals"
+    "commits": 12,
+    "areas": "Benchmarks, Animal hunger"
   },
   "dxseba": {
     "commits": 2,
@@ -46,5 +46,9 @@
   "roscatoday": {
     "commits": 1,
     "areas": "Mod settings"
+  },
+  "teppum": {
+    "commits": 2,
+    "areas": "Repair beds, Bodyguard jobs"
   }
 }

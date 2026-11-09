@@ -11,10 +11,12 @@ public static class SavePortraits
 {
     public const int Size = 2048;
 
-    static readonly Lazy<byte[]> blank = new(MakeBlank);
+    static readonly Lazy<byte[]> BlankImage = new(MakeBlank);
 
-    /// <summary>A transparent atlas.</summary>
-    public static byte[] Blank() => (byte[])blank.Value.Clone();
+    /// <summary>
+    /// A transparent atlas.
+    /// </summary>
+    public static byte[] Blank() => (byte[])BlankImage.Value.Clone();
 
     static byte[] MakeBlank()
     {
@@ -52,7 +54,7 @@ public static class SavePortraits
         s.Write(length);
     }
 
-    static readonly uint[] table = MakeTable();
+    static readonly uint[] Table = MakeTable();
 
     static uint[] MakeTable()
     {
@@ -69,7 +71,7 @@ public static class SavePortraits
     static uint Crc32(ReadOnlySpan<byte> bytes)
     {
         uint c = 0xFFFFFFFFu;
-        foreach (byte b in bytes) c = table[(c ^ b) & 0xFF] ^ (c >> 8);
+        foreach (byte b in bytes) c = Table[(c ^ b) & 0xFF] ^ (c >> 8);
         return c ^ 0xFFFFFFFFu;
     }
 }

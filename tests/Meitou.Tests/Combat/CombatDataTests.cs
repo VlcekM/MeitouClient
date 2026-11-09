@@ -11,7 +11,9 @@ using static Meitou.Tests.Combat.CombatFixtures;
 
 namespace Meitou.Tests.Combat;
 
-/// <summary>The combat record views over invented records (no install), and the same facts over the install's records ([Slow]).</summary>
+/// <summary>
+/// The combat record views over invented records (no install), and the same facts over the install's records ([Slow]).
+/// </summary>
 public class CombatDataTests
 {
     static GameDatabase Db(params FcsRecord[] records)
@@ -28,32 +30,32 @@ public class CombatDataTests
     [Fact]
     public void Records_read_into_typed_views()
     {
-        var constants = Rec("1-t", FcsRecordType.CONSTANTS, "GLOBAL CONSTANTS");
+        var constants = Rec("1-t", FcsRecordType.Constants, "GLOBAL CONSTANTS");
         constants.Floats["damage multiplier"] = 0.5f;
         constants.Floats["cut damage 1"] = 10;
         constants.Floats["cut damage 99"] = 100;
         constants.Floats["block chance increase per 10levels"] = 20;
         constants.Ints["stumble damage max"] = 40;
-        var weapon = Rec("2-t", FcsRecordType.WEAPON, "Blade");
+        var weapon = Rec("2-t", FcsRecordType.Weapon, "Blade");
         weapon.Ints["skill category"] = 1;
         weapon.Ints["attack mod"] = 3;
         weapon.Floats["cut damage multiplier"] = 1.5f;
         weapon.Floats["armour penetration"] = -0.2f;
         weapon.Bools["can block"] = true;
         weapon.References["race damage"] = [new FcsReference("9-t", 150, 0, 0)];
-        var maker = Rec("3-t", FcsRecordType.WEAPON_MANUFACTURER, "Maker");
+        var maker = Rec("3-t", FcsRecordType.WeaponManufacturer, "Maker");
         maker.Floats["cut damage mod"] = 1.1f;
         maker.Ints["min cut damage"] = 2;
         maker.References["weapon models"] = [new FcsReference("4-t", 50, 100, 0)];
-        var model = Rec("4-t", FcsRecordType.MATERIAL_SPECS_WEAPON, "Mk V");
+        var model = Rec("4-t", FcsRecordType.MaterialSpecsWeapon, "Mk V");
         model.Ints["defence mod"] = -2;
-        var armour = Rec("5-t", FcsRecordType.ARMOUR, "Plate");
+        var armour = Rec("5-t", FcsRecordType.Armour, "Plate");
         armour.Ints["class"] = 3;
         armour.Ints["material type"] = 3;
         armour.Ints["slot"] = 8;
         armour.Floats["cut into stun"] = 0.4f;
         armour.References["part coverage"] = [new FcsReference("101-t", 70, 0, 0)];
-        var technique = Rec("6-t", FcsRecordType.COMBAT_TECHNIQUE, "Slash");
+        var technique = Rec("6-t", FcsRecordType.CombatTechnique, "Slash");
         technique.Strings["anim name"] = "chop";
         technique.Bools["katanas"] = true;
         technique.Bools["1 handed"] = true;
@@ -98,25 +100,27 @@ public class CombatDataTests
     }
 }
 
-/// <summary>The facts of docs/game/combat.md checked against the install's records (base load order). Skipped without the game.</summary>
+/// <summary>
+/// The facts of docs/game/combat.md checked against the install's records (base load order). Skipped without the game.
+/// </summary>
 [Slow]
 public class CombatInstallTests
 {
-    static GameDatabase? cached;
-    static CombatDatabase? combat;
-    static readonly Lock gate = new();
+    static GameDatabase? s_cached;
+    static CombatDatabase? s_combat;
+    static readonly Lock Gate = new();
 
     static GameDatabase Database()
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
-        lock (gate) return cached ??= GameDatabase.Load(LoadOrder.BaseGame(install!));
+        lock (Gate) return s_cached ??= GameDatabase.Load(LoadOrder.BaseGame(install!));
     }
 
     static CombatDatabase Combat()
     {
         var db = Database();
-        lock (gate) return combat ??= CombatDatabase.From(db);
+        lock (Gate) return s_combat ??= CombatDatabase.From(db);
     }
 
     [Fact]
@@ -128,22 +132,27 @@ public class CombatInstallTests
         Assert.Equal(0.509f, combo.StrikeProgress(1), 3);
         Assert.Equal(0.792f, combo.StrikeProgress(2), 3);
         Assert.Equal(0.527f, combo.StopProgress(1), 3);
+
         // The martial-arts rows count frames.
         var strike = all.Single(t => t.Name == "ma Double strike");
         Assert.Equal(57, strike.NumFrames);
         Assert.Equal(18f / 57, strike.StrikeProgress(1), 4);
         Assert.Equal(31f / 57, strike.StrikeProgress(2), 4);
         Assert.Equal(WeaponKinds.Unarmed, strike.Kinds);
+
         // Every sword, block and dodge row is in fractions.
         Assert.All(all.Where(t => t.Animal == 0 && !t.Kinds.HasFlag(WeaponKinds.Unarmed) || t.IsBlock), t => Assert.Equal(1, t.NumFrames));
+
         // Four human rows are disabled; one has no weapon flag at all.
         Assert.Equal(4, all.Count(t => t.Disabled));
         Assert.Equal(WeaponKinds.None, all.Single(t => t.Name == "heavy downcut").Kinds);
+
         // The "Dodge back" rows are flagged as blocks as well as dodges.
         var dodges = all.Where(t => t.Name.StartsWith("Dodge back")).ToList();
         Assert.Equal(4, dodges.Count);
         Assert.All(dodges, t => { Assert.True(t.IsBlock); Assert.True(t.IsDodge); });
         Assert.True(dodges.Single(t => t.Name.EndsWith("fly")).IsStumbleDodge);
+
         // The static rows: a negative distance marks the case a row is not for.
         var cutStatic = all.Single(t => t.Name == "Cut left static");
         Assert.Equal(-999f, cutStatic.AttackDistance);
@@ -152,23 +161,27 @@ public class CombatInstallTests
     }
 }
 
-/// <summary>A duel between two base-game characters with real gear, race, techniques, clip lengths and constants ([Slow]).</summary>
+/// <summary>
+/// A duel between two base-game characters with real gear, race, techniques, clip lengths and constants ([Slow]).
+/// </summary>
 [Slow]
 public class RealDuelTests(ITestOutputHelper output)
 {
-    static readonly Lock gate = new();
-    static (GameDatabase Db, CombatDatabase Combat, AnimationLengths Lengths, RaceData Race, GameInstall Install)? cached;
+    static readonly Lock Gate = new();
+    static (GameDatabase Db, CombatDatabase Combat, AnimationLengths Lengths, RaceData Race, GameInstall Install)? s_cached;
 
     static (GameDatabase Db, CombatDatabase Combat, AnimationLengths Lengths, RaceData Race, GameInstall Install) Data()
     {
         var install = GameInstall.Locate();
         Assert.SkipWhen(install is null, "Kenshi install not found");
-        lock (gate)
+
+        lock (Gate)
         {
-            if (cached is { } c) return c;
+            if (s_cached is { } c) return c;
+
             var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
-            var race = RaceData.From(db.OfType(FcsRecordType.RACE).First(r => r.Name == "Greenlander"), db);
-            return (cached = (db, CombatDatabase.From(db), AnimationLengths.Load(install!.Root), race, install!)).Value;
+            var race = RaceData.From(db.OfType(FcsRecordType.Race).First(r => r.Name == "Greenlander"), db);
+            return (s_cached = (db, CombatDatabase.From(db), AnimationLengths.Load(install!.Root), race, install!)).Value;
         }
     }
 
@@ -178,21 +191,26 @@ public class RealDuelTests(ITestOutputHelper output)
         var katana = data.Weapon("476-gamedata.base")!;
         var maker = data.Manufacturers.First(m => m.Models.Any(e => e.Level == 50));
         var model = data.WeaponMaterial(maker.Models.First(e => e.Level == 50).ModelStringId)!;
-        var chest = db.OfType(FcsRecordType.LOCATIONAL_DAMAGE).First(r => r.Name == "Chest").StringId;
-        var armour = data.Armours.Where(a => a.Class == ArmourClass.Heavy && a.CoverageOf(chest) >= 90).OrderBy(a => a.StringId, StringComparer.Ordinal).First();
+        var chest = db.OfType(FcsRecordType.LocationalDamage).First(r => r.Name == "Chest").StringId;
+        var armour = data.Armours.Where(a => a.Class == ArmourClass.Heavy && a.CoverageOf(chest) >= 90).OrderBy(a => a.StringId,
+            StringComparer.Ordinal).First();
         var constants = GameConstants.FromDatabase(db);
         var combat = new CombatSystem(data.Techniques, data.Constants, constants, BodyOptions.Default, lengths, new CombatOptions { RecordLog = true });
         var world = new Meitou.Simulation.World(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 },
-            new Meitou.Simulation.OpenGroundWalkability((_, _) => 150), [combat]);
+            new OpenGroundWalkability((_, _) => 150), [combat]);
+
         CharacterId Spawn(string name, float skill, ArmourData? worn, float x)
         {
             var stats = new CharacterStats();
             foreach (var s in new[] { StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Katanas, StatsEnumerated.Dexterity, StatsEnumerated.Strength, StatsEnumerated.Toughness })
                 stats[s] = skill;
-            var fighter = new Fighter(WeaponInstance.Create(0.5f, katana, maker, model, data.Constants), worn is null ? [] : [ArmourPiece.Create(worn, 0.6f)]);
-            var cold = new Meitou.Simulation.CharacterCold { Name = name, Stats = stats, Race = race, Medical = MedicalState.Create(race, stats.Strength), Fighter = fighter };
-            return world.Characters.Spawn(new Meitou.Simulation.CharacterHot { Position = new(x, 150, 1000), Health = 100 }, cold, 0);
+
+            var fighter = new Fighter(WeaponInstance.Create(0.5f, katana, maker, model, data.Constants),
+                worn is null ? [] : [ArmourPiece.Create(worn, 0.6f)]);
+            var cold = new CharacterCold { Name = name, Stats = stats, Race = race, Medical = MedicalState.Create(race, stats.Strength), Fighter = fighter };
+            return world.Characters.Spawn(new CharacterHot { Position = new(x, 150, 1000), Health = 100 }, cold, 0);
         }
+
         var a = Spawn("Plated", 45, armour, 1000);
         var b = Spawn("Bare", 55, null, 1014);
         world.Commands.Enqueue(new AttackOrder([a], b) { Tick = 0 });
@@ -204,31 +222,46 @@ public class RealDuelTests(ITestOutputHelper output)
     public void Real_gear_duel_resolves_and_matches_at_every_thread_count()
     {
         var (_, data, lengths, _, _) = Data();
+
         // The clips the human sword, block and dodge techniques name are all known to the skeletons (otherwise they would play 1 second).
         var human = data.Techniques.Where(t => t.Animal == 0 && !t.Disabled && (t.Kinds & WeaponKinds.Unarmed) == 0).ToList();
         output.WriteLine("clip lengths: " + string.Join(", ", human.Select(t => $"{t.AnimName} {lengths.Of(t.AnimName):0.00}")));
 
         List<CombatLogEntry>? first = null;
         ulong hash = 0;
+
         foreach (int threads in new[] { 1, 4, 16 })
         {
             var (world, combat, a, b) = Build(threads, 99);
+
             using (world)
             {
                 int ticks = 0;
+
                 while (ticks < 20000 && !world.Characters.Cold(a.Slot)!.Medical!.Incapacitated && !world.Characters.Cold(b.Slot)!.Medical!.Incapacitated)
                 {
                     world.RunTick();
                     ticks++;
                 }
+
                 var sa = combat.StateOf(a);
                 var sb = combat.StateOf(b);
                 output.WriteLine($"threads {threads}: {ticks} ticks ({ticks / 30f:0.0} s); plated thrown {sa.Thrown} landed {sa.Landed} taken {sa.Taken}; bare thrown {sb.Thrown} landed {sb.Landed} taken {sb.Taken}");
                 Assert.True(world.Characters.Cold(a.Slot)!.Medical!.Incapacitated != world.Characters.Cold(b.Slot)!.Medical!.Incapacitated);
-                if (first is null) { first = [.. combat.Log]; hash = world.StateHash(); }
-                else { Assert.Equal(first, combat.Log); Assert.Equal(hash, world.StateHash()); }
+
+                if (first is null)
+                {
+                    first = [.. combat.Log];
+                    hash = world.StateHash();
+                }
+                else
+                {
+                    Assert.Equal(first, combat.Log);
+                    Assert.Equal(hash, world.StateHash());
+                }
             }
         }
+
         Assert.InRange(first!.Count, 4, 400);
     }
 }

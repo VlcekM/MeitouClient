@@ -1,18 +1,22 @@
 using System.Numerics;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Tests.Navigation;
 
 /// <summary>
-/// Zones loaded without their neighbours (docs/game/pathfinding.md "Zone borders", "Long routes"), on the Fog Islands (zone 14.26, one seed) of the install:
-/// a zone published alone keeps the ground that goes on into the next zone, and a goal in another block of loaded zones is a long route through the zones between.
+/// Zones loaded without their neighbours (docs/game/pathfinding.md "Zone borders", "Long routes"), on the Fog Islands (zone 14.26,
+/// one seed) of the install: a zone published alone keeps the ground that goes on into the next zone, and a goal in another block
+/// of loaded zones is a long route through the zones between.
 /// </summary>
 [Slow]
 public class ZoneBorderTests
 {
     static readonly ZoneCoordinate FogIslands = new(14, 26);
-    /// <summary>Where a saved character stood, 2,300 from the zone's borders, on ground the original's tile covers and the zone's own seed does not reach.</summary>
+
+    /// <summary>
+    /// Where a saved character stood, 2,300 from the zone's borders, on ground the original's tile covers and the zone's own seed does not reach.
+    /// </summary>
     static readonly Vector3 Inland = new(-80620, 709, -24171);
 
     [Fact]
@@ -25,7 +29,8 @@ public class ZoneBorderTests
         var settings = new NavBuildSettings();
         var built = NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: false);
         Assert.True(g.Seeds.Count <= 1, $"{g.Seeds.Count} seeds: no longer the one-seed case");
-        // The built mesh is pruned by its own seed only (269 of 8,292 polygons); the border rule applies when the zone is published with no neighbour loaded.
+        // The built mesh is pruned by its own seed only (269 of 8,292 polygons);
+        // the border rule applies when the zone is published with no neighbour loaded.
         Assert.True(built.KeptCount < built.PolygonCount / 2, $"{built.KeptCount} of {built.PolygonCount} polygons kept before publishing");
         var mesh = ZoneKeptClosure.ResolveAlone(built, settings);
         var here = new List<int>();
@@ -43,7 +48,8 @@ public class ZoneBorderTests
         try
         {
             using var map = TerrainHeightmap.Open(install!);
-            using var nav = new NavSystem(install!, InstallData.FullLoadOrder!, InstallData.Levels!, (x, z) => (float)map.HeightAt(x, z), cache: new NavMeshCache(dir));
+            float HeightAt(float x, float z) => (float)map.HeightAt(x, z);
+            using var nav = new NavSystem(install!, InstallData.FullLoadOrder!, InstallData.Levels!, HeightAt, cache: new NavMeshCache(dir));
             var far = new ZoneCoordinate(17, 26);
             await nav.LoadZone(FogIslands);
             await nav.LoadZone(far);

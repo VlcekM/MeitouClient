@@ -1,6 +1,8 @@
 namespace Meitou.Data.World;
 
-/// <summary>The four kinds of terrain blood decal (docs/game/blood-decals.md), the folders of the <c>Blood</c> resource group in this order.</summary>
+/// <summary>
+/// The four kinds of terrain blood decal (docs/game/blood-decals.md), the folders of the <c>Blood</c> resource group in this order.
+/// </summary>
 public enum TerrainDecalType : byte
 {
     Line = 0,
@@ -37,18 +39,26 @@ public static class TerrainDecalCells
     public const float Size = (float)WorldLayout.WorldSize / PerSide;
     const uint Marker = 1u << (2 * Level);
 
-    /// <summary>The cell holding X/Z (clamped to the world).</summary>
+    /// <summary>
+    /// The cell holding X/Z (clamped to the world).
+    /// </summary>
     public static uint Key(float x, float z) => Key(Column(x), Column(z));
 
     public static uint Key(int column, int row) => Marker | Spread((uint)column) | Spread((uint)row) << 1;
 
-    /// <summary>The column (or row) of a coordinate, clamped to the world.</summary>
+    /// <summary>
+    /// The column (or row) of a coordinate, clamped to the world.
+    /// </summary>
     public static int Column(float x) => Math.Clamp((int)MathF.Floor((x + WorldLayout.HalfWorldSize) / Size), 0, PerSide - 1);
 
-    /// <summary>The column and row of <paramref name="key"/>.</summary>
+    /// <summary>
+    /// The column and row of <paramref name="key"/>.
+    /// </summary>
     public static (int Column, int Row) Cell(uint key) => ((int)Gather(key), (int)Gather(key >> 1));
 
-    /// <summary>The X/Z corner of <paramref name="key"/>'s cell nearest the world's negative corner.</summary>
+    /// <summary>
+    /// The X/Z corner of <paramref name="key"/>'s cell nearest the world's negative corner.
+    /// </summary>
     public static (float X, float Z) Origin(uint key)
     {
         var (c, r) = Cell(key);

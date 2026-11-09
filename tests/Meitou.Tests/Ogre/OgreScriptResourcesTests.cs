@@ -4,13 +4,13 @@ namespace Meitou.Tests.Ogre;
 
 public sealed class OgreScriptResourcesTests : IDisposable
 {
-    readonly string root = Path.Combine(Path.GetTempPath(), "meitou-res-" + Guid.NewGuid().ToString("N"));
+    readonly string _root = Path.Combine(Path.GetTempPath(), "meitou-res-" + Guid.NewGuid().ToString("N"));
 
-    public void Dispose() => Directory.Delete(root, recursive: true);
+    public void Dispose() => Directory.Delete(_root, recursive: true);
 
     string Touch(string relative)
     {
-        var path = Path.Combine(root, relative);
+        var path = Path.Combine(_root, relative);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, "");
         return Path.GetFullPath(path);
@@ -18,8 +18,8 @@ public sealed class OgreScriptResourcesTests : IDisposable
 
     OgreScriptResources Config(string text)
     {
-        File.WriteAllText(Path.Combine(root, "resources.cfg"), text);
-        return OgreScriptResources.ReadConfig(Path.Combine(root, "resources.cfg"), root);
+        File.WriteAllText(Path.Combine(_root, "resources.cfg"), text);
+        return OgreScriptResources.ReadConfig(Path.Combine(_root, "resources.cfg"), _root);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class OgreScriptResourcesTests : IDisposable
         Touch("data/gui/b.dds");
         var res = Config("[General]\nFileSystem=./data/items/armour\n[GUI]\nFileSystem=./data/gui\n");
 
-        var mod = Path.Combine(root, "mods", "M");
+        var mod = Path.Combine(_root, "mods", "M");
         Touch("mods/M/M.mod");
         Touch("mods/M/_preview.png");
         var modTexture = Touch("mods/M/items/armour/a.dds");

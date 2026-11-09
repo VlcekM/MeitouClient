@@ -1,10 +1,13 @@
 using System.Numerics;
 using Meitou.Simulation;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Towns;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>The town node map of the bar squads: two guard nodes outside a door (docs/game/factions-squads-towns.md "Bar squads", <c>FUN_14038b650</c>).</summary>
+/// <summary>
+/// The town node map of the bar squads: two guard nodes outside a door (docs/game/factions-squads-towns.md "Bar squads", <c>FUN_14038b650</c>).
+/// </summary>
 public class TownGuardNodesTests
 {
     [Fact]

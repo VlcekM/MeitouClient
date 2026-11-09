@@ -1,6 +1,7 @@
 using Meitou.Data.Fcs;
 using Meitou.Data.Save;
 using Meitou.Game;
+using Meitou.Game.Title;
 using static Meitou.Tests.Save.SaveSamples;
 
 namespace Meitou.Tests.Gameplay;
@@ -22,7 +23,10 @@ public class NewGameSettingsTests
             var loaded = NewGameSettings.Read(SaveGame.Load(folder).Camera);
             for (int i = 0; i < values.Length; i++) Assert.Equal(values[i], loaded[i]);
         }
-        finally { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
         var old = NewGameSettings.Read(new SaveCamera(new FcsRecord()));
         for (int i = 0; i < values.Length; i++) Assert.Equal(1, old[i]);
     }

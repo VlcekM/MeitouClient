@@ -1,23 +1,35 @@
 using System.Numerics;
 using Meitou.Data.Gameplay.Ai;
+using Meitou.Simulation.Aggro;
+using Meitou.Simulation.Ai;
 using Meitou.Simulation.Locks;
+using Meitou.Simulation.Movement;
+using Meitou.Simulation.Player;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Kidnap;
 
-// Fogman worship (237 / 236) and the dogs' limb play (277-279, from the races' AI Goals): docs/game/ai-tasks.md "Prisoner fate and slave rows", docs/simulation.md "Captives".
+// Fogman worship (237 / 236) and the dogs' limb play (277-279, from the races' AI Goals): docs/game/ai-tasks.md "Prisoner fate and slave rows",
+// docs/simulation.md "Captives".
 public sealed partial class CaptiveSystem
 {
-    /// <summary>How near a worshipper bows (<c>Task_WorshipTarget</c>, <b>Verified</b>), the range of its bark timer in game seconds, and event 53 (worship).</summary>
+    /// <summary>
+    /// How near a worshipper bows (<c>Task_WorshipTarget</c>, <b>Verified</b>), the range of its bark timer in game seconds, and event 53 (worship).
+    /// </summary>
     public const float WorshipReach = 60, WorshipMin = 3, WorshipMax = 14;
     const int WorshipEvent = 53;
     public const string BowClip = "bowing";
-    /// <summary>The limb fetch's reach (<c>AI::findLimbOnGround</c>, squared 40000), and the play run's legs (<c>Task_DogLimbRunningPlay</c>): 1000 + 400 x rand, a new one under 200 left.</summary>
+    /// <summary>
+    /// The limb fetch's reach (<c>AI::findLimbOnGround</c>, squared 40000), and the play run's legs (<c>Task_DogLimbRunningPlay</c>): 1000 + 400 x
+    /// rand, a new one under 200 left.
+    /// </summary>
     public const float FetchRange = 200, PlayLeg = 1000, PlayLegRandom = 400, PlayTurn = 200;
     const ulong AnimalSalt = 0x416E_696D_616C_506C;
 
     /// <summary>
-    /// <c>AI::findFogmanWorshipTarget</c> (<c>FUN_1408ce880</c>): in the town nearest the worshipper, the first cage (list order) whose occupant is being eaten. Null: none.
-    /// A standing nest counts as a town (the original's town list holds the nests), its cages those of its buildings (<see cref="NestBuildings"/>); the nest markers do not.
+    /// <c>AI::findFogmanWorshipTarget</c> (<c>FUN_1408ce880</c>): in the town nearest the worshipper, the first cage (list order) whose occupant is
+    /// being eaten. Null: none. A standing nest counts as a town (the original's town list holds the nests), its cages those of its buildings
+    /// (<see cref="NestBuildings"/>); the nest markers do not.
     /// </summary>
     Fixture? WorshipTarget(World world, int slot)
     {
@@ -27,7 +39,7 @@ public sealed partial class CaptiveSystem
         float best = float.MaxValue;
         for (int s = 0; s < data.Sites.Count; s++)
         {
-            if (data.Sites[s].Town.Type == Meitou.Data.Gameplay.TownType.NestMarker) continue;   // a nest stands on it
+            if (data.Sites[s].Town.Type == Data.Gameplay.TownType.NestMarker) continue;   // a nest stands on it
             float d = Vector2.DistanceSquared(here, new Vector2(data.Sites[s].Position.X, data.Sites[s].Position.Z));
             if (d < best) (best, site) = (d, s);
         }
@@ -38,7 +50,9 @@ public sealed partial class CaptiveSystem
         }
         var cages = nest >= 0 ? NestCages(world, nest) : site >= 0 ? CagesOf(world, site) : [];
         foreach (var cage in cages)
-            if (OccupantSlot(world, cage) >= 0 && jobs.Any(j => j.Kind == CaptiveJobKind.Eat && j.Captive == cage.Occupant && j.Phase == CaptivePhase.Work)) return cage;
+            if (OccupantSlot(world, cage) >= 0
+                    && _jobs.Any(j => j.Kind == CaptiveJobKind.Eat && j.Captive == cage.Occupant && j.Phase == CaptivePhase.Work))
+                return cage;
         return null;
     }
 
@@ -46,8 +60,9 @@ public sealed partial class CaptiveSystem
         world.NestBuildings.Of(nest).SelectMany(p => world.Fixtures.OfBuilding(p.Id)).Where(f => f.Kind == FixtureKind.Cage);
 
     /// <summary>
-    /// <c>Task_WorshipTarget</c> (236 on 237's target): farther than <see cref="WorshipReach"/> from the cage it walks there; within, it stops, faces it, bows, and every 3-14 game seconds
-    /// barks event 53 (with no target: the cage resolves to no character). The original never ends it while the cage stands; Meitou ends it once nobody is held there or the job grows old.
+    /// <c>Task_WorshipTarget</c> (236 on 237's target): farther than <see cref="WorshipReach"/> from the cage it walks there; within, it stops, faces
+    /// it, bows, and every 3-14 game seconds barks event 53 (with no target: the cage resolves to no character). The original never ends it while the
+    /// cage stands; Meitou ends it once nobody is held there or the job grows old.
     /// </summary>
     bool StepWorship(World world, CaptiveJob j, int w, CharacterCold wc)
     {
@@ -58,7 +73,8 @@ public sealed partial class CaptiveSystem
         if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > WorshipReach)
         {
             wc.ActionClip = null;
-            if (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > WorshipReach) TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+            if (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > WorshipReach)
+                TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
             return true;
         }
         if (n.Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, w);
@@ -67,15 +83,18 @@ public sealed partial class CaptiveSystem
         wc.ActionClip = BowClip;
         if (j.Time >= j.NextBark)
         {
-            j.NextBark = j.Time + WorshipMin + (WorshipMax - WorshipMin) * Rng.Float(Rng.Hash(world.Seed, (ulong)Rng.Key(j.Worker), RngPurpose.Slow, AnimalSalt + (ulong)j.Blows++));
+            j.NextBark = j.Time + WorshipMin
+                    + (WorshipMax
+                            - WorshipMin) * Rng.Float(Rng.Hash(world.Seed, (ulong)Rng.Key(j.Worker), RngPurpose.Slow, AnimalSalt + (ulong)j.Blows++));
             if (j.Blows > 1) world.Defer(new Dialogue.DialogueEvent(j.Worker, CharacterId.None, WorshipEvent) { Tick = world.Tick + 1 });
         }
         return true;
     }
 
     /// <summary>
-    /// 277 Fetch (<c>AI::findLimbOnGround</c> <c>FUN_1409993a0</c>): an animal with nothing in its mouth (an adult only while its stomach is empty and its hunger at most 2.75) goes for the
-    /// nearest severed limb on the ground within <see cref="FetchRange"/> and picks it up into its mouth (<see cref="Items.FeedSystem.HoldInMouth"/>, through the pick-up walk). No job.
+    /// 277 Fetch (<c>AI::findLimbOnGround</c> <c>FUN_1409993a0</c>): an animal with nothing in its mouth (an adult only while its stomach is empty
+    /// and its hunger at most 2.75) goes for the nearest severed limb on the ground within <see cref="FetchRange"/> and picks it up into its mouth
+    /// (<see cref="Items.FeedSystem.HoldInMouth"/>, through the pick-up walk). No job.
     /// </summary>
     static void Fetch(World world, int slot, CharacterCold cold)
     {
@@ -86,36 +105,41 @@ public sealed partial class CaptiveSystem
     {
         cold.PickingUpItem = limb.Id;
         if (Vector3.Distance(world.Characters.Next[slot].Position, limb.Position) > PlayerSystem.PickUpReach)
-            TaskStart.Walk(world, slot, limb.Position, SpeedMode.Run, TaskType.ANIMAL_FETCH_A_LIMB, TaskSource.Goal);
+            TaskStart.Walk(world, slot, limb.Position, SpeedMode.Run, TaskType.AnimalFetchALimb, TaskSource.Goal);
     }
 
-    /// <summary>277's finder (a pure read): the limb <see cref="Fetch"/> goes for, null when none or the animal does not want one.</summary>
+    /// <summary>
+    /// 277's finder (a pure read): the limb <see cref="Fetch"/> goes for, null when none or the animal does not want one.
+    /// </summary>
     static Items.GroundItem? LimbFor(World world, int slot, CharacterCold cold)
     {
         if (cold.Mouth is not null || cold.PickingUpItem is not null || cold.Medical is not { } med) return null;
         if (cold.Age > 0.9f && (med.Fed > 0 || med.Hunger > 2.75f)) return null;
         var at = world.Characters.Next[slot].Position;
         Items.GroundItem? best = null;
-        float d2best = FetchRange * FetchRange;
+        float d2Best = FetchRange * FetchRange;
         foreach (var g in world.GroundItems.All)
         {
             if (g.Item.ItemFunction != Items.FeedSystem.LimbFunction || g.Slot is not null) continue;
             float d2 = Vector3.DistanceSquared(at, g.Position);
-            if (d2 < d2best) (best, d2best) = (g, d2);
+            if (d2 < d2Best) (best, d2Best) = (g, d2);
         }
         return best;
     }
 
     /// <summary>
-    /// 278's desire (<c>AI::scoreDogPlaying</c> <c>FUN_140599720</c>, <b>Verified</b> by decompile): an animal with something in its mouth, 1.1, or 0.3 for one of the player's squads over age
-    /// 0.4; 0 for the player's adults (over 0.95). Any desire above 0 plays (it beats IDLE's 0.1).
+    /// 278's desire (<c>AI::scoreDogPlaying</c> <c>FUN_140599720</c>, <b>Verified</b> by decompile): an animal with something in its mouth, 1.1, or
+    /// 0.3 for one of the player's squads over age 0.4; 0 for the player's adults (over 0.95). Any desire above 0 plays (it beats IDLE's 0.1).
     /// </summary>
     static float PlayDesire(World world, CharacterCold c) =>
         c.Mouth is null || PlayerSquad(world, c) && c.Age > 0.95f ? 0 : PlayerSquad(world, c) && c.Age > 0.4f ? 0.3f : 1.1f;
 
     static bool Plays(World world, CharacterCold c) => PlayDesire(world, c) > 0;
 
-    /// <summary>279's desire (<c>AI::scoreDogPlayingChase</c>): 1.2 for an NPC animal; of the player's squads 0 for an adult (over 0.95), 0.3 over 0.2, 0.6 younger.</summary>
+    /// <summary>
+    /// 279's desire (<c>AI::scoreDogPlayingChase</c>): 1.2 for an NPC animal; of the player's squads 0 for an adult (over 0.95), 0.3 over 0.2, 0.6
+    /// younger.
+    /// </summary>
     static float ChaseDesire(World world, CharacterCold c) => !PlayerSquad(world, c) ? 1.2f : c.Age > 0.95f ? 0 : c.Age > 0.2f ? 0.3f : 0.6f;
 
     static bool Chases(World world, CharacterCold c) => ChaseDesire(world, c) > 0;
@@ -123,7 +147,8 @@ public sealed partial class CaptiveSystem
     static bool PlayerSquad(World world, CharacterCold c) => c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction;
 
     /// <summary>
-    /// <c>AI::findAllyAnimalWithFoodInMouth</c> (<c>FUN_14099ad40</c>): the first allied animal within sight, awake, with something in its mouth (slot order). -1: none.
+    /// <c>AI::findAllyAnimalWithFoodInMouth</c> (<c>FUN_14099ad40</c>): the first allied animal within sight, awake, with something in its mouth
+    /// (slot order). -1: none.
     /// </summary>
     int MouthfulAlly(World world, int slot, CharacterCold cold)
     {
@@ -132,15 +157,18 @@ public sealed partial class CaptiveSystem
         float range = AggroSystem.RangeOf(cold, AggroSystem.OutdoorSight);
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Mouth: not null, Medical.Incapacitated: false } c || c.Fighter is not { IsAnimal: true } || !Allied(cold.Faction, c.Faction)) continue;
+            if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Mouth: not null, Medical.Incapacitated: false } c
+                    || c.Fighter is not { IsAnimal: true } || !Allied(cold.Faction, c.Faction))
+                continue;
             if (Vector3.DistanceSquared(at, table.Next[s].Position) <= range * range) return s;
         }
         return -1;
     }
 
     /// <summary>
-    /// <c>Task_DogLimbRunningPlay</c> (278): while it holds the limb the dog sprints in random legs of 1000-1400, a new one when under 200 is left or it stopped. Over when its mouth is
-    /// empty (A !149) or the job grows old. Engine choice: the first leg too is random (the original runs it 80-180 past the centroid of who it senses, away from them).
+    /// <c>Task_DogLimbRunningPlay</c> (278): while it holds the limb the dog sprints in random legs of 1000-1400, a new one when under 200 is left or
+    /// it stopped. Over when its mouth is empty (A !149) or the job grows old. Engine choice: the first leg too is random (the original runs it
+    /// 80-180 past the centroid of who it senses, away from them).
     /// </summary>
     bool StepPlay(World world, CaptiveJob j, int w, CharacterCold wc)
     {
@@ -157,14 +185,19 @@ public sealed partial class CaptiveSystem
         return true;
     }
 
-    /// <summary>279 Limb Jealousy (44 / 253 / 40 Following to its target): the dog runs after the mouthful ally until near it (10); over when the ally's mouth is empty or the job grows old.</summary>
+    /// <summary>
+    /// 279 Limb Jealousy (44 / 253 / 40 Following to its target): the dog runs after the mouthful ally until near it (10); over when the ally's mouth
+    /// is empty or the job grows old.
+    /// </summary>
     bool StepChase(World world, CaptiveJob j, int w)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(j.Captive, out int t) || table.Cold(t) is not { Mouth: not null }) return End(world, j, null);
+        if (!table.TryResolveNext(j.Captive, out int t) || table.Cold(t) is not { Mouth: not null })
+            return End(world, j, null);
         ref var n = ref table.Next[w];
         var to = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
-        if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > 10 && (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > 20))
+        if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > 10
+                && (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > 20))
             TaskStart.Walk(world, w, to, SpeedMode.Run, RowOf(j.Kind), TaskSource.Goal);
         return true;
     }

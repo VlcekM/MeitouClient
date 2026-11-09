@@ -1,6 +1,6 @@
 # Native renderer
 
-Current API: `src/Meitou.Rendering/Gpu/` (Core/Shaders included), windowing in Rendering.Display.
+Current API: `src/Meitou.Game/Rendering/Gpu/` (Core/Shaders included), windowing in `Rendering/Display/`.
 Vulkan only; engine contracts below are checked against the named source, not game-format facts.
 Feature algorithms: render-* docs/[index](README.md).
 

@@ -1,13 +1,17 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
 using Meitou.Game;
-using Meitou.Rendering;
+using Meitou.Game.Host;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Settings;
 using Meitou.Settings;
 
 namespace Meitou.Tests.Gameplay;
 
-/// <summary><see cref="LauncherSchema"/> (docs/launcher.md "Graphics"): the launcher knows the settings only from it, so every key must be
-/// one the game reads, and every slider must describe its values.</summary>
+/// <summary>
+/// <see cref="LauncherSchema"/> (docs/launcher.md "Graphics"): the launcher knows the settings only from it, so every key must be
+/// one the game reads, and every slider must describe its values.
+/// </summary>
 public class LauncherSchemaTests
 {
     static readonly SettingsSchema Schema = LauncherSchema.Create();
@@ -22,7 +26,8 @@ public class LauncherSchemaTests
             foreach (var s in All.Where(s => !s.Graphics))
             {
                 // A value other than the default, written as the launcher does (a toggle as a bool, a whole number as an integer).
-                JsonNode value = s.Kind == SettingKind.Toggle ? JsonValue.Create(!(s.Default >= 0.5f)) : JsonValue.Create((int)(s.Default == s.Max ? s.Min : s.Max));
+                int number = (int)(s.Default == s.Max ? s.Min : s.Max);
+                JsonNode value = s.Kind == SettingKind.Toggle ? JsonValue.Create(!(s.Default >= 0.5f)) : JsonValue.Create(number);
                 string file = Path.Combine(dir, UserConfig.FileName);
                 File.WriteAllText(file, new JsonObject { [s.Key] = value.DeepClone() }.ToJsonString());
                 var config = UserConfig.Load(file);
@@ -34,17 +39,23 @@ public class LauncherSchemaTests
                 Assert.Empty(Directory.GetFiles(dir, "*.bak.json"));
             }
         }
-        finally { Directory.Delete(dir, recursive: true); }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]
     public void Each_graphics_key_is_one_of_the_Tab_panel_labels_WorldFrame_names()
     {
         var fields = typeof(WorldFrame).GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-        HashSet<string> Labels(string suffix) => fields.Where(f => f.Name.EndsWith(suffix) || f.Name.EndsWith(suffix + "s"))
-            .SelectMany(f => f.GetValue(null) switch { string label => [label], string[] many => many, _ => Array.Empty<string>() }).ToHashSet();
+        HashSet<string> Labels(string suffix) => fields
+            .Where(f => f.Name.EndsWith(suffix) || f.Name.EndsWith(suffix + "s"))
+            .SelectMany(f => f.GetValue(null) switch { string label => [label], string[] many => many, _ => Array.Empty<string>() })
+            .ToHashSet();
         var sliders = Labels("Slider");
-        var switches = Labels("Switch").Concat(WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Select(e => e.Name))
+        var liveSwitches = WorldFrame.LiveSwitches(new WorldOptions(), () => null, () => null, () => null).Select(e => e.Name);
+        var switches = Labels("Switch").Concat(liveSwitches)
             .Select(label => SettingsMenu.SwitchKeyPrefix + label).ToHashSet();
 
         foreach (var s in All.Where(s => s.Graphics)) Assert.Contains(s.Key, s.Kind == SettingKind.Toggle ? switches : sliders);
@@ -77,6 +88,9 @@ public class LauncherSchemaTests
             // Keys and kinds only: a switch's shown state reads static flags (GroundRelief) other tests change meanwhile.
             Assert.Equal(All.Select(s => (s.Key, s.Kind)), read.Sections.SelectMany(s => s.Settings).Select(s => (s.Key, s.Kind)));
         }
-        finally { Directory.Delete(Path.GetDirectoryName(file)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(file)!, recursive: true);
+        }
     }
 }

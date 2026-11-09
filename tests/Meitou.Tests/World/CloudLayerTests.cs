@@ -1,14 +1,18 @@
 using Meitou.Content;
-using Meitou.Rendering;
+using Meitou.Data.Ogre;
 using Meitou.Data.Textures;
 using Meitou.Data.World;
 
 namespace Meitou.Tests.World;
 
-/// <summary>The cloud layer's numbers (docs/formats/clouds.md): what the weather feeds SkyX's pass, the coverage table, the drift.</summary>
+/// <summary>
+/// The cloud layer's numbers (docs/formats/clouds.md): what the weather feeds SkyX's pass, the coverage table, the drift.
+/// </summary>
 public class CloudLayerTests
 {
-    /// <summary>The coverage table of docs/formats/clouds.md, computed from the shipped textures.</summary>
+    /// <summary>
+    /// The coverage table of docs/formats/clouds.md, computed from the shipped textures.
+    /// </summary>
     [Fact]
     [Slow]
     public void Coverage_table_matches_the_shipped_textures()

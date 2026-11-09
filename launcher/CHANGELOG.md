@@ -2,6 +2,26 @@
 
 Released with tags `launcher-v<version>` by `.github/workflows/launcher-release.yml`; each release needs its `## v<version>` section.
 
+## v1.9.0
+
+- **Code mods just run**: an enabled code mod runs its own C# code, as in RimWorld; there is nothing to allow first. The Trust code
+  mods checkbox is gone.
+
+## v1.8.0
+
+- **The mod list saves itself**: ticking, unticking or dragging a mod, Select all / none, a preset, Arrange and From save write
+  `mods.cfg` at once, so the game always loads what the list shows. The Save mod list button is gone.
+- **Trust code mods**: one checkbox on the Mods page, on by default, lets every code mod run its own C# code; off, they load as
+  data only. It replaces the question at Play and the Code mods dialog.
+
+## v1.7.0
+
+- **Code-mod dependencies** on the Mods page: each code mod's row shows what it requires, loads after, is incompatible with and
+  which Meitou version it was built for; a mod that will not load in the current list says why ("Will not load: ...").
+- **Arrange** button: proposes an order where each enabled mod loads after the mods it needs; nothing moves until you accept.
+- **Refresh** moved to the top right of the Mods page, in place of the mod count, which could stay stuck on "Loading".
+- Continue's label, the Mac renderer and memory choices, and the status lines of the folder browse and move steps are translated now.
+
 ## v1.6.0
 
 - **Continue** on the Play button: starts the newest save straight away, with its name under the button. It only starts when the

@@ -3,6 +3,47 @@
 What changed in each release, newest first. The release workflow copies the section of the version it builds into the GitHub release
 notes and refuses to release a version without one: add a `## vX.Y.Z` section with one `- ` line per change before running it.
 
+## v0.17.1
+
+- Version tag fixed: the build reports v0.17.1, so the feedback button and code mods' game version ranges see the right release (#379)
+- Faithful UI: scrollbars on the Jobs list and the squad portrait grid
+- Tab bound to Inventory opens it while a campfire's window is open; the campfire's output line no longer takes typing (#383)
+- The Hunger bar's tooltip shows the racial hunger rate and the other hunger rate factors, as in the original (#377)
+- Shopkeepers open their doors at opening time, not only unlock them
+- A guard on an open top floor bandages the prisoner caged beside it
+
+## v0.17.0
+
+- Code mods: mods can ship C# code (meitou.json) with dependencies, load order, a settings page and save data; mod-check in meitou-tools
+- Mods' own leveldata loads, so towns and buildings a mod adds to the world appear
+- AI decides as the original: player characters and NPCs pick goals and jobs through one chooser; NPCs join fights only by their combat goals
+- Senses as the original: sight, hearing and squad sightings; every awake NPC spots sneakers, and being heard trains stealth
+- Combat: defenders follow the swing coming at them, fighters walk to a target's floor instead of hitting through it, crowd fights 3x cheaper
+- Ranged: bolts hit the original's hull boxes, crossbow reloads pause instead of restarting, bolt tracers
+- Slavery: slavers cuff, strip and carry captives, workmasters work their slaves, escaped and ex-slaves, torture racks
+- Prisons: release rounds and freed prisoners as the original, Lock / Unlock on own cages; lockpick and stealth KO pointers show their chance
+- Towns: nests lay their eggs, loot and debris, ruined homes, artifacts, town machines and production chains, patrols that stroll
+- Raids, campaigns, roaming squads, prosperity and town wipe-outs follow the original's rules
+- Birds: flocks by biome that perch on buildings and features
+- Building: repair broken doors, build in ruins, wall snapping to town walls, research paid from the benches round the camera
+- Trade walks up like Talk and opens in talk range; any selected character in reach trades; fencing chance shown; bought animals are named
+- Bought town houses are emptied of furniture, items and residents, and what you place in them joins the town
+- Frame generation: DLSS (Streamline) or FSR 3, also on Linux; DLSS preset setting; render scale modes from Ultra performance to DLAA
+- Graphics settings rebuilt: Faithful or Meitou looks with presets you can save and share, the same rows in the game and the launcher
+- Meitou effects: blood on walls and floors (saved), decapitation, advanced ragdolls, sun-lit dust and smoke, KenshiNative's bloom
+- Severed limbs and stumps bloody and skin-tinted; clothing colours from the character's or faction's scheme; belt-slot armour drawn
+- Performance: navmesh with half the polygons and faster path searches, cheaper terrain, UI and characters, fewer GC stalls (#124)
+- Memory: object meshes about half the size; under VRAM pressure textures load smaller instead of not at all, so 4 GB cards show the start town
+- Loading: character LOD and colour map disk caches; the loading screen waits only for what is near the camera
+- Navmesh: map features walkable (Mourn, Swamp Village), sealed interiors joined by their doors, half-unit steps (#357, #358)
+- Controls: rebindable mouse buttons and squad number keys, Fast and Fastest speed sliders, enhanced hardware mouse, camera speed and invert
+- In-game Feedback button: sends a screenshot, save and log as a GitHub issue
+- Simplified Chinese; crime names and run-time messages translated; translation mods no longer break new games (#200)
+- Launcher 1.5-1.9: Continue the last save, mods From save, the mod list saves itself, Arrange by dependencies, resizable window
+- Audio: sound on GOG installs (#336), output reopens on a device change (#309), mining sounds for NPC workers
+- Fix sunk cannibal cages (#258), FCS prosthetics (#224), high heels sinking (#126), Hub walls in the Shinobi tower (#111), AMD spikes (#197)
+- Fix the indoor camera bobbing (#204), carried animals falling off (#176, #307), miners working from afar (#332), swimming on sunken floors (#345)
+
 ## v0.16.0
 
 - Sky arrival: new games and loads fly in from the sky, the hour running forward to the destination's

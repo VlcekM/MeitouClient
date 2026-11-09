@@ -1,9 +1,9 @@
 using System.Numerics;
 using Meitou.Data.Ui;
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
+using Meitou.Game.Rendering.Overlays;
 
 namespace Meitou.Tests.Ui;
 
@@ -23,11 +23,13 @@ public class UiRenderingTests
             using var overlay = DebugOverlay.TryCreate(gpu);
             Assert.SkipWhen(overlay is null, "No font available");
             const int width = 64, height = 32;
-            using var target = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.ColourTarget | TextureUse.TransferSrc));
+            using var target = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height,
+                    Use: TextureUse.ColourTarget | TextureUse.TransferSrc));
             var cmd = gpu.BeginNative("clear clipping test");
             var targets = PassTargets.Of(target, null);
             cmd.BeginRendering(targets.Rendering with { Colour = targets.Colour with { Load = LoadOp.Clear, Clear = new ClearColour(0, 0, 0, 1) } });
-            cmd.EndRendering(); gpu.EndNative(cmd);
+            cmd.EndRendering();
+            gpu.EndNative(cmd);
             overlay.Target = target;
             overlay.Rect(0, 0, width, height, new Vector4(1, 0, 0, 1));
             overlay.Flush(width, height, new UiRect(8, 2, 12, 8));

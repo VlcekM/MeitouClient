@@ -17,22 +17,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Meitou.Core\Meitou.Core.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Data\Meitou.Data.csproj" />
-    <ProjectReference Include="../../src/Meitou.Ui/Meitou.Ui.csproj" />
+    <!-- The game brings the simulation, Data and Core with it. -->
     <ProjectReference Include="../../src/Meitou.Game/Meitou.Game.csproj" />
-    <ProjectReference Include="../../src/Meitou.Modding/Meitou.Modding.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Engine\Meitou.Engine.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Rendering\Meitou.Rendering.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Simulation\Meitou.Simulation.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Navigation\Meitou.Navigation.csproj" />
-    <ProjectReference Include="..\..\src\Meitou.Audio\Meitou.Audio.csproj" />
-    <!-- The Metal backend is macOS-only (SharpMetal); the Metal tests are compiled only there. -->
-    <ProjectReference Include="../../src/Meitou.Metal/Meitou.Metal.csproj" Condition="$([MSBuild]::IsOSPlatform('OSX'))" />
   </ItemGroup>
 
-  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
-    <DefineConstants>$(DefineConstants);MEITOU_METAL</DefineConstants>
+  <!-- The Metal tests compile where the game's Metal backend does (MeitouMetal, Directory.Build.props). -->
+  <PropertyGroup Condition="'$(MeitouMetal)' == 'true'">
     <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 

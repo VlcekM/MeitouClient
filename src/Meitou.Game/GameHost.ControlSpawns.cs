@@ -1,3 +1,4 @@
+using Meitou.Game.DevTools;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -8,21 +9,21 @@ namespace Meitou.Game;
 /// <summary>Debug aids of the control channel for the spawn rules (docs/agent-playtest.md): <c>spawn-trace</c> and <c>birds</c>.</summary>
 sealed partial class GameHost
 {
-    void RegisterControlSpawnCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add, Func<DevConsole, bool> loaded)
+    internal void RegisterControlSpawnCommands(Action<string, string, string, Action<IReadOnlyList<string>, DevConsole>> add, Func<DevConsole, bool> loaded)
     {
         add("spawn-trace", "spawn-trace on|off|clear|summary|dump <tsv path>", "debug: record every squad the population makes (not the player's): tick, source (sector:<group> / nest:<town> / town / roam), template, leader record, members, position, terrain height and water depth there (100 minus the height), the walkability's answer and the distance to the nearest player character at the time; summary lists the counts per leader record with how many stand in water deeper than 5; dump writes the rows as TSV", (args, con) =>
         {
-            if (!loaded(con) || population is null) return;
+            if (!loaded(con) || Population is null) return;
             string verb = args.Count > 0 ? args[0].ToLowerInvariant() : "summary";
             switch (verb)
             {
-                case "on": population.SpawnTrace ??= []; con.Print("{\"trace\":\"on\"}"); return;
-                case "off": population.SpawnTrace = null; con.Print("{\"trace\":\"off\"}"); return;
-                case "clear": population.SpawnTrace?.Clear(); con.Print("{\"cleared\":true}"); return;
+                case "on": Population.SpawnTrace ??= []; con.Print("{\"trace\":\"on\"}"); return;
+                case "off": Population.SpawnTrace = null; con.Print("{\"trace\":\"off\"}"); return;
+                case "clear": Population.SpawnTrace?.Clear(); con.Print("{\"cleared\":true}"); return;
             }
-            var rows = population.SpawnTrace;
+            var rows = Population.SpawnTrace;
             if (rows is null) { con.Error("spawn-trace: not on"); return; }
-            var walk = session.World.Walkability;
+            var walk = Session.World.Walkability;
             var lines = rows.Select(r =>
             {
                 float h = walk.TerrainHeight(r.X, r.Z);
@@ -44,11 +45,11 @@ sealed partial class GameHost
 
         add("birds", "birds [near <m>]", "debug: the bird kinds now: alive, within <m> (default 5000) of the camera, the cell sum the spawn rule compares with (birds alive + spawn count <= sum), the cells listing the kind in range, the kind's distance and spawn count", (args, con) =>
         {
-            if (birds is null) { con.Error("birds: not made yet"); return; }
-            float near = args.Count == 2 && Num(args[1], out float n) ? n : 5000;
-            var rows = birds.Stats(camera.Eye, near).Select(k =>
+            if (Birds?.Flocks is not { } flocks) { con.Error("birds: not made yet"); return; }
+            float near = args.Count == 2 && DevTools.Agents.AgentWorld.Num(args[1], out float n) ? n : 5000;
+            var rows = flocks.Stats(Camera.Eye, near).Select(k =>
                 $"{{\"kind\":\"{k.Kind}\",\"alive\":{k.Alive},\"near\":{k.Near},\"sum\":{k.Total},\"cells\":{k.Cells},\"distance\":{k.Distance.ToString(CultureInfo.InvariantCulture)},\"spawnCount\":{k.SpawnCount}}}");
-            con.Print($"{{\"total\":{birds.BirdCount},\"eye\":[{camera.Eye.X:0},{camera.Eye.Z:0}],\"kinds\":[{string.Join(",", rows)}]}}");
+            con.Print($"{{\"total\":{flocks.BirdCount},\"eye\":[{Camera.Eye.X:0},{Camera.Eye.Z:0}],\"kinds\":[{string.Join(",", rows)}]}}");
         });
     }
 }

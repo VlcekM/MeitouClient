@@ -6,14 +6,19 @@ namespace Meitou.Tests.World;
 
 public class TerrainTests
 {
-    /// <summary>Builds a baseline greyscale TIFF: 16-bit samples in strips of <paramref name="rowsPerStrip"/> rows.</summary>
-    internal static byte[] Tiff(int width, int height, Func<int, int, ushort> sample, bool littleEndian = true, int rowsPerStrip = 0, bool longSizes = false, int compression = 1)
+    /// <summary>
+    /// Builds a baseline greyscale TIFF: 16-bit samples in strips of <paramref name="rowsPerStrip"/> rows.
+    /// </summary>
+    internal static byte[] Tiff(int width, int height, Func<int, int, ushort> sample, bool littleEndian = true, int rowsPerStrip = 0,
+            bool longSizes = false, int compression = 1)
     {
         if (rowsPerStrip <= 0) rowsPerStrip = height;
         int strips = (height + rowsPerStrip - 1) / rowsPerStrip;
         var ms = new MemoryStream();
-        void U16(int v) { Span<byte> b = stackalloc byte[2]; if (littleEndian) BinaryPrimitives.WriteUInt16LittleEndian(b, (ushort)v); else BinaryPrimitives.WriteUInt16BigEndian(b, (ushort)v); ms.Write(b); }
-        void U32(long v) { Span<byte> b = stackalloc byte[4]; if (littleEndian) BinaryPrimitives.WriteUInt32LittleEndian(b, (uint)v); else BinaryPrimitives.WriteUInt32BigEndian(b, (uint)v); ms.Write(b); }
+        void U16(int v) { Span<byte> b = stackalloc byte[2]; if (littleEndian) BinaryPrimitives.WriteUInt16LittleEndian(b,
+                (ushort)v); else BinaryPrimitives.WriteUInt16BigEndian(b, (ushort)v); ms.Write(b); }
+        void U32(long v) { Span<byte> b = stackalloc byte[4]; if (littleEndian) BinaryPrimitives.WriteUInt32LittleEndian(b,
+                (uint)v); else BinaryPrimitives.WriteUInt32BigEndian(b, (uint)v); ms.Write(b); }
 
         ms.Write(littleEndian ? "II"u8 : "MM"u8);
         U16(42);
@@ -53,7 +58,9 @@ public class TerrainTests
         U16(entries.Count);
         foreach (var (tag, type, count, value) in entries)
         {
-            U16(tag); U16(type); U32(count);
+            U16(tag);
+            U16(type);
+            U32(count);
             if (type == 3 && count == 1) { U16((int)value); U16(0); } // SHORT values sit in the first 2 bytes
             else U32(value);
         }
@@ -122,7 +129,8 @@ public class TerrainTests
         Assert.True(map.Image.LittleEndian);
         // One uncompressed strip that ends exactly where the file's trailing metadata starts.
         Assert.Equal(1, map.Image.StripCount);
-        Assert.True(map.Image.DataOffset + (long)map.Size * map.Size * 2 <= new FileInfo(Path.Combine(install!.DataDirectory, TerrainHeightmap.RelativePath)).Length);
+        Assert.True(map.Image.DataOffset
+                + (long)map.Size * map.Size * 2 <= new FileInfo(Path.Combine(install!.DataDirectory, TerrainHeightmap.RelativePath)).Length);
         // The world border is sea level (raw 0); the corners and edge midpoints are all 0.
         foreach (var (c, r) in new[] { (0, 0), (16384, 0), (0, 16384), (16384, 16384), (8192, 0), (0, 8192) })
             Assert.Equal(0, map.Sample(c, r));

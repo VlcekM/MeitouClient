@@ -128,7 +128,7 @@ teleport, spawn, items, money, healing, skills and damage.
 
 ### Changes
 
-- Reuse `GameHost.DebugMenu.cs` directly:
+- Reuse `DebugMenu` directly:
   - add `debugMenuOpen` state to the Metal loop;
   - route keys and text to `DebugMenuKey` / `DebugMenuText` while open;
   - call `DrawDebugMenu` over the finished picture;
@@ -266,7 +266,7 @@ Metal warm-up frames render without advancing the simulation.
 
 ### Changes
 
-- Extract the still preparation from `GameHost.Screenshot.cs` into a shared helper usable by both
+- Extract the still preparation from `ScreenshotScenes` into a shared helper usable by both
   hosts:
   - select the player squad for `--ui-showcase`;
   - apply `--move-to` through a `MoveOrder` and advance the requested ticks;

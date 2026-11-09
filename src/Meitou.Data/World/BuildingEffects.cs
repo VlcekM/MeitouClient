@@ -9,7 +9,9 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class BuildingEffects
 {
-    /// <summary>The effects of every placed building of the world that is neither destroyed nor switched off.</summary>
+    /// <summary>
+    /// The effects of every placed building of the world that is neither destroyed nor switched off.
+    /// </summary>
     public static List<PlacedEffect> ForWorld(GameDatabase db, WorldLevelData levels, Func<double, double, float> terrainHeight, BuildingLayouts? layouts = null)
     {
         var result = new List<PlacedEffect>();
@@ -19,7 +21,9 @@ public static class BuildingEffects
         return result;
     }
 
-    /// <summary>The effects of one resolved placement: none when it is destroyed or its state's <c>power on</c> is false (lights and effects switch together).</summary>
+    /// <summary>
+    /// The effects of one resolved placement: none when it is destroyed or its state's <c>power on</c> is false (lights and effects switch together).
+    /// </summary>
     public static List<PlacedEffect> ForBuilding(GameDatabase db, WorldLevelData levels, ResolvedBuilding building, BuildingLayouts? layouts = null)
     {
         var result = new List<PlacedEffect>();

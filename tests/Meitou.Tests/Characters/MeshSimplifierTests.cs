@@ -1,6 +1,6 @@
 using System.Numerics;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.Characters;
 
@@ -11,12 +11,24 @@ public class MeshSimplifierTests
         var vertices = new Vertex[(n + 1) * (n + 1)];
         for (int y = 0; y <= n; y++)
             for (int x = 0; x <= n; x++)
-                vertices[y * (n + 1) + x] = new Vertex { Position = new Vector3(x, y, (x * 7 + y * 3) % 5 == 0 ? 0.05f : 0), Normal = Vector3.UnitZ, Uv = new Vector2(x, y) / n, Weights = new Vector4(1, 0, 0, 0) };
+            {
+                vertices[y * (n + 1) + x] = new Vertex
+                {
+                    Position = new Vector3(x, y, (x * 7 + y * 3) % 5 == 0 ? 0.05f : 0),
+                    Normal = Vector3.UnitZ,
+                    Uv = new Vector2(x, y) / n,
+                    Weights = new Vector4(1, 0, 0, 0),
+                };
+            }
+
         var indices = new List<uint>();
         for (int y = 0; y < n; y++)
             for (int x = 0; x < n; x++)
             {
-                uint a = (uint)(y * (n + 1) + x), b = a + 1, c = a + (uint)(n + 1), d = c + 1;
+                uint a = (uint)(y * (n + 1) + x);
+                uint b = a + 1;
+                uint c = a + (uint)(n + 1);
+                uint d = c + 1;
                 indices.AddRange([a, c, b, b, c, d]);
             }
         return (vertices, [.. indices]);
@@ -35,7 +47,10 @@ public class MeshSimplifierTests
         {
             Assert.Equal(0, level.Length % 3);
             Assert.All(level, i => Assert.True(i < vertices.Length));
-            for (int t = 0; t < level.Length; t += 3) Assert.True(level[t] != level[t + 1] && level[t + 1] != level[t + 2] && level[t] != level[t + 2]);
+            for (int t = 0; t < level.Length; t += 3)
+            {
+                Assert.True(level[t] != level[t + 1] && level[t + 1] != level[t + 2] && level[t] != level[t + 2]);
+            }
         }
     }
 }

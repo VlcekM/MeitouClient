@@ -1,11 +1,14 @@
 using System.Numerics;
 using Meitou.Data.Ogre;
 using Meitou.Data.World;
-using Meitou.Rendering;
+using Meitou.Game.Rendering.Shadows;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The per-cascade level choice of the coarser far shadow casters (<see cref="ShadowLod"/>; pure arithmetic, no GPU, no game). The tolerances are passed in, never the static settings.</summary>
+/// <summary>
+/// The per-cascade level choice of the coarser far shadow casters (<see cref="ShadowLod"/>; pure arithmetic, no GPU, no game). The tolerances are
+/// passed in, never the static settings.
+/// </summary>
 public class ShadowLodTests
 {
     // The swamp view's cascades (1920x1080, range 10000, 1024 px tiles): texel in world units.
@@ -18,19 +21,24 @@ public class ShadowLodTests
         Assert.Equal(0, ShadowLod.ObjectLodFloor(0, PixelScale, 1));   // not coarsened
         Assert.Equal(0, ShadowLod.ObjectLodFloor(8.82f, PixelScale, 0));   // switched off
         Assert.Equal(8.82f * PixelScale, ShadowLod.ObjectLodFloor(8.82f, PixelScale, 1), 0.01);
+
         // A mesh with game levels at 4000 and 8000 units: cascade 1 (4 units a texel) reaches only the first, cascades 2 and 3 the coarsest.
         float[] distances = [0, 4000, 8000];
         int Level(float texel, float distance) => MeshLod.Select(distances, Math.Max(distance, ShadowLod.ObjectLodFloor(texel, PixelScale, 1)));
+
         Assert.Equal(1, Level(SwampTexels[1], 100));
         Assert.Equal(2, Level(SwampTexels[2], 100));
         Assert.Equal(2, Level(SwampTexels[3], 100));
         Assert.Equal(0, Level(0, 100));   // cascade 0 keeps the distance rule
+
         // An instance already farther than the floor keeps its own (coarser) level, never a finer one.
         Assert.Equal(2, Level(SwampTexels[1], 9000));
     }
 }
 
-/// <summary>The quadtree's floor level (the shadow cascades' coarser terrain): nodes are no finer than it, and the area drawn is the same.</summary>
+/// <summary>
+/// The quadtree's floor level (the shadow cascades' coarser terrain): nodes are no finer than it, and the area drawn is the same.
+/// </summary>
 public class TerrainFloorLevelTests
 {
     const int Samples = 1025;
@@ -52,10 +60,13 @@ public class TerrainFloorLevelTests
     {
         var eye = new Vector3(1000, 500, -2000);
         var plain = Select(0, eye);
+
         Assert.Contains(plain, n => n.Level == 0);   // the distance rule alone draws the finest level near the eye
+
         for (int floor = 1; floor <= 3; floor++)
         {
             var floored = Select(floor, eye);
+
             Assert.All(floored, n => Assert.True(n.Level >= floor, $"level {n.Level} below the floor {floor}"));
             Assert.Equal(Area(plain), Area(floored), 1.0);
             Assert.True(floored.Count < plain.Count);

@@ -8,7 +8,7 @@ An option that belongs to another executable is rejected as unknown (exit 2).
 
 ## Game (`meitou`, MeitouClient.exe)
 
-Authority: `src/Meitou.Game/GameOptions.cs` (`Split`, `Usage`), `src/Meitou.Game/Program.cs`. Options not taken here go to the shared world options. Help: `-h` / `--help`.
+Authority: `src/Meitou.Game/Host/GameOptions.cs` (`Split`, `Usage`), `src/Meitou.Game/Host/Program.cs`. Options not taken here go to the shared world options. Help: `-h` / `--help`.
 
 ### Start and session
 
@@ -66,7 +66,7 @@ Authority: `src/Meitou.Game/GameOptions.cs` (`Split`, `Usage`), `src/Meitou.Game
 
 ## Viewer (`meitou-viewer`)
 
-Authority: `tools/Meitou.ModelViewer/Program.cs` (dispatch), `WorldApp.cs`, `WorldApp.FieldTour.cs`, `ImpostorApp.cs`, and `src/Meitou.Rendering/WorldFrame.cs` for the world options (see "Shared world options"). With no arguments it opens `--world --town "The Hub"`.
+Authority: `tools/Meitou.ModelViewer/Program.cs` (dispatch), `WorldApp.cs`, `WorldApp.FieldTour.cs`, `ImpostorApp.cs`, and `src/Meitou.Game/Rendering/Frame/WorldFrame.cs` for the world options (see "Shared world options"). With no arguments it opens `--world --town "The Hub"`.
 
 Dispatch: `--world`, `--view` and `--bench-compare` open the world viewer; `--impostor-preview` and `--impostor-bake-all` open the impostor tool; anything else prints a short usage and exits 2.
 
@@ -75,7 +75,7 @@ Dispatch: `--world`, `--view` and `--bench-compare` open the world viewer; `--im
 | Option | Value | Default | Effect |
 |---|---|---|---|
 | `--world` | | | Selects the world viewer. Any shared option may follow. |
-| `--view <name>` | swamp, swamp-rain, swamp-low, dust, hub | none | Named camera, world and weather preset (`src/Meitou.Rendering/Bench/NamedViews.cs`). Options after it override it. |
+| `--view <name>` | swamp, swamp-rain, swamp-low, dust, hub | none | Named camera, world and weather preset (`src/Meitou.Game/Rendering/Bench/NamedViews.cs`). Options after it override it. |
 | `--quit-after <s>` | seconds | none | Close after s seconds and print frames and average fps. |
 | `--terrain-sandbox [cliffs] [x,z]` | | flattest spot; `cliffs` sets yaw 180 | Empty world on a tile field; the tile under the camera is named top left. |
 | `--field-tour <dir>` | folder | none | With `--terrain-sandbox`: a picture of every tile and an `index.html`. |
@@ -97,7 +97,7 @@ Dispatch: `--world`, `--view` and `--bench-compare` open the world viewer; `--im
 
 ## Shared world options
 
-Authority: `src/Meitou.Rendering/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.Rendering/PostProcessOptions.cs` (`TryParse`, the post-processing rows), `src/Meitou.Rendering/Enhancements.cs` (switch ids). Used by the game (after its own options) and by the viewer.
+Authority: `src/Meitou.Game/Rendering/Frame/WorldFrame.cs` (`Parse`, `Usage`), `src/Meitou.Game/Rendering/Post/PostProcessOptions.cs` (`TryParse`, the post-processing rows), `src/Meitou.Game/Rendering/Frame/Enhancements.cs` (switch ids). Used by the game (after its own options) and by the viewer.
 
 ### Where and camera
 
@@ -259,52 +259,51 @@ Environment it sets for the game: `KENSHI_PATH`; on Windows with `steam_api64.dl
 
 These have no user-facing docs; options are from their top-level argument loops.
 
-- `src/Meitou.Metal.Host/Program.cs` (Metal sky through the backend seam): `--hour <h>` (default 12), `--hold` (1800 frames instead of 300), `--shot <png>` (10 frames, then save), `--world` (use the install's sky), `--tri` (triangle test), `--table` (triangle coloured from the bindless table; implies `--tri`).
-- `src/Meitou.MetalSpike/Program.cs` (shader chain spike): `--rt-bench` (headless ray-tracing probe, then exit), `--hold` (1800 frames).
+- `tools/Meitou.MetalHost/Program.cs` (Metal sky through the backend seam): `--hour <h>` (default 12), `--hold` (1800 frames instead of 300), `--shot <png>` (10 frames, then save), `--world` (use the install's sky), `--tri` (triangle test), `--table` (triangle coloured from the bindless table; implies `--tri`).
 
 ## Environment variables
 
 | Variable | Read by (file) | Effect |
 |---|---|---|
 | `KENSHI_PATH` | `src/Meitou.Core/Content/GameInstall.cs`, `tools/scripts/*.ps1` | Kenshi install folder. Also used by the test suite through `GameInstall.Locate`; tests skip when it is missing. |
-| `MEITOU_MODS_CFG` | `src/Meitou.Game/Program.cs` | Same as `--mods-cfg <file>`; the option wins. |
-| `DYLD_LIBRARY_PATH` | `src/Meitou.Rendering/Gpu/Core/VulkanDevice.cs`, `launcher/Meitou.Launcher/MacSupport.cs` | macOS Vulkan loader search path; only named in the error message the viewer prints. The launcher sets it. |
-| `SteamAppId` | `src/Meitou.Game/SteamSession.cs` | Steam app id; the launcher sets it on Windows. |
+| `MEITOU_MODS_CFG` | `src/Meitou.Game/Host/Program.cs` | Same as `--mods-cfg <file>`; the option wins. |
+| `DYLD_LIBRARY_PATH` | `src/Meitou.Game/Rendering/Gpu/Core/VulkanDevice.cs`, `launcher/Meitou.Launcher/MacSupport.cs` | macOS Vulkan loader search path; only named in the error message the viewer prints. The launcher sets it. |
+| `SteamAppId` | `src/Meitou.Game/Host/SteamSession.cs` | Steam app id; the launcher sets it on Windows. |
 | `SteamGameId` | launcher only | Set for Steam's overlay; not read by project code. |
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_DATA_DIRS` | `src/Meitou.Core/Content/GameInstallSources.cs` | Linux and macOS install discovery and the `meitou/config.json` location. |
 | `MTL_CAPTURE_ENABLED` | Metal framework (not project code) | Enables Metal GPU capture; the game's Ctrl+/ key uses it (per the usage text). |
-| `MEITOU_PASS_STATS` | `tools/Meitou.ModelViewer/PassMeter.cs`, `src/Meitou.Rendering/Gpu/FrameLoop.cs` | `1`: per-pass GPU cost breakdown. |
+| `MEITOU_PASS_STATS` | `tools/Meitou.ModelViewer/PassMeter.cs`, `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: per-pass GPU cost breakdown. |
 | `MEITOU_PASS_STATS_SKIP` | `tools/Meitou.ModelViewer/PassMeter.cs` | Frames skipped before the breakdown (default 60). |
 | `MEITOU_BENCH_ORBIT` | `tools/Meitou.ModelViewer/WorldApp.Benchmark.cs` | Pixels per frame the benchmark camera orbits (0.005 rad per pixel). |
-| `MEITOU_BENCH_SKIP` | `WorldApp.Benchmark.cs` (default 1), `src/Meitou.Rendering/SpikeLog.cs` (default 0) | Frames left out of benchmark percentiles and spike logs. |
+| `MEITOU_BENCH_SKIP` | `WorldApp.Benchmark.cs` (default 1), `src/Meitou.Game/Rendering/Profiling/SpikeLog.cs` (default 0) | Frames left out of benchmark percentiles and spike logs. |
 | `MEITOU_FLY_TURN` | `WorldApp.Benchmark.cs` | Radians the fly benchmark turns each frame instead of flying. |
 | `MEITOU_STREAM_LOG` | `tools/Meitou.ModelViewer/WorldApp.cs` | `1`: print frames slower than 15 ms with streamer timings. |
 | `MEITOU_VRAM_KILL` | `tools/Meitou.ModelViewer/VramWatch.cs` | Benchmark exits (code 9) when video memory passes this fraction of the budget (default 0.95; 0 off). |
-| `MEITOU_LOD_DEBUG` | `src/Meitou.Rendering/WorldObjectRenderer.cs` | `1`: colour surfaces by LOD level; `2`: wireframe coloured by level. |
-| `MEITOU_FOLIAGE_RANGE` | `src/Meitou.Rendering/FoliageRenderer.cs` | Starting value of the foliage range setting (offscreen measurements). |
-| `MEITOU_GRASS_RANGE` | `src/Meitou.Rendering/FoliageRenderer.cs` | Starting value of the grass range setting. |
-| `MEITOU_FORCE_INTEGRATED` | `src/Meitou.Rendering/Gpu/Core/VulkanDevice.cs` | `1`: treat any GPU as integrated (budgets for integrated GPUs). |
-| `MEITOU_VRAM_BUDGET_MB` | `src/Meitou.Rendering/Gpu/Core/VulkanDevice.cs` | Caps the video memory reported, for testing the memory guard. |
-| `MEITOU_VK_VALIDATION` | `src/Meitou.Rendering/Gpu/Core/VulkanDeviceOptions.cs` | `1` validation; `sync` adds synchronisation checks; `gpu` adds GPU-assisted checks; `0` off. Unset: caller's default. |
-| `MEITOU_DLSS_FAIL_AT` | `src/Meitou.Rendering/Upscalers/DlssUpscaler.cs` | Test hook: `n` reports a DLSS failure after the n-th evaluation was recorded, to exercise the fallback to TAA. |
-| `MEITOU_DIAG_SUBMIT` | `src/Meitou.Rendering/Gpu/FrameLoop.cs`, `src/Meitou.Game/GameHost.Interactive.cs` | `1`: diagnostic (issue #108): the world is submitted and waited for before the interface draws, and the interface before the present. Slower frames. |
-| `MEITOU_DIAG_IDLE` | `src/Meitou.Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #108): each frame waits for every frame in flight before it begins. Slower frames. |
-| `MEITOU_DIAG_NO_MATERIAL_CACHE` | `src/Meitou.Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain material cache starts off; every pixel shades the layers. |
-| `MEITOU_DIAG_NO_GROW` | `src/Meitou.Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain near layer arrays and the grass store keep their first size (no growth for kept places or a longer grass distance). |
-| `MEITOU_VRAM_GUARD` | `src/Meitou.Rendering/WorldFrame.cs`, `src/Meitou.Game/GameHost.Metal.cs` | `0` turns the memory-pressure guard off. On by default. |
-| `MEITOU_OBJECT_LOD_CACHE` | `src/Meitou.Rendering/ObjectLodGen.cs` | Folder for the object LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
-| `MEITOU_CHARACTER_LOD_CACHE` | `src/Meitou.Rendering/Characters/CharacterContent.cs` | Folder for the character LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
-| `MEITOU_IMPOSTOR_CACHE` | `src/Meitou.Rendering/Impostors/ImpostorCache.cs` | Impostor cache folder. |
-| `MEITOU_SSAO_STAMPS` | `src/Meitou.Rendering/PostProcess.cs` | `1`: GPU timestamps around the SSAO pass (diagnostic). |
-| `MEITOU_SHAFT_STAMPS` | `src/Meitou.Rendering/PostProcess.Shafts.cs` | `1`: GPU timestamps around the light-shaft pass (diagnostic). |
-| `MEITOU_UPSCALER_LOG` | `src/Meitou.Rendering/Upscalers/Streamline.cs`, `FsrUpscaler.cs` | `1`: log upscaler info (errors are always logged). |
-| `MEITOU_DLSS_PATH` | `src/Meitou.Rendering/Upscalers/VendorUpscalers.cs` | Folder of the DLSS runtime: the Streamline DLLs on Windows, the DLSS model and `libmeitou_ngx.so` on Linux. |
-| `MEITOU_STREAMLINE_PATH` | `src/Meitou.Rendering/Upscalers/VendorUpscalers.cs` | Older name of `MEITOU_DLSS_PATH`, read when that is unset. |
-| `MEITOU_FFX_PATH` | `src/Meitou.Rendering/Upscalers/FsrUpscaler.cs` | Path to the FidelityFX library (FSR). |
-| `MEITOU_DLSS_PRESET` | `src/Meitou.Rendering/Upscalers/VendorUpscalers.cs` | Overrides the DLSS preset number. |
-| `MEITOU_NGX_LOG` | `src/Meitou.Rendering/Upscalers/Ngx.cs` | `1` prints NGX's whole log (DLSS on Linux). |
-| `MEITOU_DLSS` | `src/Meitou.Rendering/Upscalers/Ngx.cs` | `0` keeps NGX from loading (no DLSS on Linux; the game uses TAA). |
-| `MEITOU_BENCH_ONLY` | `src/Meitou.Game/GameHost.PlayBench.cs` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |
+| `MEITOU_LOD_DEBUG` | `src/Meitou.Game/Rendering/Objects/WorldObjectRenderer.cs` | `1`: colour surfaces by LOD level; `2`: wireframe coloured by level. |
+| `MEITOU_FOLIAGE_RANGE` | `src/Meitou.Game/Rendering/Foliage/FoliageRenderer.cs` | Starting value of the foliage range setting (offscreen measurements). |
+| `MEITOU_GRASS_RANGE` | `src/Meitou.Game/Rendering/Foliage/FoliageRenderer.cs` | Starting value of the grass range setting. |
+| `MEITOU_FORCE_INTEGRATED` | `src/Meitou.Game/Rendering/Gpu/Core/VulkanDevice.cs` | `1`: treat any GPU as integrated (budgets for integrated GPUs). |
+| `MEITOU_VRAM_BUDGET_MB` | `src/Meitou.Game/Rendering/Gpu/Core/VulkanDevice.cs` | Caps the video memory reported, for testing the memory guard. |
+| `MEITOU_VK_VALIDATION` | `src/Meitou.Game/Rendering/Gpu/Core/VulkanDeviceOptions.cs` | `1` validation; `sync` adds synchronisation checks; `gpu` adds GPU-assisted checks; `0` off. Unset: caller's default. |
+| `MEITOU_DLSS_FAIL_AT` | `src/Meitou.Game/Rendering/Upscalers/DlssUpscaler.cs` | Test hook: `n` reports a DLSS failure after the n-th evaluation was recorded, to exercise the fallback to TAA. |
+| `MEITOU_DIAG_SUBMIT` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs`, `src/Meitou.Game/Host/GameLoop.cs` | `1`: diagnostic (issue #108): the world is submitted and waited for before the interface draws, and the interface before the present. Slower frames. |
+| `MEITOU_DIAG_IDLE` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #108): each frame waits for every frame in flight before it begins. Slower frames. |
+| `MEITOU_DIAG_NO_MATERIAL_CACHE` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain material cache starts off; every pixel shades the layers. |
+| `MEITOU_DIAG_NO_GROW` | `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: diagnostic (issue #319): the terrain near layer arrays and the grass store keep their first size (no growth for kept places or a longer grass distance). |
+| `MEITOU_VRAM_GUARD` | `src/Meitou.Game/Rendering/Frame/WorldFrame.cs`, `src/Meitou.Game/GameHost.Metal.cs` | `0` turns the memory-pressure guard off. On by default. |
+| `MEITOU_OBJECT_LOD_CACHE` | `src/Meitou.Game/Rendering/Objects/ObjectLodGen.cs` | Folder for the object LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
+| `MEITOU_CHARACTER_LOD_CACHE` | `src/Meitou.Game/Rendering/Characters/CharacterContent.cs` | Folder for the character LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
+| `MEITOU_IMPOSTOR_CACHE` | `src/Meitou.Game/Rendering/Impostors/ImpostorCache.cs` | Impostor cache folder. |
+| `MEITOU_SSAO_STAMPS` | `src/Meitou.Game/Rendering/Post/PostProcess.cs` | `1`: GPU timestamps around the SSAO pass (diagnostic). |
+| `MEITOU_SHAFT_STAMPS` | `src/Meitou.Game/Rendering/Post/PostProcess.Shafts.cs` | `1`: GPU timestamps around the light-shaft pass (diagnostic). |
+| `MEITOU_UPSCALER_LOG` | `src/Meitou.Game/Rendering/Upscalers/Streamline.cs`, `FsrUpscaler.cs` | `1`: log upscaler info (errors are always logged). |
+| `MEITOU_DLSS_PATH` | `src/Meitou.Game/Rendering/Upscalers/VendorUpscalers.cs` | Folder of the DLSS runtime: the Streamline DLLs on Windows, the DLSS model and `libmeitou_ngx.so` on Linux. |
+| `MEITOU_STREAMLINE_PATH` | `src/Meitou.Game/Rendering/Upscalers/VendorUpscalers.cs` | Older name of `MEITOU_DLSS_PATH`, read when that is unset. |
+| `MEITOU_FFX_PATH` | `src/Meitou.Game/Rendering/Upscalers/FsrUpscaler.cs` | Path to the FidelityFX library (FSR). |
+| `MEITOU_DLSS_PRESET` | `src/Meitou.Game/Rendering/Upscalers/VendorUpscalers.cs` | Overrides the DLSS preset number (the settings' DLSS preset otherwise). |
+| `MEITOU_NGX_LOG` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `1` prints NGX's whole log (DLSS on Linux). |
+| `MEITOU_DLSS` | `src/Meitou.Game/Rendering/Upscalers/Ngx.cs` | `0` keeps NGX from loading (no DLSS on Linux; the game uses TAA). |
+| `MEITOU_BENCH_ONLY` | `src/Meitou.Game/PlayBench` | Comma list of `--play-bench` segments to run (e.g. `settle,zoom`). |
 | `MEITOU_TERRAIN_NO_NORMAL` | `src/Meitou.Game/GameHost.Metal.cs` | `1`/`true`: terrain shader variant without normal mapping (A/B; fixed before the first draw). |
 | `MEITOU_METAL_GPU_BUDGET_MB` | `src/Meitou.Game/GameHost.Metal.cs` | Metal video-memory budget in MB (default 5 GB). The launcher sets it on macOS. |
 | `MEITOU_METAL_NO_TAA` | `GameHost.Metal.cs` | `1`/`true`: native size, no jitter, no temporal resolve (diagnostic). |
@@ -319,23 +318,23 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_METAL_NO_PARTICLES` | `GameHost.Metal.cs` | `1`: no weather particles on Metal. |
 | `MEITOU_METAL_GROUND_RELIEF` | `GameHost.Metal.cs` | `0` or `false`: ground relief (parallax) off; on by default. |
 | `MEITOU_METAL_GI` | `GameHost.Metal.cs` | `1`/`true`: native Metal probe GI (opt-in; experimental). |
-| `MEITOU_METAL_GI_LOG` | `src/Meitou.Metal/Gi/MetalProbeGi.cs` | `1`: log the probe GI. |
-| `MEITOU_METAL_GI_FALLBACK` | `src/Meitou.Metal/Gi/MetalProbeGi.cs` | `1`: disables the sky-light term of the probe GI (A/B). |
+| `MEITOU_METAL_GI_LOG` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: log the probe GI. |
+| `MEITOU_METAL_GI_FALLBACK` | `src/Meitou.Game/Rendering/Metal/Gi/MetalProbeGi.cs` | `1`: disables the sky-light term of the probe GI (A/B). |
 | `MEITOU_METAL_NO_GRASS` | `GameHost.Metal.cs` | `1`: no grass blades on Metal. |
 | `MEITOU_METAL_NO_FOLIAGE_MESHES` | `GameHost.Metal.cs` | `1`: no foliage meshes on Metal (grass only). |
-| `MEITOU_METAL_GPU_CULL` | `GameHost.Metal.cs`, `src/Meitou.Metal/MetalFrame.cs`, `src/Meitou.Rendering/FoliageRenderer.cs` | `1`/`true`: experimental GPU foliage cull (unsafe; the launcher removes it). |
+| `MEITOU_METAL_GPU_CULL` | `GameHost.Metal.cs`, `src/Meitou.Game/Rendering/Metal/MetalFrame.cs`, `src/Meitou.Game/Rendering/Foliage/FoliageRenderer.cs` | `1`/`true`: experimental GPU foliage cull (unsafe; the launcher removes it). |
 | `MEITOU_METAL_CPU_CULL` | `GameHost.Metal.cs` | `1`: force the CPU foliage cull, overriding the GPU cull. |
 | `MEITOU_METAL_TRACE` | `GameHost.Metal.cs` | `1`: trace output of the Metal frame loop. |
 | `MEITOU_METAL_NO_BUILDINGS` | `GameHost.Metal.cs` | `1`: skip the runtime building, ground-item and lamp updates (freeze diagnostic). |
-| `MEITOU_METAL_NO_PARTICLE_COVERAGE` | `src/Meitou.Game/MetalPostChain.cs` | `1`/`true`: particles do not write TAA's coverage alpha. |
+| `MEITOU_METAL_NO_PARTICLE_COVERAGE` | `src/Meitou.Game/Rendering/Metal/MetalPostChain.cs` | `1`/`true`: particles do not write TAA's coverage alpha. |
 | `MEITOU_METAL_OVERLAY` | `GameHost.Metal.cs` | `1`: add the frame-stats lines to a screenshot. |
 | `MEITOU_METAL_SETTINGS` | `GameHost.Metal.cs` | `1`/`true`: open the settings panel for a still. |
-| `MEITOU_METAL_FAST_MATH` | `src/Meitou.Metal/MetalShaders.cs` | Metal fast-math compile option: unset is Metal's default (on); `1` or `0` forces it. |
-| `MEITOU_METAL_DUMP` | `src/Meitou.Metal/MetalShaders.cs` | Folder to write the translated MSL of each shader into. |
-| `MEITOU_METAL_NO_COMPRESSION` | `src/Meitou.Metal/MetalContext.cs` | `1`: no lossless target compression (A/B). |
-| `MEITOU_METAL_SLOT_WAIT` | `src/Meitou.Metal/MetalContext.cs` | Unset or `1`: wait for the reused slot's fence (default). `0`/`false`: frame-number only. `serial`: one frame in flight. |
-| `MEITOU_METAL_NO_STATE_CACHE` | `src/Meitou.Metal/MetalCommandList.cs` | `1`: reissue every encoder state (A/B). |
-| `MEITOU_METAL_PRIVATE_STATIC` | `src/Meitou.Rendering/TerrainRenderer.cs`, `TerrainTextures.cs` | `1`: private storage for static terrain data (A/B). |
+| `MEITOU_METAL_FAST_MATH` | `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` | Metal fast-math compile option: unset is Metal's default (on); `1` or `0` forces it. |
+| `MEITOU_METAL_DUMP` | `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` | Folder to write the translated MSL of each shader into. |
+| `MEITOU_METAL_NO_COMPRESSION` | `src/Meitou.Game/Rendering/Metal/MetalContext.cs` | `1`: no lossless target compression (A/B). |
+| `MEITOU_METAL_SLOT_WAIT` | `src/Meitou.Game/Rendering/Metal/MetalContext.cs` | Unset or `1`: wait for the reused slot's fence (default). `0`/`false`: frame-number only. `serial`: one frame in flight. |
+| `MEITOU_METAL_NO_STATE_CACHE` | `src/Meitou.Game/Rendering/Metal/MetalCommandList.cs` | `1`: reissue every encoder state (A/B). |
+| `MEITOU_METAL_PRIVATE_STATIC` | `src/Meitou.Game/Rendering/Terrain/TerrainRenderer.cs`, `TerrainTextures.cs` | `1`: private storage for static terrain data (A/B). |
 
 Names starting `MEITOU_` are also recorded in the benchmark JSON (`WorldApp.Bench.cs`).
 
@@ -343,6 +342,6 @@ Names starting `MEITOU_` are also recorded in the benchmark JSON (`WorldApp.Benc
 
 - `MEITOU_BENCH_SKIP` defaults differ: 1 in `WorldApp.Benchmark.cs:93`, 0 in `SpikeLog.cs:19`.
 - `MEITOU_METAL_GI_FALLBACK` (`MetalProbeGi.cs:469`), `MEITOU_METAL_PRIVATE_STATIC` (`TerrainRenderer.cs:63`), and the two `*_STAMPS` variables are described from the names and read sites only; their effects were not traced.
-- `MEITOU_FRAGMENT` (`src/Meitou.Rendering/Gpu/Shaders/GlslProgramCompiler.cs:167`) is a shader macro, not an environment variable, so it is excluded.
+- `MEITOU_FRAGMENT` (`src/Meitou.Game/Rendering/Gpu/Shaders/GlslProgramCompiler.cs:167`) is a shader macro, not an environment variable, so it is excluded.
 - `MTL_CAPTURE_ENABLED` appears only in the game's usage text (`GameOptions.cs:120`); no project code reads it.
 - The viewer's `--class` and the impostor `--debug` semantics are not traced beyond the parse.

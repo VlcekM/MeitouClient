@@ -12,22 +12,33 @@ namespace Meitou.Content;
 public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<string> Assemblies, string Entry,
     CodeModVersion? Version, IReadOnlyList<CodeModDependency>? Dependencies)
 {
-    /// <summary>The API 1 constructor, kept so mods compiled against API 1 still bind to it (docs/modding-dependencies.md "Compatibility").</summary>
+    static readonly JsonDocumentOptions JsonOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+
+    /// <summary>
+    /// The API 1 constructor, kept so mods compiled against API 1 still bind to it (docs/modding-dependencies.md "Compatibility").
+    /// </summary>
+    // Named as the record's own parameters (and properties), which mods may pass by name.
+#pragma warning disable IDE1006
     public CodeModManifest(string Id, int ApiVersion, IReadOnlyList<string> Assemblies, string Entry)
         : this(Id, ApiVersion, Assemblies, Entry, null, null)
     {
     }
+#pragma warning restore IDE1006
 
-    /// <summary>The API 1 deconstruction (four parts), kept beside the generated six-part one for mods compiled against API 1.</summary>
-    public void Deconstruct(out string Id, out int ApiVersion, out IReadOnlyList<string> Assemblies, out string Entry)
+    /// <summary>
+    /// The API 1 deconstruction (four parts), kept beside the generated six-part one for mods compiled against API 1.
+    /// </summary>
+    public void Deconstruct(out string id, out int apiVersion, out IReadOnlyList<string> assemblies, out string entry)
     {
-        Id = this.Id;
-        ApiVersion = this.ApiVersion;
-        Assemblies = this.Assemblies;
-        Entry = this.Entry;
+        id = this.Id;
+        apiVersion = this.ApiVersion;
+        assemblies = this.Assemblies;
+        entry = this.Entry;
     }
 
-    /// <summary>The declared dependencies, in manifest order; empty when the manifest has none.</summary>
+    /// <summary>
+    /// The declared dependencies, in manifest order; empty when the manifest has none.
+    /// </summary>
     public IReadOnlyList<CodeModDependency> DependsOn => Dependencies ?? [];
 
     /// <summary>
@@ -52,8 +63,6 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         }
     }
 
-    static readonly JsonDocumentOptions JsonOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
-
     /// <summary>
     /// Only the <c>id</c> of a manifest that may be malformed otherwise, so a dependent of a broken mod names it; null when even that cannot be read.
     /// Never throws.
@@ -64,7 +73,8 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         {
             using var json = JsonDocument.Parse(File.ReadAllBytes(path), JsonOptions);
             var root = json.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.String) return null;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("id", out var id) || id.ValueKind != JsonValueKind.String)
+                return null;
             return id.GetString() is { } text && IsValidId(text) ? text : null;
         }
         catch (Exception e) when (e is not OutOfMemoryException)
@@ -75,9 +85,11 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
 
     static CodeModManifest FromJson(JsonElement root)
     {
-        if (root.ValueKind != JsonValueKind.Object) throw new InvalidDataException($"{ModList.CodeManifestFile} must hold an object");
+        if (root.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException($"{ModList.CodeManifestFile} must hold an object");
         string id = Text(root, "id");
-        if (!IsValidId(id)) throw new InvalidDataException($"id '{id}': use letters, digits, '.', '_' and '-', starting with a letter or digit");
+        if (!IsValidId(id))
+            throw new InvalidDataException($"id '{id}': use letters, digits, '.', '_' and '-', starting with a letter or digit");
         int apiVersion = WholeNumber(root, "apiVersion");
         string entry = Text(root, "entry");
         return new CodeModManifest(id, apiVersion, ReadAssemblies(root), entry, ReadVersion(root), ReadDependencies(root, id))
@@ -106,7 +118,8 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         {
             var dependency = CodeModDependency.FromJson(item);
             if (dependency.Id == id) throw new InvalidDataException($"dependencies: the mod lists itself ('{id}')");
-            if (dependencies.Any(d => d.Id == dependency.Id)) throw new InvalidDataException($"dependencies: '{dependency.Id}' is listed twice");
+            if (dependencies.Any(d => d.Id == dependency.Id))
+                throw new InvalidDataException($"dependencies: '{dependency.Id}' is listed twice");
             dependencies.Add(dependency);
         }
         return dependencies;
@@ -154,7 +167,8 @@ public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = n
     internal static CodeModDependency FromJson(JsonElement item, string key = "dependencies")
     {
         if (item.ValueKind == JsonValueKind.String) return new CodeModDependency(CheckedId(item.GetString(), key));
-        if (item.ValueKind != JsonValueKind.Object) throw new InvalidDataException($"{key}: '{item}' is neither an id nor an object");
+        if (item.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException($"{key}: '{item}' is neither an id nor an object");
         string? text = item.TryGetProperty("id", out var idValue) && idValue.ValueKind == JsonValueKind.String ? idValue.GetString() : null;
         string id = CheckedId(text, key);
         return new CodeModDependency(id, ReadRange(item, id, key), ReadOptional(item, id, key));
@@ -165,7 +179,10 @@ public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = n
         if (!item.TryGetProperty("version", out var version)) return null;
         if (version.ValueKind != JsonValueKind.String)
             throw new InvalidDataException($"{key}: {id}'s version must be a string such as \">=1.2.0 <2.0.0\"");
-        try { return CodeModVersionRange.Parse(version.GetString()!); }
+                try
+        {
+            return CodeModVersionRange.Parse(version.GetString()!);
+        }
         catch (InvalidDataException e) { throw new InvalidDataException($"{key}: {id}: {e.Message}", e); }
     }
 
@@ -179,7 +196,8 @@ public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = n
 
     static string CheckedId(string? id, string key)
     {
-        if (id is null || !CodeModManifest.IsValidId(id)) throw new InvalidDataException($"{key}: '{id}' is not a mod id");
+        if (id is null || !CodeModManifest.IsValidId(id))
+            throw new InvalidDataException($"{key}: '{id}' is not a mod id");
         return id;
     }
 

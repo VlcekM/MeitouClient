@@ -3,22 +3,27 @@ using Meitou.Data.Fcs;
 using Meitou.Data.Gameplay;
 using Meitou.Data.Save;
 using Meitou.Simulation;
+using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 using Meitou.Simulation.Saving;
 using static Meitou.Tests.Simulation.SyntheticTown;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Unique characters (docs/simulation.md "Unique characters"): made once, a claimed one replaced or left out, the table saved.</summary>
+/// <summary>
+/// Unique characters (docs/simulation.md "Unique characters"): made once, a claimed one replaced or left out, the table saved.
+/// </summary>
 public class UniqueNpcTests(ITestOutputHelper output)
 {
     [Fact]
     public void A_claimed_unique_gets_its_replacement_or_nobody_and_the_squad_keeps_a_leader()
     {
-        // Chief (the leader of both Patrols) is unique with a replacement; Hermit (the faction folk's leader) is unique without one and taken before the town is made.
+        // Chief (the leader of both Patrols) is unique with a replacement; Hermit (the faction folk's leader) is unique without one and taken before
+        // the town is made.
         FcsRecord Person(string id, string name, bool unique)
         {
-            var r = Rec(id, FcsRecordType.CHARACTER, name);
+            var r = Rec(id, FcsRecordType.Character, name);
             r.References["race"] = [Ref("1-t", 100)];
             r.Bools["unique"] = unique;
             return r;
@@ -59,7 +64,9 @@ public class UniqueNpcTests(ITestOutputHelper output)
         var data = PopulationData.Create(db, levels.Towns(), new GeneratedAppearances(db, install!.Root));
         var walk = new OpenGroundWalkability((_, _) => 300);
         SimWorld NewWorld() => new(new WorldSettings { Seed = 5, Threads = 2, PublishSnapshots = false }, walk,
-            StandardSystems.Build(data, walk, new StandardSystemOptions { Parts = StandardParts.Population | StandardParts.Player, Population = new PopulationSettings { CheckEveryTicks = 1 } }).Systems);
+            StandardSystems.Build(data, walk,
+                    new StandardSystemOptions { Parts = StandardParts.Population | StandardParts.Player,
+                            Population = new PopulationSettings { CheckEveryTicks = 1 } }).Systems);
         using var world = NewWorld();
         var population = world.Systems.OfType<PopulationSystem>().Single();
 
@@ -69,7 +76,7 @@ public class UniqueNpcTests(ITestOutputHelper output)
         {
             int fi = s.Town.Faction is { } f ? data.FactionIndex(f) : -1;
             var faction = fi >= 0 ? data.Factions[fi] : null;
-            foreach (var e in Meitou.Data.World.ResidentHomes.Entries(s.Town, faction).Concat(PopulationSystem.BarEntries(s.Town, faction)))
+            foreach (var e in Data.World.ResidentHomes.Entries(s.Town, faction).Concat(PopulationSystem.BarEntries(s.Town, faction)))
                 if (db.Find(e.Id)?.GetReferences("leader") is [{ TargetStringId: var leader }, ..] && UniqueCharacters.IsUnique(db.Find(leader)))
                     targets.Add((s, leader));
         }
@@ -82,11 +89,13 @@ public class UniqueNpcTests(ITestOutputHelper output)
             Assert.True(TestWaits.TickUntil(world, () => population.StatusOf(s.Index) == SiteStatus.Loaded), $"{s.Town.Name} was made");
         }
 
-        // Every unique person in the world is there once (the gate skips animals, as the original; Protector Of The Flame names itself as its replacement).
+        // Every unique person in the world is there once (the gate skips animals, as the original; Protector Of The Flame names itself as its
+        // replacement).
         var live = new Dictionary<string, int>(StringComparer.Ordinal);
         var table = world.Characters;
         for (int i = 0; i < table.Previous.Length; i++)
-            if (table.Previous[i].Alive && table.Cold(i) is { } c && db.Find(c.RecordId) is { Type: FcsRecordType.CHARACTER } r && UniqueCharacters.IsUnique(r))
+            if (table.Previous[i].Alive && table.Cold(i) is { } c && db.Find(c.RecordId) is { Type: FcsRecordType.Character } r
+                    && UniqueCharacters.IsUnique(r))
                 live[c.RecordId] = live.GetValueOrDefault(c.RecordId) + 1;
         output.WriteLine($"{visit.Count} towns, {live.Count} uniques in the world, {world.Uniques.Count} entries");
         Assert.True(live.Count > 5);
@@ -97,7 +106,8 @@ public class UniqueNpcTests(ITestOutputHelper output)
         string root = Path.Combine(Path.GetTempPath(), $"meitou-uniques-{Environment.ProcessId}");
         try
         {
-            var save = SaveCapture.Capture(world, data, new SaveClock(1, 13, 0), null, new SaveCaptureOptions { Placements = levels.Towns().ToList() });
+            var save = SaveCapture.Capture(world, data, new SaveClock(1, 13, 0), null,
+                    new SaveCaptureOptions { Placements = levels.Towns().ToList() });
             string folder = QuickSave.Folder(root);
             save.Write(folder);
             var back = SaveGame.Load(folder);

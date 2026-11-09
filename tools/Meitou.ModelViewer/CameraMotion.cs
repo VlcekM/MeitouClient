@@ -1,7 +1,7 @@
 using System.Numerics;
+using Meitou.Game.Rendering.Frame;
 
-using Meitou.Rendering;
-using static Meitou.Rendering.WorldFrame;
+using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 
@@ -10,26 +10,36 @@ namespace Meitou.ModelViewer;
 /// pure turn about the eye (<c>MEITOU_FLY_TURN</c>, <c>--bench-motion turn</c>) and the orbit round the target (<c>MEITOU_BENCH_ORBIT</c>,
 /// <c>--bench-motion orbit</c>); the orbit also adds to the others.
 /// </summary>
-sealed class CameraMotion(WorldCamera camera, Gpu gpu, Vector3 centre, bool circle, float radius, float unitsPerFrame, float turnRadians, float orbitPixels)
+sealed class CameraMotion(WorldCamera camera, Gpu gpu, Vector3 centre, bool circle, float radius, float unitsPerFrame, float turnRadians,
+        float orbitPixels)
 {
-    readonly float angleStep = unitsPerFrame / Math.Max(radius, 1);
+    readonly float _angleStep = unitsPerFrame / Math.Max(radius, 1);
 
-    /// <summary>The motion <c>--bench-motion</c> names.</summary>
-    public static CameraMotion For(string name, WorldOptions o, WorldCamera camera, Gpu gpu) => new(camera, gpu, camera.Target, name == "fly", Math.Max(o.FlyRadius, 1), o.FlySpeed,
+    /// <summary>
+    /// The motion <c>--bench-motion</c> names.
+    /// </summary>
+    public static CameraMotion For(string name, WorldOptions o, WorldCamera camera, Gpu gpu) => new(camera, gpu, camera.Target, name == "fly",
+            Math.Max(o.FlyRadius, 1), o.FlySpeed,
         name == "turn" ? 0.5f * MathF.PI / 180 : 0, name == "orbit" ? o.BenchOrbit : 0);   // the turn: 0.5 degrees a frame
 
-    /// <summary>The old fly benchmark's: the circle, or the turn when MEITOU_FLY_TURN gives a rate, plus the orbit of MEITOU_BENCH_ORBIT.</summary>
+    /// <summary>
+    /// The old fly benchmark's: the circle, or the turn when MEITOU_FLY_TURN gives a rate, plus the orbit of MEITOU_BENCH_ORBIT.
+    /// </summary>
     public static CameraMotion Fly(WorldOptions o, WorldCamera camera, Gpu gpu, float turnRadians, float orbitPixels) =>
         new(camera, gpu, camera.Target, turnRadians == 0, Math.Max(o.FlyRadius, 1), o.FlySpeed, turnRadians, orbitPixels);
 
     public bool Moves => circle || turnRadians != 0 || orbitPixels != 0;
 
-    /// <summary>Moves the camera to its place at frame <paramref name="i"/> (1-based; the circle starts at its east point).</summary>
+    /// <summary>
+    /// Moves the camera to its place at frame <paramref name="i"/> (1-based; the circle starts at its east point).
+    /// </summary>
     public void Step(int i)
     {
-        if (circle && angleStep != 0)   // a speed of 0 leaves the camera exactly where it was placed (else its target drops to the ground, a pose of its own)
+        // a speed of 0 leaves the camera exactly where it was placed (else its target drops to the ground, a pose of its own).
+        if (circle
+            && _angleStep != 0)
         {
-            float a = i * angleStep;
+            float a = i * _angleStep;
             float x = centre.X + radius * (MathF.Cos(a) - 1), z = centre.Z + radius * MathF.Sin(a);
             camera.Target = new Vector3(x, gpu.Terrain.HeightAt(x, z), z);
         }

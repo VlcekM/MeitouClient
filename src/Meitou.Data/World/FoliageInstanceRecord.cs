@@ -12,16 +12,25 @@ namespace Meitou.Data.World;
 [StructLayout(LayoutKind.Sequential)]
 public struct FoliageInstanceRecord
 {
-    /// <summary>The instance's transform (row-vector convention, translation in row 4; <c>M14</c> is 0 here and carries the fade once packed).</summary>
+    /// <summary>
+    /// The instance's transform (row-vector convention, translation in row 4; <c>M14</c> is 0 here and carries the fade once packed).
+    /// </summary>
     public Matrix4x4 Transform;
-    /// <summary>Bounding sphere in the world: xyz = <c>Vector3.Transform(mesh centre, Transform)</c>, w = mesh radius × scale.</summary>
+    /// <summary>
+    /// Bounding sphere in the world: xyz = <c>Vector3.Transform(mesh centre, Transform)</c>, w = mesh radius × scale.
+    /// </summary>
     public Vector4 Sphere;
-    /// <summary>x, z of the position (the range is measured along the ground), the scale, and the group's index within its zone; for a TERRAIN-mode rock group on the GPU cull, <c>FoliageCull.RockBits</c> instead (nothing else reads w).</summary>
+    /// <summary>
+    /// x, z of the position (the range is measured along the ground), the scale, and the group's index within its zone; for a TERRAIN-mode rock group
+    /// on the GPU cull, <c>FoliageCull.RockBits</c> instead (nothing else reads w).
+    /// </summary>
     public Vector4 Ground;
 
     public const int Size = 96;
 
-    /// <summary>Bytes a record takes in the GPU's instance arena (<see cref="Pack"/>): 17 floats, 71% of <see cref="Size"/>.</summary>
+    /// <summary>
+    /// Bytes a record takes in the GPU's instance arena (<see cref="Pack"/>): 17 floats, 71% of <see cref="Size"/>.
+    /// </summary>
     public const int GpuSize = 68;
 
     /// <summary>

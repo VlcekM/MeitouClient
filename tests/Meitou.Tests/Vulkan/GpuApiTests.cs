@@ -1,11 +1,13 @@
-using Meitou.Rendering;
-using Meitou.Rendering.Gpu;
-using Meitou.Rendering.Gpu.Core;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gpu;
+using Meitou.Game.Rendering.Gpu.Core;
 using Silk.NET.Vulkan;
 
 namespace Meitou.Tests.Vulkan;
 
-/// <summary>The native renderer API (docs/renderer-native.md 2 and 3.2): its pixels, the legacy modules VkGl made, its bookkeeping.</summary>
+/// <summary>
+/// The native renderer API (docs/renderer-native.md 2 and 3.2): its pixels, the legacy modules VkGl made, its bookkeeping.
+/// </summary>
 public class GpuApiTests
 {
     static VulkanDevice? TryCreate(bool sync = false)
@@ -71,7 +73,8 @@ public class GpuApiTests
         using (var ctx = new GpuContext(d!))
         {
             // The sources through LegacyProgram into an RGBA8 texture (until phase 8 stage 3 compared byte for byte with VkGl's picture).
-            using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, W, H, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "golden"));
+            using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, W, H, Use: TextureUse.ColourTarget | TextureUse.TransferSrc,
+                    Name: "golden"));
             using var lp = LegacyProgram.Create(ctx, Vertex, Fragment, "golden triangle");
             Assert.True(lp.Uniform("uMissing") is { IsValid: false });
             lp.Set(lp.Uniform("uOffset"), 0.1f, -0.05f);
@@ -84,8 +87,8 @@ public class GpuApiTests
             var vertices = frame.Constants.Write<float>(Vertices);
             LegacyProgram.Attribute?[] attributes =
             [
-                new LegacyProgram.Attribute(vertices.Binding, InternalFormat.RG32f, 20, false),
-                new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 8), InternalFormat.Rgb32f, 20, false),
+                new LegacyProgram.Attribute(vertices.Binding, InternalFormat.Rg32F, 20, false),
+                new LegacyProgram.Attribute(new GpuBufferBinding(vertices.Handle, vertices.Offset + 8), InternalFormat.Rgb32F, 20, false),
             ];
             var pipeline = ctx.Pipelines.Get(new GraphicsPipelineDesc(lp.Program, lp.VertexLayout(attributes), PrimitiveType.Triangles,
                 new AttachmentFormats(InternalFormat.Rgba8, InternalFormat.None), BlendState.Off,
@@ -184,13 +187,15 @@ public class GpuApiTests
         using (var ctx = new GpuContext(d!))
         {
             using var source = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, 1, 1, Name: "pre-frame source"));
-            using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, 16, 8, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "pre-frame target"));
+            using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, 16, 8, Use: TextureUse.ColourTarget | TextureUse.TransferSrc,
+                    Name: "pre-frame target"));
             using var args = DeviceBuffer.Create(ctx, 20, BufferUse.Storage | BufferUse.Indirect | BufferUse.TransferSrc, "pre-frame args");
             using var indices = DeviceBuffer.Create(ctx, 16, BufferUse.Index | BufferUse.TransferDst, "indices");
             using var readback = ReadbackBuffer.Create(ctx, 20, "pre-frame readback");
             var compute = ctx.Shaders.Compute(ArgsCompute, "args");
             var draw = ctx.Shaders.Native(BindlessVertex, BindlessFragment, "bindless", [GpuSetLayout.Bindless], 4);
-            var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+            var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+                    TextureWrapMode.ClampToEdge,
                 TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
             uint index = ctx.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, source.View()));
 
@@ -218,18 +223,21 @@ public class GpuApiTests
             var cp = ctx.Pipelines.Get(new ComputePipelineDesc(compute, "args"));
             pre.BindPipeline(cp);
             var info = new DescriptorBufferInfo(ctx.Device.BufferAt(args.Handle.Index), 0, 20);
-            var write = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &info };
+            var write = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 0, DescriptorCount = 1,
+                    DescriptorType = DescriptorType.StorageBuffer, PBufferInfo = &info };
             pre.PushDescriptors(compute, 0, [write], GpuBindPoint.Compute);
             pre.PushConstants(compute, GpuStage.Compute, 3u);
             pre.Dispatch(1);
             var after = new BarrierBatch();
-            after.Add(PipelineStageFlags2.ComputeShaderBit, AccessFlags2.ShaderStorageWriteBit, PipelineStageFlags2.DrawIndirectBit | PipelineStageFlags2.AllTransferBit,
+            after.Add(PipelineStageFlags2.ComputeShaderBit, AccessFlags2.ShaderStorageWriteBit,
+                    PipelineStageFlags2.DrawIndirectBit | PipelineStageFlags2.AllTransferBit,
                 AccessFlags2.IndirectCommandReadBit | AccessFlags2.TransferReadBit);
             pre.Barrier(after);
 
             cmd.EndRendering();
             var full = new BarrierBatch();
-            full.Add(PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryWriteBit, PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit);
+            full.Add(PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryWriteBit, PipelineStageFlags2.AllCommandsBit,
+                    AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit);
             cmd.Barrier(full);
             cmd.CopyBuffer(args.Handle, readback.Handle, new GpuBufferCopy(0, 0, 20));
             long number = frame.Number;
@@ -246,7 +254,9 @@ public class GpuApiTests
         ExpectClean(d!);
     }
 
-    /// <summary>A prepared segment of the test below: one fullscreen triangle through a scissor, reading one bindless texture.</summary>
+    /// <summary>
+    /// A prepared segment of the test below: one fullscreen triangle through a scissor, reading one bindless texture.
+    /// </summary>
     sealed class ColumnJob(GpuPipeline pipeline, GpuProgram program, uint texture, int x) : RecordJob
     {
         public override void Record(IGpuCommandList cmd)
@@ -260,17 +270,19 @@ public class GpuApiTests
         }
     }
 
-    /// <summary>A job that reaches for render-thread state (docs/renderer-native.md 6.3): must throw.</summary>
+    /// <summary>
+    /// A job that reaches for render-thread state (docs/renderer-native.md 6.3): must throw.
+    /// </summary>
     sealed class GreedyJob : RecordJob
     {
         public override void Record(IGpuCommandList cmd) => RenderJobs.AssertNotInJob();
     }
 
     /// <summary>
-    /// Wave 4 (docs/renderer-native.md 6): a native host's rendering with secondaries. Eight segments, each painting from its column to the
-    /// right edge in its own colour, are queued in order (one of them recorded at once on this thread through BeginGuest, as a guest that is not a job
-    /// does) and recorded on the job threads; executed in order, column k shows colour k only if the order held. Validation on, 0 errors; and a
-    /// job that touches render-thread state throws.
+    /// Wave 4 (docs/renderer-native.md 6): a native host's rendering with secondaries. Eight segments, each painting from its column to the right
+    /// edge in its own colour, are queued in order (one of them recorded at once on this thread through BeginGuest, as a guest that is not a job
+    /// does) and recorded on the job threads; executed in order, column k shows colour k only if the order held. Validation on, 0 errors; and a job
+    /// that touches render-thread state throws.
     /// </summary>
     [Fact]
     [Slow]
@@ -284,14 +296,16 @@ public class GpuApiTests
         {
             using (var ctx = new GpuContext(d!))
             {
-                const int Columns = 8;
-                var sources = new GpuTexture[Columns];
-                var indices = new uint[Columns];
-                using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, W, H, Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "columns"));
+                const int columns = 8;
+                var sources = new GpuTexture[columns];
+                var indices = new uint[columns];
+                using var target = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, W, H,
+                        Use: TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "columns"));
                 var draw = ctx.Shaders.Native(BindlessVertex, BindlessFragment, "bindless", [GpuSetLayout.Bindless], 4);
-                var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+                var sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+                        TextureWrapMode.ClampToEdge,
                     TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
-                for (int k = 0; k < Columns; k++)
+                for (int k = 0; k < columns; k++)
                 {
                     sources[k] = ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, 1, 1, Name: $"column {k}"));
                     indices[k] = ctx.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(sampler, sources[k].View()));
@@ -302,14 +316,15 @@ public class GpuApiTests
 
                 ctx.BeginFrame();
                 var frame = ctx.Frame;
-                for (int k = 0; k < Columns; k++) ctx.Uploads.Write(sources[k], 0, 0, new PixelRect(0, 0, 1, 1), [(byte)(10 + 30 * k), (byte)(200 - 20 * k), (byte)(5 * k), 255]);
+                for (int k = 0; k < columns; k++) ctx.Uploads.Write(sources[k], 0, 0, new PixelRect(0, 0, 1, 1),
+                        [(byte)(10 + 30 * k), (byte)(200 - 20 * k), (byte)(5 * k), 255]);
                 var cmd = ctx.BeginNative("columns host");
                 cmd.BeginRendering(Target(target), secondaries: true);
                 frame.Parallel.Begin((CommandList)cmd, formats, 0);
                 ctx.BeginHostPass((CommandList)cmd, PassTargets.Of(target, null), DrawState.For(formats, d!.DepthClamp));
-                for (int k = 0; k < Columns; k++)
+                for (int k = 0; k < columns; k++)
                 {
-                    var job = new ColumnJob(pipeline, draw, indices[k], k * (W / Columns));
+                    var job = new ColumnJob(pipeline, draw, indices[k], k * (W / columns));
                     if (k == 4)
                     {
                         // A guest that is not a job: records at once into a secondary of its own, in its place.
@@ -319,9 +334,9 @@ public class GpuApiTests
                     }
                     else ctx.Record($"column {k}", job);
                 }
-                Assert.Equal(1 + Columns, frame.Stats.NativeSegments);   // the host's own segment and the columns
+                Assert.Equal(1 + columns, frame.Stats.NativeSegments);   // the host's own segment and the columns
                 frame.Parallel.End();
-                Assert.Equal(Columns, frame.Parallel.Totals.Draws);
+                Assert.Equal(columns, frame.Parallel.Totals.Draws);
                 cmd.EndRendering();
                 ctx.EndHostPass(cmd);
                 ctx.EndNative(cmd);
@@ -333,7 +348,7 @@ public class GpuApiTests
                 for (int y = 0; y < H; y++)
                     for (int x = 0; x < W; x++)
                     {
-                        int k = x / (W / Columns), i = (y * W + x) * 4;
+                        int k = x / (W / columns), i = (y * W + x) * 4;
                         Assert.Equal((10 + 30 * k, 200 - 20 * k, 5 * k), (pixels[i], pixels[i + 1], pixels[i + 2]));
                     }
                 foreach (var s in sources) s.Dispose();

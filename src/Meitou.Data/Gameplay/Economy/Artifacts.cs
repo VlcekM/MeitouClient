@@ -4,24 +4,34 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.Gameplay.Economy;
 
 /// <summary>
-/// One entry of a town's artifacts (docs/game/economy.md "Artifacts"): the item record, part 1 (a weapon's model) and part 2 (its maker), "" for none, the level and the units.
+/// One entry of a town's artifacts (docs/game/economy.md "Artifacts"): the item record, part 1 (a weapon's model) and part 2 (its maker), "" for
+/// none, the level and the units.
 /// </summary>
 public readonly record struct ArtifactStack(string Item, string Part1, string Part2, int Level, int Units);
 
-/// <summary>A placed town the artifacts may go to; <paramref name="Key"/> is the caller's (a site index).</summary>
+/// <summary>
+/// A placed town the artifacts may go to; <paramref name="Key"/> is the caller's (a site index).
+/// </summary>
 public readonly record struct ArtifactTown(int Key, TownData Town, Vector3 Position);
 
-/// <summary>The towns' artifacts of a new game or an import, and an artifact's value (docs/game/economy.md "Artifacts").</summary>
+/// <summary>
+/// The towns' artifacts of a new game or an import, and an artifact's value (docs/game/economy.md "Artifacts").
+/// </summary>
 public static class Artifacts
 {
-    /// <summary>The seed of the gear spread and of every town's distribution.</summary>
+    /// <summary>
+    /// The seed of the gear spread and of every town's distribution.
+    /// </summary>
     public const uint Seed = 11667085;
 
-    /// <summary>The <see cref="ItemValue"/> of an entry at its level without the sale multipliers, a weapon with its maker's <c>price mod</c>; 0 when the data lacks the item.</summary>
+    /// <summary>
+    /// The <see cref="ItemValue"/> of an entry at its level without the sale multipliers, a weapon with its maker's <c>price mod</c>; 0 when the data
+    /// lacks the item.
+    /// </summary>
     public static int ValueOf(GameDatabase db, ArtifactStack stack, PriceConstants prices)
     {
         if (db.Find(stack.Item) is not { } record) return 0;
-        var maker = record.Type == FcsRecordType.WEAPON ? db.Find(stack.Part2) : null;
+        var maker = record.Type == FcsRecordType.Weapon ? db.Find(stack.Part2) : null;
         return ItemValue.Of(db, record, stack.Level, false, prices, maker);
     }
 
@@ -43,7 +53,9 @@ public static class Artifacts
         public List<(ArtifactStack Stack, int Value)> Given { get; } = [];
         public bool Accepts(int value) => Min <= (uint)value && (uint)value <= Max;
 
-        /// <summary>Moves <paramref name="units"/> of the entry here, onto the entry of the same value, item and parts it already has.</summary>
+        /// <summary>
+        /// Moves <paramref name="units"/> of the entry here, onto the entry of the same value, item and parts it already has.
+        /// </summary>
         public void Add(Entry e, int units)
         {
             e.Left -= units;
@@ -60,11 +72,13 @@ public static class Artifacts
         }
     }
 
-    /// <summary>The artifacts each town takes, by <see cref="ArtifactTown.Key"/>: its gear, then its items. Empty when the data has no ARTIFACTS record.</summary>
+    /// <summary>
+    /// The artifacts each town takes, by <see cref="ArtifactTown.Key"/>: its gear, then its items. Empty when the data has no ARTIFACTS record.
+    /// </summary>
     public static Dictionary<int, List<ArtifactStack>> Plan(GameDatabase db, IEnumerable<ArtifactTown> towns)
     {
         var result = new Dictionary<int, List<ArtifactStack>>();
-        if (db.OfType(FcsRecordType.ARTIFACTS).FirstOrDefault() is not { } record) return result;
+        if (db.OfType(FcsRecordType.Artifacts).FirstOrDefault() is not { } record) return result;
         var prices = PriceConstants.FromDatabase(db);
         var items = new List<Entry>();
         var gear = new List<Entry>();
@@ -79,7 +93,8 @@ public static class Artifacts
         {
             var refs = record.GetReferences(list);
             var found = Existing(db, refs);
-            for (int i = 0; i < found.Count; i++) Add(into, new ArtifactStack(found[i], "", "", level, refs[i].Values.Value0));
+            for (int i = 0; i < found.Count; i++)
+                Add(into, new ArtifactStack(found[i], "", "", level, refs[i].Values.Value0));
         }
         foreach (var list in new[] { "crossbows", "robotics" })
             foreach (var r in record.GetReferences(list))
@@ -137,7 +152,8 @@ public static class Artifacts
                 {
                     if (run > 0) itemTowns[e.Towns[at]].Add(e, run);
                     run = 0;
-                    // The original reads past its towns when their maxima add up to less than the units (or rounding leaves the balance negative); Meitou stays on the last.
+                    // The original reads past its towns when their maxima add up to less than the units (or rounding leaves the balance negative);
+                    // Meitou stays on the last.
                     at = Math.Min(at + 1, e.Towns.Count - 1);
                     balance += itemTowns[e.Towns[at]].Max;
                 }
@@ -156,12 +172,15 @@ public static class Artifacts
         return result;
     }
 
-    /// <summary>The ids of the entries of <paramref name="refs"/> whose record exists, in order.</summary>
-    static List<string> Existing(GameDatabase db, IReadOnlyList<GameReference> refs) => [.. refs.Where(r => db.Find(r.TargetStringId) is not null).Select(r => r.TargetStringId)];
+    /// <summary>
+    /// The ids of the entries of <paramref name="refs"/> whose record exists, in order.
+    /// </summary>
+    static List<string> Existing(GameDatabase db, IReadOnlyList<GameReference> refs) =>
+        [.. refs.Where(r => db.Find(r.TargetStringId) is not null).Select(r => r.TargetStringId)];
 
     /// <summary>
-    /// <c>weapons</c>: each model's maker is the WEAPON_MANUFACTURER other than <c>PLAYER_WEAPONS</c> that lists it in <c>weapon models</c> (the last in data order), and each WEAPON of
-    /// its <c>weapon types</c> is an artifact of the model, the maker and the maker's v0 for the model as level.
+    /// <c>weapons</c>: each model's maker is the WEAPON_MANUFACTURER other than <c>PLAYER_WEAPONS</c> that lists it in <c>weapon models</c> (the last
+    /// in data order), and each WEAPON of its <c>weapon types</c> is an artifact of the model, the maker and the maker's v0 for the model as level.
     /// </summary>
     static void AddWeapons(GameDatabase db, GameRecord record, List<Entry> gear, Action<List<Entry>, ArtifactStack> add)
     {
@@ -171,7 +190,7 @@ public static class Artifacts
         var makerOf = new Dictionary<string, string>(StringComparer.Ordinal);
         var levelOf = new Dictionary<(string Maker, string Model), int>();
         var typesOf = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-        foreach (var maker in db.OfType(FcsRecordType.WEAPON_MANUFACTURER))
+        foreach (var maker in db.OfType(FcsRecordType.WeaponManufacturer))
         {
             if (maker.StringId == "PLAYER_WEAPONS") continue;
             var modelRefs = maker.GetReferences("weapon models");
@@ -188,11 +207,14 @@ public static class Artifacts
         {
             if (!makerOf.TryGetValue(models[i], out var maker) || !typesOf.TryGetValue(maker, out var types)) continue;
             int level = levelOf[(maker, models[i])];
-            foreach (var type in types) add(gear, new ArtifactStack(type, models[i], maker, level, refs[i].Values.Value0));
+            foreach (var type in types)
+                add(gear, new ArtifactStack(type, models[i], maker, level, refs[i].Values.Value0));
         }
     }
 
-    /// <summary>Gives each artifact the towns whose range holds its value (none when it lies outside every range).</summary>
+    /// <summary>
+    /// Gives each artifact the towns whose range holds its value (none when it lies outside every range).
+    /// </summary>
     static void FindTowns(List<Taker> towns, List<Entry> entries)
     {
         uint lowest = uint.MaxValue, highest = 0;

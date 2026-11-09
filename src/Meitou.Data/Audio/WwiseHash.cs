@@ -9,11 +9,13 @@ public static class WwiseHash
     public static uint Id(string name)
     {
         uint hash = 2166136261;
+
         foreach (char c in name)
         {
             hash *= 16777619;
             hash ^= (byte)char.ToLowerInvariant(c);
         }
+
         return hash;
     }
 }

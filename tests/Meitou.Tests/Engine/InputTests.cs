@@ -1,18 +1,18 @@
-using Meitou.Engine.Input;
+using Meitou.Game.Host.Input;
 
 namespace Meitou.Tests.Engine;
 
 public class InputTests
 {
-    readonly InputState input = new();
-    readonly InputBindings bindings = new();
+    readonly InputState _input = new();
+    readonly InputBindings _bindings = new();
 
-    ActionState Tick() => bindings.Resolve(input.Consume());
+    ActionState Tick() => _bindings.Resolve(_input.Consume());
 
     [Fact]
     public void A_press_is_seen_by_exactly_one_of_several_ticks_in_a_frame()
     {
-        input.SetKey(Key.W, true);
+        _input.SetKey(Key.W, true);
         var t1 = Tick();
         var t2 = Tick();
         var t3 = Tick();

@@ -6,7 +6,9 @@ namespace Meitou.Data.Ui;
 
 public enum UiMode { Faithful, Meitou }
 
-/// <summary>Top-left coordinates, in pixels or fractions of the parent.</summary>
+/// <summary>
+/// Top-left coordinates, in pixels or fractions of the parent.
+/// </summary>
 public readonly record struct UiRect(float X, float Y, float Width, float Height)
 {
     public UiRect Intersect(UiRect other)
@@ -28,7 +30,9 @@ public readonly record struct UiRect(float X, float Y, float Width, float Height
         return new(n[0], n[1], n[2], n[3]);
     }
 
-    /// <summary>Align a skin piece when its reference canvas is resized.</summary>
+    /// <summary>
+    /// Align a skin piece when its reference canvas is resized.
+    /// </summary>
     public UiRect AlignTo(UiRect parent, float referenceWidth, float referenceHeight, string align)
     {
         var flags = Flags(align);
@@ -50,8 +54,14 @@ public readonly record struct UiRect(float X, float Y, float Width, float Height
         foreach (var range in text.Split(' '))
             flags |= text[range] switch
             {
-                "Right" => Align.Right, "HCenter" => Align.HCenter, "Bottom" => Align.Bottom, "VCenter" => Align.VCenter,
-                "Center" => Align.HCenter | Align.VCenter, "HStretch" => Align.HStretch, "VStretch" => Align.VStretch, "Stretch" => Align.HStretch | Align.VStretch,
+                "Right" => Align.Right,
+                "HCenter" => Align.HCenter,
+                "Bottom" => Align.Bottom,
+                "VCenter" => Align.VCenter,
+                "Center" => Align.HCenter | Align.VCenter,
+                "HStretch" => Align.HStretch,
+                "VStretch" => Align.VStretch,
+                "Stretch" => Align.HStretch | Align.VStretch,
                 _ => 0,
             };
         return flags;
@@ -67,17 +77,21 @@ public sealed record MyGuiWidget(string Type, string Name, string Skin, string L
 
 public sealed record MyGuiLayout(string Version, IReadOnlyList<MyGuiWidget> Roots)
 {
-    /// <summary>Every widget, each before its children (depth first).</summary>
+    /// <summary>
+    /// Every widget, each before its children (depth first).
+    /// </summary>
     public IReadOnlyList<MyGuiWidget> Widgets => Index().All;
-    /// <summary>The first widget of <see cref="Widgets"/> named <paramref name="name"/>.</summary>
+    /// <summary>
+    /// The first widget of <see cref="Widgets"/> named <paramref name="name"/>.
+    /// </summary>
     public MyGuiWidget? Find(string name) => Index().ByName.GetValueOrDefault(name);
 
     /// <summary>
     /// The flattened tree, made once per tree (the HUD asks it every frame). Kept by the roots list rather than in a field, which a <c>with</c> copy would carry over
     /// to other roots and which would take part in the record's equality.
     /// </summary>
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<MyGuiWidget>, WidgetIndex> indexes = new();
-    WidgetIndex Index() => indexes.GetValue(Roots, static roots => new WidgetIndex(roots));
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<MyGuiWidget>, WidgetIndex> Indexes = new();
+    WidgetIndex Index() => Indexes.GetValue(Roots, static roots => new WidgetIndex(roots));
 
     sealed class WidgetIndex
     {
@@ -95,7 +109,9 @@ public sealed record MyGuiSkinPart(string Type, UiRect Offset, string Align, IRe
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? StateProperties = null);
 public sealed record MyGuiSkin(string Name, float Width, float Height, string Texture, IReadOnlyList<MyGuiSkinPart> Parts);
 
-/// <summary>Preserves resource XML for image sets, fonts, pointers, settings and templates as well as decoded skins/layers.</summary>
+/// <summary>
+/// Preserves resource XML for image sets, fonts, pointers, settings and templates as well as decoded skins/layers.
+/// </summary>
 public sealed class MyGuiResources
 {
     public Dictionary<string, MyGuiSkin> Skins { get; } = new(StringComparer.Ordinal);
@@ -105,7 +121,9 @@ public sealed class MyGuiResources
     public List<string> LoadedFiles { get; } = [];
     public Dictionary<string, XElement> Documents { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Resolve every List through the caller's game/mod resource lookup. Cycles and repeats are read once.</summary>
+    /// <summary>
+    /// Resolve every List through the caller's game/mod resource lookup. Cycles and repeats are read once.
+    /// </summary>
     public static MyGuiResources Load(string entry, Func<string, string?> resolve, params string[] additionalEntries)
     {
         var result = new MyGuiResources();

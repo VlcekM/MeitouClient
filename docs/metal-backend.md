@@ -157,10 +157,10 @@ Two sharp edges:
 
 ## The backend so far
 
-- `src/Meitou.Metal/` - the backend (macOS only, outside the solution so the Windows build never
+- `src/Meitou.Game/Rendering/Metal/` - the backend (macOS only, outside the solution so the Windows build never
   sees it): `MslTranslator` (SPIR-V -> MSL), `MetalUniformBlock` (the engine's uniform block on
   the CPU), `MetalSky` (the spike's hand-driven sky), `MetalDisplay` (the window, the layer, the present).
-- `src/Meitou.Metal.Host/` - the host: the sky in a window of its own.
+- `tools/Meitou.MetalHost/` - the host: the sky in a window of its own.
 - The game: `--renderer metal` (macOS only). The game boots without the Vulkan renderer, the
   simulation runs, and the sky is drawn by Metal. The sky is the game's **simple** sky (the
   colour model, no textures); the camera's own view and the clock's own sun.
@@ -199,8 +199,8 @@ operation a later pass needs first throws (`InvalidOperationException` naming it
 - The frame's timestamps are the seam's `IGpuTimestamps` now (the Vulkan `QueryArena` implements
   it); Metal's hands out slots and reads nothing - Metal's GPU counters are a sampling-point model
   of their own (MTLCounterSampleBuffer, later if wanted).
-- The backend constructs the engine's handles, so `Meitou.Rendering` grants `InternalsVisibleTo`
-  `Meitou.Metal` (as it does to the viewer, the game and the tests).
+- The backend constructs the engine's handles: it is part of the game assembly (`Meitou.Game.Rendering.Metal`, compiled where
+  `MeitouMetal` is set, Directory.Build.props), which grants `InternalsVisibleTo` to the viewer, the Metal host and the tests.
 
 What the sky-sized scope does not have yet (each member throws): compute, the bindless table,
 indirect draws, dispatches, buffer/texture copies, in-pass clears, swizzled views, secondary
@@ -729,7 +729,7 @@ default.
 - **GI**: the probe GI needs ray queries; Metal's ray tracing is a different model. Vulkan on this Mac reports GI
   off (MoltenVK exposes no `VK_KHR_ray_query`), so local parity is no-GI; on a machine where Vulkan has ray
   queries the target includes GI. Either port `GiScene`/`GiProbes` to Metal ray queries (a project of its own) or
-  accept the no-GI look as the macOS baseline. **Observed** (`Meitou.MetalSpike --rt-bench`, M1 Pro): one
+  accept the no-GI look as the macOS baseline. **Observed** (the Metal spike's `--rt-bench`, since removed; M1 Pro): one
   524k-triangle terrain acceleration structure took about 75–100 ms to build (88 MB plus 97 MB scratch), while
   the 131k-ray probe batch took about 0.25–0.31 ms. That is traversal only; real scene builds, object/foliage
   structures, refit and resolve are still unmeasured. The trace cost looks promising; memory and scene-build

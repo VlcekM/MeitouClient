@@ -2,17 +2,20 @@ using System.Numerics;
 using DotRecast.Core.Numerics;
 using DotRecast.Recast;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Tests.Navigation;
 
-/// <summary>The stitcher's join of two coinciding open edges Recast left unwelded (ZoneNavMeshBuilder.Stitch, docs/game/pathfinding.md "Own builder").</summary>
+/// <summary>
+/// The stitcher's join of two coinciding open edges Recast left unwelded (ZoneNavMeshBuilder.Stitch, docs/game/pathfinding.md "Own builder").
+/// </summary>
 public class StitchSeamTests
 {
     /// <summary>
-    /// Two quads of one tile side by side along X, sharing the edge x = 20 (z 10..13, 3 cells) with separate vertices: the left quad's at height 10 cells
-    /// at both ends, the right quad's at 10 + <paramref name="gapAt10"/> and 10 + <paramref name="gapAt13"/>. The climb is 5 cells (MaxClimb 5, cell height 1):
-    /// gaps 0 and 6 stay within it along 3 * 5/6 = 2.5 cells, at least SeamClimbCells (2), so they join; 6 and 7 are over it everywhere.
+    /// Two quads of one tile side by side along X, sharing the edge x = 20 (z 10..13, 3 cells) with separate vertices:
+    /// the left quad's at height 10 cells at both ends, the right quad's at 10 + <paramref name="gapAt10"/> and 10 + <paramref name="gapAt13"/>.
+    /// The climb is 5 cells (MaxClimb 5, cell height 1): gaps 0 and 6 stay within it along 3 * 5/6 = 2.5 cells,
+    /// at least SeamClimbCells (2), so they join; 6 and 7 are over it everywhere.
     /// </summary>
     [Theory]
     [InlineData(0, 6, true)]
@@ -27,16 +30,17 @@ public class StitchSeamTests
     }
 
     /// <summary>
-    /// The pair with corner gaps 0 and 6 (within the climb along part of the edge only) and each quad's own surface samples flat over the edge: the right one
-    /// <paramref name="surfaceGap"/> above the left. Level, they join; 10 apart (the corner at gap 0 took the other's height, as the Ancient Lab's stair under its
-    /// floor's edge, docs/game/pathfinding.md "Inner seams"), they do not.
+    /// The pair with corner gaps 0 and 6 (within the climb along part of the edge only) and each quad's own surface samples flat over the edge:
+    /// the right one <paramref name="surfaceGap"/> above the left. Level, they join; 10 apart (the corner at gap 0 took the other's height,
+    /// as the Ancient Lab's stair under its floor's edge, docs/game/pathfinding.md "Inner seams"), they do not.
     /// </summary>
     [Theory]
     [InlineData(0, true)]
     [InlineData(10, false)]
     public void A_partial_seam_joins_only_where_the_polygons_own_surfaces_meet(float surfaceGap, bool joined)
     {
-        static HeightGrid Flat(float y) => new(36, 16, 4, 4, 4, Enumerable.Repeat(y, 16).ToArray()) { Own = Enumerable.Repeat(true, 16).ToArray() };
+        static HeightGrid Flat(float y) =>
+            new(36, 16, 4, 4, 4, Enumerable.Repeat(y, 16).ToArray()) { Own = Enumerable.Repeat(true, 16).ToArray() };
         var stitched = StitchPair(0, 6, details: [[Flat(9.5f), Flat(9.5f + surfaceGap)]]);
 
         Assert.Equal(joined, stitched.Neighbours[0].Contains(1));
@@ -45,7 +49,7 @@ public class StitchSeamTests
 
     static ZoneNavMesh StitchPair(int gapAt10, int gapAt13, HeightGrid?[]?[]? details)
     {
-        var s = new NavBuildSettings();
+        var s = new NavBuildSettings { CellHeight = 1 };
         const int nvp = 6, none = RcRecast.RC_MESH_NULL_IDX;
         // Recast winding (clockwise with X right, Z up): left (10,10) (10,13) (20,13) (20,10); right (20,10) (20,13) (30,13) (30,10).
         int[] verts =

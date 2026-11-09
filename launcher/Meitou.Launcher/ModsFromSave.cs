@@ -10,12 +10,20 @@ public sealed partial class MainWindow
 {
     async void ModsFromSave_Click(object? sender, RoutedEventArgs e)
     {
-        if (install is null) { Status("Set the Kenshi folder first (Settings)."); return; }
+        if (_install is null)
+        {
+            Status("Set the Kenshi folder first (Settings).");
+            return;
+        }
         if (!ModsReady()) return;
 
-        var roots = SaveModList.Roots(install);
+        var roots = SaveModList.Roots(_install);
         var slots = await Task.Run(() => SaveModList.Scan(roots));
-        if (slots.Count == 0) { Status("No saves found."); return; }
+        if (slots.Count == 0)
+        {
+            Status("No saves found.");
+            return;
+        }
         if (await PickSave(slots) is not { } slot) return;
 
         List<string>? saved;
@@ -28,13 +36,19 @@ public sealed partial class MainWindow
             Status(Tr("Could not read the save '{1}': {2}", slot.Name, ex.Message));
             return;
         }
-        if (saved is null) { Status(Tr("The save '{1}' has no mod list.", slot.Name)); return; }
+        if (saved is null)
+        {
+            Status(Tr("The save '{1}' has no mod list.", slot.Name));
+            return;
+        }
 
         var missing = ApplyOrder(saved.Select(name => (name, true)));
-        Status(Tr("Mods of the save '{1}' applied (not saved yet).", slot.Name) + NotOnDisk(missing));
+        Status(Tr("Mods of the save '{1}' applied.", slot.Name) + NotOnDisk(missing));
     }
 
-    /// <summary>Asks which save to take the mods from, newest first; null for Cancel or Escape.</summary>
+    /// <summary>
+    /// Asks which save to take the mods from, newest first; null for Cancel or Escape.
+    /// </summary>
     async Task<SaveModSlot?> PickSave(IReadOnlyList<SaveModSlot> slots)
     {
         var list = new ListBox

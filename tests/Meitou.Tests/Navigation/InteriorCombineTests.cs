@@ -1,16 +1,18 @@
 using System.Numerics;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 
 namespace Meitou.Tests.Navigation;
 
-/// <summary><see cref="NavInteriors.Combine"/> (docs/game/pathfinding.md, "Unseeded interiors").</summary>
+/// <summary>
+/// <see cref="NavInteriors.Combine"/> (docs/game/pathfinding.md, "Unseeded interiors").
+/// </summary>
 public class InteriorCombineTests
 {
     [Fact]
     public void The_interior_whose_own_pruning_kept_nothing_is_kept_and_linked_to_the_exterior_door()
     {
-        // Exterior: a kept door quad on x 0..10. Interior: a door quad on x 10..20 of the same door with a floor quad beyond it, all pruned (no seed).
-        // Quads wind counter-clockwise (X right, Z up); edge 1 is the +X side, edge 3 the -X side.
+        // Exterior: a kept door quad on x 0..10. Interior: a door quad on x 10..20 of the same door with a floor quad beyond it, all pruned (no
+        // seed). Quads wind counter-clockwise (X right, Z up); edge 1 is the +X side, edge 3 the -X side.
         var exterior = new ZoneNavMesh
         {
             ZoneX = 0, ZoneZ = 0, BoundsMin = new(-100), BoundsMax = new(100),

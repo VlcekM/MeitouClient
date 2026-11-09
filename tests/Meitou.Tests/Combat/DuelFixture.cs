@@ -11,7 +11,9 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Combat;
 
-/// <summary>A fighter to put in a headless fight: stats, weapon and armour.</summary>
+/// <summary>
+/// A fighter to put in a headless fight: stats, weapon and armour.
+/// </summary>
 sealed record Combatant
 {
     public string Name { get; init; } = "fighter";
@@ -38,33 +40,56 @@ sealed record Combatant
         s[StatsEnumerated.Toughness] = Toughness;
         s[StatsEnumerated.Dodge] = Dodge;
         s[StatsEnumerated.MartialArts] = Martial;
-        foreach (var skill in new[] { StatsEnumerated.Katanas, StatsEnumerated.Sabres, StatsEnumerated.Blunt, StatsEnumerated.HeavyWeapons, StatsEnumerated.Hackers, StatsEnumerated.Polearms })
+        foreach (var skill in new[]
+                 {
+                     StatsEnumerated.Katanas, StatsEnumerated.Sabres, StatsEnumerated.Blunt, StatsEnumerated.HeavyWeapons,
+                     StatsEnumerated.Hackers, StatsEnumerated.Polearms,
+                 })
+        {
             s[skill] = WeaponSkill;
+        }
+
         return s;
     }
 
-    public Fighter MakeFighter() => new(Weapon is null ? null : WeaponInstance.Create(Quality, Weapon, null, null, Constants),
+    public Fighter MakeFighter() => new(
+        Weapon is null ? null : WeaponInstance.Create(Quality, Weapon, null, null, Constants),
         Armour.Select(a => ArmourPiece.Create(a, ArmourQuality)));
 
-    /// <summary>The character record of a fighter: stats, a Greenlander body and the fighter.</summary>
+    /// <summary>
+    /// The character record of a fighter: stats, a Greenlander body and the fighter.
+    /// </summary>
     public CharacterCold MakeCold(string? name = null)
     {
         var stats = MakeStats();
-        return new CharacterCold { Name = name ?? Name, Stats = stats, Race = Human, Medical = MedicalState.Create(Human, stats.Strength), Fighter = MakeFighter() };
+        return new CharacterCold
+        {
+            Name = name ?? Name, Stats = stats, Race = Human, Medical = MedicalState.Create(Human, stats.Strength), Fighter = MakeFighter(),
+        };
     }
 }
 
-/// <summary>Builds worlds with the combat system alone: flat ground, a Greenlander body, base-game constants and the synthetic katana techniques.</summary>
+/// <summary>
+/// Builds worlds with the combat system alone: flat ground, a Greenlander body, base-game constants and the synthetic katana techniques.
+/// </summary>
 static class DuelFixture
 {
     public static AnimationLengths Lengths { get; } = new AnimationLengths()
-        .Add("cut left", 0.9f).Add("combo", 1.3f).Add("block up", 0.7f).Add("block left", 0.7f).Add("block right", 0.7f).Add("block thrust", 0.7f).Add("dodge back", 0.8f);
+        .Add("cut left", 0.9f).Add("combo", 1.3f).Add("block up", 0.7f).Add("block left", 0.7f).Add("block right", 0.7f)
+        .Add("block thrust", 0.7f).Add("dodge back", 0.8f);
 
-    /// <summary><paramref name="minPartition"/> is the fewest slots in a partition: 1 puts even two fighters in different partitions, so more than one thread really runs them side by side.</summary>
-    public static SimWorld NewWorld(ulong seed, int threads, out CombatSystem combat, CombatOptions? options = null, IEnumerable<CombatTechnique>? techniques = null, int minPartition = 1)
+    /// <summary>
+    /// <paramref name="minPartition"/> is the fewest slots in a partition: 1 puts even two fighters in different partitions,
+    /// so more than one thread really runs them side by side.
+    /// </summary>
+    public static SimWorld NewWorld(
+        ulong seed, int threads, out CombatSystem combat, CombatOptions? options = null, IEnumerable<CombatTechnique>? techniques = null,
+        int minPartition = 1)
     {
-        combat = new CombatSystem(techniques ?? KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, Lengths, options ?? new CombatOptions { RecordLog = true });
-        return new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, new OpenGroundWalkability((_, _) => 150), [combat, CombatFixtures.Senses(combat)]);
+        combat = new CombatSystem(
+            techniques ?? KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, Lengths, options ?? new CombatOptions { RecordLog = true });
+        var settings = new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition };
+        return new SimWorld(settings, new OpenGroundWalkability((_, _) => 150), [combat, Senses(combat)]);
     }
 
     public static CharacterId Spawn(SimWorld world, Combatant c, Vector3 position)
@@ -73,7 +98,9 @@ static class DuelFixture
         return world.Characters.Spawn(new CharacterHot { Position = position, Health = 100 }, cold, 0);
     }
 
-    /// <summary>Two fighters facing each other <paramref name="distance"/> units apart on the X axis, ordered to fight at tick 0.</summary>
+    /// <summary>
+    /// Two fighters facing each other <paramref name="distance"/> units apart on the X axis, ordered to fight at tick 0.
+    /// </summary>
     public static (CharacterId A, CharacterId B) Pair(SimWorld world, Combatant a, Combatant b, float distance = 14, float x = 1000, float z = 1000)
     {
         var ia = Spawn(world, a, new Vector3(x, 150, z));
@@ -85,7 +112,9 @@ static class DuelFixture
 
     public static bool Down(SimWorld world, CharacterId id) => world.Characters.Cold(id.Slot)!.Medical!.Incapacitated;
 
-    /// <summary>Runs until one of the two is out or the limit; returns the tick count.</summary>
+    /// <summary>
+    /// Runs until one of the two is out or the limit; returns the tick count.
+    /// </summary>
     public static int RunToEnd(SimWorld world, CharacterId a, CharacterId b, int limit = 6000)
     {
         int ticks = 0;

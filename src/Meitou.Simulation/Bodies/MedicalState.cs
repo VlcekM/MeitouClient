@@ -1,81 +1,107 @@
 using Meitou.Data.Gameplay;
 using Meitou.Data.Gameplay.Bodies;
+using Meitou.Simulation.Perception;
 
 namespace Meitou.Simulation.Bodies;
 
 /// <summary>
-/// A character's medical state: body parts, blood, wounds, hunger and the KO timer (docs/game/character-stats.md "Needs", "Blood and bleeding", "Body parts and
-/// injuries", "First aid"). It belongs to one character and is stepped with <see cref="Tick"/> in seconds of character time; the world runs characters in parallel, so
-/// nothing here touches shared state. Randomness comes from the world's seeded rolls through the <see cref="MedicalContext"/>, with a per-character counter kept in the state.
-/// <para>Time (<b>Verified</b>, docs/game/character-stats.md "Time"): <c>dt</c> is the character time, real seconds x game speed (the <c>dt * 0.05</c> factors of the
-/// original are kept as written); hunger follows the game clock in hours. The KO timer counts the same seconds.</para>
-/// Field names follow the save keys of MEDICAL_STATE (docs/formats/save.md): <see cref="Blood"/> <c>blood</c>, <see cref="Bleeding"/> <c>bleeding</c>,
-/// <see cref="Hunger"/> <c>hung</c>, <see cref="Fed"/> <c>fed</c>, <see cref="KoTimer"/> <c>KO</c>.
+/// A character's medical state: body parts, blood, wounds, hunger and the KO timer (docs/game/character-stats.md "Needs", "Blood and bleeding", "Body
+/// parts and injuries", "First aid"). It belongs to one character and is stepped with <see cref="Tick"/> in seconds of character time; the world runs
+/// characters in parallel, so nothing here touches shared state. Randomness comes from the world's seeded rolls through the
+/// <see cref="MedicalContext"/>, with a per-character counter kept in the state.
+/// <para>Time (<b>Verified</b>, docs/game/character-stats.md "Time"): <c>dt</c> is the character time, real seconds x game speed (the
+/// <c>dt * 0.05</c> factors of the original are kept as written); hunger follows the game clock in hours. The KO timer counts the same
+/// seconds.</para> Field names follow the save
+/// keys of MEDICAL_STATE (docs/formats/save.md): <see cref="Blood"/> <c>blood</c>, <see cref="Bleeding"/> <c>bleeding</c>, <see cref="Hunger"/>
+/// <c>hung</c>, <see cref="Fed"/> <c>fed</c>, <see cref="KoTimer"/> <c>KO</c>.
 /// </summary>
 public sealed partial class MedicalState
 {
-    /// <summary>Hunger starts and tops out here (the UI shows level x 100).</summary>
+    /// <summary>
+    /// Hunger starts and tops out here (the UI shows level x 100).
+    /// </summary>
     public const float MaxHunger = 3;
 
-    readonly List<float> wounds = [];
-    ulong rollCounter;
+    readonly List<float> _wounds = [];
+    ulong _rollCounter;
 
-    public MedicalState(IEnumerable<HealthPart> parts) => this.parts = [.. parts];
+    public MedicalState(IEnumerable<HealthPart> parts) => this._parts = [.. parts];
 
-    public IReadOnlyList<HealthPart> Parts => parts;
-    readonly HealthPart[] parts;
-    /// <summary><see cref="Parts"/> for the every-tick loops (no enumerator to allocate).</summary>
-    internal ReadOnlySpan<HealthPart> PartSpan => parts;
+    public IReadOnlyList<HealthPart> Parts => _parts;
+    readonly HealthPart[] _parts;
 
-    /// <summary>Save key <c>blood</c>. Current blood; a character has capacity <see cref="BloodCapacity(RaceData, float, bool, float, float)"/>.</summary>
+    /// <summary>
+    /// <see cref="Parts"/> for the every-tick loops (no enumerator to allocate).
+    /// </summary>
+    internal ReadOnlySpan<HealthPart> PartSpan => _parts;
+
+    /// <summary>
+    /// Save key <c>blood</c>. Current blood; a character has capacity <see cref="BloodCapacity(RaceData, float, bool, float, float)"/>.
+    /// </summary>
     public float Blood { get; set; }
 
-    /// <summary>Save key <c>bleeding</c>: the current bleed rate (blood per second of character time), recomputed each tick.</summary>
+    /// <summary>
+    /// Save key <c>bleeding</c>: the current bleed rate (blood per second of character time), recomputed each tick.
+    /// </summary>
     public float Bleeding { get; private set; }
 
-    /// <summary>Save key <c>hung</c>: the hunger level 0 to 3 (3 full; 2 and above well fed, below 1 starving).</summary>
+    /// <summary>
+    /// Save key <c>hung</c>: the hunger level 0 to 3 (3 full; 2 and above well fed, below 1 starving).
+    /// </summary>
     public float Hunger { get; set; } = MaxHunger;
 
-    /// <summary>Save key <c>fed</c>: the stomach buffer, food waiting to be digested (<b>Unknown</b> in the save, inferred from the name).</summary>
+    /// <summary>
+    /// Save key <c>fed</c>: the stomach buffer, food waiting to be digested (<b>Unknown</b> in the save, inferred from the name).
+    /// </summary>
     public float Fed { get; set; }
 
-    /// <summary>Save key <c>KO</c>: game minutes of knock-out left (<b>Unknown</b> in the save, inferred from the name).</summary>
+    /// <summary>
+    /// Save key <c>KO</c>: game minutes of knock-out left (<b>Unknown</b> in the save, inferred from the name).
+    /// </summary>
     public float KoTimer { get; set; }
 
-    /// <summary>Save key <c>unconcious</c> (sic): knocked out.</summary>
+    /// <summary>
+    /// Save key <c>unconcious</c> (sic): knocked out.
+    /// </summary>
     public bool Unconscious { get; private set; }
 
-    /// <summary>Save key <c>dead</c>.</summary>
+    /// <summary>
+    /// Save key <c>dead</c>.
+    /// </summary>
     public bool Dead { get; private set; }
 
     public DeathCause Cause { get; private set; }
 
     /// <summary>
-    /// Set when blood reached 0 or while a limb is freshly cut off (<c>+0x163 bloodlossTrauma</c>, <see cref="HasFreshStump"/>); clears only on a tick that finds blood below
-    /// capacity and then above 25 (docs/game/character-stats.md "Blood and KO"). While set, a conscious character goes down only under -25, and the HUD's Toughness XP shows
-    /// "Blood loss trauma: +2x".
+    /// Set when blood reached 0 or while a limb is freshly cut off (<c>+0x163 bloodlossTrauma</c>, <see cref="HasFreshStump"/>); clears only on a
+    /// tick that finds blood below capacity and then above 25 (docs/game/character-stats.md "Blood and KO"). While set, a conscious character goes
+    /// down only under -25, and the HUD's Toughness XP shows "Blood loss trauma: +2x".
     /// </summary>
     public bool BloodKo { get; private set; }
 
     /// <summary>
-    /// Save key <c>coma</c> (medical <c>+0x162</c>, "Recovery coma"): set when a vital part fell under the KO point, cleared once no vital part is under 0
-    /// (<see cref="VitalPartsKeepDown"/>).
+    /// Save key <c>coma</c> (medical <c>+0x162</c>, "Recovery coma"): set when a vital part fell under the KO point, cleared once no vital part is
+    /// under 0 (<see cref="VitalPartsKeepDown"/>).
     /// </summary>
     public bool Coma { get; private set; }
 
-    /// <summary>Knocked out or dead. Also written as save key <c>incapacitated</c>, which in the original is medical <c>+0x160</c> (a leg-collapse part down, <b>Observed</b>; not matched).</summary>
+    /// <summary>
+    /// Knocked out or dead. Also written as save key <c>incapacitated</c>, which in the original is medical <c>+0x160</c> (a leg-collapse part down,
+    /// <b>Observed</b>; not matched).
+    /// </summary>
     public bool Incapacitated => Unconscious || Dead;
 
     /// <summary>
-    /// The KO point (<see cref="KoPoint"/>) the legs' collapse test uses, from the owner's toughness at the last <see cref="Tick"/> (0 before the first). Derived, not saved: the first tick
-    /// after a load sets it again.
+    /// The KO point (<see cref="KoPoint"/>) the legs' collapse test uses, from the owner's toughness at the last <see cref="Tick"/> (0 before the
+    /// first). Derived, not saved: the first tick after a load sets it again.
     /// </summary>
-    public float LegKoPoint { get => legKoPoint; private set { legKoPoint = value; legKoKnown = true; } }
-    float legKoPoint;
-    bool legKoKnown;
+    public float LegKoPoint { get => _legKoPoint; private set { _legKoPoint = value; _legKoKnown = true; } }
+    float _legKoPoint;
+    bool _legKoKnown;
 
     /// <summary>
-    /// The injuries make an NPC medic pass the patient by, and count it crippled in the target score (<c>FUN_140644170</c>, <b>Verified</b>): a stump on a leg, or on both arms.
+    /// The injuries make an NPC medic pass the patient by, and count it crippled in the target score (<c>FUN_140644170</c>, <b>Verified</b>): a stump
+    /// on a leg, or on both arms.
     /// </summary>
     public bool Maimed
     {
@@ -93,96 +119,115 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// The original's forced crawl (posture 2, <c>FUN_140649320</c>, <b>Observed</b>): a conscious character with a stats object (not an animal) any of whose legs is down by
-    /// <see cref="HealthPart.LegDown"/>. One leg is enough; it moves at <see cref="Speed.CrawlSpeed"/> and plays the grounded clips. Read live, so a hit shows at once.
+    /// The original's forced crawl (posture 2, <c>FUN_140649320</c>, <b>Observed</b>): a conscious character with a stats object (not an animal) any
+    /// of whose legs is down by <see cref="HealthPart.LegDown"/>. One leg is enough; it moves at <see cref="Speed.CrawlSpeed"/> and plays the
+    /// grounded clips. Read live, so a hit shows at once.
     /// </summary>
     public bool Crawling
     {
         get
         {
-            // The original's flag (medical +0x160) is only set by the medical tick: before the first one (KO point not yet known) nobody is crippled, where a KO point of 0
-            // would ground anyone with a leg merely below 0 (between 0 and the KO point a leg only limps).
+            // The original's flag (medical +0x160) is only set by the medical tick: before the first one (KO point not yet known) nobody is crippled,
+            // where a KO point of 0 would ground anyone with a leg merely below 0 (between 0 and the KO point a leg only limps).
             return !Incapacitated && LegsDown;
         }
     }
 
-    /// <summary>A leg is down by <see cref="HealthPart.LegDown"/> whether or not the character is conscious (the original's flag +0x160 is set by the tick either way); needs the KO point known.</summary>
+    /// <summary>
+    /// A leg is down by <see cref="HealthPart.LegDown"/> whether or not the character is conscious (the original's flag +0x160 is set by the tick
+    /// either way); needs the KO point known.
+    /// </summary>
     bool LegsDown
     {
         get
         {
-            if (!HasStatsObject || !legKoKnown) return false;
-            foreach (var p in parts) if (p.IsLeg && p.LegDown(LegKoPoint)) return true;
+            if (!HasStatsObject || !_legKoKnown) return false;
+            foreach (var p in _parts) if (p.IsLeg && p.LegDown(LegKoPoint)) return true;
             return false;
         }
     }
 
     /// <summary>
-    /// Set by <see cref="Tick"/> on the update that finds a leg down where the last one did not (the original's first set of the crippled flag, which calls <c>FUN_1405c8330</c>:
-    /// the character stops and its orders and tasks are cleared, docs/game/ragdolls.md "Forced crawl"); <see cref="BodySystem"/> takes it in a serial phase. The first tick after a
-    /// load only learns the state. Not saved.
+    /// Set by <see cref="Tick"/> on the update that finds a leg down where the last one did not (the original's first set of the crippled flag, which
+    /// calls <c>FUN_1405c8330</c>: the character stops and its orders and tasks are cleared, docs/game/ragdolls.md "Forced crawl");
+    /// <see cref="BodySystem"/> takes it in a serial phase. The first tick after a load only learns the state. Not saved.
     /// </summary>
     public bool CollapseOnset { get; set; }
-    int legsWereDown = -1;
+    int _legsWereDown = -1;
 
     /// <summary>
-    /// The planner's <c>myLegsAreMessedUp</c> (state 103, <c>FUN_1409980c0</c>, docs/game/ai-tasks.md "Planner states"): false when a leg is a stump (the limb-state table's legs, <c>FUN_14002a6e9</c>);
-    /// else true when a leg is down by <see cref="HealthPart.LegDown"/> (<c>FUN_140644450</c>) and the KO point is under its maximum health less its stun, i.e. the leg could still be fixed.
-    /// The original names its two leg parts (<c>+0x4d8</c>, <c>+0x4e0</c>); here they are the parts with a leg <c>collapse part</c>. Like <see cref="Crawling"/> it needs the KO point known.
+    /// The planner's <c>myLegsAreMessedUp</c> (state 103, <c>FUN_1409980c0</c>, docs/game/ai-tasks.md "Planner states"): false when a leg is a stump
+    /// (the limb-state table's legs, <c>FUN_14002a6e9</c>); else true when a leg is down by <see cref="HealthPart.LegDown"/> (<c>FUN_140644450</c>)
+    /// and the KO point is under its maximum health less its stun, i.e. the leg could still be fixed. The original names its two leg parts
+    /// (<c>+0x4d8</c>, <c>+0x4e0</c>); here they are the parts with a leg <c>collapse part</c>. Like <see cref="Crawling"/> it needs the KO point
+    /// known.
     /// </summary>
     public bool LegsMessedUp
     {
         get
         {
-            if (!legKoKnown) return false;
-            foreach (var p in parts) if (p.IsLeg && p.Limb == LimbState.Stump) return false;
-            foreach (var p in parts) if (p.IsLeg && p.LegDown(LegKoPoint) && LegKoPoint < p.MaxHp - p.Stun) return true;
+            if (!_legKoKnown) return false;
+            foreach (var p in _parts) if (p.IsLeg && p.Limb == LimbState.Stump) return false;
+            foreach (var p in _parts) if (p.IsLeg && p.LegDown(LegKoPoint) && LegKoPoint < p.MaxHp - p.Stun) return true;
             return false;
         }
     }
 
     /// <summary>
-    /// Posture 0 (<c>PS_NORMAL</c>, docs/game/ragdolls.md "Forced crawl"): conscious, neither staying low nor crawling, read live. A leg going down at posture 0 knocks the
-    /// character out (<see cref="LegCollapse"/>, which reads the posture as of the last tick).
+    /// Posture 0 (<c>PS_NORMAL</c>, docs/game/ragdolls.md "Forced crawl"): conscious, neither staying low nor crawling, read live. A leg going down
+    /// at posture 0 knocks the character out (<see cref="LegCollapse"/>, which reads the posture as of the last tick).
     /// </summary>
     public bool Standing => !Unconscious && !StayingLow && !Crawling;
 
     /// <summary>
-    /// The voluntary crawl (posture 1 <c>PS_STAYING_LOW</c>, docs/game/ragdolls.md "Staying low"): set on waking while sneaking, cleared by a speed order, sneak off, Stand Up or a melee
-    /// attack. Kept on the medical state beside <see cref="Crawling"/> so <see cref="Prone"/> reads both; not saved (the original's save key, if any, is <b>Unknown</b>).
+    /// The voluntary crawl (posture 1 <c>PS_STAYING_LOW</c>, docs/game/ragdolls.md "Staying low"): set on waking while sneaking, cleared by a speed
+    /// order, sneak off, Stand Up or a melee attack. Kept on the medical state beside <see cref="Crawling"/> so <see cref="Prone"/> reads both; not
+    /// saved (the original's save key, if any, is <b>Unknown</b>).
     /// </summary>
     public bool StayingLow { get; set; }
 
     /// <summary>
-    /// Playing dead (posture 3 <c>PS_PLAYING_DEAD</c>, docs/game/ragdolls.md "Playing dead"): the knockout is over but the character lies on, still <see cref="Unconscious"/> to everyone,
-    /// until it is safe to get up (<see cref="MedicalContext.PlayDead"/>) or <see cref="StandUp"/>. Not saved: after a load the next tick decides again.
+    /// Playing dead (posture 3 <c>PS_PLAYING_DEAD</c>, docs/game/ragdolls.md "Playing dead"): the knockout is over but the character lies on, still
+    /// <see cref="Unconscious"/> to everyone, until it is safe to get up (<see cref="MedicalContext.PlayDead"/>) or <see cref="StandUp"/>. Not saved:
+    /// after a load the next tick decides again.
     /// </summary>
     public bool PlayingDead { get; private set; }
 
-    /// <summary>Knocked out with nothing but the KO timer keeping it down (vital parts and blood allow waking): whether it may wake within <paramref name="dt"/> seconds.</summary>
+    /// <summary>
+    /// Knocked out with nothing but the KO timer keeping it down (vital parts and blood allow waking): whether it may wake within
+    /// <paramref name="dt"/> seconds.
+    /// </summary>
     public bool WakesWithin(float dt) => Unconscious && !Dead && KoTimer <= dt && !VitalPartsKeepDown(LegKoPoint) && Blood >= WakeBloodFloor;
 
     /// <summary>
-    /// An arm or leg stump whose h - s is still under -M (M of the stump's base HP 5), as right after the cut (<c>hasFreshlySeveredALimb</c> <c>FUN_140645350</c>, <b>Verified</b>
-    /// decompile). While one is, each tick sets <see cref="BloodKo"/> and blood holds an unconscious character down only under -25, as a conscious one.
+    /// An arm or leg stump whose h - s is still under -M (M of the stump's base HP 5), as right after the cut (<c>hasFreshlySeveredALimb</c>
+    /// <c>FUN_140645350</c>, <b>Verified</b> decompile). While one is, each tick sets <see cref="BloodKo"/> and blood holds an unconscious character
+    /// down only under -25, as a conscious one.
     /// </summary>
     public bool HasFreshStump
     {
         get
         {
-            foreach (var p in parts)
+            foreach (var p in _parts)
                 if (p.Limb == LimbState.Stump && p.Template.Type is BodyPartType.Leg or BodyPartType.Arm && p.Flesh - p.Stun < -p.MaxHp) return true;
             return false;
         }
     }
 
-    /// <summary>The blood an unconscious character needs to wake: 0, or -25 with a <see cref="HasFreshStump"/> (<c>reassessCollapseMode</c> then takes the conscious rule).</summary>
+    /// <summary>
+    /// The blood an unconscious character needs to wake: 0, or -25 with a <see cref="HasFreshStump"/> (<c>reassessCollapseMode</c> then takes the
+    /// conscious rule).
+    /// </summary>
     float WakeBloodFloor => HasFreshStump ? -25 : 0;
 
-    /// <summary>How <see cref="StandUp"/> ended playing dead (staying low or not) for the get-up to take, instead of the sneak order; null when it did not.</summary>
+    /// <summary>
+    /// How <see cref="StandUp"/> ended playing dead (staying low or not) for the get-up to take, instead of the sneak order; null when it did not.
+    /// </summary>
     public bool? WokenLow { get; set; }
 
-    /// <summary>Posture 0 (or 1 with <paramref name="stayLow"/>): ends staying low, and playing dead at once.</summary>
+    /// <summary>
+    /// Posture 0 (or 1 with <paramref name="stayLow"/>): ends staying low, and playing dead at once.
+    /// </summary>
     public void StandUp(bool stayLow = false)
     {
         StayingLow = stayLow;
@@ -193,21 +238,29 @@ public sealed partial class MedicalState
         WokenLow = stayLow;
     }
 
-    /// <summary>Posture not 0 while conscious: <see cref="Crawling"/> or <see cref="StayingLow"/>. What the grounded clips, the prone techniques and the stealth x2 read.</summary>
+    /// <summary>
+    /// Posture not 0 while conscious: <see cref="Crawling"/> or <see cref="StayingLow"/>. What the grounded clips, the prone techniques and the
+    /// stealth x2 read.
+    /// </summary>
     public bool Prone => !Incapacitated && HasStatsObject && (StayingLow || Crawling);
 
     /// <summary>
-    /// The character's light level P that the stat multiplier's light term reads (<c>FUN_1406457e0</c> reads Character <c>+0xd8</c>, the light level of docs/game/perception.md
-    /// "Sight", <b>Verified</b>): 1 in daylight, 0 in the dark. <see cref="BodySystem"/> copies it from <see cref="SightMap.Light"/> every tick; derived, not saved.
+    /// The character's light level P that the stat multiplier's light term reads (<c>FUN_1406457e0</c> reads Character <c>+0xd8</c>, the light level
+    /// of docs/game/perception.md "Sight", <b>Verified</b>): 1 in daylight, 0 in the dark. <see cref="BodySystem"/> copies it from
+    /// <see cref="SightMap.Light"/> every tick; derived, not saved.
     /// </summary>
     public float Light { get; set; } = 1;
 
-    /// <summary>The untreated wounds' strengths, in creation order.</summary>
-    public IReadOnlyList<float> Wounds => wounds;
+    /// <summary>
+    /// The untreated wounds' strengths, in creation order.
+    /// </summary>
+    public IReadOnlyList<float> Wounds => _wounds;
 
-    /// <summary>Game hours until a starving character may pass out again after waking (an engine choice; the original's timing was not traced).</summary>
-    float starveGrace;
-    bool starvationKo;
+    /// <summary>
+    /// Game hours until a starving character may pass out again after waking (an engine choice; the original's timing was not traced).
+    /// </summary>
+    float _starveGrace;
+    bool _starvationKo;
 
     // ------------------------------------------------------------------ creation
 
@@ -216,7 +269,8 @@ public sealed partial class MedicalState
     /// </summary>
     public static MedicalState Create(RaceData race, float strength, bool hasStats = true, float hpMultiplier = 1, float bodyScale = 1)
     {
-        // In the original's part order (BodyPartTemplate.MedicalOrder; parts of one place keep the race's order, which gives vanilla's stomach before chest).
+        // In the original's part order (BodyPartTemplate.MedicalOrder; parts of one place keep the race's order, which gives vanilla's stomach before
+        // chest).
         var parts = race.Anatomy.OrderBy(a => a.Part.MedicalOrder).Select(a =>
         {
             var p = new HealthPart(a.Part, a.HitWeight, a.BaseHp)
@@ -234,32 +288,42 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// False for an animal: the character's slot 0x250 (the humanoid stats object) is null for a <c>CharacterAnimal</c> (<b>Observed</b>, docs/game/animals.md), so the blood
-    /// capacity takes s = 1 and the hit path cannot sever limbs. Set at creation; ANDed with <see cref="MedicalContext.HasStats"/>.
+    /// False for an animal: the character's slot 0x250 (the humanoid stats object) is null for a <c>CharacterAnimal</c> (<b>Observed</b>,
+    /// docs/game/animals.md), so the blood capacity takes s = 1 and the hit path cannot sever limbs. Set at creation; ANDed with
+    /// <see cref="MedicalContext.HasStats"/>.
     /// </summary>
     public bool HasStatsObject { get; private set; } = true;
-    /// <summary>The character's slot-0x390 factor k (1 for humans; an animal's size, lerp(age, scale min, scale max)): the parts' HP multiplier, the blood capacity and the hunger rate.</summary>
+
+    /// <summary>
+    /// The character's slot-0x390 factor k (1 for humans; an animal's size, lerp(age, scale min, scale max)): the parts' HP multiplier, the blood
+    /// capacity and the hunger rate.
+    /// </summary>
     public float ScaleK { get; private set; } = 1;
-    /// <summary>The character's slot-0x238 factor z (1 for humans; an animal's <c>HP mult</c>): the parts' body scale and the blood capacity.</summary>
+
+    /// <summary>
+    /// The character's slot-0x238 factor z (1 for humans; an animal's <c>HP mult</c>): the parts' body scale and the blood capacity.
+    /// </summary>
     public float ScaleZ { get; private set; } = 1;
 
     /// <summary>
-    /// Makes this an animal's body (docs/game/animals.md "Body"): no humanoid stats object, size <paramref name="size"/> (slot 0x390) as the parts' HP multiplier and
-    /// <paramref name="hpMult"/> (slot 0x238) as their body scale. A save holds neither, so a loaded animal gets them here; the ageing calls it with the new size every
-    /// tick, as the original reads slot 0x390 into the parts' multiplier every tick.
+    /// Makes this an animal's body (docs/game/animals.md "Body"): no humanoid stats object, size <paramref name="size"/> (slot 0x390) as the parts'
+    /// HP multiplier and <paramref name="hpMult"/> (slot 0x238) as their body scale. A save holds neither, so a loaded animal gets them here; the
+    /// ageing calls it with the new size every tick, as the original reads slot 0x390 into the parts' multiplier every tick.
     /// </summary>
     public void SetAnimalBody(float size, float hpMult)
     {
         (HasStatsObject, ScaleK, ScaleZ) = (false, size, hpMult);
-        foreach (var p in parts) (p.HpMultiplier, p.BodyScale) = (size, hpMult);
+        foreach (var p in _parts) (p.HpMultiplier, p.BodyScale) = (size, hpMult);
     }
 
-    /// <summary>This character's blood capacity under <paramref name="ctx"/> (its stats object and scale factors applied).</summary>
+    /// <summary>
+    /// This character's blood capacity under <paramref name="ctx"/> (its stats object and scale factors applied).
+    /// </summary>
     public float Capacity(in MedicalContext ctx) => BloodCapacity(ctx.Race, ctx.Strength, ctx.HasStats && HasStatsObject, ScaleK, ScaleZ);
 
     /// <summary>
-    /// The blood capacity (<c>FUN_1406440a0</c>): <c>min blood</c> + (<c>max blood</c> - <c>min blood</c>) x s x k x z, s = strength / 100 for a character with a stats
-    /// object (1 otherwise), k and z the two scale slots (1.0 for humans). So a human holds 75 at strength 0 and 150 at 100.
+    /// The blood capacity (<c>FUN_1406440a0</c>): <c>min blood</c> + (<c>max blood</c> - <c>min blood</c>) x s x k x z, s = strength / 100 for a
+    /// character with a stats object (1 otherwise), k and z the two scale slots (1.0 for humans). So a human holds 75 at strength 0 and 150 at 100.
     /// </summary>
     public static float BloodCapacity(RaceData race, float strength, bool hasStats = true, float k = 1, float z = 1) =>
         race.MinBlood + (race.MaxBlood - race.MinBlood) * (hasStats ? strength / 100 : 1) * k * z;
@@ -267,13 +331,14 @@ public sealed partial class MedicalState
     // ------------------------------------------------------------------ queries
 
     /// <summary>
-    /// Whether an arm works (the medical object's arm bytes, set every tick by <c>FUN_140649320</c> through <c>FUN_140644450</c>, <b>Observed</b>; docs/game/combat.md "Arms"):
-    /// no part whose <c>collapse part</c> has the arm's bit (4 left, 2 right) is a stump or crushed, or collapses and is down (flesh - stun + rig &lt; 0). A fitted prosthetic works.
+    /// Whether an arm works (the medical object's arm bytes, set every tick by <c>FUN_140649320</c> through <c>FUN_140644450</c>, <b>Observed</b>;
+    /// docs/game/combat.md "Arms"): no part whose <c>collapse part</c> has the arm's bit (4 left, 2 right) is a stump or crushed, or collapses and is
+    /// down (flesh - stun + rig &lt; 0). A fitted prosthetic works.
     /// </summary>
     public bool ArmWorks(bool left)
     {
         int bit = left ? 4 : 2;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if ((p.Template.CollapsePart & bit) == 0) continue;
             if (p.Limb is LimbState.Stump or LimbState.Crushed) return false;
@@ -282,49 +347,57 @@ public sealed partial class MedicalState
         return true;
     }
 
-    /// <summary>Both arms work (<see cref="ArmWorks"/>): the planner's <c>hasTwoWorkingArm</c>, which a crossbow, a heavy weapon or a polearm needs.</summary>
+    /// <summary>
+    /// Both arms work (<see cref="ArmWorks"/>): the planner's <c>hasTwoWorkingArm</c>, which a crossbow, a heavy weapon or a polearm needs.
+    /// </summary>
     public bool BothArmsWork => ArmWorks(left: true) && ArmWorks(left: false);
 
-    /// <summary>The aggregates of <c>FUN_140644e60</c>; <paramref name="exemptFromWear"/> gives the arm aggregate 1.0 (characters with the slot-0x248 object).</summary>
+    /// <summary>
+    /// The aggregates of <c>FUN_140644e60</c>; <paramref name="exemptFromWear"/> gives the arm aggregate 1.0 (characters with the slot-0x248 object).
+    /// </summary>
     public BodyAggregates Aggregates(bool exemptFromWear = false) => exemptFromWear ? Summary.Aggregates with { Arm = 1 } : Summary.Aggregates;
 
-    /// <summary>The lowest part fraction (1 for a body without parts), the way <c>Enumerable.Min</c> reads floats: a NaN wins.</summary>
+    /// <summary>
+    /// The lowest part fraction (1 for a body without parts), the way <c>Enumerable.Min</c> reads floats: a NaN wins.
+    /// </summary>
     public float WorstPart => Summary.Worst;
 
-    /// <summary>The blood the first 8 parts show, a byte each (<see cref="BloodAmounts(MedicalState)"/>).</summary>
+    /// <summary>
+    /// The blood the first 8 parts show, a byte each (<see cref="BloodAmounts(MedicalState)"/>).
+    /// </summary>
     public ulong ShownBlood => Summary.Blood;
 
-    // The part figures, kept while no part changed (HealthPart.Version only grows, so the sum moves with every change). A value under a lock: the publish reads it from several
-    // threads, and a new record on every change (a bleeding or healing character's every tick) was garbage.
+    // The part figures, kept while no part changed (HealthPart.Version only grows, so the sum moves with every change). A value under a lock: the
+    // publish reads it from several threads, and a new record on every change (a bleeding or healing character's every tick) was garbage.
     readonly record struct PartSummary(int Version, BodyAggregates Aggregates, float Worst, ulong Blood);
-    PartSummary summary;
-    bool summaryKnown;
-    readonly Lock summaryLock = new();
+    PartSummary _summary;
+    bool _summaryKnown;
+    readonly Lock _summaryLock = new();
 
     PartSummary Summary
     {
         get
         {
             int version = 0;
-            foreach (var p in parts) version += p.Version;
-            lock (summaryLock)
+            foreach (var p in _parts) version += p.Version;
+            lock (_summaryLock)
             {
-                if (summaryKnown && summary.Version == version) return summary;
-                summary = new(version, ComputeAggregates(), ComputeWorstPart(), BloodAmounts(this));
-                summaryKnown = true;
-                return summary;
+                if (_summaryKnown && _summary.Version == version) return _summary;
+                _summary = new(version, ComputeAggregates(), ComputeWorstPart(), BloodAmounts(this));
+                _summaryKnown = true;
+                return _summary;
             }
         }
     }
 
     float ComputeWorstPart()
     {
-        if (parts.Length == 0) return 1;
-        float worst = parts[0].Fraction;
+        if (_parts.Length == 0) return 1;
+        float worst = _parts[0].Fraction;
         if (float.IsNaN(worst)) return worst;
-        for (int k = 1; k < parts.Length; k++)
+        for (int k = 1; k < _parts.Length; k++)
         {
-            float f = parts[k].Fraction;
+            float f = _parts[k].Fraction;
             if (f < worst) worst = f;
             else if (float.IsNaN(f)) return f;
         }
@@ -335,7 +408,7 @@ public sealed partial class MedicalState
     {
         float arm = 0, head = 1, torso = float.MaxValue;
         bool anyArm = false, anyTorso = false, left = false, right = false;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             float f = Math.Clamp(p.Fraction, 0, 1);
             switch (p.Template.Type)
@@ -349,41 +422,58 @@ public sealed partial class MedicalState
                         else if (p.Template.Side == BodySide.Right) right = true;
                     }
                     break;
-                case BodyPartType.Head: head = f; break;
-                case BodyPartType.Torso: anyTorso = true; torso = MathF.Min(torso, f); break;
+                case BodyPartType.Head:
+                    head = f;
+                    break;
+                case BodyPartType.Torso:
+                    anyTorso = true;
+                    torso = MathF.Min(torso, f);
+                    break;
             }
         }
         return new BodyAggregates(!anyArm ? 1 : arm, head, anyTorso ? torso : 1, left, right);
     }
 
-    /// <summary>The stat multiplier in [0, 1] (<c>FUN_1406457e0</c>); see <see cref="StatMultiplier"/>.</summary>
-    public float StatMultiplier(StatsEnumerated stat, StatUse use = StatUse.Hunger | StatUse.Limbs | StatUse.Light | StatUse.DamageState | StatUse.Stun, StatFactors? factors = null, bool exemptFromWear = false) =>
-        Bodies.StatMultiplier.Compute(this, stat, use, factors ?? (Bodies.StatFactors.None with { Stun = DustStatFactor }), Aggregates(exemptFromWear), Light);
+    /// <summary>
+    /// The stat multiplier in [0, 1] (<c>FUN_1406457e0</c>); see <see cref="StatMultiplier"/>.
+    /// </summary>
+    public float StatMultiplier(StatsEnumerated stat,
+        StatUse use = StatUse.Hunger | StatUse.Limbs | StatUse.Light | StatUse.DamageState | StatUse.Stun,
+        StatFactors? factors = null, bool exemptFromWear = false) =>
+        Bodies.StatMultiplier.Compute(this, stat, use, factors ?? (StatFactors.None with { Stun = DustStatFactor }),
+            Aggregates(exemptFromWear), Light);
 
     /// <summary>
-    /// The body term of stealth (<c>FUN_140644da0</c>, medical <c>+0xb4</c>): the lowest health fraction over the torso and leg parts (1 with none) plus
-    /// <paramref name="toughness"/> x 0.01, clamped to [0, 1]. Stealth has no hunger or arm term (docs/game/character-stats.md "Effective stealth").
+    /// The body term of stealth (<c>FUN_140644da0</c>, medical <c>+0xb4</c>): the lowest health fraction over the torso and leg parts (1 with none)
+    /// plus <paramref name="toughness"/> x 0.01, clamped to [0, 1]. Stealth has no hunger or arm term (docs/game/character-stats.md "Effective
+    /// stealth").
     /// </summary>
     public float StealthBodyFactor(float toughness)
     {
         float f = 1;
-        foreach (var p in parts)
+        foreach (var p in _parts)
             if (p.Template.Type is BodyPartType.Torso or BodyPartType.Leg) f = MathF.Min(f, p.Fraction);
         return Math.Clamp(f + toughness * 0.01f, 0, 1);
     }
 
-    /// <summary>The product of the fitted arm prosthetics' multipliers for a stat (1 with none).</summary>
+    /// <summary>
+    /// The product of the fitted arm prosthetics' multipliers for a stat (1 with none).
+    /// </summary>
     public float ArmItemFactor(StatsEnumerated stat) => ItemFactor(stat, legs: false);
 
-    /// <summary>The product of the fitted leg prosthetics' multipliers for a stat (1 with none).</summary>
+    /// <summary>
+    /// The product of the fitted leg prosthetics' multipliers for a stat (1 with none).
+    /// </summary>
     public float LegItemFactor(StatsEnumerated stat) => ItemFactor(stat, legs: true);
 
-    /// <summary>A prosthetic is fitted to an arm or a leg (<c>FUN_140883690</c>: one of the four limb slots holds an item).</summary>
+    /// <summary>
+    /// A prosthetic is fitted to an arm or a leg (<c>FUN_140883690</c>: one of the four limb slots holds an item).
+    /// </summary>
     public bool HasProsthetics
     {
         get
         {
-            foreach (var p in parts)
+            foreach (var p in _parts)
                 if (p.Limb == LimbState.Replaced && p.Replacement is not null && p.Template.Type is BodyPartType.Arm or BodyPartType.Leg) return true;
             return false;
         }
@@ -392,7 +482,7 @@ public sealed partial class MedicalState
     float ItemFactor(StatsEnumerated stat, bool legs)
     {
         float f = 1;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             bool isLeg = p.Template.Type == BodyPartType.Leg;
             bool isArm = p.Template.Type == BodyPartType.Arm;
@@ -403,14 +493,14 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// Whether a vital part keeps the character out (<c>reassessCollapseMode</c> through <c>getCollapseStage</c>, docs/game/character-stats.md "Blood and KO"): a vital part with
-    /// h - s + extra under <paramref name="koPoint"/> sets <see cref="Coma"/>; while it is set any vital part under 0 keeps the character out, and it clears once none does.
-    /// A vital part between the KO point and 0 does not keep a character out without it.
+    /// Whether a vital part keeps the character out (<c>reassessCollapseMode</c> through <c>getCollapseStage</c>, docs/game/character-stats.md "Blood
+    /// and KO"): a vital part with h - s + extra under <paramref name="koPoint"/> sets <see cref="Coma"/>; while it is set any vital part under 0
+    /// keeps the character out, and it clears once none does. A vital part between the KO point and 0 does not keep a character out without it.
     /// </summary>
     bool VitalPartsKeepDown(float koPoint)
     {
         bool down = false;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             if (!p.IsVital) continue;
             float v = p.Flesh - p.Stun + p.Rig;
@@ -421,7 +511,10 @@ public sealed partial class MedicalState
         return down;
     }
 
-    /// <summary>The passing-out point of starvation (<c>FUN_140657620</c>): (100 - K x f) / 100, K = lerp(min, max toughness ko point, toughness / 100), f 1 with an empty stomach and 2 with food.</summary>
+    /// <summary>
+    /// The passing-out point of starvation (<c>FUN_140657620</c>): (100 - K x f) / 100, K = lerp(min, max toughness ko point, toughness / 100), f 1
+    /// with an empty stomach and 2 with food.
+    /// </summary>
     public static float StarvationKoThreshold(GameConstants c, float toughness, bool foodInStomach)
     {
         float k = c.MinToughnessKoPoint + (c.MaxToughnessKoPoint - c.MinToughnessKoPoint) * (toughness * 0.01f);
@@ -429,19 +522,23 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// The negative HP at which a character goes into a coma (<c>FUN_140643ae0</c>, <b>Verified</b>): -lerp(min, max toughness ko point, toughness x stats multiplier x 0.01) with the plain
-    /// unclamped lerp (<c>FUN_140015b63</c>), so toughness past 100 goes past the max; -10 at toughness 0 and -85 at 100 in the base game. <paramref name="toughness"/> is the stat times the
-    /// stats multiplier.
+    /// The negative HP at which a character goes into a coma (<c>FUN_140643ae0</c>, <b>Verified</b>): -lerp(min, max toughness ko point, toughness x
+    /// stats multiplier x 0.01) with the plain unclamped lerp (<c>FUN_140015b63</c>), so toughness past 100 goes past the max; -10 at toughness 0 and
+    /// -85 at 100 in the base game. <paramref name="toughness"/> is the stat times the stats multiplier.
     /// </summary>
     public static float KoPoint(GameConstants c, float toughness) =>
         -(c.MinToughnessKoPoint + (c.MaxToughnessKoPoint - c.MinToughnessKoPoint) * (toughness * 0.01f));
 
-    /// <summary>The wound degeneration multiplier lerp(<c>degeneration mult 1</c>, <c>degeneration mult 99</c>, toughness / 100): toughness 1 deteriorates about 57 times faster than 99.</summary>
+    /// <summary>
+    /// The wound degeneration multiplier lerp(<c>degeneration mult 1</c>, <c>degeneration mult 99</c>, toughness / 100): toughness 1 deteriorates
+    /// about 57 times faster than 99.
+    /// </summary>
     public static float DegenerationMult(GameConstants c, float toughness) =>
         c.DegenerationMult1 + (c.DegenerationMult99 - c.DegenerationMult1) * (toughness * 0.01f);
 
     /// <summary>
-    /// The untreated damage fraction D of a part (<c>FUN_14064f5c0</c>): clamp(((M - h - b) x 100 / M - 20) / (90 - 20), 0, 1), x0.25 if h + b &gt; 0. Damage under 20% of M does nothing; 90% or more is full speed.
+    /// The untreated damage fraction D of a part (<c>FUN_14064f5c0</c>): clamp(((M - h - b) x 100 / M - 20) / (90 - 20), 0, 1), x0.25 if h + b &gt;
+    /// 0. Damage under 20% of M does nothing; 90% or more is full speed.
     /// </summary>
     public static float UntreatedDamage(float maxHp, float flesh, float bandage)
     {
@@ -451,9 +548,10 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// The hunger-rate situation factor (<c>FUN_1408837a0</c>, <b>Verified</b>): resting, knocked out or dead <c>bed hunger rate</c>; moving or fighting (not <paramref name="still"/>)
-    /// 1 + (1 - e) x <c>encumbrance hunger rate</c>; else on a machine or chair its functionality's <c>hunger rate</c> (<paramref name="useRate"/>), idle (<paramref name="idle"/>)
-    /// <see cref="IdleHungerRate"/>, otherwise 1 (CharStats <c>+0x178</c>'s default).
+    /// The hunger-rate situation factor (<c>FUN_1408837a0</c>, <b>Verified</b>): resting, knocked out or dead <c>bed hunger rate</c>; moving or
+    /// fighting (not <paramref name="still"/>) 1 + (1 - e) x <c>encumbrance hunger rate</c>; else on a machine or chair its functionality's <c>hunger
+    /// rate</c> (<paramref name="useRate"/>), idle (<paramref name="idle"/>) <see cref="IdleHungerRate"/>, otherwise 1 (CharStats <c>+0x178</c>'s
+    /// default).
     /// </summary>
     public static float HungerSituationFactor(GameConstants c, bool resting, bool still, bool idle, float encumbranceFactor, float? useRate = null)
     {
@@ -462,21 +560,25 @@ public sealed partial class MedicalState
         return useRate ?? (idle ? IdleHungerRate : 1);
     }
 
-    /// <summary>The hunger factor of a character standing still with no task (<c>FUN_1408837a0</c> literal; <b>Verified</b> in game, #134: the HUD's "Idle: 0.80x").</summary>
+    /// <summary>
+    /// The hunger factor of a character standing still with no task (<c>FUN_1408837a0</c> literal; <b>Verified</b> in game, #134: the HUD's "Idle:
+    /// 0.80x").
+    /// </summary>
     public const float IdleHungerRate = 0.8f;
 
     // ------------------------------------------------------------------ KO time
 
     /// <summary>
-    /// The terms of the KO time without the base (<c>FUN_1406447d0</c>): with k = lerp(<c>knockout mult 1</c>, <c>knockout mult 99</c>, toughness / 100), for each vital part
-    /// (M - (h + s)) x k x 0.25 / M x 100; for each part with h - s &lt; 0, |h - s| x k x KO mult / M x 100; once |capacity - blood| x k x 0.5 / capacity x 100.
+    /// The terms of the KO time without the base (<c>FUN_1406447d0</c>): with k = lerp(<c>knockout mult 1</c>, <c>knockout mult 99</c>, toughness /
+    /// 100), for each vital part (M - (h + s)) x k x 0.25 / M x 100; for each part with h - s &lt; 0, |h - s| x k x KO mult / M x 100; once |capacity
+    /// - blood| x k x 0.5 / capacity x 100.
     /// </summary>
     public float KoTerms(in MedicalContext ctx)
     {
         var c = ctx.Constants;
         float k = c.KnockoutMult1 + (c.KnockoutMult99 - c.KnockoutMult1) * (ctx.Toughness / 100);
         float sum = 0;
-        foreach (var p in parts)
+        foreach (var p in _parts)
         {
             float m = p.MaxHp;
             if (m <= 0) continue;
@@ -488,6 +590,8 @@ public sealed partial class MedicalState
         return sum;
     }
 
-    /// <summary>The KO time in seconds of character time: <c>knockout time base</c> (20) plus <see cref="KoTerms"/>.</summary>
+    /// <summary>
+    /// The KO time in seconds of character time: <c>knockout time base</c> (20) plus <see cref="KoTerms"/>.
+    /// </summary>
     public float KoTime(in MedicalContext ctx) => ctx.Constants.KnockoutTimeBase + KoTerms(ctx);
 }

@@ -55,7 +55,7 @@ static class Bc7
         6, 2, 6, 8, 15, 15, 2, 2,
         15, 15, 15, 15, 15, 2, 2, 15,
     ];
-    static readonly byte[] Anchor3a = [
+    static readonly byte[] Anchor3A = [
         3, 3, 15, 15, 8, 3, 15, 15,
         8, 8, 6, 6, 6, 5, 3, 3,
         3, 3, 8, 15, 3, 3, 6, 10,
@@ -65,7 +65,7 @@ static class Bc7
         3, 15, 5, 5, 5, 8, 5, 10,
         5, 10, 8, 13, 15, 12, 3, 3,
     ];
-    static readonly byte[] Anchor3b = [
+    static readonly byte[] Anchor3B = [
         15, 8, 8, 3, 15, 15, 3, 8,
         15, 15, 15, 15, 15, 15, 15, 8,
         15, 8, 15, 3, 15, 8, 15, 8,
@@ -76,7 +76,9 @@ static class Bc7
         15, 15, 15, 15, 3, 15, 15, 8,
     ];
 
-    /// <summary>Decodes one 16-byte block into 16 RGBA pixels (<paramref name="rgba"/>, 64 bytes, row by row).</summary>
+    /// <summary>
+    /// Decodes one 16-byte block into 16 RGBA pixels (<paramref name="rgba"/>, 64 bytes, row by row).
+    /// </summary>
     public static void DecodeBlock(ReadOnlySpan<byte> src, Span<byte> rgba)
     {
         ulong lo = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src), hi = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(src[8..]);
@@ -117,7 +119,7 @@ static class Bc7
 
         uint subsets = m.Subsets == 1 ? 0 : m.Subsets == 2 ? Subsets2[partition] : Subsets3[partition];
         int Subset(int i) => (int)(subsets >> (2 * i)) & 3;
-        int Anchor(int subset) => subset == 0 ? 0 : m.Subsets == 2 ? Anchor2[partition] : subset == 1 ? Anchor3a[partition] : Anchor3b[partition];
+        int Anchor(int subset) => subset == 0 ? 0 : m.Subsets == 2 ? Anchor2[partition] : subset == 1 ? Anchor3A[partition] : Anchor3B[partition];
 
         Span<int> idx = stackalloc int[16], idx2 = stackalloc int[16];
         for (int i = 0; i < 16; i++)

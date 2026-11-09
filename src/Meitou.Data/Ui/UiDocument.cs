@@ -2,8 +2,13 @@ using System.Numerics;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>A list row; <paramref name="Cells"/> are its per-column texts in a MultiListBox (null: the caption is the first column).</summary>
-/// <summary>A list row; <paramref name="SortKeys"/>, per column, what a MultiListBox sorts it by instead of its shown cells (a date by its time, as the save list's comparator).</summary>
+/// <summary>
+/// A list row; <paramref name="Cells"/> are its per-column texts in a MultiListBox (null: the caption is the first column).
+/// </summary>
+/// <summary>
+/// A list row; <paramref name="SortKeys"/>, per column, what a MultiListBox sorts it by instead of its shown cells (a date by its time, as the save
+/// list's comparator).
+/// </summary>
 public sealed record UiListItem(string Id, string Caption, IReadOnlyList<string>? Cells = null, IReadOnlyList<string>? SortKeys = null);
 
 public sealed record UiControl(string Name, string Type, UiRect Bounds, string Caption, string Action,
@@ -11,10 +16,14 @@ public sealed record UiControl(string Name, string Type, UiRect Bounds, string C
     Vector4? TextColour = null, Vector4? HoverColour = null, Vector4? ActiveColour = null, Vector4? DisabledColour = null,
     bool? Pickable = null, string Argument = "", float? TextScale = null, UiRect? Clip = null);
 
-/// <summary>A frame shared by both frontends; bindings supply data and visibility without changing source documents.</summary>
+/// <summary>
+/// A frame shared by both frontends; bindings supply data and visibility without changing source documents.
+/// </summary>
 public sealed partial class UiBindings
 {
-    /// <summary>Scale pixel-based template chrome along with viewport-relative layouts.</summary>
+    /// <summary>
+    /// Scale pixel-based template chrome along with viewport-relative layouts.
+    /// </summary>
     public float TemplateScale { get; set; } = 1;
     public Dictionary<string, string> Text { get; } = new(StringComparer.Ordinal);
 
@@ -22,16 +31,21 @@ public sealed partial class UiBindings
     /// The text the code set for <paramref name="key"/>, in the active language when it is a message of the game's catalog (the original sets such
     /// captions through gettext; a layout's own captions stay as written). Null when the code set nothing.
     /// </summary>
-    public string? Coded(string key) => Text.TryGetValue(key, out var text) ? Localisation.Loc.Tr(text) : null;
+    public string? Coded(string key) => Text.TryGetValue(key, out var text) ? Loc.Tr(text) : null;
     public Dictionary<string, string> Actions { get; } = new(StringComparer.Ordinal);
     public HashSet<string> Hidden { get; } = new(StringComparer.Ordinal);
     public HashSet<string> Disabled { get; } = new(StringComparer.Ordinal);
     public HashSet<MyGuiWidget> HiddenWidgets { get; } = [];
     public Dictionary<string, UiRect> Positions { get; } = new(StringComparer.Ordinal);
-    /// <summary>Parent-relative runtime geometry, including anonymous layout panels.</summary>
+    /// <summary>
+    /// Parent-relative runtime geometry, including anonymous layout panels.
+    /// </summary>
     public Dictionary<MyGuiWidget, UiRect> RelativePositions { get; } = [];
     public Dictionary<string, int> SelectedTabs { get; } = new(StringComparer.Ordinal);
-    /// <summary>A TabControl whose buttons are made at run time (one per player squad): their captions; the selected button shows the first page (MyGUI adds TabItems so).</summary>
+    /// <summary>
+    /// A TabControl whose buttons are made at run time (one per player squad): their captions; the selected button shows the first page (MyGUI adds
+    /// TabItems so).
+    /// </summary>
     public Dictionary<string, IReadOnlyList<string>> TabCaptions { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, float> Progress { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> States { get; } = new(StringComparer.Ordinal);
@@ -68,10 +82,12 @@ public static partial class MyGuiPresentation
             string? trackSkin = progress ? w.UserStrings.GetValueOrDefault("TrackSkin") : null;
             if (progress && trackSkin is null) bounds = bounds with { Width = bounds.Width * Math.Clamp(fraction, 0, 1) };
             // A caption written in the layout is the source string of the player's language (the layouts say "SKILLS", the catalog key is "Skills").
-            string caption = bindings.Coded(w.Name) ?? PartText(bindings, props) ?? Localisation.Loc.TrCaption(props.GetValueOrDefault("Caption") ?? "");
+            // MyGUI's plain Widget has no text: it ignores a layout Caption (the character trading window's TradePanel says "Character Selection").
+            string layoutCaption = w.Type == "Widget" ? "" : props.GetValueOrDefault("Caption") ?? "";
+            string caption = bindings.Coded(w.Name) ?? PartText(bindings, props) ?? Loc.TrCaption(layoutCaption);
             if (props.TryGetValue("CaptionOwner", out string? owner))
             {
-                caption = bindings.Coded(owner) ?? Localisation.Loc.TrCaption(layout.Find(owner)?.Properties.GetValueOrDefault("Caption") ?? "");
+                caption = bindings.Coded(owner) ?? Loc.TrCaption(layout.Find(owner)?.Properties.GetValueOrDefault("Caption") ?? "");
                 // An EditBox's WordWrap is its text's, which the template's client draws.
                 if (!props.ContainsKey("WordWrap") && ((bindings.Properties.GetValueOrDefault(owner)?.GetValueOrDefault("WordWrap")) ?? layout.Find(owner)?.Properties.GetValueOrDefault("WordWrap")) is { } wrap)
                     props["WordWrap"] = wrap;
@@ -97,16 +113,18 @@ public static partial class MyGuiPresentation
                 int buttons = captions?.Count ?? pages.Length;
                 int selected = Math.Clamp(bindings.SelectedTabs.GetValueOrDefault(w.Name), 0, Math.Max(0, buttons - 1));
                 foreach (var child in w.Children.Where(c => c.Type != "TabItem")) Visit(child, bounds, childClip, enabled, alpha);
-                // The buttons go in the skin's HeaderPlace (MyGUI's TabControl part), ButtonWidth wide unless ButtonAutoWidth.
+                // The buttons go in the skin's HeaderPlace (MyGUI's TabControl part), ButtonWidth (at the template scale) wide unless ButtonAutoWidth.
                 var header = result.LastOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == w.Name && c.Properties.GetValueOrDefault("TemplatePart") == "HeaderPlace")?.Bounds
-                    ?? new UiRect(bounds.X, bounds.Y, bounds.Width, 30);
-                float tabWidth = buttons == 0 ? 0 : props.GetValueOrDefault("ButtonAutoWidth") == "false" && float.TryParse(props.GetValueOrDefault("ButtonWidth"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float fixedWidth)
-                    ? Math.Min(fixedWidth, header.Width / buttons) : header.Width / buttons;
+                    ?? new UiRect(bounds.X, bounds.Y, bounds.Width, 30 * bindings.TemplateScale);
+                float tabWidth = buttons == 0 ? 0 : header.Width / buttons;
+                if (buttons > 0 && props.GetValueOrDefault("ButtonAutoWidth") == "false"
+                    && float.TryParse(props.GetValueOrDefault("ButtonWidth"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float fixedWidth))
+                    tabWidth = Math.Min(fixedWidth * bindings.TemplateScale, tabWidth);
                 // The selected tab is Checked, not a fixed State, so the painter shows the skin's hover and pushed states (amber caption under the mouse).
                 for (int i = 0; i < buttons; i++)
                     result.Add(new(w.Name + "@tab" + i, "Button", new(header.X + i * tabWidth, header.Y, tabWidth, header.Height),
                         captions?[i] ?? bindings.Coded(w.Name + "@tab" + i)
-                            ?? (pages[i].Properties.GetValueOrDefault("Caption") is { Length: > 0 } tabText ? Localisation.Loc.TrCaption(tabText) : null)
+                            ?? (pages[i].Properties.GetValueOrDefault("Caption") is { Length: > 0 } tabText ? Loc.TrCaption(tabText) : null)
                             ?? pages[i].Name, $"mygui:tab:{w.Name}:{i}", "Kenshi_SquadTabButton1Skin", enabled,
                         new Dictionary<string, string> { ["Checked"] = i == selected ? "true" : "false", ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" }, default, Clip: clip));
                 if (pages.Length > 0) Visit(pages[captions is null ? selected : 0], bounds, childClip, enabled, alpha);
@@ -135,9 +153,10 @@ public static partial class MyGuiPresentation
         return -1;
     }
 
-    /// <summary>Transparent full-screen roots never swallow world input. Reverse order matches painting.</summary>
+    /// <summary>
+    /// Transparent full-screen roots never swallow world input. Reverse order matches painting.
+    /// </summary>
     public static UiControl? HitTest(IReadOnlyList<UiControl> controls, float x, float y) => controls.Reverse().FirstOrDefault(c =>
         c.Bounds.Contains(x, y) && (c.Clip is null || c.Clip.Value.Contains(x, y)) && c.Properties.GetValueOrDefault("NeedMouse") != "false" &&
         (c.Pickable ?? (c.Action.Length > 0 || c.Type == "Button" || c.Skin.Length > 0 && c.Skin != "PanelEmpty" || c.Background.W > 0)));
 }
-

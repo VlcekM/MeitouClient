@@ -1,7 +1,7 @@
 # Benchmarking
 
 The world viewer's offscreen harness measures frame cost and visual effects of runtime switches.
-Implementation: `WorldApp.Bench.cs`, `src/Meitou.Rendering/Bench/`, `BenchHarnessTests`.
+Implementation: `WorldApp.Bench.cs`, `src/Meitou.Game/Rendering/Bench/`, `BenchHarnessTests`.
 Options: [viewer.md](viewer.md).
 
 ## Runs
@@ -102,7 +102,7 @@ numbers from untraced runs.
 ## Play benchmark
 
 `MeitouClient --load <save> --play-bench <dir>` plays a scripted session in the real game (frame limit and VSync off) and quits
-(`GameHost.PlayBench.cs`). Segments: settle, idle, orbit, zoom to the farthest, pan, a 30 s travel at 3000 units/s, return, time x2
+(`PlayBench`). Segments: settle, idle, orbit, zoom to the farthest, pan, a 30 s travel at 3000 units/s, return, time x2
 and x5, talk, trade, container, doors, pick-up, paths (a squad or each member sent 20-200 m in a random direction every 0.5 s), walk,
 fight (six spawned enemies, `--scene-npc`), loot, the panels opened cold then warm (with limbs and build), a grazing horizon view, the overview, flights (each player character in turn, twice, 6 s each, as a double click on its portrait: a character flight when they are on).
 Each interaction targets the nearest candidate within 150 m and retries every 3 s; a modal message box is closed and logged.

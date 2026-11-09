@@ -12,18 +12,26 @@ public static class MeitouTranslations
 {
     const string Prefix = "Meitou.locale.", Suffix = ".po";
 
-    /// <summary>The file in <c>locale/&lt;code&gt;/</c> whose messages override the built-in ones.</summary>
+    /// <summary>
+    /// The file in <c>locale/&lt;code&gt;/</c> whose messages override the built-in ones.
+    /// </summary>
     public const string OverrideFile = "meitou.po";
 
-    /// <summary>The locale codes with a catalog built into Meitou, sorted.</summary>
+    /// <summary>
+    /// The locale codes with a catalog built into Meitou, sorted.
+    /// </summary>
     public static IReadOnlyList<string> EmbeddedCodes { get; } = typeof(MeitouTranslations).Assembly.GetManifestResourceNames()
         .Where(n => n.StartsWith(Prefix, StringComparison.Ordinal) && n.EndsWith(Suffix, StringComparison.Ordinal))
         .Select(n => n[Prefix.Length..^Suffix.Length]).Order(StringComparer.Ordinal).ToArray();
 
-    /// <summary>Whether Meitou has a built-in catalog for <paramref name="code"/> (<c>pt_BR</c> or <c>pt-BR</c>).</summary>
+    /// <summary>
+    /// Whether Meitou has a built-in catalog for <paramref name="code"/> (<c>pt_BR</c> or <c>pt-BR</c>).
+    /// </summary>
     public static bool HasEmbedded(string code) => Embedded(code) is not null;
 
-    /// <summary>Whether <paramref name="code"/> has any Meitou texts: built in, or a <see cref="OverrideFile"/> in <paramref name="localeFolder"/>.</summary>
+    /// <summary>
+    /// Whether <paramref name="code"/> has any Meitou texts: built in, or a <see cref="OverrideFile"/> in <paramref name="localeFolder"/>.
+    /// </summary>
     public static bool Has(string code, string? localeFolder) =>
         HasEmbedded(code) || (localeFolder is not null && File.Exists(Path.Combine(localeFolder, OverrideFile)));
 
@@ -38,7 +46,8 @@ public static class MeitouTranslations
             using (var stream = typeof(MeitouTranslations).Assembly.GetManifestResourceStream(Prefix + name + Suffix))
                 if (stream is not null)
                     using (var reader = new StreamReader(stream, Encoding.UTF8)) result = GettextCatalog.ReadPo(reader.ReadToEnd());
-        if (localeFolder is null || Path.Combine(localeFolder, OverrideFile) is not { } file || !File.Exists(file)) return result;
+        if (localeFolder is null || Path.Combine(localeFolder, OverrideFile) is not { } file || !File.Exists(file))
+            return result;
         try
         {
             var over = GettextCatalog.ReadPo(File.ReadAllText(file, Encoding.UTF8));

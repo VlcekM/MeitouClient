@@ -1,8 +1,22 @@
+using Meitou.Game.Audio;
 using System.Numerics;
-using Meitou.Audio;
 using Meitou.Data.World;
-using Meitou.Rendering;
-using Meitou.Rendering.Characters;
+using Meitou.Game.Rendering.Characters;
+using Meitou.Game.Rendering.Foliage;
+using Meitou.Game.Rendering.Frame;
+using Meitou.Game.Rendering.Gi;
+using Meitou.Game.Rendering.Impostors;
+using Meitou.Game.Rendering.Objects;
+using Meitou.Game.Rendering.Overlays;
+using Meitou.Game.Rendering.Particles;
+using Meitou.Game.Rendering.Post;
+using Meitou.Game.Rendering.Profiling;
+using Meitou.Game.Rendering.Shadows;
+using Meitou.Game.Rendering.Sky;
+using Meitou.Game.Rendering.Terrain;
+using Meitou.Game.Rendering.Ui;
+using Meitou.Game.Rendering.Upscalers;
+using Meitou.Game.Rendering.Water;
 using Meitou.Simulation;
 
 namespace Meitou.Game;
@@ -81,8 +95,8 @@ sealed partial class GameHost
         public bool Seen;
     }
 
-    readonly List<BodyCapsule> contactBodies = [];
-    ContactPatch[] contactPatches = new ContactPatch[64];
+    readonly List<BodyCapsule> _contactBodies = [];
+    ContactPatch[] _contactPatches = new ContactPatch[64];
 
     /// <summary>
     /// A character's frame: its posed capsules against the ground. False when it has no pose (it was not drawn), then its path's prints stand in. <paramref name="speed"/> is the body's own
@@ -90,25 +104,25 @@ sealed partial class GameHost
     /// </summary>
     bool BodyContact(TerrainTrailRenderer trails, GroundSurfaces ground, long key, ref Walker w, Vector3 root, Vector2 heading, bool animal, bool upright, float speed, bool continues)
     {
-        contactBodies.Clear();
-        gpu.Characters?.ContactCapsules(key, contactBodies);
-        int count = contactBodies.Count;
+        _contactBodies.Clear();
+        Gpu.Characters?.ContactCapsules(key, _contactBodies);
+        int count = _contactBodies.Count;
         if (count == 0) return false;
         if (w.Contacts is null || w.Contacts.Length != count) w.Contacts = new Contact[count];
-        if (contactPatches.Length < count) contactPatches = new ContactPatch[count];
-        bool known = continues && speed * trailDt < Placed;
-        float rootGround = gpu.Terrain.HeightAt(root.X, root.Z);
-        for (int i = 0; i < count; i++) contactPatches[i] = Contacting(contactBodies[i], rootGround);
+        if (_contactPatches.Length < count) _contactPatches = new ContactPatch[count];
+        bool known = continues && speed * _trailDt < Placed;
+        float rootGround = Gpu.Terrain.HeightAt(root.X, root.Z);
+        for (int i = 0; i < count; i++) _contactPatches[i] = Contacting(_contactBodies[i], rootGround);
         if (upright) Unshadowed(count);
         if (upright)
         {
             int bones = 0;
-            foreach (var c in contactBodies) bones = Math.Max(bones, c.Limb + 1);
+            foreach (var c in _contactBodies) bones = Math.Max(bones, c.Limb + 1);
             if (w.Limbs is null || w.Limbs.Length != bones) w.Limbs = new Limb[bones];
             foreach (ref var l in w.Limbs.AsSpan()) (l.Down, l.Seen) = (false, false);
         }
         for (int i = 0; i < count; i++)
-            Touch(trails, ground, key, contactBodies[i], contactPatches[i], ref w, i, animal, upright, speed, known);
+            Touch(trails, ground, key, _contactBodies[i], _contactPatches[i], ref w, i, animal, upright, speed, known);
         if (upright) Footfalls(trails, ground, key, ref w, animal);
         return true;
     }
@@ -118,16 +132,16 @@ sealed partial class GameHost
     {
         for (int i = 0; i < count; i++)
         {
-            if (!contactPatches[i].Valid) continue;
+            if (!_contactPatches[i].Valid) continue;
             for (int j = 0; j < count; j++)
             {
-                if (j == i || !contactPatches[j].Valid) continue;
-                if (!Adjacent(contactPatches[i], contactPatches[j])) continue;
-                float lower = contactPatches[i].Bottom - contactPatches[j].Bottom;
-                bool longer = contactPatches[j].Length > contactPatches[i].Length * 1.05f || (contactPatches[j].Length >= contactPatches[i].Length * 0.95f && j < i);
+                if (j == i || !_contactPatches[j].Valid) continue;
+                if (!Adjacent(_contactPatches[i], _contactPatches[j])) continue;
+                float lower = _contactPatches[i].Bottom - _contactPatches[j].Bottom;
+                bool longer = _contactPatches[j].Length > _contactPatches[i].Length * 1.05f || (_contactPatches[j].Length >= _contactPatches[i].Length * 0.95f && j < i);
                 if (lower > ShadowedBy || (lower >= -ShadowedBy && longer))
                 {
-                    contactPatches[i] = contactPatches[i] with { Valid = false };
+                    _contactPatches[i] = _contactPatches[i] with { Valid = false };
                     break;
                 }
             }
@@ -149,7 +163,7 @@ sealed partial class GameHost
     {
         ref var st = ref w.Contacts![index];
         var middle = new Vector2(cap.A.X + cap.B.X, cap.A.Z + cap.B.Z) / 2;
-        float speed = known && trailDt > 0 ? Vector2.Distance(middle, st.Middle) / trailDt : 0;
+        float speed = known && _trailDt > 0 ? Vector2.Distance(middle, st.Middle) / _trailDt : 0;
         st.Middle = middle;
         bool swinging = speed > bodySpeed * SwingShare + SwingSlack, sliding = speed > bodySpeed * SlideShare + SlideSlack;
         if (cap.Radius <= 0 || swinging || !patch.Valid)
@@ -191,7 +205,7 @@ sealed partial class GameHost
     /// </summary>
     void Footfalls(TerrainTrailRenderer trails, GroundSurfaces ground, long key, ref Walker w, bool animal)
     {
-        float dt = trailDt * (float)session.Simulation.Speed;
+        float dt = _trailDt * (float)Session.Simulation.Speed;
         foreach (ref var l in w.Limbs!.AsSpan())
         {
             if (l.Down)
@@ -218,7 +232,7 @@ sealed partial class GameHost
     /// <summary>A part that is not planted this frame: once it has been off the ground for <see cref="LiftTime"/> it may print again.</summary>
     void Lifted(ref Contact st)
     {
-        st.Air += trailDt;
+        st.Air += _trailDt;
         if (st.Air >= LiftTime) st.Printed = false;
     }
 
@@ -242,7 +256,7 @@ sealed partial class GameHost
     /// <summary>The mark a planted limb leaves: the shape of the body's own mesh.</summary>
     TrailStamp PrintOf(in ContactPatch patch, float depth, long key)
     {
-        float floor = MathF.Min(patch.Bottom, gpu.Terrain.HeightAt(patch.At.X, patch.At.Y)) - ImprintBelow;
+        float floor = MathF.Min(patch.Bottom, Gpu.Terrain.HeightAt(patch.At.X, patch.At.Y)) - ImprintBelow;
         return new TrailStamp(patch.At, Vector2.UnitY, patch.Length, patch.Width, depth * ImprintDepth, TrailKind.Imprint)
         {
             Body = key, Half = MathF.Max(MathF.Max(patch.Length, patch.Width) / 2 + ImprintMargin, ImprintLeast), Floor = floor,
@@ -257,7 +271,7 @@ sealed partial class GameHost
     {
         float r = cap.Radius;
         if (r <= 0 || MathF.Min(cap.A.Y, cap.B.Y) - r > rootGround + NearRoot) return default;
-        float ca = cap.A.Y - r - gpu.Terrain.HeightAt(cap.A.X, cap.A.Z), cb = cap.B.Y - r - gpu.Terrain.HeightAt(cap.B.X, cap.B.Z);
+        float ca = cap.A.Y - r - Gpu.Terrain.HeightAt(cap.A.X, cap.A.Z), cb = cap.B.Y - r - Gpu.Terrain.HeightAt(cap.B.X, cap.B.Z);
         if (MathF.Min(ca, cb) > ContactPlane) return default;
         float t0 = ca > ContactPlane ? (ca - ContactPlane) / (ca - cb) : 0, t1 = cb > ContactPlane ? (ContactPlane - ca) / (cb - ca) : 1;
         float pen = ContactPlane - MathF.Min(ca, cb);

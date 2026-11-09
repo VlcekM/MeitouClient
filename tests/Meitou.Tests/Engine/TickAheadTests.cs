@@ -1,9 +1,11 @@
 using System.Numerics;
-using Meitou.Engine;
+using Meitou.Game.Host;
 
 namespace Meitou.Tests.Engine;
 
-/// <summary>The tick run ahead during the world draw (docs/simulation.md "Tick ahead").</summary>
+/// <summary>
+/// The tick run ahead during the world draw (docs/simulation.md "Tick ahead").
+/// </summary>
 public class TickAheadTests
 {
     [Fact]
@@ -70,9 +72,12 @@ public class TickAheadTests
         Assert.Same(shown, session.CurrentSnapshot);
         Assert.Same(before, session.PreviousSnapshot);
         // The batch's two publishes went into the other two buffers, not the shown pair's.
-        Assert.DoesNotContain(session.World.Snapshot.Characters.Concat(session.World.PreviousSnapshot.Characters), c => heldCharacters.Contains(c));
+        Assert.DoesNotContain(
+            session.World.Snapshot.Characters.Concat(session.World.PreviousSnapshot.Characters),
+            c => heldCharacters.Contains(c));
 
-        // A frame owing 1: it is taken from the batch, the clock moves a tick, the picture holds; no tick runs and no new batch starts.
+        // A frame owing 1: it is taken from the batch, the clock moves a tick, the picture holds;
+        // no tick runs and no new batch starts.
         Assert.Equal(1, session.AdvanceSimulation(tick / 5));
         Assert.Equal(at + 3, session.World.Tick);
         Assert.Equal(at, session.ShownTick);

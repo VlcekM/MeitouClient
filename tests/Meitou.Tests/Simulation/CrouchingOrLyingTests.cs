@@ -5,7 +5,9 @@ using static Meitou.Tests.Bodies.BodyFixtures;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>State 26 IS_CROUCHING_OR_LYING (<c>FUN_140599e90</c>): staying low or in a bed, not when standing or knocked out (docs/game/ai-tasks.md).</summary>
+/// <summary>
+/// State 26 IS_CROUCHING_OR_LYING (<c>FUN_140599e90</c>): staying low or in a bed, not when standing or knocked out (docs/game/ai-tasks.md).
+/// </summary>
 public class CrouchingOrLyingTests
 {
     static CharacterCold Cold() => new() { Race = Human, Medical = MedicalState.Create(Human, 50) };
@@ -15,6 +17,7 @@ public class CrouchingOrLyingTests
     {
         var c = Cold();
         c.Medical!.StayingLow = true;
+
         Assert.True(CharacterFacts.CrouchingOrLying(c));
     }
 
@@ -23,6 +26,7 @@ public class CrouchingOrLyingTests
     {
         var c = Cold();
         c.Medical!.KnockOut(1000);
+
         Assert.False(CharacterFacts.CrouchingOrLying(c));
     }
 }

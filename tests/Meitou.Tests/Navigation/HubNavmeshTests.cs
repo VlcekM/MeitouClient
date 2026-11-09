@@ -2,41 +2,46 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.World;
-using Meitou.Navigation;
+using Meitou.Simulation.Navigation;
 using Meitou.Simulation;
 
 namespace Meitou.Tests.Navigation;
 
-/// <summary>The navmesh pipeline on The Hub (zones 20.32 and 21.32) against the Kenshi install.</summary>
+/// <summary>
+/// The navmesh pipeline on The Hub (zones 20.32 and 21.32) against the Kenshi install.
+/// </summary>
 [Slow]
 public class HubNavmeshTests
 {
     static readonly object Gate = new();
-    static readonly Dictionary<ZoneCoordinate, (ZoneGeometry Geometry, ZoneNavMesh Full)> built = [];
+    static readonly Dictionary<ZoneCoordinate, (ZoneGeometry Geometry, ZoneNavMesh Full)> Built = [];
 
     // With the zones' interior files, as the game and `meitou-tools navmesh --fingerprint` load them (the pins come from the latter).
-    static readonly Lazy<WorldLevelData?> levels = new(() => InstallData.Install is { } i ? WorldLevelData.LoadBaseGame(i, includeInteriors: true) : null);
+    static readonly Lazy<WorldLevelData?> Levels = new(() =>
+        InstallData.Install is { } i ? WorldLevelData.LoadBaseGame(i, includeInteriors: true) : null);
 
     static (GameInstall Install, GameDatabase Db, WorldLevelData Levels)? Load() =>
-        InstallData.Install is { } install ? (install, InstallData.FullLoadOrder!, levels.Value!) : null;
+        InstallData.Install is { } install ? (install, InstallData.FullLoadOrder!, Levels.Value!) : null;
 
     static (ZoneGeometry Geometry, ZoneNavMesh Full) Zone(ZoneCoordinate zone)
     {
         var (install, db, levels) = Load()!.Value;
         lock (Gate)
         {
-            if (built.TryGetValue(zone, out var b)) return b;
+            if (Built.TryGetValue(zone, out var b)) return b;
             using var gatherer = new ZoneGeometryGatherer(install, db, levels, new CollisionCache(install));
             var g = gatherer.Gather(zone);
             var mesh = NavMeshPipeline.BuildZone(gatherer, g, new NavBuildSettings(), out _);
-            return built[zone] = (g, mesh);
+            return Built[zone] = (g, mesh);
         }
     }
 
     static readonly ZoneCoordinate West = new(20, 32), East = new(21, 32);
 
     static string Pin(PathResult path) =>
-        path.Found ? string.Join("\n", path.Points.Select(p => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{p.X:R},{p.Y:R},{p.Z:R}"))) : "none";
+        path.Found
+            ? string.Join("\n", path.Points.Select(p => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{p.X:R},{p.Y:R},{p.Z:R}")))
+            : "none";
 
     [Fact]
     public void The_hub_paths_keep_their_exact_points()
@@ -63,12 +68,13 @@ public class HubNavmeshTests
         Assert.Equal(HubPathPins.WestToCentre.ReplaceLineEndings("\n"), Pin(query.FindPath(outsideWest, centre)));
         Assert.Equal(HubPathPins.CentreToEast.ReplaceLineEndings("\n"), Pin(query.FindPath(centre, outsideEast)));
         Assert.Equal(HubPathPins.WestToEast.ReplaceLineEndings("\n"), Pin(query.FindPath(outsideWest, outsideEast)));
-        Assert.Equal(HubPathPins.WestToCentreDoorsClosed.ReplaceLineEndings("\n"), Pin(query.FindPath(outsideWest, centre, new NavAgent { DoorsClosed = true })));
+        var doorsClosed = new NavAgent { DoorsClosed = true };
+        Assert.Equal(HubPathPins.WestToCentreDoorsClosed.ReplaceLineEndings("\n"), Pin(query.FindPath(outsideWest, centre, doorsClosed)));
     }
 
     /// <summary>
-    /// A polygon over a hollow north of the Hub, its corners on the ground, reads the ground where it leaves its plane by ~40 (the original's mesh: 1246.5),
-    /// not the plane (docs/game/pathfinding.md "Polygon heights"; a walker there was blocked on every step north).
+    /// A polygon over a hollow north of the Hub, its corners on the ground, reads the ground where it leaves its plane by ~40
+    /// (the original's mesh: 1246.5), not the plane (docs/game/pathfinding.md "Polygon heights"; a walker there was blocked on every step north).
     /// </summary>
     [Fact]
     public void A_polygon_over_a_hollow_reads_the_ground_not_its_plane()

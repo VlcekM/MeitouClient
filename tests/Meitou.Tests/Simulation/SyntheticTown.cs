@@ -3,11 +3,14 @@ using Meitou.Data;
 using Meitou.Data.Fcs;
 using Meitou.Data.World;
 using Meitou.Simulation;
+using Meitou.Simulation.Population;
 using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>A small invented game database with one town, for the population and movement tests (no install needed).</summary>
+/// <summary>
+/// A small invented game database with one town, for the population and movement tests (no install needed).
+/// </summary>
 static class SyntheticTown
 {
     const uint New = 0x10;
@@ -22,13 +25,18 @@ static class SyntheticTown
 
     public static readonly Vector3 Far = new(9500, 300, 2000);
 
-    /// <summary><paramref name="roaming"/> adds a second town (<c>31-t</c>, far away), roaming squads and bar squads at the first, and a roaming budget for the faction;
-    /// <paramref name="extra"/> adds records, <paramref name="changePatrol"/> changes the resident <c>Patrol</c> template (<c>10-t</c>) and <paramref name="changeFolk"/> the
-    /// <c>Faction folk</c> one (<c>12-t</c>, the roaming squads') before the database is made.</summary>
-    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false, bool items = false,
+    /// <summary>
+    /// <paramref name="roaming"/> adds a second town (<c>31-t</c>, far away), roaming squads and bar squads at the first, and a roaming budget for
+    /// the faction;
+    /// <paramref name="extra"/> adds records, <paramref name="changePatrol"/> changes the resident <c>Patrol</c> template (<c>10-t</c>) and
+    /// <paramref name="changeFolk"/> the
+    /// <c>Faction folk</c> one (<c>12-t</c>, the roaming squads') before the database is made.
+    /// </summary>
+    public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false,
+            bool items = false,
         IReadOnlyList<FcsRecord>? extra = null, Action<FcsRecord>? changePatrol = null, Action<FcsRecord>? changeFolk = null, Action<FcsRecord>? changeTown = null)
     {
-        var race = Rec("1-t", FcsRecordType.RACE, "Testers");
+        var race = Rec("1-t", FcsRecordType.Race, "Testers");
         var parts = new List<FcsRecord>();
         if (anatomy)
         {
@@ -36,7 +44,7 @@ static class SyntheticTown
             // A chest (vital) and two legs: enough to be hurt, to limp and to be knocked out.
             FcsRecord Part(string id, string name, int type, int collapse, bool vital)
             {
-                var p = Rec(id, FcsRecordType.LOCATIONAL_DAMAGE, name);
+                var p = Rec(id, FcsRecordType.LocationalDamage, name);
                 p.Ints["body part type"] = type;
                 p.Ints["collapse part"] = collapse;
                 p.Bools["death"] = vital;
@@ -50,17 +58,17 @@ static class SyntheticTown
         race.Ints["speed min skill"] = 70;
         race.Ints["speed max skill"] = 120;
         race.Floats["walk speed"] = 15;
-        var guard = Rec("2-t", FcsRecordType.CHARACTER, "Guard");
+        var guard = Rec("2-t", FcsRecordType.Character, "Guard");
         guard.References["race"] = [Ref("1-t", 100)];
         var itemRecords = new List<FcsRecord>();
         if (items)
         {
-            var ration = Rec("70-t", FcsRecordType.ITEM, "Ration");
+            var ration = Rec("70-t", FcsRecordType.Item, "Ration");
             ration.Ints["item function"] = 3;
             ration.Floats["charges"] = 100;
             ration.Floats["weight kg"] = 1;
             ration.Ints["value"] = 10;
-            var snack = Rec("71-t", FcsRecordType.ITEM, "Snack");
+            var snack = Rec("71-t", FcsRecordType.Item, "Snack");
             snack.Ints["item function"] = 3;
             snack.Floats["charges"] = 30;
             snack.Floats["weight kg"] = 0.5f;
@@ -68,28 +76,28 @@ static class SyntheticTown
             itemRecords.AddRange([ration, snack]);
             guard.References["inventory"] = [Ref("70-t", 2)];
         }
-        var boss = Rec("3-t", FcsRecordType.CHARACTER, "Boss");
+        var boss = Rec("3-t", FcsRecordType.Character, "Boss");
         boss.References["race"] = [Ref("1-t", 100)];
-        var dog = Rec("4-t", FcsRecordType.ANIMAL_CHARACTER, "Dog");
+        var dog = Rec("4-t", FcsRecordType.AnimalCharacter, "Dog");
         dog.Floats["animal age random"] = 0.5f;
 
-        var patrol = Rec("10-t", FcsRecordType.SQUAD_TEMPLATE, "Patrol");
+        var patrol = Rec("10-t", FcsRecordType.SquadTemplate, "Patrol");
         patrol.References["leader"] = [Ref("3-t", 1)];
         patrol.References["squad"] = [Ref("2-t", 2, 4)];
         patrol.References["squad2"] = [Ref("2-t", 1, 100)];
         patrol.References["animals"] = [Ref("4-t", 1, 0, 50)];
-        var gated = Rec("11-t", FcsRecordType.SQUAD_TEMPLATE, "Gated");
+        var gated = Rec("11-t", FcsRecordType.SquadTemplate, "Gated");
         gated.References["squad"] = [Ref("2-t", 5)];
         gated.References["world state"] = [Ref("90-t", 1)];   // needs a state that does not hold: the boss dead
-        var bossDead = Rec("90-t", FcsRecordType.WORLD_EVENT_STATE, "Boss dead");
+        var bossDead = Rec("90-t", FcsRecordType.WorldEventState, "Boss dead");
         bossDead.References["NPC is"] = [Ref("3-t", 0)];
-        var factionTemplate = Rec("12-t", FcsRecordType.SQUAD_TEMPLATE, "Faction folk");
+        var factionTemplate = Rec("12-t", FcsRecordType.SquadTemplate, "Faction folk");
         factionTemplate.References["squad"] = [Ref("2-t", 3)];
 
-        var faction = Rec("20-t", FcsRecordType.FACTION, "Testfolk");
+        var faction = Rec("20-t", FcsRecordType.Faction, "Testfolk");
         faction.Ints["default relation"] = 0;
         faction.References["residents"] = [Ref("12-t", 1, 0)];
-        var town = Rec("30-t", FcsRecordType.TOWN, "Testville");
+        var town = Rec("30-t", FcsRecordType.Town, "Testville");
         town.Ints["type"] = 2;
         town.Floats["size radius"] = 300;
         town.Floats["town radius mult"] = 1;
@@ -103,16 +111,16 @@ static class SyntheticTown
             faction.Ints["roaming population"] = 10;
             town.References["roaming squads"] = [Ref("12-t", 2)];
             town.References["bar squads"] = [Ref("12-t", 2, 100), Ref("10-t", 1, 100)];
-            far = Rec("31-t", FcsRecordType.TOWN, "Faraway");
+            far = Rec("31-t", FcsRecordType.Town, "Faraway");
             far.Ints["type"] = 2;
             far.Floats["size radius"] = 300;
             far.Floats["town radius mult"] = 1;
             far.References["faction"] = [Ref("20-t")];
         }
 
-        var nameless = Rec("204-gamedata.base", FcsRecordType.FACTION, "Nameless");
+        var nameless = Rec("204-gamedata.base", FcsRecordType.Faction, "Nameless");
         nameless.Ints["default relation"] = 0;
-        var startoff = Rec("40-t", FcsRecordType.NEW_GAME_STARTOFF, "Test start");
+        var startoff = Rec("40-t", FcsRecordType.NewGameStartoff, "Test start");
         startoff.Ints["money"] = 500;
         startoff.Ints["start pos X"] = 4000;
         startoff.Ints["start pos Z"] = 4000;
@@ -140,9 +148,15 @@ static class SyntheticTown
 
     public static float Ground(float x, float z) => 300;
 
-    /// <summary>The game's system order (<see cref="StandardSystems"/>) for the parts a test needs; path requests are answered inside the tick unless asked otherwise.</summary>
-    public static StandardSystemSet Standard(PopulationData data, IWalkability walk, StandardParts parts, PopulationSettings? population = null, bool synchronousPaths = true, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null) =>
-        StandardSystems.Build(data, walk, new StandardSystemOptions { Parts = parts, Population = population, SynchronousPaths = synchronousPaths, BodyTimeScale = bodyTimeScale, Feed = feed });
+    /// <summary>
+    /// The game's system order (<see cref="StandardSystems"/>) for the parts a test needs; path requests are answered inside the tick unless asked
+    /// otherwise.
+    /// </summary>
+    public static StandardSystemSet Standard(PopulationData data, IWalkability walk, StandardParts parts, PopulationSettings? population = null,
+            bool synchronousPaths = true, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null) =>
+        StandardSystems.Build(data, walk,
+                new StandardSystemOptions { Parts = parts, Population = population, SynchronousPaths = synchronousPaths,
+                        BodyTimeScale = bodyTimeScale, Feed = feed });
 
     public static SimWorld World(ulong seed, int threads, int residentSquads = 3, PopulationSettings? settings = null, bool synchronousPaths = true,
         GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null, Meitou.Simulation.Bodies.BodyOptions? bodyOptions = null, int minPartition = 16, params ITickSystem[] extra)
@@ -150,9 +164,11 @@ static class SyntheticTown
         db ??= Database(residentSquads);
         var walk = new OpenGroundWalkability(Ground);
         var data = Data(db, bodyOptions);
-        var parts = StandardParts.Population | StandardParts.Movement | (bodies ? StandardParts.Body : 0) | (feed is not null ? StandardParts.Feed : 0);
+        var parts = StandardParts.Population | StandardParts.Movement | (bodies ? StandardParts.Body : 0) | (feed is not null ? StandardParts.Feed
+                : 0);
         var systems = Standard(data, walk, parts, settings, synchronousPaths, bodyTimeScale, feed).Systems.Concat(extra);
-        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, walk, systems);
+        var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition },
+                walk, systems);
         world.Commands.Enqueue(new FocusCommand(Centre) { Tick = 0 });
         return world;
     }

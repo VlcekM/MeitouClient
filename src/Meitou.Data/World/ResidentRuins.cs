@@ -29,9 +29,9 @@ public static class ResidentRuins
             int ruined = 0;
             foreach (var placement in levels.Towns())
             {
-                if (!buildings.TryGetValue(placement.InstanceId, out var list) || db.Find(placement.TownId) is not { Type: Fcs.FcsRecordType.TOWN } record) continue;
+                if (!buildings.TryGetValue(placement.InstanceId, out var list) || db.Find(placement.TownId) is not { Type: Fcs.FcsRecordType.Town } record) continue;
                 var town = TownData.From(record);
-                var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.FACTION } f ? FactionData.From(f) : null;
+                var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.Faction } f ? FactionData.From(f) : null;
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
                 {
                     if (t.BuildingRuined && Ruin(db, levels, b)) ruined++;
@@ -69,7 +69,9 @@ public static class ResidentRuins
         state.StringTable[SquadTemplateKey] = naming.SquadTemplate;
     }
 
-    /// <summary>The name and squad template housing <paramref name="t"/> gives a home named <paramref name="own"/> before (<see cref="DisplayName"/>).</summary>
+    /// <summary>
+    /// The name and squad template housing <paramref name="t"/> gives a home named <paramref name="own"/> before (<see cref="DisplayName"/>).
+    /// </summary>
     public static BuildingNaming Naming(SquadTemplate t, BuildingNaming own) => new(DisplayName(t) ?? own.Name, t.Id);
 
     /// <summary>
@@ -79,7 +81,9 @@ public static class ResidentRuins
     public static string? DisplayName(SquadTemplate t) =>
         t.BuildingName.Length > 0 ? t.BuildingName : t.LayoutInterior.Length > 0 ? t.LayoutInterior : null;
 
-    /// <summary>The level-state keys housing <paramref name="t"/> names, with the layout names it gives them (<see cref="LayOut"/>).</summary>
+    /// <summary>
+    /// The level-state keys housing <paramref name="t"/> names, with the layout names it gives them (<see cref="LayOut"/>).
+    /// </summary>
     public static IEnumerable<(string Key, string Layout)> Names(SquadTemplate t) =>
         [(InteriorKey, t.LayoutInterior), (ExteriorKey, t.LayoutExterior)];
 
@@ -129,9 +133,13 @@ public static class ResidentRuins
     }
 }
 
-/// <summary>A building's display <c>name</c> and its residents' <c>squad template</c> (docs/game/factions-squads-towns.md "Town residents", Layouts).</summary>
+/// <summary>
+/// A building's display <c>name</c> and its residents' <c>squad template</c> (docs/game/factions-squads-towns.md "Town residents", Layouts).
+/// </summary>
 public readonly record struct BuildingNaming(string Name, string SquadTemplate)
 {
-    /// <summary>What <paramref name="state"/>, a GAMESTATE_BUILDING, names.</summary>
+    /// <summary>
+    /// What <paramref name="state"/>, a GAMESTATE_BUILDING, names.
+    /// </summary>
     public static BuildingNaming Of(GameRecord? state) => new(state?.GetString(ResidentRuins.NameKey) ?? "", state?.GetString(ResidentRuins.SquadTemplateKey) ?? "");
 }
