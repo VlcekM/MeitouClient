@@ -232,14 +232,7 @@ public static class MeitouShadowFit
             double x = rotation.M11 * (double)s.X + rotation.M21 * (double)s.Y + rotation.M31 * (double)s.Z;
             double y = rotation.M12 * (double)s.X + rotation.M22 * (double)s.Y + rotation.M32 * (double)s.Z;
             double z = rotation.M13 * (double)s.X + rotation.M23 * (double)s.Y + rotation.M33 * (double)s.Z;
-            (
-                x0,
-                x1,
-                y0,
-                y1,
-                z0,
-                z1
-            ) = (
+            (x0, x1, y0, y1, z0, z1) = (
                 Math.Min(x0, x - s.W),
                 Math.Max(x1, x + s.W),
                 Math.Min(y0, y - s.W),

@@ -69,10 +69,7 @@ public sealed class TutorialCatalog
     [
         (
             220,
-            [S(
-                108,
-                TutorialAdvance.CameraControls
-            ), S(
+            [S(108, TutorialAdvance.CameraControls), S(
                 156,
                 TutorialAdvance.CharSelection,
                 TutorialHighlight.Portraits

@@ -149,9 +149,7 @@ static class StageClock
     /// overlays, the settings panel, the cinema's layer, the loading screen, the pointer and the composite of the interface over the world.
     /// </summary>
     public static readonly string[] UiPartNames =
-    [
-        "world end", "markers", "steer", "hud", "debug", "settings", "cinema", "loading", "pointer", "composite",
-    ];
+    ["world end", "markers", "steer", "hud", "debug", "settings", "cinema", "loading", "pointer", "composite",];
 
     public const int UiWorldEnd = 0, UiMarkers = 1, UiSteer = 2, UiHud = 3, UiDebug = 4, UiSettings = 5, UiCinema = 6, UiLoading = 7, UiPointer = 8,
         UiComposite = 9;

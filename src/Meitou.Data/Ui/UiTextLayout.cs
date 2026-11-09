@@ -20,12 +20,7 @@ public readonly record struct UiInsets(float Left, float Top, float Right, float
         var values = value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(v => float.Parse(v, CultureInfo.InvariantCulture)).ToArray();
         if (values.Any(v => !float.IsFinite(v) || v < 0))
             throw new InvalidDataException("Text padding needs finite nonnegative values.");
-        return values.Length switch { 1 => Uniform(values[0]), 2 => new(
-            values[0],
-            values[1],
-            values[0],
-            values[1]
-        ), 4 => new(
+        return values.Length switch { 1 => Uniform(values[0]), 2 => new(values[0], values[1], values[0], values[1]), 4 => new(
             values[0],
             values[1],
             values[2],

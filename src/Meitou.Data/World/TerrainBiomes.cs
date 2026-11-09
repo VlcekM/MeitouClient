@@ -233,13 +233,7 @@ public sealed record BiomeTerrain
             BrightnessFix = brightness == 0 ? 1 : brightness, // the game replaces 0 with 1
             DistortWavelength = r.GetFloat("distort wavelength", 1000),
             DistortAmplitude = r.GetFloat("distort amplitude", 0),
-            Absorbance = [r.GetFloat(
-                "absorbance 0",
-                0.55f
-            ), r.GetFloat(
-                "absorbance 1",
-                0.2f
-            ), r.GetFloat(
+            Absorbance = [r.GetFloat("absorbance 0", 0.55f), r.GetFloat("absorbance 1", 0.2f), r.GetFloat(
                 "absorbance 2",
                 0.5f
             ), r.GetFloat("absorbance grass", 0.44f), r.GetFloat("absorbance dirt", 0.3f), r.GetFloat("absorbance road", 0.25f)],

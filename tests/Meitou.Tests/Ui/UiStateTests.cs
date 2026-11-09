@@ -76,8 +76,7 @@ public class UiStateTests
             </Widget></MyGUI>
             """), modal: true, centreRoot: true);
         host.Open("save");
-        UiBindings Bind(string _) { var b = new UiBindings(); b.Properties["Save"] = new Dictionary<string,
-                string> { ["DefaultAction"] = "true" };
+        UiBindings Bind(string _) { var b = new UiBindings(); b.Properties["Save"] = new Dictionary<string, string> { ["DefaultAction"] = "true" };
                 return b;
                 }
         var frame = host.Arrange(800, 600, Bind).Single().Controls;

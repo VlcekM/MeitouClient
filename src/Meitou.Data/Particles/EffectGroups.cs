@@ -939,9 +939,7 @@ public static class EffectGroups
             var camera = new EffectCamera(new Vector3(0, 100, 0), Vector3.UnitZ);
             var input = new WeatherEffectInput();
             ReadOnlySpan<EffectType> types =
-            [
-                EffectType.CameraRain, EffectType.Point, EffectType.Wandering, EffectType.PointLighting, EffectType.Global, EffectType.GlobalPoint,
-            ];
+            [EffectType.CameraRain, EffectType.Point, EffectType.Wandering, EffectType.PointLighting, EffectType.Global, EffectType.GlobalPoint,];
             foreach (var type in types)
             {
                 var record = new EffectRecord("prime", type, "prime", true, false, 1, 0, 0, Vector3.One, 1, false, 100, 0, 0, 5, 10)

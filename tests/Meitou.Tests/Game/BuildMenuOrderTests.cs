@@ -17,9 +17,7 @@ public class BuildMenuOrderTests
     public void Categories_and_groups_go_by_name_and_members_by_materials_descending()
     {
         var menu = new BuildMenu(
-        [
-            B("a", "walls", "Wall", 5), B("b", "Beds", "Zed", 3), B("c", "Beds", "Cot", 2), B("d", "Beds", "Cot", 9), B("e", "Beds", "Cot", 9),
-        ]);
+        [B("a", "walls", "Wall", 5), B("b", "Beds", "Zed", 3), B("c", "Beds", "Cot", 2), B("d", "Beds", "Cot", 9), B("e", "Beds", "Cot", 9),]);
         var all = new HashSet<string> { "a", "b", "c", "d", "e" };
 
         Assert.Equal(["Beds", "walls"], menu.Categories(all));

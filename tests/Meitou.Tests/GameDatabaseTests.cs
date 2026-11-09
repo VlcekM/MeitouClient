@@ -89,9 +89,7 @@ public class GameDatabaseTests
     public void Mods_cfg_follows_the_game_rules()
     {
         string[] lines =
-        [
-            "A.mod", "", " B.mod ", "B.x.mod", "#C.mod", "/C.mod", ";C.mod", "C.MOD", "C", "rebirth.mod", "Dialogue.mod", "A.mod",
-        ];
+        ["A.mod", "", " B.mod ", "B.x.mod", "#C.mod", "/C.mod", ";C.mod", "C.MOD", "C", "rebirth.mod", "Dialogue.mod", "A.mod",];
         Assert.Equal(["A", "B.x", "A"], LoadOrder.ParseModsCfg(lines));
     }
 

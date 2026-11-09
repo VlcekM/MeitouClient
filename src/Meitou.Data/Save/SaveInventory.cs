@@ -132,10 +132,7 @@ public static class SaveInventory
         Stun = r.Floats.GetValueOrDefault("stun"),
         Death = r.Bools.GetValueOrDefault("death"),
         Unique = r.Bools.GetValueOrDefault("unique"),
-        Lock = r.Ints.TryGetValue(
-            "lock lvl",
-            out int lockLevel
-        ) ? new SaveItemLock(
+        Lock = r.Ints.TryGetValue("lock lvl", out int lockLevel) ? new SaveItemLock(
             lockLevel,
             r.Bools.GetValueOrDefault("locked"),
             r.Bools.GetValueOrDefault("broken"),

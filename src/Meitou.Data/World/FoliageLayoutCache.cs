@@ -148,10 +148,7 @@ public sealed class FoliageLayoutCache
             }
             Flush();
         }
-        foreach (var (
-            at,
-            range
-        ) in towns) text.Append("town|").Append(at.X.ToString(
+        foreach (var (at, range) in towns) text.Append("town|").Append(at.X.ToString(
             "R",
             inv
         )).Append('|').Append(at.Y.ToString("R", inv)).Append('|').Append(range.ToString("R", inv)).Append('\n');
@@ -195,31 +192,16 @@ public sealed class FoliageLayoutCache
             k,
             v
         ) in r.Bools.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('b').Append(k).Append('=').Append(v ? 1 : 0).Append('\n');
-        foreach (var (
-            k,
-            v
-        ) in r.Floats.OrderBy(
+        foreach (var (k, v) in r.Floats.OrderBy(
             p => p.Key,
             StringComparer.Ordinal
         )) text.Append('f').Append(k).Append('=').Append(BitConverter.SingleToInt32Bits(v).ToString(inv)).Append('\n');
         foreach (var (k, v) in r.Ints.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('i').Append(k).Append('=').Append(v).Append('\n');
-        foreach (var (
-            k,
-            v
-        ) in r.Vector3S.OrderBy(
-            p => p.Key,
-            StringComparer.Ordinal
-        )) text.Append('v').Append(k).Append('=').Append(v.X.ToString(
+        foreach (var (k, v) in r.Vector3S.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('v').Append(k).Append('=').Append(v.X.ToString(
             "R",
             inv
         )).Append(',').Append(v.Y.ToString("R", inv)).Append(',').Append(v.Z.ToString("R", inv)).Append('\n');
-        foreach (var (
-            k,
-            v
-        ) in r.Vector4S.OrderBy(
-            p => p.Key,
-            StringComparer.Ordinal
-        )) text.Append('w').Append(k).Append('=').Append(v.X.ToString(
+        foreach (var (k, v) in r.Vector4S.OrderBy(p => p.Key, StringComparer.Ordinal)) text.Append('w').Append(k).Append('=').Append(v.X.ToString(
             "R",
             inv
         )).Append(',').Append(v.Y.ToString(

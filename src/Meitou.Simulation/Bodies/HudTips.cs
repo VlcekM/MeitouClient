@@ -258,10 +258,7 @@ static class HudTips
         if (hc is { } d)
         {
             result[StatsEnumerated.Dexterity] =
-            [
-                new("Attack speed:", Loc.Tr("{1,num=fix,p=2}", d.AttackRate)),
-                new("Block speed:", Loc.Tr("{1,num=fix,p=2}", d.BlockRate)),
-            ];
+            [new("Attack speed:", Loc.Tr("{1,num=fix,p=2}", d.AttackRate)), new("Block speed:", Loc.Tr("{1,num=fix,p=2}", d.BlockRate)),];
         }
 
         // CharStats +0x190 (the encumbrance factor) x 100 as a float number.
@@ -276,10 +273,7 @@ static class HudTips
             ];
         }
         result[StatsEnumerated.Swimming] =
-        [
-            new("Max swim speed:", Int(Speed.SwimBase(race, stats))),
-            new("Current swim speed:", Int(Speed.Swim(race, stats, med, e))),
-        ];
+        [new("Max swim speed:", Int(Speed.SwimBase(race, stats))), new("Current swim speed:", Int(Speed.Swim(race, stats, med, e))),];
 
         // The skills, from the effective level L: work rates lerp(L/100, 0.5, 1.4) (FUN_1408852a0), aim (L + perception) x 0.5% (FUN_140435160).
         float Eff(StatsEnumerated s) => stats[s] * stats.Scale * med.StatMultiplier(s, factors: factors);
@@ -289,27 +283,17 @@ static class HudTips
         if (hc is { } m) result[StatsEnumerated.MartialArts] = [new("Affects damage", Int(m.UnarmedDamage))];
         if (constants is not null)
             result[StatsEnumerated.Medic] =
-            [
-                new("First aid skills:", Loc.Tr("{1,num,p=2}x", Lerp(Eff(StatsEnumerated.Medic) * 0.01f, 1, 15) * constants.MedicSpeedMult)),
-            ];
+            [new("First aid skills:", Loc.Tr("{1,num,p=2}x", Lerp(Eff(StatsEnumerated.Medic) * 0.01f, 1, 15) * constants.MedicSpeedMult)),];
         result[StatsEnumerated.Turrets] = [new("Accuracy:", Aim(StatsEnumerated.Turrets)), new("Rate of fire:", Aim(StatsEnumerated.Turrets))];
         result[StatsEnumerated.Crossbows] = [new("Accuracy:", Aim(StatsEnumerated.Crossbows)), new("Rate of fire:", Aim(StatsEnumerated.Crossbows))];
         result[StatsEnumerated.FriendlyFire] =
-        [
-            new("Friendly fire avoidance:", Loc.Tr("{1,num}%", (int)(Math.Min(Eff(StatsEnumerated.FriendlyFire) * 0.015f, 1) * 100))),
-        ];
+        [new("Friendly fire avoidance:", Loc.Tr("{1,num}%", (int)(Math.Min(Eff(StatsEnumerated.FriendlyFire) * 0.015f, 1) * 100))),];
         result[StatsEnumerated.Assassination] = [new("Stealthy knock-outs:", Rate(StatsEnumerated.Assassination))];
         result[StatsEnumerated.Engineering] =
-        [
-            new("Building things:", Rate(StatsEnumerated.Engineering)),
-            new("Repairing things:", Rate(StatsEnumerated.Engineering)),
-        ];
+        [new("Building things:", Rate(StatsEnumerated.Engineering)), new("Repairing things:", Rate(StatsEnumerated.Engineering)),];
         result[StatsEnumerated.Science] = [new("Research rate:", Rate(StatsEnumerated.Science))];
         result[StatsEnumerated.Labouring] =
-        [
-            new("Mining:", Rate(StatsEnumerated.Labouring)),
-            new("Using machinery:", Rate(StatsEnumerated.Labouring)),
-        ];
+        [new("Mining:", Rate(StatsEnumerated.Labouring)), new("Using machinery:", Rate(StatsEnumerated.Labouring)),];
         result[StatsEnumerated.Farming] = [new("Harvesting speed:", Rate(StatsEnumerated.Farming)),
             new("Harvesting yield:", Loc.Tr("{1,num}%", (int)(Math.Clamp(Lerp(Eff(StatsEnumerated.Farming) * 0.01f, 0.5f, 2), 0, 1) * 100)))];
         result[StatsEnumerated.Cooking] = [new("Cooking:", Rate(StatsEnumerated.Cooking))];
@@ -318,10 +302,7 @@ static class HudTips
             weapon.Add(new("Weapon quality:", "[" + model + "]"));
         result[StatsEnumerated.SmithingWeapon] = weapon;
         result[StatsEnumerated.SmithingArmour] =
-        [
-            new("Crafting armour (speed):", Rate(StatsEnumerated.SmithingArmour)),
-            new("Armour quality:", Grade(StatsEnumerated.SmithingArmour)),
-        ];
+        [new("Crafting armour (speed):", Rate(StatsEnumerated.SmithingArmour)), new("Armour quality:", Grade(StatsEnumerated.SmithingArmour)),];
         result[StatsEnumerated.SmithingBow] =
         [
             new("Crafting crossbows (speed):", Rate(StatsEnumerated.SmithingBow)),

@@ -149,9 +149,7 @@ public sealed class CharacterSounds
 
     static readonly string[] Persons = ["Human", "Shek", "Hive", "Robot"];
     static readonly string[] Creatures =
-    [
-        "Beak", "Bull", "Cage", "Dog", "Duck", "Gar", "Goat", "Gorillo", "IronSpider", "Leviathan", "Pack", "Spider", "Turtle",
-    ];
+    ["Beak", "Bull", "Cage", "Dog", "Duck", "Gar", "Goat", "Gorillo", "IronSpider", "Leviathan", "Pack", "Spider", "Turtle",];
     static readonly string[] Weapons = ["Katanas", "Sabres", "Blunt", "Heavy", "Hackers", "", "Bow", "Turret", "Blunt"];
     static readonly string[] Armours = ["Cloth", "Leather", "Chain", "Plate"];
     static readonly string[] Shoes = ["Sand", "Grass", "Concrete", "Wood", "Metal", "Water", "Mud", "Snow", "Dirt"];

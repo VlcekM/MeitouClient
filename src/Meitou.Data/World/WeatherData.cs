@@ -493,12 +493,7 @@ public sealed class WeatherData
     {
         return s.GetReferences("weathers")
             .Where(r => weathers.ContainsKey(r.TargetStringId))
-            .Select(r => new SeasonWeather(
-                weathers[r.TargetStringId],
-                r.Values.Value0,
-                r.Values.Value1,
-                Math.Max(r.Values.Value1, r.Values.Value2)
-            ))
+            .Select(r => new SeasonWeather(weathers[r.TargetStringId], r.Values.Value0, r.Values.Value1, Math.Max(r.Values.Value1, r.Values.Value2)))
             .ToList();
     }
 

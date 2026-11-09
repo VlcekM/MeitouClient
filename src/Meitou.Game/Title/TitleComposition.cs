@@ -141,11 +141,7 @@ sealed class TitleComposition
         Staged = pieces;
         Wanderer = OnPlateau(view, top, plateau, WandererOnScreen) ?? GroundUnder(view, WandererOnScreen, ground);
         Fights =
-        [
-            GroundUnder(view, new(0.70f, 0.85f), ground),
-            GroundUnder(view, new(0.755f, 0.89f), ground),
-            GroundUnder(view, new(0.81f, 0.93f), ground),
-        ];
+        [GroundUnder(view, new(0.70f, 0.85f), ground), GroundUnder(view, new(0.755f, 0.89f), ground), GroundUnder(view, new(0.81f, 0.93f), ground),];
 
         // His back to the camera, looking out over the valley.
         var toward = Vector3.Normalize(view.Forward with { Y = 0 }) * MathF.Cos(WandererBearing);

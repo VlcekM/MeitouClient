@@ -570,12 +570,7 @@ public sealed unsafe partial class TerrainDecalRenderer
         };
         cmd.PushConstants(program, GpuStage.Vertex | GpuStage.Fragment, in push);
         Span<GpuBufferBinding> buffers =
-        [
-            new(rows.Handle, rows.Offset),
-            new(rows.Handle, rows.Offset + 16),
-            new(rows.Handle, rows.Offset + 32),
-            new(rows.Handle, rows.Offset + 48),
-        ];
+        [new(rows.Handle, rows.Offset), new(rows.Handle, rows.Offset + 16), new(rows.Handle, rows.Offset + 32), new(rows.Handle, rows.Offset + 48),];
         cmd.BindVertexBuffers(0, buffers);
         cmd.Draw(4, (uint)n);
         cmd.EndRendering();
