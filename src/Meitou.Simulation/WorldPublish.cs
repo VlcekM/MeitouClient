@@ -17,27 +17,34 @@ public sealed partial class World
     internal EffectBuffer BufferAt(int i) => _buffers[i];
 
     /// <summary>
-    /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to what it stands on (<see cref="IWalkability.WaterBed"/>: a sunken floor, else the seabed) or, swimming, to <see cref="Bodies.Speed.WadingHeight"/>
-    /// (the same surface test as <see cref="MovementSystem"/>'s water state: within <see cref="Bodies.Speed.WaterSlack"/> of the water level). Not a carried or a downed body.
-    /// One lying in a bed is raised by <see cref="BedLift"/>.
+    /// Where a character is drawn: a character on the water, which the simulation keeps on the navmesh's flat surface, is lowered to what it stands
+    /// on (<see cref="IWalkability.WaterBed"/>: a sunken floor, else the seabed) or, swimming, to <see cref="Bodies.Speed.WadingHeight"/> (the same
+    /// surface test as <see cref="MovementSystem"/>'s water state: within <see cref="Bodies.Speed.WaterSlack"/> of the water level). Not a carried or
+    /// a downed body. One lying in a bed is raised by <see cref="BedLift"/>.
     /// </summary>
     Vector3 DrawnPosition(CharacterCold? cold, Vector3 at)
     {
         if (cold?.InSomething == Locks.HeldState.Bed) return at with { Y = at.Y + BedLift };
-        if (cold is not { Race: { } race, Medical: not { Incapacitated: true } } || !cold.CarriedBy.IsNone || at.Y > Data.World.WorldWater.Height + Speed.WaterSlack) return at;
+
+        if (cold is not { Race: { } race, Medical: not { Incapacitated: true } } || !cold.CarriedBy.IsNone
+            || at.Y > Data.World.WorldWater.Height + Speed.WaterSlack)
+        {
+            return at;
+        }
+
         float bed = Walkability.WaterBed(at.X, at.Z, at.Y);
         return bed < at.Y ? at with { Y = Speed.WadingHeight(bed, 1, race.Swims) } : at;
     }
 
     /// <summary>
-    /// How far a sleeper is drawn above its lie spot (engine choice, docs/game/locks.md "Beds"): the bed clips hold <c>Bip01</c> about level with the mattress top
-    /// (<c>sleepinbed</c> 6.7 on <c>Bed</c>'s 7.36, <c>sleeponfloor</c> 1.46 on <c>Camp Bed</c>'s 1.73), so the body sank into it.
+    /// How far a sleeper is drawn above its lie spot (engine choice, docs/game/locks.md "Beds"): the bed clips hold <c>Bip01</c> about level with the
+    /// mattress top (<c>sleepinbed</c> 6.7 on <c>Bed</c>'s 7.36, <c>sleeponfloor</c> 1.46 on <c>Camp Bed</c>'s 1.73), so the body sank into it.
     /// </summary>
     const float BedLift = 1.5f;
 
     /// <summary>
-    /// The faction the bounty panel calls local (<c>FUN_140852010</c>, docs/game/ui-screens.md section 4): the cage owner's while imprisoned, else (Meitou's reading of the status
-    /// object's <c>+0x88</c>) the town's the character stands in; -1 when none.
+    /// The faction the bounty panel calls local (<c>FUN_140852010</c>, docs/game/ui-screens.md section 4): the cage owner's while imprisoned, else
+    /// (Meitou's reading of the status object's <c>+0x88</c>) the town's the character stands in; -1 when none.
     /// </summary>
     int LocalFaction(CharacterCold c, Vector3 at, PopulationData? data) =>
         c.IsImprisoned ? c.InWhat is { } cage && Fixtures.Find(cage) is { } f ? f.Owner : -1
@@ -47,20 +54,28 @@ public sealed partial class World
     static readonly string[] MainGrid = ["main"];
 
     /// <summary>
-    /// The build a character is drawn with: the normal maps follow the live stats, the bone shape is made once and rebuilt only while the character is of the player's faction
-    /// (<c>FUN_140531820</c> calls <c>FUN_14052e6c0</c> only then; <c>FUN_1405338f0</c> made it at creation, here the first publish; docs/animation.md "Stat-driven body").
+    /// The build a character is drawn with: the normal maps follow the live stats, the bone shape is made once and rebuilt only while the character
+    /// is of the player's faction (<c>FUN_140531820</c> calls <c>FUN_14052e6c0</c> only then; <c>FUN_1405338f0</c> made it at creation, here the
+    /// first publish; docs/animation.md "Stat-driven body").
     /// </summary>
     Data.Characters.BodyBuild ShapedBuild(CharacterCold cold, Data.Characters.BodyBuild live)
     {
-        if (cold.ShapedBuild is not { } shaped || cold.Faction >= 0 && cold.Faction == Player.Faction) cold.ShapedBuild = shaped = live;
+        if (cold.ShapedBuild is not { } shaped || cold.Faction >= 0 && cold.Faction == Player.Faction)
+            cold.ShapedBuild = shaped = live;
+
         return live.WithShapeOf(shaped);
     }
 
-    /// <summary>A player character's disguise for the panel (<see cref="Crime.ArrestSystem"/>: the level, the uniform faction, the blown cooldown, the tooltip's factors).</summary>
+    /// <summary>
+    /// A player character's disguise for the panel (<see cref="Crime.ArrestSystem"/>: the level, the uniform faction, the blown cooldown, the
+    /// tooltip's factors).
+    /// </summary>
     DisguiseView DisguiseOf(CharacterCold c, Vector3 at, PopulationData? data)
     {
         var marks = c.DisguiseMarks;
+
         bool Marked(int k) => marks is not null && marks[k] > 0;
+
         string name = data is { Factions: { } factions } && (uint)c.DisguiseFaction < (uint)factions.Count ? factions[c.DisguiseFaction].Name : "";
         bool secure = _systems.OfType<Crime.ArrestSystem>().FirstOrDefault()?.SecureLocation(this, at) ?? false;
         return new DisguiseView(c.DisguiseLevel, name, c.RecentlyWanted, Crime.ArrestSystem.SeenFaction(c) != c.Faction, secure,
@@ -68,25 +83,36 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The status line of the bounty panel (<c>FUN_1405d4260</c>, <b>Observed</b>, docs/game/ui-screens.md section 4), first match: the leader of a campaign's leader platoon
-    /// (<c>Character::isLeadingAWarCampaign</c>): War Leader for a hostile campaign (<c>CampaignData::_isHostile</c>), else Leader; kidnapped; Diplomatic Status for an NPC class Diplomat
-    /// (<c>Character::isDiplomaticStatus</c> without its biome test, <b>Verified</b> by disassembly); for a free character a pending crime, then the escaped-prisoner flag.
+    /// The status line of the bounty panel (<c>FUN_1405d4260</c>, <b>Observed</b>, docs/game/ui-screens.md section 4), first match: the leader of a
+    /// campaign's leader platoon (<c>Character::isLeadingAWarCampaign</c>): War Leader for a hostile campaign (<c>CampaignData::_isHostile</c>), else
+    /// Leader; kidnapped; Diplomatic Status for an NPC class Diplomat (<c>Character::isDiplomaticStatus</c> without its biome test, <b>Verified</b>
+    /// by disassembly); for a free character a pending crime, then the escaped-prisoner flag.
     /// </summary>
     StatusView? StatusOf(CharacterId id, CharacterCold c, Vector3 at, PopulationData? data)
     {
-        if (c.SquadId >= 0 && Squads.Find(c.SquadId) is { PlatoonId: >= 0 } squad && squad.Leader == id && Platoons.Find(squad.PlatoonId) is { Campaign: { } inst } platoon && inst.Leader == platoon.Id)
+        if (c.SquadId >= 0 && Squads.Find(c.SquadId) is { PlatoonId: >= 0 } squad && squad.Leader == id
+            && Platoons.Find(squad.PlatoonId) is { Campaign: { } inst } platoon && inst.Leader == platoon.Id)
+        {
             return new(_systems.OfType<PopulationSystem>().FirstOrDefault()?.CampaignOf(inst.CampaignId)?.IsHostile == true ? StatusKind.WarLeader : StatusKind.Leader);
+        }
+
         if (c.Kidnapped) return new(StatusKind.Kidnapped);
         if (c.NpcClass == FundamentalType.Diplomat) return new(StatusKind.Diplomatic);
         if (c.SlaveState != 0) return null;
+
         if (c.Pending is { } crime)
-            return new(StatusKind.Crime, Crime.CrimeTable.Name(crime.Code), (int)crime.Timer, c.Bounties is null ? 0 : Crime.CrimeSystem.Lines(c, Tick, TickSeconds, LocalFaction(c, at, data)).FirstOrDefault(b => b.Local).Amount);
+        {
+            return new(StatusKind.Crime, Crime.CrimeTable.Name(crime.Code), (int)crime.Timer,
+                c.Bounties is null ? 0 : Crime.CrimeSystem.Lines(c, Tick, TickSeconds, LocalFaction(c, at, data)).FirstOrDefault(b => b.Local).Amount);
+        }
+
         return c.Escaped ? new(StatusKind.EscapedPrisoner) : null;
     }
 
     /// <summary>
-    /// The machine whose <c>animation events</c> sound on the character's clip: the player's operate task while it works (its functionality on <see cref="CharacterCold.OperateClip"/>),
-    /// or an AI worker's or obedient slave's standing work while its <see cref="CharacterCold.ActionClip"/> is still that work's clip; null otherwise.
+    /// The machine whose <c>animation events</c> sound on the character's clip: the player's operate task while it works (its functionality on
+    /// <see cref="CharacterCold.OperateClip"/>), or an AI worker's or obedient slave's standing work while its <see cref="CharacterCold.ActionClip"/>
+    /// is still that work's clip; null otherwise.
     /// </summary>
     static WorkEvents? WorkEventsOf(byte task, CharacterCold? cold)
     {
@@ -96,6 +122,7 @@ public sealed partial class World
                 ? new WorkEvents(works, workClip)
                 : null;
         }
+
         return task == (byte)CharacterTask.Idle && cold is { ActionWork: { } standing, ActionClip: { } clip } && clip == standing.Clip ? standing : null;
     }
 
@@ -104,11 +131,13 @@ public sealed partial class World
         [.. ClosableSlots.Where(slot => Items.InventoryCommands.SectionClosed(cold, slot)), .. Items.InventoryCommands.MainClosed(cold) ? MainGrid : []];
 
     static IReadOnlyList<HealthPartView> HealthPartsOf(MedicalState health, RaceData anatomy) =>
-        Array.AsReadOnly(health.Parts.Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp, p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb }).ToArray());
+        Array.AsReadOnly(health.Parts
+            .Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp, p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb })
+            .ToArray());
 
     /// <summary>
-    /// The inventory window's view: Total Weight is the carried weight (<see cref="Bodies.Encumbrance.CarriedWeight"/>, a carried person included, as the original's panel
-    /// <c>FUN_1405d4260</c>, docs/game/ui-screens.md), the maximum and the burden factor from the holder's strength.
+    /// The inventory window's view: Total Weight is the carried weight (<see cref="Bodies.Encumbrance.CarriedWeight"/>, a carried person included, as
+    /// the original's panel <c>FUN_1405d4260</c>, docs/game/ui-screens.md), the maximum and the burden factor from the holder's strength.
     /// </summary>
     InventoryView InventoryViewOf(CharacterCold cold, Items.Inventory grid, PopulationData? population, GameConstants? constants)
     {
@@ -116,7 +145,8 @@ public sealed partial class World
         bool carrying = !cold.Carrying.IsNone;
         float strengthMult = cold.Medical?.StatMultiplier(StatsEnumerated.Strength) ?? 1;
         var stats = constants is null ? null : cold.Stats;
-        return new InventoryView(grid.Width, grid.Height, grid.Backpack?.Contents?.Width ?? 0, grid.Backpack?.Contents?.Height ?? 0, ItemsOf(grid, cold.Faction, population))
+        return new InventoryView(grid.Width, grid.Height, grid.Backpack?.Contents?.Width ?? 0, grid.Backpack?.Contents?.Height ?? 0,
+            ItemsOf(grid, cold.Faction, population))
         {
             TotalWeight = constants is null ? items : Encumbrance.CarriedWeight(constants, items, carrying),
             CarryCapacity = stats is null ? null : Encumbrance.WindowCapacity(constants!, stats.Strength, strengthMult),
@@ -140,30 +170,39 @@ public sealed partial class World
             BagItems = shown.Item.Contents?.Items.Count ?? -1
         }).ToArray());
 
-    /// <summary>Slots a publish job takes at a time: the characters are made on the worker pool, each one reading only the tick's state.</summary>
+    /// <summary>
+    /// Slots a publish job takes at a time: the characters are made on the worker pool, each one reading only the tick's state.
+    /// </summary>
     const int PublishChunk = 256;
     /// <summary>
-    /// A set of character snapshots the publish fills in place: one object per slot, reused tick after tick. Four of them: the shown pair (<see cref="Snapshot"/> and
-    /// <see cref="PreviousSnapshot"/>) stays untouched while the next ticks, run ahead, publish twice into the other two (docs/simulation.md "Snapshots").
+    /// A set of character snapshots the publish fills in place: one object per slot, reused tick after tick. Four of them: the shown pair
+    /// (<see cref="Snapshot"/> and <see cref="PreviousSnapshot"/>) stays untouched while the next ticks, run ahead, publish twice into the other two
+    /// (docs/simulation.md "Snapshots").
     /// </summary>
     sealed class SnapshotBuffer
     {
-        /// <summary>Per slot, the snapshot this publish shows: the object the buffer filled (<see cref="Own"/>, else <see cref="Spare"/>), or the last publish's for a character the far cadence skipped.</summary>
+        /// <summary>
+        /// Per slot, the snapshot this publish shows: the object the buffer filled (<see cref="Own"/>, else <see cref="Spare"/>), or the last
+        /// publish's for a character the far cadence skipped.
+        /// </summary>
         public CharacterSnapshot?[] Slots = [];
         public CharacterSnapshot?[] Own = [], Spare = [];
         public readonly List<CharacterSnapshot> List = [];
     }
 
     /// <summary>
-    /// The buffer's object to fill for slot <paramref name="i"/>: never one another buffer of the ring still shows (a far character's object is shared across publishes and the render
-    /// thread may be reading it). The two the buffer owns alternate; one more is made only when both are shown elsewhere.
+    /// The buffer's object to fill for slot <paramref name="i"/>: never one another buffer of the ring still shows (a far character's object is
+    /// shared across publishes and the render thread may be reading it). The two the buffer owns alternate; one more is made only when both are shown
+    /// elsewhere.
     /// </summary>
     CharacterSnapshot Fresh(SnapshotBuffer buffer, int i)
     {
         ref var own = ref buffer.Own[i];
         if (own is null || !ShownElsewhere(buffer, own, i)) return own ??= new();
+
         ref var spare = ref buffer.Spare[i];
         if (spare is not null && ShownElsewhere(buffer, spare, i)) spare = null;
+
         (own, spare) = (spare ?? new(), own);
         return own;
     }
@@ -172,30 +211,58 @@ public sealed partial class World
     {
         foreach (var b in _snapshotRing)
             if (b != buffer && i < b.Slots.Length && ReferenceEquals(b.Slots[i], s)) return true;
+
         return false;
     }
+
     readonly SnapshotBuffer[] _snapshotRing = [new(), new(), new(), new()];
-    /// <summary>The buffers <see cref="Snapshot"/>, <see cref="PreviousSnapshot"/> and the snapshot before that were filled from (null: <see cref="WorldSnapshot.Empty"/>).</summary>
+    /// <summary>
+    /// The buffers <see cref="Snapshot"/>, <see cref="PreviousSnapshot"/> and the snapshot before that were filled from (null:
+    /// <see cref="WorldSnapshot.Empty"/>).
+    /// </summary>
     SnapshotBuffer? _shownBuffer, _previousBuffer, _olderBuffer;
 
-    /// <summary>Keeps <see cref="PreviousSnapshot"/> across a publish (a paused publish, loading): its buffer stays out of the ring with it.</summary>
+    /// <summary>
+    /// Keeps <see cref="PreviousSnapshot"/> across a publish (a paused publish, loading): its buffer stays out of the ring with it.
+    /// </summary>
     void KeepPrevious(WorldSnapshot previous, SnapshotBuffer? buffer) => (PreviousSnapshot, _previousBuffer) = (previous, buffer);
 
-    /// <summary>Builds the <see cref="WorldSnapshot"/> of the tick that just ended from the state it left in <see cref="CharacterTable.Previous"/>.</summary>
-    /// <param name="farShared">A tick's publish: a character the far cadence skipped this tick (<see cref="Steps"/>) is published as the last publish had it, the same object.</param>
+    /// <summary>
+    /// Builds the <see cref="WorldSnapshot"/> of the tick that just ended from the state it left in <see cref="CharacterTable.Previous"/>.
+    /// </summary>
+    /// <param name="farShared">A tick's publish: a character the far cadence skipped this tick (<see cref="Steps"/>) is published as the last publish
+    /// had it, the same object.</param>
     void Publish(TickProfile? prof = null, bool farShared = false)
     {
         var table = Characters;
         var state = table.Previous;
+
         // The selection's first member that could knock someone out from behind: the stealth KO chances are against it.
         int koSlot = -1;
+
         foreach (var s in Player.Selection)
-            if (table.TryResolveNext(s, out int k) && table.Cold(k) is { } c && Carrying.CarrySystem.CanKnockOut(c)) { koSlot = k; break; }
+        {
+            if (table.TryResolveNext(s, out int k) && table.Cold(k) is { } c && Carrying.CarrySystem.CanKnockOut(c))
+            {
+                koSlot = k;
+                break;
+            }
+        }
+
         // The selection's lead: the kidnap chances are against it.
         int leadSlot = -1;
+
         foreach (var s in Player.Selection)
-            if (table.TryResolveNext(s, out int l)) { leadSlot = l; break; }
-        // The character under the pointer: with the selected and inspected ones it gets the context menu's figures, the crowd does not (docs/simulation.md, tick order).
+        {
+            if (table.TryResolveNext(s, out int l))
+            {
+                leadSlot = l;
+                break;
+            }
+        }
+
+        // The character under the pointer: with the selected and inspected ones it gets the context menu's figures, the crowd does not
+        // (docs/simulation.md, tick order).
         var pointed = Player.Pointed;
         var aggro = koSlot >= 0 ? _systems.OfType<AggroSystem>().FirstOrDefault() : null;
         var talk = _systems.OfType<Dialogue.DialogueSystem>().FirstOrDefault();
@@ -205,26 +272,33 @@ public sealed partial class World
         var population = _systems.OfType<PopulationSystem>().FirstOrDefault()?.Data;
         float extraBloodLoss = _systems.OfType<BodySystem>().FirstOrDefault()?.Constants.ExtraBloodLossFromBodyparts ?? 1;
         var buffer = Array.Find(_snapshotRing, b => b != _shownBuffer && b != _previousBuffer && b != _olderBuffer)!;
+
         if (buffer.Slots.Length < state.Length)
         {
             Array.Resize(ref buffer.Slots, state.Length);
             Array.Resize(ref buffer.Own, state.Length);
             Array.Resize(ref buffer.Spare, state.Length);
         }
+
         var slots = buffer.Slots;
-        // A character the far cadence skipped this tick has not changed: the last publish's object stands for it again (docs/simulation.md "Far cadence").
+
+        // A character the far cadence skipped this tick has not changed: the last publish's object stands for it again (docs/simulation.md "Far
+        // cadence").
         var kept = farShared ? _shownBuffer?.Slots : null;
         ParallelFor((state.Length + PublishChunk - 1) / PublishChunk, chunk =>
         {
             var state = table.Previous;
+
             for (int i = chunk * PublishChunk, end = Math.Min(state.Length, i + PublishChunk); i < end; i++)
             {
                 if (!state[i].Alive) continue;
+
                 if (kept is not null && !Steps(i) && i < kept.Length && kept[i] is { } last && last.Id == new CharacterId(i, state[i].Generation))
                 {
                     slots[i] = last;
                     continue;
                 }
+
                 Fill(slots[i] = Fresh(buffer, i), i);
             }
         });
@@ -232,6 +306,7 @@ public sealed partial class World
         list.Clear();
         for (int i = 0; i < state.Length; i++)
             if (state[i].Alive) list.Add(slots[i]!);
+
         prof?.Part("publish characters");   // F12, in a tick only (a paused publish has no lap to measure from)
 
         // Every property is written on every fill: the object held another character's last time.
@@ -240,8 +315,10 @@ public sealed partial class World
             var state = table.Previous;
             var id = new CharacterId(i, state[i].Generation);
             var cold = table.Cold(i);
+
             // The details only the selection shows: asked once per character, the selection is a list.
-            bool selected = cold is { IsPlayer: true } && Player.Selection.Contains(id), inspected = !selected && id == Player.Inspected, detailed = selected || inspected;
+            bool selected = cold is { IsPlayer: true } && Player.Selection.Contains(id), inspected = !selected
+                && id == Player.Inspected, detailed = selected || inspected;
             bool shown = detailed || id == pointed;
             bool sneaking = cold is { IsPlayer: true } && (cold.Orders & CharacterOrders.Sneak) != 0;
             var watchers = sneaking ? WatchersOf(cold!) : [];
@@ -286,9 +363,12 @@ public sealed partial class World
                 _systems.OfType<Kidnap.CaptiveSystem>().FirstOrDefault()?.LooksLikeSlaveLevel(cold) ?? 0) : null;
             s.Disguise = detailed && cold!.Faction == Player.Faction && (cold.DisguiseLevel > 0 || cold.RecentlyWanted > 0) ? DisguiseOf(cold, state[i].Position, population) : null;
             s.Status = detailed ? StatusOf(id, cold!, state[i].Position, population) : null;
-            s.NoLootGuilt = cold is { } guilt && (guilt.NpcClass is FundamentalType.Bandit or FundamentalType.Slave || population is { Factions: { } fl } && (uint)guilt.Faction < (uint)fl.Count && fl[guilt.Faction].NotReal);
-            s.WarParty = cold is { SquadId: >= 0 } warCold && Squads.Find(warCold.SquadId) is { PlatoonId: >= 0 } warSquad && Platoons.Find(warSquad.PlatoonId)?.Campaign is not null;
+            s.NoLootGuilt = cold is { } guilt
+                && (guilt.NpcClass is FundamentalType.Bandit or FundamentalType.Slave || population is { Factions: { } fl } && (uint)guilt.Faction < (uint)fl.Count && fl[guilt.Faction].NotReal);
+            s.WarParty = cold is { SquadId: >= 0 } warCold && Squads.Find(warCold.SquadId) is { PlatoonId: >= 0 } warSquad
+                && Platoons.Find(warSquad.PlatoonId)?.Campaign is not null;
             s.Body = cold?.Medical is { } med && cold.Race is { } race ? BodyOf(cold, med, race, state[i].Task, extraBloodLoss) : null;
+
             // The original skips robots' appearances (FUN_140531820) and animals have none.
             s.Build = cold is { Stats: { } buildStats, Medical: { } fed, Race.IsRobot: false, Appearance: { Animal: null } look }
                 ? ShapedBuild(cold, Data.Characters.CharacterShape.BuildFromStats(look.Female, buildStats, static (stats, s) => stats[s], fed.Hunger)) : null;
@@ -307,7 +387,8 @@ public sealed partial class World
             s.WorkingShackles = cold?.Shackles is { Work: Locks.ShackleWork.Pick or Locks.ShackleWork.Cut };
             s.InBed = cold is { InSomething: Locks.HeldState.Bed };
             s.Imprisoned = cold is { InSomething: Locks.HeldState.Imprisoned };
-            s.CageOpen = cold is { InSomething: Locks.HeldState.Imprisoned, InWhat: { } heldIn } && Fixtures.Find(heldIn) is { Kind: Locks.FixtureKind.Cage, Lock: { EffectivelyLocked: false } };
+            s.CageOpen = cold is { InSomething: Locks.HeldState.Imprisoned, InWhat: { } heldIn }
+                && Fixtures.Find(heldIn) is { Kind: Locks.FixtureKind.Cage, Lock: { EffectivelyLocked: false } };
             s.StayingLow = cold?.Medical is { StayingLow: true, Prone: true, Crawling: false };
             s.InCombat = cold?.InCombat ?? false;
             s.CombatMode = cold is not null && combat is not null && CharacterFacts.InCombatMode(combat, table, id, cold, true, true);
@@ -323,11 +404,13 @@ public sealed partial class World
             s.Jobs = cold is { Jobs.Count: > 0 } ? cold.Jobs.ToArray() : [];
             s.Scale = cold?.Animal is { } animal ? animal.Scale(cold.ShownAge) : 1;   // the size last refreshed (BodySystem.Age)
             s.DrawDistanceScale = cold?.Race is { Gigantic: true } ? RaceData.GiganticDrawScale : 1;
-            s.WeatherNotice = cold?.WeatherNotice ?? WeatherNotice.None; s.WeatherNoticeProtection = cold?.WeatherNoticeProtection ?? 0;
+            s.WeatherNotice = cold?.WeatherNotice ?? WeatherNotice.None;
+            s.WeatherNoticeProtection = cold?.WeatherNoticeProtection ?? 0;
             s.Decision = Decisions.Tracing ? cold?.Decision : null;
             s.Activity = cold is not null && (shown || cold.IsPlayer) ? Ai.AiSystem.ActivityText(state[i], cold, Tick) : null;
-            // The turret the combat system runs with this gunner; else (no combat system) at the gun of the turret its squad gave it: the AI's turret goal, walked to and stood at
-            // (derived from the claims, not hashed).
+
+            // The turret the combat system runs with this gunner; else (no combat system) at the gun of the turret its squad gave it: the AI's turret
+            // goal, walked to and stood at (derived from the claims, not hashed).
             s.Turret = combat?.TurretOf(cold?.Gunning) is { } gunned ? new MannedTurret(cold!.Gunning!, gunned.BuildingId, gunned.Position, gunned.Yaw, gunned.GunId) { Simulated = true, Aim = gunned.Aim, Angles = gunned.Angles }
                 : cold is { Ai: { Behaviour: Ai.AiBehaviour.Turret, Squad.Ai: { } board } } && (CharacterTask)state[i].Task == CharacterTask.Idle && Ai.AiSystem.Holds(state[i], cold)
                 && board.TurretClaims.TryGetValue(i, out int claimed) && (uint)claimed < (uint)board.Turrets.Count && board.Turrets[claimed] is { Turret: { } post } building
@@ -335,7 +418,9 @@ public sealed partial class World
             s.RangedLine = detailed && cold is not null ? combat?.RangedLineOf(this, id, cold) : null;
             s.InPlayerBuilding = cold is { IsPlayer: false } && cold.Faction != Player.Faction && (cold.Medical is { Unconscious: true } || Carrying.CarrySystem.Asleep(table, i))
                 && _production?.InPlayerBuilding(this, state[i].Position) == true;
-            s.BedRecoveryRate = detailed && cold is { InSomething: Locks.HeldState.Bed } ? _systems.OfType<BodySystem>().FirstOrDefault()?.BedRecoveryRate(this, cold, in state[i]) : null;
+            s.BedRecoveryRate = detailed && cold is { InSomething: Locks.HeldState.Bed } ? _systems
+                .OfType<BodySystem>()
+                .FirstOrDefault()?.BedRecoveryRate(this, cold, in state[i]) : null;
             s.Stealth = sneaking ? watchers.Length == 0 ? StealthExposure.Unobserved : watchers.Max(w => w.Level) : null;
             s.Light = sneaking ? Sight.PeekLight(i) : 1;
             s.Watchers = watchers;
@@ -358,6 +443,7 @@ public sealed partial class World
             s.KidnapChance = shown && leadSlot >= 0 && i != leadSlot && cold is { IsPlayer: false } ? Carrying.CarrySystem.KidnapChance(table.Cold(leadSlot)!, cold, Tick) : null;
             s.LockpickSkill = cold is { IsPlayer: true } ? Locks.Lockpicking.Skill(cold) : 0;
         }
+
         (_olderBuffer, _previousBuffer, _shownBuffer) = (_previousBuffer, _shownBuffer, buffer);
         PreviousSnapshot = Snapshot;
         Snapshot = new WorldSnapshot(Tick, list)
@@ -412,26 +498,34 @@ public sealed partial class World
         prof?.Part("publish views");
     }
 
-    /// <summary>The dialogue's speech bubbles, then the <see cref="Bark"/>s still due whose speaker has no dialogue line on show; expired barks are dropped.</summary>
+    /// <summary>
+    /// The dialogue's speech bubbles, then the <see cref="Bark"/>s still due whose speaker has no dialogue line on show; expired barks are dropped.
+    /// </summary>
     IReadOnlyList<Dialogue.SpeechBubble> PublishSpeech()
     {
         var speech = _dialogues?.PublishSpeech() ?? [];
         if (_barks.Count == 0) return speech;
-        foreach (var gone in _barks.Where(b => Tick >= b.Value.Until || !Characters.TryResolveNext(b.Key, out _)).Select(b => b.Key).ToArray()) _barks.Remove(gone);
+        foreach (var gone in _barks
+            .Where(b => Tick >= b.Value.Until || !Characters.TryResolveNext(b.Key, out _))
+            .Select(b => b.Key)
+            .ToArray()) _barks.Remove(gone);
         if (_barks.Count == 0) return speech;
+
         var all = new List<Dialogue.SpeechBubble>(speech);
         foreach (var (who, (text, _)) in _barks)
             if (!speech.Any(s => s.Speaker == who)) all.Add(new Dialogue.SpeechBubble(who, text, false));
+
         return all;
     }
 
     /// <summary>
-    /// The open container (<see cref="PlayerState.OpenContainer"/>) shaped as a machine with a storage grid, so the host shows it in the storage window the research bench uses.
-    /// <c>Site</c> is the fixture id, <c>Record</c> its BUILDING record. Null when none is open.
+    /// The open container (<see cref="PlayerState.OpenContainer"/>) shaped as a machine with a storage grid, so the host shows it in the storage
+    /// window the research bench uses. <c>Site</c> is the fixture id, <c>Record</c> its BUILDING record. Null when none is open.
     /// </summary>
     Production.MachineSnapshot? OpenContainerView()
     {
         if (Player.OpenContainer is not { } id || Fixtures.Find(id) is not { Contents: not null } f) return null;
+
         var grid = PlayerSystem.GridOf(this, f, out var region);
         var storage = new InventoryView(region.Width, region.Height, 0, 0,
             Array.AsReadOnly(grid.Items.Select((item, index) => (item, index)).Where(e => region.Holds(e.item)).Select(e => new InventoryItemView(e.index, e.item.Record,
@@ -441,45 +535,60 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The bar of Task_PickLock and Task_PickLock_Shackles (docs/game/locks.md "Lockpicking"): "Lockpicking (Chance {p}%)" with the cage penalty, filled pick time / next-roll time,
-    /// while the picker is at the lock (not walking to it).
+    /// The bar of Task_PickLock and Task_PickLock_Shackles (docs/game/locks.md "Lockpicking"): "Lockpicking (Chance {p}%)" with the cage penalty,
+    /// filled pick time / next-roll time, while the picker is at the lock (not walking to it).
     /// </summary>
     TaskBar? PickBar(CharacterCold c, byte task)
     {
         if (task == (byte)CharacterTask.GoTo) return null;
+
         var l = c.PickingLock is { } id ? Fixtures.Find(id)?.Lock
             : c.Shackles is { Work: Locks.ShackleWork.Pick } job && Characters.TryResolveNext(job.Wearer, out int w) ? Locks.LockSystem.WornShackles(Characters.Cold(w))?.Lock : null;
         if (l is not { EffectivelyLocked: true }) return null;
+
         float chance = Locks.Lockpicking.RollChance(c, l.Level);
         string text = Loc.Tr("Lockpicking (Chance {1}%)", MathF.Round(chance * 100));
         return new TaskBar(text, l.NextRoll > 0 ? Math.Clamp(l.PickTime / l.NextRoll, 0, 1) : 0);
     }
 
-    /// <summary>The bar of Task_UseTrainingDummy (docs/game/ai-tasks.md "Finders of the jobs"): "Training", filled with the trained stat's fraction, while the user works the dummy.</summary>
+    /// <summary>
+    /// The bar of Task_UseTrainingDummy (docs/game/ai-tasks.md "Finders of the jobs"): "Training", filled with the trained stat's fraction, while the
+    /// user works the dummy.
+    /// </summary>
     TaskBar? TrainBar(CharacterCold c)
     {
-        if (!c.Operating || c.OperateSite is not { } site || Machines.Find(site) is not { Data.IsTraining: true } m || c.Stats is not { } stats) return null;
+        if (!c.Operating || c.OperateSite is not { } site || Machines.Find(site) is not { Data.IsTraining: true } m || c.Stats is not { } stats)
+            return null;
+
         float stat = stats[(StatsEnumerated)m.Data.Stat];
         return new TaskBar("Training", stat - MathF.Floor(stat));
     }
 
-    /// <summary>The sneaker's watchers of the last <see cref="AggroSystem.WatcherSeconds"/> that are still about, where they stand now.</summary>
+    /// <summary>
+    /// The sneaker's watchers of the last <see cref="AggroSystem.WatcherSeconds"/> that are still about, where they stand now.
+    /// </summary>
     SquadView[] PublishSquads() => [.. SquadManagement.PlayerSquads(this).Select(s => new SquadView(s.Id, s.Name, [.. s.Members]))];
 
     WatcherView[] WatchersOf(CharacterCold cold)
     {
         if (cold.Watchers is not { Count: > 0 } list) return [];
+
         long lapse = Tick - (long)MathF.Ceiling(AggroSystem.WatcherSeconds / TickSeconds);
         var views = new List<WatcherView>(list.Count);
+
         foreach (var w in list)
-            if (w.Tick >= lapse && Characters.TryResolveNext(w.Looker, out int slot) && Characters.Cold(slot) is { CarriedBy.IsNone: true }) views.Add(new WatcherView(Characters.Previous[slot].Position, w.Level));
+        {
+            if (w.Tick >= lapse && Characters.TryResolveNext(w.Looker, out int slot) && Characters.Cold(slot) is { CarriedBy.IsNone: true })
+                views.Add(new WatcherView(Characters.Previous[slot].Position, w.Level));
+        }
+
         return [.. views];
     }
 
     /// <summary>
-    /// The HUD's numbers of a selected character (docs/game/ui-screens.md section 4). The stats panel lists what the character fights with: Crossbows, Precision and
-    /// Perception in ranged mode with a crossbow, else Martial Arts unarmed or Attack and Defense with a melee weapon; then Strength, Dexterity, Toughness and, but
-    /// in ranged mode, Dodge; the lines and their tooltips are <see cref="HudTips"/>'s.
+    /// The HUD's numbers of a selected character (docs/game/ui-screens.md section 4). The stats panel lists what the character fights with:
+    /// Crossbows, Precision and Perception in ranged mode with a crossbow, else Martial Arts unarmed or Attack and Defense with a melee weapon; then
+    /// Strength, Dexterity, Toughness and, but in ranged mode, Dodge; the lines and their tooltips are <see cref="HudTips"/>'s.
     /// </summary>
     HudView HudOf(CharacterId id, CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, in CharacterHot hot, Combat.CombatSystem? combat,
         GameConstants? constants, bool inBuilding, bool inside, Data.GameDatabase? db = null)
@@ -505,25 +614,30 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The state panel's "Current Skill" line (the HUD update's panel 3, docs/game/ui-screens.md section 4): the skill the job used this tick at its effective level with its
-    /// tooltip (<see cref="SkillTermsOf"/>); else, with the stats display mode 2 or the ranged controller's combat mode, the crossbow's accuracy error; else, in a melee fight, the
-    /// class of the weapon in hand at its trained level with its damage; else Stealth when sneaking, Athletics when moving faster than 9 units a second. Swimming replaces it with
-    /// the swim speed. Picking a lock is Lockpicking.
+    /// The state panel's "Current Skill" line (the HUD update's panel 3, docs/game/ui-screens.md section 4): the skill the job used this tick at its
+    /// effective level with its tooltip (<see cref="SkillTermsOf"/>); else, with the stats display mode 2 or the ranged controller's combat mode, the
+    /// crossbow's accuracy error; else, in a melee fight, the class of the weapon in hand at its trained level with its damage; else Stealth when
+    /// sneaking, Athletics when moving faster than 9 units a second. Swimming replaces it with the swim speed. Picking a lock is Lockpicking.
     /// </summary>
     CurrentSkillView? SkillLine(CharacterId id, CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, in CharacterHot hot, Combat.CombatSystem? combat,
         int mode)
     {
         float encumbrance = cold.Fighter?.EncumbranceFactor ?? 1;
-        if (cold.WaterState == 3) return new(StatsEnumerated.Swimming, "Swimming", cold.SwimSpeed, Speed: true) { Swim = SwimTermsOf(cold, med, race, stats, encumbrance) };
+        if (cold.WaterState == 3)
+            return new(StatsEnumerated.Swimming, "Swimming", cold.SwimSpeed, Speed: true) { Swim = SwimTermsOf(cold, med, race, stats, encumbrance) };
+
         var stat = cold.SkillInUseTick >= Tick - 1 ? cold.SkillInUse : PickBar(cold, hot.Task) is not null ? StatsEnumerated.Lockpicking : StatsEnumerated.None;
+
         if (stat != StatsEnumerated.None)
         {
             var terms = SkillTermsOf(cold, med, stats, stat);
             return new(stat, null, MathF.Round(terms.Total), terms.Penalised, Terms: terms);
         }
-        // getGUIStatsDisplayMode 2 or the ranged controller's combat mode (a shooting fight, a manned turret; no target test), with a crossbow: its accuracy with Crossbows, or with
-        // Turrets when Character +0x3d8 (the last weapon category the HUD saw in a melee fight) is 7.
+
+        // getGUIStatsDisplayMode 2 or the ranged controller's combat mode (a shooting fight, a manned turret; no target test), with a crossbow: its
+        // accuracy with Crossbows, or with Turrets when Character +0x3d8 (the last weapon category the HUD saw in a melee fight) is 7.
         bool aiming = mode == 2 || Combat.CombatSystem.RangedCombatMode(cold);
+
         if (aiming)
         {
             var aimStat = cold.LastWeaponCategory == (int)Data.Gameplay.Combat.WeaponCategory.Turret ? StatsEnumerated.Turrets : StatsEnumerated.Crossbows;
@@ -532,8 +646,9 @@ public sealed partial class World
         }
         else if (combat?.MeleeCombatMode(id, cold) == true)
         {
-            // The HUD writes Character +0x3d8 from the weapon in hand (getCurrentWeapon; the FISTS weapon with nothing drawn), then labels by it. The only writer besides the constructor,
-            // so this display state lives on the character; each character is published by one worker, so the write does not race.
+            // The HUD writes Character +0x3d8 from the weapon in hand (getCurrentWeapon; the FISTS weapon with nothing drawn), then labels by it. The
+            // only writer besides the constructor, so this display state lives on the character; each character is published by one worker, so the
+            // write does not race.
             cold.LastWeaponCategory = Combat.CombatSystem.HandCategory(cold);
             var (label, skill) = cold.LastWeaponCategory switch
             {
@@ -545,8 +660,10 @@ public sealed partial class World
                 8 => ("Polearm:", StatsEnumerated.Polearms),
                 _ => ((string?)null, StatsEnumerated.None),
             };
-            if (label is not null) return new(skill, label, (int)stats[skill]) { Damage = combat.HudDamage(this, id.Slot, cold) };
+            if (label is not null)
+                return new(skill, label, (int)stats[skill]) { Damage = combat.HudDamage(this, id.Slot, cold) };
         }
+
         if ((cold.Orders & CharacterOrders.Sneak) != 0)
         {
             float s = Orders.Stealth(cold);
@@ -560,8 +677,10 @@ public sealed partial class World
                 (int)(((cold.Fighter?.StealthMult ?? 1) - 1) * 100), (int)((med.LegItemFactor(StatsEnumerated.Stealth) - 1) * 100), total)
             };
         }
+
         float speed = MathF.Sqrt(hot.Velocity.X * hot.Velocity.X + hot.Velocity.Z * hot.Velocity.Z);
         if (speed <= 9) return null;
+
         return new(StatsEnumerated.Athletics, "Athletics:", (int)stats.Athletics)
         {
             Athletics = new((int)stats.Athletics, Speed.RunValue(race, stats.Athletics),
@@ -571,8 +690,9 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The Swimming line's tooltip (the HUD update): the trained level, the base swim speed (<see cref="Bodies.Speed.SwimBase"/>), the leg term with 0.6 per unusable arm, the hunger
-    /// term, the encumbrance and the limb items' factor (all four limbs) as percentages, whether both arms are broken, and the current swim speed.
+    /// The Swimming line's tooltip (the HUD update): the trained level, the base swim speed (<see cref="Bodies.Speed.SwimBase"/>), the leg term with
+    /// 0.6 per unusable arm, the hunger term, the encumbrance and the limb items' factor (all four limbs) as percentages, whether both arms are
+    /// broken, and the current swim speed.
     /// </summary>
     static SwimTerms SwimTermsOf(CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, float encumbrance)
     {
@@ -599,7 +719,9 @@ public sealed partial class World
     static SkillTerms SkillTermsOf(CharacterCold cold, MedicalState med, CharacterStats stats, StatsEnumerated stat)
     {
         var factors = (cold.Fighter?.Factors ?? StatFactors.None) with { Stun = med.DustStatFactor };
+
         int Term(StatUse use) => (int)((1 - med.StatMultiplier(stat, use, factors)) * 100);
+
         bool robotics = med.Parts.Any(p => p.Limb == LimbState.Replaced && p.Replacement is not null);
         int gear = stat is StatsEnumerated.Strength or StatsEnumerated.Perception ? 0 : Term(StatUse.LimbItems);
         int missingArm = stat == StatsEnumerated.Strength && med.Aggregates().EitherArmDisabled ? 33 : 0;
@@ -608,17 +730,21 @@ public sealed partial class World
             robotics, gear, missingArm, (stats[stat] + bonus) * med.StatMultiplier(stat, StatUse.All, factors), bonus);
     }
 
-    /// <summary>A locked item worn (not in the main grid): shackles. A loop, not Any with a lambda: it runs for every character on every publish.</summary>
+    /// <summary>
+    /// A locked item worn (not in the main grid): shackles. A loop, not Any with a lambda: it runs for every character on every publish.
+    /// </summary>
     static bool WearsLocked(Items.Inventory worn)
     {
         foreach (var item in worn.Items)
             if (item.IsLocked && item.Section != "main") return true;
+
         return false;
     }
 
     static BodyStatus BodyOf(CharacterCold cold, MedicalState med, RaceData race, byte task, float extraBloodLoss)
     {
-        // The quick right click's tests (FUN_1407fb410): the organic need score above 0.01 is first aid (order 25), else the robot one is robot repair (60).
+        // The quick right click's tests (FUN_1407fb410): the organic need score above 0.01 is first aid (order 25), else the robot one is robot
+        // repair (60).
         float capacity = MathF.Max(MedicalState.BloodCapacity(race, cold.Stats?.Strength ?? 50, med.HasStatsObject, med.ScaleK, med.ScaleZ), 1);
         var (organicNeed, robotScore) = med.FirstAidNeeds(race, capacity, extraBloodLoss);
         bool organic = organicNeed > MedicalState.AidNeedFloor;

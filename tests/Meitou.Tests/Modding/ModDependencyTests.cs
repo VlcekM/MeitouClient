@@ -39,7 +39,9 @@ public class ModDependencyTests
         return ModHost.Load(options);
     }
 
-    /// <summary>A tiny assembly that is not on the game's list, as a framework DLL would be.</summary>
+    /// <summary>
+    /// A tiny assembly that is not on the game's list, as a framework DLL would be.
+    /// </summary>
     static byte[] EmitLibrary(string name)
     {
         var builder = new PersistedAssemblyBuilder(new AssemblyName(name), typeof(object).Assembly);
@@ -70,7 +72,9 @@ public class ModDependencyTests
         Assert.Same(framework.GetType("MeitouTestFramework.Ledger"), shared.GetType("MeitouTestFramework.Ledger"));
     }
 
-    /// <summary>Each refusal before code is opened names its fix; a refused dependency cascades with its reason; a disabled one says so.</summary>
+    /// <summary>
+    /// Each refusal before code is opened names its fix; a refused dependency cascades with its reason; a disabled one says so.
+    /// </summary>
     [Fact]
     public void The_loader_refuses_missing_disabled_later_and_refused_dependencies()
     {
@@ -117,6 +121,7 @@ public class ModDependencyTests
     {
         static CodeModManifest Built(string range) =>
             new("m", 2, ["m.dll"], "X.Y", null, null) { GameVersion = CodeModVersionRange.Parse(range) };
+
         static CodeModVersion V(string text) => CodeModVersion.TryParse(text, out var v) ? v : throw new ArgumentException(text);
 
         Assert.Null(CodeModChecks.GameVersionProblem(Built(">=0.16.1"), V("0.16.1-nightly.20261106")));
@@ -129,8 +134,8 @@ public class ModDependencyTests
     }
 
     /// <summary>
-    /// The launcher and the loader judge against what loads, not what is merely enabled: a refused (here missing a dependency) mod neither takes its id nor
-    /// conflicts, and a dependent names the mod that would have served.
+    /// The launcher and the loader judge against what loads, not what is merely enabled: a refused (here missing a dependency) mod neither takes its
+    /// id nor conflicts, and a dependent names the mod that would have served.
     /// </summary>
     [Fact]
     public void A_refused_mod_blocks_no_later_one_in_the_launcher_or_the_loader()

@@ -2,7 +2,9 @@ using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Rendering.Sky;
 
-/// <summary>Independent procedural cloud ray marcher and history filter; no original-game shader code.</summary>
+/// <summary>
+/// Independent procedural cloud ray marcher and history filter; no original-game shader code.
+/// </summary>
 public static class VolumetricCloudShaders
 {
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);

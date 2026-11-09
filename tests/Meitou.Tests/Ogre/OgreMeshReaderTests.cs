@@ -7,7 +7,9 @@ namespace Meitou.Tests.Ogre;
 
 public class OgreMeshReaderTests
 {
-    /// <summary>Writes Ogre serializer chunks: id, total length (including the 6-byte header), body.</summary>
+    /// <summary>
+    /// Writes Ogre serializer chunks: id, total length (including the 6-byte header), body.
+    /// </summary>
     sealed class Builder
     {
         readonly MemoryStream _ms = new();
@@ -38,11 +40,37 @@ public class OgreMeshReaderTests
             return this;
         }
 
-        public Builder Bool(bool v) { _w.Write(v); return this; }
-        public Builder U16(ushort v) { _w.Write(v); return this; }
-        public Builder U32(uint v) { _w.Write(v); return this; }
-        public Builder F32(params float[] v) { foreach (var f in v) _w.Write(f); return this; }
-        public Builder String(string s) { _w.Write(Encoding.UTF8.GetBytes(s + "\n")); return this; }
+        public Builder Bool(bool v)
+        {
+            _w.Write(v);
+            return this;
+        }
+
+        public Builder U16(ushort v)
+        {
+            _w.Write(v);
+            return this;
+        }
+
+        public Builder U32(uint v)
+        {
+            _w.Write(v);
+            return this;
+        }
+
+        public Builder F32(params float[] v)
+        {
+            foreach (var f in v) _w.Write(f);
+
+            return this;
+        }
+
+        public Builder String(string s)
+        {
+            _w.Write(Encoding.UTF8.GetBytes(s + "\n"));
+            return this;
+        }
+
         public byte[] ToArray() => _ms.ToArray();
     }
 
@@ -124,15 +152,19 @@ public class OgreMeshReaderTests
             var mesh = OgreMeshReader.ReadFile(file);
             var bounds = mesh.Bounds ?? throw new Xunit.Sdk.XunitException($"{file}: no bounds");
             float tolerance = 1e-3f * (1 + (bounds.Max - bounds.Min).Length());
+
             foreach (var sub in mesh.SubMeshes)
             {
                 var vertices = sub.UseSharedVertices ? mesh.SharedVertexData! : sub.VertexData!;
                 Assert.All(sub.Indices.Indices, i => Assert.True(i < vertices.VertexCount, file));
+
                 foreach (var p in vertices.ReadPositions() ?? [])
+                {
                     Assert.True(
                         Vector3.Min(p, bounds.Min - new Vector3(tolerance)) == bounds.Min - new Vector3(tolerance) &&
                         Vector3.Max(p, bounds.Max + new Vector3(tolerance)) == bounds.Max + new Vector3(tolerance),
                         $"{file}: {p} outside {bounds}");
+                }
             }
         });
     }

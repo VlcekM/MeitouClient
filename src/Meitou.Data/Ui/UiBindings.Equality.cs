@@ -3,8 +3,9 @@ namespace Meitou.Data.Ui;
 public sealed partial class UiBindings
 {
     /// <summary>
-    /// Whether <paramref name="other"/> binds the same data, so that <see cref="MyGuiPresentation.Arrange"/> makes the same controls from it (a host reuses the last arrangement then).
-    /// Every member counts; a member added to the bindings must be compared here too. <see cref="TextHeight"/> is compared by identity.
+    /// Whether <paramref name="other"/> binds the same data, so that <see cref="MyGuiPresentation.Arrange"/> makes the same controls from it (a host
+    /// reuses the last arrangement then). Every member counts; a member added to the bindings must be compared here too. <see cref="TextHeight"/> is
+    /// compared by identity.
     /// </summary>
     public bool ContentEquals(UiBindings other) =>
         TemplateScale == other.TemplateScale && OpenCombo == other.OpenCombo && TextHeight == other.TextHeight
@@ -30,6 +31,7 @@ public sealed partial class UiBindings
         if (a.Count != b.Count) return false;
         foreach (var (key, value) in a)
             if (!b.TryGetValue(key, out var theirs) || !equal(value, theirs)) return false;
+
         return true;
     }
 }

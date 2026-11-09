@@ -26,6 +26,7 @@ sealed class MetalTimestamps : IGpuTimestamps
     public QuerySlot Allocate()
     {
         if (_slot < 0) return default;
+
         return new QuerySlot(_frame, _slot, (uint)_count++);
     }
 
