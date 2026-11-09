@@ -559,7 +559,7 @@ Status `+0x468` of a `ProductionBuilding` (production, furnace, generator, wind,
   an unmet !63 into rows 92 Collecting resource (`Task_EmptyMachine`; A: 66, !63, !169) and 113 (A: !63, 105, !66, !89), which achieve it: the worker takes the output into its own inventory (B 82 room; 114 ditching makes it) before operating.
 - **Crafting** (`FUN_1402bcac0`, **Observed**): after a finished item is stored, status 1 when the output has become full (not when it could not be stored).
 
-Meitou: `Machine.Status` (hashed, not saved, a producer starts at 2), `HasEmptyInputs`, `OutputBlocked`, `Jammed`; `ProductionSystem.SlowWorld` clears 1 / 0 for a producer that takes operators, an operator's or automatic machine's step sets them. The panel reads the word chain
+Meitou: `Machine.Status` (hashed, not saved, a producer starts at 2), `HasEmptyInputs`, `OutputBlocked`, `Jammed`; `ProductionSystem.ClearBlocked` (its serial step) clears 1 / 0 for a producer that takes operators, an operator's or automatic machine's step sets them. The panel reads the word chain
 (`ProductionStatus`). Planner: `Holds` evaluates 62 / 63 / 64 for a `Targets.Machine` target, which no finder gives yet; 65, 105, 106, the farm and bench variants and the 87 to 92 plan are not modelled (the job system's `HasWork` / `Room` is the engine reading of the blocked start).
 
 ### Item furnace

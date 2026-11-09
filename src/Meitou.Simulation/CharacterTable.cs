@@ -1487,6 +1487,17 @@ public sealed class CharacterTable
         if (k.Inventory is null) hasher.Add(-1); else k.Inventory.Hash(ref hasher);
         hasher.Add(k.DiedTick);
         if (k.HasFlies) hasher.Add(0x466C6965);
+        HashCombatMotion(ref hasher, k);
+        if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
+        hasher.Add(k.Name.Length);
+    }
+
+    /// <summary>
+    /// The fight and steering part of <see cref="HashColdFields"/>: in combat, the chase run, the steer or path chase, the failed targets, the
+    /// steer and agent speeds (each only while set).
+    /// </summary>
+    static void HashCombatMotion(ref StateHasher hasher, CharacterCold k)
+    {
         hasher.Add(k.InCombat);
         if (k.CombatRunning || k.TargetFleeingTime != 0)
         {
@@ -1524,8 +1535,6 @@ public sealed class CharacterTable
             hasher.Add(0x41676e74);
             hasher.Add(k.AgentSpeed);
         }
-        if (k.Animation is { } anim) anim.Hash(ref hasher); else hasher.Add(-1);
-        hasher.Add(k.Name.Length);
     }
 
     /// <summary>
