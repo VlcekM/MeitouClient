@@ -15,8 +15,9 @@ public sealed partial class WwisePlayer
 
     /// <summary>
     /// A value in dB (or cents, or low-pass units) set by an action: it moves to its target over the action's fade time and an entry that has fallen
-    /// back to 0 is dropped. Entries are looked up by (target, game object). A dB value moves in a straight line in linear gain (Wwise's transitions on
-    /// volumes, docs/audio.md "Pause and speed"): a reset from −96 dB over 3 s is at −6 dB half way, not at −48 dB. The others move straight in their units.
+    /// back to 0 is dropped. Entries are looked up by (target, game object). A dB value moves in a straight line in linear gain (Wwise's transitions
+    /// on volumes, docs/audio.md "Pause and speed"): a reset from −96 dB over 3 s is at −6 dB half way, not at −48 dB. The others move straight in
+    /// their units.
     /// </summary>
     sealed class OffsetTable(bool decibels = false)
     {
@@ -65,7 +66,9 @@ public sealed partial class WwisePlayer
             if (gone is not null) foreach (var key in gone) _entries.Remove(key);
         }
 
-        /// <summary>The global offset plus the one for the object.</summary>
+        /// <summary>
+        /// The global offset plus the one for the object.
+        /// </summary>
         public float Get(uint id, ulong gameObject)
         {
             if (_entries.Count == 0) return 0;
@@ -79,19 +82,27 @@ public sealed partial class WwisePlayer
             foreach (var key in _entries.Keys.Where(k => k.Object == gameObject).ToList()) _entries.Remove(key);
         }
 
-        /// <summary>A linear gain in dB, −96 (the floor <see cref="WwiseCurves.DbToGain"/> reads as silence) at or below 10^(−96/20).</summary>
+        /// <summary>
+        /// A linear gain in dB, −96 (the floor <see cref="WwiseCurves.DbToGain"/> reads as silence) at or below 10^(−96/20).
+        /// </summary>
         static float GainToDb(float gain) => gain <= 1.5849e-5f ? -96 : 20 * MathF.Log10(gain);
     }
 
-    /// <summary>An auxiliary bus: the stereo input its senders add to, the bypass state of its effect slots and the reverbs it runs.</summary>
+    /// <summary>
+    /// An auxiliary bus: the stereo input its senders add to, the bypass state of its effect slots and the reverbs it runs.
+    /// </summary>
     sealed class AuxBusState(WwiseBus bus)
     {
         public readonly WwiseBus Bus = bus;
-        /// <summary>Bit n set: the effect in slot n is bypassed (starts as the bank's, changed by bypass actions).</summary>
+        /// <summary>
+        /// Bit n set: the effect in slot n is bypassed (starts as the bank's, changed by bypass actions).
+        /// </summary>
         public byte Bypass = bus.FxBypass;
         public readonly Dictionary<byte, RoomReverb> Units = [];
         public float[] Input = [];
-        /// <summary>Senders added to <see cref="Input"/> in the block being mixed.</summary>
+        /// <summary>
+        /// Senders added to <see cref="Input"/> in the block being mixed.
+        /// </summary>
         public bool Received;
 
         public float[] Prepare(int frames)
@@ -102,16 +113,21 @@ public sealed partial class WwisePlayer
         }
     }
 
-    /// <summary>The indoor auxiliary bus (two RoomVerb slots: 0 the big room, 1 the small one) and the outdoor one (slot 0), both bypassed until a bank event enables them.</summary>
+    /// <summary>
+    /// The indoor auxiliary bus (two RoomVerb slots: 0 the big room, 1 the small one) and the outdoor one (slot 0), both bypassed until a bank event
+    /// enables them.
+    /// </summary>
     public const uint IndoorAuxBus = 0x23F4785D, OutdoorAuxBus = 0x5E1D37D4;
 
     /// <summary>
-    /// Bypasses or enables effect slots of an auxiliary bus directly, as the banks' bypass actions do (<c>Enter_Building</c>, a biome's <c>Enter_</c> event):
-    /// <paramref name="slots"/> bits 0-3 are the slots, bit 4 means all. A bypassed reverb takes no more input and its tail rings out.
+    /// Bypasses or enables effect slots of an auxiliary bus directly, as the banks' bypass actions do (<c>Enter_Building</c>, a biome's <c>Enter_</c>
+    /// event): <paramref name="slots"/> bits 0-3 are the slots, bit 4 means all. A bypassed reverb takes no more input and its tail rings out.
     /// </summary>
     public void SetAuxBypass(uint auxBus, bool bypass, byte slots = 0x10) => _commands.Enqueue(() => ApplyBypass(auxBus, bypass, slots));
 
-    /// <summary>The state of an auxiliary bus (made on first use); null when the bus is not a known aux bus (its bank is not loaded).</summary>
+    /// <summary>
+    /// The state of an auxiliary bus (made on first use); null when the bus is not a known aux bus (its bank is not loaded).
+    /// </summary>
     AuxBusState? AuxBus(uint id)
     {
         if (_auxBuses.TryGetValue(id, out var state)) return state;
@@ -191,9 +207,15 @@ public sealed partial class WwisePlayer
             float y = WwiseCurves.Evaluate(rtpc.Points, Parameter(rtpc.GameParameterId));
             switch (rtpc.ParameterId)
             {
-                case 16: preDelay = y; break;
-                case 60: gain18 *= rtpc.Scaling == 2 ? Math.Max(0, 1 + y) : y; break;
-                case 62: gain19 *= rtpc.Scaling == 2 ? Math.Max(0, 1 + y) : y; break;
+                case 16:
+                    preDelay = y;
+                    break;
+                case 60:
+                    gain18 *= rtpc.Scaling == 2 ? Math.Max(0, 1 + y) : y;
+                    break;
+                case 62:
+                    gain19 *= rtpc.Scaling == 2 ? Math.Max(0, 1 + y) : y;
+                    break;
             }
         }
         unit.Configure(effect.RoomVerbValue(0), effect.RoomVerbValue(1), effect.RoomVerbValue(2), effect.RoomVerbValue(3), preDelay);

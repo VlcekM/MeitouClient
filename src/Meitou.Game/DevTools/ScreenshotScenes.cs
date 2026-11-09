@@ -11,10 +11,14 @@ using Meitou.Simulation;
 
 namespace Meitou.Game.DevTools;
 
-/// <summary>The <c>--screenshot</c> runs: the still pictures and showcases, and the staged scenes (<c>--scene</c>) saved frame by frame.</summary>
+/// <summary>
+/// The <c>--screenshot</c> runs: the still pictures and showcases, and the staged scenes (<c>--scene</c>) saved frame by frame.
+/// </summary>
 sealed class ScreenshotScenes(GameHost host)
 {
-    /// <summary>The showcase's trade: the leader opens a trade with the nearest trader and walks up to it (false: no trader, or it never opened).</summary>
+    /// <summary>
+    /// The showcase's trade: the leader opens a trade with the nearest trader and walks up to it (false: no trader, or it never opened).
+    /// </summary>
     internal bool ShowcaseTrade()
     {
         host.Player.ShowUiPanel(null);
@@ -42,7 +46,10 @@ sealed class ScreenshotScenes(GameHost host)
         return true;
     }
 
-    /// <summary>The showcase's conversation: the trade closes, the leader talks to the nearest shopkeeper (else the nearest NPC) that answers a Talk and walks up to it (false: none, or it never opened).</summary>
+    /// <summary>
+    /// The showcase's conversation: the trade closes, the leader talks to the nearest shopkeeper (else the nearest NPC) that answers a Talk and walks
+    /// up to it (false: none, or it never opened).
+    /// </summary>
     internal bool ShowcaseTalk()
     {
         host.Session.World.Commands.Enqueue(new Simulation.Trading.CloseTrade { Tick = host.Session.World.Tick });
@@ -81,13 +88,17 @@ sealed class ScreenshotScenes(GameHost host)
         return true;
     }
 
-    /// <summary>The panels a still captures: the one named by <c>--ui-panel</c>, the showcase's set, or only the HUD.</summary>
+    /// <summary>
+    /// The panels a still captures: the one named by <c>--ui-panel</c>, the showcase's set, or only the HUD.
+    /// </summary>
     internal string?[] StillPanels() => host.GameOptions.UiPanel is { Length: > 0 } one ? [one == "hud" ? null : one]
         : host.GameOptions.UiShowcase
             ? [null, "hud-expanded", "inventory", "stats", "overview", "menu", "new-game", "save", "load", "title", "build", "editor", "editor-face", "editor-hair", "edited", "trade", "talk"]
             : [null];
 
-    /// <summary>The file a still panel is written to: the requested picture, or one per panel for the showcase.</summary>
+    /// <summary>
+    /// The file a still panel is written to: the requested picture, or one per panel for the showcase.
+    /// </summary>
     internal string StillPicturePath(string? panelName) => host.GameOptions.UiShowcase
         ? Path.Combine(Path.GetDirectoryName(host.WorldOptions.Screenshot!) ?? "", $"{Path.GetFileNameWithoutExtension(host.WorldOptions.Screenshot!)}-{panelName ?? "hud"}.png")
         : host.WorldOptions.Screenshot!;
@@ -226,16 +237,20 @@ sealed class ScreenshotScenes(GameHost host)
     // Staged scenes to check behaviour offscreen (<c>--scene</c> with <c>--screenshot</c>, usually with <c>--load</c>): the scene gives its orders, then every <c>--scene-every</c>
     // control ticks a frame with the interface is saved as <c>&lt;screenshot&gt;-scene-NN.png</c>, <c>--scene-frames</c> of them, and the log prints the leader's state. The camera
     // follows the scene's focus. A test harness: nothing here is a game rule.
-    /// <summary>The scenes <see cref="StageScene"/> knows.</summary>
+    /// <summary>
+    /// The scenes <see cref="StageScene"/> knows.
+    /// </summary>
     static readonly string[] SceneNames = ["fight", "turret", "bed", "acid", "menu"];
 
-    /// <summary>The menu scene's targets, one frame each.</summary>
+    /// <summary>
+    /// The menu scene's targets, one frame each.
+    /// </summary>
     static readonly string[] SceneMenus = ["character", "door", "container", "cage"];
 
     /// <summary>
-    /// Gives the scene's orders and returns the point the camera watches (null: the leader). fight: two enemies of <c>--scene-npc</c> spawned 40 units from the leader, which the
-    /// squad attacks; turret: the nearest town turret within 5000, three enemies spawned 250 units before it; bed: the leader sleeps in the nearest bed; acid: acid rain on every
-    /// point; menu: nothing (the menus open per frame).
+    /// Gives the scene's orders and returns the point the camera watches (null: the leader). fight: two enemies of <c>--scene-npc</c> spawned 40
+    /// units from the leader, which the squad attacks; turret: the nearest town turret within 5000, three enemies spawned 250 units before it; bed:
+    /// the leader sleeps in the nearest bed; acid: acid rain on every point; menu: nothing (the menus open per frame).
     /// </summary>
     Vector3? StageScene(string scene)
     {
@@ -325,7 +340,9 @@ sealed class ScreenshotScenes(GameHost host)
         }
     }
 
-    /// <summary>Runs <paramref name="ticks"/> control ticks as the screenshot loop does (each with its real time of simulation at speed 1).</summary>
+    /// <summary>
+    /// Runs <paramref name="ticks"/> control ticks as the screenshot loop does (each with its real time of simulation at speed 1).
+    /// </summary>
     void AdvanceScene(int ticks)
     {
         for (int i = 0; i < ticks; i++)
@@ -336,7 +353,9 @@ sealed class ScreenshotScenes(GameHost host)
         }
     }
 
-    /// <summary>The leader's state for the log: task, activity, weapon, turret, bed, weather notice, blood and the parts' flesh.</summary>
+    /// <summary>
+    /// The leader's state for the log: task, activity, weapon, turret, bed, weather notice, blood and the parts' flesh.
+    /// </summary>
     string SceneState()
     {
         if (host.PlayerSquad is null || host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == host.PlayerSquad.Leader) is not { } me) return "no leader";
@@ -351,8 +370,8 @@ sealed class ScreenshotScenes(GameHost host)
     }
 
     /// <summary>
-    /// The scene's frames: <see cref="StageScene"/>, then per frame the ticks, the camera on the focus (else the leader), the world and the interface drawn, the picture saved;
-    /// the menu scene opens one menu per frame instead of running ticks.
+    /// The scene's frames: <see cref="StageScene"/>, then per frame the ticks, the camera on the focus (else the leader), the world and the interface
+    /// drawn, the picture saved; the menu scene opens one menu per frame instead of running ticks.
     /// </summary>
     void SceneShots(string scene, VulkanDisplay display, GpuTexture target, DebugOverlay? overlay, int w, int h)
     {

@@ -7,28 +7,47 @@ using Meitou.Game.Ui;
 namespace Meitou.Game.DevTools.Agents;
 
 /// <summary>
-/// The agent control channel (debug only, docs/procedures/todo-faster-ingame-agent-tests.md): with <c>--control-dir &lt;dir&gt;</c> (or MEITOU_CONTROL_DIR) the game polls <c>&lt;dir&gt;/cmd</c> on the game thread
-/// about four times a second; each line <c>&lt;id&gt; &lt;console command&gt;</c> is run by <see cref="DevConsole.Execute"/> (the console window need not be open), and one result line per command is appended
-/// to <c>&lt;dir&gt;/out</c> as one JSON object: <c>{"id":n,"ok":true,"data":..}</c> or <c>{"id":n,"ok":false,"error":"..","data":..}</c>; <c>data</c> is the command's structured result (state, ui-tree, ui-click candidates) or <c>{"text":".."}</c> with the printed lines joined by " | ". <c>--exec</c> (or <c>--setup</c>) runs commands once, in order, after the world has loaded and settled; the first failing one stops the list and the run exits with code 3. Without the flag nothing here runs.
+/// The agent control channel (debug only, docs/procedures/todo-faster-ingame-agent-tests.md): with <c>--control-dir &lt;dir&gt;</c> (or
+/// MEITOU_CONTROL_DIR) the game polls <c>&lt;dir&gt;/cmd</c> on the game thread about four times a second; each line <c>&lt;id&gt; &lt;console
+/// command&gt;</c> is run by <see cref="DevConsole.Execute"/> (the console window need not be open), and one result line per command is appended to
+/// <c>&lt;dir&gt;/out</c> as one JSON object: <c>{"id":n,"ok":true,"data":..}</c> or <c>{"id":n,"ok":false,"error":"..","data":..}</c>; <c>data</c>
+/// is the command's structured result (state, ui-tree, ui-click candidates) or <c>{"text":".."}</c> with the printed lines joined by " | ".
+/// <c>--exec</c> (or <c>--setup</c>) runs commands once, in order, after the world has loaded and settled; the first failing one stops the list and
+/// the run exits with code 3. Without the flag nothing here runs.
 /// </summary>
 sealed class AgentChannel(GameHost host)
 {
-    /// <summary>The whole interface hidden (F7, or the <c>hud hide</c> console command).</summary>
+    /// <summary>
+    /// The whole interface hidden (F7, or the <c>hud hide</c> console command).
+    /// </summary>
     internal bool InterfaceHidden;
     internal string? ControlDir, ExecPending;
-    /// <summary>When the world was first seen loaded (for the setup's settle wait), and the exit code the run ends with (0, or 3 when a setup command failed).</summary>
+    /// <summary>
+    /// When the world was first seen loaded (for the setup's settle wait), and the exit code the run ends with (0, or 3 when a setup command failed).
+    /// </summary>
     long _setupLoadedAt, _shotDueAt;
-    /// <summary>--screenshot-after: the setup is done and the timer runs (shotDueAt), or the picture was asked for and its save ends the run.</summary>
+    /// <summary>
+    /// --screenshot-after: the setup is done and the timer runs (shotDueAt), or the picture was asked for and its save ends the run.
+    /// </summary>
     bool _autoShotTimer, _autoShotAsked;
     internal int ControlExitCode;
     long _nextControlPoll;
-    /// <summary>The settings window of the interactive loop (null in the one-shot modes), for the console commands.</summary>
+    /// <summary>
+    /// The settings window of the interactive loop (null in the one-shot modes), for the console commands.
+    /// </summary>
     internal SettingsMenu? SettingsPanel;
-    /// <summary>The id whose result waits for the screenshot's frame to be saved, and the file it goes to.</summary>
+    /// <summary>
+    /// The id whose result waits for the screenshot's frame to be saved, and the file it goes to.
+    /// </summary>
     internal string? ShotWaitId, ShotPath, CurrentControlId;
-    /// <summary>Structured result of the running control command (raw JSON), for the file channel; the console keeps its printed text.</summary>
+    /// <summary>
+    /// Structured result of the running control command (raw JSON), for the file channel; the console keeps its printed text.
+    /// </summary>
     internal string? ControlData;
-    /// <summary>Event stream: on by default, last snapshot, event counter, start time; pending wait-for conditions; replies held a few frames to report "changed".</summary>
+    /// <summary>
+    /// Event stream: on by default, last snapshot, event counter, start time; pending wait-for conditions; replies held a few frames to report
+    /// "changed".
+    /// </summary>
     internal bool ControlEvents = true, ControlReplyDeferred;
     ControlSnap? _lastSnap;
     private long _controlSeq;
@@ -36,7 +55,9 @@ sealed class AgentChannel(GameHost host)
     readonly List<ControlWait> _controlWaits = [];
     readonly List<ControlSettle> _controlSettles = [];
 
-    /// <summary>The small state diffed every poll tick for events and changed.</summary>
+    /// <summary>
+    /// The small state diffed every poll tick for events and changed.
+    /// </summary>
     sealed record ControlSnap(string Screens, string Screen, string Page, bool Loaded, string Mode, int Selected);
     sealed record ControlWait(string Id, string Key, string Value, long Deadline, long Started, double TimeoutSeconds);
     sealed class ControlSettle(string id, string text, string? data, ControlSnap before) { public string Id = id, Text = text; public string? Data = data; public ControlSnap Before = before; public int Frames = 4; }
@@ -49,7 +70,9 @@ sealed class AgentChannel(GameHost host)
         ExecPending = host.GameOptions.Exec;
     }
 
-    /// <summary>Once per frame: the one-shot <c>--exec</c> after the load, then the command file at most every 0.25 s.</summary>
+    /// <summary>
+    /// Once per frame: the one-shot <c>--exec</c> after the load, then the command file at most every 0.25 s.
+    /// </summary>
     internal void PollControl()
     {
         if (!host.DevConsoleHost.ConsoleRegistered) host.DevConsoleHost.RegisterConsoleCommands();
@@ -107,10 +130,14 @@ sealed class AgentChannel(GameHost host)
     }
 
     readonly Queue<string> _execQueue = new();
-    /// <summary>The setup command whose deferred reply (wait-for, order move --wait, spawn-at) is still pending; the setup list goes on when it arrives.</summary>
+    /// <summary>
+    /// The setup command whose deferred reply (wait-for, order move --wait, spawn-at) is still pending; the setup list goes on when it arrives.
+    /// </summary>
     string? _execWaitingFor;
 
-    /// <summary>Runs the setup list one command at a time; a deferred command is waited on, and its failure ends the list (exit 3).</summary>
+    /// <summary>
+    /// Runs the setup list one command at a time; a deferred command is waited on, and its failure ends the list (exit 3).
+    /// </summary>
     void PumpExec()
     {
         while (_execWaitingFor is null && _execQueue.Count > 0)
@@ -134,7 +161,10 @@ sealed class AgentChannel(GameHost host)
         _execWaitingFor = null;
     }
 
-    /// <summary>The same "loaded and settled" as <c>mt-ctl --wait-ready --world</c>: a world on screen, a selected character, the simulation has ticked (or is paused). A save with no selection runs after 3 s loaded.</summary>
+    /// <summary>
+    /// The same "loaded and settled" as <c>mt-ctl --wait-ready --world</c>: a world on screen, a selected character, the simulation has ticked (or is
+    /// paused). A save with no selection runs after 3 s loaded.
+    /// </summary>
     bool SetupSettled()
     {
         if (host.Covered || host.Player.TitleOpen) { _setupLoadedAt = 0; return false; }
@@ -143,7 +173,9 @@ sealed class AgentChannel(GameHost host)
         return host.Session.World.Player.Selection.Any() || Stopwatch.GetElapsedTime(_setupLoadedAt).TotalSeconds >= 3;
     }
 
-    /// <summary>Runs one command line as the channel does; false when the command failed (printed an error).</summary>
+    /// <summary>
+    /// Runs one command line as the channel does; false when the command failed (printed an error).
+    /// </summary>
     bool RunControlLine(string id, string command)
     {
         CurrentControlId = id;
@@ -166,7 +198,10 @@ sealed class AgentChannel(GameHost host)
         return !failed;
     }
 
-    /// <summary>Hands a JSON answer to the reply (<see cref="ControlData"/>); without a control channel the console prints it instead. The log gets only its size, not up to 23 KB per call.</summary>
+    /// <summary>
+    /// Hands a JSON answer to the reply (<see cref="ControlData"/>); without a control channel the console prints it instead. The log gets only its
+    /// size, not up to 23 KB per call.
+    /// </summary>
     internal void PrintData(DevConsole con, string json)
     {
         ControlData = json;
@@ -188,7 +223,9 @@ sealed class AgentChannel(GameHost host)
         return new ControlSnap(string.Join(',', ControlScreenSet()), ControlScreen(), SettingsPanel is { Visible: true } p ? p.PageName : "", loaded, host.Player.UiMode.ToString(), loaded ? host.Session.World.Player.Selection.Count() : 0);
     }
 
-    /// <summary>Every poll tick: diff the snapshot into events, then check the pending wait-for conditions.</summary>
+    /// <summary>
+    /// Every poll tick: diff the snapshot into events, then check the pending wait-for conditions.
+    /// </summary>
     void ControlTick()
     {
         host.AgentWorld.ControlCameraTick();
@@ -250,7 +287,9 @@ sealed class AgentChannel(GameHost host)
         ControlWrite(wt.Id, ok, ok ? "" : "timeout", data);
     }
 
-    /// <summary>Appends one reply object to out: id (a number when it is one), ok, data (the raw JSON given, else {"text":..}) and, on failure, error.</summary>
+    /// <summary>
+    /// Appends one reply object to out: id (a number when it is one), ok, data (the raw JSON given, else {"text":..}) and, on failure, error.
+    /// </summary>
     internal void ControlWrite(string id, bool ok, string text, string? dataJson = null, bool? changed = null)
     {
         if (id == "exec" && _execWaitingFor is { } waited)   // the deferred reply of a setup command
@@ -279,7 +318,9 @@ sealed class AgentChannel(GameHost host)
         catch (IOException e) { Console.WriteLine($"control   cannot write out: {e.Message}"); }
     }
 
-    /// <summary>The frame asked for by <c>screenshot</c> is on screen: saves it to the requested file and reports.</summary>
+    /// <summary>
+    /// The frame asked for by <c>screenshot</c> is on screen: saves it to the requested file and reports.
+    /// </summary>
     internal void SaveControlShot(GpuContext context, GpuTexture picture, int width, int height, bool topDown)
     {
         string path = ShotPath!;
@@ -298,7 +339,9 @@ sealed class AgentChannel(GameHost host)
         }
     }
 
-    /// <summary>A requested control screenshot could not be made: say why to the waiting client, and end a <c>--screenshot-after</c> run with exit 4.</summary>
+    /// <summary>
+    /// A requested control screenshot could not be made: say why to the waiting client, and end a <c>--screenshot-after</c> run with exit 4.
+    /// </summary>
     internal void ControlShotFailed(string why, string? id = null)
     {
         if (id is null) { id = ShotWaitId; host.ScreenshotRequested = false; }
@@ -470,10 +513,15 @@ sealed class AgentChannel(GameHost host)
         }, (i, typed) => i == 0 ? SettingsMenu.PageNames.Select(p => "settings:" + p).Where(p => p.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) : []);
     }
 
-    /// <summary>One clickable widget for ui-tree / ui-click: its label, screen-pixel bounds, widget id (screen/name), the screen it is on and how to press it.</summary>
+    /// <summary>
+    /// One clickable widget for ui-tree / ui-click: its label, screen-pixel bounds, widget id (screen/name), the screen it is on and how to press it.
+    /// </summary>
     sealed record ControlWidget(string Label, float X, float Y, float W, float H, string Id, string Screen, Action Click, Slider? Slider = null);
 
-    /// <summary>The clickable widgets of the screen on top: the settings window while it is open, else the faithful screens (title, pause menu, load/save, windows) and the world HUD.</summary>
+    /// <summary>
+    /// The clickable widgets of the screen on top: the settings window while it is open, else the faithful screens (title, pause menu, load/save,
+    /// windows) and the world HUD.
+    /// </summary>
     List<ControlWidget> ControlWidgets()
     {
         var list = new List<ControlWidget>();
@@ -536,7 +584,10 @@ sealed class AgentChannel(GameHost host)
         if (widgets.Count == 0) con.Print("(no clickable widgets)");
     }
 
-    /// <summary>Splits <c>--id/--label/--screen/--index &lt;value...&gt;</c> selectors from the positional rest (a value runs to the next --flag); null after an error message.</summary>
+    /// <summary>
+    /// Splits <c>--id/--label/--screen/--index &lt;value...&gt;</c> selectors from the positional rest (a value runs to the next --flag); null after
+    /// an error message.
+    /// </summary>
     (Dictionary<string, string> Flags, string Positional)? ControlSelector(string cmd, IReadOnlyList<string> args, DevConsole con)
     {
         var flags = new Dictionary<string, string>();
@@ -556,7 +607,10 @@ sealed class AgentChannel(GameHost host)
         return (flags, string.Join(' ', rest));
     }
 
-    /// <summary>The widget the selectors name: flags AND together, then the positional label (exact, else unique part) or ui-tree index narrows further. Null after an error reply that lists candidates as JSON.</summary>
+    /// <summary>
+    /// The widget the selectors name: flags AND together, then the positional label (exact, else unique part) or ui-tree index narrows further. Null
+    /// after an error reply that lists candidates as JSON.
+    /// </summary>
     ControlWidget? ControlFind(string cmd, IReadOnlyList<string> args, DevConsole con)
     {
         if (ControlSelector(cmd, args, con) is not var (flags, target)) return null;

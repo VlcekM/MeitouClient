@@ -1,8 +1,9 @@
 namespace Meitou.Game.Audio;
 
 /// <summary>
-/// One playing WEM: reads a short clip's samples decoded once and shared (<see cref="PcmCache"/>), a long one's Ogg Vorbis stream as it goes (NVorbis); loops it, resamples it to the output rate with the pitch, runs it
-/// through a one-pole low-pass and adds it to the mix with a gain per side, ramped across the block so changes do not click.
+/// One playing WEM: reads a short clip's samples decoded once and shared (<see cref="PcmCache"/>), a long one's Ogg Vorbis stream as it goes
+/// (NVorbis); loops it, resamples it to the output rate with the pitch, runs it through a one-pole low-pass and adds it to the mix with a gain per
+/// side, ramped across the block so changes do not click.
 /// </summary>
 sealed class Voice : IDisposable
 {
@@ -18,7 +19,8 @@ sealed class Voice : IDisposable
     double _position;
     int _playsLeft;
     readonly int _plays;
-    // Source frames played since the start, across the loops (what a silent voice keeps counting); owed: those skipped while silent, sought on the next mix.
+    // Source frames played since the start, across the loops (what a silent voice keeps counting); owed: those skipped while silent,
+    // sought on the next mix.
     double _cursor, _owed;
     long _toSkip, _limit;
     bool _ended, _final;
@@ -26,14 +28,17 @@ sealed class Voice : IDisposable
     readonly float[] _lastSend = new float[2 * MaxSends];
     bool _started;
 
-    /// <summary>The most auxiliary buses a voice can feed (a node lists four user-defined sends).</summary>
+    /// <summary>
+    /// The most auxiliary buses a voice can feed (a node lists four user-defined sends).
+    /// </summary>
     public const int MaxSends = 4;
     readonly float[] _lowPass = new float[2];
 
     /// <summary>
-    /// <paramref name="plays"/>: how many times to play the clip; 0 = forever. <paramref name="skipFrames"/> source frames are dropped from the
-    /// start and, when <paramref name="limitFrames"/> is not negative, only that many are played after them (music clips' trims).
-    /// <paramref name="startPhase"/>: how far into the first source frame (in source frames) the first output frame lies, for a start between two output frames.
+    /// <paramref name="plays"/>: how many times to play the clip; 0 = forever. <paramref name="skipFrames"/> source frames are dropped from the start
+    /// and, when <paramref name="limitFrames"/> is not negative, only that many are played after them (music clips' trims).
+    /// <paramref name="startPhase"/>: how far into the first source frame (in source frames) the first output frame lies, for a start between two
+    /// output frames.
     /// </summary>
     public Voice(MediaClip clip, int plays, long skipFrames = 0, long limitFrames = -1, double startPhase = 0, float[]? pcm = null)
     {
@@ -47,7 +52,15 @@ sealed class Voice : IDisposable
         else
         {
             _reader = Open();
-            try { _framesPerPlay = _reader.TotalSamples; } catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException) { _framesPerPlay = 0; }
+            try
+            {
+                _framesPerPlay = _reader.TotalSamples;
+            }
+            catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException)
+            {
+                _framesPerPlay = 0;
+            }
+
             if (_framesPerPlay <= 0) _framesPerPlay = clip.Frames;
         }
         _decoded = new float[4096 * clip.Channels];
@@ -55,7 +68,9 @@ sealed class Voice : IDisposable
 
     NVorbis.VorbisReader Open() => new(new MemoryStream(_clip.Ogg, writable: false), closeOnDispose: true);
 
-    /// <summary>Up to <paramref name="count"/> samples (interleaved) from the source into <paramref name="buffer"/>; 0 at the end of a play.</summary>
+    /// <summary>
+    /// Up to <paramref name="count"/> samples (interleaved) from the source into <paramref name="buffer"/>; 0 at the end of a play.
+    /// </summary>
     int ReadSamples(float[] buffer, int offset, int count)
     {
         if (_pcm is null) return _reader!.ReadSamples(buffer, offset, count);
@@ -65,7 +80,9 @@ sealed class Voice : IDisposable
         return n;
     }
 
-    /// <summary>The source back at <paramref name="frame"/> of the clip (0: the start of the next play).</summary>
+    /// <summary>
+    /// The source back at <paramref name="frame"/> of the clip (0: the start of the next play).
+    /// </summary>
     void Rewind(long frame = 0)
     {
         if (_pcm is not null) { _pcmRead = frame * _clip.Channels; return; }
@@ -76,15 +93,17 @@ sealed class Voice : IDisposable
 
     public bool Ended => _ended;
 
-    /// <summary>Whether <see cref="Skip"/> can keep this voice's place: a plain clip, not a trimmed music clip.</summary>
+    /// <summary>
+    /// Whether <see cref="Skip"/> can keep this voice's place: a plain clip, not a trimmed music clip.
+    /// </summary>
     public bool CanSkip => _toSkip == 0 && _limit < 0 && _framesPerPlay > 0;
 
     // The source frames one play decodes to (the decoder's count, the WEM header's when it has none): what the silent clock counts plays in.
     readonly long _framesPerPlay;
 
     /// <summary>
-    /// The voice is silent for <paramref name="frames"/> output frames (the first <paramref name="first"/> not yet started): its clock runs on without decoding,
-    /// and the next <see cref="Mix"/> seeks to where it would be, fading in from silence; a voice that ran out meanwhile ends.
+    /// The voice is silent for <paramref name="frames"/> output frames (the first <paramref name="first"/> not yet started): its clock runs on
+    /// without decoding, and the next <see cref="Mix"/> seeks to where it would be, fading in from silence; a voice that ran out meanwhile ends.
     /// </summary>
     public void Skip(int frames, double rate, int first = 0)
     {
@@ -93,7 +112,9 @@ sealed class Voice : IDisposable
         if (_plays > 0 && _cursor + _owed >= (double)_plays * _framesPerPlay) _ended = true;
     }
 
-    /// <summary>Seeks past the frames skipped while silent: the play and the place in the clip from the voice's clock.</summary>
+    /// <summary>
+    /// Seeks past the frames skipped while silent: the play and the place in the clip from the voice's clock.
+    /// </summary>
     void CatchUp()
     {
         // From silence (it faded out, or was never heard): the first block ramps up to its gains.
@@ -127,11 +148,19 @@ sealed class Voice : IDisposable
     }
 
     /// <summary>
-    /// Adds <paramref name="frames"/> frames to <paramref name="mix"/> (stereo), the first <paramref name="first"/> of them left silent (a
-    /// start inside the block). <paramref name="rate"/> is source frames per output frame; <paramref name="lowPass"/> the one-pole
-    /// coefficient (1 = no filtering). Each of <paramref name="sends"/> receives the voice with its own gains (an auxiliary bus's input), ramped like the main ones.
+    /// Adds <paramref name="frames"/> frames to <paramref name="mix"/> (stereo), the first <paramref name="first"/> of them left silent (a start
+    /// inside the block). <paramref name="rate"/> is source frames per output frame; <paramref name="lowPass"/> the one-pole coefficient (1 = no
+    /// filtering). Each of <paramref name="sends"/> receives the voice with its own gains (an auxiliary bus's input), ramped like the main ones.
     /// </summary>
-    public void Mix(float[] mix, int frames, double rate, float left, float right, float lowPass, int first = 0, ReadOnlySpan<VoiceSend> sends = default)
+    public void Mix(
+        float[] mix,
+        int frames,
+        double rate,
+        float left,
+        float right,
+        float lowPass,
+        int first = 0,
+        ReadOnlySpan<VoiceSend> sends = default)
     {
         if (_ended) return;
         if (_owed > 0) CatchUp();
@@ -160,7 +189,8 @@ sealed class Voice : IDisposable
             float t = (float)(_position - i);
             bool atEnd = i + 1 >= _decodedFrames;
             float l = _decoded[i * channels] + ((atEnd ? 0 : _decoded[(i + 1) * channels]) - _decoded[i * channels]) * t;
-            float r = channels > 1 ? _decoded[i * channels + 1] + ((atEnd ? 0 : _decoded[(i + 1) * channels + 1]) - _decoded[i * channels + 1]) * t : l;
+            float r = l;
+            if (channels > 1) r = _decoded[i * channels + 1] + ((atEnd ? 0 : _decoded[(i + 1) * channels + 1]) - _decoded[i * channels + 1]) * t;
             if (lowPass < 1)
             {
                 this._lowPass[0] += lowPass * (l - this._lowPass[0]);
@@ -188,7 +218,9 @@ sealed class Voice : IDisposable
         }
     }
 
-    /// <summary>Keeps the last decoded frame (for interpolation) and decodes more after it, looping at the end. False when the clip is done.</summary>
+    /// <summary>
+    /// Keeps the last decoded frame (for interpolation) and decodes more after it, looping at the end. False when the clip is done.
+    /// </summary>
     bool Refill()
     {
         int channels = _clip.Channels;
@@ -238,16 +270,20 @@ sealed class Voice : IDisposable
     public void Dispose() => _reader?.Dispose();
 }
 
-/// <summary>One auxiliary send of a voice: the bus's stereo input buffer and the gains the voice adds to it.</summary>
+/// <summary>
+/// One auxiliary send of a voice: the bus's stereo input buffer and the gains the voice adds to it.
+/// </summary>
 readonly record struct VoiceSend(float[] Buffer, float Left, float Right);
 
-/// <summary>A WEM converted to Ogg Vorbis, ready to play.</summary>
+/// <summary>
+/// A WEM converted to Ogg Vorbis, ready to play.
+/// </summary>
 sealed record MediaClip(uint Id, byte[] Ogg, int Channels, int SampleRate, int Frames);
 
 /// <summary>
-/// Short clips decoded once, their samples shared by every voice that plays them (docs/audio.md "Voice cap"): opening a Vorbis stream (its codebooks) costs
-/// about 1.7 ms and decoding it again more, per sound, which a big fight's hundreds of footsteps, swings and hits a second cannot afford on the audio thread.
-/// A clip longer than <see cref="MaxSeconds"/> (beds, music) or past <see cref="BudgetBytes"/> streams instead. The audio thread only.
+/// Short clips decoded once, their samples shared by every voice that plays them (docs/audio.md "Voice cap"): opening a Vorbis stream (its codebooks)
+/// costs about 1.7 ms and decoding it again more, per sound, which a big fight's hundreds of footsteps, swings and hits a second cannot afford on the
+/// audio thread. A clip longer than <see cref="MaxSeconds"/> (beds, music) or past <see cref="BudgetBytes"/> streams instead. The audio thread only.
 /// </summary>
 sealed class PcmCache
 {
@@ -256,7 +292,9 @@ sealed class PcmCache
     readonly Dictionary<uint, float[]?> _clips = [];
     long _bytes;
 
-    /// <summary>The clip's samples (interleaved), decoded the first time; null when it streams.</summary>
+    /// <summary>
+    /// The clip's samples (interleaved), decoded the first time; null when it streams.
+    /// </summary>
     public float[]? Get(MediaClip clip)
     {
         if (_clips.TryGetValue(clip.Id, out var known)) return known;

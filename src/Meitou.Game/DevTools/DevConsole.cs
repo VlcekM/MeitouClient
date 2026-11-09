@@ -2,22 +2,31 @@ using System.Text;
 
 namespace Meitou.Game.DevTools;
 
-/// <summary>One console command: <see cref="Run"/> gets the arguments (quotes already removed) and prints through the console. <see cref="Complete"/> lists what Tab may fill in for an argument.</summary>
+/// <summary>
+/// One console command: <see cref="Run"/> gets the arguments (quotes already removed) and prints through the console. <see cref="Complete"/> lists
+/// what Tab may fill in for an argument.
+/// </summary>
 /// <param name="Name">What is typed first, lower case.</param>
 /// <param name="Usage">E.g. <c>give "&lt;item record&gt;" [qty] [quality]</c>.</param>
 /// <param name="Help">One line for <c>help</c>.</param>
 public sealed record ConsoleCommand(string Name, string Usage, string Help, Action<IReadOnlyList<string>, DevConsole> Run)
 {
-    /// <summary>The candidates for argument <c>index</c> (0 is the first after the name) beginning with, or else containing, the text typed so far; null: none are offered.</summary>
+    /// <summary>
+    /// The candidates for argument <c>index</c> (0 is the first after the name) beginning with, or else containing, the text typed so far; null: none
+    /// are offered.
+    /// </summary>
     public Func<int, string, IEnumerable<string>>? Complete { get; init; }
 
-    /// <summary>The <c>--flags</c> the usage text names, in order (what Tab offers for a word starting with a dash, and what help lists).</summary>
+    /// <summary>
+    /// The <c>--flags</c> the usage text names, in order (what Tab offers for a word starting with a dash, and what help lists).
+    /// </summary>
     public IReadOnlyList<string> Flags => System.Text.RegularExpressions.Regex.Matches(Usage, @"(?<![\w-])--[a-z][a-z0-9-]*").Select(m => m.Value).Distinct().ToList();
 }
 
 /// <summary>
-/// The text half of the dev console (Meitou only, docs/game/ui-input.md "Dev console"): the input line with its caret, history, scrollback, parsing and Tab completion, and the table of
-/// <see cref="ConsoleCommand"/>s. It knows nothing of the world; the host registers commands that enqueue simulation commands. A later mod API can register into the same table.
+/// The text half of the dev console (Meitou only, docs/game/ui-input.md "Dev console"): the input line with its caret, history, scrollback, parsing
+/// and Tab completion, and the table of <see cref="ConsoleCommand"/>s. It knows nothing of the world; the host registers commands that enqueue
+/// simulation commands. A later mod API can register into the same table.
 /// </summary>
 public sealed class DevConsole
 {
@@ -36,29 +45,41 @@ public sealed class DevConsole
     public bool Open { get; set; }
     public string Input { get; private set; } = "";
     public int Caret { get; private set; }
-    /// <summary>How many visual lines the scrollback is scrolled up from the newest.</summary>
+    /// <summary>
+    /// How many visual lines the scrollback is scrolled up from the newest.
+    /// </summary>
     public int Scroll { get; set; }
     public IReadOnlyList<Line> Lines => _lines;
     public IEnumerable<ConsoleCommand> Commands => _commands.Values.OrderBy(c => c.Name, StringComparer.Ordinal);
 
-    /// <summary>Called with every non-input line printed (the agent control channel, <c>--control-dir</c>, collects a command's output through it).</summary>
+    /// <summary>
+    /// Called with every non-input line printed (the agent control channel, <c>--control-dir</c>, collects a command's output through it).
+    /// </summary>
     public Action<string, Kind>? Tap { get; set; }
 
     public void Register(ConsoleCommand command) => _commands[command.Name] = command;
 
-    /// <summary>Gives an already registered command an argument completer (the registration helpers of the control commands have none).</summary>
+    /// <summary>
+    /// Gives an already registered command an argument completer (the registration helpers of the control commands have none).
+    /// </summary>
     public void SetComplete(string name, Func<int, string, IEnumerable<string>> complete)
     {
         if (_commands.TryGetValue(name, out var c)) _commands[name] = c with { Complete = complete };
     }
 
-    /// <summary>Candidates for the value after a flag (<c>--id</c> takes character ids); the host sets it. Gets the flag and the text typed so far.</summary>
+    /// <summary>
+    /// Candidates for the value after a flag (<c>--id</c> takes character ids); the host sets it. Gets the flag and the text typed so far.
+    /// </summary>
     public Func<string, string, IEnumerable<string>>? FlagValues { get; set; }
 
-    /// <summary>While a completer runs: the arguments before the word being completed (so a completer can tell <c>order attack</c> from <c>order move</c>).</summary>
+    /// <summary>
+    /// While a completer runs: the arguments before the word being completed (so a completer can tell <c>order attack</c> from <c>order move</c>).
+    /// </summary>
     public IReadOnlyList<string> CompletionArgs { get; private set; } = [];
 
-    /// <summary>Adds a line to the scrollback and to log.txt.</summary>
+    /// <summary>
+    /// Adds a line to the scrollback and to log.txt.
+    /// </summary>
     public void Print(string text, Kind kind = Kind.Info)
     {
         foreach (string part in text.ReplaceLineEndings("\n").Split('\n'))
@@ -117,7 +138,9 @@ public sealed class DevConsole
 
     void SetInput(string text) => (Input, Caret) = (text, text.Length);
 
-    /// <summary>Runs the input line and clears it.</summary>
+    /// <summary>
+    /// Runs the input line and clears it.
+    /// </summary>
     public void Submit()
     {
         string line = Input.Trim();
@@ -131,7 +154,9 @@ public sealed class DevConsole
 
     // ---- commands
 
-    /// <summary>Runs one command line. An unknown command, a bad argument or an exception in a handler prints an error line; nothing is thrown.</summary>
+    /// <summary>
+    /// Runs one command line. An unknown command, a bad argument or an exception in a handler prints an error line; nothing is thrown.
+    /// </summary>
     public void Execute(string line)
     {
         Print(line, Kind.Input);
@@ -142,7 +167,9 @@ public sealed class DevConsole
         catch (Exception e) { Error($"{command.Name} failed: {e.Message}"); }
     }
 
-    /// <summary>The error line for an unknown command, with the closest names (prefix, substring, or an edit distance of at most 2).</summary>
+    /// <summary>
+    /// The error line for an unknown command, with the closest names (prefix, substring, or an edit distance of at most 2).
+    /// </summary>
     string UnknownCommand(string typed)
     {
         string low = typed.ToLowerInvariant();
@@ -151,7 +178,9 @@ public sealed class DevConsole
         return $"unknown command '{typed}'" + (close.Count > 0 ? "; did you mean: " + string.Join(", ", close) + "?" : " (help lists them)");
     }
 
-    /// <summary>Edit distance between two names.</summary>
+    /// <summary>
+    /// Edit distance between two names.
+    /// </summary>
     public static int EditDistance(string a, string b)
     {
         var row = Enumerable.Range(0, b.Length + 1).ToArray();
@@ -171,7 +200,10 @@ public sealed class DevConsole
 
     public ConsoleCommand? Find(string name) => _commands.GetValueOrDefault(name);
 
-    /// <summary>Words split at spaces outside double quotes, the quotes removed; each with its start in <paramref name="text"/>. <paramref name="fresh"/>: the text ends where a new word would begin.</summary>
+    /// <summary>
+    /// Words split at spaces outside double quotes, the quotes removed; each with its start in <paramref name="text"/>. <paramref name="fresh"/>: the
+    /// text ends where a new word would begin.
+    /// </summary>
     public static List<(string Text, int Start)> Tokenize(string text, out bool fresh)
     {
         var list = new List<(string, int)>();
@@ -197,7 +229,10 @@ public sealed class DevConsole
 
     // ---- Tab
 
-    /// <summary>Completes the word before the caret: a command name, or an argument the command offers. One candidate is filled in whole, several as far as they agree (and listed).</summary>
+    /// <summary>
+    /// Completes the word before the caret: a command name, or an argument the command offers. One candidate is filled in whole, several as far as
+    /// they agree (and listed).
+    /// </summary>
     public void Complete()
     {
         string head = Input[..Caret], tail = Input[Caret..];

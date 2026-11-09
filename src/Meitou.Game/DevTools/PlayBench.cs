@@ -10,11 +10,12 @@ using Meitou.Simulation.Factions;
 namespace Meitou.Game.DevTools;
 
 /// <summary>
-/// <c>--play-bench &lt;dir&gt;</c> (docs/bench.md, "Play benchmark"): the interactive game driven by a script instead of a player, every frame measured. Once the
-/// world is up the script runs its segments (idle, camera orbit, zoom, pan, a long travel, the return, time x2 and x5, talking, trading, a container, doors, a pick-up,
-/// path requests, the squad walking, a fight, looting, the interface panels cold and warm, a horizon view, the overview) and records per frame the interval, the update and the world ticks (their steps and systems, <see cref="TickProfile"/>),
-/// the render thread's stages and the GPU's (<see cref="FrameProfiler"/>), the garbage collections, allocation and memory; then it writes frames.csv
-/// and summary.md and quits. The frame limit and vsync are off for it.
+/// <c>--play-bench &lt;dir&gt;</c> (docs/bench.md, "Play benchmark"): the interactive game driven by a script instead of a player, every frame
+/// measured. Once the world is up the script runs its segments (idle, camera orbit, zoom, pan, a long travel, the return, time x2 and x5, talking,
+/// trading, a container, doors, a pick-up, path requests, the squad walking, a fight, looting, the interface panels cold and warm, a horizon view,
+/// the overview) and records per frame the interval, the update and the world ticks (their steps and systems, <see cref="TickProfile"/>), the render
+/// thread's stages and the GPU's (<see cref="FrameProfiler"/>), the garbage collections, allocation and memory; then it writes frames.csv and
+/// summary.md and quits. The frame limit and vsync are off for it.
 /// </summary>
 sealed class PlayBench(GameHost host)
 {
@@ -31,13 +32,19 @@ sealed class PlayBench(GameHost host)
         public double GpuTotal;
         public int Gc0, Gc1, Gc2;
         public double AllocMb, PauseMs, WorkingSetMb;
-        /// <summary>This process's video memory (<c>VulkanDevice.VideoMemory</c>), MB: read every 30 frames (a driver call), carried between; NaN on Metal.</summary>
+        /// <summary>
+        /// This process's video memory (<c>VulkanDevice.VideoMemory</c>), MB: read every 30 frames (a driver call), carried between; NaN on Metal.
+        /// </summary>
         public double VramMb = double.NaN;
         public double[] Sections = new double[BenchSections.Length];
         public double CameraMs, HandlersMs, StartMs;
-        /// <summary>The frame's slowest system phase ("System.phase") and its time.</summary>
+        /// <summary>
+        /// The frame's slowest system phase ("System.phase") and its time.
+        /// </summary>
         public string TopSystem = "";
-        /// <summary>Pipelines the frame created while drawing (nothing prepared them at load).</summary>
+        /// <summary>
+        /// Pipelines the frame created while drawing (nothing prepared them at load).
+        /// </summary>
         public int LatePipelines;
         public double TopSystemMs;
     }
@@ -45,13 +52,18 @@ sealed class PlayBench(GameHost host)
     BenchGcListener? _benchGc;
     double _benchGcStart;
 
-    /// <summary>The game loop's sections a frame's wall time splits into (<see cref="BenchLap"/>): the last runs from the end of the drawing to the next frame.</summary>
+    /// <summary>
+    /// The game loop's sections a frame's wall time splits into (<see cref="BenchLap"/>): the last runs from the end of the drawing to the next
+    /// frame.
+    /// </summary>
     static readonly string[] BenchSections = ["events", "update", "host", "camera", "audio", "view", "begin-frame", "render", "tail"];
     internal const int BenchTail = 8;
     long _benchLapAt;
     readonly double[] _benchLaps = new double[BenchSections.Length];
 
-    /// <summary>Ends loop section <paramref name="section"/> (<see cref="BenchSections"/>) for the benchmark; the tail goes to the frame recorded last.</summary>
+    /// <summary>
+    /// Ends loop section <paramref name="section"/> (<see cref="BenchSections"/>) for the benchmark; the tail goes to the frame recorded last.
+    /// </summary>
     internal void BenchLap(int section)
     {
         if (host.GameOptions.PlayBench is null) return;
@@ -81,7 +93,10 @@ sealed class PlayBench(GameHost host)
     Vector2 _benchOrigin, _benchDirection;
     CharacterId _benchLeader;
 
-    /// <summary>The frame's script step (before the world's update): false once the script is done. Waits for the world (no loading screen, a player character) first.</summary>
+    /// <summary>
+    /// The frame's script step (before the world's update): false once the script is done. Waits for the world (no loading screen, a player
+    /// character) first.
+    /// </summary>
     internal bool PlayBenchFrame(double dt, FrameProfiler? profiler)
     {
         if (host.GameOptions.PlayBench is null) return true;
@@ -140,7 +155,9 @@ sealed class PlayBench(GameHost host)
         _benchScript[index].Begin?.Invoke();
     }
 
-    /// <summary>After the world's update: its wall time and the ticks it ran.</summary>
+    /// <summary>
+    /// After the world's update: its wall time and the ticks it ran.
+    /// </summary>
     internal void PlayBenchUpdated(double ms)
     {
         if (_benchCurrent is not { } f) return;
@@ -159,7 +176,9 @@ sealed class PlayBench(GameHost host)
         }
     }
 
-    /// <summary>After the frame is presented: the render thread's stages (StageClock, read before the next frame starts it), the collections and memory.</summary>
+    /// <summary>
+    /// After the frame is presented: the render thread's stages (StageClock, read before the next frame starts it), the collections and memory.
+    /// </summary>
     internal void PlayBenchRendered(double busyMs, int latePipelines)
     {
         if (_benchCurrent is not { } f) return;
@@ -184,7 +203,9 @@ sealed class PlayBench(GameHost host)
         _benchCurrent = null;
     }
 
-    /// <summary>The script: each segment's length and what it does each frame (t: seconds into it, dt: the frame's).</summary>
+    /// <summary>
+    /// The script: each segment's length and what it does each frame (t: seconds into it, dt: the frame's).
+    /// </summary>
     BenchSegment[] BenchScript()
     {
         var strategy = host.Session.Camera.Strategy;
@@ -347,7 +368,9 @@ sealed class PlayBench(GameHost host)
     string? _benchPanel;
     int _flightHop = -1;
 
-    /// <summary>Writes frames.csv and summary.md into the bench directory (after the loop).</summary>
+    /// <summary>
+    /// Writes frames.csv and summary.md into the bench directory (after the loop).
+    /// </summary>
     internal void WritePlayBench(Silk.NET.Maths.Vector2D<int> size)
     {
         if (host.GameOptions.PlayBench is not { } dir || _benchScript is null) return;
@@ -379,7 +402,9 @@ sealed class PlayBench(GameHost host)
         Console.WriteLine($"bench     {_benchFrames.Count} frames: {Path.GetFullPath(Path.Combine(dir, "summary.md"))}");
     }
 
-    /// <summary>The collections (generation, reason, pause) and the allocation samples by type, from <see cref="BenchGcListener"/>.</summary>
+    /// <summary>
+    /// The collections (generation, reason, pause) and the allocation samples by type, from <see cref="BenchGcListener"/>.
+    /// </summary>
     string GcSummary()
     {
         if (_benchGc is null) return "";

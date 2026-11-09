@@ -15,13 +15,19 @@ public sealed partial class WwisePlayer
     readonly Dictionary<(uint Playlist, uint Item), List<uint>> _musicHistory = [];
     readonly Dictionary<(uint Playlist, uint Item), int> _musicSteps = [];
 
-    /// <summary>A music node that plays on a timeline: when its current segment ends, and whether it should stop after that one.</summary>
+    /// <summary>
+    /// A music node that plays on a timeline: when its current segment ends, and whether it should stop after that one.
+    /// </summary>
     abstract class MusicInstance(WwisePlayer player, WwiseObject node, Instance? parent) : Instance(player, node, parent)
     {
-        /// <summary>Player time (seconds) of the exit cue of the segment playing now; minus infinity when none is.</summary>
+        /// <summary>
+        /// Player time (seconds) of the exit cue of the segment playing now; minus infinity when none is.
+        /// </summary>
         public abstract double CurrentExit { get; }
 
-        /// <summary>When set, nothing follows the current segment (a music switch is about to replace this one at its exit cue).</summary>
+        /// <summary>
+        /// When set, nothing follows the current segment (a music switch is about to replace this one at its exit cue).
+        /// </summary>
         public virtual bool Hold { get; set; }
 
         protected Instance? Spawn(uint id, double at)
@@ -34,7 +40,9 @@ public sealed partial class WwisePlayer
         }
     }
 
-    /// <summary>A segment: its tracks' clips, each placed at its play-at time (segment time 0 is the entry cue minus its position).</summary>
+    /// <summary>
+    /// A segment: its tracks' clips, each placed at its play-at time (segment time 0 is the entry cue minus its position).
+    /// </summary>
     sealed class MusicSegmentInstance(WwisePlayer player, WwiseMusicSegment node, Instance? parent) : MusicInstance(player, node, parent)
     {
         public override double CurrentExit => StartTime + Math.Max(1, node.ExitCue - node.EntryCue) / 1000;
@@ -129,7 +137,9 @@ public sealed partial class WwisePlayer
             }
         }
 
-        /// <summary>The children one pass of a group plays, in order. Group types: 0 sequence continuous, 1 sequence step, 2 random continuous, 3 random step.</summary>
+        /// <summary>
+        /// The children one pass of a group plays, in order. Group types: 0 sequence continuous, 1 sequence step, 2 random continuous, 3 random step.
+        /// </summary>
         List<WwisePlaylistItem> Pass(WwisePlaylistItem group)
         {
             var children = group.Children;
@@ -218,7 +228,9 @@ public sealed partial class WwisePlayer
             if (_active is null) End();
         }
 
-        /// <summary>The music object for the current values, 0 for none: at each depth the child with the value as key, else the one keyed 0 (any).</summary>
+        /// <summary>
+        /// The music object for the current values, 0 for none: at each depth the child with the value as key, else the one keyed 0 (any).
+        /// </summary>
         uint Select()
         {
             var current = node.Tree;

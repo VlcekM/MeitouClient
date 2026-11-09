@@ -11,7 +11,9 @@ namespace Meitou.Game.Audio;
 /// </summary>
 public sealed class MusicDirector
 {
-    /// <summary>The exe's names of the <c>music</c> indices 0..3 (<see cref="BiomeMusic"/>'s spellings differ); 4 is no music.</summary>
+    /// <summary>
+    /// The exe's names of the <c>music</c> indices 0..3 (<see cref="BiomeMusic"/>'s spellings differ); 4 is no music.
+    /// </summary>
     static readonly string[] Names = ["Dunes", "Savannah", "Swamplands", "Tarsands"];
 
     const string MainThemeBank = "MT_Music_Bank";
@@ -29,19 +31,29 @@ public sealed class MusicDirector
     string? _pendingBank;
     bool _firstChange = true;
 
-    /// <summary>The music of the region the camera is over, null for none.</summary>
+    /// <summary>
+    /// The music of the region the camera is over, null for none.
+    /// </summary>
     public string? Biome { get; private set; }
 
-    /// <summary>True from <see cref="StartMainTheme"/> until <see cref="OnCreateOrLoadGame"/>: the timer does not run (the game's title screen).</summary>
+    /// <summary>
+    /// True from <see cref="StartMainTheme"/> until <see cref="OnCreateOrLoadGame"/>: the timer does not run (the game's title screen).
+    /// </summary>
     public bool TitleScreen { get; private set; }
 
-    /// <summary><c>Music volume</c> (0..1); music is only posted when it is above 0.</summary>
+    /// <summary>
+    /// <c>Music volume</c> (0..1); music is only posted when it is above 0.
+    /// </summary>
     public float Volume { get; private set; }
 
-    /// <summary>The event the timer would post now (<c>Music_Dunes_Play</c>), null when no biome music is remembered.</summary>
+    /// <summary>
+    /// The event the timer would post now (<c>Music_Dunes_Play</c>), null when no biome music is remembered.
+    /// </summary>
     public string? Remembered => _remembered;
 
-    /// <summary>Real seconds until the timer next fires (negative once due, e.g. during the title screen).</summary>
+    /// <summary>
+    /// Real seconds until the timer next fires (negative once due, e.g. during the title screen).
+    /// </summary>
     public double SecondsToNext => _deadline - _clock();
 
     /// <summary>
@@ -72,14 +84,18 @@ public sealed class MusicDirector
         _player.SetParameter("User_Volume_Music", Volume * 100);
     }
 
-    /// <summary>A changed <c>Music frequency</c> moves the deadline earlier when now + the new interval is sooner, never later.</summary>
+    /// <summary>
+    /// A changed <c>Music frequency</c> moves the deadline earlier when now + the new interval is sooner, never later.
+    /// </summary>
     public void SetFrequency(float minutes)
     {
         _frequencyMinutes = Math.Max(0.1f, minutes);
         _deadline = Math.Min(_deadline, _clock() + Interval());
     }
 
-    /// <summary>The title screen's music: loads the main theme's bank and posts <c>Boot_Up_Game</c> (the event waits for the bank).</summary>
+    /// <summary>
+    /// The title screen's music: loads the main theme's bank and posts <c>Boot_Up_Game</c> (the event waits for the bank).
+    /// </summary>
     public void StartMainTheme()
     {
         TitleScreen = true;
@@ -88,8 +104,9 @@ public sealed class MusicDirector
     }
 
     /// <summary>
-    /// A new game, load or import starts: the title screen is gone and <c>Create_or_Load_Game</c> is posted on the GUI object. Its stop of the main theme is limited
-    /// to that object (docs/audio.md#music), so the theme, started on the music object, plays on until a biome's <c>Enter_</c> event stops it.
+    /// A new game, load or import starts: the title screen is gone and <c>Create_or_Load_Game</c> is posted on the GUI object. Its stop of the main
+    /// theme is limited to that object (docs/audio.md#music), so the theme, started on the music object, plays on until a biome's <c>Enter_</c> event
+    /// stops it.
     /// </summary>
     public void OnCreateOrLoadGame()
     {
@@ -118,7 +135,9 @@ public sealed class MusicDirector
 
     static string BankOf(string name) => $"{name}_Music_Bank";
 
-    /// <summary>The game's biome-music step (an index outside 0..4 counts as 4); does nothing when the index is the same as last time.</summary>
+    /// <summary>
+    /// The game's biome-music step (an index outside 0..4 counts as 4); does nothing when the index is the same as last time.
+    /// </summary>
     void ChangeBiome(int next, double now)
     {
         if (next is < 0 or > 4) next = 4;
@@ -164,7 +183,9 @@ public sealed class MusicDirector
         _player.SetSwitch("Biomes", name);
     }
 
-    /// <summary>Unloads biome music banks 60 s after they were last current, when no load is pending.</summary>
+    /// <summary>
+    /// Unloads biome music banks 60 s after they were last current, when no load is pending.
+    /// </summary>
     void UnloadStale(double now)
     {
         if (_pendingBank is not null) return;

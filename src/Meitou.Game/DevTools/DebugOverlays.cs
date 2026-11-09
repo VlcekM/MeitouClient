@@ -9,7 +9,9 @@ using Meitou.Simulation.Navigation;
 
 namespace Meitou.Game.DevTools;
 
-/// <summary>The debug views drawn over the world (Meitou only): the character boxes, the navmesh view (Shift+F11) and F11's path view.</summary>
+/// <summary>
+/// The debug views drawn over the world (Meitou only): the character boxes, the navmesh view (Shift+F11) and F11's path view.
+/// </summary>
 sealed class DebugOverlays(GameHost host)
 {
     // The character boxes (Meitou only; a checkbox on the F11 statistics' characters line, and the F10 Overlays row "Character boxes", one shared switch) that outline, over everything, each character its "drawn" count
@@ -22,7 +24,9 @@ sealed class DebugOverlays(GameHost host)
 
     static readonly Vector4 CharacterBoxColour = new(1f, 0.85f, 0.2f, 0.9f);
 
-    /// <summary>Ticks the statistics' checkboxes as their switches stand (the lines are built once a second).</summary>
+    /// <summary>
+    /// Ticks the statistics' checkboxes as their switches stand (the lines are built once a second).
+    /// </summary>
     internal void TickStatsToggles(List<string> stats)
     {
         TickStatsToggle(stats, CharacterBoxes, WorldStats.CharacterBoxesOff, WorldStats.CharacterBoxesOn);
@@ -37,14 +41,18 @@ sealed class DebugOverlays(GameHost host)
             if (stats[i].Contains(from, StringComparison.Ordinal)) stats[i] = stats[i].Replace(from, to, StringComparison.Ordinal);
     }
 
-    /// <summary>Where the checkboxes are in the panel just drawn (from its laid-out lines).</summary>
+    /// <summary>
+    /// Where the checkboxes are in the panel just drawn (from its laid-out lines).
+    /// </summary>
     internal void FindStatsToggles(float charWidth)
     {
         CharacterBoxesToggle = FindStatsToggle(CharacterBoxes ? WorldStats.CharacterBoxesOn : WorldStats.CharacterBoxesOff, charWidth);
         WalkPathsToggle = FindStatsToggle(WalkPaths ? WorldStats.PathsOn : WorldStats.PathsOff, charWidth);
     }
 
-    /// <summary>A checkbox's rectangle in the panel just drawn, or null when it is not there.</summary>
+    /// <summary>
+    /// A checkbox's rectangle in the panel just drawn, or null when it is not there.
+    /// </summary>
     Vector4? FindStatsToggle(string marker, float charWidth)
     {
         foreach (var (line, rect) in StatsLaidOut)
@@ -57,7 +65,9 @@ sealed class DebugOverlays(GameHost host)
         return null;
     }
 
-    /// <summary>A left click on a checkbox flips its switch; true when one took the click.</summary>
+    /// <summary>
+    /// A left click on a checkbox flips its switch; true when one took the click.
+    /// </summary>
     internal bool StatsToggleClick(Vector2 at)
     {
         if (Inside(CharacterBoxesToggle, at)) { CharacterBoxes = !CharacterBoxes; return true; }
@@ -67,7 +77,9 @@ sealed class DebugOverlays(GameHost host)
 
     static bool Inside(Vector4? rect, Vector2 at) => rect is { } t && at.X >= t.X && at.X <= t.Z && at.Y >= t.Y && at.Y <= t.W;
 
-    /// <summary>The counted characters' outlines over the whole picture, seen through the world camera at the display size.</summary>
+    /// <summary>
+    /// The counted characters' outlines over the whole picture, seen through the world camera at the display size.
+    /// </summary>
     internal void DrawCharacterBoxes(DebugOverlay overlay, CharacterRenderer characters, WorldCamera camera, int width, int height)
     {
         var viewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
@@ -93,7 +105,9 @@ sealed class DebugOverlays(GameHost host)
     // whenever the navigation world or the view changes.
     internal enum NavView { Off, Meitou, Original, Both }
 
-    /// <summary>How far above the meshes the view is drawn, so the ground does not hide them (the original's a little higher, so the two do not fight).</summary>
+    /// <summary>
+    /// How far above the meshes the view is drawn, so the ground does not hide them (the original's a little higher, so the two do not fight).
+    /// </summary>
     const float NavOverlayLift = 3, OriginalOverlayLift = 4;
 
     internal NavView NavViewMode;
@@ -120,7 +134,9 @@ sealed class DebugOverlays(GameHost host)
 
     int _inspectorShown = -1;
 
-    /// <summary>Once a frame: the inspector's hulls go to their renderer when they changed (docs/viewer.md "Pick & collision inspector").</summary>
+    /// <summary>
+    /// Once a frame: the inspector's hulls go to their renderer when they changed (docs/viewer.md "Pick & collision inspector").
+    /// </summary>
     internal void UpdateInspectorOverlay()
     {
         if (!host.Player.Inspector.InspectorDrawing) { if (host.Gpu.InspectorOverlay is { Visible: true } hidden) hidden.Visible = false; _inspectorShown = -1; return; }
@@ -132,7 +148,9 @@ sealed class DebugOverlays(GameHost host)
         overlay.SetMesh(origin, fill, edges);
     }
 
-    /// <summary>Once a frame: a finished build goes to the renderer; a changed world or view starts the next.</summary>
+    /// <summary>
+    /// Once a frame: a finished build goes to the renderer; a changed world or view starts the next.
+    /// </summary>
     internal void UpdateNavOverlay()
     {
         if (host.Nav is null || NavOverlayRenderer is not { Visible: true } overlay) return;
@@ -164,8 +182,8 @@ sealed class DebugOverlays(GameHost host)
     }
 
     /// <summary>
-    /// Meitou's mesh: walkable polygons cyan (each a little lighter or darker, so neighbours tell apart), door polygons blue, polygons the seed pass removed red;
-    /// edges where the mesh ends yellow, the rest faint.
+    /// Meitou's mesh: walkable polygons cyan (each a little lighter or darker, so neighbours tell apart), door polygons blue, polygons the seed pass
+    /// removed red; edges where the mesh ends yellow, the rest faint.
     /// </summary>
     static void AddMeitouMesh(NavWorld world, List<float> fill, List<float> edges, ref Vector3? origin)
     {
@@ -198,7 +216,10 @@ sealed class DebugOverlays(GameHost host)
         }
     }
 
-    /// <summary>The original's mesh: polygons magenta (shaded like Meitou's), edges where it ends orange, edges joined to the next tile violet, the rest faint.</summary>
+    /// <summary>
+    /// The original's mesh: polygons magenta (shaded like Meitou's), edges where it ends orange, edges joined to the next tile violet, the rest
+    /// faint.
+    /// </summary>
     static void AddOriginalMesh(OriginalNavMesh m, List<float> fill, List<float> edges, ref Vector3? origin)
     {
         if (m.Vertices.Length == 0) return;
@@ -250,7 +271,9 @@ sealed class DebugOverlays(GameHost host)
     // then the navmesh part, then the provisional long-range part (CharacterSnapshot.PathExact), the next waypoint and the end marked.
     internal bool WalkPaths;
 
-    /// <summary>How far above the waypoints the path is drawn, so the ground does not swallow it (the navmesh view's lift).</summary>
+    /// <summary>
+    /// How far above the waypoints the path is drawn, so the ground does not swallow it (the navmesh view's lift).
+    /// </summary>
     const float PathLift = NavOverlayLift;
 
     static readonly Vector4 PathColour = new(0.2f, 1f, 0.35f, 0.95f);
@@ -258,7 +281,9 @@ sealed class DebugOverlays(GameHost host)
     static readonly Vector4 NextWaypointColour = new(1f, 1f, 1f, 1f);
     static readonly Vector4 PathEndColour = new(1f, 0.25f, 0.25f, 1f);
 
-    /// <summary>The paths of the characters the snapshot details, seen through the world camera at the display size.</summary>
+    /// <summary>
+    /// The paths of the characters the snapshot details, seen through the world camera at the display size.
+    /// </summary>
     internal void DrawWalkPaths(DebugOverlay overlay, WorldSnapshot snapshot, WorldCamera camera, int width, int height)
     {
         var viewProjection = camera.View * camera.Projection(width / (float)Math.Max(height, 1), camera.Near, camera.ViewDistance);
@@ -267,7 +292,9 @@ sealed class DebugOverlays(GameHost host)
         overlay.Flush(width, height);
     }
 
-    /// <summary>The paths' count in a small panel at the top left, below <paramref name="panelsBottom"/>; returns the new bottom (as the fps line does).</summary>
+    /// <summary>
+    /// The paths' count in a small panel at the top left, below <paramref name="panelsBottom"/>; returns the new bottom (as the fps line does).
+    /// </summary>
     internal static float DrawWalkPathsLabel(DebugOverlay overlay, WorldSnapshot snapshot, int width, int height, float panelsBottom)
     {
         int shown = 0, points = 0;
@@ -286,7 +313,9 @@ sealed class DebugOverlays(GameHost host)
         return top + h - 8;   // the panels add their own 16 px margin
     }
 
-    /// <summary>One character's path: the legs (navmesh green, provisional orange), a square at each waypoint, the next one white and the end red.</summary>
+    /// <summary>
+    /// One character's path: the legs (navmesh green, provisional orange), a square at each waypoint, the next one white and the end red.
+    /// </summary>
     static void DrawWalkPath(DebugOverlay overlay, CharacterSnapshot c, Matrix4x4 viewProjection, int width, int height)
     {
         var lift = Vector3.UnitY * PathLift;
@@ -304,14 +333,18 @@ sealed class DebugOverlays(GameHost host)
         }
     }
 
-    /// <summary>A world point in pixels, or null behind the eye.</summary>
+    /// <summary>
+    /// A world point in pixels, or null behind the eye.
+    /// </summary>
     static Vector2? Screen(Vector3 p, Matrix4x4 viewProjection, int width, int height)
     {
         var clip = Vector4.Transform(new Vector4(p, 1), viewProjection);
         return clip.W <= NearW ? null : Pixel(clip, width, height);
     }
 
-    /// <summary>A segment in pixels, cut where it passes behind the eye; null when all of it is behind.</summary>
+    /// <summary>
+    /// A segment in pixels, cut where it passes behind the eye; null when all of it is behind.
+    /// </summary>
     static (Vector2, Vector2)? Clip(Vector3 a, Vector3 b, Matrix4x4 viewProjection, int width, int height)
     {
         var ca = Vector4.Transform(new Vector4(a, 1), viewProjection);

@@ -2,23 +2,39 @@ using Meitou.Data.World;
 
 namespace Meitou.Game.Audio;
 
-/// <summary>What the ambience follows each frame (docs/audio.md "What the game sends").</summary>
+/// <summary>
+/// What the ambience follows each frame (docs/audio.md "What the game sends").
+/// </summary>
 public readonly record struct AmbienceInput
 {
-    /// <summary>The ambience of the region under the camera's pivot (BIOME_GROUP <c>ambience</c>); null when there is none.</summary>
+    /// <summary>
+    /// The ambience of the region under the camera's pivot (BIOME_GROUP <c>ambience</c>); null when there is none.
+    /// </summary>
     public Ambience? Biome { get; init; }
-    /// <summary>Game hour 0..24.</summary>
+    /// <summary>
+    /// Game hour 0..24.
+    /// </summary>
     public double Hour { get; init; }
-    /// <summary>GLOBAL CONSTANTS <c>sunrise</c> / <c>sunset</c> (5 and 23 in the base game).</summary>
+    /// <summary>
+    /// GLOBAL CONSTANTS <c>sunrise</c> / <c>sunset</c> (5 and 23 in the base game).
+    /// </summary>
     public float Sunrise { get; init; }
     public float Sunset { get; init; }
-    /// <summary>The camera eye's height above the ground under it.</summary>
+    /// <summary>
+    /// The camera eye's height above the ground under it.
+    /// </summary>
     public float EyeAboveGround { get; init; }
-    /// <summary>The weather's rain level 0..100 (<c>rain intensity</c> × strength).</summary>
+    /// <summary>
+    /// The weather's rain level 0..100 (<c>rain intensity</c> × strength).
+    /// </summary>
     public float Rain { get; init; }
-    /// <summary>The weather's <c>wind intensity</c> × wind speed × 0.01.</summary>
+    /// <summary>
+    /// The weather's <c>wind intensity</c> × wind speed × 0.01.
+    /// </summary>
     public float Wind { get; init; }
-    /// <summary>Real seconds since the last update.</summary>
+    /// <summary>
+    /// Real seconds since the last update.
+    /// </summary>
     public double RealSeconds { get; init; }
 }
 
@@ -28,7 +44,9 @@ public readonly record struct AmbienceInput
 /// </summary>
 public sealed class AmbienceDirector(WwisePlayer player)
 {
-    /// <summary>The state the game compares each frame: the biome index, with bit 8 set at night; -1 before the first.</summary>
+    /// <summary>
+    /// The state the game compares each frame: the biome index, with bit 8 set at night; -1 before the first.
+    /// </summary>
     int _state = -1;
     bool? _day;
     bool _raining, _windy;
@@ -39,12 +57,20 @@ public sealed class AmbienceDirector(WwisePlayer player)
     public bool Raining => _raining;
     public bool Windy => _windy;
 
-    /// <summary>Fix (default): a biome entered before its bank is loaded gets the right <c>_Day</c> / <c>_Night</c> event. Off: the game's bug, the opposite suffix on that path.</summary>
+    /// <summary>
+    /// Fix (default): a biome entered before its bank is loaded gets the right <c>_Day</c> / <c>_Night</c> event. Off: the game's bug, the opposite
+    /// suffix on that path.
+    /// </summary>
     public bool FixDelayedSuffix { get; set; } = true;
-    /// <summary>Fix (default): the wind bed ends with the bank's <c>Weather_Wind_End</c>. Off: the game's <c>Weather_Wind_Stop</c>, which no bank has, so the wind never stops.</summary>
+    /// <summary>
+    /// Fix (default): the wind bed ends with the bank's <c>Weather_Wind_End</c>. Off: the game's <c>Weather_Wind_Stop</c>, which no bank has, so the
+    /// wind never stops.
+    /// </summary>
     public bool FixWindStop { get; set; } = true;
 
-    /// <summary>The banks the game loads at start (with Init, the music and the voices, which the viewer does not play; the voices are not played yet).</summary>
+    /// <summary>
+    /// The banks the game loads at start (with Init, the music and the voices, which the viewer does not play; the voices are not played yet).
+    /// </summary>
     public void Start()
     {
         player.LoadBank("SFX_Amb_Weather_Bank");
