@@ -55,16 +55,16 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         /// </summary>
         public bool Landmark;
         /// <summary>
-        /// A door part: the open amount its <see cref="Transform"/> was last posed at (-1: not yet; <c>WorldObjectRenderer.PoseDoor</c>).
+        /// A door part: the open amount its <see cref="Transform"/> was last posed at (-1: not yet; <c>DoorPoses.Pose</c>).
         /// </summary>
         public float DoorOpen = -1;
         /// <summary>
         /// A turret part (<see cref="PlacedMesh.Joints"/>): the <see cref="TurretPose.Version"/> its <see cref="Transform"/> was last posed at (0:
-        /// from its placement; <c>WorldObjectRenderer.PoseJoints</c>).
+        /// from its placement; <c>JointPoses.Pose</c>).
         /// </summary>
         public int TurretStamp;
         /// <summary>
-        /// A part under a rotor: the <c>WorldObjectRenderer.AdvanceRotors</c> frame its <see cref="Transform"/> was last posed at (-1: not yet).
+        /// A part under a rotor: the <c>RotatingParts.Advance</c> frame its <see cref="Transform"/> was last posed at (-1: not yet).
         /// </summary>
         public long RotorFrame = -1;
         public GpuObjectMesh? Gpu;
@@ -75,8 +75,8 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         /// </summary>
         public InteriorAnswer? Interior;
         /// <summary>
-        /// A colour its albedo is multiplied by (a farm plant's, <c>WorldObjectRenderer.SetFarmPlants</c>), packed by
-        /// <c>WorldObjectRenderer.PackTint</c>; 0: none.
+        /// A colour its albedo is multiplied by (a farm plant's, <c>FarmPlants.Set</c>), packed by
+        /// <c>FarmPlants.PackTint</c>; 0: none.
         /// </summary>
         public float Tint;
     }

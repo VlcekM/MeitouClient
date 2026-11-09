@@ -60,11 +60,11 @@ sealed class FarmCrops(GameHost host)
                     growth, view.Death, look.Height);
                 look.Tints[i] = FarmLayout.Tint(look.Data, look.Data.Parts[sub.Part], sub.Random, view.Death);
             }
-            objects.SetFarmPlants(site.Id, look.Meshes, look.Transforms, look.Tints);
+            objects.Farms.Set(site.Id, look.Meshes, look.Transforms, look.Tints);
         }
         foreach (string id in _farms.Keys.Where(id => !seen.Contains(id)).ToArray())
         {
-            objects.RemoveFarmPlants(id);
+            objects.Farms.Remove(id);
             _farms.Remove(id);
         }
     }
@@ -84,7 +84,7 @@ sealed class FarmCrops(GameHost host)
 
     internal void ForgetFarms()
     {
-        foreach (string id in _farms.Keys) host.ActiveObjects?.RemoveFarmPlants(id);
+        foreach (string id in _farms.Keys) host.ActiveObjects?.Farms.Remove(id);
         _farms.Clear();
         _farmsVersion = (-1, -1);
     }

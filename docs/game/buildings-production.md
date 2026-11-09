@@ -945,7 +945,7 @@ is lost once a part moves):
 - Data (**Verified**, probe of the merged data): Wind Generator (I, II) head 25°/s, blades 90°/s, wind 10 to 50; Small Wind Generator body
   25°/s, blades 180°/s wind 4 to 25 (its share), dynamo wind 5 to 25; refinery spinners 16, drills 100, generator spinner 100, looms 90.
 
-Meitou (`RotorSpec`, `WorldObjectRenderer.AdvanceRotors`): the renderer turns the parts it draws by the game frame time and the scheduled
+Meitou (`RotorSpec`, `RotatingParts.Advance`): the renderer turns the parts it draws by the game frame time and the scheduled
 wind; a level building's mult comes from its data as its sound emitter's efficiency does (generator output x 0.01, batteries and machines
 needing neither operators nor power their `output rate`, other machines 0; engine choice).
 
