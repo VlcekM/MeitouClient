@@ -22,10 +22,11 @@ namespace Meitou.Simulation.Kidnap;
 /// the town the gatherer stands in (173, 245:
 /// of its faction; 217: of any faction but the player's; 245 only a woman or one of another race than the gatherer, <c>FUN_1408d1410</c>). The
 /// gatherer walks there and takes the captive
-/// (<c>Task_GetSlave</c>, 174, whose effect is TARGET_IS_MY_SLAVE): <b>engine reading</b> of its queued message (<b>Unknown</b>): the cage is opened,
-/// the captive becomes the gatherer's
-/// faction's slave and joins the gatherer's squad as a slave member, whose Slave AI Goals then follow the squad (171). Player characters are not
-/// gathered (engine choice).</item>
+/// (<c>Task_GetSlave</c>, 174, whose effect is TARGET_IS_MY_SLAVE): its queued message is replayed as <c>setChainedMode</c> only
+/// (<c>FUN_1407b65b0</c> kind 5 -> <c>FUN_14032e590</c>, <b>Verified</b>): the captive becomes the gatherer's faction's slave, owned by the
+/// gatherer, and stays in its own squad, planning with the owner squad's Slave AI Goals (job 187, <see cref="Ai.AiSystem.ObeyedRoles"/>). The
+/// cage is opened (<b>engine reading</b>: which task does it in the original is <b>Unknown</b>). Player characters are not gathered (engine
+/// choice).</item>
 /// <item><b>Deliver</b> (192 "Delivering slaves", wanted at 0.25 per slave, AI slot 65; then 194 / 218 "Selling slaves", 218 only in a prison or
 /// slave camp, AI slot 66): the leader walks to the shipping package's town (<see cref="Blackboard.MissionTown"/>); there it says event 39
 /// SLAVE_DELIVERY to the nearest member of an allied squad of the town and hands its slaves over: each leaves the squad for a squad of its own, owned
@@ -249,8 +250,9 @@ public sealed partial class CaptiveSystem
                     if (cage.Lock is { } l) l.Locked = false;
                     world.Fixtures.LiftOut(world, j.Captive, w, stepOut: true);
                     cc.Escaped = false;
-                    FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);
-                    Join(world, j.Captive, cc, squad, SquadRole.Slave);
+                    FixtureRegistry.Enslave(world, cc, wc.Faction, squad.Id);
+                    cc.Engaged = false;
+                    cc.Kidnapped = false;
                     Note(world, CaptiveEventKind.Gathered, j);
                     return End(world, j, null);
                 }
