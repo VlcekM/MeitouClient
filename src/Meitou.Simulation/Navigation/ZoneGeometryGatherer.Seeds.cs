@@ -5,6 +5,10 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Navigation;
 
+/// <summary>
+/// The seed points of a gather, what the pruner keeps regions from: seeds.def points, door seeds and markers, a ground grid where the file has none,
+/// and linked-wall seeds.
+/// </summary>
 internal sealed partial class ZoneGeometryGatherer
 {
     #region Seeds
@@ -29,6 +33,10 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     const float WallReach = 400;
 
+    /// <summary>
+    /// A ray down from above at (<paramref name="x"/>, <paramref name="z"/>): whether it hits a floor-0/1 building part, and in <paramref name="y"/>
+    /// the highest hit.
+    /// </summary>
     delegate bool BuildingRay(float x, float z, out float y);
 
     /// <summary>
@@ -50,9 +58,9 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// A door marker's seed stands on the highest walkable surface under it at most <see cref="DoorSeedRise"/> above the door's base, as the original drops the
-    /// marker with a ray; the terrain (or the water) where there is none. The terrain under a raised doorstep would seed the ground inside the building's
-    /// foundation (docs/game/pathfinding.md, "Entrance seeds").
+    /// A door marker's seed stands on the highest walkable surface under it at most <see cref="DoorSeedRise"/> above the door's base, as the original
+    /// drops the marker with a ray; the terrain (or the water) where there is none. The terrain under a raised doorstep would seed the ground inside
+    /// the building's foundation (docs/game/pathfinding.md, "Entrance seeds").
     /// </summary>
     void AddDoorMarkerSeeds(ZoneGeometry g)
     {
@@ -65,8 +73,9 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// The two marker points either side of a box door, in the order the callers try them (the side of the negative axis direction first, which decides ties):
-    /// the shape's centre moved perpendicular to its width (<c>door navmesh axis</c>) past its faces. False for a shape that is not a box or is degenerate.
+    /// The two marker points either side of a box door, in the order the callers try them (the side of the negative axis direction first, which
+    /// decides ties): the shape's centre moved perpendicular to its width (<c>door navmesh axis</c>) past its faces. False for a shape that is not a
+    /// box or is degenerate.
     /// </summary>
     static bool DoorMarkers(GameRecord door, PreparedShape shape, Matrix4x4 node, out Vector3 behind, out Vector3 ahead)
     {
@@ -90,13 +99,19 @@ internal sealed partial class ZoneGeometryGatherer
         return true;
     }
 
+    /// <summary>
+    /// Adds the zone's seeds: the door markers, the seeds.def points by the original's ray rule (a point without a height that hits a floor-0/1
+    /// building part is moved onto it, one with a height that hits one is dropped), the ground grid when the file has none, and the linked
+    /// walls' seeds.
+    /// </summary>
     void AddSeeds(ZoneGeometry g)
     {
         AddDoorMarkerSeeds(g);
         float water = WorldWater.Height;
 
-        // The original's ray rule (FUN_1403d4dd0): a seed.def point without a height (Y -99) that a ray from above hits on a floor-0/1 building part (groups 9
-        // and 10) is moved onto it, one with a height that hits one is dropped. A roof, an unwalkable roof (27), stairs or furniture does not count.
+        // The original's ray rule (FUN_1403d4dd0): a seed.def point without a height (Y -99) that a ray from above hits on a floor-0/1 building part
+        // (groups 9 and 10) is moved onto it, one with a height that hits one is dropped. A roof, an unwalkable roof (27), stairs or furniture does
+        // not count.
         bool HitsBuilding(float x, float z, out float y)
         {
             y = float.MinValue;
@@ -152,9 +167,9 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// Linked wall sections (BUILDING with <c>link length</c> above 0): three seeds on top of a WALKABLE wall where the ray down hits it, and for walls that leave
-    /// the zone three ground seeds clamped into the zone box. The three positions along the wall are our choice (0.15, 0.5 and 0.85 of its length, the length
-    /// taken from the collision footprint); the original's are Unknown.
+    /// Linked wall sections (BUILDING with <c>link length</c> above 0): three seeds on top of a WALKABLE wall where the ray down hits it, and for
+    /// walls that leave the zone three ground seeds clamped into the zone box. The three positions along the wall are our choice (0.15, 0.5 and 0.85
+    /// of its length, the length taken from the collision footprint); the original's are Unknown.
     /// </summary>
     void AddLinkedWallSeeds(ZoneGeometry g, BuildingRay hits)
     {
@@ -249,6 +264,9 @@ internal sealed partial class ZoneGeometryGatherer
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="p"/> (X, Z) lies in the zone's box, edges included.
+    /// </summary>
     static bool InsideBox(ZoneGeometry g, Vector2 p) => p.X >= g.ZoneMin.X && p.X <= g.ZoneMax.X && p.Y >= g.ZoneMin.Y && p.Y <= g.ZoneMax.Y;
 
     #endregion

@@ -139,6 +139,9 @@ sealed class CharacterAssembly(PopulationData data)
         return new Fighter(weapon) { IsAnimal = true };
     }
 
+    /// <summary>
+    /// The fighter of a character: an animal's from its ANIMAL_CHARACTER record, anyone else's from its gear, limbs and race.
+    /// </summary>
     Fighter FighterOf(GameRecord? record, Inventory inventory, MedicalState? medical, string? raceId) =>
         AnimalData.From(record) is { } animal ? MakeAnimalFighter(animal) : MakeFighter(inventory, medical, raceId);
 
@@ -185,6 +188,10 @@ sealed class CharacterAssembly(PopulationData data)
         RefreshEquipment(c);
     }
 
+    /// <summary>
+    /// Makes the character's fighter again from its inventory (keeping its guard and encumbrance), the drawn weapon following the new kit, and dyes
+    /// its gear.
+    /// </summary>
     public void RefreshEquipment(CharacterCold cold)
     {
         if (cold.Inventory is not { } inventory) return;
@@ -243,10 +250,6 @@ sealed class CharacterAssembly(PopulationData data)
     }
 
     /// <summary>
-    /// CHARACTER <c>NPC class</c> (<b>Verified</b>, carry-loot.md 4.3: read by <c>FUN_14062b210</c>, the editor's CharacterTypeEnum, <c>fcs.def</c>
-    /// default MILITARY); None without a CHARACTER record (an animal's ANIMAL_CHARACTER, or nothing).
-    /// </summary>
-    /// <summary>
     /// The record's <c>NPC class</c>, except that a player-faction character is an Adventurer (9), as the original sets it when the character is made
     /// (<c>FUN_14062b210</c>).
     /// </summary>
@@ -260,6 +263,10 @@ sealed class CharacterAssembly(PopulationData data)
     public static float FactionImportanceOf(GameRecord? record) =>
         record is { Type: FcsRecordType.Character } ? record.GetFloat("faction importance", 0) : 0;
 
+    /// <summary>
+    /// CHARACTER <c>NPC class</c> (<b>Verified</b>, carry-loot.md 4.3: read by <c>FUN_14062b210</c>, the editor's CharacterTypeEnum, <c>fcs.def</c>
+    /// default MILITARY); None without a CHARACTER record (an animal's ANIMAL_CHARACTER, or nothing).
+    /// </summary>
     public static FundamentalType NpcClassOf(GameRecord? record) =>
         record is { Type: FcsRecordType.Character }
             ? (FundamentalType)record.GetInt("NPC class", (int)FundamentalType.Military)

@@ -61,6 +61,9 @@ public sealed class GroundItems
     /// </summary>
     public const int DefaultLimit = 1024, MaxLimit = 4096;
 
+    /// <summary>
+    /// The limit's value (<see cref="Limit"/>).
+    /// </summary>
     int _limit = DefaultLimit;
 
     /// <summary>
@@ -70,10 +73,22 @@ public sealed class GroundItems
     /// </summary>
     public int Limit { get => _limit; set => _limit = Math.Clamp(value, 1, MaxLimit); }
 
+    /// <summary>
+    /// The items on the ground, oldest first.
+    /// </summary>
     readonly List<GroundItem> _items = [];
+    /// <summary>
+    /// The id the next item gets.
+    /// </summary>
     int _nextId = 1;
 
+    /// <summary>
+    /// How many items lie on the ground.
+    /// </summary>
     public int Count => _items.Count;
+    /// <summary>
+    /// The items on the ground, oldest first.
+    /// </summary>
     public IReadOnlyList<GroundItem> All => _items;
     /// <summary>
     /// Bumped when an item is dropped, loaded or goes: the host diffs <see cref="Published"/> by id when it changes.
@@ -90,6 +105,9 @@ public sealed class GroundItems
         Revision++;
     }
 
+    /// <summary>
+    /// Whether the item counts against <see cref="Limit"/>: dropped in play, kept by no slot and no camp.
+    /// </summary>
     static bool Capped(GroundItem i) => i.Item.Saved is null && i.Slot is null && i.Camp is null;
 
     /// <summary>
@@ -127,6 +145,9 @@ public sealed class GroundItems
         Revision++;
     }
 
+    /// <summary>
+    /// The item of <paramref name="id"/>; null when it is gone.
+    /// </summary>
     public GroundItem? Find(int id) => _items.Find(i => i.Id == id);
 
     /// <summary>
@@ -154,9 +175,18 @@ public sealed class GroundItems
                                     i.Item.Quality, i.OwnedBy, i.Fall))], Revision);
         return _published;
     }
+    /// <summary>
+    /// The last published list.
+    /// </summary>
     IReadOnlyList<GroundItemSnapshot> _published = [];
+    /// <summary>
+    /// The <see cref="Revision"/> <see cref="_published"/> was made at.
+    /// </summary>
     long _publishedAt;
 
+    /// <summary>
+    /// Adds each item (id, record, quantity, position, rotation; its slot, camp and owner when set) to the world hash.
+    /// </summary>
     public void Hash(ref StateHasher h)
     {
         h.Add(_items.Count);

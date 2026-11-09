@@ -6,6 +6,9 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Simulation.Navigation;
 
+/// <summary>
+/// The terrain of a gather: the zone's heightmap window and its triangles, the water surface in place of the ground under it.
+/// </summary>
 internal sealed partial class ZoneGeometryGatherer
 {
     #region Terrain
@@ -25,8 +28,15 @@ internal sealed partial class ZoneGeometryGatherer
     /// </summary>
     const int TerrainSampleStep = 2;
 
+    /// <summary>
+    /// <paramref name="value"/> rounded down to a multiple of <paramref name="step"/> (towards negative infinity).
+    /// </summary>
     static int FloorTo(int value, int step) => (int)Math.Floor(value / (double)step) * step;
 
+    /// <summary>
+    /// Adds the terrain over the zone and its margin on every second heightmap sample, each quad cut along the same diagonal as the original's; under
+    /// the water the vertices stand on the water surface and the triangles take the water areas by depth.
+    /// </summary>
     void AddTerrain(ZoneGeometry g)
     {
         // Every second sample (36 units), on even samples, as the original's generator (docs/game/pathfinding.md, terrain grid).
@@ -65,7 +75,8 @@ internal sealed partial class ZoneGeometryGatherer
                 int c = a + cols;
                 int d = c + 1;
 
-                // Cut from the cell's (i, j) corner to (i + 1, j + 1): the original's outlines follow this diagonal (docs/game/pathfinding.md, "Terrain").
+                // Cut from the cell's (i, j) corner to (i + 1, j + 1): the original's outlines follow this diagonal
+                // (docs/game/pathfinding.md, "Terrain").
                 Tri(a, c, d);
                 Tri(a, d, b);
             }

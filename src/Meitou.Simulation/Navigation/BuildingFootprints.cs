@@ -15,8 +15,8 @@ namespace Meitou.Simulation.Navigation;
 public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
 {
     /// <summary>
-    /// The convex hull of each collision shape on its own (same space as <see cref="Hull"/>): what the pick & collision inspector draws next to the
-    /// merged hull.
+    /// The convex hull of each collision shape on its own (same space as <see cref="Hull"/>): what the pick &amp; collision inspector draws next to
+    /// the merged hull.
     /// </summary>
     public IReadOnlyList<Vector2[]> Shapes { get; init; } = [];
 
@@ -75,7 +75,8 @@ public sealed record BuildingFootprint(Vector2[] Hull, float YMin, float YMax)
             var a = Hull[i];
             var e = Hull[(i + 1) % Hull.Length] - a;
             float cross = e.X * (p.Y - a.Y) - e.Y * (p.X - a.X);
-            if (cross > 0) left++; else if (cross < 0) right++;
+            if (cross > 0) left++;
+            else if (cross < 0) right++;
             float t = e.LengthSquared() > 1e-12f ? Math.Clamp(Vector2.Dot(p - a, e) / e.LengthSquared(), 0, 1) : 0;
             nearest = MathF.Min(nearest, Vector2.Distance(p, a + t * e));
         }
@@ -101,15 +102,39 @@ public readonly record struct PlacedBuilding(BuildingPlacement Placement, Buildi
 /// </summary>
 public sealed class BuildingFootprints
 {
+    /// <summary>
+    /// The game install the collision files and the part meshes' bounds are resolved in.
+    /// </summary>
     readonly GameInstall _install;
+    /// <summary>
+    /// The game data the BUILDING records are looked up in.
+    /// </summary>
     readonly GameDatabase _db;
+    /// <summary>
+    /// The collision files read so far (the footprints and <see cref="File"/> share it).
+    /// </summary>
     readonly CollisionCache _collision;
-    // The level data's buildings by zone, made on first use and again when the level data was edited (WorldLevelData.EditRevision).
+    /// <summary>
+    /// The level data's buildings by zone, made on first use and again when the level data was edited (WorldLevelData.EditRevision).
+    /// </summary>
     (int Revision, Dictionary<ZoneCoordinate, List<BuildingPlacement>> Map)? _indexed;
+    /// <summary>
+    /// Guards building and swapping <see cref="_indexed"/> (<see cref="Index"/> runs on any caller's thread).
+    /// </summary>
     readonly object _indexGate = new();
+    /// <summary>
+    /// The level data whose placed buildings are indexed and picked; null: no placed buildings.
+    /// </summary>
     readonly WorldLevelData? _levels;
+    /// <summary>
+    /// Each BUILDING record's footprint by id, read once on a worker (<see cref="Request"/>); a null result is a record without collision.
+    /// </summary>
     readonly ConcurrentDictionary<string, Task<BuildingFootprint?>> _byRecord = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Reads the footprints of <paramref name="db"/>'s BUILDING records from the collision files of <paramref name="install"/>, and indexes the
+    /// placed buildings of <paramref name="levels"/> (null: none).
+    /// </summary>
     public BuildingFootprints(GameInstall install, GameDatabase db, WorldLevelData? levels)
     {
         this._install = install;
@@ -118,6 +143,9 @@ public sealed class BuildingFootprints
         _collision = new CollisionCache(install);
     }
 
+    /// <summary>
+    /// The level data's buildings by zone, made again when <see cref="WorldLevelData.EditRevision"/> moved on since the last call.
+    /// </summary>
     Dictionary<ZoneCoordinate, List<BuildingPlacement>> Index()
     {
         int revision = _levels?.EditRevision ?? 0;
@@ -298,6 +326,9 @@ public sealed class BuildingFootprints
     public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> File(string recordPath) =>
         _collision.Get(recordPath) is { } prepared ? [.. prepared.Shapes.Select(s => (s.Vertices, s.Indices))] : [];
 
+    /// <summary>
+    /// The <see cref="Plot"/> stand-ins by BUILDING id, made once each; null for a record with collision or without readable part bounds.
+    /// </summary>
     readonly ConcurrentDictionary<string, BuildingFootprint?> _plots = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -323,6 +354,9 @@ public sealed class BuildingFootprints
         return hull.Length < 3 ? null : new BuildingFootprint(hull, points.Min(p => p.Y), points.Max(p => p.Y));
     });
 
+    /// <summary>
+    /// The part meshes' bounds by mesh path, read once each (<see cref="PartBounds"/>).
+    /// </summary>
     readonly ConcurrentDictionary<string, (Vector3 Min, Vector3 Max)?> _partBounds = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -339,9 +373,16 @@ public sealed class BuildingFootprints
     /// </summary>
     bool IsFarm(string buildingId) => _db.Find(buildingId)?.GetReferences("farm data") is [_, ..];
 
+    /// <summary>
+    /// Starts reading a record's footprint on a worker the first time it is asked for; the task of the read.
+    /// </summary>
     Task<BuildingFootprint?> Request(string buildingId) => _byRecord.GetOrAdd(buildingId, static (id, self) => Task.Run(() => self.Compute(id)),
             this);   // a static factory: nothing allocated on a hit
 
+    /// <summary>
+    /// Reads a BUILDING's footprint: the hull of its parts' collision shapes (record <c>scale</c> applied, 1 when not positive) with each shape's own
+    /// hull in <see cref="BuildingFootprint.Shapes"/>; null for a missing record or one without collision.
+    /// </summary>
     BuildingFootprint? Compute(string buildingId)
     {
         if (_db.Find(buildingId) is not { } building) return null;
@@ -381,6 +422,10 @@ public sealed class BuildingFootprints
                 yield return new PlacedBuilding(b, plot, Plot: true);
     }
 
+    /// <summary>
+    /// The level data's placed buildings (not those at the origin or aimed at a zone record) within 200 units of the ray's ground track over
+    /// <paramref name="maxDistance"/>, from the zones round the track.
+    /// </summary>
     IEnumerable<BuildingPlacement> Near(Vector3 origin, Vector3 direction, float maxDistance)
     {
         var map = Index();

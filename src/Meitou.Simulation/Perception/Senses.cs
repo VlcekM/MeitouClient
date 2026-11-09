@@ -10,6 +10,9 @@ namespace Meitou.Simulation.Perception;
 [Flags]
 public enum SenseTag : ushort
 {
+    /// <summary>
+    /// No tag.
+    /// </summary>
     None = 0,
 
     /// <summary>
@@ -45,10 +48,25 @@ public enum SenseTag : ushort
 /// </summary>
 public struct SenseEntry
 {
+    /// <summary>
+    /// The sensed character's slot and generation.
+    /// </summary>
     public int Target, Generation;
+    /// <summary>
+    /// The tick it was last seen or heard (+0x10).
+    /// </summary>
     public long Tick;
+    /// <summary>
+    /// Where it was last sensed (+0x0).
+    /// </summary>
     public Vector3 Place;
+    /// <summary>
+    /// Whether the last look saw (+0x38) or heard (+0x39) it.
+    /// </summary>
     public bool Seen, Heard;
+    /// <summary>
+    /// Its tags (+0x30).
+    /// </summary>
     public SenseTag Tags;
 
     /// <summary>
@@ -64,9 +82,10 @@ public struct SenseEntry
 }
 
 /// <summary>
-/// A character's senses (the original's <c>SensoryData</c>, docs/game/perception.md "Senses"): the entries, kept in target slot order and bounded by
-/// <see cref="Cap"/>, and what the last look counted from them. Written by <see cref="AggroSystem"/>'s look in <c>Act</c> (the looker's own slot only) and by the
-/// forced sense (<see cref="AggroSystem.Force"/>, serial); read from any phase after that look (<see cref="CharacterFacts.Senses"/>).
+/// A character's senses (the original's <c>SensoryData</c>, docs/game/perception.md "Senses"): the entries, kept in target slot order
+/// and bounded by <see cref="Cap"/>, and what the last look counted from them. Written by <see cref="AggroSystem"/>'s look in
+/// <c>Act</c> (the looker's own slot only) and by the forced sense (<see cref="AggroSystem.Force"/>, serial); read from any phase after
+/// that look (<see cref="CharacterFacts.Senses"/>).
 /// </summary>
 public sealed class SenseBlock
 {
@@ -76,7 +95,13 @@ public sealed class SenseBlock
     /// </summary>
     public const int Cap = 40;
 
+    /// <summary>
+    /// The entries, by target slot.
+    /// </summary>
     internal readonly List<SenseEntry> EntryList = [];
+    /// <summary>
+    /// The threats sensed at the last look.
+    /// </summary>
     internal readonly List<CharacterId> ThreatList = [];
 
     /// <summary>
@@ -104,6 +129,9 @@ public sealed class SenseBlock
     /// </summary>
     public int Allies { get; internal set; }
 
+    /// <summary>
+    /// The other allies sensed at the last look (+0x48).
+    /// </summary>
     public int AlliesDown { get; internal set; }
 
     /// <summary>
@@ -112,6 +140,9 @@ public sealed class SenseBlock
     /// </summary>
     public float ThreatToMe { get; internal set; }
 
+    /// <summary>
+    /// The threat towards characters of its faction (+0x8c), one per fighting threat.
+    /// </summary>
     public float ThreatToAllies { get; internal set; }
 
     /// <summary>
@@ -180,6 +211,9 @@ public sealed class SenseBlock
         return lo;
     }
 
+    /// <summary>
+    /// Adds the entries (all fields, the base tags too) to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(EntryList.Count);

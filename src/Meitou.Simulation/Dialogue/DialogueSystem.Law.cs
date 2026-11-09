@@ -3,6 +3,9 @@ using Meitou.Data.Gameplay.Dialogue;
 
 namespace Meitou.Simulation.Dialogue;
 
+/// <summary>
+/// The dialogue system's bail list, and the events and queries other systems use.
+/// </summary>
 public sealed partial class DialogueSystem
 {
     #region Bail list

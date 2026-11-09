@@ -8,6 +8,9 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Dialogue;
 
+/// <summary>
+/// The dialogue system's regard and memory tags, and the AI acts its lines start.
+/// </summary>
 public sealed partial class DialogueSystem
 {
     #region Regard and memory tags
@@ -99,6 +102,9 @@ public sealed partial class DialogueSystem
         }
     }
 
+    /// <summary>
+    /// Whether factions <paramref name="a"/> and <paramref name="b"/> are the same or allied (false for a missing one).
+    /// </summary>
     bool AlliedFactions(int a, int b) =>
         a >= 0 && b >= 0 && (a == b || _data.Relations.Contains(a) && _data.Relations.Contains(b) && _data.Relations.IsAlly(a, b));
 
@@ -165,6 +171,9 @@ public sealed partial class DialogueSystem
         return Has(ab, MemoryTag.TempAlly) ? -1 : 0;
     }
 
+    /// <summary>
+    /// Whether bit <paramref name="tag"/> is set in <paramref name="tags"/>.
+    /// </summary>
     static bool Has(uint tags, int tag) => (tags >> tag & 1) != 0;
 
     /// <summary>

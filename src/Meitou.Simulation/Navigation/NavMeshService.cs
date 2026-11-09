@@ -10,7 +10,17 @@ namespace Meitou.Simulation.Navigation;
 /// <summary>
 /// Where a zone's mesh came from.
 /// </summary>
-public enum NavMeshOrigin { Cache, Built }
+public enum NavMeshOrigin
+{
+    /// <summary>
+    /// Read from the <see cref="NavMeshCache"/> (also a zone that was already loaded when it was asked for).
+    /// </summary>
+    Cache,
+    /// <summary>
+    /// Gathered and built by the worker (then saved to the cache).
+    /// </summary>
+    Built
+}
 
 /// <summary>
 /// What a worker reports for one finished zone.
@@ -26,27 +36,70 @@ public sealed record NavZoneReady(ZoneCoordinate Zone, NavMeshOrigin Origin, dou
 /// </summary>
 internal sealed class NavMeshService : IDisposable
 {
+    /// <summary>
+    /// The game install the gatherer reads the terrain and collision files from.
+    /// </summary>
     readonly GameInstall _install;
+    /// <summary>
+    /// The game data the gatherer reads the records from.
+    /// </summary>
     readonly GameDatabase _db;
+    /// <summary>
+    /// The level data whose placed buildings the zones are gathered with.
+    /// </summary>
     readonly WorldLevelData _levels;
+    /// <summary>
+    /// The collision files read so far, shared by every gather.
+    /// </summary>
     readonly CollisionCache _collisions;
+    /// <summary>
+    /// The player's buildings to gather with the level data's; null: none.
+    /// </summary>
     readonly NavRuntimeBuildings? _runtime;
 
-    // Bumped by Rebuild: a zone whose build started before the bump is queued again after it publishes (its gather may have missed the change).
+    /// <summary>
+    /// Bumped by Rebuild: a zone whose build started before the bump is queued again after it publishes (its gather may have missed the change).
+    /// </summary>
     readonly ConcurrentDictionary<ZoneCoordinate, int> _rebuilds = new();
+    /// <summary>
+    /// The zones waiting for the worker, in request order; a zone is added once while it is pending.
+    /// </summary>
     readonly BlockingCollection<ZoneCoordinate> _queue = [];
+    /// <summary>
+    /// The task of each requested zone until it is published, unloaded or fails; a zone not in it is not wanted any more.
+    /// </summary>
     readonly ConcurrentDictionary<ZoneCoordinate, TaskCompletionSource<NavZoneReady>> _pending = new();
+    /// <summary>
+    /// The worker thread that loads and builds the queued zones (<see cref="Work"/>), below normal priority.
+    /// </summary>
     readonly Thread _worker;
+    /// <summary>
+    /// Guards <see cref="_full"/>, <see cref="_live"/> and <see cref="_standing"/> and the publishing of the walkability's world.
+    /// </summary>
     readonly object _publishLock = new();
 
-    // The loaded zones' meshes with their pruned polygons, for resolving the kept regions (worker thread, KeepAt and Unload, under publishLock).
+    /// <summary>
+    /// The loaded zones' meshes with their pruned polygons, for resolving the kept regions (worker thread, KeepAt and Unload, under publishLock).
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, ZoneNavMesh> _full = [];
 
-    // The kept sets the loaded world was published with, and the points whose regions KeepAt keeps.
+    /// <summary>
+    /// The kept sets the loaded world was published with, and the points whose regions KeepAt keeps.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, bool[]> _live = [];
+    /// <summary>
+    /// The points by zone whose regions <see cref="KeepAt"/> was asked to keep, resolved again with every publish.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, List<Vector3>> _standing = [];
+    /// <summary>
+    /// Set by <see cref="Dispose"/>: the worker stops at its next zone.
+    /// </summary>
     volatile bool _disposed;
 
+    /// <summary>
+    /// Starts the worker that builds the zones of <paramref name="levels"/> into <paramref name="walkability"/>; <paramref name="settings"/> null:
+    /// the defaults, <paramref name="cache"/> null: the default cache folder.
+    /// </summary>
     public NavMeshService(
         GameInstall install,
         GameDatabase db,
@@ -68,8 +121,14 @@ internal sealed class NavMeshService : IDisposable
         _worker.Start();
     }
 
+    /// <summary>
+    /// The walkability the finished zones are published to.
+    /// </summary>
     public NavmeshWalkability Walkability { get; }
 
+    /// <summary>
+    /// The build settings the zones are built and cached with (thread count aside, <see cref="BuildSettings"/>).
+    /// </summary>
     public NavBuildSettings Settings { get; }
 
     /// <summary>
@@ -79,6 +138,9 @@ internal sealed class NavMeshService : IDisposable
     /// </summary>
     public bool Covered { get; set; } = true;
 
+    /// <summary>
+    /// <see cref="Settings"/> with a quarter of the cores while not <see cref="Covered"/> and the settings leave the thread count to the build.
+    /// </summary>
     NavBuildSettings BuildSettings
     {
         get
@@ -89,6 +151,9 @@ internal sealed class NavMeshService : IDisposable
         }
     }
 
+    /// <summary>
+    /// The cache the worker loads zones from and saves built ones to.
+    /// </summary>
     public NavMeshCache Cache { get; }
 
     /// <summary>
@@ -159,8 +224,8 @@ internal sealed class NavMeshService : IDisposable
     }
 
     /// <summary>
-    /// Resolves the loaded zones' kept sets (<see cref="ZoneKeptClosure.Resolve"/>) and returns <paramref name="world"/> with every zone whose set changed, or
-    /// which it lacks, published again (<see cref="NavWorld.With"/> relinks its borders). Under <see cref="_publishLock"/>.
+    /// Resolves the loaded zones' kept sets (<see cref="ZoneKeptClosure.Resolve"/>) and returns <paramref name="world"/> with every zone whose set
+    /// changed, or which it lacks, published again (<see cref="NavWorld.With"/> relinks its borders). Under <see cref="_publishLock"/>.
     /// </summary>
     NavWorld Publish(NavWorld world)
     {
@@ -183,7 +248,8 @@ internal sealed class NavMeshService : IDisposable
     public void Unload(ZoneCoordinate zone) => Unload([zone]);
 
     /// <summary>
-    /// Drops several zones at once: the world is published again once (the combined mesh is rebuilt on each publish, tens of milliseconds), not per zone.
+    /// Drops several zones at once: the world is published again once (the combined mesh is rebuilt on each publish, tens of milliseconds), not
+    /// per zone.
     /// </summary>
     public void Unload(IReadOnlyCollection<ZoneCoordinate> zones)
     {
@@ -209,6 +275,11 @@ internal sealed class NavMeshService : IDisposable
             tcs.TrySetCanceled();
     }
 
+    /// <summary>
+    /// The worker loop: for each queued zone still pending, the cached mesh or a gathered and built one (saved to the cache), published under
+    /// <see cref="_publishLock"/> with its neighbours' kept regions resolved again; queued again when a <see cref="Rebuild"/> came while it
+    /// was built.
+    /// </summary>
     void Work()
     {
         using var gatherer = new ZoneGeometryGatherer(_install, _db, _levels, _collisions, _runtime);
@@ -231,7 +302,8 @@ internal sealed class NavMeshService : IDisposable
                 {
                     var geometry = gatherer.Gather(zone, buildingHash: hash);
 
-                    // Pruned by the zone's own seeds only, so the cached mesh does not depend on which neighbours were loaded (ZoneKeptClosure joins them).
+                    // Pruned by the zone's own seeds only, so the cached mesh does not depend on which neighbours were loaded (ZoneKeptClosure
+                    // joins them).
                     mesh = NavMeshPipeline.BuildZone(gatherer, geometry, BuildSettings, out _);
                     origin = NavMeshOrigin.Built;
                     try
@@ -274,6 +346,9 @@ internal sealed class NavMeshService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Stops the worker (waiting up to 30 s for its zone) and cancels the zones still pending.
+    /// </summary>
     public void Dispose()
     {
         _disposed = true;

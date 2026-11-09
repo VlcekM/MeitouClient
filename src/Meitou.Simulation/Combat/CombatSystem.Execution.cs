@@ -6,6 +6,9 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// The execution of captives: one blow of <c>Task_KillPrisoner</c> (<see cref="Execute"/>) and its effects.
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>

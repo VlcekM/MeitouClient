@@ -3,9 +3,12 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Simulation.Bodies;
 
+/// <summary>
+/// The medical tick and what feeds it: food, first aid, splints, the parts' healing and degeneration, blood, hunger and the knock-out timer.
+/// </summary>
 public sealed partial class MedicalState
 {
-    // ------------------------------------------------------------------ food
+    #region Food
 
     /// <summary>
     /// Puts food into the stomach buffer, in hunger levels (a bite of n nutrition is n / 100, <see cref="Items.FeedSystem"/>). The buffer digests
@@ -13,7 +16,9 @@ public sealed partial class MedicalState
     /// </summary>
     public void Feed(float amount) => Fed += MathF.Max(0, amount);
 
-    // ------------------------------------------------------------------ first aid
+    #endregion
+
+    #region First aid
 
     /// <summary>
     /// The bandaging rate of a treatment (<c>FUN_140649a00</c>): lerp(1, 15, min(skill, kit quality) x 0.01) x <c>medic speed mult</c>, x <c>robot
@@ -160,7 +165,9 @@ public sealed partial class MedicalState
         return (c.MedkitDrain99 + (c.MedkitDrain1 - c.MedkitDrain99) * t) * dt * (robotKit ? c.RobotMedicSpeedMult : 1);
     }
 
-    // ------------------------------------------------------------------ splints
+    #endregion
+
+    #region Splints
 
     /// <summary>
     /// Effective HP (h - s + rig, absolute) under which a part can take a splint, and to which healing wears the splint down (<c>FUN_140649d50</c>,
@@ -203,7 +210,9 @@ public sealed partial class MedicalState
         return 0;
     }
 
-    // ------------------------------------------------------------------ the tick
+    #endregion
+
+    #region The tick
 
     /// <summary>
     /// Game hours in one second of character time (the Verified 1200/11 s per game hour, <c>GameClock</c>).
@@ -258,17 +267,6 @@ public sealed partial class MedicalState
         _legsWereDown = legsDown ? 1 : 0;
         _posture = Standing ? PostureState.Normal : PostureState.Other;
     }
-
-    /// <summary>
-    /// The rates every part of one <see cref="Tick"/> steps with.
-    /// </summary>
-    /// <param name="Dtb">The medical time times the body time scale.</param>
-    /// <param name="DegMult">The degeneration multiplier, 0 in a bed.</param>
-    /// <param name="Organic">The organic heal rate.</param>
-    /// <param name="Robotic">The robotic heal rate.</param>
-    /// <param name="Conscious">Whether the character was conscious when the tick began.</param>
-    /// <param name="Chance">The chance of death option.</param>
-    readonly record struct PartRates(float Dtb, float DegMult, float Organic, float Robotic, bool Conscious, float Chance);
 
     /// <summary>
     /// The part rates of one <see cref="Tick"/>.
@@ -430,6 +428,10 @@ public sealed partial class MedicalState
         }
     }
 
+    /// <summary>
+    /// One tick of blood: the wounds clot, the wounds and damaged stumps bleed, blood is held to capacity and, while nothing bleeds, recovers; the
+    /// blood-loss trauma flag clears above 25.
+    /// </summary>
     void TickBlood(float dt, in MedicalContext ctx)
     {
         var c = ctx.Constants;
@@ -491,4 +493,16 @@ public sealed partial class MedicalState
         }
     }
 
+    /// <summary>
+    /// The rates every part of one <see cref="Tick"/> steps with.
+    /// </summary>
+    /// <param name="Dtb">The medical time times the body time scale.</param>
+    /// <param name="DegMult">The degeneration multiplier, 0 in a bed.</param>
+    /// <param name="Organic">The organic heal rate.</param>
+    /// <param name="Robotic">The robotic heal rate.</param>
+    /// <param name="Conscious">Whether the character was conscious when the tick began.</param>
+    /// <param name="Chance">The chance of death option.</param>
+    readonly record struct PartRates(float Dtb, float DegMult, float Organic, float Robotic, bool Conscious, float Chance);
+
+    #endregion
 }

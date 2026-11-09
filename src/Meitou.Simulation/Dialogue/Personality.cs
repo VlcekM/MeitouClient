@@ -12,6 +12,9 @@ namespace Meitou.Simulation.Dialogue;
 /// </summary>
 public static class Personality
 {
+    /// <summary>
+    /// The tag numbers read here (NONE, HONORABLE, TRAITOROUS, NORMAL) and the tag count; the valid tags are 1 to 14.
+    /// </summary>
     public const int None = 0, Honorable = 1, Traitorous = 2, Normal = 13, Count = 15;
 
     /// <summary>
@@ -88,6 +91,9 @@ public static class Personality
         return pool[^1].Tag;
     }
 
+    /// <summary>
+    /// Whether <paramref name="tag"/> is a valid tag (1 to 14).
+    /// </summary>
     static bool Valid(int tag) => tag is > None and < Count;
 
     /// <summary>
@@ -105,6 +111,9 @@ public static class Personality
         return db.Find("blank personality") is { Type: FcsRecordType.Personality } blank ? blank : null;
     }
 
+    /// <summary>
+    /// The PERSONALITY record of <paramref name="owner"/>'s first <c>personality</c> reference; null when it has none or it does not resolve to one.
+    /// </summary>
     static GameRecord? First(GameDatabase db, GameRecord? owner) =>
         owner?.GetReferences("personality") is { Count: > 0 } list
             && db.Find(list[0].TargetStringId) is { Type: FcsRecordType.Personality } p ? p : null;

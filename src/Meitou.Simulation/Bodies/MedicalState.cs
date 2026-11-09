@@ -22,12 +22,27 @@ public sealed partial class MedicalState
     /// </summary>
     public const float MaxHunger = 3;
 
+    /// <summary>
+    /// The bleeding wounds' strengths (blood per second each); they clot over time.
+    /// </summary>
     readonly List<float> _wounds = [];
+    /// <summary>
+    /// The rolls drawn so far from the character's medical stream (hit parts, severed limbs, KO timers).
+    /// </summary>
     ulong _rollCounter;
 
+    /// <summary>
+    /// A medical state of <paramref name="parts"/>, all whole; the rest starts at its defaults.
+    /// </summary>
     public MedicalState(IEnumerable<HealthPart> parts) => this._parts = [.. parts];
 
+    /// <summary>
+    /// The body parts in their template order.
+    /// </summary>
     public IReadOnlyList<HealthPart> Parts => _parts;
+    /// <summary>
+    /// The body parts behind <see cref="Parts"/> and <see cref="PartSpan"/>.
+    /// </summary>
     readonly HealthPart[] _parts;
 
     /// <summary>
@@ -70,6 +85,9 @@ public sealed partial class MedicalState
     /// </summary>
     public bool Dead { get; private set; }
 
+    /// <summary>
+    /// What killed the character (<see cref="DeathCause.None"/> while alive).
+    /// </summary>
     public DeathCause Cause { get; private set; }
 
     /// <summary>
@@ -96,7 +114,13 @@ public sealed partial class MedicalState
     /// first). Derived, not saved: the first tick after a load sets it again.
     /// </summary>
     public float LegKoPoint { get => _legKoPoint; private set { _legKoPoint = value; _legKoKnown = true; } }
+    /// <summary>
+    /// The value behind <see cref="LegKoPoint"/>.
+    /// </summary>
     float _legKoPoint;
+    /// <summary>
+    /// Whether <see cref="LegKoPoint"/> has been set since the state was made or loaded.
+    /// </summary>
     bool _legKoKnown;
 
     /// <summary>
@@ -153,6 +177,9 @@ public sealed partial class MedicalState
     /// <see cref="BodySystem"/> takes it in a serial phase. The first tick after a load only learns the state. Not saved.
     /// </summary>
     public bool CollapseOnset { get; set; }
+    /// <summary>
+    /// Whether a leg was down at the last tick (1 yes, 0 no, -1 not known yet: the first tick after a load only learns it).
+    /// </summary>
     int _legsWereDown = -1;
 
     /// <summary>
@@ -260,9 +287,12 @@ public sealed partial class MedicalState
     /// Game hours until a starving character may pass out again after waking (an engine choice; the original's timing was not traced).
     /// </summary>
     float _starveGrace;
+    /// <summary>
+    /// Whether the character's KO is a starvation KO: waking from it starts <see cref="_starveGrace"/>.
+    /// </summary>
     bool _starvationKo;
 
-    // ------------------------------------------------------------------ creation
+    #region Creation
 
     /// <summary>
     /// A healthy new character: every part at its maximum, full blood, hunger 3. <paramref name="strength"/> sets the blood capacity.
@@ -328,7 +358,9 @@ public sealed partial class MedicalState
     public static float BloodCapacity(RaceData race, float strength, bool hasStats = true, float k = 1, float z = 1) =>
         race.MinBlood + (race.MaxBlood - race.MinBlood) * (hasStats ? strength / 100 : 1) * k * z;
 
-    // ------------------------------------------------------------------ queries
+    #endregion
+
+    #region Queries
 
     /// <summary>
     /// Whether an arm works (the medical object's arm bytes, set every tick by <c>FUN_140649320</c> through <c>FUN_140644450</c>, <b>Observed</b>;
@@ -367,13 +399,27 @@ public sealed partial class MedicalState
     /// </summary>
     public ulong ShownBlood => Summary.Blood;
 
-    // The part figures, kept while no part changed (HealthPart.Version only grows, so the sum moves with every change). A value under a lock: the
-    // publish reads it from several threads, and a new record on every change (a bleeding or healing character's every tick) was garbage.
+    /// <summary>
+    /// The part figures, kept while no part changed (HealthPart.Version only grows, so the sum moves with every change). A value under a lock: the
+    /// publish reads it from several threads, and a new record on every change (a bleeding or healing character's every tick) was garbage.
+    /// </summary>
     readonly record struct PartSummary(int Version, BodyAggregates Aggregates, float Worst, ulong Blood);
+    /// <summary>
+    /// The part figures last computed; valid while <see cref="_summaryKnown"/> and the part versions sum to its version.
+    /// </summary>
     PartSummary _summary;
+    /// <summary>
+    /// Whether <see cref="_summary"/> has been computed.
+    /// </summary>
     bool _summaryKnown;
+    /// <summary>
+    /// Guards <see cref="_summary"/>: the publish reads it from several threads.
+    /// </summary>
     readonly Lock _summaryLock = new();
 
+    /// <summary>
+    /// The part figures for the parts as they are now, computed again only when a part's version moved.
+    /// </summary>
     PartSummary Summary
     {
         get
@@ -390,6 +436,9 @@ public sealed partial class MedicalState
         }
     }
 
+    /// <summary>
+    /// The lowest health fraction of the parts (1 with none); NaN when a part's is NaN.
+    /// </summary>
     float ComputeWorstPart()
     {
         if (_parts.Length == 0) return 1;
@@ -404,6 +453,9 @@ public sealed partial class MedicalState
         return worst;
     }
 
+    /// <summary>
+    /// The parts' figures for the stat multipliers: the best arm, the head, the worst torso part (each 1 when there is none) and which arms are down.
+    /// </summary>
     BodyAggregates ComputeAggregates()
     {
         float arm = 0, head = 1, torso = float.MaxValue;
@@ -479,6 +531,9 @@ public sealed partial class MedicalState
         }
     }
 
+    /// <summary>
+    /// The product of the fitted prosthetics' multipliers for <paramref name="stat"/>, over the legs or over the arms.
+    /// </summary>
     float ItemFactor(StatsEnumerated stat, bool legs)
     {
         float f = 1;
@@ -566,7 +621,9 @@ public sealed partial class MedicalState
     /// </summary>
     public const float IdleHungerRate = 0.8f;
 
-    // ------------------------------------------------------------------ KO time
+    #endregion
+
+    #region KO time
 
     /// <summary>
     /// The terms of the KO time without the base (<c>FUN_1406447d0</c>): with k = lerp(<c>knockout mult 1</c>, <c>knockout mult 99</c>, toughness /
@@ -594,4 +651,6 @@ public sealed partial class MedicalState
     /// The KO time in seconds of character time: <c>knockout time base</c> (20) plus <see cref="KoTerms"/>.
     /// </summary>
     public float KoTime(in MedicalContext ctx) => ctx.Constants.KnockoutTimeBase + KoTerms(ctx);
+
+    #endregion
 }

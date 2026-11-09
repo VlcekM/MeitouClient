@@ -27,8 +27,17 @@ public sealed class MedicalTimeBudget
     /// </summary>
     public const float NpcRange = 3250;
 
+    /// <summary>
+    /// The unflagged budget's cursor: the list position of its last turn of a full round (-1: start from the head).
+    /// </summary>
     int _unflaggedCursor = -1;
+    /// <summary>
+    /// The flagged budget's cursor, as <see cref="_unflaggedCursor"/>.
+    /// </summary>
     int _flaggedCursor = -1;
+    /// <summary>
+    /// How many characters were flagged last frame (sets this frame's flagged turns).
+    /// </summary>
     int _flaggedLastFrame;
 
     /// <summary>
@@ -83,9 +92,18 @@ public sealed class MedicalTimeBudget
     /// </summary>
     struct Round(int cursor, int turns)
     {
+        /// <summary>
+        /// The turns given so far this frame.
+        /// </summary>
         int _taken;
+        /// <summary>
+        /// The list position of the last turn given (-1: none).
+        /// </summary>
         int _last = -1;
 
+        /// <summary>
+        /// The next frame's cursor: the last turn of a full round, else -1 (start from the head).
+        /// </summary>
         public readonly int NextCursor => _taken == turns ? _last : -1;
 
         /// <summary>

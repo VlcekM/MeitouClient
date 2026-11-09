@@ -26,6 +26,9 @@ public sealed partial class CarrySystem
     /// The attacker's clip and the rate it plays at (<c>Task_StealthKO</c>: <c>knockout</c> at 1.2, <b>Verified</b> literals).
     /// </summary>
     public const string KnockoutClip = "knockout";
+    /// <summary>
+    /// The rate the attacker's <see cref="KnockoutClip"/> plays at.
+    /// </summary>
     public const float KnockoutPlaySpeed = 1.2f;
 
     /// <summary>
@@ -125,6 +128,10 @@ public sealed partial class CarrySystem
         return (x + k) / (2 * k) * 100 * (heard ? 0.5f : 1);
     }
 
+    /// <summary>
+    /// Gives the stealth knock-out order to the first of the order's attackers (the selection's order) that can run it, so the chance the interface
+    /// showed is the one rolled; nothing when the target cannot be knocked out.
+    /// </summary>
     void BeginKnockOut(World world, StealthKoOrder order)
     {
         var table = world.Characters;
@@ -224,6 +231,9 @@ public sealed partial class CarrySystem
                 && fight.TargetSlot == attacker && fight.TargetGeneration == attackerId.Generation;
     }
 
+    /// <summary>
+    /// Turns <paramref name="n"/> to face <paramref name="target"/> (unchanged when they stand on one spot).
+    /// </summary>
     static void Face(ref CharacterHot n, in CharacterHot target)
     {
         float dx = target.Position.X - n.Position.X, dz = target.Position.Z - n.Position.Z;

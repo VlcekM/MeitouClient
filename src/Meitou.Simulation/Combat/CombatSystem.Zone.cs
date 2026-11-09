@@ -8,6 +8,9 @@ using Meitou.Simulation.Factions;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// A blow's attack zone (<c>attackImpactCheck</c>): the characters and the walls and doors a swing hits besides its target.
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>
@@ -33,27 +36,64 @@ public sealed partial class CombatSystem
         int _first;
     }
 
+    /// <summary>
+    /// The keys <see cref="ZoneSlots"/> is sorted by (the target -1, else the squared distance from the attacker), kept on the stack.
+    /// </summary>
     [InlineArray(ZoneCapacity)]
     struct ZoneKeys
     {
+        /// <summary>
+        /// The first key (the inline array's element).
+        /// </summary>
         float _first;
     }
 
+    /// <summary>
+    /// The state of <see cref="Scan"/>'s grid query: the attacker's side, the zone and the characters found.
+    /// </summary>
     struct ZoneScan
     {
+        /// <summary>
+        /// The characters the query reads.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The last tick's fight states (the down test).
+        /// </summary>
         public CombatSlot[] Read;
+        /// <summary>
+        /// The faction relations; null: no slave or enemy test.
+        /// </summary>
         public FactionRelations? Relations;
+        /// <summary>
+        /// The attacker's slot, its target's, faction and squad, and how many characters are found.
+        /// </summary>
         public int Self, Target, Faction, Squad, Count;
+        /// <summary>
+        /// Whether the attacker's zone takes slaves that are not its allies (an attacker neither of the player's faction nor anti-slavery).
+        /// </summary>
         public bool HitsSlaves;
+        /// <summary>
+        /// The zone's start, centre and heading (X/Z).
+        /// </summary>
         public Vector2 From, Centre, Forward;
+        /// <summary>
+        /// The attacker's feet height, the zone's half width, the half height test and the half depth.
+        /// </summary>
         public float Y, Half, High, Deep;
+        /// <summary>
+        /// The characters found, in key order.
+        /// </summary>
         public ZoneSlots Slots;
+        /// <summary>
+        /// The keys of <see cref="Slots"/>.
+        /// </summary>
         public ZoneKeys Keys;
     }
 
     /// <summary>
-    /// A blow's attack zone on the ground: the box's centre and heading (X/Z), half width, half depth, the attacker's feet height and the half height test.
+    /// A blow's attack zone on the ground: the box's centre and heading (X/Z), half width, half depth, the attacker's feet height and the half
+    /// height test.
     /// </summary>
     internal readonly record struct Zone(Vector2 From, Vector2 Centre, Vector2 Forward, float Half, float Deep, float Y, float High);
 
@@ -75,13 +115,13 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// Emits blow <paramref name="blow"/> of fighter <paramref name="i"/>'s attack to everyone in its attack zone (<b>Verified</b>,
-    /// <c>calculateTargetsInAttackZone</c> FUN_1406087a0 and <c>attackImpactCheck</c> FUN_14060a2f0, docs/game/combat.md "Attack zone"), at most the technique's
-    /// <c>max simultaneous hits</c>; nobody in it is a whiff and the swing keeps its 0.5 s pause. The zone is a box ahead along the heading, k the fighter's
-    /// size, s = lerp(k, 0.45, 1), r its footprint, L its weapon's length: its centre (L / 4 + r + max(0, attack distance − the distance moved since
-    /// the swing started)) s ahead, half-extents (r + 0.5, 25, L / 2) s, or (13, 8, L / 2) s for a left or right cut; then h = max(0, (offset − k r)
-    /// / 2) moves the centre back by h and deepens it by h. In it: a body not knocked out that is the fighter's target or an enemy that is not an
-    /// ally. Engine readings: a body counts when its footprint circle (size-scaled) meets the box, the height test is the box's half-height plus 9
-    /// from the fighter's feet, and the order is the target first, then by distance (the original's is the physics query's).
+    /// <c>calculateTargetsInAttackZone</c> FUN_1406087a0 and <c>attackImpactCheck</c> FUN_14060a2f0, docs/game/combat.md "Attack zone"), at most the
+    /// technique's <c>max simultaneous hits</c>; nobody in it is a whiff and the swing keeps its 0.5 s pause. The zone is a box ahead along the
+    /// heading, k the fighter's size, s = lerp(k, 0.45, 1), r its footprint, L its weapon's length: its centre (L / 4 + r + max(0, attack distance −
+    /// the distance moved since the swing started)) s ahead, half-extents (r + 0.5, 25, L / 2) s, or (13, 8, L / 2) s for a left or right cut; then h
+    /// = max(0, (offset − k r) / 2) moves the centre back by h and deepens it by h. In it: a body not knocked out that is the fighter's target or an
+    /// enemy that is not an ally. Engine readings: a body counts when its footprint circle (size-scaled) meets the box, the height test is the box's
+    /// half-height plus 9 from the fighter's feet, and the order is the target first, then by distance (the original's is the physics query's).
     /// </summary>
     void Strike(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow, EffectBuffer effects)
     {
@@ -168,7 +208,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The attack zone of blow <paramref name="blow"/> (<see cref="Strike"/>), from the last tick's positions, so the act and the apply see the same box.
+    /// The attack zone of blow <paramref name="blow"/> (<see cref="Strike"/>), from the last tick's positions, so the act and the apply see the
+    /// same box.
     /// </summary>
     static Zone ZoneOf(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow)
     {
@@ -208,7 +249,8 @@ public sealed partial class CombatSystem
     readonly ZoneBuildings _zoneBuildings = new();
 
     /// <summary>
-    /// The construction system, for which sites are walls (<see cref="Construction.ConstructionSystem.Data"/>) and their footprints; null: blows hit no wall.
+    /// The construction system, for which sites are walls (<see cref="Construction.ConstructionSystem.Data"/>) and their footprints; null: blows hit
+    /// no wall.
     /// </summary>
     public Construction.ConstructionSystem? Construction { get; set; }
 
@@ -218,12 +260,12 @@ public sealed partial class CombatSystem
     public Locks.LockSystem? Locks { get; set; }
 
     /// <summary>
-    /// The walls and doors in a blow's zone (<c>attackImpactCheck</c>: <c>WallBuilding</c> and <c>DoorStuff</c> are the buildings whose <c>hitByMeleeAttack</c>
-    /// does anything, docs/game/combat.md "Attack zone"), up to the hits the characters left, nearest first: the attacker's damage packet (times the blow's power)
-    /// gives f = 2 blunt + 0.5 cut; a door takes clamp(f, 20, 60) (<see cref="Locks.LockSystem.Strike"/>), a wall clamp(f / 2, 10, 60) x 0.003 off its progress
-    /// (its wall line's for an attached piece), destroyed at 0. A broken door takes nothing. Engine readings: a wall counts when its footprint hull is within the
-    /// box's half width of its axis's three points (near end, centre, far end), a door when its leaf's centre is in the box widened by the leaf's half width;
-    /// the walls and doors come after the characters.
+    /// The walls and doors in a blow's zone (<c>attackImpactCheck</c>: <c>WallBuilding</c> and <c>DoorStuff</c> are the buildings whose
+    /// <c>hitByMeleeAttack</c> does anything, docs/game/combat.md "Attack zone"), up to the hits the characters left, nearest first: the attacker's
+    /// damage packet (times the blow's power) gives f = 2 blunt + 0.5 cut; a door takes clamp(f, 20, 60) (<see cref="Locks.LockSystem.Strike"/>), a
+    /// wall clamp(f / 2, 10, 60) x 0.003 off its progress (its wall line's for an attached piece), destroyed at 0. A broken door takes nothing.
+    /// Engine readings: a wall counts when its footprint hull is within the box's half width of its axis's three points (near end, centre, far end),
+    /// a door when its leaf's centre is in the box widened by the leaf's half width; the walls and doors come after the characters.
     /// </summary>
     void ApplyZoneBuildings(World world, in Effect e)
     {

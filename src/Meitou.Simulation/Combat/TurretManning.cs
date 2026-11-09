@@ -107,8 +107,9 @@ sealed class TurretManning
     static string SaveKeyOf(World world, string key) => world.Buildings.Find(key) is { } site ? BuildingKey.Of(site.Zone, site.Id) : key;
 
     /// <summary>
-    /// The harpoons a turret first manned since loading starts with: its building's saved <see cref="ShotsKey"/> capped at the gun's shots (<c>GunClass::loadFromSerialise</c>
-    /// <c>FUN_140439140</c>: min(saved, <c>+0x1c</c>); a missing key reads 0). Meitou's cap is the reload's <c>max(num shots, 1)</c> and it floors at 0.
+    /// The harpoons a turret first manned since loading starts with: its building's saved <see cref="ShotsKey"/> capped at the gun's shots
+    /// (<c>GunClass::loadFromSerialise</c> <c>FUN_140439140</c>: min(saved, <c>+0x1c</c>); a missing key reads 0). Meitou's cap is the reload's
+    /// <c>max(num shots, 1)</c> and it floors at 0.
     /// </summary>
     static int SavedShots(World world, string key, TurretGun gun) =>
         world.Fixtures.Saved?.GetValueOrDefault(SaveKeyOf(world, key)) is { } state && state.Ints.TryGetValue(ShotsKey, out int shots)
@@ -147,11 +148,11 @@ sealed class TurretManning
     readonly record struct Post(string Key, string BuildingId, Vector3 Position, float Yaw, float Mount, float Efficiency, float DamageMult);
 
     /// <summary>
-    /// The turret a character mans now, or null. Any gunner must be awake, free (not fighting, carrying, carried or caged) and have a working arm (task 146's
-    /// <c>hasOneWorkingArm</c>). A player character operates a turret of its own (<see cref="CharacterTask.Operate"/> at the site,
-    /// <see cref="Production.ProductionSystem"/>); its efficiency is the machine's power grant (0 unpowered) and its damage takes the research multiplier of the
-    /// building. An NPC stands at the turret of its town its squad gave it (the AI's turret goals, <see cref="Ai.AiBehaviour.Turret"/>); <b>engine
-    /// choice</b>: efficiency 1 (NPC towns have no power grid here).
+    /// The turret a character mans now, or null. Any gunner must be awake, free (not fighting, carrying, carried or caged) and have a working arm
+    /// (task 146's <c>hasOneWorkingArm</c>). A player character operates a turret of its own (<see cref="CharacterTask.Operate"/> at the site,
+    /// <see cref="Production.ProductionSystem"/>); its efficiency is the machine's power grant (0 unpowered) and its damage takes the research
+    /// multiplier of the building. An NPC stands at the turret of its town its squad gave it (the AI's turret goals,
+    /// <see cref="Ai.AiBehaviour.Turret"/>); <b>engine choice</b>: efficiency 1 (NPC towns have no power grid here).
     /// </summary>
     Post? Manning(World world, int i, CharacterCold cold)
     {
@@ -259,7 +260,8 @@ sealed class TurretManning
         t.DamageMult = post.DamageMult;
         cold.Gunning = post.Key;
 
-        // Manning sets Character +0x198 to Turrets (11) every update (Task_UseTurret FUN_1403474f0), an NPC gunner's too: the HUD's Current Skill line.
+        // Manning sets Character +0x198 to Turrets (11) every update (Task_UseTurret FUN_1403474f0), an NPC gunner's too: the HUD's Current
+        // Skill line.
         cold.UseSkill(StatsEnumerated.Turrets, world.Tick);
         int generation = table.Previous[i].Generation;
         if (t.Gunner == i && t.GunnerGeneration == generation) return;
@@ -276,7 +278,8 @@ sealed class TurretManning
 }
 
 /// <summary>
-/// One turret building's gun state (the original's <c>GunClassTurret</c> and <c>TurretBuilding</c> fields, and its gunner's controller fields while one mans it).
+/// One turret building's gun state (the original's <c>GunClassTurret</c> and <c>TurretBuilding</c> fields, and its gunner's controller fields while
+/// one mans it).
 /// </summary>
 internal sealed class TurretState(string key, TurretGun gun, Vector3 position, float yaw, float mount)
 {

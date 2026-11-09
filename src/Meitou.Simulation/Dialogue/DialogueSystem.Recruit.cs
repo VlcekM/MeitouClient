@@ -7,6 +7,9 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Dialogue;
 
+/// <summary>
+/// The dialogue system's recruiting: joining the player's squad, leaving one, and slaves given.
+/// </summary>
 public sealed partial class DialogueSystem
 {
     /// <summary>
@@ -39,6 +42,9 @@ public sealed partial class DialogueSystem
         return true;
     }
 
+    /// <summary>
+    /// The living player characters that have not died (the faction size cap counts them).
+    /// </summary>
     internal static int PlayerHeads(World world)
     {
         var table = world.Characters;
@@ -124,6 +130,9 @@ public sealed partial class DialogueSystem
         return true;
     }
 
+    /// <summary>
+    /// Takes <paramref name="me"/> out of its squad, passing the lead to a successor when it led it.
+    /// </summary>
     internal static void Leave(World world, CharacterId me, CharacterCold mc)
     {
         if (world.Squads.Find(mc.SquadId) is not { } old) return;

@@ -9,8 +9,15 @@ namespace Meitou.Simulation.Navigation;
 /// </summary>
 internal static class NavSeeds
 {
+    /// <summary>
+    /// Where the file lies under the install's data folder.
+    /// </summary>
     public const string RelativePath = "newland/land/navtiles/seeds.def";
 
+    /// <summary>
+    /// The seeds by zone (index z x <see cref="WorldLayout.ZoneCount"/> + x), points outside the zone grid dropped; null when the file is not in
+    /// the install.
+    /// </summary>
     public static List<Vector3>[]? Load(GameInstall install)
     {
         var path = Path.Combine(install.DataDirectory, RelativePath);

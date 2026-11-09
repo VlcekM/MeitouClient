@@ -37,7 +37,13 @@ public sealed record ArrestSettings
     /// <see cref="FineLeash"/> or after <see cref="FineSeconds"/>.
     /// </summary>
     public float TalkRange { get; init; } = 40;
+    /// <summary>
+    /// A fining guard's target farther than this turns the fine into an arrest.
+    /// </summary>
     public float FineLeash { get; init; } = 800;
+    /// <summary>
+    /// Game seconds a guard waits on a fine before it becomes an arrest.
+    /// </summary>
     public float FineSeconds { get; init; } = 60;
     /// <summary>
     /// A guard counts as in his own town within this multiple of his resident squad's home radius of its centre (<b>engine reading</b> of the
@@ -61,6 +67,9 @@ public sealed record ArrestSettings
     /// seconds.
     /// </summary>
     public float HuntLeash { get; init; } = 3000;
+    /// <summary>
+    /// Game seconds a hunter leaves a target alone after hunting it.
+    /// </summary>
     public float HuntRestSeconds { get; init; } = 600;
     /// <summary>
     /// After a guard fires event 44 or 45 at a target, nobody fires again at it for this many game seconds, longer while the guard is still saying or
@@ -78,7 +87,22 @@ public sealed record ArrestSettings
 /// </summary>
 public enum ArrestPhase : byte
 {
-    Fine, Fight, Lift, Walk,
+    /// <summary>
+    /// The guard walks up to take a fine (a bounty below <see cref="ArrestSystem.FineLimit"/>).
+    /// </summary>
+    Fine,
+    /// <summary>
+    /// The guard fights the target until it is down.
+    /// </summary>
+    Fight,
+    /// <summary>
+    /// The guard lifts the downed target.
+    /// </summary>
+    Lift,
+    /// <summary>
+    /// The guard carries the target to the cage.
+    /// </summary>
+    Walk,
     /// <summary>
     /// Row 181 Stripping weapons between the fight (7) and the lift (240); appended so the earlier numbers keep their meaning.
     /// </summary>
@@ -90,15 +114,33 @@ public enum ArrestPhase : byte
 /// </summary>
 public sealed class Arrest
 {
+    /// <summary>
+    /// The arresting guard.
+    /// </summary>
     public required CharacterId Guard { get; init; }
+    /// <summary>
+    /// The character being arrested.
+    /// </summary>
     public required CharacterId Target { get; init; }
+    /// <summary>
+    /// The guard's faction, whose bounty entry the arrest is about.
+    /// </summary>
     public required int Faction { get; init; }
+    /// <summary>
+    /// Where the arrest is.
+    /// </summary>
     public ArrestPhase Phase { get; set; }
     /// <summary>
     /// Game seconds in the phase (the fine's patience, the wait between attack orders, the lift's retries).
     /// </summary>
     public float Time { get; set; }
+    /// <summary>
+    /// The fine to take in the <see cref="ArrestPhase.Fine"/> phase (<see cref="ArrestSystem.FineFor"/>), in cats.
+    /// </summary>
     public int Fine { get; set; }
+    /// <summary>
+    /// Failed lifts (5 end the arrest), or walks to the cage (up to <see cref="ArrestSettings.CageWalks"/>).
+    /// </summary>
     public int Tries { get; set; }
     /// <summary>
     /// Game seconds the guard, free of fighting, has failed to start lifting the downed target.
@@ -121,6 +163,9 @@ public sealed class Arrest
     /// </summary>
     public bool Stripped { get; set; }
 
+    /// <summary>
+    /// Adds the arrest's state (the cage as a stable hash of its id, the flags as tags) to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Guard);
@@ -138,7 +183,69 @@ public sealed class Arrest
     }
 }
 
-public enum ArrestEventKind { Attack, Fine, Paid, Arrest, Lifted, Jailed, Dropped, GaveUp, Released, Bailed, Claimed, Hunt, HuntOver, Spotted }
+/// <summary>
+/// What the arrest system did, for its <see cref="ArrestSystem.Log"/>.
+/// </summary>
+public enum ArrestEventKind
+{
+    /// <summary>
+    /// A guard attacks instead of arresting (outside his town, or an animal target).
+    /// </summary>
+    Attack,
+    /// <summary>
+    /// A guard went to take a fine.
+    /// </summary>
+    Fine,
+    /// <summary>
+    /// The fine was paid and the bounty cleared.
+    /// </summary>
+    Paid,
+    /// <summary>
+    /// A guard began fighting to arrest the target.
+    /// </summary>
+    Arrest,
+    /// <summary>
+    /// The guard lifted the downed target.
+    /// </summary>
+    Lifted,
+    /// <summary>
+    /// The target was caged.
+    /// </summary>
+    Jailed,
+    /// <summary>
+    /// No free cage: the guard dropped the captive.
+    /// </summary>
+    Dropped,
+    /// <summary>
+    /// The arrest was given up: the guard or the target was lost, the target was carried off or caged otherwise, got away, or the guard could not
+    /// go on.
+    /// </summary>
+    GaveUp,
+    /// <summary>
+    /// A prisoner was released (nothing logs it yet).
+    /// </summary>
+    Released,
+    /// <summary>
+    /// A player character paid a prisoner's bail.
+    /// </summary>
+    Bailed,
+    /// <summary>
+    /// A bounty was claimed for a caged captive.
+    /// </summary>
+    Claimed,
+    /// <summary>
+    /// A bounty hunter began a hunt.
+    /// </summary>
+    Hunt,
+    /// <summary>
+    /// A hunt ended.
+    /// </summary>
+    HuntOver,
+    /// <summary>
+    /// A guard fired event 44 or 45 at the target (the amount is the event number).
+    /// </summary>
+    Spotted
+}
 
 /// <summary>
 /// A guard that fired event 44 or 45 at a target (serial state of the <see cref="ArrestSystem"/>): the target is left to that dialogue until
@@ -146,17 +253,38 @@ public enum ArrestEventKind { Attack, Fine, Paid, Arrest, Lifted, Jailed, Droppe
 /// </summary>
 public sealed class Spotting
 {
+    /// <summary>
+    /// The guard that fired the event.
+    /// </summary>
     public required CharacterId Guard { get; init; }
+    /// <summary>
+    /// The character it was fired at.
+    /// </summary>
     public required CharacterId Target { get; init; }
+    /// <summary>
+    /// The event fired: 44 BOUNTY_SPOTTED or 45 ESCAPED_PRISONER_SPOTTED.
+    /// </summary>
     public required int Event { get; init; }
+    /// <summary>
+    /// The tick the target is left to the dialogue until (pushed on while the guard still talks).
+    /// </summary>
     public long Until { get; set; }
 
+    /// <summary>
+    /// Adds the guard, target, event and end tick to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
-        h.Add(Guard); h.Add(Target); h.Add(Event); h.Add(Until);
+        h.Add(Guard);
+        h.Add(Target);
+        h.Add(Event);
+        h.Add(Until);
     }
 }
 
+/// <summary>
+/// One arrest log line: the tick, what happened, the guard, the target, the faction and an amount (bounty, fine, price or event number).
+/// </summary>
 public readonly record struct ArrestEvent(long Tick, ArrestEventKind Kind, CharacterId Guard, CharacterId Target, int Faction, int Amount);
 
 /// <summary>
@@ -191,11 +319,26 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// </summary>
     public const int FineLimit = 1050;
 
+    /// <summary>
+    /// The running arrests, stepped in start order.
+    /// </summary>
     readonly List<Arrest> _arrests = [];
+    /// <summary>
+    /// The targets left to a spotting's dialogue.
+    /// </summary>
     readonly List<Spotting> _spottings = [];
+    /// <summary>
+    /// The arrest log, kept while <see cref="ArrestSettings.RecordLog"/> is on.
+    /// </summary>
     readonly List<ArrestEvent> _log = [];
 
+    /// <summary>
+    /// The settings; the defaults when none were given.
+    /// </summary>
     public ArrestSettings Settings { get; } = settings ?? new ArrestSettings();
+    /// <summary>
+    /// The crime system whose bookings and police tests the arrests use.
+    /// </summary>
     public CrimeSystem Crimes { get; } = crimes;
     /// <summary>
     /// The carry system the guards lift and carry with; null: an arrest ends when the target is down.
@@ -209,14 +352,26 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// The relation event of a caging (<see cref="FactionDeeds.Caged"/>: the captive's faction about the one who caged it); null: none.
     /// </summary>
     public FactionDeeds? Deeds { get; set; }
+    /// <summary>
+    /// The running arrests.
+    /// </summary>
     public IReadOnlyList<Arrest> Arrests => _arrests;
+    /// <summary>
+    /// The targets left to a spotting's dialogue.
+    /// </summary>
     public IReadOnlyList<Spotting> Spottings => _spottings;
     /// <summary>
     /// The dialogue spotting fires events 44 and 45 through; null, or its event lines off (<see cref="Dialogue.DialogueSettings.AmbientEvents"/>):
     /// the engine's fine or arrest instead.
     /// </summary>
     public Dialogue.DialogueSystem? Talk { get; set; }
+    /// <summary>
+    /// A dialogue with its event lines on takes the spotting (the engine's fine or arrest otherwise).
+    /// </summary>
     bool Talks => Talk is { Settings.AmbientEvents: true };
+    /// <summary>
+    /// The arrest log (empty unless <see cref="ArrestSettings.RecordLog"/>).
+    /// </summary>
     public IReadOnlyList<ArrestEvent> Log => _log;
 
     /// <summary>
@@ -238,8 +393,13 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         _ => 10000,
     };
 
-    // ------------------------------------------------------------------ the tick
+    #region The tick
 
+    /// <summary>
+    /// The slow-world step: books the crime system's new bookings, steps the spottings; every <see cref="ArrestSettings.SpotEveryTicks"/> the
+    /// disguise, the spotting and the status-town passes; then the bounty duty, the arrests, the cagings and the hunts, each dropping the
+    /// finished ones.
+    /// </summary>
     public void SlowWorld(World world)
     {
         foreach (var b in Crimes.BookingsOf(world.Tick)) Booked(world, b);
@@ -327,6 +487,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         }
     }
 
+    /// <summary>
+    /// Whether the character is a guard or target of an arrest, or the hunter of a hunt that is not resting.
+    /// </summary>
     bool Busy(CharacterId id)
     {
         foreach (var a in _arrests) if (a.Guard == id || a.Target == id) return true;
@@ -370,8 +533,14 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         Start(world, g, t, force: fighting);
     }
 
-    // ------------------------------------------------------------------ spotting
+    #endregion
 
+    #region Spotting
+
+    /// <summary>
+    /// The spotting pass over the suspects in slot order: slave catching, the recognition meter from the lookers that see the target, then event
+    /// 44/45 or the engine's arrest, and a hunt for a seen bounty.
+    /// </summary>
     void Spot(World world, float seconds)
     {
         var table = world.Characters;
@@ -516,6 +685,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// </summary>
     public const float GateMargin = 100;
 
+    /// <summary>
+    /// The gate positions per town site, cached on first use.
+    /// </summary>
     readonly Dictionary<int, Vector2[]> _townGates = [];
 
     /// <summary>
@@ -578,7 +750,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         return Vector2.DistanceSquared(new Vector2(p.X, p.Z), squad.HomeCentre) <= r * r;
     }
 
-    // ------------------------------------------------------------------ fine or arrest
+    #endregion
+
+    #region Fine or arrest
 
     /// <summary>
     /// <paramref name="capture"/> false: the guard attacks instead of arresting, in his own town too (a dialogue's animal target).
@@ -611,6 +785,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         else BeginFight(world, arrest, g, t);
     }
 
+    /// <summary>
+    /// Puts the arrest in its fight: the guard attacks unless he already does, a player target gets the "is arresting" message once per target.
+    /// </summary>
     void BeginFight(World world, Arrest arrest, int g, int t)
     {
         arrest.Phase = ArrestPhase.Fight;
@@ -874,6 +1051,9 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
     /// </summary>
     const float StripWalkSeconds = 60;
 
+    /// <summary>
+    /// Puts the arrest in its strip phase.
+    /// </summary>
     void BeginStrip(Arrest a)
     {
         a.Phase = ArrestPhase.Strip;
@@ -964,12 +1144,18 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         world.Characters.TryResolveNext(target.CarriedBy, out int carrier) && world.Characters.Cold(carrier) is { } c && c != guard
             && c.Faction == guard.Faction;
 
+    /// <summary>
+    /// Whether another arrest than <paramref name="self"/> has taken cage <paramref name="f"/>.
+    /// </summary>
     bool Reserved(Fixture f, Arrest? self)
     {
         foreach (var a in _arrests) if (!ReferenceEquals(a, self) && a.Cage == f.Id) return true;
         return false;
     }
 
+    /// <summary>
+    /// No free cage: the guard stands, lets go of the captive and the arrest ends as dropped.
+    /// </summary>
     bool Drop(World world, Arrest a, int g)
     {
         TaskStart.Stand(world.Characters, g);
@@ -994,11 +1180,17 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         return false;
     }
 
+    /// <summary>
+    /// Logs an arrest event when <see cref="ArrestSettings.RecordLog"/> is on.
+    /// </summary>
     void Note(World world, ArrestEventKind kind, CharacterId guard, CharacterId target, int faction, int amount)
     {
         if (Settings.RecordLog) _log.Add(new ArrestEvent(world.Tick, kind, guard, target, faction, amount));
     }
 
+    /// <summary>
+    /// Adds the bounty, disguise, spotting and arrest state to the world hash; the spottings and arrests only while there are any.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         HashBounties(ref hasher);
@@ -1014,4 +1206,6 @@ public sealed partial class ArrestSystem(CrimeSystem crimes, GameConstants const
         hasher.Add(_arrests.Count);
         foreach (var a in _arrests) a.Hash(ref hasher);
     }
+
+    #endregion
 }

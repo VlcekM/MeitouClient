@@ -1,5 +1,8 @@
 namespace Meitou.Simulation.Bodies;
 
+/// <summary>
+/// Being eaten alive: the eat rate by toughness and the passes over the parts that end in death (<see cref="BeingEaten"/>).
+/// </summary>
 public sealed partial class MedicalState
 {
     /// <summary>

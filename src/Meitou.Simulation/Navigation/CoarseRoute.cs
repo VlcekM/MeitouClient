@@ -21,6 +21,9 @@ public sealed class CoarseRoute
     /// Cell edge in units: 24 cells a zone, 1536 a world side (engine choice: about 2.4 M cells, a cross-map search in well under a second).
     /// </summary>
     public const int Cell = 192;
+    /// <summary>
+    /// Cells along a world side (<see cref="WorldLayout.WorldSize"/> / <see cref="Cell"/>).
+    /// </summary>
     public const int Side = WorldLayout.WorldSize / Cell;
     /// <summary>
     /// The terrain's walkable slope (the navmesh builder's terrain limit), tested between samples <see cref="SlopeStep"/> apart along every step.
@@ -45,24 +48,61 @@ public sealed class CoarseRoute
     /// </summary>
     public const float BuildingCost = 40;
 
-    // Direction k: (dx, dz). Bits 0..7 of a cell: the step in direction k is barred. Bit 8: under the water; bits 9..10: then its wet state 1..3
-    // (Speed.WetStateOfDepth).
+    /// <summary>
+    /// The eight step directions, k = 0..7 (the first four forward, the next four their reverses). Direction k: (dx, dz). Bits 0..7 of a cell: the
+    /// step in direction k is barred. Bit 8: under the water; bits 9..10: then its wet state 1..3 (Speed.WetStateOfDepth).
+    /// </summary>
     static readonly (int Dx, int Dz)[] Directions = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)];
+    /// <summary>
+    /// Bit 8 of a cell: it lies under the water.
+    /// </summary>
     const ushort Water = 1 << 8;
+    /// <summary>
+    /// The shift of a wet cell's wet state (bits 9..10).
+    /// </summary>
     const int WetShift = 9;
 
+    /// <summary>
+    /// Heights of the route's points (any thread).
+    /// </summary>
     readonly Func<float, float, float> _terrain;
+    /// <summary>
+    /// Makes the height function the grid is built from; dropped (null) once <see cref="Build"/> used it.
+    /// </summary>
     Func<Func<float, float, float>>? _slopeTerrain;
+    /// <summary>
+    /// Makes the building footprints the crossings are built from; dropped (null) once <see cref="Build"/> used it.
+    /// </summary>
     Func<IReadOnlyList<Vector2[]>>? _obstacles;
+    /// <summary>
+    /// The grid (barred steps and water bits per cell), built once by the first query or <see cref="Warm"/>.
+    /// </summary>
     readonly Lazy<ushort[]> _cells;
-    // Bit k of a cell: the step in direction k crosses a building's footprint (filled with the grid). The player's buildings have their own layer,
-    // replaced whole when they change (empty: none).
+    /// <summary>
+    /// Bit k of a cell: the step in direction k crosses a building's footprint (filled with the grid). The player's buildings have their own layer,
+    /// replaced whole when they change (empty: none).
+    /// </summary>
     byte[] _crossings = [];
+    /// <summary>
+    /// The player's buildings' crossings (same layout as <see cref="_crossings"/>), replaced whole by <see cref="SetPlayerObstacles"/>.
+    /// </summary>
     volatile byte[] _playerCrossings = [];
 
+    /// <summary>
+    /// Serialises the searches: there is one search buffer.
+    /// </summary>
     readonly object _searchLock = new();
+    /// <summary>
+    /// The search buffer's cost so far per cell, allocated by the first search.
+    /// </summary>
     float[]? _g;
+    /// <summary>
+    /// The search buffer's parent cell per cell, and the generation each cell was last touched in (a cell of an older generation is unvisited).
+    /// </summary>
     int[]? _parent, _stamp;
+    /// <summary>
+    /// The current search's generation in <see cref="_stamp"/>; at <see cref="int.MaxValue"/> the stamps are cleared and it starts again at 1.
+    /// </summary>
     int _generation;
 
     /// <param name="terrainHeight">Heights of the route's points; must be safe from any thread.</param>
@@ -93,10 +133,23 @@ public sealed class CoarseRoute
     /// </summary>
     public void SetPlayerObstacles(IReadOnlyList<Vector2[]> hulls) => _playerCrossings = hulls.Count == 0 ? [] : Crossings(hulls);
 
+    /// <summary>
+    /// World X or Z of the grid's first cell edge (the world's -X/-Z edge).
+    /// </summary>
     static float Origin => -WorldLayout.HalfWorldSize;
+    /// <summary>
+    /// The cell column or row of world coordinate <paramref name="v"/>, clamped into the grid.
+    /// </summary>
     static int CellOf(float v) => Math.Clamp((int)MathF.Floor((v - Origin) / Cell), 0, Side - 1);
+    /// <summary>
+    /// The world X/Z centre of cell (<paramref name="x"/>, <paramref name="z"/>).
+    /// </summary>
     static Vector2 Centre(int x, int z) => new(Origin + (x + 0.5f) * Cell, Origin + (z + 0.5f) * Cell);
 
+    /// <summary>
+    /// Builds the grid from the slope terrain (barred steps, the border, water depth bits) and, from the obstacles, <see cref="_crossings"/>; drops
+    /// both factories.
+    /// </summary>
     ushort[] Build()
     {
         var height = _slopeTerrain?.Invoke() ?? _terrain;
@@ -180,9 +233,18 @@ public sealed class CoarseRoute
         return result;
     }
 
-    // The level data's crossings with the player's layer on top (a copy only while the player has buildings), cached per pair of arrays.
+    /// <summary>
+    /// The two crossing layers and the array combining them: what <see cref="Combined"/> hands out again while both stay the same. The level data's
+    /// crossings with the player's layer on top (a copy only while the player has buildings), cached per pair of arrays.
+    /// </summary>
     sealed record Layers(byte[] Static, byte[] Player, byte[] Both);
+    /// <summary>
+    /// The last combination <see cref="Combined"/> made; null before the first.
+    /// </summary>
     volatile Layers? _combined;
+    /// <summary>
+    /// The level layer with the player's layer or'd on: the level array itself while the player has no buildings, else a copy cached for the pair.
+    /// </summary>
     byte[] Combined(byte[] level, byte[] player)
     {
         if (player.Length == 0) return level;
@@ -230,8 +292,15 @@ public sealed class CoarseRoute
         return true;
     }
 
+    /// <summary>
+    /// The 2D cross product of <paramref name="a"/> and <paramref name="b"/> (z of the 3D one).
+    /// </summary>
     static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
 
+    /// <summary>
+    /// Whether the terrain (the water surface where it is lower) between <paramref name="a"/> and <paramref name="b"/> rises or falls more than
+    /// <paramref name="rise"/> per <see cref="SlopeStep"/> between any two samples.
+    /// </summary>
     static bool TooSteep(Func<float, float, float> terrain, Vector2 a, Vector2 b, float rise)
     {
         int steps = Math.Max(1, (int)MathF.Ceiling(Vector2.Distance(a, b) / SlopeStep));
@@ -258,6 +327,10 @@ public sealed class CoarseRoute
         return route.Count > 0 ? route : Find(from, to, water, slopes: false);
     }
 
+    /// <summary>
+    /// One search between the cells of <paramref name="from"/> and <paramref name="to"/>, with slope-barred steps kept closed when
+    /// <paramref name="slopes"/> is set: the route's turns, empty when the goal is not reached.
+    /// </summary>
     List<Vector3> Find(Vector3 from, Vector3 to, WaterCost water, bool slopes)
     {
         var map = _cells.Value;
@@ -366,6 +439,9 @@ public sealed class CoarseRoute
     static ushort Border(int x, int z) =>
         (ushort)((z == 0 ? 0b1110_0000 : 0) | (z == Side - 1 ? 0b0000_1110 : 0) | (x == 0 ? 0b0011_1000 : 0) | (x == Side - 1 ? 0b1000_0011 : 0));
 
+    /// <summary>
+    /// The octile distance between cell (<paramref name="x"/>, <paramref name="z"/>) and the goal cell, in cells.
+    /// </summary>
     static float Heuristic(int x, int z, int gx, int gz)
     {
         int dx = Math.Abs(x - gx), dz = Math.Abs(z - gz);

@@ -15,7 +15,13 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 static class HudTips
 {
+    /// <summary>
+    /// The exe's inline colour tags: Bad, Good, Main and the text default (Ink).
+    /// </summary>
     const string Bad = "#59231a", Good = "#a8b774", Main = "#afa68b", Ink = "#140806";
+    /// <summary>
+    /// What a row that does not apply shows.
+    /// </summary>
     const string None = "-";
 
     /// <summary>
@@ -156,10 +162,19 @@ static class HudTips
     /// </summary>
     static string Signed(int n) => (n < 0 ? Bad : n > 0 ? Good : Ink) + Loc.Tr(n > 0 ? "+{1,num}" : "{1,num}", n);
 
+    /// <summary>
+    /// A penalty <c>-N%</c> in the Bad colour.
+    /// </summary>
     static string Penalty(int percent) => Bad + "-" + Loc.Tr("{1,num}%", percent);
 
+    /// <summary>
+    /// A whole number, truncated.
+    /// </summary>
     static string Int(float v) => Loc.Tr("{1,num}", (int)v);
 
+    /// <summary>
+    /// <paramref name="v"/> rounded half up to a whole number.
+    /// </summary>
     static int Round(float v) => (int)MathF.Floor(v + 0.5f);
 
     /// <summary>

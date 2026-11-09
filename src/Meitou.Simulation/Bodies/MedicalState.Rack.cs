@@ -8,6 +8,9 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 public readonly record struct RackStretch(bool Busy, float Progress);
 
+/// <summary>
+/// A torture rack's frames on its user (<see cref="StretchLimbs"/>).
+/// </summary>
 public sealed partial class MedicalState
 {
     /// <summary>
@@ -58,6 +61,9 @@ public sealed partial class MedicalState
         return new RackStretch(busy, 0.5f - (none + sided) * 0.25f);
     }
 
+    /// <summary>
+    /// One part's frame on the rack: <paramref name="dt"/> off its flesh, then the part checks and the leg collapse.
+    /// </summary>
     void Stretch(int index, HealthPart p, float dt, in MedicalContext ctx, List<MedicalEvent>? events)
     {
         p.Flesh -= dt;

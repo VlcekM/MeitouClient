@@ -18,6 +18,9 @@ public sealed partial class MedicalState
     /// after the storm (<b>Observed</b>: no other writer in the binary). Not saved.
     /// </summary>
     public float Dust { get; private set; }
+    /// <summary>
+    /// Whether a dust-storm update has set a positive <see cref="Dust"/>; nothing clears it.
+    /// </summary>
     public bool DustSet { get; private set; }
 
     /// <summary>

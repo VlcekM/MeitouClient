@@ -4,6 +4,9 @@ using Meitou.Simulation.Items;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// A character's combat rating (<see cref="Rating"/>).
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>

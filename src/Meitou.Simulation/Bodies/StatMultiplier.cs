@@ -8,8 +8,17 @@ namespace Meitou.Simulation.Bodies;
 [Flags]
 public enum StatUse
 {
+    /// <summary>
+    /// No effect.
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// The hunger term H.
+    /// </summary>
     Hunger = 1,
+    /// <summary>
+    /// The limb term L.
+    /// </summary>
     Limbs = 2,
     /// <summary>
     /// The light factor: working, looking and shooting in the dark (the rows' floor p0, from the character's light level).
@@ -27,6 +36,9 @@ public enum StatUse
     /// The worn gear's bonus factor of the stat's row (<see cref="StatFactors"/>).
     /// </summary>
     LimbItems = 32,
+    /// <summary>
+    /// Every effect.
+    /// </summary>
     All = Hunger | Limbs | Light | DamageState | Stun | LimbItems,
 }
 
@@ -39,6 +51,9 @@ public enum StatUse
 /// </summary>
 public readonly record struct StatFactors(float Assassin, float Dexterity, float Weapons, float Ranged, float Stun)
 {
+    /// <summary>
+    /// No factor: all 1.
+    /// </summary>
     public static StatFactors None { get; } = new(1, 1, 1, 1, 1);
 }
 
@@ -50,7 +65,13 @@ public readonly record struct StatFactors(float Assassin, float Dexterity, float
 /// <param name="Torso">T: the lowest health fraction among the torso parts.</param>
 public readonly record struct BodyAggregates(float Arm, float Head, float Torso, bool LeftArmDisabled, bool RightArmDisabled)
 {
+    /// <summary>
+    /// Whether both arms are disabled.
+    /// </summary>
     public bool BothArmsDisabled => LeftArmDisabled && RightArmDisabled;
+    /// <summary>
+    /// Whether either arm is disabled.
+    /// </summary>
     public bool EitherArmDisabled => LeftArmDisabled || RightArmDisabled;
 }
 
@@ -63,9 +84,67 @@ public readonly record struct BodyAggregates(float Arm, float Head, float Torso,
 /// </summary>
 public static class StatMultiplier
 {
-    enum Limb { One, Arm, ArmTorso, Head, ArmHead }
+    /// <summary>
+    /// Which body aggregates a row's limb term reads.
+    /// </summary>
+    enum Limb
+    {
+        /// <summary>
+        /// None: the limb term is 1.
+        /// </summary>
+        One,
+        /// <summary>
+        /// The best arm.
+        /// </summary>
+        Arm,
+        /// <summary>
+        /// The best arm times the worst torso part.
+        /// </summary>
+        ArmTorso,
+        /// <summary>
+        /// The head.
+        /// </summary>
+        Head,
+        /// <summary>
+        /// The best arm times the head.
+        /// </summary>
+        ArmHead
+    }
 
-    enum Bonus { None, Assassin, Dexterity, Weapons, Ranged, RangedStun, StunOnly }
+    /// <summary>
+    /// Which gear factor (<see cref="StatFactors"/>) a row multiplies in, and whether the dust factor applies.
+    /// </summary>
+    enum Bonus
+    {
+        /// <summary>
+        /// No factor.
+        /// </summary>
+        None,
+        /// <summary>
+        /// Assassination's armour factor.
+        /// </summary>
+        Assassin,
+        /// <summary>
+        /// Dexterity's armour factor.
+        /// </summary>
+        Dexterity,
+        /// <summary>
+        /// The melee weapon skills' damage output factor.
+        /// </summary>
+        Weapons,
+        /// <summary>
+        /// The ranged skill factor (crossbows).
+        /// </summary>
+        Ranged,
+        /// <summary>
+        /// The ranged skill factor and the dust factor.
+        /// </summary>
+        RangedStun,
+        /// <summary>
+        /// The dust factor only.
+        /// </summary>
+        StunOnly
+    }
 
     /// <summary>
     /// A row of the table. <paramref name="LightFloor"/> p0 is 1 for rows without a light term.
@@ -73,6 +152,9 @@ public static class StatMultiplier
     readonly record struct Row(Limb Limb, float H0, float L0, float F0, float LightFloor, Bonus Bonus,
         bool BothArmsPenalty = false, bool OneUnlessBothArmsDisabled = false, bool Scaled = true);
 
+    /// <summary>
+    /// The row of a stat (the doc's table); null for a stat without one, whose multiplier is 1.
+    /// </summary>
     static Row? RowOf(StatsEnumerated stat) => stat switch
     {
         StatsEnumerated.Strength => new Row(Limb.ArmTorso, 0, 0.75f, 0.1f, 1, Bonus.None),
@@ -158,5 +240,8 @@ public static class StatMultiplier
         return f;
     }
 
+    /// <summary>
+    /// Linear interpolation from <paramref name="a"/> to <paramref name="b"/> by <paramref name="t"/>.
+    /// </summary>
     static float Lerp(float a, float b, float t) => a + (b - a) * t;
 }

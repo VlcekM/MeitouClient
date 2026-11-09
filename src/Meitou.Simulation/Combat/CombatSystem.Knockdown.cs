@@ -2,6 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// The push a downing blow or a blast gives the victim's ragdoll.
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>
@@ -10,10 +13,10 @@ public sealed partial class CombatSystem
     const float PushPerDamage = 0.5f, PushMin = 12.5f, PushLift = 0.2f;
 
     /// <summary>
-    /// Meitou (<see cref="BodyOptions.AdvancedRagdolls"/>, docs/game/ragdolls.md "Initial state"): a hit that knocked the victim out or killed it leaves
-    /// <see cref="CharacterCold.Blow"/>, the speed its ragdoll starts with: the victim's own motion of the last tick plus a push along the blow's
-    /// <paramref name="direction"/> (X/Z) sized by the <paramref name="damage"/>, and the struck <paramref name="part"/>'s bone, which the ragdoll takes more of
-    /// the push on.
+    /// Meitou (<see cref="Bodies.BodyOptions.AdvancedRagdolls"/>, docs/game/ragdolls.md "Initial state"): a hit that knocked the victim out or killed
+    /// it leaves <see cref="CharacterCold.Blow"/>, the speed its ragdoll starts with: the victim's own motion of the last tick plus a push along the
+    /// blow's <paramref name="direction"/> (X/Z) sized by the <paramref name="damage"/>, and the struck <paramref name="part"/>'s bone, which the
+    /// ragdoll takes more of the push on.
     /// </summary>
     void Knockdown(World world, int victim, CharacterCold vc, Vector2 direction, float damage, int part, float lift = PushLift)
     {
@@ -41,8 +44,9 @@ public sealed partial class CombatSystem
     /// <summary>
     /// The debug explosion's throw (<c>explode</c>): sets <see cref="CharacterCold.Launch"/> on a knocked-out or dead victim, a push along
     /// <paramref name="direction"/> (X/Z) of <paramref name="force"/> world units/s (at least <see cref="PushMin"/>) with the lift.
-    /// <see cref="Ragdolls.RagdollSystem"/> applies it to the live ragdoll bodies (a frozen one is woken) once the ragdoll exists, or slides a victim without a
-    /// ragdoll. Independent of <see cref="BodyOptions.AdvancedRagdolls"/>. Returns false (nothing thrown) for a victim who is not down.
+    /// <see cref="Ragdolls.RagdollSystem"/> applies it to the live ragdoll bodies (a frozen one is woken) once the ragdoll exists, or slides a
+    /// victim without a ragdoll. Independent of <see cref="Bodies.BodyOptions.AdvancedRagdolls"/>. Returns false (nothing thrown) for a victim who
+    /// is not down.
     /// </summary>
     internal bool Blast(CharacterCold vc, Vector2 direction, float force)
     {

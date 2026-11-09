@@ -4,9 +4,9 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The interior join sweep (docs/game/pathfinding.md "Join sweep"): per original interior group, whether the original connects it to the exterior (mesh
-/// connections in its streaming set, docs/formats/havok-tagfile.md "Interior joins") and whether ours, the interior whose hull holds most of its faces, is
-/// reached from the street.
+/// The interior join sweep (docs/game/pathfinding.md "Join sweep"): per original interior group, whether the original connects it to the exterior
+/// (mesh connections in its streaming set, docs/formats/havok-tagfile.md "Interior joins") and whether ours, the interior whose hull holds most of
+/// its faces, is reached from the street.
 /// </summary>
 internal static class InteriorJoinSweep
 {
@@ -54,6 +54,9 @@ internal static class InteriorJoinSweep
         return Inside(group, site) > 0 ? site : null;
     }
 
+    /// <summary>
+    /// The centres of the group's faces of three or more vertices (vertex averages).
+    /// </summary>
     static IEnumerable<Vector3> Centres(OriginalInterior group) =>
         group.Polygons.Where(p => p.Length >= 3).Select(p => p.Aggregate(Vector3.Zero, (a, i) => a + group.Vertices[i]) / p.Length);
 

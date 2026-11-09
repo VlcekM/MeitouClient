@@ -28,10 +28,10 @@ namespace Meitou.Simulation.Carrying;
 /// carrier does not regard as friendly is knocked out again.</item>
 /// <item><b>Dropped</b> at once when the carrier is knocked out or dies or its left arm fails or is cut off. A body that comes round is put down by
 /// an NPC carrier when the carrier's lists hold goal 169 (<see cref="ListsPutDown"/>) unless it is chained and the carrier's enemy
-/// (<see cref="WakesIntoPutDown"/>); any other rides on awake (a player-side body that is no friend is knocked out again on the shoulder, engine choice); a
-/// player-side carrier sets only a friendly one down. A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until put
-/// down.</item>
-/// <item><b>Rescue</b>: the rescue job, and NPC squads' knocked-out leaders (<see cref="CarrySettings.RescueNpcLeaders"/>).</item>
+/// (<see cref="WakesIntoPutDown"/>); any other rides on awake (a player-side body that is no friend is knocked out again on the shoulder, engine
+/// choice); a player-side carrier sets only a friendly one down. A squad mate lifted awake (<see cref="CharacterCold.CarriedAwake"/>) rides until
+/// put down.</item>
+/// <item><b>Rescue</b>: the rescue job, and NPC squads' knocked-out leaders (<see cref="RescueLeaders"/>).</item>
 /// <item><b>Loot</b> (<see cref="CharacterTask.Loot"/>): the walk, then everything of the main inventory and the backpack that fits moves to the
 /// looter (<see cref="LootOrder"/>), or the body's inventory opens in a window to take from (<see cref="OpenLootOrder"/>); a member of the victim's
 /// faction who sees it makes it a theft. NPCs with goal 177 loot by the original's rules (CarrySystem.Scavenge.cs).</item>
@@ -54,7 +54,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// </summary>
     public const string LiftClip = "shoulder lift left", CarriedClip = "carry me";
 
+    /// <summary>
+    /// The reaches, timings and auto cadence of carrying and looting.
+    /// </summary>
     public CarrySettings Settings { get; } = settings ?? new CarrySettings();
+    /// <summary>
+    /// The CONSTANTS the carry and loot rules read.
+    /// </summary>
     public GameConstants Constants { get; } = constants;
 
     /// <summary>
@@ -94,7 +100,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// The player characters a failed kidnap or knock-out engaged, and their defence as a decision source (<see cref="EngagedDefence.Engage"/>).
     /// </summary>
     readonly EngagedDefence _engaged = new();
+    /// <summary>
+    /// The body options (the put-down knock-out reads them).
+    /// </summary>
     readonly BodyOptions _bodyOptions = options;
+    /// <summary>
+    /// The loots done since the last <see cref="TakeLoots"/>.
+    /// </summary>
     readonly List<LootEntry> _loots = [];
 
     /// <summary>
@@ -102,6 +114,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// </summary>
     public IReadOnlyList<LootEntry> Loots => _loots;
 
+    /// <summary>
+    /// The loots done since the last call, emptied.
+    /// </summary>
     public LootEntry[] TakeLoots()
     {
         LootEntry[] all = [.. _loots];
@@ -146,9 +161,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     public static bool CanBeLifted(World world, CharacterCold cold) => CanBeLifted(cold) || InOpenCage(world, cold) is not null || AwakeMate(cold);
 
     /// <summary>
-    /// One of the player's own characters, awake, of a <c>carriable</c> race, free, carrying no one and not carried.
-    /// </summary>
-    /// <summary>
     /// A down body of a <c>carriable</c> race that someone else carries: what a snatching lift (<see cref="CharacterCold.Snatching"/>) may take from
     /// its carrier.
     /// </summary>
@@ -166,6 +178,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         return CanBeLifted(world, b) || table.Cold(carrier)!.Snatching && Snatchable(b) && b.CarriedBy != table.IdOf(carrier);
     }
 
+    /// <summary>
+    /// One of the player's own characters, awake, of a <c>carriable</c> race, free, carrying no one and not carried.
+    /// </summary>
     static bool AwakeMate(CharacterCold cold) =>
         cold is { IsPlayer: true, Medical.Incapacitated: false, Race.Carriable: true, IsImprisoned: false }
             && cold.Carrying.IsNone && cold.CarriedBy.IsNone;
@@ -231,6 +246,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     public bool Friendly(CharacterCold a, CharacterCold b) =>
         a.Faction == b.Faction || Relations is { } r && r.Contains(a.Faction) && r.Contains(b.Faction) && r.IsAlly(a.Faction, b.Faction);
 
+    /// <summary>
+    /// The distance between two characters on the X/Z plane.
+    /// </summary>
     static float Gap(in CharacterHot a, in CharacterHot b)
     {
         float dx = a.Position.X - b.Position.X, dz = a.Position.Z - b.Position.Z;
@@ -246,6 +264,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     static bool InReach(World world, in CharacterHot a, in CharacterHot b, float reach) =>
         Gap(a, b) <= reach && (Level(a.Position.Y, b.Position.Y) || Level(a.Position.Y, FloorUnder(world, b.Position)));
 
+    /// <summary>
+    /// Whether two heights lie within <see cref="MovementSystem.FloorSlack"/> of each other: the same floor.
+    /// </summary>
     static bool Level(float a, float b) => MathF.Abs(a - b) <= MovementSystem.FloorSlack;
 
     /// <summary>
@@ -271,6 +292,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         return body;
     }
 
+    /// <summary>
+    /// The characters an order names, or the player's selection when it names none.
+    /// </summary>
     static IReadOnlyList<CharacterId> Who(World world, IReadOnlyList<CharacterId> ids) => ids.Count > 0 ? ids : world.Player.Selection.ToArray();
     #endregion
 
@@ -405,8 +429,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         }
     }
 
-    // Saved: the Open Inventory loot is kind 1; the Rescue button's look (row None) is not saved.
+    /// <summary>
+    /// The save kind of an order: Saved: the Open Inventory loot is kind 1; the Rescue button's look (row None) is not saved.
+    /// </summary>
     int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is null ? 0 : order.Detail == OpenInventory ? 1 : -1;
+    /// <inheritdoc/>
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) => kind == 1 ? OpenInventory : null;
 
     /// <summary>
@@ -461,6 +488,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         return OrderCheck.Gone;
     }
 
+    /// <inheritdoc/>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
@@ -613,6 +641,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         int job = -1) =>
         TaskStart.Start(world, slot, new TaskRequest(task, row, source) { Target = target, Resume = resume, Job = job }) == StartResult.Started;
 
+    /// <summary>
+    /// Registers this system as the handler of the pick-up, put-down, loot and stealth knock-out tasks.
+    /// </summary>
     public void RegisterTasks(TaskHandlers tasks)
     {
         tasks.Register(CharacterTask.PickUp, this);
@@ -621,6 +652,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         tasks.Register(CharacterTask.StealthKo, this);
     }
 
+    /// <inheritdoc/>
     void ITaskHandler.Start(World world, int slot, in TaskRequest request)
     {
         if (request.Task == CharacterTask.PutDown) PutDownStart(world.Characters, slot);
@@ -687,6 +719,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     #region Schedule
 
+    /// <summary>
+    /// The approach step of the lifts and loots (and the stealth knock-outs' start): a carrier or looter that can no longer do it ends its task, one
+    /// in reach stops walking (a lift starts its clip), one out of reach asks for a path to the body's floor again when its goal is stale.
+    /// </summary>
     public void Schedule(World world)
     {
         ScheduleKnockOuts(world);
@@ -744,10 +780,17 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
 
     #region Lifting and links
 
-    // How often the saved carries still waiting for their partner are looked at (engine choice; the original checks its deferred link every frame,
-    // FUN_140797ec0).
+    /// <summary>
+    /// How often the saved carries still waiting for their partner are looked at (engine choice; the original checks its deferred link every
+    /// frame, FUN_140797ec0).
+    /// </summary>
     const int RestoreEveryTicks = 20;
 
+    /// <summary>
+    /// The serial carry step: each stepping character's lift, put-down, loot or stealth knock-out runs, then the saved links are restored every
+    /// <see cref="RestoreEveryTicks"/> ticks, the loot window and the links are kept, and the automatic rescue, scavenging and arming run on
+    /// their beat.
+    /// </summary>
     public void SlowWorld(World world)
     {
         var table = world.Characters;
@@ -825,6 +868,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         }
     }
 
+    /// <summary>
+    /// One tick of a lift: a kidnap rolls on arrival, the clip advances (at once in deep water), the body is attached at
+    /// <see cref="CarrySettings.AttachAt"/> of the clip (out of a cage or bed, from another carrier), and the lift finishes at the clip's end.
+    /// </summary>
     void Lift(World world, CharacterTable table, int i, float dt)
     {
         var cold = table.Cold(i)!;
@@ -887,6 +934,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         if (cold.LiftTime >= CarrySettings.DoneAt * LiftSeconds) End(world, i);
     }
 
+    /// <summary>
+    /// One tick of a put-down: the clip runs backwards from its end and the body is let go below 0.2 of the way.
+    /// </summary>
     void PutDown(World world, int i, float dt)
     {
         var table = world.Characters;
@@ -1058,6 +1108,10 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// </summary>
     CharacterId _seenLoot = CharacterId.None;
 
+    /// <summary>
+    /// One tick of a loot once the looter is in reach: a held loot window is kept, a forager takes, an NPC loots over time, an open-loot order opens
+    /// the window; else the take-all (money cashed for the player's faction, death items butchered, the theft marked and reported) ends the task.
+    /// </summary>
     void Loot(World world, CharacterTable table, int i, float dt)
     {
         var cold = table.Cold(i)!;
@@ -1242,7 +1296,8 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         {
             int units = item.Quantity;   // money is never split (InventoryCommands.ClickCount)
             PlayerSystem.Cash(world, Data, item, units);
-            if (units >= item.Quantity) owner.Remove(item); else item.Quantity -= units;
+            if (units >= item.Quantity) owner.Remove(item);
+        else item.Quantity -= units;
             item.Mark = mark;
             Butcher(world, i, t, death);
             Seen(world, i, t, owner.Items.Contains(item) ? 1 : 0);
@@ -1350,13 +1405,6 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     }
 
     /// <summary>
-    /// "Take all": every item of <paramref name="from"/>'s main inventory and of its worn backpack, in order, goes into <paramref name="into"/> where
-    /// it fits (a stack joins a stack, else the first free cell of the main grid, then of the backpack: <see cref="Inventory.Add"/>); what does not
-    /// fit stays. Worn clothing, armour, weapons and the backpack itself stay (engine choice: the fighter's gear is fixed at spawn). Returns the
-    /// items moved and the ones left. With <paramref name="stolenFrom"/> at 0 or above (a theft) what moves is marked stolen from that faction; what
-    /// stays keeps its mark.
-    /// </summary>
-    /// <summary>
     /// The money items of a loot's grid and bag into the player's purse (a take-all by the player's own); the number of stacks taken.
     /// </summary>
     int CashMoney(World world, Inventory from)
@@ -1378,6 +1426,13 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         return n;
     }
 
+    /// <summary>
+    /// "Take all": every item of <paramref name="from"/>'s main inventory and of its worn backpack, in order, goes into <paramref name="into"/> where
+    /// it fits (a stack joins a stack, else the first free cell of the main grid, then of the backpack: <see cref="Inventory.Add"/>); what does not
+    /// fit stays. Worn clothing, armour, weapons and the backpack itself stay (engine choice: the fighter's gear is fixed at spawn). Returns the
+    /// items moved and the ones left. With <paramref name="stolenFrom"/> at 0 or above (a theft) what moves is marked stolen from that faction; what
+    /// stays keeps its mark.
+    /// </summary>
     public static (int Taken, int Left) TakeAll(Inventory into, Inventory from, StolenMark? stolen = null)
     {
         var items = new List<ItemInstance>();
@@ -1469,10 +1524,19 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         decisions.Register(_engaged);
     }
 
+    /// <summary>
+    /// The job source of the rescue and the forage jobs: finds a body for the job's character and starts the lift or the loot of it.
+    /// </summary>
     sealed class CarryJobs(CarrySystem owner) : IJobSource
     {
+        /// <summary>
+        /// The body <see cref="CanRun"/> found, with the tick, slot and job it was found for (-1: none); <see cref="Start"/> takes only that one.
+        /// </summary>
         (long Tick, int Slot, int K, int Body) _found = (-1, -1, -1, -1);
 
+        /// <summary>
+        /// Whether the job runs: it is already running, or the character can carry and a body to rescue (or forage) is found.
+        /// </summary>
         public DecisionCheck CanRun(World world, int slot, int k)
         {
             var table = world.Characters;
@@ -1491,6 +1555,9 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
             return DecisionCheck.Run;
         }
 
+        /// <summary>
+        /// Starts the lift or loot of the body <see cref="CanRun"/> found this tick for this slot and job; nothing when it found none.
+        /// </summary>
         public void Start(World world, int slot, int k)
         {
             if (_found.Tick != world.Tick || _found.Slot != slot || _found.K != k) return;

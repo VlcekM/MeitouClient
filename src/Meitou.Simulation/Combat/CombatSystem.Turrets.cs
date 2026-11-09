@@ -14,8 +14,8 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Combat;
 
 /// <summary>
-/// A manned turret as the snapshot shows it: its BUILDING and GUN_DATA records, the point it aims at (null: none yet) and the turn of its parts (radians,
-/// <c>TurretGun.Parts</c> order).
+/// A manned turret as the snapshot shows it: its BUILDING and GUN_DATA records, the point it aims at (null: none yet) and the turn of its parts
+/// (radians, <c>TurretGun.Parts</c> order).
 /// </summary>
 public readonly record struct TurretView(string BuildingId, string GunId, Vector3 Position, float Yaw, Vector3? Aim, float[]? Angles = null);
 
@@ -31,18 +31,39 @@ public readonly record struct TurretView(string BuildingId, string GunId, Vector
 public readonly record struct TurretPanelView(string Instance, float Range, float AimSpeed, float Deviation, float Mount, float Height,
     float UserSkill, float? Perception)
 {
+    /// <summary>
+    /// The height above the last aim point in metres; null before any aim.
+    /// </summary>
     public int? HeightMetres { get; init; }
 
+    /// <summary>
+    /// The shots loaded.
+    /// </summary>
     public int Loaded { get; init; }
 
+    /// <summary>
+    /// The shots a full gun holds.
+    /// </summary>
     public int Shots { get; init; } = 1;
 
+    /// <summary>
+    /// The share of the running reload still to go (1 while none runs).
+    /// </summary>
     public float ReloadLeft { get; init; } = 1;
 
+    /// <summary>
+    /// The GUN_DATA shortest reload time.
+    /// </summary>
     public float ReloadMin { get; init; }
 
+    /// <summary>
+    /// The GUN_DATA longest reload time.
+    /// </summary>
     public float ReloadMax { get; init; }
 
+    /// <summary>
+    /// The gunner's Crossbows level; null: no gunner.
+    /// </summary>
     public float? Crossbows { get; init; }
 }
 
@@ -164,7 +185,8 @@ public sealed partial class CombatSystem
             ? TurretRig.Turn(t.Gun.Parts, t.Angles, t.Position, t.Yaw, t.Gun.Scale, aim, rate * dt)
             : -99;
 
-        // Meitou fix: the gunner faces along the barrel as it turns (after the production and AI steps, which face it toward the turret as the game does).
+        // Meitou fix: the gunner faces along the barrel as it turns (after the production and AI steps, which face it toward the turret as the
+        // game does).
         if (GunnerFacesBarrel)
         {
             var (_, heading) = TurretRig.Barrel(t.Gun, t.Angles, t.Position, t.Yaw);
@@ -230,9 +252,18 @@ public sealed partial class CombatSystem
         return false;
     }
 
+    /// <summary>
+    /// The state of the target choice's grid query.
+    /// </summary>
     struct TurretScan
     {
+        /// <summary>
+        /// The characters the query reads.
+        /// </summary>
         public CharacterTable Table;
+        /// <summary>
+        /// The slots found within the query's radius.
+        /// </summary>
         public List<int> Found;
     }
 
@@ -250,14 +281,14 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The target choice (<c>FUN_140437f40</c>, <c>FUN_1404374d0</c>, the score <c>FUN_140435d70</c>): every candidate within 1.5 x range of the gunner scores
-    /// <see cref="TurretFormulas.Closeness"/> x <see cref="TurretFormulas.Arc"/>, x 1.5 when it fights the gunner, + 0.1 for the current target, and the current
-    /// target's score is x 1.5 again in the pass; the best above 1e-6 wins, else the current one is kept. The first pass takes the gunner's enemies
-    /// (the faction relations, or anyone fighting it). With none, an NPC gunner's turret takes characters of default-hostile factions (own default
-    /// relation below -30) and anyone fighting a member of the gunner's faction. Not targets: the dead, the carried, the caged; a target down scores
-    /// 0 for an NPC gunner and x 0.01 for the player's. <b>Engine choices</b>: every candidate counts as seen (the original's sense list and its seen
-    /// flag), the 1.5 for "fights the gunner" (<c>FUN_1405ca6f0</c>), the candidate radius. A player gunner with Shoot first then takes the neutrals
-    /// of <see cref="SquadAiRules.ShootsFirstAt"/>.
+    /// The target choice (<c>FUN_140437f40</c>, <c>FUN_1404374d0</c>, the score <c>FUN_140435d70</c>): every candidate within 1.5 x range of the
+    /// gunner scores <see cref="TurretFormulas.Closeness"/> x <see cref="TurretFormulas.Arc"/>, x 1.5 when it fights the gunner, + 0.1 for the
+    /// current target, and the current target's score is x 1.5 again in the pass; the best above 1e-6 wins, else the current one is kept. The first
+    /// pass takes the gunner's enemies (the faction relations, or anyone fighting it). With none, an NPC gunner's turret takes characters of
+    /// default-hostile factions (own default relation below -30) and anyone fighting a member of the gunner's faction. Not targets: the dead, the
+    /// carried, the caged; a target down scores 0 for an NPC gunner and x 0.01 for the player's. <b>Engine choices</b>: every candidate counts as
+    /// seen (the original's sense list and its seen flag), the 1.5 for "fights the gunner" (<c>FUN_1405ca6f0</c>), the candidate radius. A player
+    /// gunner with Shoot first then takes the neutrals of <see cref="SquadAiRules.ShootsFirstAt"/>.
     /// </summary>
     int ChooseTurretTarget(World world, TurretState t, int g, CharacterCold gc)
     {
@@ -302,9 +333,9 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Shoot At (<c>FUN_140437f40</c>, <b>Verified</b>): the ordered target is kept while it lives, is free, is not down and the gunner does not regard
-    /// it as friendly; otherwise the order is dropped and the gunner chooses as it always does (row 235 list A state 7, which counts a crawler; out of
-    /// range or blocked, the turret waits). Returns the ordered target kept, else -1.
+    /// Shoot At (<c>FUN_140437f40</c>, <b>Verified</b>): the ordered target is kept while it lives, is free, is not down and the gunner does not
+    /// regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does (row 235 list A state 7, which counts a
+    /// crawler; out of range or blocked, the turret waits). Returns the ordered target kept, else -1.
     /// </summary>
     static int KeptTurretOrder(World world, int g, CharacterCold gc)
     {
@@ -454,8 +485,8 @@ public sealed partial class CombatSystem
     /// <summary>
     /// A turret's shot (<c>FUN_14043a730</c> with a <c>GunClassTurret</c>): from the muzzle along the barrel tilted by u x D degrees (D =
     /// <see cref="RangedFormulas.Deviation"/> of the gun's <c>accuracy deviation at 0 skill</c> with Turrets and perception), a harpoon of
-    /// <see cref="TurretFormulas.Harpoon"/> with the height factor from the muzzle, the gunner's friendly-fire avoidance. The harpoon is the gunner's bolt: its
-    /// hits, XP and crimes are the gunner's.
+    /// <see cref="TurretFormulas.Harpoon"/> with the height factor from the muzzle, the gunner's friendly-fire avoidance. The harpoon is the gunner's
+    /// bolt: its hits, XP and crimes are the gunner's.
     /// </summary>
     void FireTurret(World world, TurretState t, int g, CharacterCold cold, int target, Vector3 muzzle, Vector3 forward)
     {

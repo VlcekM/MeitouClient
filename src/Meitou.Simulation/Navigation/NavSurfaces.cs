@@ -26,8 +26,17 @@ public sealed class NavSurfaces
     /// </summary>
     public Vector3[] Corners { get; }
 
+    /// <summary>
+    /// The index grid's corner (X, Z): the smallest X and Z of the triangles.
+    /// </summary>
     readonly Vector2 _min;
+    /// <summary>
+    /// The index grid's columns (along X) and rows (along Z) of <see cref="Cell"/> units.
+    /// </summary>
     readonly int _columns, _rows;
+    /// <summary>
+    /// The triangle indices whose box meets each grid cell (row-major: z x columns + x).
+    /// </summary>
     readonly int[][] _cells;
 
     /// <summary>
@@ -35,8 +44,14 @@ public sealed class NavSurfaces
     /// </summary>
     readonly Box[] _boxes;
 
+    /// <summary>
+    /// A triangle's bounds on each axis.
+    /// </summary>
     readonly record struct Box(float X0, float X1, float Y0, float Y1, float Z0, float Z1);
 
+    /// <summary>
+    /// Indexes the triangles of <paramref name="corners"/> (three corners each) into the grid; an empty array gives an empty index.
+    /// </summary>
     public NavSurfaces(Vector3[] corners)
     {
         Corners = corners;
@@ -80,8 +95,14 @@ public sealed class NavSurfaces
         _cells = [.. lists.Select(l => l is null ? [] : l.ToArray())];
     }
 
+    /// <summary>
+    /// The number of triangles.
+    /// </summary>
     public int TriangleCount => Corners.Length / 3;
 
+    /// <summary>
+    /// The grid columns and rows triangle <paramref name="t"/>'s plan bounds cover.
+    /// </summary>
     (int X0, int X1, int Z0, int Z1) Range(int t)
     {
         var a = Corners[t * 3];
@@ -94,8 +115,14 @@ public sealed class NavSurfaces
             Row(MathF.Max(a.Z, MathF.Max(b.Z, c.Z))));
     }
 
+    /// <summary>
+    /// The grid column of world X <paramref name="x"/>, clamped into the grid.
+    /// </summary>
     int Col(float x) => Math.Clamp((int)((x - _min.X) / Cell), 0, _columns - 1);
 
+    /// <summary>
+    /// The grid row of world Z <paramref name="z"/>, clamped into the grid.
+    /// </summary>
     int Row(float z) => Math.Clamp((int)((z - _min.Y) / Cell), 0, _rows - 1);
 
     /// <summary>

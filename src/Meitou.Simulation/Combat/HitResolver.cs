@@ -111,8 +111,12 @@ public static class HitResolver
         return (part, damage, Absorbed(packet, effect));
     }
 
+    /// <summary>
+    /// A cover roll from a function of the piece index.
+    /// </summary>
     readonly struct FuncCover(Func<int, float> roll) : ICoverRoll
     {
+        /// <inheritdoc/>
         public float Roll(int piece) => roll(piece);
     }
 }
@@ -127,5 +131,8 @@ public readonly record struct ArmourAbsorbed(float Cut, float Blunt, float Pierc
 /// </summary>
 public interface ICoverRoll
 {
+    /// <summary>
+    /// The roll in [0, 1) for armour piece <paramref name="piece"/>.
+    /// </summary>
     float Roll(int piece);
 }

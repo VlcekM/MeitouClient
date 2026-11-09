@@ -12,8 +12,10 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Carrying;
 
-// NPC looting: goal 177 "Looting the dead" and its step Task_Loot_AI (docs/game/carry-loot.md "NPC looting", docs/simulation.md "Carrying, rescue and
-// looting").
+/// <summary>
+/// NPC looting: goal 177 "Looting the dead" and its step Task_Loot_AI (docs/game/carry-loot.md "NPC looting", docs/simulation.md "Carrying, rescue
+/// and looting").
+/// </summary>
 public sealed partial class CarrySystem
 {
     #region NPC looting
@@ -154,6 +156,9 @@ public sealed partial class CarrySystem
         return world.Sight.BuildingOf(body) is not { } building || world.Sight.BuildingOf(looter) == building || world.Fixtures.HasOpenDoor(building);
     }
 
+    /// <summary>
+    /// Whether <paramref name="c"/> is the player's or of the player's faction.
+    /// </summary>
     internal static bool PlayerSide(World world, CharacterCold c) => c.IsPlayer || world.Player.Faction >= 0 && c.Faction == world.Player.Faction;
 
     /// <summary>

@@ -28,6 +28,10 @@ internal static class NavTileRaster
         return walk;
     }
 
+    /// <summary>
+    /// Rasterizes the triangles of <paramref name="tris"/> that are walkable (<paramref name="walkable"/> set) or cutting (area
+    /// <see cref="NavArea.Null"/>) into <paramref name="hf"/>, merging spans within <paramref name="climb"/>.
+    /// </summary>
     static void RasterizeWhere(
         RcContext ctx,
         float[] verts,

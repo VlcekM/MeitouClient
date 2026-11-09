@@ -2,6 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// The combat sounds queued for the host (<see cref="Sound"/>).
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>

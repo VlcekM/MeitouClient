@@ -10,6 +10,9 @@ namespace Meitou.Simulation.Player;
 [Flags]
 public enum SquadAi : ushort
 {
+    /// <summary>
+    /// No option set.
+    /// </summary>
     None = 0,
     /// <summary>
     /// Ditch items (+0x117): idle characters put carried materials into storage (job 242).
@@ -81,6 +84,9 @@ public sealed record SquadFormationCommand(SquadFormation Formation) : SimComman
 /// </summary>
 public static class SquadAiKeys
 {
+    /// <summary>
+    /// The CAMERA bool of each option the original saves.
+    /// </summary>
     public static readonly (SquadAi Option, string Key)[] Keys =
     [
         (SquadAi.Ditch, "ditch"), (SquadAi.Sleep, "sleep"), (SquadAi.Sit, "sit"), (SquadAi.Heal, "heal"), (SquadAi.Help, "help"), (SquadAi.Rescue,
@@ -94,6 +100,9 @@ public static class SquadAiKeys
     public static readonly (SquadAi Option, string Key)[] MeitouKeys = [(SquadAi.HealNeutrals, "meitou heal neutrals"),
             (SquadAi.HealAll, "meitou heal all")];
 
+    /// <summary>
+    /// Writes the options to the CAMERA record: the original's keys always, the Meitou keys only while on (removed while off).
+    /// </summary>
     public static void Write(Data.Fcs.FcsRecord camera, SquadAi options)
     {
         foreach (var (option, key) in Keys) camera.Bools[key] = (options & option) != 0;

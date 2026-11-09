@@ -15,18 +15,21 @@ public readonly record struct ZoneBlood(float Value, Vector2 Position);
 
 /// <summary>
 /// The blood smell of the zones (<c>ZoneSmell</c>, <b>Verified</b> decompile) and the blood hunters that follow it (goal 176 HUNTING_BLOODSMELL,
-/// <c>Task_HuntingSmell</c>). Serial, in <c>SlowWorld</c> every <see cref="EveryTicks"/> ticks, the zones stepping once per <see cref="StepSeconds"/> with the
-/// elapsed time: each zone's target is its corpses with flies (1 each; the bleeders the original posts are skipped by its accumulation); its position
-/// is the corpses' centroid, or (0, 0) without corpses (the original's zero vector); the value rises toward the target at 1/60 a game second and
-/// falls at 1/240. A zone not loaded is dropped once its target is 0 (<c>FUN_1408f85f0</c>). An animal whose squad's package lists 176 hunts the zone
-/// with the best weighted value (its own x1, a neighbour x0.8, any other x0.5) above its race's ANIMAL_CHARACTER <c>smell blood</c>, keeps it while
-/// the value stays at the threshold, and runs to its position. Engine choices: every loaded zone is a candidate (the original's active zone island);
-/// all zones step together, the original one zone per kick in a cycle.
+/// <c>Task_HuntingSmell</c>). Serial, in <c>SlowWorld</c> every <see cref="EveryTicks"/> ticks, the zones stepping once per <see cref="StepSeconds"/>
+/// with the elapsed time: each zone's target is its corpses with flies (1 each; the bleeders the original posts are skipped by its accumulation); its
+/// position is the corpses' centroid, or (0, 0) without corpses (the original's zero vector); the value rises toward the target at 1/60 a game second
+/// and falls at 1/240. A zone not loaded is dropped once its target is 0 (<c>FUN_1408f85f0</c>). An animal whose squad's package lists 176 hunts the
+/// zone with the best weighted value (its own x1, a neighbour x0.8, any other x0.5) above its race's ANIMAL_CHARACTER <c>smell blood</c>, keeps it
+/// while the value stays at the threshold, and runs to its position. Engine choices: every loaded zone is a candidate (the original's active zone
+/// island); all zones step together, the original one zone per kick in a cycle.
 /// </summary>
 public sealed class SmellSystem(PopulationData data, PopulationSystem? population) : ITickSystem, IStateHashed
 {
     #region Zone smell
 
+    /// <summary>
+    /// The ticks between the system's runs.
+    /// </summary>
     public const int EveryTicks = 30;
 
     /// <summary>
@@ -40,11 +43,17 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     public const float NeighbourWeight = 0.8f, FarWeight = 0.5f;
 
     /// <summary>
-    /// Game seconds between the zone steps (Verified literal 10), and the time gathered towards the next. Not saved.
+    /// Game seconds between the zone steps (Verified literal 10).
     /// </summary>
     public const float StepSeconds = 10;
 
+    /// <summary>
+    /// Per zone key: the blood smell's value and its sources' position.
+    /// </summary>
     readonly SortedDictionary<int, (float Value, Vector2 Position)> _zones = [];
+    /// <summary>
+    /// The time gathered towards the next zone step, in game seconds. Not saved.
+    /// </summary>
     float _elapsed;
 
     /// <summary>
@@ -52,8 +61,14 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
     /// </summary>
     public ZoneBlood Blood(ZoneCoordinate zone) => _zones.TryGetValue(Key(zone), out var z) ? new ZoneBlood(z.Value, z.Position) : default;
 
+    /// <summary>
+    /// The zone's key: row x zone count + column.
+    /// </summary>
     static int Key(ZoneCoordinate z) => z.Y * WorldLayout.ZoneCount + z.X;
 
+    /// <summary>
+    /// Every <see cref="EveryTicks"/>: the zone step once <see cref="StepSeconds"/> have gathered, then the hunters.
+    /// </summary>
     public void SlowWorld(World world)
     {
         if (world.Tick % EveryTicks != 0) return;
@@ -70,6 +85,10 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
         if (population is not null) Hunt(world);
     }
 
+    /// <summary>
+    /// One zone step over <paramref name="dt"/> game seconds: each zone's value toward its corpses' count, its position at their centroid; a zone
+    /// with target 0 is dropped once its value is 0 or it is not loaded.
+    /// </summary>
     void Update(World world, float dt)
     {
         var sums = CorpseSums(world);
@@ -117,11 +136,18 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
 
     #region Hunters
 
-    // Within this of the smell's position a hunter stops walking (engine choice; the original keeps walking at the moving centroid).
+    /// <summary>
+    /// Within this of the smell's position a hunter stops walking (engine choice; the original keeps walking at the moving centroid).
+    /// </summary>
     const float HuntArrive = 50;
 
-    // The zone each hunting squad keeps (Blackboard +0xf8), by squad id.
+    /// <summary>
+    /// The zone each hunting squad keeps (Blackboard +0xf8), by squad id.
+    /// </summary>
     readonly SortedDictionary<int, int> _hunts = [];
+    /// <summary>
+    /// The <c>smell blood</c> threshold per record id, read once.
+    /// </summary>
     readonly Dictionary<string, float> _thresholds = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -136,6 +162,9 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
         return t;
     }
 
+    /// <summary>
+    /// The blood hunters: each animal-led squad whose package lists goal 176 keeps or picks its zone and runs to its smell.
+    /// </summary>
     void Hunt(World world)
     {
         var table = world.Characters;
@@ -205,6 +234,9 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
             TaskStart.Walk(world, s, to, SpeedMode.Run, TaskType.HuntingBloodsmell, TaskSource.Goal);
     }
 
+    /// <summary>
+    /// Lets the squad's members' AI take them again.
+    /// </summary>
     static void Release(World world, Squad squad)
     {
         foreach (var member in squad.Members)
@@ -216,6 +248,9 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
 
     #endregion
 
+    /// <summary>
+    /// Adds the zones and the hunts to the world hash, only while there are any.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         if (_zones.Count == 0 && _hunts.Count == 0) return;

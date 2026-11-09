@@ -48,6 +48,10 @@ public readonly record struct ArmourPiece(ArmourData Data, float Quality, float 
         _ => (1, 1),
     };
 
+    /// <summary>
+    /// The class table's stealth factors (low, high): medium 0.9 both, heavy 0 and 0.4, any other 1 (docs/game/character-stats.md "Gear
+    /// factors", <b>Verified</b>).
+    /// </summary>
     public static (float Low, float High) ClassStealth(ArmourClass c) => c switch
     {
         ArmourClass.Medium => (0.9f, 0.9f),
@@ -133,6 +137,9 @@ public readonly record struct ArmourPiece(ArmourData Data, float Quality, float 
 /// <param name="StunFraction">Fraction of the cut that turns into stun.</param>
 public readonly record struct ArmourEffect(float CutReduction, float BluntReduction, float PierceFlat, float StunFraction)
 {
+    /// <summary>
+    /// No armour: nothing removed, no stun.
+    /// </summary>
     public static ArmourEffect None => default;
 }
 

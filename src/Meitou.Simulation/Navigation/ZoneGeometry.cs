@@ -4,13 +4,19 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// Area ids of the navmesh builder. They are Recast area ids, so where two surfaces meet in one column the larger id wins: door over water over ground;
-/// <see cref="Null"/> is "not walkable" (a cutting obstacle). The original's face data are 3 (water), 4 (open door), 5 (closed door)
+/// Area ids of the navmesh builder. They are Recast area ids, so where two surfaces meet in one column the larger id wins: door over water over
+/// ground; <see cref="Null"/> is "not walkable" (a cutting obstacle). The original's face data are 3 (water), 4 (open door), 5 (closed door)
 /// (docs/game/pathfinding.md, "Face data"); a closed door is a run-time state.
 /// </summary>
 public static class NavArea
 {
+    /// <summary>
+    /// Not walkable: a cutting obstacle.
+    /// </summary>
     public const byte Null = 0;
+    /// <summary>
+    /// Walkable ground.
+    /// </summary>
     public const byte Ground = 1;
 
     /// <summary>
@@ -19,10 +25,19 @@ public static class NavArea
     /// </summary>
     public const byte Water = 2, WaterWaist = 4, WaterDeep = 5;
 
+    /// <summary>
+    /// An open door (face data 4); <see cref="NavDoors"/> closes it at run time.
+    /// </summary>
     public const byte Door = 3;
 
+    /// <summary>
+    /// Whether a polygon of <paramref name="area"/> can be walked on (anything but <see cref="Null"/>).
+    /// </summary>
     public static bool IsWalkable(byte area) => area != Null;
 
+    /// <summary>
+    /// Whether <paramref name="area"/> is one of the water areas.
+    /// </summary>
     public static bool IsWater(byte area) => WetState(area) > 0;
 
     /// <summary>
@@ -30,6 +45,9 @@ public static class NavArea
     /// </summary>
     public static int WetState(byte area) => area switch { Water => 1, WaterWaist => 2, WaterDeep => 3, _ => 0 };
 
+    /// <summary>
+    /// The water area of water state <paramref name="state"/> (1 shallow, 2 waist-deep, 3 deep; anything else is shallow).
+    /// </summary>
     public static byte OfWetState(int state) => state switch { 3 => WaterDeep, 2 => WaterWaist, _ => Water };
 }
 
@@ -48,18 +66,27 @@ internal sealed class NavVolume(Vector2[] polygon, float yMin, float yMax)
     /// </summary>
     public Vector2[] Polygon { get; } = polygon;
 
+    /// <summary>
+    /// The prism's bottom height.
+    /// </summary>
     public float YMin { get; } = yMin;
 
+    /// <summary>
+    /// The prism's top height.
+    /// </summary>
     public float YMax { get; } = yMax;
 }
 
 /// <summary>
-/// A closed convex collision shape of a walkable part, as planes (unit normal outward; a point p is inside when every <c>Dot(n, p) + d</c> is below 0).
-/// Recast rasterises surfaces, not volumes, so the ground inside a solid foundation would stay as a floor under it; the builder removes the walkable spans
-/// inside (docs/game/pathfinding.md, "Solids").
+/// A closed convex collision shape of a walkable part, as planes (unit normal outward; a point p is inside when every <c>Dot(n, p) + d</c> is below
+/// 0). Recast rasterises surfaces, not volumes, so the ground inside a solid foundation would stay as a floor under it; the builder removes the
+/// walkable spans inside (docs/game/pathfinding.md, "Solids").
 /// </summary>
 internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
 {
+    /// <summary>
+    /// The bounding planes, (unit normal outward, d) each.
+    /// </summary>
     public Vector4[] Planes { get; } = planes;
 
     /// <summary>
@@ -77,6 +104,9 @@ internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
     /// </summary>
     public Vector2 Min { get; } = min;
 
+    /// <summary>
+    /// The shape's box's largest X and Z.
+    /// </summary>
     public Vector2 Max { get; } = max;
 }
 
@@ -87,6 +117,9 @@ internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
 /// </summary>
 internal sealed class NavMeshSolid(Vector3[] triangles, Vector2 min, Vector2 max)
 {
+    /// <summary>
+    /// The triangles, three points each, outward-facing.
+    /// </summary>
     public Vector3[] Triangles { get; } = triangles;
 
     /// <summary>
@@ -99,6 +132,9 @@ internal sealed class NavMeshSolid(Vector3[] triangles, Vector2 min, Vector2 max
     /// </summary>
     public Vector2 Min { get; } = min;
 
+    /// <summary>
+    /// The mesh's box's largest X and Z.
+    /// </summary>
     public Vector2 Max { get; } = max;
 }
 
@@ -107,8 +143,18 @@ internal sealed class NavMeshSolid(Vector3[] triangles, Vector2 min, Vector2 max
 /// </summary>
 internal sealed class GatherStats
 {
+    /// <summary>
+    /// Placed buildings, their parts with collision and the shapes taken; foliage instances, shapes, meshes and cutters; collision files that
+    /// were missing.
+    /// </summary>
     public int Buildings, PartsWithCollision, Shapes, FoliageInstances, FoliageShapes, FoliageMeshes, FoliageCutters, MissingFiles;
+    /// <summary>
+    /// Triangles added by kind: walkable, cutting, terrain and water.
+    /// </summary>
     public int WalkableTriangles, CuttingTriangles, TerrainTriangles, WaterTriangles;
+    /// <summary>
+    /// Carvers, door painters, door seeds, seeds dropped, wall seeds, solids and map features added.
+    /// </summary>
     public int Carvers, Painters, DoorSeeds, SeedsDropped, WallSeeds, Solids, MapFeatures;
 }
 
@@ -118,6 +164,9 @@ internal sealed class GatherStats
 /// </summary>
 internal sealed class ZoneGeometry
 {
+    /// <summary>
+    /// The zone the geometry was gathered for.
+    /// </summary>
     public required ZoneCoordinate Zone { get; init; }
 
     /// <summary>
@@ -125,12 +174,24 @@ internal sealed class ZoneGeometry
     /// </summary>
     public Vector2 ZoneMin { get; init; }
 
+    /// <summary>
+    /// The largest X and Z of the zone's world box.
+    /// </summary>
     public Vector2 ZoneMax { get; init; }
 
+    /// <summary>
+    /// How far (units) the triangles reach beyond the zone's box.
+    /// </summary>
     public float Margin { get; init; }
 
+    /// <summary>
+    /// The lowest vertex height added so far (<see cref="AddVertex"/>); <see cref="float.MaxValue"/> before the first.
+    /// </summary>
     public float MinY { get; set; } = float.MaxValue;
 
+    /// <summary>
+    /// The highest vertex height added so far (<see cref="AddVertex"/>); <see cref="float.MinValue"/> before the first.
+    /// </summary>
     public float MaxY { get; set; } = float.MinValue;
 
     /// <summary>
@@ -179,8 +240,8 @@ internal sealed class ZoneGeometry
     public List<Vector3> Seeds { get; } = [];
 
     /// <summary>
-    /// For an interior mesh: its building's first shopkeeper or general node, else (no door either) the original's ray seed on its floor, the seed when
-    /// <see cref="Seeds"/> (the inner door markers) find nothing (docs/game/pathfinding.md, "Interior seeds").
+    /// For an interior mesh: its building's first shopkeeper or general node, else (no door either) the original's ray seed on its floor, the seed
+    /// when <see cref="Seeds"/> (the inner door markers) find nothing (docs/game/pathfinding.md, "Interior seeds").
     /// </summary>
     public List<Vector3> NodeSeeds { get; } = [];
 
@@ -211,8 +272,9 @@ internal sealed class ZoneGeometry
     public List<(string Owner, string Part, string Path, int First, int Last)> PartRanges { get; } = [];
 
     /// <summary>
-    /// For the interior of a destroyed building: its ground floor is kept besides what its seed reaches (<see cref="SeedPruner.DestroyedFloorBand"/>), and it is
-    /// joined to the exterior along its hull (docs/game/pathfinding.md, "Destroyed interiors").
+    /// For the interior of a destroyed building: its ground floor is kept besides what its seed reaches
+    /// (<see cref="SeedPruner.DestroyedFloorBand"/>), and it is joined to the exterior along its hull (docs/game/pathfinding.md,
+    /// "Destroyed interiors").
     /// </summary>
     public bool InteriorDestroyed { get; init; }
 
@@ -250,10 +312,19 @@ internal sealed class ZoneGeometry
     /// </summary>
     public uint BuildingHash { get; set; }
 
+    /// <summary>
+    /// What the gather found, for logs and the debug tool.
+    /// </summary>
     public GatherStats Stats { get; } = new();
 
+    /// <summary>
+    /// The number of triangles added.
+    /// </summary>
     public int TriangleCount => Indices.Count / 3;
 
+    /// <summary>
+    /// Adds a vertex and widens <see cref="MinY"/> / <see cref="MaxY"/> to it; its index.
+    /// </summary>
     public int AddVertex(Vector3 p)
     {
         int i = Vertices.Count / 3;
@@ -267,6 +338,9 @@ internal sealed class ZoneGeometry
         return i;
     }
 
+    /// <summary>
+    /// Adds a triangle of vertices <paramref name="a"/>, <paramref name="b"/>, <paramref name="c"/> with its area.
+    /// </summary>
     public void AddTriangle(int a, int b, int c, byte area)
     {
         Indices.Add(a);

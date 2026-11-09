@@ -7,22 +7,41 @@ namespace Meitou.Simulation.Navigation;
 /// <summary>
 /// The navigation of a running game in one object, for the simulation host: the <see cref="Walkability"/> to hand to the simulation (replacing the
 /// open-ground stand-in), the <see cref="Doors"/> table, and the zone load/unload calls that feed the background builder.
-/// <para>Thread-safety: <see cref="Walkability"/> (<c>IsWalkable</c>, <c>GroundHeight</c>, <c>FindPath</c>) and <see cref="Doors"/> may be used from any thread at
-/// any time; a zone's mesh appears in a path query when its build finishes (never half), until then the stand-in answers for that zone.
+/// <para>Thread-safety: <see cref="Walkability"/> (<c>IsWalkable</c>, <c>GroundHeight</c>, <c>FindPath</c>) and <see cref="Doors"/> may be used from
+/// any thread at any time; a zone's mesh appears in a path query when its build finishes (never half), until then the stand-in answers for that zone.
 /// <see cref="LoadZone"/>, <see cref="LoadRing"/> and <see cref="UnloadZone"/> may be called from any thread and return at once.</para>
 /// </summary>
 public sealed class NavSystem : IDisposable
 {
     #region Zones
 
+    /// <summary>
+    /// The background zone builder that feeds <see cref="Walkability"/>.
+    /// </summary>
     readonly NavMeshService _service;
 
-    // Footprints for the long-range grid's obstacles, the level data's and the player's (one record cache for both).
+    /// <summary>
+    /// Footprints for the long-range grid's obstacles, the level data's and the player's (one record cache for both).
+    /// </summary>
     readonly Lazy<BuildingFootprints> _footprints;
+    /// <summary>
+    /// The level data the gates' records and the long-range grid's obstacles come from.
+    /// </summary>
     readonly WorldLevelData _levels;
+    /// <summary>
+    /// The game data the gates' BUILDING records are looked up in.
+    /// </summary>
     readonly GameDatabase _db;
+    /// <summary>
+    /// The terrain height for a placement that has no height of its own.
+    /// </summary>
     readonly Func<double, double, float> _placementHeight;
 
+    /// <summary>
+    /// The navigation of a game over <paramref name="levels"/>: the walkability with the long-range grid built from <paramref name="terrainHeight"/>
+    /// and the level data's footprints, and the zone builder (<paramref name="settings"/> null: the defaults, <paramref name="cache"/> null: the
+    /// default cache folder).
+    /// </summary>
     public NavSystem(
         GameInstall install,
         GameDatabase db,
@@ -36,7 +55,8 @@ public sealed class NavSystem : IDisposable
         _placementHeight = (x, z) => terrainHeight((float)x, (float)z);
         _footprints = new(() => new BuildingFootprints(install, db, levels));
 
-        // The long-range grid reads every second heightmap sample (36 units) when it is first needed: the simulation's own grid is coarse far from the start.
+        // The long-range grid reads every second heightmap sample (36 units) when it is first needed: the simulation's own grid is coarse far from
+        // the start.
         Walkability = new NavmeshWalkability(
             terrainHeight,
             routeTerrain: () => ReadRouteTerrain(install, terrainHeight),
@@ -48,6 +68,9 @@ public sealed class NavSystem : IDisposable
         Walkability.DoorGeometry = new NavDoorGeometry(install, db);
     }
 
+    /// <summary>
+    /// The walkability to hand to the simulation: the loaded zones' navmesh, the open-ground stand-in elsewhere and the long-range grid.
+    /// </summary>
     public NavmeshWalkability Walkability { get; }
 
     /// <summary>
@@ -135,6 +158,9 @@ public sealed class NavSystem : IDisposable
     /// </summary>
     public NavRuntimeBuildings Runtime { get; } = new();
 
+    /// <summary>
+    /// Runs the player-route updates one at a time.
+    /// </summary>
     readonly object _playerRouteGate = new();
 
     /// <summary>
@@ -174,8 +200,8 @@ public sealed class NavSystem : IDisposable
     }
 
     /// <summary>
-    /// Gives the long-range grid the player's buildings now, on the pool (their footprints may need reading). Runs one at a time, each from the overlay as it is
-    /// then, so the last one leaves the newest set.
+    /// Gives the long-range grid the player's buildings now, on the pool (their footprints may need reading). Runs one at a time, each from the
+    /// overlay as it is then, so the last one leaves the newest set.
     /// </summary>
     void UpdatePlayerRoute()
     {
@@ -190,11 +216,19 @@ public sealed class NavSystem : IDisposable
 
     #region Gates
 
+    /// <summary>
+    /// One gate labelling at a time.
+    /// </summary>
     readonly object _labelGate = new();
+    /// <summary>
+    /// The <c>functionality</c> records looked up by the gate test, cached by id across labellings.
+    /// </summary>
     readonly Dictionary<string, GameRecord?> _functions = [];
 
-    // The level data's buildings by placement key (what the door polygons are named by), their BUILDING record ids.
-    // Made on first use and again when the level data was edited (WorldLevelData.EditRevision).
+    /// <summary>
+    /// The level data's buildings by placement key (what the door polygons are named by), their BUILDING record ids. Made on first use and again when
+    /// the level data was edited (WorldLevelData.EditRevision).
+    /// </summary>
     (int Revision, Dictionary<string, string> Map)? _levelRecords;
 
     /// <summary>
@@ -220,6 +254,9 @@ public sealed class NavSystem : IDisposable
         return _db.Find(record) is { } building && TownBuildings.IsGate(_db, building, _functions);
     }
 
+    /// <summary>
+    /// The level data's buildings' record ids by placement key, made again when <see cref="WorldLevelData.EditRevision"/> moved on.
+    /// </summary>
     Dictionary<string, string> LevelRecords()
     {
         int revision = _levels.EditRevision;
@@ -235,5 +272,8 @@ public sealed class NavSystem : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// Stops the zone builder.
+    /// </summary>
     public void Dispose() => _service.Dispose();
 }

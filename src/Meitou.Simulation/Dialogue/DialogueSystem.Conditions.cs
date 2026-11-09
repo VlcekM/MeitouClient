@@ -10,6 +10,9 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Dialogue;
 
+/// <summary>
+/// The dialogue system's line conditions (DC), each tested on the speaker and the subject.
+/// </summary>
 public sealed partial class DialogueSystem
 {
     /// <summary>
@@ -412,8 +415,14 @@ public sealed partial class DialogueSystem
         return Vector2.DistanceSquared(new(at.X, at.Z), new(b.Position.X, b.Position.Z)) <= r * r;
     }
 
+    /// <summary>
+    /// The character's health parts of <paramref name="type"/> (none without medical state).
+    /// </summary>
     static IEnumerable<HealthPart> Parts(CharacterCold c, BodyPartType type) => c.Medical?.Parts.Where(p => p.Template.Type == type) ?? [];
 
+    /// <summary>
+    /// The part's flesh as a fraction of its maximum.
+    /// </summary>
     static float Fraction(HealthPart p) => p.Flesh / MathF.Max(1e-3f, p.MaxHp);
 
     /// <summary>
@@ -422,6 +431,9 @@ public sealed partial class DialogueSystem
     internal static Vector3? Position(World world, CharacterId id) =>
         world.Characters.TryResolveNext(id, out int s) ? world.Characters.Next[s].Position : null;
 
+    /// <summary>
+    /// The character's horizontal speed; 0 when the id no longer resolves.
+    /// </summary>
     static float Speed(World world, CharacterId id) =>
         world.Characters.TryResolveNext(id, out int s)
             ? new Vector2(world.Characters.Next[s].Velocity.X, world.Characters.Next[s].Velocity.Z).Length() : 0;

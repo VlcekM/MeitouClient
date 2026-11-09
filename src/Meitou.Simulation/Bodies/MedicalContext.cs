@@ -8,6 +8,9 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 public enum BedKind
 {
+    /// <summary>
+    /// On the ground or standing: no bed.
+    /// </summary>
     None = 0,
     /// <summary>
     /// A bed-like object of kind 6: the degeneration multiplier is forced to 0 and organic healing is multiplied by
@@ -28,8 +31,17 @@ public enum BedKind
 /// </summary>
 public readonly struct MedicalContext(GameConstants constants, BodyOptions options, RaceData race)
 {
+    /// <summary>
+    /// The CONSTANTS the medical rates read.
+    /// </summary>
     public GameConstants Constants { get; } = constants;
+    /// <summary>
+    /// The body options (engine choices and settings).
+    /// </summary>
     public BodyOptions Options { get; } = options;
+    /// <summary>
+    /// The owner's race (heal and hunger rates, blood, parts).
+    /// </summary>
     public RaceData Race { get; } = race;
 
     /// <summary>
@@ -113,6 +125,9 @@ public readonly struct MedicalContext(GameConstants constants, BodyOptions optio
     /// </summary>
     public float EncumbranceFactor { get; init; } = 1;
 
+    /// <summary>
+    /// What the character lies on (<see cref="BedKind.None"/> outside a bed).
+    /// </summary>
     public BedKind Bed { get; init; }
 
     /// <summary>
@@ -140,5 +155,8 @@ public readonly struct MedicalContext(GameConstants constants, BodyOptions optio
     /// The world seed and the character's key (<see cref="Rng.Key"/>), for the rolls of hits, severed limbs and KO timers.
     /// </summary>
     public ulong Seed { get; init; }
+    /// <summary>
+    /// The character's key (<see cref="Rng.Key"/>), the other half of the roll streams' key.
+    /// </summary>
     public ulong CharacterKey { get; init; }
 }

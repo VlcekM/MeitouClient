@@ -176,6 +176,10 @@ internal static class NavGeometry
         return [.. hull];
     }
 
+    /// <summary>
+    /// The 2D cross product of (<paramref name="a"/> - <paramref name="o"/>) and (<paramref name="b"/> - <paramref name="o"/>): positive when o, a, b
+    /// turn counter-clockwise.
+    /// </summary>
     static float Cross(Vector2 o, Vector2 a, Vector2 b) => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
 
     /// <summary>
@@ -209,7 +213,8 @@ internal static class NavGeometry
     }
 
     /// <summary>
-    /// Whether an edge with the coordinates <paramref name="a"/> and <paramref name="b"/> across a border line lies on the line <paramref name="line"/>.
+    /// Whether an edge with the coordinates <paramref name="a"/> and <paramref name="b"/> across a border line lies on the
+    /// line <paramref name="line"/>.
     /// </summary>
     public static bool OnLine(float a, float b, float line) => Math.Abs(a - line) < BorderTolerance && Math.Abs(b - line) < BorderTolerance;
 
@@ -227,9 +232,9 @@ internal static class NavGeometry
     }
 
     /// <summary>
-    /// Whether <paramref name="b0"/> <paramref name="b1"/> runs opposite <paramref name="a0"/> <paramref name="a1"/>, overlaps it along that line and lies within
-    /// <paramref name="maxGap"/> of it (on X/Z) at both ends of the overlap. <paramref name="lo"/>, <paramref name="hi"/>: the overlap as fractions of a0 a1;
-    /// <paramref name="yLo"/>, <paramref name="yHi"/>: b's heights there.
+    /// Whether <paramref name="b0"/> <paramref name="b1"/> runs opposite <paramref name="a0"/> <paramref name="a1"/>, overlaps it along that line and
+    /// lies within <paramref name="maxGap"/> of it (on X/Z) at both ends of the overlap. <paramref name="lo"/>, <paramref name="hi"/>: the overlap as
+    /// fractions of a0 a1; <paramref name="yLo"/>, <paramref name="yHi"/>: b's heights there.
     /// </summary>
     public static bool FacingOverlap(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, float maxGap, out float lo, out float hi,
         out float yLo, out float yHi)
@@ -274,7 +279,8 @@ internal static class NavGeometry
     public static float Lerp(float a0, float a1, float y0, float y1, float at) => a1 - a0 < 1e-5f ? y0 : y0 + (y1 - y0) * (at - a0) / (a1 - a0);
 
     /// <summary>
-    /// Whether two spans along one border line overlap and, at the middle of the overlap, their heights differ by no more than <paramref name="maxStep"/>.
+    /// Whether two spans along one border line overlap and, at the middle of the overlap, their heights differ by no more
+    /// than <paramref name="maxStep"/>.
     /// </summary>
     public static bool SpansMeet((float From, float To, float YFrom, float YTo) a, (float From, float To, float YFrom, float YTo) b, float maxStep)
     {
