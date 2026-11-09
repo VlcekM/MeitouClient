@@ -13,17 +13,36 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public static class WorldCameraCode
 {
+    /// <summary>
+    /// The code's first byte; a code with another is not read.
+    /// </summary>
     const byte Version = 1;
+
+    /// <summary>
+    /// A code's length in bytes: the version and six floats.
+    /// </summary>
     const int Bytes = 1 + 6 * 4;
 
+    /// <summary>
+    /// A camera pose read from a code or a location: the target, yaw and pitch (radians) and the distance.
+    /// </summary>
     public readonly record struct Pose(Vector3 Target, float Yaw, float Pitch, float Distance);
 
+    /// <summary>
+    /// A number in a location text, signed with optional decimals, as a regex group.
+    /// </summary>
     const string Number = @"(-?\d+(?:\.\d+)?)";
 
+    /// <summary>
+    /// A location text: the target's three numbers, then the yaw, pitch (degrees) and boom or distance.
+    /// </summary>
     static readonly Regex Location = new(
         $@"target\s+{Number},\s*{Number},\s*{Number}.*?yaw\s+{Number},\s*pitch\s+{Number},\s*(?:boom|distance)\s+{Number}",
         RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// The code for <paramref name="camera"/>'s target, yaw, pitch and distance: 50 hex digits.
+    /// </summary>
     public static string Encode(WorldCamera camera)
     {
         Span<byte> b = stackalloc byte[Bytes];
@@ -38,6 +57,9 @@ public static class WorldCameraCode
     /// </summary>
     public static Pose? Decode(string? text) => DecodeHex(text) ?? DecodeLocation(text);
 
+    /// <summary>
+    /// The pose in a hex code (spaces ignored); null when the length, the hex, the version or a value (not finite, distance not positive) is wrong.
+    /// </summary>
     static Pose? DecodeHex(string? text)
     {
         string hex = new((text ?? "").Where(c => !char.IsWhiteSpace(c)).ToArray());
@@ -72,6 +94,9 @@ public static class WorldCameraCode
         return new Pose(target, At(4) * MathF.PI / 180, At(5) * MathF.PI / 180, distance);
     }
 
+    /// <summary>
+    /// Puts <paramref name="camera"/> at <paramref name="pose"/>: its target, yaw, pitch and distance.
+    /// </summary>
     public static void Apply(Pose pose, WorldCamera camera) =>
         (camera.Target, camera.Yaw, camera.Pitch, camera.Distance) = (pose.Target, pose.Yaw, pose.Pitch, pose.Distance);
 
@@ -85,6 +110,9 @@ public static class WorldCameraCode
         return true;
     }
 
+    /// <summary>
+    /// <paramref name="c"/> as a location text (the target, yaw and pitch in degrees, the distance), the form <see cref="Decode"/> reads.
+    /// </summary>
     public static string Describe(WorldCamera c) =>
         $"target {c.Target.X:0}, {c.Target.Y:0}, {c.Target.Z:0}, yaw {c.Yaw * 180 / MathF.PI:0.#}, "
         + $"pitch {c.Pitch * 180 / MathF.PI:0.#}, distance {c.Distance:0}";

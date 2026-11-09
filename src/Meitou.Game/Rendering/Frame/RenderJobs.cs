@@ -7,14 +7,44 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public static class RenderJobs
 {
+    /// <summary>
+    /// The job threads: a third of the processors, 1 to 4.
+    /// </summary>
     static readonly int Workers = Math.Clamp(Environment.ProcessorCount / 3, 1, 4);
+
+    /// <summary>
+    /// Released once per job thread a loop wakes (<see cref="For"/>).
+    /// </summary>
     static readonly SemaphoreSlim Wake = new(0);
+
+    /// <summary>
+    /// Set by the last job thread to finish its share of a loop.
+    /// </summary>
     static readonly ManualResetEventSlim Done = new(false);
+
+    /// <summary>
+    /// The loop body; null between loops.
+    /// </summary>
     static Action<int>? s_body;
+
+    /// <summary>
+    /// The loop's next item to take, its item count, and how many woken job threads have not finished yet.
+    /// </summary>
     static int s_next, s_count, s_pending;
+
+    /// <summary>
+    /// This thread's index (<see cref="ThreadIndex"/>): set by each job thread, 0 elsewhere.
+    /// </summary>
     [ThreadStatic] static int s_threadIndex;
+
+    /// <summary>
+    /// Whether this thread runs a recording job (<see cref="InJob"/>).
+    /// </summary>
     [ThreadStatic] static bool s_inJob;
 
+    /// <summary>
+    /// Starts the <see cref="Workers"/> job threads (background, above normal priority).
+    /// </summary>
     static RenderJobs()
     {
         for (int i = 0; i < Workers; i++)
@@ -63,6 +93,9 @@ public static class RenderJobs
         }
     }
 
+    /// <summary>
+    /// A job thread's loop: waits to be woken, takes items until the loop's are gone, and signals <see cref="Done"/> when it is the last.
+    /// </summary>
     static void Worker(int index)
     {
         s_threadIndex = index;
@@ -74,6 +107,9 @@ public static class RenderJobs
         }
     }
 
+    /// <summary>
+    /// Takes and runs the current loop's items until none are left; the render thread and the woken job threads all run it.
+    /// </summary>
     static void Run()
     {
         var work = Volatile.Read(ref s_body);

@@ -12,8 +12,14 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 sealed class SceneHost(IGpuContext ctx)
 {
+    /// <summary>
+    /// The command list of the open rendering; null while the host is closed.
+    /// </summary>
     IGpuCommandList? _cmd;
 
+    /// <summary>
+    /// Whether a rendering is open (between <see cref="Open"/> and <see cref="Close"/>).
+    /// </summary>
     public bool IsOpen => _cmd is not null;
 
     /// <summary>
@@ -52,6 +58,9 @@ sealed class SceneHost(IGpuContext ctx)
         if (_cmd is not null) ctx.SetPassStage(stage);
     }
 
+    /// <summary>
+    /// Ends the open rendering after its queued guests have executed into it; nothing when the host is closed.
+    /// </summary>
     public void Close()
     {
         if (_cmd is not { } list) return;

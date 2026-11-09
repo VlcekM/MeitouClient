@@ -35,6 +35,9 @@ public sealed class WorldTexture
         }
     }
 
+    /// <summary>
+    /// Marks the texture used now, and starts loading it again when the cache had unloaded it.
+    /// </summary>
     void Touch()
     {
         LastUsed = Environment.TickCount64;
@@ -45,12 +48,40 @@ public sealed class WorldTexture
     /// Normal map stored with X in alpha and Y in green (the model viewer's heuristic, docs/viewer.md).
     /// </summary>
     public bool Swizzled;
+
+    /// <summary>
+    /// The background decode of the file; null when none is running.
+    /// </summary>
     internal Task<TextureData?>? Pending;
+
+    /// <summary>
+    /// Sampled with a transparent clamp-to-border edge instead of repeating.
+    /// </summary>
     internal bool Border;
+
+    /// <summary>
+    /// The cache the texture belongs to.
+    /// </summary>
     internal WorldTextureCache? Owner;
+
+    /// <summary>
+    /// The name the texture was asked for, as the material gives it.
+    /// </summary>
     internal string Name = "";
+
+    /// <summary>
+    /// The file found for <see cref="Name"/>; null when it is missing.
+    /// </summary>
     internal string? Path;
+
+    /// <summary>
+    /// When something last read <see cref="Key"/>, <see cref="Environment.TickCount64"/>.
+    /// </summary>
     internal long LastUsed;
+
+    /// <summary>
+    /// The video memory the resident image takes, in bytes (0 when not resident).
+    /// </summary>
     internal long Bytes;
 
     /// <summary>
@@ -131,6 +162,9 @@ public sealed class WorldTexture
         if (need < NeedPass) NeedPass = need;
     }
 
+    /// <summary>
+    /// Where the texture is: loading, resident, unloaded (comes back when used) or missing.
+    /// </summary>
     internal Residency State;
 
     /// <summary>
@@ -142,7 +176,15 @@ public sealed class WorldTexture
     /// The <see cref="TextureShare"/> entry <see cref="Native"/> is, when the cache shares its images.
     /// </summary>
     internal TextureShare.Image? Shared;
+
+    /// <summary>
+    /// The image's view: the levels sampled.
+    /// </summary>
     internal int ViewLevels;
+
+    /// <summary>
+    /// The image's view: the component swizzle sampled with.
+    /// </summary>
     internal GpuSwizzle ViewSwizzle;
 
     /// <summary>
@@ -154,10 +196,43 @@ public sealed class WorldTexture
     /// The <see cref="SamplerCache.Generation"/> its entries were made under (the anisotropic filtering setting).
     /// </summary>
     internal int SamplerGeneration;
+
+    /// <summary>
+    /// The bindless indices for the two LOD biases <see cref="BiasA"/> and <see cref="BiasB"/>.
+    /// </summary>
     internal uint IndexA, IndexB;
+
+    /// <summary>
+    /// Whether <see cref="IndexA"/> and <see cref="IndexB"/> are held.
+    /// </summary>
     internal bool HasA, HasB;
 
-    internal enum Residency { Loading, Resident, Unloaded, Missing }
+    /// <summary>
+    /// A texture's residency: loading (a decode or upload is running), resident, unloaded (by the cache; comes back when used) or missing (no file,
+    /// or none that decodes).
+    /// </summary>
+    internal enum Residency
+    {
+        /// <summary>
+        /// The file is being decoded or its image uploaded.
+        /// </summary>
+        Loading,
+
+        /// <summary>
+        /// The image is in video memory and drawn with.
+        /// </summary>
+        Resident,
+
+        /// <summary>
+        /// Not loaded (unloaded by the cache, or deferred): the next read of <see cref="Key"/> loads it.
+        /// </summary>
+        Unloaded,
+
+        /// <summary>
+        /// No file was found for the name, or the file could not be decoded.
+        /// </summary>
+        Missing,
+    }
 }
 
 /// <summary>
@@ -173,18 +248,44 @@ public sealed unsafe class WorldTextureCache : IDisposable
 {
     #region Cache state
 
+    /// <summary>
+    /// The textures by name (case-insensitive).
+    /// </summary>
     readonly Dictionary<string, WorldTexture> _cache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The textures by number (<see cref="WorldTexture.Number"/> - 1).
+    /// </summary>
     readonly List<WorldTexture> _byNumber = [];
+
+    /// <summary>
+    /// The textures whose decode is running, in the order they were started.
+    /// </summary>
     readonly List<WorldTexture> _pending = [];
+
+    /// <summary>
+    /// The device the images are made on.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// Where the texture files are found.
+    /// </summary>
     readonly AssetLocator _assets;
 
     /// <summary>
     /// The images' owner in their allocation names (the F12 VRAM pie groups by it).
     /// </summary>
     readonly string _allocationName;
+
+    /// <summary>
+    /// When <see cref="Trim"/> last ran, <see cref="Environment.TickCount64"/> (it runs at most once a second).
+    /// </summary>
     long _lastTrim;
 
+    /// <summary>
+    /// An empty cache of the textures <paramref name="assets"/> finds, made on <paramref name="gpu"/>.
+    /// </summary>
     /// <param name="name">The images' allocation name, by owner ("object textures", "foliage textures").</param>
     public WorldTextureCache(IGpuContext gpu, AssetLocator assets, string name)
     {
@@ -194,15 +295,26 @@ public sealed unsafe class WorldTextureCache : IDisposable
         _governor = new MipGovernor(this, assets);
     }
 
+    /// <summary>
+    /// The cache's warnings (missing files, failed decodes), for the host to show.
+    /// </summary>
     public List<string> Messages { get; } = [];
+
+    /// <summary>
+    /// The textures still loading, plus one while uploads are queued.
+    /// </summary>
     public int PendingCount => _pending.Count + (_steps.Count > 0 ? 1 : 0);
 
     /// <summary>
     /// <see cref="PendingCount"/> without the coarser replacements, what a view waits for: a coarsening's finer image is drawn until it lands, so
-    /// nothing is
-    /// missing. Over the cache's mark the governor coarsens a few textures at a time, and a town's loading screen waited 10 s for hundreds of them.
+    /// nothing is missing. Over the cache's mark the governor coarsens a few textures at a time, and a town's loading screen waited 10 s for hundreds
+    /// of them.
     /// </summary>
     public int AwaitedCount => _pending.Count(t => !t.Replacing || t.Refine) + _uploadsAwaited;
+
+    /// <summary>
+    /// Queued uploads a view waits for (counted in <see cref="AwaitedCount"/>).
+    /// </summary>
     int _uploadsAwaited;
 
     /// <summary>
@@ -230,7 +342,15 @@ public sealed unsafe class WorldTextureCache : IDisposable
             _residentBytes = value;
         }
     }
+
+    /// <summary>
+    /// The backing field of <see cref="ResidentBytes"/>.
+    /// </summary>
     long _residentBytes;
+
+    /// <summary>
+    /// How many textures are resident.
+    /// </summary>
     public int ResidentCount { get; private set; }
 
     /// <summary>
@@ -238,7 +358,15 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// them checks.
     /// </summary>
     public int Version { get; private set; }
+
+    /// <summary>
+    /// Textures unloaded so far.
+    /// </summary>
     public int Unloads { get; private set; }
+
+    /// <summary>
+    /// Unloaded textures loaded again so far.
+    /// </summary>
     public int Reloads { get; private set; }
 
     /// <summary>
@@ -287,6 +415,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// is for all the sharing caches together (<see cref="TextureShare.ResidentBytes"/>), not for each.
     /// </summary>
     public double HighWaterMb { get; set; } = TextureQuality.MemoryBudgetMb(TextureQuality.Level);
+
+    /// <summary>
+    /// Unused for this long, a texture goes when the cache is over its mark.
+    /// </summary>
     public double PressureIdleSeconds { get; set; } = 8;
 
     /// <summary>
@@ -311,6 +443,11 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     internal const double MaxAreaShare = 0.5;
 
+    /// <summary>
+    /// The mark (MB) for <paramref name="highWaterMb"/> and <paramref name="share"/> of the guard's budget, scaled by <paramref name="areas"/> (the
+    /// share to at most <paramref name="maxShare"/>): the smaller of the two, and three quarters of it under pressure. Infinite marks stay infinite;
+    /// without a known budget only the scaled mark counts.
+    /// </summary>
     internal static double EffectiveMark(double highWaterMb, double share, VramGuard? guard, int areas = 1, double maxShare = MaxAreaShare)
     {
         if (double.IsInfinity(highWaterMb) || highWaterMb >= double.MaxValue) return highWaterMb;
@@ -332,6 +469,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// Images shared with the other caches on the same GPU (<see cref="TextureShare"/>); null: this cache's images are its own.
     /// </summary>
     public TextureShare? Share { get; init; }
+
+    /// <summary>
+    /// Unused for this long under the guard's pressure, a texture goes whatever the mark.
+    /// </summary>
     public double GuardIdleSeconds { get; set; } = 2;
 
     /// <summary>
@@ -371,6 +512,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         w.WriteLine();
     }
 
+    /// <summary>
+    /// The statistics line: resident count and memory, unloads, reloads and shares, and what mip streaming saves.
+    /// </summary>
     public string Describe()
     {
         string counts = $"{ResidentCount} textures {ResidentBytes / 1048576.0:0} MB ({Unloads} unloaded, {Reloads} reloaded so far"
@@ -392,6 +536,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     static readonly HashSet<string> WarnedMissing = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Whether to warn about a missing <paramref name="name"/>: once per file name, and never for the dead vanilla references.
+    /// </summary>
     static bool ShouldWarnMissing(string name)
     {
         string file = Path.GetFileName(name.Replace('\\', '/'));
@@ -403,6 +550,14 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     #region Lookup
 
+    /// <summary>
+    /// The file sizes counted as in flight across the loading textures (<see cref="WorldTexture.InFlight"/>), for the guard's room.
+    /// </summary>
+    long _inFlight;
+
+    /// <summary>
+    /// The texture <paramref name="name"/> (with a border when <paramref name="border"/>), one per name; null for no name.
+    /// </summary>
     /// <param name="deferred">The texture is not loaded now: it stays <see cref="WorldTexture.Residency.Unloaded"/> until something reads its
     /// <see cref="WorldTexture.Key"/> (the foliage makes its meshes' textures this way and reads the keys only of groups within their range).</param>
     public WorldTexture? Get(string? name, bool border, bool deferred = false)
@@ -480,7 +635,6 @@ public sealed unsafe class WorldTextureCache : IDisposable
         (t.InFlight, _inFlight, lean) = (LeanBytes, _inFlight + LeanBytes, true);
         return true;
     }
-    long _inFlight;
 
     /// <summary>
     /// The bindless index (in the 2D float array) of the texture whose <see cref="WorldTexture.Key"/> is <paramref name="key"/>, sampled as the
@@ -530,6 +684,10 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     public bool Urgent { get; set; }
 
+    /// <summary>
+    /// Starts loading <paramref name="t"/>: adopts a shared image of the same file when one fits, else decodes it on a streaming thread (<paramref
+    /// name="replacing"/>: as a replacement while the old image is drawn; <paramref name="lean"/>: at most <see cref="LeanSize"/>).
+    /// </summary>
     internal void Start(WorldTexture t, bool replacing = false, bool lean = false)
     {
         string path = t.Path!, name = t.Name;
@@ -655,6 +813,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         Resident(t, bytes);
     }
 
+    /// <summary>
+    /// Loads an unloaded texture again (a read of its key), when the guard lets it start.
+    /// </summary>
     internal void Reload(WorldTexture t)
     {
         if (t.State != WorldTexture.Residency.Unloaded) return;
@@ -778,6 +939,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     public void Rebalance() => _governor.Rebalance();
 
+    /// <summary>
+    /// Releases a resident texture's image and entries and takes its bytes off the count; it comes back when used.
+    /// </summary>
     void Unload(WorldTexture t)
     {
         Release(t);
@@ -810,12 +974,25 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     #region Loading and decoding
 
+    /// <summary>
+    /// The upload steps queued for <see cref="Pump"/>, run in order.
+    /// </summary>
     readonly Queue<Action> _steps = new();
+
+    /// <summary>
+    /// What each kind of upload step has cost, so <see cref="Pump"/> stops before its budget runs out.
+    /// </summary>
     readonly StepCosts _stepCosts = new();
+
+    /// <summary>
+    /// The most bytes one upload step copies (512 KB): a larger level is split into slabs of whole rows.
+    /// </summary>
     const int SlabBytes = 512 << 10;
 
-    // DDS textures in BC1, BC2, BC3, BC4 or BC5 with a full mip chain go to the GPU as they are stored (BC4 through a swizzle that shows it as grey);
-    // the rest is decoded to RGBA8 on the CPU.
+    /// <summary>
+    /// Reads and decodes the file at <paramref name="path"/>: DDS textures in BC1, BC2, BC3, BC4 or BC5 with a full mip chain go to the GPU as they
+    /// are stored (BC4 through a swizzle that shows it as grey); the rest is decoded to RGBA8 on the CPU.
+    /// </summary>
     /// <param name="leanSize">0, or the largest top side to keep (a lean load under the guard's pressure).</param>
     static TextureData Load(string path, int dropMips, float need, bool streaming, float perDistance, float bias, int extra, int leanSize = 0)
     {
@@ -864,6 +1041,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         return n;
     }
 
+    /// <summary>
+    /// Whether a DDS file's blocks can go to the GPU as stored: BC1-BC5 or BC7, one 2D image, a full mip chain down to 1 x 1.
+    /// </summary>
     static bool CanUploadCompressed(DdsFile dds) =>
         dds.Format is DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3 or DdsFormat.Bc4 or DdsFormat.Bc5 or DdsFormat.Bc7
         && !dds.IsCubemap && !dds.IsVolume && dds.ImageCount == 1 && dds.Width > 0 && dds.Height > 0
@@ -899,6 +1079,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// </summary>
     static bool GeneratesMips(LoadedTexture tex) => tex.Levels.Count == 1 || tex.Levels[^1].Width > 1 || tex.Levels[^1].Height > 1;
 
+    /// <summary>
+    /// The block-compressed format of a DDS format (BC3 for anything not listed).
+    /// </summary>
     static InternalFormat FormatOf(DdsFormat format) => format switch
     {
         DdsFormat.Bc1 => InternalFormat.CompressedRgbaS3TcDxt1Ext,
@@ -1023,6 +1206,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         t.InFlight = 0;
     }
 
+    /// <summary>
+    /// A loaded image became the texture's: resident from now, counted, and the version moved.
+    /// </summary>
     void Resident(WorldTexture t, long bytes)
     {
         Landed(t);
@@ -1035,6 +1221,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         ResidentCount++;
     }
 
+    /// <summary>
+    /// Queues <paramref name="data"/>'s upload, stored blocks or RGBA8, counting it as awaited unless it is a coarser replacement.
+    /// </summary>
     void QueueUpload(WorldTexture t, TextureData data)
     {
         bool awaited = !t.Replacing || t.Refine;   // AwaitedCount
@@ -1074,6 +1263,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         t.FileHeight = fileHeight;
     }
 
+    /// <summary>
+    /// Whether an RGBA8 normal map looks like a "DXT5 normal" (X in alpha): red, green and blue all near the same mean, below 180.
+    /// </summary>
     internal static bool LooksSwizzled(RgbaImage image)
     {
         long r = 0, g = 0, b = 0;
@@ -1089,6 +1281,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         return b / n < 180 && Math.Abs(r - b) / n < 8 && Math.Abs(g - b) / n < 8;
     }
 
+    /// <summary>
+    /// Waits for the running decodes (dropping images made for them), then releases every texture's image.
+    /// </summary>
     public void Dispose()
     {
         foreach (var t in _pending)
@@ -1129,18 +1324,55 @@ sealed record TextureData(LoadedTexture Rgba, DdsFile? Compressed, int Dropped =
 /// </summary>
 public sealed class TextureShare
 {
+    /// <summary>
+    /// One shared image: its file, texture and users, and what it was loaded as.
+    /// </summary>
     internal sealed class Image
     {
+        /// <summary>
+        /// The file the image was loaded from.
+        /// </summary>
         public required string Path;
+
+        /// <summary>
+        /// The image.
+        /// </summary>
         public required GpuTexture Texture;
+
+        /// <summary>
+        /// How many textures use the image; it goes when the last releases it.
+        /// </summary>
         public int Refs = 1;
+
+        /// <summary>
+        /// The image's view levels, the top levels dropped, the quality level it was asked at, and the file's top size.
+        /// </summary>
         public int ViewLevels, Dropped, QualityLevel, FileWidth, FileHeight;
+
+        /// <summary>
+        /// The swizzle the image is sampled with.
+        /// </summary>
         public GpuSwizzle ViewSwizzle;
+
+        /// <summary>
+        /// Whether the image is a swizzled normal map, and whether its file can drop levels.
+        /// </summary>
         public bool Swizzled, Droppable;
+
+        /// <summary>
+        /// The video memory the image takes, in bytes.
+        /// </summary>
         public long Bytes;
     }
 
+    /// <summary>
+    /// The shared images by file (case-insensitive).
+    /// </summary>
     readonly Dictionary<string, List<Image>> _byPath = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The share of each device's caches.
+    /// </summary>
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IGpuContext, TextureShare> Shares = new();
 
     /// <summary>
@@ -1153,14 +1385,23 @@ public sealed class TextureShare
     /// </summary>
     public long ResidentBytes { get; internal set; }
 
+    /// <summary>
+    /// The shared images of <paramref name="path"/> (empty when none).
+    /// </summary>
     internal IReadOnlyList<Image> Of(string path) => _byPath.TryGetValue(path, out var list) ? list : [];
 
+    /// <summary>
+    /// Adds a new image (one user) to the share.
+    /// </summary>
     internal void Add(Image e)
     {
         if (!_byPath.TryGetValue(e.Path, out var list)) _byPath[e.Path] = list = [];
         list.Add(e);
     }
 
+    /// <summary>
+    /// Drops one user of <paramref name="e"/>: the last one disposes the image and forgets it.
+    /// </summary>
     internal void Release(Image e)
     {
         if (--e.Refs > 0) return;

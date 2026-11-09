@@ -13,6 +13,9 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public static unsafe class FramebufferCapture
 {
+    /// <summary>
+    /// Reads <paramref name="target"/> back and writes it to <paramref name="path"/> as a PNG, creating its folder.
+    /// </summary>
     public static void SavePng(GpuContext ctx, GpuTexture target, string path, int w, int h, bool topDown = false)
     {
         var picture = ReadPicture(ctx, target, w, h, topDown);

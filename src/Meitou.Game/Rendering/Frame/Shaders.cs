@@ -7,8 +7,14 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 static class Shaders
 {
+    /// <summary>
+    /// The size of the vertex shader's bone palette (<c>uBones</c>); a skinned mesh's bone indices stay below it.
+    /// </summary>
     public const int MaxBones = 128;
 
+    /// <summary>
+    /// The mesh vertex shader: skinned by up to four bones, passing the world position, normal, tangent, texture coordinates and vertex colour on.
+    /// </summary>
     public const string MeshVertex = """
         #version 330 core
         layout(location = 0) in vec3 aPosition;
@@ -48,6 +54,9 @@ static class Shaders
         }
         """;
 
+    /// <summary>
+    /// The mesh fragment shader: a directional light, optional normal and dual maps, with the sky's atmosphere functions included.
+    /// </summary>
     public static readonly string MeshFragment = "#version 330 core\n" + AtmosphereShaders.Functions + """
         in vec3 vWorld;
         in vec3 vNormal;
@@ -185,6 +194,9 @@ static class Shaders
         }
         """;
 
+    /// <summary>
+    /// The debug line vertex shader: a position and colour per vertex, moved by <c>uModel</c> and <c>uViewProjection</c>.
+    /// </summary>
     public const string LineVertex = """
         #version 330 core
         layout(location = 0) in vec3 aPosition;
@@ -195,6 +207,9 @@ static class Shaders
         void main() { vColour = aColour; gl_Position = uViewProjection * uModel * vec4(aPosition, 1.0); }
         """;
 
+    /// <summary>
+    /// The debug line fragment shader: the vertex colour, opaque.
+    /// </summary>
     public const string LineFragment = """
         #version 330 core
         in vec3 vColour;

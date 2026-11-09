@@ -9,6 +9,9 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 public sealed class WorldCamera
 {
+    /// <summary>
+    /// The point the camera orbits and looks at, in world units.
+    /// </summary>
     public Vector3 Target { get; set; }
 
     /// <summary>
@@ -20,7 +23,15 @@ public sealed class WorldCamera
     /// Radians above the horizon of the eye, as seen from the target.
     /// </summary>
     public float Pitch { get; set; } = 0.5f;
+
+    /// <summary>
+    /// The eye's distance from <see cref="Target"/>, in world units (<see cref="Zoom"/> keeps it 5 .. <see cref="ViewDistance"/>).
+    /// </summary>
     public float Distance { get; set; } = 2000;
+
+    /// <summary>
+    /// The vertical field of view in radians (50 degrees by default).
+    /// </summary>
     public float FieldOfView { get; set; } = 50 * MathF.PI / 180;
 
     /// <summary>
@@ -38,13 +49,29 @@ public sealed class WorldCamera
     /// </summary>
     public float EyeClearance { get; set; } = 100;
 
+    /// <summary>
+    /// The unit vector from the target towards the eye.
+    /// </summary>
     Vector3 Back => new(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
 
+    /// <summary>
+    /// Where the eye is: <see cref="Distance"/> from the target along the yaw and pitch.
+    /// </summary>
     public Vector3 Eye => Target + Back * Distance;
+
+    /// <summary>
+    /// The unit view direction, from the eye towards the target.
+    /// </summary>
     public Vector3 Forward => -Back;
 
+    /// <summary>
+    /// The view matrix from the eye to the target, Y up.
+    /// </summary>
     public Matrix4x4 View => Matrix4x4.CreateLookAt(Eye, Target, Vector3.UnitY);
 
+    /// <summary>
+    /// The near-plane rule: a quarter of the eye's height above the terrain (or of the distance, when smaller), 0.5 .. <see cref="MaxNear"/>.
+    /// </summary>
     public float Near => Math.Clamp(Math.Min(EyeClearance, Distance) * 0.25f, 0.5f, MaxNear);
 
     /// <summary>
@@ -86,6 +113,10 @@ public sealed class WorldCamera
         Target = eye - Back * Distance;
     }
 
+    /// <summary>
+    /// Moves the eye towards the target (positive <paramref name="steps"/>) or away, 15% a step, keeping the distance 5 .. <see
+    /// cref="ViewDistance"/>.
+    /// </summary>
     public void Zoom(float steps) => Distance = Math.Clamp(Distance * MathF.Pow(0.85f, steps), 5f, ViewDistance);
 
     /// <summary>

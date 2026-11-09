@@ -9,17 +9,40 @@ namespace Meitou.Game.Rendering.Frame;
 /// </summary>
 internal sealed class NativeProg : IDisposable
 {
+    /// <summary>
+    /// The context the program and its pipelines live in.
+    /// </summary>
     readonly IGpuContext _ctx;
+
+    /// <summary>
+    /// The native program, built through the frame's program cache.
+    /// </summary>
     public readonly GpuProgram P;
+
+    /// <summary>
+    /// The vertex input locations the reflection lists, one per slot (a matrix input takes several).
+    /// </summary>
     readonly int[] _locations;
+
+    /// <summary>
+    /// The scalar kind of each of <see cref="_locations"/>' inputs, for the dummy format a missing attribute reads.
+    /// </summary>
     readonly Meitou.Game.Rendering.Gpu.Shaders.ScalarKind[] _kinds;
 
     /// <summary>
     /// The program's own input locations (below the instance rows): 0 .. Own − 1.
     /// </summary>
     public readonly int Own;
+
+    /// <summary>
+    /// The layout <see cref="Layout"/> made last, returned again while the inputs stay the same.
+    /// </summary>
     VertexLayout? _last;
 
+    /// <summary>
+    /// Builds the program from GLSL <paramref name="vertex"/> and <paramref name="fragment"/> with descriptor set layouts <paramref name="own"/>; its
+    /// own inputs are those below <see cref="FoliageShaders.InstanceLocation"/>.
+    /// </summary>
     public NativeProg(IGpuContext ctx, NativeFrame frame, string vertex, string fragment, string name, params GpuSetLayout[] own)
     {
         this._ctx = ctx;
@@ -30,6 +53,10 @@ internal sealed class NativeProg : IDisposable
         Own = _locations.Where(l => l < FoliageShaders.InstanceLocation).DefaultIfEmpty(-1).Max() + 1;
     }
 
+    /// <summary>
+    /// The vertex layout for the GL attributes by location (<paramref name="byLocation"/>): each input the attribute's format and stride, a missing
+    /// one GL's constant (stride 0 where the device has constant vertex attributes, else 16). Reuses the last layout while nothing changed.
+    /// </summary>
     public VertexLayout Layout(ReadOnlySpan<LegacyProgram.Attribute?> byLocation)
     {
         Span<VertexInput> inputs = stackalloc VertexInput[_locations.Length];
@@ -64,6 +91,9 @@ internal sealed class NativeProg : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Drops the program's pipelines and the program.
+    /// </summary>
     public void Dispose()
     {
         _ctx.Pipelines.Forget(P);

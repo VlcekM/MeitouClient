@@ -15,20 +15,57 @@ public sealed class FrameProfiler : IDisposable
 {
     #region Tables
 
-    public enum Mode { Off, Gpu, Cpu }
+    /// <summary>
+    /// What the chart shows (<see cref="Showing"/>; F12 cycles it).
+    /// </summary>
+    public enum Mode
+    {
+        /// <summary>
+        /// Nothing: the profiler is hidden.
+        /// </summary>
+        Off,
 
+        /// <summary>
+        /// The GPU's stage times.
+        /// </summary>
+        Gpu,
+
+        /// <summary>
+        /// The render thread's stage times.
+        /// </summary>
+        Cpu,
+    }
+
+    /// <summary>
+    /// The frames kept and charted.
+    /// </summary>
     public const int History = 300;
+
+    /// <summary>
+    /// The frames in flight timed at once (each a slot of stamps), the most stage stamps and pre-frame stamps a frame takes, and the <see
+    /// cref="StageClock"/> stages.
+    /// </summary>
     internal const int Slots = 4, MaxStamps = 128, MaxPre = 96, Stages = 28;
 
-    // Series: the stages by StageClock index, then the GPU time outside the stamped stages (uploads, overlay), then the total.
+    /// <summary>
+    /// The series: the stages by <see cref="StageClock"/> index, then the GPU time outside the stamped stages (uploads, overlay), then the total.
+    /// </summary>
     internal const int Other = Stages, Total = Stages + 1, Series = Stages + 2;
 
-    // The panel's margin round it and its padding.
+    /// <summary>
+    /// The panel's margin round it.
+    /// </summary>
     const float Margin = 16;
+
+    /// <summary>
+    /// The panel's padding.
+    /// </summary>
     internal const float Pad = 12;
 
-    // The legend's top rows: a stage of its own, or a group of stages (shown as their sum) that a click on its row opens. The GPU's submit span
-    // is the window copy/tail; driver-wait is CPU only.
+    /// <summary>
+    /// The legend's top rows: a stage of its own, or a group of stages (shown as their sum) that a click on its row opens. The GPU's submit span is
+    /// the window copy/tail; driver-wait is CPU only.
+    /// </summary>
     internal static readonly (string Name, int[] Stages)[] Groups =
     [
         ("sim", [StageClock.Sim]),
@@ -41,8 +78,14 @@ public sealed class FrameProfiler : IDisposable
         ("other", [Other]), ("total", [Total]),
     ];
 
+    /// <summary>
+    /// Every series of <see cref="Groups"/>, in the legend's order.
+    /// </summary>
     internal static readonly int[] Order = Groups.SelectMany(g => g.Stages).ToArray();
 
+    /// <summary>
+    /// Each series' line colour, by series index.
+    /// </summary>
     internal static readonly Vector4[] Colours =
     [
         new(0.55f, 0.75f, 1.00f, 1), new(0.35f, 0.55f, 0.95f, 1), new(0.60f, 0.45f, 0.95f, 1), new(0.95f, 0.85f, 0.35f, 1),
@@ -58,35 +101,91 @@ public sealed class FrameProfiler : IDisposable
         new(0.50f, 0.50f, 0.50f, 1), new(1.00f, 1.00f, 1.00f, 1),
     ];
 
+    /// <summary>
+    /// The colour of the whole frame's line.
+    /// </summary>
     static readonly Vector4 FrameColour = new(1.00f, 0.55f, 0.10f, 1);
+
+    /// <summary>
+    /// The colour of the dim legend text.
+    /// </summary>
     internal static readonly Vector4 DimColour = new(0.7f, 0.7f, 0.68f, 1);
 
     #endregion
 
     #region Frame timing
 
+    /// <summary>
+    /// The whole frame's GPU time, when the backend measures it; null otherwise.
+    /// </summary>
     readonly Func<double>? _gpuFrameMs;
 
-    // Native timestamps: the context (VkGl provides the seam), the slots per stamp, and the record callback (no allocation per stamp).
+    /// <summary>
+    /// The native timestamps' context (VkGl provides the seam).
+    /// </summary>
     readonly GpuContext _native;
+
+    /// <summary>
+    /// The slot of the frame being made.
+    /// </summary>
     int _slot;
+
+    /// <summary>
+    /// The simulation's ms of the last <see cref="Outside(double)"/> call, taken into the next frame at <see cref="BeginFrame"/>.
+    /// </summary>
     double _outsideSim;
+
+    /// <summary>
+    /// When the last <see cref="BeginFrame"/> ran, in <see cref="System.Diagnostics.Stopwatch"/> ticks (0: never).
+    /// </summary>
     long _lastBegin;
+
+    /// <summary>
+    /// The whole frame's wall time from the last <see cref="BeginFrame"/> to this one, in ms.
+    /// </summary>
     double _frameMs;
 
-    // The whole frame's wall time, from one BeginFrame to the next (the simulation, the host, the waits for a free frame and for the GPU included):
-    // kept with the render thread's history, a frame late, and drawn on both charts.
+    /// <summary>
+    /// The whole frame's wall time, from one BeginFrame to the next (the simulation, the host, the waits for a free frame and for the GPU included):
+    /// kept with the render thread's history, a frame late, and drawn on both charts.
+    /// </summary>
     readonly float[] _frameTime = new float[History];
 
-    // The simulation's parts (Outside with parts): the names, how many lead as phases (the last of them the time outside the world's ticks), how many
-    // systems follow (listed by cost; the rest are parts of systems, listed in order), each one's ms and the world ticks per frame, listed under sim
-    // in the legend, not plotted. simNow is the newest call's, kept with the frame at EndFrame.
+    /// <summary>
+    /// The simulation's parts (Outside with parts): the names, how many lead as phases (the last of them the time outside the world's ticks), how
+    /// many systems follow (listed by cost; the rest are parts of systems, listed in order), each one's ms and the world ticks per frame, listed
+    /// under sim in the legend, not plotted. simNow is the newest call's, kept with the frame at EndFrame.
+    /// </summary>
     string[] _simNames = [];
+
+    /// <summary>
+    /// How many of the simulation's parts lead as phases, how many systems follow, and the path requests not answered yet.
+    /// </summary>
     int _simPhases, _simSystems, _simPaths;
+
+    /// <summary>
+    /// Each simulation part's ms per frame of the history.
+    /// </summary>
     float[][] _simParts = [];
+
+    /// <summary>
+    /// The world ticks run per frame of the history.
+    /// </summary>
     readonly float[] _simTicks = new float[History];
+
+    /// <summary>
+    /// The newest <see cref="Outside(double, int, string[], ReadOnlySpan{double}, int, int, int)"/> call's ms per part.
+    /// </summary>
     double[] _simNow = [];
+
+    /// <summary>
+    /// The newest call's world ticks.
+    /// </summary>
     int _simNowTicks;
+
+    /// <summary>
+    /// The simulation's rows as the legend lists them, refreshed each draw.
+    /// </summary>
     readonly List<(string Name, double Ms)> _simRows = [];
 
     /// <summary>
@@ -106,6 +205,9 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     public Action<long, double[], double>? OnGpuFrame { get; set; }
 
+    /// <summary>
+    /// A profiler of <paramref name="gpu"/>'s frames: timestamps around the stages (the pre-frame buffer's too), with its VRAM panel and spike run.
+    /// </summary>
     /// <param name="gpuFrameMs">The whole frame's GPU time, when the backend measures it (it includes the uploads before the first stage).</param>
     public FrameProfiler(GpuContext gpu, Func<double>? gpuFrameMs = null)
     {
@@ -218,25 +320,70 @@ public sealed class FrameProfiler : IDisposable
 
     #region GPU stamps
 
+    /// <summary>
+    /// Per slot and stamp, the stage the time up to the stamp goes to.
+    /// </summary>
     readonly int[,] _stampStage = new int[Slots, MaxStamps];
+
+    /// <summary>
+    /// Per slot, the stage stamps taken.
+    /// </summary>
     readonly int[] _stampCount = new int[Slots];
+
+    /// <summary>
+    /// Per slot, whether its stamps wait to be read.
+    /// </summary>
     readonly bool[] _pending = new bool[Slots];
+
+    /// <summary>
+    /// Per slot, whether the frame's submission had started (its tail then counts as submit, else as interface).
+    /// </summary>
     readonly bool[] _submitted = new bool[Slots];
+
+    /// <summary>
+    /// Per slot and stamp, the native timestamp's query.
+    /// </summary>
     readonly QuerySlot[,] _nativeStamps = new QuerySlot[Slots, MaxStamps];
+
+    /// <summary>
+    /// The query the record callback writes next.
+    /// </summary>
     QuerySlot _pendingStamp;
+
+    /// <summary>
+    /// Records <see cref="_pendingStamp"/> into a command list (one delegate, so a stamp allocates nothing).
+    /// </summary>
     readonly Action<IGpuCommandList> _recordStamp;
 
-    // The pre-frame command buffer's own chain of stamps (uploads, culls, bakes; PreStamp): per slot the stamp and the stage that owns the time since
-    // the one before.
+    /// <summary>
+    /// The pre-frame command buffer's own chain of stamps (uploads, culls, bakes; <see cref="PreStamp"/>): per slot the stamp and the stage that owns
+    /// the time since the one before.
+    /// </summary>
     readonly QuerySlot[,] _preSlots = new QuerySlot[Slots, MaxPre];
+
+    /// <summary>
+    /// Per slot and pre-frame stamp, the stage that owns the time since the one before.
+    /// </summary>
     readonly int[,] _preStage = new int[Slots, MaxPre];
+
+    /// <summary>
+    /// Per slot, the pre-frame stamps taken.
+    /// </summary>
     readonly int[] _preCount = new int[Slots];
+
+    /// <summary>
+    /// Per slot, the pre-frame buffer's end stamp.
+    /// </summary>
     readonly QuerySlot[] _slotPreEnd = new QuerySlot[Slots];
 
-    // Series of the frame being read (Collect), and the stamp slots of each frame in flight.
+    /// <summary>
+    /// The series of the frame being read (<see cref="Collect"/>).
+    /// </summary>
     readonly double[] _gpuFrame = new double[Series];
 
-    // Each profiled frame's own first and last stamps (its GPU total).
+    /// <summary>
+    /// Each profiled frame's own first and last stamps (its GPU total).
+    /// </summary>
     readonly (QuerySlot Begin, QuerySlot End)[] _slotWhole = new (QuerySlot, QuerySlot)[Slots];
 
     /// <summary>
@@ -252,6 +399,10 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     internal static void PreStamp(IGpuCommandList cmd, int stage) => StageClock.Profiler?.RecordPre(cmd, stage);
 
+    /// <summary>
+    /// Records a pre-frame stamp into <paramref name="cmd"/> for <paramref name="stage"/> (nothing past <see cref="MaxPre"/> or without a free
+    /// query).
+    /// </summary>
     void RecordPre(IGpuCommandList cmd, int stage)
     {
         int n = _preCount[_slot];
@@ -266,6 +417,10 @@ public sealed class FrameProfiler : IDisposable
         _preCount[_slot] = n + 1;
     }
 
+    /// <summary>
+    /// A stage stamp: the GPU time since the previous stamp goes to <paramref name="stage"/> (nothing past <see cref="MaxStamps"/> or without a free
+    /// query).
+    /// </summary>
     internal void Stamp(int stage)
     {
         int n = _stampCount[_slot];
@@ -283,6 +438,9 @@ public sealed class FrameProfiler : IDisposable
         _stampCount[_slot] = n + 1;
     }
 
+    /// <summary>
+    /// Reads stamp <paramref name="i"/> of slot <paramref name="s"/> in nanoseconds; false while it is not ready.
+    /// </summary>
     bool TryStamp(int s, int i, out ulong ns) => _native.Frame.Timestamps.TryRead(_nativeStamps[s, i], out ns);
 
     /// <summary>
@@ -376,9 +534,14 @@ public sealed class FrameProfiler : IDisposable
 
     #region Chart
 
+    /// <summary>
+    /// The render thread's and the GPU's ms per series and frame (<see cref="History"/> frames each, ring buffers).
+    /// </summary>
     readonly float[][] _cpu = NewHistory(), _gpu = NewHistory();
 
-    // The render thread's ms per part of upd-chars (StageClock.PartNames), listed under it in the legend, not plotted.
+    /// <summary>
+    /// The render thread's ms per part of upd-chars (<see cref="StageClock.PartNames"/>), listed under it in the legend, not plotted.
+    /// </summary>
     readonly float[][] _parts = StageClock.PartNames.Select(_ => new float[History]).ToArray();
 
     /// <summary>
@@ -390,6 +553,10 @@ public sealed class FrameProfiler : IDisposable
     /// The series plotted: the legend's rows', then the whole frame's.
     /// </summary>
     readonly List<(float[] Series, Vector4 Colour, float Thickness, int Head, int Count)> _plotted = [];
+
+    /// <summary>
+    /// The render thread's and the GPU's ring heads (the next frame's index) and frame counts.
+    /// </summary>
     int _cpuHead, _cpuCount, _gpuHead, _gpuCount;
 
     /// <summary>
@@ -421,6 +588,9 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     public bool Click(Vector2 at) => Showing != Mode.Off && _legend.Click(at);
 
+    /// <summary>
+    /// A ring buffer of <see cref="History"/> frames for every series.
+    /// </summary>
     static float[][] NewHistory()
     {
         var h = new float[Series][];
@@ -428,10 +598,19 @@ public sealed class FrameProfiler : IDisposable
         return h;
     }
 
+    /// <summary>
+    /// Whether a series is charted for the render thread (not GPU-only, not other).
+    /// </summary>
     internal static bool OnCpu(int series) => series != Other && !StageClock.GpuOnly(series);
 
+    /// <summary>
+    /// Whether a series is charted for the GPU (not CPU-only).
+    /// </summary>
     internal static bool OnGpu(int series) => !StageClock.CpuOnly(series);
 
+    /// <summary>
+    /// A series' legend label: its stage's name, "other" or "total".
+    /// </summary>
     internal static string Label(int series) => series switch { Other => "other", Total => "total", _ => StageClock.Names[series] };
 
     /// <summary>
@@ -693,6 +872,9 @@ public sealed class FrameProfiler : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// Stops being the <see cref="StageClock"/>'s profiler.
+    /// </summary>
     public void Dispose()
     {
         if (StageClock.Profiler == this) StageClock.Profiler = null;

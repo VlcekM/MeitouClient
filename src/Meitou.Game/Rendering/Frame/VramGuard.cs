@@ -19,12 +19,16 @@ namespace Meitou.Game.Rendering.Frame;
 /// refusal puts the guard into pressure at once. Streaming moves a gigabyte in a quarter of a second at its fastest, so the sampling alone
 /// would be too slow.</item>
 /// <item>At the default settings the use is a third of an 11 GB card's budget: the guard never leaves its idle state there
-/// (<see cref="Scale"/> 1 multiplies exactly, so pictures are unchanged).</item>
+/// (<see cref="RangeScale"/> 1 multiplies exactly, so pictures are unchanged).</item>
 /// </list>
 /// Render thread only (<see cref="Tick"/>, <see cref="Allows"/>); the properties may be read from the job threads.
 /// </summary>
 public sealed class VramGuard
 {
+    /// <summary>
+    /// The use fractions of the budget: pressure starts at <see cref="High"/> and ends under <see cref="Low"/>, the ranges return only under <see
+    /// cref="Recover"/>, and <see cref="Allows"/> refuses past <see cref="Ceiling"/>.
+    /// </summary>
     public const double High = 0.90, Low = 0.80, Recover = 0.74, Ceiling = 0.92;
 
     /// <summary>
@@ -36,17 +40,82 @@ public sealed class VramGuard
     /// The newest a sample must be for <see cref="Allows"/> to use it.
     /// </summary>
     const double FreshSeconds = 0.02;
+
+    /// <summary>
+    /// The range factor's step down (about 12%), its step up (4%) and its floor.
+    /// </summary>
     public const float StepDown = 0.88f, StepUp = 1.04f, MinScale = 0.15f;
 
+    /// <summary>
+    /// How far round the camera zones are still laid out and object meshes still decoded under <see cref="Pressure"/> (world units): a card that
+    /// never gets back under <see cref="Low"/> would otherwise never load the town the player stands in (#336). The range clamp's floor
+    /// (<see cref="MinScale"/> of the default object distance) is about this.
+    /// </summary>
+    public const float NearReach = 3000;
+
+    /// <summary>
+    /// The most the per-frame scratch may take the use to (<see cref="Allows(ulong)"/> stops at <see cref="Ceiling"/>).
+    /// </summary>
+    public const double PriorityCeiling = 0.945;
+
+    /// <summary>
+    /// Seconds between two squeezes (a refused scratch asks for a shorter range every frame it is refused; this paces them).
+    /// </summary>
+    const double SqueezeSeconds = 0.05;
+
+    /// <summary>
+    /// Reads the device-local memory in use and the budget.
+    /// </summary>
     readonly Func<(ulong Used, ulong Budget)> _sample;
+
+    /// <summary>
+    /// The time in seconds, monotonic.
+    /// </summary>
     readonly Func<double> _clock;
+
+    /// <summary>
+    /// Where the one log line goes.
+    /// </summary>
     readonly Action<string>? _log;
+
+    /// <summary>
+    /// When the last sample and the last range step were taken, and since when the use has stayed under <see cref="Recover"/> (seconds).
+    /// </summary>
     double _lastSample = double.NegativeInfinity, _lastStep, _calmSince;
+
+    /// <summary>
+    /// Whether the guard is under pressure (<see cref="Pressure"/>); read from the job threads.
+    /// </summary>
     volatile bool _pressure;
+
+    /// <summary>
+    /// The range factor (<see cref="RangeScale"/>).
+    /// </summary>
     float _scale = 1f;
+
+    /// <summary>
+    /// The last sample's use and budget, and the bytes <see cref="Allows"/> granted since it.
+    /// </summary>
     long _used, _budget, _reserved;
+
+    /// <summary>
+    /// Whether the one log line was written.
+    /// </summary>
     bool _logged;
 
+    /// <summary>
+    /// When the last squeeze was (seconds).
+    /// </summary>
+    double _lastSqueeze = double.NegativeInfinity;
+
+    /// <summary>
+    /// The allocator's refused allocations as the last step saw them.
+    /// </summary>
+    int _seenFailures;
+
+    /// <summary>
+    /// A guard that samples the video memory with <paramref name="sample"/>, idle until the use runs high.
+    /// </summary>
     /// <param name="sample">The device-local memory in use and the budget (<c>VulkanDevice.VideoMemory</c>).</param>
     /// <param name="clock">Seconds, monotonic (a stopwatch by default; tests drive it).</param>
     /// <param name="log">Where the one log line goes (the console by default).</param>
@@ -80,13 +149,6 @@ public sealed class VramGuard
     public bool Streaming => !_pressure;
 
     /// <summary>
-    /// How far round the camera zones are still laid out and object meshes still decoded under <see cref="Pressure"/> (world units): a card that
-    /// never gets back under <see cref="Low"/> would otherwise never load the town the player stands in (#336). The range clamp's floor
-    /// (<see cref="MinScale"/> of the default object distance) is about this.
-    /// </summary>
-    public const float NearReach = 3000;
-
-    /// <summary>
     /// Whether what lies within <see cref="NearReach"/> may start loading: always, but under pressure only while the use is under <see
     /// cref="PriorityCeiling"/>.
     /// </summary>
@@ -111,13 +173,25 @@ public sealed class VramGuard
     /// Times the guard entered pressure, the lowest <see cref="RangeScale"/> it reached, and allocations <see cref="Allows"/> refused.
     /// </summary>
     public int Activations { get; private set; }
+
+    /// <summary>
+    /// The lowest <see cref="RangeScale"/> reached.
+    /// </summary>
     public float LowestScale { get; private set; } = 1f;
+
+    /// <summary>
+    /// Allocations <see cref="Allows"/> refused.
+    /// </summary>
     public int Refusals { get; private set; }
 
     /// <summary>
     /// The smallest and largest driver budgets sampled (0 before the first): the driver's budget shrinks while other programs hold video memory.
     /// </summary>
     public long LowestBudget { get; private set; }
+
+    /// <summary>
+    /// The largest driver budget sampled (0 before the first).
+    /// </summary>
     public long HighestBudget { get; private set; }
 
     /// <summary>
@@ -144,6 +218,9 @@ public sealed class VramGuard
         if (now - _lastSample >= SampleSeconds) Sample(now);
     }
 
+    /// <summary>
+    /// Takes a sample now (forgetting what was reserved since the last), widens the budget's range seen, and moves the state.
+    /// </summary>
     void Sample(double now)
     {
         _lastSample = now;
@@ -201,11 +278,6 @@ public sealed class VramGuard
     public int LeanGrants { get; private set; }
 
     /// <summary>
-    /// The most the per-frame scratch may take the use to (<see cref="Allows(ulong)"/> stops at <see cref="Ceiling"/>).
-    /// </summary>
-    public const double PriorityCeiling = 0.945;
-
-    /// <summary>
     /// Scratch allocations granted above <see cref="Ceiling"/> (the use then is the scratch's, not the caches').
     /// </summary>
     public int PriorityGrants { get; private set; }
@@ -238,11 +310,6 @@ public sealed class VramGuard
     }
 
     /// <summary>
-    /// Seconds between two squeezes (a refused scratch asks for a shorter range every frame it is refused; this paces them).
-    /// </summary>
-    const double SqueezeSeconds = 0.05;
-
-    /// <summary>
     /// A frame's scratch was refused: the ranges that make it fall one step now instead of waiting for the next regular step (0.75 s), so a view
     /// is shortened within a few frames rather than left out for seconds. Only under pressure; the regular steps and the recovery go on as before.
     /// </summary>
@@ -254,14 +321,15 @@ public sealed class VramGuard
         LowestScale = Math.Min(LowestScale, _scale);
         Squeezes++;
     }
-    double _lastSqueeze = double.NegativeInfinity;
-    int _seenFailures;
 
     /// <summary>
     /// Range steps taken early because a scratch was refused.
     /// </summary>
     public int Squeezes { get; private set; }
 
+    /// <summary>
+    /// Enters pressure: lean allocator, the first range step due at once, and the log line the first time.
+    /// </summary>
     void Enter(double now, double fraction)
     {
         _pressure = true;
@@ -276,6 +344,10 @@ public sealed class VramGuard
             $"and falling while over {Low * 100:0}%); the statistics show it, this line is not repeated"));
     }
 
+    /// <summary>
+    /// Moves the state after a sample: enters pressure at <see cref="High"/> or on a refused allocation, leaves it under <see cref="Low"/>, steps the
+    /// ranges down under pressure and back up after the calm.
+    /// </summary>
     void Step(double now)
     {
         if (_budget <= 0) return;

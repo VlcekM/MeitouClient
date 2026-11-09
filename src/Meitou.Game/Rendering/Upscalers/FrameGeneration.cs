@@ -14,12 +14,39 @@ namespace Meitou.Game.Rendering.Upscalers;
 /// </summary>
 public sealed record FrameGenInputs
 {
+    /// <summary>
+    /// The post chain's depth and motion vectors, bottom-up.
+    /// </summary>
     public required GpuTexture Depth, Motion;
+
+    /// <summary>
+    /// The render size in pixels (before upscaling).
+    /// </summary>
     public required int RenderWidth, RenderHeight;
+
+    /// <summary>
+    /// The projection's jitter this frame, in pixels.
+    /// </summary>
     public required Vector2 JitterPixels;
+
+    /// <summary>
+    /// The camera's near and far planes, vertical field of view (radians), the frame time in seconds and the aspect ratio.
+    /// </summary>
     public required float Near, Far, FieldOfView, DeltaSeconds, Aspect;
+
+    /// <summary>
+    /// Whether the history is cut (a camera cut): the interpolation starts afresh.
+    /// </summary>
     public required bool Reset;
+
+    /// <summary>
+    /// The camera's position and its right, up and forward axes.
+    /// </summary>
     public required Vector3 Eye, Right, Up, Forward;
+
+    /// <summary>
+    /// The camera's projection, and the reprojection from this frame's clip space to the previous frame's.
+    /// </summary>
     public required Matrix4x4 ViewToClip, ClipToPreviousClip;
 }
 
@@ -74,79 +101,279 @@ public interface IFrameGenerator : IDisposable
 /// </summary>
 public sealed unsafe class FrameGeneration : IFrameGenerator
 {
+    #region Interop structures
+
+    /// <summary>
+    /// The descriptor types (ffx_api.h, ffx_framegeneration.h): create, configure, prepare, camera info, and the Vulkan backend.
+    /// </summary>
     const ulong CreateType = 0x00020001, ConfigureType = 0x00020002, PrepareType = 0x00020004, CameraInfoType = 0x0002000a, BackendVkType = 0x00000003;
+
+    /// <summary>
+    /// <c>FFX_FRAMEGENERATION_ENABLE_DEBUG_CHECKING</c>: the library checks its inputs.
+    /// </summary>
     const uint EnableDebugChecking = 1 << 6;
 
+    /// <summary>
+    /// <c>ffxCreateContextDescFrameGeneration</c>: the context's flags, the display and largest render sizes, and the back buffer's format.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct CreateDesc
     {
+        /// <summary>
+        /// The descriptor's type (<see cref="CreateType"/>) and the backend descriptor after it.
+        /// </summary>
         public Header Header;
+
+        /// <summary>
+        /// The creation flags (<see cref="EnableDebugChecking"/> when <c>MEITOU_UPSCALER_LOG=1</c>).
+        /// </summary>
         public uint Flags;
+
+        /// <summary>
+        /// The display size and the largest render size.
+        /// </summary>
         public Dimensions DisplaySize, MaxRenderSize;
+
+        /// <summary>
+        /// The swapchain's format (FfxApiSurfaceFormat).
+        /// </summary>
         public uint BackBufferFormat;
     }
+
+    /// <summary>
+    /// <c>ffxCreateBackendVKDesc</c>: the Vulkan device the context runs on.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct BackendVkDesc
     {
+        /// <summary>
+        /// The descriptor's type (<see cref="BackendVkType"/>).
+        /// </summary>
         public Header Header;
+
+        /// <summary>
+        /// The device, the physical device and the loader's <c>vkGetDeviceProcAddr</c>.
+        /// </summary>
         public nint Device, PhysicalDevice, DeviceProcAddr;
     }
+
+    /// <summary>
+    /// <c>ffxConfigureDescFrameGeneration</c>: the swapchain, the callbacks and whether this frame is generated.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct ConfigureDesc
     {
+        /// <summary>
+        /// The descriptor's type (<see cref="ConfigureType"/>).
+        /// </summary>
         public Header Header;
+
+        /// <summary>
+        /// The swapchain, the present callback and its context (unused: the layer composes the interface), and the generation callback (<see
+        /// cref="OnGenerate"/>) and its context (the context slot).
+        /// </summary>
         public nint SwapChain, PresentCallback, PresentCallbackUserContext, FrameGenerationCallback, FrameGenerationCallbackUserContext;
+
+        /// <summary>
+        /// Whether frame generation is on for the frame, and whether its work may run asynchronously.
+        /// </summary>
         public byte FrameGenerationEnabled, AllowAsyncWorkloads;
+
+        /// <summary>
+        /// The colour without the interface (unused: the world is presented alone).
+        /// </summary>
         public Resource HudLessColor;
+
+        /// <summary>
+        /// The configuration flags.
+        /// </summary>
         public uint Flags;
+
+        /// <summary>
+        /// Whether only the generated frames are presented.
+        /// </summary>
         public byte OnlyPresentGenerated;
+
+        /// <summary>
+        /// The part of the display generated (zero: the whole display).
+        /// </summary>
         public Rect GenerationRect;
+
+        /// <summary>
+        /// The frame's number (<see cref="FrameId"/>).
+        /// </summary>
         public ulong FrameId;
     }
+
+    /// <summary>
+    /// <c>ffxDispatchDescFrameGenerationPrepare</c>: one rendered frame's depth, motion and camera.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct PrepareDesc
     {
+        /// <summary>
+        /// The descriptor's type (<see cref="PrepareType"/>) and the camera info after it.
+        /// </summary>
         public Header Header;
+
+        /// <summary>
+        /// The frame's number.
+        /// </summary>
         public ulong FrameId;
+
+        /// <summary>
+        /// The dispatch flags.
+        /// </summary>
         public uint Flags;
+
+        /// <summary>
+        /// The command buffer the dispatch is recorded into.
+        /// </summary>
         public nint CommandList;
+
+        /// <summary>
+        /// The render size.
+        /// </summary>
         public Dimensions RenderSize;
+
+        /// <summary>
+        /// The jitter in pixels (y negated for the flipped rows), and the scale that turns our motion vectors into FFX's.
+        /// </summary>
         public Coords JitterOffset, MotionVectorScale;
+
+        /// <summary>
+        /// The frame time in milliseconds.
+        /// </summary>
         public float FrameTimeDelta;
+
+        /// <summary>
+        /// Unused (the reset is the frame number's step).
+        /// </summary>
         public byte UnusedReset;
+
+        /// <summary>
+        /// The camera's near and far planes, its vertical field of view, and the view space to metres factor (0.1: Kenshi units taken as decimetres).
+        /// </summary>
         public float CameraNear, CameraFar, CameraFovAngleVertical, ViewSpaceToMetersFactor;
+
+        /// <summary>
+        /// The depth and the motion vectors, flipped top-down.
+        /// </summary>
         public Resource Depth, MotionVectors;
     }
+
+    /// <summary>
+    /// Three floats: a position or direction in <see cref="CameraInfoDesc"/>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Float3
     {
+        /// <summary>
+        /// The components.
+        /// </summary>
         public float X, Y, Z;
     }
 
+    /// <summary>
+    /// The camera info chained to the prepare dispatch (<see cref="CameraInfoType"/>): the camera's position and axes.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct CameraInfoDesc
     {
+        /// <summary>
+        /// The descriptor's type (<see cref="CameraInfoType"/>).
+        /// </summary>
         public Header Header;
+
+        /// <summary>
+        /// The camera's position and its up, right and forward axes.
+        /// </summary>
         public Float3 Position, Up, Right, Forward;
     }
 
+    #endregion
+
+    #region Context
+
+    /// <summary>
+    /// The device context the copies are recorded on.
+    /// </summary>
     readonly GpuContext _ctx;
+
+    /// <summary>
+    /// The Vulkan device.
+    /// </summary>
     readonly VulkanDevice _device;
+
+    /// <summary>
+    /// The FFX swapchain layer the frames are presented through.
+    /// </summary>
     readonly FfxSwapchain _layer;
+
+    /// <summary>
+    /// <c>ffxCreateContext</c>.
+    /// </summary>
     readonly delegate* unmanaged<nint*, void*, void*, uint> _createContext;
+
+    /// <summary>
+    /// <c>ffxDestroyContext</c>.
+    /// </summary>
     readonly delegate* unmanaged<nint*, void*, uint> _destroyContext;
+
+    /// <summary>
+    /// <c>ffxConfigure</c>.
+    /// </summary>
     readonly delegate* unmanaged<nint*, void*, uint> _configure;
-    static delegate* unmanaged<nint*, void*, uint> s_dispatchFunction;   // the callback has no way to carry it
+
+    /// <summary>
+    /// <c>ffxDispatch</c>: static, since the generation callback has no way to carry it.
+    /// </summary>
+    static delegate* unmanaged<nint*, void*, uint> s_dispatchFunction;
+
+    /// <summary>
+    /// Whether the library's debug checking and messages are on (<c>MEITOU_UPSCALER_LOG=1</c>).
+    /// </summary>
     readonly bool _debug;
 
-    // Kept as long as the context (ffx_api.h); the slot also is the callback's user context.
+    /// <summary>
+    /// The create descriptor, kept as long as the context (ffx_api.h).
+    /// </summary>
     readonly CreateDesc* _createDesc;
+
+    /// <summary>
+    /// The backend descriptor, kept as long as the context (ffx_api.h).
+    /// </summary>
     readonly BackendVkDesc* _backendDesc;
+
+    /// <summary>
+    /// The context's slot, kept as long as the context: also the generation callback's user context (0: no context).
+    /// </summary>
     readonly nint* _contextSlot;
+
+    /// <summary>
+    /// The display size and back buffer format the context was made for.
+    /// </summary>
     (int, int, uint) _contextSize;
+
+    /// <summary>
+    /// The depth, motion and interface pictures flipped top-down for the layer.
+    /// </summary>
     GpuTexture? _depthFlipped, _motionFlipped, _uiFlipped;
+
+    /// <summary>
+    /// The number of the last frame handed over (<see cref="FrameId"/>).
+    /// </summary>
     ulong _frameId;
+
+    /// <summary>
+    /// The frame numbering's next step restarts the logic; this frame's number is assigned; the context could not be made or a call failed (off for
+    /// the run); the layer went away; an interface picture is registered; the one-time log lines were written.
+    /// </summary>
     bool _resetNext = true, _idAssigned, _failed, _layerGone, _uiRegistered, _loggedActive, _loggedUnprepared;
+
+    /// <summary>
+    /// The display size of the frame being made.
+    /// </summary>
     int _displayWidth, _displayHeight;
 
     /// <summary>
@@ -170,6 +397,9 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     /// </summary>
     public ulong FrameId => _frameId;
 
+    /// <summary>
+    /// Binds the library's functions, allocates the descriptors that live with the context, and follows the layer's disposal.
+    /// </summary>
     FrameGeneration(GpuContext ctx, FfxSwapchain layer, nint library)
     {
         this._ctx = ctx;
@@ -228,6 +458,9 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         }
     }
 
+    /// <summary>
+    /// A message callback for the library, errors and warnings to the console (registered nowhere at present).
+    /// </summary>
     [UnmanagedCallersOnly]
     static void OnMessage(uint type, char* message)
     {
@@ -235,6 +468,9 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         Console.WriteLine($"frame generation  {level}: {FsrUpscaler.WideString(message)}");
     }
 
+    /// <summary>
+    /// Makes the context for the display size and the layer's format (again when they changed); false when it cannot be made.
+    /// </summary>
     bool EnsureContext(int displayW, int displayH)
     {
         var size = (displayW, displayH, _layer.SurfaceFormat);
@@ -271,6 +507,9 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         return true;
     }
 
+    /// <summary>
+    /// Destroys the context: configured off first (<paramref name="configureOff"/>), after the device has gone idle.
+    /// </summary>
     void DestroyContext(bool configureOff = true)
     {
         if (*_contextSlot == 0) return;
@@ -282,6 +521,10 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         _destroyContext(&c, null);
         *_contextSlot = 0;
     }
+
+    #endregion
+
+    #region Frames
 
     /// <summary>
     /// Starts a frame of <paramref name="displayW"/> × <paramref name="displayH"/>; <paramref name="wanted"/> is false under the loading screen and
@@ -296,6 +539,9 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         if (wanted && !Wanted) _failed = true;   // the context could not be made: off for the rest of the run
     }
 
+    /// <summary>
+    /// This frame's number: assigned once a frame, stepping by 2 (a restart) on a cut or after frames without frame generation, else by 1.
+    /// </summary>
     ulong NextId(bool reset)
     {
         if (!_idAssigned)
@@ -327,6 +573,9 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         vk.CmdBlitImage(cb, src, ImageLayout.General, dst, ImageLayout.General, 1, &blit, Filter.Nearest);
     }
 
+    /// <summary>
+    /// <see cref="Target(GpuContext, ref GpuTexture?, InternalFormat, int, int, string)"/> on this generator's context.
+    /// </summary>
     GpuTexture Target(ref GpuTexture? slot, InternalFormat format, int w, int h, string name) => Target(_ctx, ref slot, format, w, h, name);
 
     /// <summary>
@@ -399,6 +648,10 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         return true;
     }
 
+    /// <summary>
+    /// Configures the context for frame <paramref name="id"/> with frame generation on or off; true when there is no context yet or the call
+    /// succeeds.
+    /// </summary>
     bool ConfigureFrame(bool enabled, ulong id)
     {
         if (*_contextSlot == 0) return true;   // no context yet (never wanted so far): nothing to configure
@@ -469,6 +722,13 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         return Enabled;
     }
 
+    #endregion
+
+    #region Disposal
+
+    /// <summary>
+    /// Configures the context off (unless the layer went first) and destroys it, then frees the flipped pictures and the descriptors.
+    /// </summary>
     public void Dispose()
     {
         _layer.Disposing -= OnLayerDisposing;
@@ -480,4 +740,6 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         NativeMemory.Free(_backendDesc);
         NativeMemory.Free(_contextSlot);
     }
+
+    #endregion
 }

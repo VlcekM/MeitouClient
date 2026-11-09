@@ -11,11 +11,38 @@ namespace Meitou.Game.Rendering.Gi;
 /// </summary>
 internal interface IProbeGi : IDisposable
 {
+    /// <summary>
+    /// Whether the world shaders take their ambient from the probes (the <c>gi</c> switch).
+    /// </summary>
     bool Enabled { get; set; }
+
+    /// <summary>
+    /// False: indoor surfaces keep the original ambient while outdoor surfaces still use GI.
+    /// </summary>
     bool InteriorEnabled { get; set; }
+
+    /// <summary>
+    /// False while the frame does not update the probes (the bench's gi-scene switch): the shaders then do not read them.
+    /// </summary>
     bool Active { get; set; }
+
+    /// <summary>
+    /// False: the probes are updated but the world's shading does not read them (the bench's gi-shade switch, the reads' cost).
+    /// </summary>
     bool Shade { get; set; }
+
+    /// <summary>
+    /// How much the probes replace the sky's light (1: fully, 0: not at all; <c>--gi-strength</c>).
+    /// </summary>
     float Strength { get; set; }
+
+    /// <summary>
+    /// Updates the probes for the eye at <paramref name="eye"/> from the terrain heights, the objects, the lamps and the fog volumes.
+    /// </summary>
     void Update(Vector3 eye, HeightSnapshot heights, WorldObjectRenderer? objects, WorldLamps? lamps, FogVolumes? fog);
+
+    /// <summary>
+    /// A line describing the probes' layout and state, for the log.
+    /// </summary>
     string Describe();
 }

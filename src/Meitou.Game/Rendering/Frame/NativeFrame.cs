@@ -21,19 +21,74 @@ namespace Meitou.Game.Rendering.Frame;
 /// </remarks>
 sealed unsafe class NativeFrame : IDisposable
 {
+    /// <summary>
+    /// The context the programs, the frame's constants and the bindless entries belong to.
+    /// </summary>
     readonly IGpuContext _ctx;
+
+    /// <summary>
+    /// The alignment the constant slices are written at: the device's uniform buffer alignment, at least 16.
+    /// </summary>
     readonly ulong _align;
+
+    /// <summary>
+    /// The frame constants as the last <see cref="Bind"/> built them.
+    /// </summary>
     FrameConstants _constants;
+
+    /// <summary>
+    /// The frame constants as last written into the frame's constants (<see cref="_frameSlice"/>).
+    /// </summary>
     FrameConstants _written;
+
+    /// <summary>
+    /// The frame <see cref="_written"/> was written in; -1: never.
+    /// </summary>
     long _writtenFrame = -1;
+
+    /// <summary>
+    /// Where the frame block was last written in the frame's constants.
+    /// </summary>
     Transient _frameSlice;
+
+    /// <summary>
+    /// The frame <see cref="_bones"/> was written in; -1: never.
+    /// </summary>
     long _bonesFrame = -1;
+
+    /// <summary>
+    /// Where this frame's empty bone block is in the frame's constants.
+    /// </summary>
     Transient _bones;
+
+    /// <summary>
+    /// The frame globals' version <see cref="_uniforms"/>, <see cref="_textures"/> and <see cref="_blocks"/> were resolved at; -1: never.
+    /// </summary>
     int _resolvedVersion = -1;
+
+    /// <summary>
+    /// The frame globals' getter of each of <see cref="FrameConstants.Uniforms"/>; null where none is published.
+    /// </summary>
     FrameGlobals.Uniform?[] _uniforms = [];
+
+    /// <summary>
+    /// The frame globals' getter of each of <see cref="FrameConstants.Textures"/>; null where none is published.
+    /// </summary>
     Func<SampledTexture>?[] _textures = [];
+
+    /// <summary>
+    /// The frame globals' getter of each shadow block in <see cref="Blocks"/>; null where none is published.
+    /// </summary>
     Func<GpuBufferBinding>?[] _blocks = [];
+
+    /// <summary>
+    /// Each frame texture's bindless entry: the texture it was made for, its index, and whether it is held.
+    /// </summary>
     readonly (SampledTexture Texture, uint Index, bool Has)[] _entries = new (SampledTexture, uint, bool)[FrameConstants.Textures.Length];
+
+    /// <summary>
+    /// The kind of dummy (2D, cube, shadow, arrayed) each frame texture falls back to where the globals give none.
+    /// </summary>
     readonly SamplerInfo[] _standIns;
 
     /// <summary>
@@ -45,6 +100,10 @@ sealed unsafe class NativeFrame : IDisposable
         (ShadowShaders.CasterBlock, NativeShaders.CasterBinding, 16),
         (MeitouShadowShaders.Block, NativeShaders.MeitouBinding, MeitouShadowShaders.BlockBytes),
     ];
+
+    /// <summary>
+    /// The skinning block's size: 128 matrices of 64 bytes.
+    /// </summary>
     const int BonesBytes = 128 * 64;
 
     /// <summary>
@@ -58,6 +117,9 @@ sealed unsafe class NativeFrame : IDisposable
     /// </summary>
     readonly int _extraStorage;
 
+    /// <summary>
+    /// Makes set 0's layout (six uniform buffers, then <paramref name="extraStorage"/> storage buffers) and the stand-ins of the frame textures.
+    /// </summary>
     public NativeFrame(IGpuContext ctx, int extraStorage = 0)
     {
         this._ctx = ctx;
@@ -96,6 +158,9 @@ sealed unsafe class NativeFrame : IDisposable
     /// </summary>
     public FrameConstants Constants => _constants;
 
+    /// <summary>
+    /// Looks the frame globals' getters up again (their version changed).
+    /// </summary>
     void Resolve()
     {
         var g = _ctx.Globals;
@@ -106,7 +171,7 @@ sealed unsafe class NativeFrame : IDisposable
     }
 
     /// <summary>
-    /// Once per native segment, before its draws: binds set 1 (the bindless table) and set 0 for <paramref name="layout"/> (any native
+    /// Once per native segment, before its draws: binds set 1 (the bindless table) and set 0 for <paramref name="program"/>'s layout (any native
     /// program's: they are all compatible) with this segment's frame constants, shadow blocks and <paramref name="view"/>.
     /// </summary>
     public void Bind(IGpuCommandList cmd, GpuProgram program, in ViewConstants view, ReadOnlySpan<GpuBufferBinding> extra = default)
@@ -214,6 +279,9 @@ sealed unsafe class NativeFrame : IDisposable
         return e.Index;
     }
 
+    /// <summary>
+    /// Frees the frame textures' bindless entries.
+    /// </summary>
     public void Dispose()
     {
         for (int i = 0; i < _entries.Length; i++)
@@ -227,13 +295,30 @@ sealed unsafe class NativeFrame : IDisposable
 /// </summary>
 unsafe struct FrameBinding
 {
+    /// <summary>
+    /// The most bindings set 0 has: the six uniform buffers and the storage buffers after them.
+    /// </summary>
     public const int MaxBindings = 10;
+
+    /// <summary>
+    /// Room for <see cref="MaxBindings"/> bindings inline, so the value can be copied to a recording job.
+    /// </summary>
     [System.Runtime.CompilerServices.InlineArray(MaxBindings)]
-    public struct BindingArray { GpuBinding _first; }
+    public struct BindingArray
+    {
+        /// <summary>
+        /// The first element: the runtime lays the others out after it.
+        /// </summary>
+        GpuBinding _first;
+    }
 
     /// <summary>
     /// Set 0's bindings: the uniform buffers 0 to 5 and the storage buffers after them.
     /// </summary>
     public BindingArray Bindings;
+
+    /// <summary>
+    /// How many of <see cref="Bindings"/> are used.
+    /// </summary>
     public int Count;
 }
