@@ -63,6 +63,9 @@ internal sealed unsafe class GiProbes : IDisposable
     Constants lastConstants;
     WorldLamps? lastLamps;
 
+    /// <summary>The lamps' tiles as the traced light binds them (set with the frame's hit images).</summary>
+    internal DescriptorImageInfo TileImage { get; private set; }
+
     /// <summary>Whether the world shaders take their ambient from the probes (the <c>gi</c> switch).</summary>
     public bool Enabled { get; set; } = true;
     /// <summary>How much of the last value a probe keeps each frame (0.97: about 30 frames to settle).</summary>
@@ -233,7 +236,7 @@ internal sealed unsafe class GiProbes : IDisposable
             (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
             (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
             (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
-            (13, DescriptorType.StorageBuffer), (14, DescriptorType.StorageBuffer),
+            (13, DescriptorType.StorageBuffer), (14, DescriptorType.StorageBuffer), (18, DescriptorType.CombinedImageSampler),
             .. clouds ? new (uint, DescriptorType)[] { (15, DescriptorType.CombinedImageSampler), (16, DescriptorType.CombinedImageSampler) } : [],
         ];
         var trace = ctx.Shaders.Compute(GiShaders.ProbeTrace(rays, relocate, clouds), "gi probe trace " + rays, set0, GpuSetLayout.Bindless);
@@ -444,7 +447,7 @@ internal sealed unsafe class GiProbes : IDisposable
             (traceConstants, traceFrame) = (uniform, ctx.Frame.Number);
             var stateInfo = new DescriptorBufferInfo(ctx.Device.BufferAt(state.Handle.Index), 0, state.Size);
             var listInfo = new DescriptorBufferInfo(lists[slot].Buffer, 0, (ulong)Math.Max(listed, 1) * 4);
-            var writes = stackalloc WriteDescriptorSet[17];
+            var writes = stackalloc WriteDescriptorSet[18];
             writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
             writes[1] = Buffer(1, DescriptorType.StorageBuffer, &records);
             writes[2] = Buffer(2, DescriptorType.StorageBuffer, &rayInfo);
@@ -453,7 +456,9 @@ internal sealed unsafe class GiProbes : IDisposable
                 writes[4 + i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(4 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[i] };
             writes[13] = Buffer(13, DescriptorType.StorageBuffer, &stateInfo);
             writes[14] = Buffer(14, DescriptorType.StorageBuffer, &listInfo);
-            int count = 15;
+            var tiles = TileImage;
+            writes[15] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 18, DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &tiles };
+            int count = 16;
             if (CloudShadows)
             {
                 for (int i = 0; i < 2; i++)
@@ -520,6 +525,7 @@ internal sealed unsafe class GiProbes : IDisposable
             images[8] = new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lampData.View().Index), ImageLayout.General);
         }
         else images[6] = images[7] = images[8] = images[2];
+        TileImage = lamps is null ? images[2] : new DescriptorImageInfo(ctx.Device.SamplerAt(lamps.NearestSampler.Index), ctx.Device.ViewAt(lamps.TilesTexture.View().Index), ImageLayout.General);
         if (!CloudShadows) return;
         images[9] = Image(g, "uAtmoClouds", cube: false);
         images[10] = Image(g, "uAtmoCloudsTile", cube: false);
@@ -584,7 +590,9 @@ internal sealed unsafe class GiProbes : IDisposable
         for (int i = 0; i < traceImages.Length; i++) images[i] = traceImages[i];
         images[9] = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(frame.Surface.View().Index), ImageLayout.General);
         images[10] = new DescriptorImageInfo(ctx.Device.SamplerAt(nearest.Index), ctx.Device.ViewAt(frame.Depth.View().Index), ImageLayout.General);
-        var writes = stackalloc WriteDescriptorSet[16];
+        var tiles = TileImage;
+        var writes = stackalloc WriteDescriptorSet[17];
+        writes[16] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 18, DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &tiles };
         writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
         writes[1] = Buffer(1, DescriptorType.StorageBuffer, &records);
         writes[2] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &hit };
@@ -595,7 +603,7 @@ internal sealed unsafe class GiProbes : IDisposable
         cmd.BeginLabel("gi reflect");
         cmd.Barrier(BarrierBatch.Full);
         cmd.BindPipeline(reflectPipeline);
-        cmd.PushDescriptors(reflectProgram.Value, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 16), GpuBindPoint.Compute);
+        cmd.PushDescriptors(reflectProgram.Value, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 17), GpuBindPoint.Compute);
         cmd.BindBindlessTable(reflectProgram.Value, 1, GpuBindPoint.Compute);
         cmd.Dispatch((uint)((frame.Hit.Desc.Width + 7) / 8), (uint)((frame.Hit.Desc.Height + 7) / 8));
         cmd.Barrier(BarrierBatch.Full);
@@ -620,7 +628,7 @@ internal sealed unsafe class GiProbes : IDisposable
         (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
         (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
         (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
-        (13, DescriptorType.CombinedImageSampler), (14, DescriptorType.CombinedImageSampler), (15, DescriptorType.UniformBuffer),
+        (13, DescriptorType.CombinedImageSampler), (14, DescriptorType.CombinedImageSampler), (15, DescriptorType.UniformBuffer), (18, DescriptorType.CombinedImageSampler),
     ];
 
     static WriteDescriptorSet Buffer(uint binding, DescriptorType type, DescriptorBufferInfo* info) =>

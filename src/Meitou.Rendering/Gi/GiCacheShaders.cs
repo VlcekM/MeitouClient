@@ -302,9 +302,7 @@ static class GiCacheShaders
         layout(set = 0, binding = 14, std430) readonly buffer Active { uint listed[]; };
         layout(set = 0, binding = 17, std430) buffer Ring { uint ring[]; };
         #define LAMP_DIFFUSE_ONLY
-        float giLampVisibility(vec3 world, vec3 n, vec3 toLamp, int indoor, uint emitter);
-        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) giLampVisibility(world, n, toLamp, indoor, emitter)
-        {{LampShaders.Defines}}{{LampShaders.Lighting}}
+        {{GiShaders.LampTileTrace}}
         {{GiShaders.ProbeSampling}}
         {{GiShaders.HitFunctions}}
         {{Hashes}}

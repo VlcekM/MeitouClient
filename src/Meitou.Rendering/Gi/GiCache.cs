@@ -83,7 +83,7 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
             (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
             (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
             (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
-            (13, DescriptorType.StorageBuffer), (14, DescriptorType.StorageBuffer), (17, DescriptorType.StorageBuffer),
+            (13, DescriptorType.StorageBuffer), (14, DescriptorType.StorageBuffer), (17, DescriptorType.StorageBuffer), (18, DescriptorType.CombinedImageSampler),
             .. clouds ? new (uint, DescriptorType)[] { (15, DescriptorType.CombinedImageSampler), (16, DescriptorType.CombinedImageSampler) } : [],
         ];
         var program = ctx.Shaders.Compute(GiCacheShaders.Trace(relocate, clouds), "gi cache trace", set0, GpuSetLayout.Bindless);
@@ -221,7 +221,8 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
         buffers[1] = Whole(sums!);
         buffers[2] = Whole(active!);
         buffers[3] = Whole(ring!);
-        var writes = stackalloc WriteDescriptorSet[18];
+        var writes = stackalloc WriteDescriptorSet[19];
+        var tiles = probes.TileImage;
         writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
         writes[1] = BufferWrite(1, DescriptorType.StorageBuffer, &records);
         writes[2] = BufferWrite(2, DescriptorType.StorageBuffer, &buffers[0]);
@@ -230,7 +231,8 @@ sealed unsafe class GiCache(GpuContext ctx, GiScene scene, GiProbes probes) : ID
         writes[13] = BufferWrite(13, DescriptorType.StorageBuffer, &buffers[1]);
         writes[14] = BufferWrite(14, DescriptorType.StorageBuffer, &buffers[2]);
         writes[15] = BufferWrite(17, DescriptorType.StorageBuffer, &buffers[3]);
-        int count = 16;
+        writes[16] = ImageWrite(18, &tiles);
+        int count = 17;
         if (clouds)
             for (int i = 0; i < 2; i++) writes[count++] = ImageWrite((uint)(15 + i), &images[9 + i]);
         cmd.BindPipeline(trace.Pipeline);

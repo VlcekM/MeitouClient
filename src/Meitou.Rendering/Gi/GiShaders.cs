@@ -191,6 +191,23 @@ static class GiShaders
         """;
 
     /// <summary>What a shader that shades ray hits needs (the probe trace, <see cref="GiCacheShaders.Trace"/>): the vertex fetches, the ambient lookups, the cut-out test and the lamps' shadow rays. Needs its names in scope: <c>geometries</c>, <c>maps</c>, <c>origin</c>, <c>uScene</c>.</summary>
+    /// <summary>
+    /// The lamps' visibility at the hits of the traced light: the lamp's tile when it has one (every lamp, the same still world the direct light sees, one filtered lookup), else <c>giLampVisibility</c>,
+    /// the old rule (a ray for an interior lamp, none for the others). Binding 18 is the tiles.
+    /// </summary>
+    internal static readonly string LampTileTrace = $$"""
+        layout(set = 0, binding = 18) uniform sampler2D uLampTiles;
+        float giLampVisibility(vec3 world, vec3 n, vec3 toLamp, int indoor, uint emitter);
+        #define LAMP_TILE_CHEAP
+        {{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
+        float giLampSeen(int lamp, vec3 world, vec3 n, vec3 toLamp, float d, int indoor, uint emitter)
+        {
+            return texelFetch(uLightData, ivec2(4, lamp), 0).w != 0.0 ? lampTileVisibility(lamp, world, toLamp, d, n) : giLampVisibility(world, n, toLamp, indoor, emitter);
+        }
+        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) giLampSeen(lamp, world, n, toLamp, d, indoor, emitter)
+        {{LampShaders.Lighting}}
+        """;
+
     internal static readonly string HitFunctions = $$"""
         {{HitBuffers}}
 
@@ -313,9 +330,7 @@ static class GiShaders
         layout(set = 0, binding = 11) uniform sampler2D uLightIndex;
         layout(set = 0, binding = 12) uniform sampler2D uLightData;
         #define LAMP_DIFFUSE_ONLY
-        float giLampVisibility(vec3 world, vec3 n, vec3 toLamp, int indoor, uint emitter);
-        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) giLampVisibility(world, n, toLamp, indoor, emitter)
-        {{LampShaders.Defines}}{{LampShaders.Lighting}}
+        {{LampTileTrace}}
         // The bounces read the probes without the visibility test: a quarter of the fetches, and the light seen in a bounce is blurred anyway.
         #define GI_NO_VISIBILITY
         {{ProbeSampling}}
@@ -369,9 +384,7 @@ static class GiShaders
         layout(set = 0, binding = 11) uniform sampler2D uLightIndex;
         layout(set = 0, binding = 12) uniform sampler2D uLightData;
         #define LAMP_DIFFUSE_ONLY
-        float giLampVisibility(vec3 world, vec3 n, vec3 toLamp, int indoor, uint emitter);
-        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) giLampVisibility(world, n, toLamp, indoor, emitter)
-        {{LampShaders.Defines}}{{LampShaders.Lighting}}
+        {{LampTileTrace}}
         // The bounces read the probes without the visibility test: a quarter of the fetches, and the light seen in a bounce is blurred anyway.
         #define GI_NO_VISIBILITY
         {{ProbeSampling}}

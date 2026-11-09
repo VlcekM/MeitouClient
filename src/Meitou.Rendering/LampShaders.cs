@@ -116,8 +116,8 @@ static class LampShaders
             int place = int(t.z), row = place / 128;
             ivec2 corner = ivec2(place - row * 128, row) * LAMP_TILE_UNIT;
             vec2 st = uv * float(side);
-            #ifdef LAMP_SKIN
-            // A character's skin: one filtered lookup. Its shadows fall on a small, busy surface, and characters overlap on screen by the dozen in a fight.
+            #if defined(LAMP_SKIN) || defined(LAMP_TILE_CHEAP)
+            // A character's skin, a hit of the traced light: one filtered lookup. Small, busy surfaces that overlap by the dozen, a light blurred anyway.
             return lampTileLit(corner, side, st, (d - margin - 2.0) / reach);
             #endif
 
