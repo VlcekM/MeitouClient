@@ -192,7 +192,7 @@ goes back to deciding at once for want of a technique (`FUN_140609290`, **Verifi
 the stumble state (8) is planned only with a clip (`FUN_140665490`) (**Verified**); Meitou matches (`AnimationSystem.ChooseStumble` returns none for an animal).
 Meitou: `CombatSystem.MostAdvanced` (the followed swing; an exact tie keeps the followed one, else the lower slot, since the grid's order is not stable), `React` (start),
 `Reconsider` (the update; it follows the furthest swing during a dodge too, as `FUN_140609c70` updates +0x1a8 before its technique checks), `ReactionEnds` (a blow counts as on its way until the attacker's state shows it struck: strikes apply after every Act, a far attacker's at its own step), `CombatTuning.DefenceStartProgress`. A held block's progress
-is clamped at 1, so it keeps blocking. A blow decided again draws afresh (`ChooseDefence` salts the blow's roll counter with the tick). The zone list: `CombatSystem.InZone`, double-buffered,
+is clamped at 1, so it keeps blocking. A blow decided again draws afresh (`ChooseDefence` salts the blow's roll counter with the tick). The zone list: `AttackZoneLists.Contains`, double-buffered,
 so a defender sees the list an attacker built last tick (the original reads it in its own update order).
 
 **Observed** (decompiled, not measured in game), with several attackers: a target answering a request is asked by
@@ -770,7 +770,7 @@ values; trajectory, aim timing and obstruction uncertainties remain labelled.
 
 - **Save** (**Verified**, decompile): a turret saves its building and machine keys, the `mounted` handle and its gun's int `current shots` (loaded harpoons, capped at the gun's shots on load); the aim error, rotation and reload timer are not saved ([save](../formats/save.md#faction-trust-war-flags-bed-rent-and-turrets)).
 
-Meitou ([simulation](../simulation.md#ranged)): `CombatSystem.Turrets.cs`, `TurretGun`, `TurretFormulas`. The indoor weight takes the gunner's building and floor for the turret's (engine reading).
+Meitou ([simulation](../simulation.md#ranged)): `CombatSystem.Turrets.cs` (firing), `TurretManning` (gunners, gun state), `TurretGun`, `TurretFormulas`. The indoor weight takes the gunner's building and floor for the turret's (engine reading).
 
 ## Stealth knock-out
 

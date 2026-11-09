@@ -292,6 +292,21 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
+    /// <c>DA_TALK_TO_LEADER</c> (2, <c>FUN_140680560</c>): for a player-faction target, the speaker squad's leader gets task 102 on it with event 1,
+    /// so it walks up and opens a conversation (<see cref="ApproachQueue"/>). Nothing when the leader is already in the open player conversation
+    /// (its line would send it again); a bubble speaker that leads still walks up.
+    /// </summary>
+    void TalkToLeader(World world, Conversation c, CharacterCold mc, CharacterId target, CharacterCold tc)
+    {
+        if ((tc.Faction != world.Player.Faction && !tc.IsPlayer) || mc.SquadId < 0) return;
+        if (world.Squads.Find(mc.SquadId) is not { Leader: { IsNone: false } leader }) return;
+        if (_open?.Npc == leader || _npcApproaches.Has(leader)) return;
+        if (!world.Characters.TryResolveNext(leader, out int l) || !Awake(world.Characters, l)) return;
+        _npcApproaches.Add(world, leader, target);
+        Hold(world, l);
+    }
+
+    /// <summary>
     /// DA_ARREST_TARGET's memory (<c>FUN_140680560</c>): when the speaker captures (<see cref="Crime.ArrestSystem.CapturesInTown"/>: in his own town,
     /// the target no animal) the target's squad tags the speaker MY_CAPTOR; otherwise the speaker's squad tags the target TEMP_ENEMY.
     /// </summary>

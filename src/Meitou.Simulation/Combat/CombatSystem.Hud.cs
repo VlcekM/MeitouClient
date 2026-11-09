@@ -67,7 +67,7 @@ public sealed partial class CombatSystem
         int target = -1, generation = 0;
         if (cold.Gunning is { } key)
         {
-            if (_turrets.TryGetValue(key, out var t)) (target, generation) = (t.Target, t.TargetGeneration);
+            if (_turretManning.TryGet(key, out var t)) (target, generation) = (t.Target, t.TargetGeneration);
         }
         else if (StateOf(id) is { TargetSlot: >= 0 } s)
         {

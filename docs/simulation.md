@@ -656,7 +656,7 @@ Backpacks move intact between pockets and their attachment slot; a bag goes insi
 does not grant worn bonuses. Race limits apply to every equipment and prosthetic slot of a character (drag, right click, trade, loot, captive clothing; `ItemInstance.WearableBy`, rule in [holding an item](game/ui-screens.md#6-inventory-trade-dialogue-build)); worn items are never taken off for it. `InventoryCommands.Arrange` and `Inventory.AddTo` follow the original's ARRANGE and auto-add; a limited storage's
 stacks start from 1 (`Inventory.Limited`). Rules: [holding an item](game/ui-screens.md#6-inventory-trade-dialogue-build).
 
-Held item (`Items/HeldItems.cs`, part of `PlayerSystem`): `PlayerState.Held` is the item on the mouse with its origin (window `ItemOwner`: a character, the open trade's stock
+Held item (`Player/HeldItems.cs`, `HeldItems`, owned by `PlayerSystem`): `PlayerState.Held` is the item on the mouse with its origin (window `ItemOwner`: a character, the open trade's stock
 or a site; its root inventory, section and cell) and the character holding it. `LiftItem` takes it out (the whole stack or one unit; a fitted prosthetic comes off; a machine slot's
 units are made into an item), `PlaceHeld` places, merges or swaps it (the swapped item becomes the held one), `GiveHeld` adds it to a character in range, `DropHeld` puts it on the
 ground (own windows only), `ReturnHeld` puts it back (old cell, else `Inventory.Add`, else after arranging, else the ground). Stock goes only to the customer and is bought when placed
@@ -715,7 +715,7 @@ least to the aim point), the closing ray `RangedTuning.RayReach` (2000); the ori
 counts, the near-camera gate on aiming, and the controller's own target choice (Meitou's crossbowmen choose as fighters do, every second).
 Ranged state is hashed when used. Weapon/turret research: [combat.md](game/combat.md).
 
-Turrets (`CombatSystem.Turrets.cs`, facts: [combat.md](game/combat.md#turrets)): one serial step after the bolts fly finds the gunners and runs each manned turret in key
+Turrets (`CombatSystem.Turrets.cs`, the gunners and gun state in `TurretManning`, facts: [combat.md](game/combat.md#turrets)): one serial step after the bolts fly finds the gunners and runs each manned turret in key
 order: target choice, reload, aim point while loaded, turning the parts (`TurretRig`), and the fire decision (in range from the gunner, aimed within 1°, steady 0.4 s, line
 along the barrel clear); harpoons are the gunner's bolts (hits, XP, crimes). A gunner is a player character operating its turret (`CharacterTask.Operate`, below) or an NPC
 standing at the turret its squad claimed (AI turret goals); one per turret (lowest slot). `CharacterCold.Gunning` names it (derived); the aggro system starts no fight with a
@@ -1518,7 +1518,7 @@ crafting benches, generators and batteries. Facts: [production](game/buildings-p
   - Several operators add with the 0.6^k falloff.
   - Partial progress is kept off the queue (in memory only).
   - Blueprints ([rules](game/buildings-production.md#blueprints)): `GameDatabase.AddGearBlueprints` makes the `.TECH.1` research after loading;
-    `ItemFactory.Blueprint` makes the item (type `BLUEPRINT`); the own-window right click (`HeldItems.QuickMove`) calls `ProductionSystem.Learn`.
+    `ItemFactory.Blueprint` makes the item (type `BLUEPRINT`); the own-window right click (`QuickMoves.QuickMove`) calls `ProductionSystem.Learn`.
 - **Hash.** Machines and research join the world hash only once the player has one; golden hashes are unchanged. Yields read the
   biome map and rock source, so a replay without them (headless) hashes other yields than the host.
   RNG: `RngPurpose.Farm` (replanting, harvest rolls), `RngPurpose.Craft` (critical rolls).

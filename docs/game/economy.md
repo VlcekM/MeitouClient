@@ -85,7 +85,7 @@ characters) on the player interface (`FUN_140791830`; kind 3 is loot/inspect, `F
 
 Meitou (engine choices): window moves to and from a machine or storage need the character within `ProductionSettings.TransferReach` 40 of the building's footprint hull (for the
 bounds radius + 40), to and from a container within `PlayerSystem.TradingRange` 60; both post "Out of trading range.". The loot window closes beyond 1.5 x the carry reach, or over 20 units apart in height (Meitou: the reach is on the body's floor, and the looter walks to that floor, #292; the height is the body's root or the floor under it, as a big ragdoll's root rests well off the ground: a downed Cleanser Unit 67 over the terrain, **Observed** on a player save). A held item given to a
-character: within `PlayerSystem.GiveRange` 1000 of its window's owner, `StealRange` 60 out of a non-player window. No faction or floor test, no sound (`gui_notrade` is in no bank, [audio](../audio.md)).
+character: within `HeldItems.GiveRange` 1000 of its window's owner, `StealRange` 60 out of a non-player window. No faction or floor test, no sound (`gui_notrade` is in no bank, [audio](../audio.md)).
 
 ### Who trades
 
@@ -111,7 +111,7 @@ character: within `PlayerSystem.GiveRange` 1000 of its window's owner, `StealRan
 - **Wages** (CHARACTER `wages`, 108 non-zero; `Character::giveBirth` / `Character::dailyUpdate`, **Verified**): a character not of the player's faction with wages >= 1 *sets* its squad's money to them
   when made and every day (the last waged member wins). "Made" is a character born without saved state: `giveBirth` (`FUN_14062b210`) skips the wages, like the bounty
   roll and `slave`, when it is given one (**Observed**, decompile), so a character coming back from a save or from out of the world keeps its squad's purse. Meitou
-  (`TradeSystem.PayWages`): on each game-day change, and once for a squad first seen after the system's first pass unless it is `Squad.Restored`.
+  (`SquadWages.Pay`, run by `TradeSystem`): on each game-day change, and once for a squad first seen after the system's first pass unless it is `Squad.Restored`.
 - **Spawn money** (CHARACTER `money item prob` / `min` / `max`; `RootObjectFactory::process`, **Verified**): a newly made non-player character gets money items worth U[min, max]
   when a [0, 1) roll is at most prob (so 80-100 always pass); what does not fit is lost. Meitou: one stack of the `Cats` item (`ItemFactory.AddSpawnMoney`).
 
@@ -326,7 +326,7 @@ Per-character hash map keyed by faction (`Character+0xf0`). Entry (`FUN_1405e7ee
   stores it there; e.g. Bounty Hunters and Medics Guild -> United Cities) when it has one, else the given faction itself when its `+0x40` flag is set (else a null key that
   nothing reads: the flag is still set and the culprit marked recently wanted, but no bounty is kept). `FUN_140851fb0(faction)` is the same choice without the cage rule ("booking
   faction" below). **Verified** (decompile of `FUN_140853ec0`, `FUN_140852010`, `FUN_140851fb0`, `FUN_140853e20`): every ledger read, claim and erase by a faction goes through the
-  same key. Meitou: `CrimeSystem.Book` (cage owner while imprisoned, `CrimeFactions.BookingOf`), every lookup through `BountyLedger.BookedFor` / `BookedAmount`, the release's erase of the releaser's and the jail's entries too (`FUN_1408539f0`).
+  same key. Meitou: `CrimeSystem.Book` (`BountyBook.Book`; cage owner while imprisoned, `CrimeFactions.BookingOf`), every lookup through `BountyLedger.BookedFor` / `BookedAmount`, the release's erase of the releaser's and the jail's entries too (`FUN_1408539f0`).
   The given faction is the **booking police witness's** (or the police in the hit rule of 11.6), not the victim's (**Observed**: both callers pass their own faction); the crime bit is set, the timestamp is reset to now, and the "wanted" UI is refreshed. The very first crime
   code (1, Enslaving) sets the flag but adds nothing (**Observed**; the code returns before the add). The same function also sets the status float `Character+0x1a0 -> +0x110` to 250.0: the **"recently wanted" marker** that makes a bounty
   visible at once (11.8); setting or witnessing a pending crime (`FUN_140852e10`, `FUN_140851f40`) sets it too. Its decrement was not traced.
@@ -384,7 +384,7 @@ Per-character hash map keyed by faction (`Character+0xf0`). Entry (`FUN_1405e7ee
 ### 11.3 Lifetime
 
 `FUN_140851f10`: `0.04 * amount` hours below 10000, else never ("Notorious"). The character tick `FUN_1405cbb80` removes at most
-one expired entry per tick and is skipped while `Character+0x2f8 == 2` (imprisoned); each crime resets the timestamp (**Verified**, `FUN_1405cbb80`). Meitou: `CrimeSystem.Expire`, at most one per tick of its sweep period.
+one expired entry per tick and is skipped while `Character+0x2f8 == 2` (imprisoned); each crime resets the timestamp (**Verified**, `FUN_1405cbb80`). Meitou: `BountyBook.Expire`, at most one per tick of its sweep period.
 
 ### 11.4 Claiming
 

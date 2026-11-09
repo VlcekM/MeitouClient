@@ -221,12 +221,12 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         for (int i = 0; i < _read.Length; i++)
         {
             _read[i].Hash(ref hasher);
-            HashZone(ref hasher, i);
+            _zones.Hash(ref hasher, i);
         }
 
         hasher.Add(_log.Count);
         HashRanged(ref hasher);
-        HashTurrets(ref hasher);
+        _turretManning.Hash(ref hasher);
     }
 
     void Sync(CharacterTable table)
@@ -242,7 +242,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             if (_read[i].Generation == generation) continue;
 
             _read[i] = CombatSlot.Fresh(generation);
-            _zoneCountRead[i] = 0;
+            _zones.Clear(i);
         }
     }
 
@@ -258,7 +258,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             _write[i] = CombatSlot.Fresh(-1);
         }
 
-        ResizeZones(size);
+        _zones.Resize(size);
     }
 
     /// <summary>
@@ -602,7 +602,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     {
         Sync(world.Characters);
         Array.Copy(_read, _write, world.Characters.HighWater);
-        CopyZones(world.Characters.HighWater);
+        _zones.Copy(world.Characters.HighWater);
         FlyProjectiles(world);
         TickTurrets(world);
         _index.Build(_read, world.Characters, world.Grid);
@@ -687,7 +687,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     {
         RepeatAssaults(world);
         (_read, _write) = (_write, _read);
-        SwapZones();
+        _zones.Swap();
         _swappedTick = world.Tick;
     }
 

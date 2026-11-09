@@ -84,7 +84,7 @@ public static class InventoryCommands
             if (section == "boots" && cold.Race is { NoShoes: false } && inventory.Items.Find(i => i.Section == section) is { } boots)
             {
                 inventory.Items.Remove(boots);
-                PlayerSystem.DropAhead(world, slot, boots);
+                HeldItems.DropAhead(world, slot, boots);
             }
             inventory.Items.RemoveAll(i => i.Section == section);
         }

@@ -1063,7 +1063,7 @@ public sealed partial class CombatSystem : IProjectileSource
     {
         if (!IsInCombatMode(world.Characters, id, cold, false, true)) return null;
 
-        if (cold.Gunning is { } key && _turrets.TryGetValue(key, out var t))
+        if (cold.Gunning is { } key && _turretManning.TryGet(key, out var t))
         {
             bool noPower = t.Gun.IsConsumer && world.Machines.Find(key) is not { HasPower: true };
             float share = t.Reloading && t.ReloadTime > 0 ? t.ReloadLeft / t.ReloadTime : 0;
