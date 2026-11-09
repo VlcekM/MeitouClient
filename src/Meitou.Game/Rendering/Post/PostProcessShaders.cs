@@ -294,7 +294,8 @@ static class PostProcessShaders
     /// <c>layers-lean</c> split, <see cref="SceneLayersLean"/>) it is the pass for the pixels the lean one left out.
     /// </summary>
     public static readonly string SceneLayers = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
-        + FogVolumeShaders.Functions + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance + HalfUpsample + """
+        + FogVolumeShaders.Functions + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance
+        + HalfUpsample + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -802,7 +803,9 @@ static class PostProcessShaders
         void main() { fragColour = vec4(textureLod(uScene, vUv, 0.0).a, 0.0, 0.0, 1.0); }
         """;
 
-    /// <summary>Depth-aware blur (7 taps) of the occlusion, one direction per pass.</summary>
+    /// <summary>
+    /// Depth-aware blur (7 taps) of the occlusion, one direction per pass.
+    /// </summary>
     public const string SsaoBlur = """
         #version 330 core
         in vec2 vUv;
@@ -829,7 +832,9 @@ static class PostProcessShaders
         }
         """;
 
-    /// <summary>The finished occlusion as a factor the scene colour is multiplied by (blend zero, source colour; red, green and blue only).</summary>
+    /// <summary>
+    /// The finished occlusion as a factor the scene colour is multiplied by (blend zero, source colour; red, green and blue only).
+    /// </summary>
     public const string SsaoApply = """
         #version 330 core
         in vec2 vUv;
@@ -959,7 +964,9 @@ static class PostProcessShaders
         }
         """;
 
-    /// <summary>Exposure, occlusion, the game's clip at 1 (no tone curve) and dither: HDR scene in, display colour out.</summary>
+    /// <summary>
+    /// Exposure, occlusion, the game's clip at 1 (no tone curve) and dither: HDR scene in, display colour out.
+    /// </summary>
     public const string Composite = "#version 330 core\n" + Noise + """
 
         in vec2 vUv;

@@ -35,7 +35,11 @@ sealed class FogDirectionSolver
     /// </summary>
     public float? Radius(FogVolumes.Volume block, Vector3 eye, float far, bool inline)
     {
-        if (_solving is { IsCompleted: true } done) { _solved = done.Result; _solving = null; }
+        if (_solving is { IsCompleted: true } done)
+        {
+            _solved = done.Result;
+            _solving = null;
+        }
         bool Fits(DirectionSolve s) => s.Block == block && s.Far == far && Vector3.Distance(s.Centre, eye) <= FogVolumes.DirectionSolveMargin;
         if (_solved is { } s && Fits(s)) return s.Radius;
         if (_solving is not null) return null;
@@ -96,7 +100,11 @@ sealed class FogDirectionSolver
             for (int i = 0; i < n; i++)
             {
                 double dn = nx[i] * cx + ny[i] * cy + nz[i] * cz, lo = dn - length[i] * delta, hi = dn + length[i] * delta;
-                if (lo > 0 && cell.L0 * lo > insideHi[i]) { feasible = false; break; }
+                if (lo > 0 && cell.L0 * lo > insideHi[i])
+                {
+                    feasible = false;
+                    break;
+                }
                 double lower = hi <= 0 ? insideLo[i] : Math.Max(insideLo[i] - cell.L1 * hi * 0.5, insideLo[i] * 0.5);
                 edge *= Math.Clamp(blur * lower, 0, 1);
             }

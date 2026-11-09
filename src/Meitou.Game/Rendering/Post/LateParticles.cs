@@ -97,7 +97,11 @@ sealed class LateParticles(PostProcess post)
     {
         bool h = half.Late, q = quarter.Late;
         half.Late = quarter.Late = false;
-        if (!h && !q) { _lateParticlesValid = false; return; }
+        if (!h && !q)
+        {
+            _lateParticlesValid = false;
+            return;
+        }
         EnsureLayers(targetWidth, targetHeight);
         (_lateParticlesNow, _lateParticlesLast) = (_lateParticlesLast!, _lateParticlesNow);
         bool history = _lateParticlesValid && !reset;

@@ -89,7 +89,8 @@ sealed unsafe class TerrainRockBake : IDisposable
     /// <summary>
     /// Records one frame of a rock bake into <paramref name="cmd"/> (inside the baker's open rendering): the rock's parts drawn orthographically along
     /// <paramref name="dir"/> with the biome's material, writing the output of <paramref name="pass"/> (0 albedo, 1 normal in the frame's basis, 2
-    /// gloss). <paramref name="distance"/> is the distance the material is shaded for (its fade with distance), <paramref name="scale"/> the placement's.
+    /// gloss). <paramref name="distance"/> is the distance the material is shaded for (its fade with distance), <paramref name="scale"/> the
+    /// placement's.
     /// </summary>
     public void Record(IGpuCommandList cmd, AttachmentFormats formats, DrawState state, int row, float scale, float distance,
         in Matrix4x4 viewProjection, Vector3 eye, Vector3 dir, Vector3 right, Vector3 up, int pass, ImpostorBaker.Part[] parts)

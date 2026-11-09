@@ -36,7 +36,8 @@ public sealed class FoliageCardMask
     /// </summary>
     public const float Slack = 0.1f;
 
-    /// <param name="levels">Per level the cells, row-major, row 0 at v = 0 (the top row of the decoded image); each level contains the one before.</param>
+    /// <param name="levels">Per level the cells, row-major, row 0 at v = 0 (the top row of the decoded image); each level contains the one
+    /// before.</param>
     public FoliageCardMask(int width, int height, bool[][] levels)
     {
         if (levels.Length == 0 || levels.Any(l => l.Length != width * height))
@@ -157,7 +158,8 @@ public sealed class FoliageCardMask
     /// <summary>
     /// Masks built, read from the cache, and the cache bytes written (for the log).
     /// </summary>
-    public static string Summary => $"{Interlocked.Read(ref s_built)} built ({s_buildMs:0} ms), {Interlocked.Read(ref s_hits)} from the cache ({s_loadMs:0} ms), {Interlocked.Read(ref s_bytesWritten) / 1024} KB written";
+    public static string Summary => $"{Interlocked.Read(ref s_built)} built ({s_buildMs:0} ms), " +
+        $"{Interlocked.Read(ref s_hits)} from the cache ({s_loadMs:0} ms), {Interlocked.Read(ref s_bytesWritten) / 1024} KB written";
 
     /// <summary>
     /// The mask of the texture file at <paramref name="path"/> for a cut-out at <paramref name="threshold"/> (0-1), from the cache or built and
@@ -178,16 +180,26 @@ public sealed class FoliageCardMask
             string cache = PathFor(Path.GetFileNameWithoutExtension(path), file, cutoff);
             if (TryRead(cache) is { } cached)
             {
-                lock (Memo) { s_hits++; s_loadMs += watch.Elapsed.TotalMilliseconds; }
+                lock (Memo)
+                {
+                    s_hits++;
+                    s_loadMs += watch.Elapsed.TotalMilliseconds;
+                }
                 return cached;
             }
             var (alpha, w, h) = DecodeAlpha(file);
             var mask = FromAlpha(alpha, w, h, cutoff, CoarsestSize);
             long bytes = Write(cache, mask);
-            lock (Memo) { s_built++; s_buildMs += watch.Elapsed.TotalMilliseconds; s_bytesWritten += bytes; }
+            lock (Memo)
+            {
+                s_built++;
+                s_buildMs += watch.Elapsed.TotalMilliseconds;
+                s_bytesWritten += bytes;
+            }
             return mask;
         }
-        catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException or UnauthorizedAccessException or OutOfMemoryException)
+        catch (Exception e) when (e is DdsFormatException or InvalidOperationException or IOException or ArgumentException
+            or UnauthorizedAccessException or OutOfMemoryException)
         {
             return null;
         }

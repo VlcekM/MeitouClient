@@ -87,7 +87,11 @@ public static class NormalHeight
             for (int col = 0; col < size; col++)
             {
                 int fx = col <= size / 2 ? col : col - size, i = row * size + col;
-                if (fx * fx + fy * fy < 4) { pRe[i] = pIm[i] = 0; continue; }
+                if (fx * fx + fy * fy < 4)
+                {
+                    pRe[i] = pIm[i] = 0;
+                    continue;
+                }
                 float r = MathF.Sqrt(fx * fx + fy * fy), ux = fx / r, uy = fy / r;
                 float gRe = ux * pRe[i] + uy * qRe[i], gIm = ux * pIm[i] + uy * qIm[i];
                 float t = Math.Clamp(2 * MathF.Log2(r) - 2, 0, bands - 1);
@@ -155,7 +159,11 @@ public static class NormalHeight
         }, _ => { });
         if (!inverse) return;
         float s = 1f / ((float)n * n);
-        for (int k = 0; k < re.Length; k++) { re[k] *= s; im[k] *= s; }
+        for (int k = 0; k < re.Length; k++)
+        {
+            re[k] *= s;
+            im[k] *= s;
+        }
     }
 
     /// <summary>
@@ -169,7 +177,11 @@ public static class NormalHeight
             int bit = n >> 1;
             for (; (j & bit) != 0; bit >>= 1) j ^= bit;
             j ^= bit;
-            if (i < j) { (re[i], re[j]) = (re[j], re[i]); (im[i], im[j]) = (im[j], im[i]); }
+            if (i < j)
+            {
+                (re[i], re[j]) = (re[j], re[i]);
+                (im[i], im[j]) = (im[j], im[i]);
+            }
         }
         for (int len = 2; len <= n; len <<= 1)
         {

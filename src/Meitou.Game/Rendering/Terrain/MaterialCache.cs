@@ -192,7 +192,11 @@ sealed class MaterialCache : IDisposable
         ref TerrainConstants c, ref int build)
     {
         // A first bake, towards the origin it started with; the strips catch up once it is whole.
-        if (_cacheBuilt[k] < 0) { _cacheBuilt[k] = 0; _cacheTarget[k] = want; }
+        if (_cacheBuilt[k] < 0)
+        {
+            _cacheBuilt[k] = 0;
+            _cacheTarget[k] = want;
+        }
         int chunk = Math.Min(build, CacheSide - _cacheBuilt[k]);
         rects[0] = (0, _cacheBuilt[k], CacheSide, chunk);
         _cacheBuilt[k] += chunk;
@@ -248,7 +252,11 @@ sealed class MaterialCache : IDisposable
         static int Split(Span<(int, int)> parts, int t0, int t1)
         {
             int length = Math.Min(t1 - t0, CacheSide), start = ((t0 % CacheSide) + CacheSide) % CacheSide;
-            if (start + length <= CacheSide) { parts[0] = (start, length); return 1; }
+            if (start + length <= CacheSide)
+            {
+                parts[0] = (start, length);
+                return 1;
+            }
             parts[0] = (start, CacheSide - start);
             parts[1] = (0, length - (CacheSide - start));
             return 2;

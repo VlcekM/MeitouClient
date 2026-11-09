@@ -263,14 +263,24 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         if (m.KeepLevelIndices)
         {
             // A map feature drawn through the terrain shader wants every level (it was marked after the mesh was made for farther users).
-            if (gpu.MinLevel > 0 && Retarget(m, 0)) { Refined++; Upgrading++; m.Upgrade = true; }
+            if (gpu.MinLevel > 0 && Retarget(m, 0))
+            {
+                Refined++;
+                Upgrading++;
+                m.Upgrade = true;
+            }
             return;
         }
         int need = gpu.Curve.LevelFor(near * LodBias);
         if (need < gpu.MinLevel)
         {
             // One level more than needed, so a camera on its way in does not ask again at the next boundary.
-            if (Retarget(m, near * 0.7f)) { Refined++; Upgrading++; m.Upgrade = true; }
+            if (Retarget(m, near * 0.7f))
+            {
+                Refined++;
+                Upgrading++;
+                m.Upgrade = true;
+            }
         }
         else if (need > gpu.MinLevel)
         {
@@ -311,7 +321,11 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             DecodedObjectMesh? decoded = null;
             try { decoded = m.Reshape.Result; }
             catch (AggregateException e) { Messages.Add($"mesh {m.Key}: {e.InnerException?.Message ?? e.Message}"); }
-            if (decoded is null || m.Gpu is not { } old || old.MinLevel == decoded.MinLevel) { EndReshape(m); continue; }
+            if (decoded is null || m.Gpu is not { } old || old.MinLevel == decoded.MinLevel)
+            {
+                EndReshape(m);
+                continue;
+            }
             QueueReshape(m, decoded);
         }
     }
@@ -319,7 +333,11 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     void EndReshape(ObjectMesh m)
     {
         m.Reshape = null;
-        if (m.Upgrade) { m.Upgrade = false; Upgrading--; }
+        if (m.Upgrade)
+        {
+            m.Upgrade = false;
+            Upgrading--;
+        }
     }
 
     public ObjectMesh Get(string key, bool distant = false)
@@ -364,7 +382,11 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             try { decoded = m.Job.Result; }
             catch (AggregateException e) { Messages.Add($"mesh {m.Key}: {e.InnerException?.Message ?? e.Message}"); }
             m.Job = null;
-            if (decoded is null) { m.Status = ObjectMesh.State.Failed; continue; }
+            if (decoded is null)
+            {
+                m.Status = ObjectMesh.State.Failed;
+                continue;
+            }
             m.Status = ObjectMesh.State.Uploading;
             QueueUpload(m, decoded);
         }
@@ -373,7 +395,11 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
 
         // Memory pressure: only what is wanted within the guard's near reach is decoded, and nothing past its priority ceiling (the scan asks again).
         bool nearOnly = Guard is { Streaming: false };
-        if (Guard is { StreamsNear: false }) { _wanted.Clear(); return; }
+        if (Guard is { StreamsNear: false })
+        {
+            _wanted.Clear();
+            return;
+        }
         var order = _wanted.OrderBy(p => p.Value).Select(p => p.Key).ToList();
         _wanted.Clear();
         foreach (var m in order)
@@ -397,9 +423,16 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     DecodedObjectMesh? Decode(string name, bool distant, int depth, bool keep, float near, bool nearIsPlacement, float lodBias)
     {
         var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
-        if (path is null) { lock (Messages) Messages.Add($"mesh not found: {name}"); return null; }
+        if (path is null)
+        {
+            lock (Messages) Messages.Add($"mesh not found: {name}");
+            return null;
+        }
         OgreMesh mesh;
-        try { mesh = OgreMeshReader.ReadFile(path); }
+        try
+        {
+            mesh = OgreMeshReader.ReadFile(path);
+        }
         catch (Exception e) when (e is OgreFormatException or EndOfStreamException or IOException or InvalidDataException)
         {
             lock (Messages) Messages.Add($"mesh {name}: {e.Message}");
@@ -408,25 +441,8 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         bool weld = MeshWeld.Enabled;
         if (weld) OgreMeshWeld.Apply(mesh);
         var model = Model.Build(mesh, null);
-        if (distant)
-        {
-            foreach (var part in model.Parts)
-            {
-                for (int i = 0; i < part.Vertices.Length; i++)
-                {
-                    var colour = part.Vertices[i].Colour;
-                    part.Vertices[i].Colour = new Vector4(colour.X * 1.5f, colour.Y * 1.5f, colour.Z * 1.5f, colour.W);
-                }
-            }
-        }
-        var centre = model.Center;
-        float radius = model.Radius, top = centre.Y + radius;
-        Vector3 min = new(float.MaxValue), max = new(float.MinValue);
-        if (mesh.Bounds is { } b && b.Max.X >= b.Min.X) { centre = (b.Min + b.Max) / 2; radius = Math.Max((b.Max - b.Min).Length() / 2,
-                1e-3f); top = b.Max.Y; (min, max) = (b.Min, b.Max); }
-        else
-            foreach (var part in model.Parts)
-                foreach (var v in part.Vertices) { min = Vector3.Min(min, v.Position); max = Vector3.Max(max, v.Position); }
+        if (distant) Brighten(model);
+        var (centre, radius, top, min, max) = Bounds(mesh, model);
         var levels = MeshLod.Levels(mesh);
 
         // Generated levels among the file's (docs/render-objects.md, "Generated levels"): a mesh drawn through the normal path, not a distant one,
@@ -446,6 +462,64 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         int minLevel = 0;
         if (depth == 0 && !distant && !keep && float.IsFinite(near))
             minLevel = curve.LevelFor((nearIsPlacement ? near - 6 * radius : near) * lodBias);
+        var manual = DecodeManualLevels(levels, minLevel, distant, depth, keep, lodBias);
+        if (minLevel >= levels.Count) minLevel = levels.Count - 1;   // the chain ended earlier than the distances said
+        var result = new DecodedObjectMesh { Model = model, Levels = levels, Manual = manual, Centre = centre, Radius = radius, Top = top, Min = min,
+                Max = max, Curve = curve, MinLevel = minLevel };
+        foreach (var part in model.Parts) result.Prepared.Add(PreparePart(result, part, keep));
+        foreach (var prepared in result.Prepared) prepared.Packed = GpuVertex.PackObject(prepared.Part.Vertices);
+        return result;
+    }
+
+    /// <summary>
+    /// Multiplies a distant mesh's vertex colours by 1.5 (the alpha kept).
+    /// </summary>
+    static void Brighten(Model model)
+    {
+        foreach (var part in model.Parts)
+        {
+            for (int i = 0; i < part.Vertices.Length; i++)
+            {
+                var colour = part.Vertices[i].Colour;
+                part.Vertices[i].Colour = new Vector4(colour.X * 1.5f, colour.Y * 1.5f, colour.Z * 1.5f, colour.W);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The mesh's centre, radius, top and box: from the file's bounds when it has them, else the model's sphere and its vertices' box.
+    /// </summary>
+    static (Vector3 Centre, float Radius, float Top, Vector3 Min, Vector3 Max) Bounds(OgreMesh mesh, Model model)
+    {
+        var centre = model.Center;
+        float radius = model.Radius, top = centre.Y + radius;
+        Vector3 min = new(float.MaxValue), max = new(float.MinValue);
+        if (mesh.Bounds is { } b && b.Max.X >= b.Min.X)
+        {
+            centre = (b.Min + b.Max) / 2;
+            radius = Math.Max((b.Max - b.Min).Length() / 2, 1e-3f);
+            top = b.Max.Y;
+            (min, max) = (b.Min, b.Max);
+        }
+        else
+        {
+            foreach (var part in model.Parts)
+                foreach (var v in part.Vertices)
+                {
+                    min = Vector3.Min(min, v.Position);
+                    max = Vector3.Max(max, v.Position);
+                }
+        }
+        return (centre, radius, top, min, max);
+    }
+
+    /// <summary>
+    /// The manual levels' meshes, decoded from the finest level wanted on (an inner mesh only at depth 0); a level whose mesh cannot be had ends
+    /// the chain there (the levels from it are removed).
+    /// </summary>
+    Dictionary<int, DecodedObjectMesh> DecodeManualLevels(List<MeshLodLevel> levels, int minLevel, bool distant, int depth, bool keep,
+        float lodBias)
+    {
         var manual = new Dictionary<int, DecodedObjectMesh>();
         for (int l = 1; l < levels.Count; l++)
         {
@@ -459,15 +533,14 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
                 // a level above the finest wanted: its file is there, it is not read
                 else if (assets.Find(manualName) is not null || assets.Find(Path.GetFileName(manualName.Replace('\\', '/'))) is not null) continue;
             }
-            if (inner is null) { levels.RemoveRange(l, levels.Count - l); break; }
+            if (inner is null)
+            {
+                levels.RemoveRange(l, levels.Count - l);
+                break;
+            }
             manual[l] = inner;
         }
-        if (minLevel >= levels.Count) minLevel = levels.Count - 1;   // the chain ended earlier than the distances said
-        var result = new DecodedObjectMesh { Model = model, Levels = levels, Manual = manual, Centre = centre, Radius = radius, Top = top, Min = min,
-                Max = max, Curve = curve, MinLevel = minLevel };
-        foreach (var part in model.Parts) result.Prepared.Add(PreparePart(result, part, keep));
-        foreach (var prepared in result.Prepared) prepared.Packed = GpuVertex.PackObject(prepared.Part.Vertices);
-        return result;
+        return manual;
     }
 
     /// <summary>
@@ -538,10 +611,18 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             var kept = new List<Vertex>();
             for (int l = minLevel; l < levelCount; l++)
                 foreach (uint index in arrays[l])
-                    if (remap[index] < 0) { remap[index] = kept.Count; kept.Add(part.Vertices[index]); }
+                    if (remap[index] < 0)
+                    {
+                        remap[index] = kept.Count;
+                        kept.Add(part.Vertices[index]);
+                    }
             for (int l = 0; l < levelCount; l++)
             {
-                if (l < minLevel) { arrays[l] = []; continue; }
+                if (l < minLevel)
+                {
+                    arrays[l] = [];
+                    continue;
+                }
                 var source = arrays[l];
                 var mapped = new uint[source.Length];
                 for (int i = 0; i < mapped.Length; i++) mapped[i] = (uint)remap[source[i]];
@@ -775,7 +856,8 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         foreach (var (level, inner) in decoded.Manual)
         {
             var innerGpu = fresh.Manual[level]!;
-            for (int i = 0; i < inner.Prepared.Count; i++) QueuePart(innerGpu, inner.Prepared[i], $"mesh {mesh.Key} manual {level} part {i} (reshaped)");
+            for (int i = 0; i < inner.Prepared.Count; i++)
+                QueuePart(innerGpu, inner.Prepared[i], $"mesh {mesh.Key} manual {level} part {i} (reshaped)");
         }
         _reshapeQueued++;
         uploads.Add(() =>

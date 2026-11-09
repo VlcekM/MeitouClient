@@ -349,6 +349,29 @@ public sealed unsafe class DebrisRenderer : IDisposable
     {
         if (pieces.IsEmpty) return;
         var cmd = _gpu.BeginGuest("debris");
+        BeginPass(cmd);
+
+        // The bindless table is bound once per segment: register/update the debris textures before that bind. On Metal the
+        // argument buffer must already name them when the encoder takes it.
+        var standIn = _gpu.StandIn2D;
+        UseTextures(pieces, skinTable);
+        BindView(cmd, sliceViewProjection, eye, light);
+
+        var basePush = new DebrisPush
+        {
+            SunColour = light.SunColour,
+            AmbientSky = light.AmbientSky,
+            AmbientGround = light.AmbientGround,
+        };
+        DrawPieces(cmd, pieces, eye, frustum, basePush, standIn, skinTable);
+        _gpu.EndGuest(cmd);
+    }
+
+    /// <summary>
+    /// The guest's state: depth tested and written, back faces culled, colour only, and the debris pipeline bound.
+    /// </summary>
+    void BeginPass(IGpuCommandList cmd)
+    {
         var targets = _gpu.CurrentTargets();
         var state = _gpu.CurrentState() with
         {
@@ -365,14 +388,15 @@ public sealed unsafe class DebrisRenderer : IDisposable
         cmd.SetDepth(state.DepthTest, state.DepthWrite, state.Compare);
         cmd.SetDepthBias(false, 0, 0);
         cmd.BindPipeline(_gpu.Pipelines.Get(state.Pipeline(_program.P, _layout, PrimitiveType.Triangles, targets.Formats, "debris")));
+    }
 
-        // The bindless table is bound once per segment: register/update the debris textures before that bind. On Metal the
-        // argument buffer must already name them when the encoder takes it.
-        var standIn = _gpu.StandIn2D;
-
+    /// <summary>
+    /// Registers the textures of the loaded pieces' meshes (reading an index registers it), and the skin table's entries of the limbs.
+    /// </summary>
+    void UseTextures(ReadOnlySpan<DebrisPiece> pieces, Func<LimbLook, uint>? skinTable)
+    {
         // Pieces of one mesh come in runs (a flock of birds): the lookup is made once per run.
         string? runName = null;
-        Mesh? runMesh = null;
         foreach (var piece in pieces)
         {
             if (piece.Limb is null && ReferenceEquals(piece.Mesh, runName)) continue;
@@ -380,11 +404,22 @@ public sealed unsafe class DebrisRenderer : IDisposable
             {
                 if (piece.Limb is null) runName = piece.Mesh;
                 foreach (var part in known.Parts) _ = part.Diffuse?.Index;
-                if (known.Limb) { _ = known.Mask?.Index; _ = known.Normal?.Index; _ = (_bloodMap ??= Texture("bloody.png"))?.Index; if (piece.Limb is { } first) _ = skinTable?.Invoke(first); }
+                if (known.Limb)
+                {
+                    _ = known.Mask?.Index;
+                    _ = known.Normal?.Index;
+                    _ = (_bloodMap ??= Texture("bloody.png"))?.Index;
+                    if (piece.Limb is { } first) _ = skinTable?.Invoke(first);
+                }
             }
         }
+    }
 
-        // The view block carries the camera-relative projection/eye and the light direction; the frame block carries the atmosphere.
+    /// <summary>
+    /// The view block carries the camera-relative projection/eye and the light direction; the frame block carries the atmosphere.
+    /// </summary>
+    void BindView(IGpuCommandList cmd, Matrix4x4 sliceViewProjection, Vector3 eye, in WorldLighting light)
+    {
         var view = new ViewConstants
         {
             // The model matrices are camera-relative (as the legacy path set them), so the view projection is too.
@@ -395,14 +430,16 @@ public sealed unsafe class DebrisRenderer : IDisposable
             FogDistance = light.FogDistance,
         };
         _frame.Bind(cmd, _program.P, in view);
+    }
 
-        var basePush = new DebrisPush
-        {
-            SunColour = light.SunColour,
-            AmbientSky = light.AmbientSky,
-            AmbientGround = light.AmbientGround,
-        };
-        (runName, runMesh) = (null, null);
+    /// <summary>
+    /// Draws each piece whose mesh is loaded and whose bounds are in the frustum: its vertex streams bound, then each part.
+    /// </summary>
+    void DrawPieces(IGpuCommandList cmd, ReadOnlySpan<DebrisPiece> pieces, Vector3 eye, Vector4[] frustum, in DebrisPush basePush, uint standIn,
+        Func<LimbLook, uint>? skinTable)
+    {
+        string? runName = null;
+        Mesh? runMesh = null;
         foreach (var piece in pieces)
         {
             // Only meshes loaded before (Extent): nothing is uploaded inside the pass.
@@ -419,34 +456,45 @@ public sealed unsafe class DebrisRenderer : IDisposable
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
             var m = Matrix4x4.CreateScale(piece.Scale, piece.Scale,
                 piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
-            for (int k = 0; k < 5; k++) _bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle,
+            for (int k = 0; k < 5; k++)
+            {
+                _bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle,
                     (ulong)(k switch { 0 => 0, 1 => 12, 2 => 20, 3 => 36, _ => 28 }));
+            }
             cmd.BindVertexBuffers(0, _bindings);
             cmd.BindIndexBuffer(new GpuBufferBinding(mesh.Indices.Handle, 0), IndexKind.U32);
-            foreach (var part in mesh.Parts)
-            {
-                var push = basePush;
-                push.Model = m;
-                push.Diffuse = part.Diffuse is { } diffuse ? diffuse.CachedIndex : standIn;
-                push.Textured = part.Diffuse is null ? 0 : part.Coloured ? 1 | 8 : 1;   // 8: the diffuse times the vertex colour (COLOURING)
-                push.AlphaThreshold = part.AlphaThreshold;
-                if (mesh.Limb && piece.Limb is { } look)
-                {
-                    // A severed limb (see the fragment): the diffuse map, the mask and the blood map, the colours packed, the mesh's centre x in
-                    // place of the cut-out. Textured: the low byte 2 (+ 4 with a normal map), the blood colour above it; the normal map's index in
-                    // the bits of the cut-out word.
-                    push.Textured = (int)(2 | (mesh.Normal is not null ? 4u : 0) | Pack(look.BloodColour) << 8);
-                    push.AlphaThreshold = BitConverter.UInt32BitsToSingle(mesh.Normal?.CachedIndex ?? standIn);
-                    push.LimbMask = mesh.Mask?.CachedIndex ?? standIn;
-                    push.LimbBlood = _bloodMap?.CachedIndex ?? standIn;
-                    push.LimbSkin = skinTable?.Invoke(look) ?? 0;
-                    push.LimbTone = mesh.Mask is null ? 0 : Pack(look.SkinTone);
-                }
-                cmd.PushConstants(_program.P, GpuStage.Vertex | GpuStage.Fragment, in push);
-                cmd.DrawIndexed(part.Count, 1, part.First, part.VertexOffset);
-            }
+            DrawParts(cmd, mesh, piece, m, basePush, standIn, skinTable);
         }
-        _gpu.EndGuest(cmd);
+    }
+
+    /// <summary>
+    /// Draws a piece's parts, each with its texture, alpha threshold and (a severed limb) the limb's maps and colours in the push constants.
+    /// </summary>
+    void DrawParts(IGpuCommandList cmd, Mesh mesh, in DebrisPiece piece, in Matrix4x4 m, in DebrisPush basePush, uint standIn,
+        Func<LimbLook, uint>? skinTable)
+    {
+        foreach (var part in mesh.Parts)
+        {
+            var push = basePush;
+            push.Model = m;
+            push.Diffuse = part.Diffuse is { } diffuse ? diffuse.CachedIndex : standIn;
+            push.Textured = part.Diffuse is null ? 0 : part.Coloured ? 1 | 8 : 1;   // 8: the diffuse times the vertex colour (COLOURING)
+            push.AlphaThreshold = part.AlphaThreshold;
+            if (mesh.Limb && piece.Limb is { } look)
+            {
+                // A severed limb (see the fragment): the diffuse map, the mask and the blood map, the colours packed, the mesh's centre x in
+                // place of the cut-out. Textured: the low byte 2 (+ 4 with a normal map), the blood colour above it; the normal map's index in
+                // the bits of the cut-out word.
+                push.Textured = (int)(2 | (mesh.Normal is not null ? 4u : 0) | Pack(look.BloodColour) << 8);
+                push.AlphaThreshold = BitConverter.UInt32BitsToSingle(mesh.Normal?.CachedIndex ?? standIn);
+                push.LimbMask = mesh.Mask?.CachedIndex ?? standIn;
+                push.LimbBlood = _bloodMap?.CachedIndex ?? standIn;
+                push.LimbSkin = skinTable?.Invoke(look) ?? 0;
+                push.LimbTone = mesh.Mask is null ? 0 : Pack(look.SkinTone);
+            }
+            cmd.PushConstants(_program.P, GpuStage.Vertex | GpuStage.Fragment, in push);
+            cmd.DrawIndexed(part.Count, 1, part.First, part.VertexOffset);
+        }
     }
 
     Mesh? Load(string file, string? materialOf, LimbLook? limb = null)
@@ -522,9 +570,11 @@ public sealed unsafe class DebrisRenderer : IDisposable
         try
         {
             if (_find(name) is { } path)
+            {
                 texture = new DebrisTexture(_gpu, path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
                     ? SampledImage.Rgba8(_gpu, TextureLoader.LoadFile(path, false).Levels[0], repeat: true, mipmaps: true, "debris " + name)
                     : SampledImage.FromDds(_gpu, DdsReader.ReadFile(path), repeat: true, "debris " + name, bc3Blocks: true));
+            }
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
         {

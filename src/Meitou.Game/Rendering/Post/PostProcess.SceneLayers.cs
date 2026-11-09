@@ -180,8 +180,10 @@ public sealed unsafe partial class PostProcess
         p.P.Set(p.Half, half && !lean && _halfHoldsShafts ? 1 : 0, half && !lean && _halfHoldsFog ? 1 : 0, 0, 0);
         p.P.ApplyGlobals();
         if (lean)
+        {
             DrawPass(p.P, _sceneColour!.Attachment, _sceneColour.Format, _layerMask!.Attachment, _layerMask.Format, _width, _height, _width, _height,
                     FallbackState);
+        }
         else
             Draw(p.P, _sceneColour!.Attachment, _sceneColour.Format, _width, _height, _width, _height, FogState);
         Stamp("layers");

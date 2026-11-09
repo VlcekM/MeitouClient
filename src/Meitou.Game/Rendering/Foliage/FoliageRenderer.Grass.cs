@@ -68,7 +68,8 @@ public sealed unsafe partial class FoliageRenderer
                 bool isActive = spriteId != 0 && (!motion || (wind && g.SwayLength != 0));
                 bool hasColour = !motion && options.Textures && colourId != 0;
                 uint flags = (g.CrossQuads ? FoliageGrassShaders.FlagCross : 0) | (hasColour ? FoliageGrassShaders.FlagColourMap : 0) |
-                    (!motion && coverage ? FoliageGrassShaders.FlagCoverage : 0) | (!motion && options.Wireframe == 2 ? FoliageGrassShaders.FlagWireframe : 0) |
+                    (!motion && coverage ? FoliageGrassShaders.FlagCoverage : 0) |
+                    (!motion && options.Wireframe == 2 ? FoliageGrassShaders.FlagWireframe : 0) |
                     (isActive ? FoliageGrassShaders.FlagActive : 0);
                 if (isActive) active++;
                 _grassPatchRows.Add(new GrassPatchRow

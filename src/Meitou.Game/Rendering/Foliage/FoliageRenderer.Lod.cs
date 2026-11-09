@@ -76,7 +76,9 @@ public sealed unsafe partial class FoliageRenderer
     /// The render's pixels per radian for the screen-size rules: the main camera's, or a 1080-line picture's with the 50 degree field of view before
     /// the first frame.
     /// </summary>
-    float ScreenLodPixelsPerRadian => LodPixelsPerRadian > 0 ? LodPixelsPerRadian : Meitou.Game.Rendering.Impostors.ImpostorClass.ReferenceHeight / (2 * MathF.Tan(25 * MathF.PI / 180));
+    float ScreenLodPixelsPerRadian => LodPixelsPerRadian > 0
+        ? LodPixelsPerRadian
+        : Meitou.Game.Rendering.Impostors.ImpostorClass.ReferenceHeight / (2 * MathF.Tan(25 * MathF.PI / 180));
 
     /// <summary>
     /// The deviations the cull and <see cref="LevelNeeded"/> use for a level set in the view being drawn: with <see cref="ScreenLod"/> in a colour
@@ -155,7 +157,12 @@ public sealed unsafe partial class FoliageRenderer
                 var first = new int[set.Levels];
                 var count = new int[set.Levels];
                 int total = 0;
-                for (int l = 1; l < set.Levels; l++) { first[l] = total; count[l] = levels[l - 1].Length; total += count[l]; }
+                for (int l = 1; l < set.Levels; l++)
+                {
+                    first[l] = total;
+                    count[l] = levels[l - 1].Length;
+                    total += count[l];
+                }
                 var indices = DeviceBuffer.Create(Gpu, (ulong)total * sizeof(uint), BufferUse.Index, MeshAllocationName);
                 ulong at = 0;
                 for (int l = 1; l < set.Levels; l++)
@@ -227,7 +234,9 @@ public sealed unsafe partial class FoliageRenderer
         bool Allowed(int level)   // some instance may pick a level at least this coarse
         {
             if (level == 0) return true;
-            float need = relative[level] * scale / tolerance;   // radii per radius of the mesh: allowed when distance >= r (1 + need), or in a cascade when r <= tolerance texel / error
+
+            // radii per radius of the mesh: allowed when distance >= r (1 + need), or in a cascade when r <= tolerance texel / error
+            float need = relative[level] * scale / tolerance;
             if (_lodView.Ortho) return g.MinRadius * relative[level] * scale <= tolerance * 1.01f;
             if (growFrom > 0)
             {
@@ -244,7 +253,8 @@ public sealed unsafe partial class FoliageRenderer
             float need = relative[level + 1] * scale / tolerance;
             if (!_lodView.Ortho && growFrom > 0)
             {
-                float gap = near * 0.99f - g.MaxRadius;   // the nearest an instance can be: the nearest is the hardest to satisfy, so a smaller gap is the safe side
+                // the nearest an instance can be: the nearest is the hardest to satisfy, so a smaller gap is the safe side
+                float gap = near * 0.99f - g.MaxRadius;
                 return gap > 0 && g.MaxRadius * relative[level + 1] * scale <= tolerance * Math.Max(1, gap / growFrom) * gap;
             }
             return _lodView.Ortho ? g.MaxRadius * relative[level + 1] * scale <= tolerance * 0.99f : near >= g.MaxRadius * (1 + need) * 1.01f;

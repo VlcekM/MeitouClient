@@ -168,13 +168,17 @@ sealed class Bloom(PostProcess post)
         (_bloomWidth, _bloomHeight) = (w, h);
         using var batch = post.Gpu.Uploads.Begin();
         for (int level = 1; level <= levels; level++)
+        {
             _bloomDown[level - 1] = post.Make(batch, BloomPlan.LevelSide(w, level), BloomPlan.LevelSide(h, level), InternalFormat.R11FG11FB10F,
                 TextureMinFilter.Linear, $"post bloom 1/{1 << level}");
+        }
 
         // The coarsest level has no sum of its own (the first up pass reads it directly), except when it is level 2, the output.
         for (int level = 2; level <= Math.Max(levels - 1, 2); level++)
+        {
             _bloomUp[level - 2] = post.Make(batch, BloomPlan.LevelSide(w, level), BloomPlan.LevelSide(h, level), InternalFormat.R11FG11FB10F,
                 TextureMinFilter.Linear, $"post bloom sum 1/{1 << level}");
+        }
     }
 
     #endregion

@@ -187,7 +187,9 @@ public sealed class MaterialResolver
             case FcsRecordType.Race:
                 {
                     // The first head of the race (heads are picked per character; the first is as good as any).
-                    var head = record.GetReferences(female ? "heads female" : "heads male").Select(r => _db!.Find(r.TargetStringId)).FirstOrDefault(h => h is not null);
+                    var head = record.GetReferences(female ? "heads female" : "heads male")
+                        .Select(r => _db!.Find(r.TargetStringId))
+                        .FirstOrDefault(h => h is not null);
                     yield return new SurfaceMaterial
                     {
                         Description = via + " (body texture" + (head is null ? ")" : $", head '{head.Name}')"),
@@ -299,7 +301,8 @@ public sealed class MaterialResolver
                     int type = spec.GetInt("material type");
                     yield return new SurfaceMaterial
                     {
-                        Description = $"{name} (type {type switch { 0 => "DEFAULT", 1 => "ALPHA", 2 => "FOLIAGE", 3 => "DUAL", 4 => "EMISSIVE", _ => type.ToString() }})",
+                        Description = $"{name} (type " +
+                            $"{type switch { 0 => "DEFAULT", 1 => "ALPHA", 2 => "FOLIAGE", 3 => "DUAL", 4 => "EMISSIVE", _ => type.ToString() }})",
                         Diffuse = Tex(spec, "texture map"),
                         Normal = Tex(spec, "normal map"),
                         Diffuse2 = type == 3 ? Tex(spec, "texture map 2") : null,

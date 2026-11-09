@@ -181,16 +181,44 @@ sealed class PostComposite : IDisposable
     {
         EnsureDisplay(target.Desc.Width, target.Desc.Height);
         MakeTargets(o, temporal);
+        RunLuminance(cmd, scene);
+        RunAdaptation(cmd, band);
 
-        // The luminance: 16 taps of the scene into 256², then the mip chain down to 1×1.
+        // The composite: auto exposure (0.55 / adapted), the game's tone map, grade and dither.
+        bool smaaOn = o.Smaa && !temporal && _ldr is not null;
+        bool fxaaOn = o.Fxaa && !smaaOn && !temporal && _ldr is not null;
+        bool hazeOn = o.HeatHaze && HasHeatHaze && HeatHazeAmount * o.HeatHazeScale > 0 && _ldr is not null;
+        var compositeTarget = fxaaOn || smaaOn || hazeOn ? _ldr! : target;
+        RunComposite(cmd, scene, o, compositeTarget);
+
+        GpuTexture picture = compositeTarget;
+        if (fxaaOn) picture = RunFxaa(cmd, picture, target, hazeOn);
+        if (smaaOn)
+        {
+            RunSmaa(cmd, target, hazeOn);
+            picture = hazeOn ? _ldrFxaa! : target;
+        }
+        if (hazeOn) RunHeatHaze(cmd, depth, target, picture, o, inputs);
+    }
+
+    /// <summary>
+    /// The luminance: 16 taps of the scene into 256², then the mip chain down to 1×1.
+    /// </summary>
+    void RunLuminance(IGpuCommandList cmd, GpuTexture scene)
+    {
         _luminance.Bind(_lumSceneSlot, _sceneSampler with { View = scene.View() });
         _luminance.Set(_lumCell, 1f / LuminanceSize, 1f / LuminanceSize);
         Fullscreen(cmd, _luminance, _luminanceTarget!, LuminanceSize, LuminanceSize);
         cmd.GenerateMips(_luminanceTarget!);
         cmd.Order();
+    }
 
-        // The adaptation: this frame's mean against the last output, blended at the game's rate (instant for a still)
-        // inside the band. adaptB is the target written last frame; the swap below makes it adaptA.
+    /// <summary>
+    /// The adaptation: this frame's mean against the last output, blended at the game's rate (instant for a still)
+    /// inside the band. adaptB is the target written last frame; the swap below makes it adaptA.
+    /// </summary>
+    void RunAdaptation(IGpuCommandList cmd, (float Min, float Max) band)
+    {
         var previous = _adaptB;
         (_adaptA, _adaptB) = (_adaptB, _adaptA);
         long now = Stopwatch.GetTimestamp();
@@ -208,12 +236,13 @@ sealed class PostComposite : IDisposable
         Fullscreen(cmd, _adapt, _adaptB!, 1, 1);
         _adaptedValid = true;
         _adaptedFrames = Math.Min(_adaptedFrames + 1, 2);
+    }
 
-        // The composite: auto exposure (0.55 / adapted), the game's tone map, grade and dither.
-        bool smaaOn = o.Smaa && !temporal && _ldr is not null;
-        bool fxaaOn = o.Fxaa && !smaaOn && !temporal && _ldr is not null;
-        bool hazeOn = o.HeatHaze && HasHeatHaze && HeatHazeAmount * o.HeatHazeScale > 0 && _ldr is not null;
-        var compositeTarget = fxaaOn || smaaOn || hazeOn ? _ldr! : target;
+    /// <summary>
+    /// The composite pass of the scene into <paramref name="compositeTarget"/>: auto exposure, the tone map, grade and dither.
+    /// </summary>
+    void RunComposite(IGpuCommandList cmd, GpuTexture scene, PostOptions o, GpuTexture compositeTarget)
+    {
         var p = _composite;
         p.Bind(_sceneSlot, _sceneSampler with { View = scene.View() });
         p.Bind(_aoSlot, _ctx.Dummy(p.SamplerInfo(_aoSlot)));
@@ -231,39 +260,40 @@ sealed class PostComposite : IDisposable
         p.Set(_balance, o.Balance);
         p.Set(_sceneSize, 0f, 0f);
         Fullscreen(cmd, _composite, compositeTarget, compositeTarget.Desc.Width, compositeTarget.Desc.Height);
+    }
 
-        GpuTexture picture = compositeTarget;
-        if (fxaaOn)
-        {
-            var f = _fxaa;
-            f.P.Bind(f.Image, _plainSampler with { View = picture.View() });
-            f.P.Set(f.Texel, 1f / target.Desc.Width, 1f / target.Desc.Height);
-            var output = hazeOn ? _ldrFxaa! : target;
-            Fullscreen(cmd, f.P, output, output.Desc.Width, output.Desc.Height);
-            picture = output;
-        }
-        if (smaaOn)
-        {
-            RunSmaa(cmd, target, hazeOn);
-            picture = hazeOn ? _ldrFxaa! : target;
-        }
-        if (hazeOn)
-        {
-            var h = _haze;
-            h.P.Bind(h.Flow, _linearMipSampler with { View = _flowTexture!.View() });
-            h.P.Bind(h.Perturbation, _linearMipSampler with { View = _perturbationTexture!.View() });
-            h.P.Bind(h.Depth, _pointSampler with { View = depth.View() });
-            h.P.Bind(h.Image, _plainSampler with { View = picture.View() });
-            double phase = HeatHazeHours * 100;
-            h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
-            h.P.Set(h.Amount, HeatHazeAmount * o.HeatHazeScale);
-            float tanY = MathF.Tan(inputs.FieldOfView * 0.5f);
-            h.P.Set(h.Tan, ViewWindow.Tan(tanY * inputs.Aspect, tanY));
-            h.P.Set(h.NearFar, inputs.Near, inputs.Far);
-            h.P.Set(h.FarClip, HeatHazeFarClip);
-            h.P.Set(h.HasDepth, 1f);
-            Fullscreen(cmd, h.P, target, target.Desc.Width, target.Desc.Height);
-        }
+    /// <summary>
+    /// FXAA of <paramref name="picture"/> into the heat haze's input or the target; returns what it drew into.
+    /// </summary>
+    GpuTexture RunFxaa(IGpuCommandList cmd, GpuTexture picture, GpuTexture target, bool hazeOn)
+    {
+        var f = _fxaa;
+        f.P.Bind(f.Image, _plainSampler with { View = picture.View() });
+        f.P.Set(f.Texel, 1f / target.Desc.Width, 1f / target.Desc.Height);
+        var output = hazeOn ? _ldrFxaa! : target;
+        Fullscreen(cmd, f.P, output, output.Desc.Width, output.Desc.Height);
+        return output;
+    }
+
+    /// <summary>
+    /// The heat haze of <paramref name="picture"/> into the target, its distortion cut by the scene depth.
+    /// </summary>
+    void RunHeatHaze(IGpuCommandList cmd, GpuTexture depth, GpuTexture target, GpuTexture picture, PostOptions o, in SceneInputs inputs)
+    {
+        var h = _haze;
+        h.P.Bind(h.Flow, _linearMipSampler with { View = _flowTexture!.View() });
+        h.P.Bind(h.Perturbation, _linearMipSampler with { View = _perturbationTexture!.View() });
+        h.P.Bind(h.Depth, _pointSampler with { View = depth.View() });
+        h.P.Bind(h.Image, _plainSampler with { View = picture.View() });
+        double phase = HeatHazeHours * 100;
+        h.P.Set(h.Phase, (float)(phase - Math.Floor(phase)));
+        h.P.Set(h.Amount, HeatHazeAmount * o.HeatHazeScale);
+        float tanY = MathF.Tan(inputs.FieldOfView * 0.5f);
+        h.P.Set(h.Tan, ViewWindow.Tan(tanY * inputs.Aspect, tanY));
+        h.P.Set(h.NearFar, inputs.Near, inputs.Far);
+        h.P.Set(h.FarClip, HeatHazeFarClip);
+        h.P.Set(h.HasDepth, 1f);
+        Fullscreen(cmd, h.P, target, target.Desc.Width, target.Desc.Height);
     }
 
     /// <summary>
@@ -332,18 +362,7 @@ sealed class PostComposite : IDisposable
         int down = Math.Max(1, (int)MathF.Round(across * scene.Desc.Height / (float)Math.Max(scene.Desc.Width, 1)));
         int columns = LightShaftShaders.AtlasColumns, rows = (slices + columns - 1) / columns;
         int aw = across * columns, ah = down * rows;
-        if (_shaftInjected is null || _shaftInjected.Desc.Width != aw || _shaftInjected.Desc.Height != ah)
-        {
-            _shaftInjected?.Dispose();
-            _shaftLight?.Dispose();
-            _shaftScatter?.Dispose();
-            _shaftInjected = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, aw, ah,
-                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts injected"));
-            _shaftLight = _ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, aw, ah,
-                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts light"));
-            _shaftScatter = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, aw, ah,
-                Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts scatter"));
-        }
+        EnsureShaftTargets(aw, ah);
         float near = Math.Clamp(PostOptions.ShaftNear, 1, far * 0.5f);
         var grid = new Vector4(across, down, slices, columns);
         var range = new Vector4(near, far, MathF.Log(far / near), temporal ? _ctx.Frame.Number % 4096 : 0);
@@ -404,6 +423,23 @@ sealed class PostComposite : IDisposable
         };
         Fullscreen(cmd, apply.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
         _shaftFrame = (grid, range, tan, Math.Clamp(darkening, 0, 1));
+    }
+
+    /// <summary>
+    /// The shafts' atlases (injected samples, their sums, the air's scatter) at <paramref name="aw"/> x <paramref name="ah"/>, remade on a resize.
+    /// </summary>
+    void EnsureShaftTargets(int aw, int ah)
+    {
+        if (_shaftInjected is not null && _shaftInjected.Desc.Width == aw && _shaftInjected.Desc.Height == ah) return;
+        _shaftInjected?.Dispose();
+        _shaftLight?.Dispose();
+        _shaftScatter?.Dispose();
+        _shaftInjected = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, aw, ah,
+            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts injected"));
+        _shaftLight = _ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, aw, ah,
+            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts light"));
+        _shaftScatter = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, aw, ah,
+            Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post shafts scatter"));
     }
 
     void RunFogVolumes(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs i)
@@ -542,11 +578,15 @@ sealed class PostComposite : IDisposable
         // unless it is the selected anti-aliasing path. This keeps MetalFX from carrying ~60 MiB of never-bound display-size textures.
         bool wantLdr = o.HeatHaze || (!temporal && (o.Fxaa || o.Smaa));
         if (wantLdr && _ldr is null)
+        {
             _ldr = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, _displayWidth, _displayHeight,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post ldr"));
+        }
         if (wantLdr && !temporal && (o.Fxaa || o.Smaa) && _ldrFxaa is null)
+        {
             _ldrFxaa = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, _displayWidth, _displayHeight,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "post ldr fxaa"));
+        }
         if (!temporal && o.Smaa && _smaaEdges is null)
         {
             _smaaEdges = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba8, _displayWidth, _displayHeight,
@@ -592,8 +632,10 @@ sealed class PostComposite : IDisposable
         var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);
         var s = state ?? DrawState.For(formats, false);
         if (!_pipelines.TryGetValue((program.Program, formats.Colour, s), out var desc))
+        {
             _pipelines[(program.Program, formats.Colour, s)] = desc = s.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles,
                     formats, program.Name);
+        }
         cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), load, default), default, w, h));
         cmd.SetViewport(new PixelViewport(0, 0, w, h, 0, 1));
         cmd.SetScissor(new PixelRect(0, 0, (uint)w, (uint)h));
@@ -661,8 +703,10 @@ sealed class PostComposite : IDisposable
         var formats = new AttachmentFormats(colour?.Desc.Format ?? InternalFormat.None, target.Desc.Format);
         var state = DrawState.For(formats, false, depthTest: true, depthWrite: true, compare: DepthFunction.Always);
         if (!_pipelines.TryGetValue((program.Program, formats.Colour, state), out var desc))
+        {
             _pipelines[(program.Program, formats.Colour, state)] = desc = state.Pipeline(program.Program, program.VertexLayout([]),
                 PrimitiveType.Triangles, formats, program.Name);
+        }
         cmd.BeginRendering(new RenderingDesc(colour is null ? default : new RenderTarget(colour.Attachment(), LoadOp.Clear, default),
             new RenderTarget(target.Attachment(), LoadOp.Clear, default, DepthConvention.Clear), w, h));
         cmd.SetViewport(new PixelViewport(0, 0, w, h, 0, 1));
