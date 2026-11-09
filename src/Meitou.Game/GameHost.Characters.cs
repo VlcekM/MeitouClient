@@ -177,7 +177,11 @@ sealed partial class GameHost
             FillPortraits();
             FillDrawListCore(list);
         }
-        finally { FillTotal += Stopwatch.GetElapsedTime(f0).TotalMilliseconds; FillCalls++; }
+        finally
+        {
+            FillTotal += Stopwatch.GetElapsedTime(f0).TotalMilliseconds;
+            FillCalls++;
+        }
     }
 
     /// <summary>
@@ -304,6 +308,7 @@ sealed partial class GameHost
         if (heldPending is not null)
             list.Distant.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, c.Position, DrawnYaw(c), []) { Hidden = true });
     }
+
     /// <summary>
     /// <paramref name="slots"/>[<paramref name="slot"/>], the array grown to hold it.
     /// </summary>
@@ -325,12 +330,7 @@ sealed partial class GameHost
         // made again only when the snapshot changes (CharacterDrawList.Distant). The editor's scene is listed whole every frame.
         var reachOf = editing is null && !Player.CharacterEditor.EditorOpen ? Gpu.Characters : null;
         var eye = Camera.Eye;
-        _portraitKeys.Clear();
-        if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) _portraitKeys.Add(r.Key);
-        var distantKey = (current, current.Tick, worldEpoch: Saves.WorldEpoch);
-        bool distant = reachOf is not null && distantKey != DistantFor;
-        if (reachOf is null ? list.Distant.Count > 0 : distant) list.BeginDistant();
-        DistantFor = reachOf is null ? default : distantKey;
+        bool distant = BeginDistant(list, current, reachOf);
         foreach (var c in current.Characters)
         {
             var inBar = editing is { } shown ? CharacterEditor.Bar.EditorBarPlace(c.Id, shown) : null;
@@ -342,80 +342,125 @@ sealed partial class GameHost
                 if (distant) AddDistant(list, c);
                 continue;
             }
-            var position = c.Position;
-            float yaw = DrawnYaw(c);
-            CharacterSnapshot? before = null;
-            if (PreviousById.TryGetValue(c.Id, out var found))
-            {
-                before = found;
-                if (!Reanchored(found, c))
-                {
-                    position = Vector3.Lerp(found.Position, c.Position, alpha);
-                    yaw = Simulation.Session.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
-                }
-            }
-            Quaternion? rotation = null;
-            if (c.Carry is { } carry)
-            {
-                // The body hangs on its carrier's drawn shoulder: the carrier's drawn facing (it turns at a limited rate), not the simulation's.
-                yaw = CarrierYaw(current, c, yaw, alpha);
-                (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
-            }
-            // A character hidden indoors is not drawn (CharacterRenderer: as one out of reach) unless for its portrait: its poses are not read
-            // either.
-            bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || _portraitKeys.Contains(DrawKey(c.Id));
-            var poses = !posed ? [] : Slot(ref _posesBySlot, c.Id.Slot) is { } kept && kept.Length == c.Animations.Count ? kept
-                : _posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
-            for (int i = 0; i < poses.Length; i++)
-            {
-                var layer = c.Animations[i];
-                float time = layer.Time, weight = layer.Weight;
-                // Between ticks the clip time and weight move on from the last snapshot (a wrap of a looping clip goes through the wrap: LayerTime).
-                if (before is not null)
-                    // Indexed: a foreach over the list's interface boxed an enumerator per layer per frame.
-                    for (int k = 0; k < before.Animations.Count; k++)
-                        if (before.Animations[k] is var old && old.Name == layer.Name)
-                        {
-                            time = LayerTime(old, layer, alpha);
-                            weight = old.Weight + (layer.Weight - old.Weight) * alpha;
-                            break;
-                        }
-                poses[i] = new CharacterPose(layer.Name, time, weight);
-            }
-            if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStances.EditorStancePoses(c.Id, stance);
-            // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
-            else if (Player.CharacterEditor.IsEditorAnimal(c.Id))
-                poses = [.. poses.Select(p => p with { Time = CharacterEditor.Bar.EditorClipTime(p.Animation, (float)RealTime.Elapsed.TotalSeconds) })];
-            // The Meitou editor's bar (CharacterEditorHost): the shown character stands in it, the others sit on its seats.
-            if (inBar is { } place)
-            {
-                (position, yaw, rotation) = (place.Position, place.Yaw, null);
-                if (place.Clip is { } clip)
-                    poses = [new CharacterPose(clip, CharacterEditor.Bar.EditorClipTime(clip, (float)RealTime.Elapsed.TotalSeconds), 1)];
-            }
-            if (c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Pose() is { } forced)
-                poses = forced;   // the sandbox drop-down loops a picked clip on the hero
-            var held = HeldLooks.HeldLook(c.Appearance, c.HeldTool, out var heldPending);
-            var look = Player.CharacterEditor.Previews.EditorPreview(c.Id, c.Appearance) ?? held;
-            if (editing is null) Decapitation.CutHead(c, look);
-            var glide = Player.CharacterEditor.Previews.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
-            var bones = !posed ? null
-                : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref _ragdollsBySlot, c.Id.Slot),
-                ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
-            bool hidden = inBar is null && Interiors.HiddenIndoors.Contains(c.Id);
-            bool fullRated = editing is not null || _fullRate.Contains(c.Id)
-                || c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Current is not null;
-            var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated);
-            if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
-            list.Add(instance);
-            // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.
-            if (Player.CharacterEditor.Previews.EditorPending(c.Id) is { } pending)
-                list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), pending, position, yaw, poses) { Hidden = true });
-            else if (heldPending is not null)
-                list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
+            AddCharacter(list, current, c, editing, reachOf, inBar, alpha);
         }
         if (editing is null) Decapitation.AddHeads(list);
         else CharacterEditor.Bar.AddEditorCrowd(list);
+    }
+
+    /// <summary>
+    /// The portrait requests' keys, and the distant list begun again when the snapshot changed (or emptied when everything is posed); whether
+    /// this frame lists the distant characters.
+    /// </summary>
+    bool BeginDistant(CharacterDrawList list, WorldSnapshot current, CharacterRenderer? reachOf)
+    {
+        _portraitKeys.Clear();
+        if (reachOf is not null) foreach (var r in reachOf.PortraitRequests) _portraitKeys.Add(r.Key);
+        var distantKey = (current, current.Tick, worldEpoch: Saves.WorldEpoch);
+        bool distant = reachOf is not null && distantKey != DistantFor;
+        if (reachOf is null ? list.Distant.Count > 0 : distant) list.BeginDistant();
+        DistantFor = reachOf is null ? default : distantKey;
+        return distant;
+    }
+
+    /// <summary>
+    /// Lists character <paramref name="c"/> within reach: its place and poses between the ticks, the editor's and sandbox's overrides, its look,
+    /// ragdoll and the hidden next looks.
+    /// </summary>
+    void AddCharacter(CharacterDrawList list, WorldSnapshot current, CharacterSnapshot c, CharacterId? editing, CharacterRenderer? reachOf,
+        (Vector3 Position, float Yaw, string? Clip)? inBar, float alpha)
+    {
+        var (position, yaw, rotation, before) = DrawnPlace(current, c, alpha);
+        // A character hidden indoors is not drawn (CharacterRenderer: as one out of reach) unless for its portrait: its poses are not read
+        // either.
+        bool posed = reachOf is null || !Interiors.HiddenIndoors.Contains(c.Id) || _portraitKeys.Contains(DrawKey(c.Id));
+        var poses = LayerPoses(c, before, alpha, posed);
+        if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStances.EditorStancePoses(c.Id, stance);
+        // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
+        else if (Player.CharacterEditor.IsEditorAnimal(c.Id))
+            poses = [.. poses.Select(p => p with { Time = CharacterEditor.Bar.EditorClipTime(p.Animation, (float)RealTime.Elapsed.TotalSeconds) })];
+        // The Meitou editor's bar (CharacterEditorHost): the shown character stands in it, the others sit on its seats.
+        if (inBar is { } place)
+        {
+            (position, yaw, rotation) = (place.Position, place.Yaw, null);
+            if (place.Clip is { } clip)
+                poses = [new CharacterPose(clip, CharacterEditor.Bar.EditorClipTime(clip, (float)RealTime.Elapsed.TotalSeconds), 1)];
+        }
+        if (c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Pose() is { } forced)
+            poses = forced;   // the sandbox drop-down loops a picked clip on the hero
+        var held = HeldLooks.HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
+        var look = Player.CharacterEditor.Previews.EditorPreview(c.Id, c.Appearance) ?? held;
+        if (editing is null) Decapitation.CutHead(c, look);
+        var glide = Player.CharacterEditor.Previews.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
+        var bones = !posed ? null
+            : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref _ragdollsBySlot, c.Id.Slot),
+            ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
+        bool hidden = inBar is null && Interiors.HiddenIndoors.Contains(c.Id);
+        bool fullRated = editing is not null || _fullRate.Contains(c.Id)
+            || c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Current is not null;
+        var instance = Drawn(c, look, position, yaw, poses, rotation, bones, hidden, fullRated);
+        if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
+        list.Add(instance);
+        // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.
+        if (Player.CharacterEditor.Previews.EditorPending(c.Id) is { } pending)
+            list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), pending, position, yaw, poses) { Hidden = true });
+        else if (heldPending is not null)
+            list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
+    }
+
+    /// <summary>
+    /// Where character <paramref name="c"/> is drawn between the last tick and this one (on its carrier's shoulder when carried), and its last
+    /// snapshot.
+    /// </summary>
+    (Vector3 Position, float Yaw, Quaternion? Rotation, CharacterSnapshot? Before) DrawnPlace(WorldSnapshot current, CharacterSnapshot c, float alpha)
+    {
+        var position = c.Position;
+        float yaw = DrawnYaw(c);
+        CharacterSnapshot? before = null;
+        if (PreviousById.TryGetValue(c.Id, out var found))
+        {
+            before = found;
+            if (!Reanchored(found, c))
+            {
+                position = Vector3.Lerp(found.Position, c.Position, alpha);
+                yaw = Simulation.Session.Interp.LerpAngle(DrawnYaw(found), DrawnYaw(c), alpha);
+            }
+        }
+        Quaternion? rotation = null;
+        if (c.Carry is { } carry)
+        {
+            // The body hangs on its carrier's drawn shoulder: the carrier's drawn facing (it turns at a limited rate), not the simulation's.
+            yaw = CarrierYaw(current, c, yaw, alpha);
+            (position, rotation) = MixCarry(before?.Carry, carry, alpha).World(position, yaw);
+        }
+        return (position, yaw, rotation, before);
+    }
+
+    /// <summary>
+    /// The poses of <paramref name="c"/>'s animation layers between the ticks (none when it is not <paramref name="posed"/>), in its kept
+    /// per-slot array.
+    /// </summary>
+    CharacterPose[] LayerPoses(CharacterSnapshot c, CharacterSnapshot? before, float alpha, bool posed)
+    {
+        var poses = !posed ? [] : Slot(ref _posesBySlot, c.Id.Slot) is { } kept && kept.Length == c.Animations.Count ? kept
+            : _posesBySlot[c.Id.Slot] = new CharacterPose[c.Animations.Count];
+        for (int i = 0; i < poses.Length; i++)
+        {
+            var layer = c.Animations[i];
+            float time = layer.Time, weight = layer.Weight;
+            // Between ticks the clip time and weight move on from the last snapshot (a wrap of a looping clip goes through the wrap: LayerTime).
+            if (before is not null)
+                // Indexed: a foreach over the list's interface boxed an enumerator per layer per frame.
+                for (int k = 0; k < before.Animations.Count; k++)
+                    if (before.Animations[k] is var old && old.Name == layer.Name)
+                    {
+                        time = LayerTime(old, layer, alpha);
+                        weight = old.Weight + (layer.Weight - old.Weight) * alpha;
+                        break;
+                    }
+            poses[i] = new CharacterPose(layer.Name, time, weight);
+        }
+        return poses;
     }
 
     #endregion

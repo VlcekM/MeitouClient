@@ -143,7 +143,8 @@ sealed class SimProfileWindow(GameHost host)
     /// </summary>
     void AddFrame(TickProfile profile, double advanceMs, double ahead, int firstSystem, int firstPart)
     {
-        (_simWindowTicks, _simWindowMain, _simWindowAhead, _simWindowFrames) = (_simWindowTicks + profile.Ticks, _simWindowMain + advanceMs, _simWindowAhead + ahead, _simWindowFrames + 1);
+        (_simWindowTicks, _simWindowMain, _simWindowAhead, _simWindowFrames) =
+            (_simWindowTicks + profile.Ticks, _simWindowMain + advanceMs, _simWindowAhead + ahead, _simWindowFrames + 1);
         void Add(string key, double ms) => _simWindowMs[key] = _simWindowMs.GetValueOrDefault(key) + ms;
         for (int p = 0; p < firstSystem - 1; p++) Add("#" + _simNames[p], _simMs[p]);
         for (int k = firstSystem; k < _simMs.Length - 1; k++) Add((k >= firstPart ? "." : "") + _simNames[k], _simMs[k]);
@@ -151,8 +152,10 @@ sealed class SimProfileWindow(GameHost host)
             Add("~" + _simNames[firstSystem + k], profile.Ms(TickProfile.SlowWorld, k));
         if (host.Session.World.Systems.OfType<Simulation.Ragdolls.RagdollSystem>().FirstOrDefault() is { } rag)
         {
-            (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping) = (_simWindowRagdolls + rag.Count, _simWindowMoving + rag.Moving, _simWindowAwake + rag.AwakeBodies, _simWindowStepping + (rag.Moving > 0 ? 1 : 0));
-            (_simWindowCarried, _simWindowWhole, _simWindowLimbs) = (_simWindowCarried + rag.MovingCarried, _simWindowWhole + rag.MovingWhole, _simWindowLimbs + rag.MovingLimbs);
+            (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping) = (_simWindowRagdolls + rag.Count,
+                _simWindowMoving + rag.Moving, _simWindowAwake + rag.AwakeBodies, _simWindowStepping + (rag.Moving > 0 ? 1 : 0));
+            (_simWindowCarried, _simWindowWhole, _simWindowLimbs) =
+                (_simWindowCarried + rag.MovingCarried, _simWindowWhole + rag.MovingWhole, _simWindowLimbs + rag.MovingLimbs);
         }
     }
 
@@ -167,10 +170,19 @@ sealed class SimProfileWindow(GameHost host)
             .OrderByDescending(p => p.Value).Take(count)
             .Select(p => string.Create(inv, $"{p.Key.TrimStart('#', '~', '.')} {p.Value / _simWindowTicks:0.00}")));
         double tickMs = _simWindowMs.Where(p => p.Key[0] == '#').Sum(p => p.Value) / _simWindowTicks;
-        Console.WriteLine(string.Create(inv, $"simprof   {host.Session.Simulation.Speed:0}x {_simWindowFrames / seconds:0} fps, {_simWindowTicks / seconds:0} ticks/s, {host.Session.World.Snapshot.Characters.Count} characters; ") +
-            string.Create(inv, $"ms a frame: in frame {_simWindowMain / _simWindowFrames:0.00}, ahead {_simWindowAhead / _simWindowFrames:0.00}; ms a tick {tickMs:0.00}: ") +
+        Console.WriteLine(string.Create(inv, $"simprof   {host.Session.Simulation.Speed:0}x {_simWindowFrames / seconds:0} fps, ") +
+            string.Create(inv, $"{_simWindowTicks / seconds:0} ticks/s, ") +
+            string.Create(inv, $"{host.Session.World.Snapshot.Characters.Count} characters; ") +
+            string.Create(inv, $"ms a frame: in frame {_simWindowMain / _simWindowFrames:0.00}, ahead {_simWindowAhead / _simWindowFrames:0.00}; ") +
+            string.Create(inv, $"ms a tick {tickMs:0.00}: ") +
             $"phases: {Top('#', 10)}; systems: {Top(' ', 12)}; slow world: {Top('~', 12)}; parts: {Top('.', 12)}; " +
-            string.Create(inv, $"ragdolls {(double)_simWindowRagdolls / _simWindowFrames:0.0}, moving {(double)_simWindowMoving / _simWindowFrames:0.0} (carried {(double)_simWindowCarried / _simWindowFrames:0.0}, whole {(double)_simWindowWhole / _simWindowFrames:0.0}, limbs {(double)_simWindowLimbs / _simWindowFrames:0.0}), awake bodies {(double)_simWindowAwake / _simWindowFrames:0}, stepping {100.0 * _simWindowStepping / _simWindowFrames:0}% of frames"));
+            string.Create(inv, $"ragdolls {(double)_simWindowRagdolls / _simWindowFrames:0.0}, ") +
+            string.Create(inv, $"moving {(double)_simWindowMoving / _simWindowFrames:0.0} ") +
+            string.Create(inv, $"(carried {(double)_simWindowCarried / _simWindowFrames:0.0}, ") +
+            string.Create(inv, $"whole {(double)_simWindowWhole / _simWindowFrames:0.0}, ") +
+            string.Create(inv, $"limbs {(double)_simWindowLimbs / _simWindowFrames:0.0}), ") +
+            string.Create(inv, $"awake bodies {(double)_simWindowAwake / _simWindowFrames:0}, ") +
+            string.Create(inv, $"stepping {100.0 * _simWindowStepping / _simWindowFrames:0}% of frames"));
     }
 
     /// <summary>
@@ -180,7 +192,8 @@ sealed class SimProfileWindow(GameHost host)
     {
         _simWindowMs.Clear();
         (_simWindowStart, _simWindowTicks, _simWindowMain, _simWindowAhead, _simWindowFrames) = (now, 0, 0, 0, 0);
-        (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping, _simWindowCarried, _simWindowWhole, _simWindowLimbs) = (0, 0, 0, 0, 0, 0, 0);
+        (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping, _simWindowCarried, _simWindowWhole, _simWindowLimbs) =
+            (0, 0, 0, 0, 0, 0, 0);
     }
 
     #endregion

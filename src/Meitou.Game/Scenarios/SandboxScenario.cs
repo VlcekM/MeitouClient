@@ -133,7 +133,8 @@ sealed class SandboxScenario(GameHost host)
         world.Commands.Enqueue(new SelectCommand([SandboxHero]) { Tick = world.Tick });
         bool patrol = false, fight = false;
         // --sandbox-mode: comma-separated walk, run or free, a fixed speed in units/s, patrol and fight.
-        foreach (string token in (host.GameOptions.SandboxMode ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        var tokens = (host.GameOptions.SandboxMode ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (string token in tokens)
         {
             if (float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out float speed)) _sandboxSpeed = speed;
             else
@@ -153,7 +154,8 @@ sealed class SandboxScenario(GameHost host)
         host.Session.Ticked += _ => SandboxTick();
         string pair = host.GameOptions.Sandbox >= 2 ? ", two facing each other 30 units apart (G fights)" : "";
         string more = host.GameOptions.Sandbox > 2 ? $", {host.GameOptions.Sandbox - 2} more round them" : "";
-        Console.WriteLine($"sandbox   {record}{pair}{more}; flat floor {2 * SandboxHalf:0} x {2 * SandboxHalf:0}, grid {SandboxMinor:0} / {SandboxMajor:0}");
+        Console.WriteLine($"sandbox   {record}{pair}{more}; flat floor {2 * SandboxHalf:0} x {2 * SandboxHalf:0}, "
+            + $"grid {SandboxMinor:0} / {SandboxMajor:0}");
         return new Vector3(0, host.Scene.FlatHeight, 0);
     }
 
@@ -315,7 +317,8 @@ sealed class SandboxScenario(GameHost host)
             AddCharacter("Foe", SandboxFoe, Add, yellow, detailed: false);
         }
         Add("");
-        Add($"patrol {(_sandboxPatrol ? $"ON: x {-PatrolHalf:0} <-> {PatrolHalf:0} (to {_patrolTarget:0})" : "off")}   follow {(_sandboxFollow ? "on" : "off")}", dim);
+        Add($"patrol {(_sandboxPatrol ? $"ON: x {-PatrolHalf:0} <-> {PatrolHalf:0} (to {_patrolTarget:0})" : "off")}   "
+            + $"follow {(_sandboxFollow ? "on" : "off")}", dim);
         Add("Z walk  X run  C free  [ ] fixed speed +-5  P patrol  G fight  Y follow  R stop", dim);
         SandboxPicker ??= host.AnimationLibrary is { } lib ? new SandboxAnimationPicker(lib, host.AnimationLengths) : null;
         if (SandboxPicker is not null)   // the button on the blank row
@@ -341,9 +344,18 @@ sealed class SandboxScenario(GameHost host)
         var cold = table.Cold(id.Slot)!;
         float v = MathF.Sqrt(hot.Velocity.X * hot.Velocity.X + hot.Velocity.Z * hot.Velocity.Z), measured = 0;
         if (host.Session.PreviousSnapshot.Characters.FirstOrDefault(c => c.Id == id) is { } before)
-            measured = Vector3.Distance(new Vector3(before.Position.X, 0, before.Position.Z), new Vector3(snapshot.Position.X, 0, snapshot.Position.Z)) / (float)host.Session.Simulation.TickSeconds;
+        {
+            measured = Vector3.Distance(new Vector3(before.Position.X, 0, before.Position.Z), new Vector3(snapshot.Position.X, 0, snapshot.Position.Z))
+                / (float)host.Session.Simulation.TickSeconds;
+        }
         byte mode = cold.ModeOverride ?? hot.Mode;
-        string modeText = mode switch { SpeedMode.Walk => $"WALK (cap {hot.WalkSpeed:0.#})", SpeedMode.Run => $"RUN (cap {SpeedMode.RunCap:0})", SpeedMode.Group => "GROUP (squad's slowest)", _ => "FREE (no cap)" };
+        string modeText = mode switch
+        {
+            SpeedMode.Walk => $"WALK (cap {hot.WalkSpeed:0.#})",
+            SpeedMode.Run => $"RUN (cap {SpeedMode.RunCap:0})",
+            SpeedMode.Group => "GROUP (squad's slowest)",
+            _ => "FREE (no cap)",
+        };
         add($"{label}: {snapshot.Name}   {(CharacterTask)hot.Task}", heading);
         add($"v {v,6:0.00} u/s   measured {measured,6:0.00}   speed chain {hot.MaxSpeed:0.0}", null);
         if (!detailed)
@@ -365,7 +377,9 @@ sealed class SandboxScenario(GameHost host)
             // Published by record name; the length is the clip's (a technique's record name differs from its clip).
             // An animal publishes its clips by clip name (its techniques by record name) and has its own skeleton's lengths.
             bool animal = cold.Fighter is { IsAnimal: true };
-            string clip = host.AnimationLibrary is { } lib && lib.IndexOfAny(layer.Name) is var at and >= 0 && (!animal || lib.Definitions[at].Technique) ? lib.Definitions[at].Clip : layer.Name;
+            var library = host.AnimationLibrary;
+            string clip = library is { } lib && lib.IndexOfAny(layer.Name) is var at and >= 0 && (!animal || lib.Definitions[at].Technique)
+                ? lib.Definitions[at].Clip : layer.Name;
             float length = host.AnimationLengths?.For(animal ? cold.Race?.StringId : null).Of(clip) ?? 1;
             add($"  {layer.Name,-28} t {layer.Time,5:0.00}/{length,5:0.00}  w {layer.Weight:0.00}", null);
         }

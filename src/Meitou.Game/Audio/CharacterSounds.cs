@@ -71,7 +71,10 @@ public sealed class CharacterSoundProfile
         if (look.Animal is not null)
         {
             string creature = CharacterSounds.CreatureName(sounds);
-            return new CharacterSoundProfile { Animal = true, Voice = creature, Weapons = creature, Barefoot = false, ArmourMaterial = 0, Ambient = ambient };
+            return new CharacterSoundProfile
+            {
+                Animal = true, Voice = creature, Weapons = creature, Barefoot = false, ArmourMaterial = 0, Ambient = ambient,
+            };
         }
         string race = CharacterSounds.PersonName(sounds);
         return new CharacterSoundProfile

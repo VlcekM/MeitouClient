@@ -44,74 +44,20 @@ static class FeedbackSender
         string? temp = p.SaveFolder is null ? null : Path.GetDirectoryName(p.SaveFolder);
         try
         {
-            byte[]? png = p.Screenshot is null ? null : await p.Screenshot;
-            byte[]? navPng = p.Navmesh is null ? null : await p.Navmesh;
-            string? zip = null;
-            if (p.SaveFolder is not null)
-            {
-                await p.SaveWritten!;
-                status("Zipping the save...");
-                zip = Path.Combine(temp!, "save.zip");
-                await Task.Run(() => ZipFile.CreateFromDirectory(p.SaveFolder, zip, CompressionLevel.Optimal, includeBaseDirectory: true));
-                long size = new FileInfo(zip).Length;
-                if (size > SaveMax) return new(0, null, $"The save is {Mb(size)} zipped, over the 95 MB limit. Untick it to send without it.");
-            }
-            byte[]? log = p.LogPath is null ? null : await Task.Run(() => GzipLog(p.LogPath));
-
-            status("Sending...");
-            var form = new JsonObject
-            {
-                ["title"] = p.Form.Title,
-                ["body"] = p.Form.Body,
-                ["version"] = p.Version,
-                ["commit"] = p.Commit,
-                ["platform"] = p.Platform,
-                ["discord"] = p.Form.Discord,
-                ["mods"] = new JsonArray([.. p.Mods.Select(m => (JsonNode)m)]),
-                ["screenshot"] = png is not null,
-                ["navmesh"] = navPng is not null,
-                ["location"] = p.Location,
-                ["save"] = zip is not null,
-                ["log"] = log is not null,
-            };
-            var content = new StringContent(form.ToJsonString(), Encoding.UTF8, "application/json");
-            var created = await Answer(await Http.PostAsync($"{ServiceUrl}/feedback", content));
-            string token = (string)created["token"]!;
-            if (png is not null)
-            {
-                status("Uploading the screenshot...");
-                await Put(token, "screenshot", new ByteArrayContent(png), "image/png");
-            }
-            if (navPng is not null)
-            {
-                status("Uploading the navmesh screenshot...");
-                await Put(token, "navmesh", new ByteArrayContent(navPng), "image/png");
-            }
-            if (zip is not null)
-            {
-                long size = new FileInfo(zip).Length;
-                int shown = -1;
-                await Put(token, "save", new FileUpload(zip, sent =>
-                {
-                    int percent = (int)(sent * 100 / Math.Max(1, size));
-                    if (percent != shown) status($"Uploading the save ({Mb(size)}): {shown = percent}%");
-                }), "application/zip");
-            }
-            if (log is not null)
-            {
-                status("Uploading log.txt...");
-                await Put(token, "log", new ByteArrayContent(log), "application/gzip");
-            }
-            status("Opening the issue...");
-            var issue = await Answer(await Http.PostAsync($"{ServiceUrl}/feedback/{token}/send", null));
-            return new((int)issue["number"]!, (string)issue["url"]!, null);
+            return await SendReport(p, status, temp);
         }
         catch (Refused e)
         {
             return new(0, null, e.Message);
         }
-        catch (HttpRequestException e) { return new(0, null, $"Could not reach the feedback service: {e.Message}"); }
-        catch (TaskCanceledException) { return new(0, null, "The feedback service took too long to answer. Try again."); }
+        catch (HttpRequestException e)
+        {
+            return new(0, null, $"Could not reach the feedback service: {e.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            return new(0, null, "The feedback service took too long to answer. Try again.");
+        }
         catch (Exception e)
         {
             Console.Error.WriteLine($"feedback  not sent: {e}");
@@ -126,6 +72,90 @@ static class FeedbackSender
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
             }
+        }
+    }
+
+    /// <summary>
+    /// The report's steps: the screenshots, the zipped save and the log made ready, the form sent, each attachment uploaded, the issue opened.
+    /// </summary>
+    static async Task<FeedbackResult> SendReport(FeedbackPackage p, Action<string> status, string? temp)
+    {
+        byte[]? png = p.Screenshot is null ? null : await p.Screenshot;
+        byte[]? navPng = p.Navmesh is null ? null : await p.Navmesh;
+        string? zip = null;
+        if (p.SaveFolder is not null)
+        {
+            await p.SaveWritten!;
+            status("Zipping the save...");
+            zip = Path.Combine(temp!, "save.zip");
+            await Task.Run(() => ZipFile.CreateFromDirectory(p.SaveFolder, zip, CompressionLevel.Optimal, includeBaseDirectory: true));
+            long size = new FileInfo(zip).Length;
+            if (size > SaveMax) return new(0, null, $"The save is {Mb(size)} zipped, over the 95 MB limit. Untick it to send without it.");
+        }
+        byte[]? log = p.LogPath is null ? null : await Task.Run(() => GzipLog(p.LogPath));
+
+        status("Sending...");
+        string token = await CreateReport(p, png, navPng, zip, log);
+        await UploadAttachments(token, png, navPng, zip, log, status);
+        status("Opening the issue...");
+        var issue = await Answer(await Http.PostAsync($"{ServiceUrl}/feedback/{token}/send", null));
+        return new((int)issue["number"]!, (string)issue["url"]!, null);
+    }
+
+    /// <summary>
+    /// Sends the form (with which attachments follow) and returns the report's upload token.
+    /// </summary>
+    static async Task<string> CreateReport(FeedbackPackage p, byte[]? png, byte[]? navPng, string? zip, byte[]? log)
+    {
+        var form = new JsonObject
+        {
+            ["title"] = p.Form.Title,
+            ["body"] = p.Form.Body,
+            ["version"] = p.Version,
+            ["commit"] = p.Commit,
+            ["platform"] = p.Platform,
+            ["discord"] = p.Form.Discord,
+            ["mods"] = new JsonArray([.. p.Mods.Select(m => (JsonNode)m)]),
+            ["screenshot"] = png is not null,
+            ["navmesh"] = navPng is not null,
+            ["location"] = p.Location,
+            ["save"] = zip is not null,
+            ["log"] = log is not null,
+        };
+        var content = new StringContent(form.ToJsonString(), Encoding.UTF8, "application/json");
+        var created = await Answer(await Http.PostAsync($"{ServiceUrl}/feedback", content));
+        return (string)created["token"]!;
+    }
+
+    /// <summary>
+    /// Uploads each attachment of the report, one request each, the save with its progress.
+    /// </summary>
+    static async Task UploadAttachments(string token, byte[]? png, byte[]? navPng, string? zip, byte[]? log, Action<string> status)
+    {
+        if (png is not null)
+        {
+            status("Uploading the screenshot...");
+            await Put(token, "screenshot", new ByteArrayContent(png), "image/png");
+        }
+        if (navPng is not null)
+        {
+            status("Uploading the navmesh screenshot...");
+            await Put(token, "navmesh", new ByteArrayContent(navPng), "image/png");
+        }
+        if (zip is not null)
+        {
+            long size = new FileInfo(zip).Length;
+            int shown = -1;
+            await Put(token, "save", new FileUpload(zip, sent =>
+            {
+                int percent = (int)(sent * 100 / Math.Max(1, size));
+                if (percent != shown) status($"Uploading the save ({Mb(size)}): {shown = percent}%");
+            }), "application/zip");
+        }
+        if (log is not null)
+        {
+            status("Uploading log.txt...");
+            await Put(token, "log", new ByteArrayContent(log), "application/gzip");
         }
     }
 

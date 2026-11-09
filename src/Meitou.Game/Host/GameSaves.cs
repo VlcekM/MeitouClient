@@ -98,9 +98,12 @@ sealed class GameSaves(GameHost host)
         if (host.PopData is { } data) (data.BodyOptions.Dismemberment, data.BodyOptions.Decapitation,
             data.BodyOptions.AdvancedRagdolls) = (gameplay.Dismemberment, host.Config.Decapitation, host.Config.AdvancedRagdolls);
         foreach (var population in host.Session.World.Systems.OfType<PopulationSystem>())
-            (population.Settings.SquadSizeMultiplier, population.Settings.PopulationMultiplier, population.Settings.RaidSizeMult, population.Settings.RaidFrequencyMult) =
-                (gameplay.SquadSize, gameplay.Population, gameplay.RaidSize, gameplay.RaidFrequency);
-        foreach (var population in host.Session.World.Systems.OfType<PopulationSystem>()) population.Settings.FastZoneHopping = gameplay.FastZoneHopping;
+        {
+            (population.Settings.SquadSizeMultiplier, population.Settings.PopulationMultiplier, population.Settings.RaidSizeMult,
+                population.Settings.RaidFrequencyMult) = (gameplay.SquadSize, gameplay.Population, gameplay.RaidSize, gameplay.RaidFrequency);
+        }
+        foreach (var population in host.Session.World.Systems.OfType<PopulationSystem>())
+            population.Settings.FastZoneHopping = gameplay.FastZoneHopping;
         foreach (var ai in host.Session.World.Systems.OfType<Simulation.Ai.AiSystem>()) ai.Settings.TownAttacks = gameplay.TownAttacks;
         foreach (var combat in host.Session.World.Systems.OfType<Simulation.Combat.CombatSystem>()) combat.StuckLimit = gameplay.HarpoonLimit;
     }
@@ -175,9 +178,21 @@ sealed class GameSaves(GameHost host)
             QuickLoadRequested = false;
             BeginQuickLoad();
         }
-        if (SaveRequestedFolder is { } to) { SaveRequestedFolder = null; QuickSaveNow(to); }
-        if (LoadRequestedFolder is { } sourceFolder) { LoadRequestedFolder = null; BeginQuickLoad(sourceFolder); }
-        if (ImportRequested is { } import) { ImportRequested = null; BeginImport(import.Folder, import.Options); }
+        if (SaveRequestedFolder is { } to)
+        {
+            SaveRequestedFolder = null;
+            QuickSaveNow(to);
+        }
+        if (LoadRequestedFolder is { } sourceFolder)
+        {
+            LoadRequestedFolder = null;
+            BeginQuickLoad(sourceFolder);
+        }
+        if (ImportRequested is { } import)
+        {
+            ImportRequested = null;
+            BeginImport(import.Folder, import.Options);
+        }
 
         if (PreparedBase is null && SavesAvailable(out _) && host.Session.World.Player.Exists)
         {
@@ -277,7 +292,8 @@ sealed class GameSaves(GameHost host)
             {
                 var written = Stopwatch.StartNew();
                 game.Write(folder);
-                Console.WriteLine($"save      {folder}: captured in {captureMs:0.0} ms{(ahead ? "" : " (the base made on the spot)")}, written in {written.ElapsedMilliseconds} ms");
+                Console.WriteLine($"save      {folder}: captured in {captureMs:0.0} ms{(ahead ? "" : " (the base made on the spot)")}, "
+                    + $"written in {written.ElapsedMilliseconds} ms");
                 if (!feedback) _saveNotices.Enqueue(("Saved", false));
             }
             catch (Exception e)
@@ -346,7 +362,15 @@ sealed class GameSaves(GameHost host)
             GameHost.Stage("read", () => read = Task.Run(() => SaveGame.Load(SaveFolder.Open(folder), ReadArrivalHour))),
             GameHost.Stage("systems", () => { prepared = PrepareSystems(read!, interactive: true); return null; }, duringAscent: true),
             GameHost.Stage("build", () => SwapInSave(read!, interactive: true, out summary, prepared: prepared)),
-            GameHost.Stage("finishing", () => { host.SettleNewWorld(); host.Player.FollowSelected(); FinishLoadNotice(summary); PauseAfterLoad(); SaveInUse = folder; return null; }));
+            GameHost.Stage("finishing", () =>
+            {
+                host.SettleNewWorld();
+                host.Player.FollowSelected();
+                FinishLoadNotice(summary);
+                PauseAfterLoad();
+                SaveInUse = folder;
+                return null;
+            }));
     }
 
     /// <summary>
@@ -473,7 +497,8 @@ sealed class GameSaves(GameHost host)
         }
         host.PopData = nextData;
         Difficulty = nextDifficulty;
-        host.Player.AdvancedOptions.NewGameOptions = nextDifficulty;   // the New game window then shows the loaded save's options (the original loads them into its globals)
+        // The New game window then shows the loaded save's options (the original loads them into its globals).
+        host.Player.AdvancedOptions.NewGameOptions = nextDifficulty;
         host.Population = built.Population;
         if (host.Nav is not null) host.Population!.ZoneGate = zone => host.Nav.Walkability.World.Contains(zone);
         SnapshotPlayerTowns();
@@ -518,7 +543,10 @@ sealed class GameSaves(GameHost host)
             }
             navmesh = NavmeshAround(at);
         }
-        summary = $"{ReadingFolder}: {loaded.PlayerPlatoons.Sum(p => p.Squad.Members.Count)} player character(s), {loaded.RoamingPlatoons.Count} roaming, {loaded.TownBoundPlatoons} town and {loaded.WildPlatoons} wild platoon(s) kept as saved, day {loaded.Clock.Day} {loaded.Clock.Hour:00}:{loaded.Clock.Minute:00}, made in {watch.ElapsedMilliseconds} ms";
+        summary = $"{ReadingFolder}: {loaded.PlayerPlatoons.Sum(p => p.Squad.Members.Count)} player character(s), "
+            + $"{loaded.RoamingPlatoons.Count} roaming, "
+            + $"{loaded.TownBoundPlatoons} town and {loaded.WildPlatoons} wild platoon(s) kept as saved, "
+            + $"day {loaded.Clock.Day} {loaded.Clock.Hour:00}:{loaded.Clock.Minute:00}, made in {watch.ElapsedMilliseconds} ms";
         return navmesh;
     }
 

@@ -181,8 +181,13 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     public float FontSize
     {
         get => _fontSize;
-        set { _fontSize = value; if (UiPainter is not null) UiPainter.FontSizeSetting = value; }
+        set
+        {
+            _fontSize = value;
+            if (UiPainter is not null) UiPainter.FontSizeSetting = value;
+        }
     }
+
     float _fontSize = KenshiFontSize.DefaultSetting;
 
     internal Func<string, string?>? UiResolve;
@@ -197,6 +202,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         try { return _uiAtlas = TextureLoader.LoadFile(path, allMips: false).Levels[0]; }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException) { return null; }
     }
+
     /// <summary>
     /// How far from the camera a box select still takes characters.
     /// </summary>
@@ -235,7 +241,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         var firstSelected = Selected().Count > 0 ? Selected()[0].Id : CharacterId.None;
         var squad = snapshot.PlayerSquads.FirstOrDefault(s => s.Id == snapshot.ActiveSquad)
             ?? snapshot.PlayerSquads.FirstOrDefault(s => s.Members.Contains(firstSelected)) ?? snapshot.PlayerSquads.FirstOrDefault();
-        if (squad is null) return snapshot.PlayerSquads.Count == 0 ? PlayerCharacters() : [];   // a world with no squad list at all (tests, bare sessions) keeps every player character
+        // A world with no squad list at all (tests, bare sessions) keeps every player character.
+        if (squad is null) return snapshot.PlayerSquads.Count == 0 ? PlayerCharacters() : [];
         var present = PlayerCharacters().ToHashSet();
         return [.. squad.Members.Where(present.Contains)];
     }
@@ -275,75 +282,111 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         if (button == MouseButton.Right && !OverHud(p) && Build.WallCancel()) return true;
         if (button == MouseButton.Right && !OverHud(p) && LevelEditorPanel.LevelClearAt(p)) return true;
         if (button == MouseButton.Right && !OverHud(p) && Build.BuildDiscard()) return true;
-        if (button == MouseButton.Left)
-        {
-            if (ContextMenuWindow.OpenMenu is not null) return true;   // an open menu takes no press: its rows act on the release, a press beside it does nothing (FUN_1407a7f10)
-            if (UiMouseDown(p)) return true;
-            if (OverHud(p)) return true;
-
-            // Debug "Explode on click": the host takes the press on the ground (the point under the cursor, if any) instead of the selection.
-            if (Picking.WorldClick is { } worldClick && !WorldMap.MapTabShown
-                    && worldClick(Ray(p) is { } wr ? Picking.MoveHit(wr.Origin, wr.Direction) : null))
-                return true;
-
-            // A ground item's name label (shown while Highlight is held) takes the left press; its release over it is the item's pick-up (FUN_1401638f0).
-            if (GroundItemPicks.LabelAt(p) is { } label) { GroundItemPicks.LabelPress = label; return true; }
-            if (Build.BuildClick()) return true;
-            _dragFrom = p;
-            Dragging = false;
-            return true;
-        }
+        if (button == MouseButton.Left) return LeftDown(p);
         if (button == MouseButton.Right && WorldMap.InventoryRightClick(p, shift)) return true;
         if (button == MouseButton.Right && ContextMenuWindow.CloseContextMenu()) return true;
         if (button == MouseButton.Right && WorldMap.MapRightDown(p)) return true;
 
-        // A right press on a squad bar portrait held 0.25 s opens the member's context menu; a quicker release over it selects the member and focuses the camera on it,
-        // as the double click (FUN_140413d80, FUN_140415630, docs/game/ui-input.md "Squad bar portraits").
-        if (button == MouseButton.Right && PortraitBar.SquadBarMemberAt(p) is { } member)
-        {
-            if (Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == member) is { } shown
-                && ContextMenuWindow.ContextPressOn(p, at => ContextMenuWindow.Menu(shown.Name, at, ContextMenuWindow.Verbs(shown)),
-                    () => FocusMember(member, shift), ContextMenuWindow.PortraitHoldSeconds)) return true;
-            _memberPress = member;
-            return true;
-        }
+        // A right press on a squad bar portrait held 0.25 s opens the member's context menu; a quicker release over it selects the member and
+        // focuses the camera on it, as the double click (FUN_140413d80, FUN_140415630, docs/game/ui-input.md "Squad bar portraits").
+        if (button == MouseButton.Right && PortraitBar.SquadBarMemberAt(p) is { } member) return PortraitRightDown(p, member, shift);
         if (button == MouseButton.Middle && UiVisible && WorldMap.MapPointerDown(p)) return true;
-        if (button == MouseButton.Right && !OverHud(p))
-        {
-            // Alt + right click on a downed or dead character: the nearest selected loots it (take all). Ctrl + right click: picks it up, or puts it
-            // down when a selected character carries it. A plain right click on one of your own downed characters that needs no first aid picks it up
-            // too (the original's quick right click). A ground item's name label (shown while Alt is held) is drawn over everything: a click on it is
-            // the item's, never the body lying beside it.
-            var downed = (alt || ctrl) && GroundItemPicks.LabelAt(p) is null ? Picking.PickDowned(p) : null;
-            if (alt && downed is { } loot && SelectedIds() is { Count: > 0 })
-                Say(new Simulation.Carrying.LootOrder([], loot) { Tick = Session.World.Tick });
-            else if (ctrl && downed is { } body && Selected().Where(c => c.Carrying == body).Select(c => c.Id).ToArray() is { Length: > 0 } carriers)
-                Say(new Simulation.Carrying.PutDownOrder(carriers) { Tick = Session.World.Tick });
-            else if (ctrl && downed is { } lift && SelectedIds() is { Count: > 0 })
-                Say(new Simulation.Carrying.PickUpOrder([], lift) { Tick = Session.World.Tick });
+        if (button == MouseButton.Right && !OverHud(p)) return WorldRightDown(p, shift, ctrl, alt);
+        return OverHud(p);
+    }
 
-            // Else the nearest target along the ray (PickAt). On a character: the quick order (trade with a trader, attack anyone else, treat a hurt
-            // ally, pick up a downed one of yours, loot anyone else's) is given when the button comes up before the context menu's hold time; held
-            // longer, the menu opens instead (ContextMenuWindow).
-            else if (Picking.PickAt(p).Kind is var kind && kind == WorldPicking.Picked.Character) { var quick = QuickOrder(p)?.Do; if (!ContextMenuWindow.ContextPress(p, quick)) quick?.Invoke(); }
-            else if (kind == WorldPicking.Picked.GroundItem && GroundItemPicks.GroundItemClick(p)) { }
-            else if (kind == WorldPicking.Picked.Container && Furniture.ContainerClick(p, alt)) { }
-            else if (kind == WorldPicking.Picked.Door && Furniture.DoorClick(p, alt)) { }
-            else if (kind == WorldPicking.Picked.Bed && Furniture.BedPress(p)) { }
-            else if (kind == WorldPicking.Picked.Seat && Furniture.SeatPress(p)) { }
-            else if (kind == WorldPicking.Picked.Cage && Furniture.CageClick(p)) { }
-            else if (kind == WorldPicking.Picked.Dummy && Furniture.DummyPress(p)) { }
-            else if (kind == WorldPicking.Picked.Rock && Furniture.RockPress(p)) { }
-            else if (kind is WorldPicking.Picked.Site or WorldPicking.Picked.None && Build.SitePress(p)) { }
-            else if (Ray(p) is { } ray && Picking.MoveHit(ray.Origin, ray.Direction) is { } hit)
-            {
-                Move(hit, shift);
-                MoveMarker.PlaceMarker(hit);
-                (Steering, _steerTarget, _steerTick) = (!shift, hit, Session.World.Tick);
-            }
+    /// <summary>
+    /// A left press past the HUD's own handlers: the interface, the debug world click, a ground item's label, the build mode, else the start of
+    /// a selection drag; always taken.
+    /// </summary>
+    bool LeftDown(Vector2 p)
+    {
+        // An open menu takes no press: its rows act on the release, a press beside it does nothing (FUN_1407a7f10).
+        if (ContextMenuWindow.OpenMenu is not null) return true;
+        if (UiMouseDown(p)) return true;
+        if (OverHud(p)) return true;
+
+        // Debug "Explode on click": the host takes the press on the ground (the point under the cursor, if any) instead of the selection.
+        if (Picking.WorldClick is { } worldClick && !WorldMap.MapTabShown
+                && worldClick(Ray(p) is { } wr ? Picking.MoveHit(wr.Origin, wr.Direction) : null))
+            return true;
+
+        // A ground item's name label (shown while Highlight is held) takes the left press; its release over it is the item's pick-up
+        // (FUN_1401638f0).
+        if (GroundItemPicks.LabelAt(p) is { } label)
+        {
+            GroundItemPicks.LabelPress = label;
             return true;
         }
-        return OverHud(p);
+        if (Build.BuildClick()) return true;
+        _dragFrom = p;
+        Dragging = false;
+        return true;
+    }
+
+    /// <summary>
+    /// A right press on squad bar portrait <paramref name="member"/>: the context press on it, else the press a quick release selects; always
+    /// taken.
+    /// </summary>
+    bool PortraitRightDown(Vector2 p, CharacterId member, bool shift)
+    {
+        if (Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == member) is { } shown
+            && ContextMenuWindow.ContextPressOn(p, at => ContextMenuWindow.Menu(shown.Name, at, ContextMenuWindow.Verbs(shown)),
+                () => FocusMember(member, shift), ContextMenuWindow.PortraitHoldSeconds)) return true;
+        _memberPress = member;
+        return true;
+    }
+
+    /// <summary>
+    /// A right press on the world: the Alt / Ctrl orders on a downed character, else the click on what is under the cursor; always taken.
+    /// </summary>
+    bool WorldRightDown(Vector2 p, bool shift, bool ctrl, bool alt)
+    {
+        // Alt + right click on a downed or dead character: the nearest selected loots it (take all). Ctrl + right click: picks it up, or puts it
+        // down when a selected character carries it. A plain right click on one of your own downed characters that needs no first aid picks it up
+        // too (the original's quick right click). A ground item's name label (shown while Alt is held) is drawn over everything: a click on it is
+        // the item's, never the body lying beside it.
+        var downed = (alt || ctrl) && GroundItemPicks.LabelAt(p) is null ? Picking.PickDowned(p) : null;
+        if (alt && downed is { } loot && SelectedIds() is { Count: > 0 })
+            Say(new Simulation.Carrying.LootOrder([], loot) { Tick = Session.World.Tick });
+        else if (ctrl && downed is { } body && Selected().Where(c => c.Carrying == body).Select(c => c.Id).ToArray() is { Length: > 0 } carriers)
+            Say(new Simulation.Carrying.PutDownOrder(carriers) { Tick = Session.World.Tick });
+        else if (ctrl && downed is { } lift && SelectedIds() is { Count: > 0 })
+            Say(new Simulation.Carrying.PickUpOrder([], lift) { Tick = Session.World.Tick });
+        else
+            PickedRightDown(p, shift, alt);
+        return true;
+    }
+
+    /// <summary>
+    /// A right press on the nearest target along the ray (PickAt): its own click, else a move to the ground under the cursor.
+    /// </summary>
+    void PickedRightDown(Vector2 p, bool shift, bool alt)
+    {
+        // On a character: the quick order (trade with a trader, attack anyone else, treat a hurt ally, pick up a downed one of yours, loot anyone
+        // else's) is given when the button comes up before the context menu's hold time; held longer, the menu opens instead (ContextMenuWindow).
+        var kind = Picking.PickAt(p).Kind;
+        if (kind == WorldPicking.Picked.Character)
+        {
+            var quick = QuickOrder(p)?.Do;
+            if (!ContextMenuWindow.ContextPress(p, quick)) quick?.Invoke();
+            return;
+        }
+        if (kind == WorldPicking.Picked.GroundItem && GroundItemPicks.GroundItemClick(p)) return;
+        if (kind == WorldPicking.Picked.Container && Furniture.ContainerClick(p, alt)) return;
+        if (kind == WorldPicking.Picked.Door && Furniture.DoorClick(p, alt)) return;
+        if (kind == WorldPicking.Picked.Bed && Furniture.BedPress(p)) return;
+        if (kind == WorldPicking.Picked.Seat && Furniture.SeatPress(p)) return;
+        if (kind == WorldPicking.Picked.Cage && Furniture.CageClick(p)) return;
+        if (kind == WorldPicking.Picked.Dummy && Furniture.DummyPress(p)) return;
+        if (kind == WorldPicking.Picked.Rock && Furniture.RockPress(p)) return;
+        if (kind is WorldPicking.Picked.Site or WorldPicking.Picked.None && Build.SitePress(p)) return;
+        if (Ray(p) is { } ray && Picking.MoveHit(ray.Origin, ray.Direction) is { } hit)
+        {
+            Move(hit, shift);
+            MoveMarker.PlaceMarker(hit);
+            (Steering, _steerTarget, _steerTick) = (!shift, hit, Session.World.Tick);
+        }
     }
 
     /// <summary>
@@ -475,7 +518,15 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             if (GroundItemPicks.LabelAt(p) == labelled) GroundItemPicks.LabelPickUp(labelled);
             return;
         }
-        if (button == MouseButton.Left) { WorldMap.MapPickUp(p); InventoryWindows.InventoryPointerUp(p); OrdersPanel.JobDragEnd(p); SquadWindows.SquadPointerUp(p, shift); FaithfulScreens.PointerUp(); WorldMap.MapDrag = null; }
+        if (button == MouseButton.Left)
+        {
+            WorldMap.MapPickUp(p);
+            InventoryWindows.InventoryPointerUp(p);
+            OrdersPanel.JobDragEnd(p);
+            SquadWindows.SquadPointerUp(p, shift);
+            FaithfulScreens.PointerUp();
+            WorldMap.MapDrag = null;
+        }
         if (button == MouseButton.Middle) WorldMap.MapDrag = null;
         if (button == MouseButton.Right && _memberPress is { } pressed)
         {
@@ -484,7 +535,15 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
             return;
         }
         if (button == MouseButton.Right && WorldMap.MapRightUp(p)) return;
-        if (button == MouseButton.Right) { ContextMenuWindow.ContextRelease(); Build.SiteRelease(); Furniture.RockRelease(); Furniture.BedRelease(); Furniture.DummyRelease(); Furniture.SeatRelease(); }
+        if (button == MouseButton.Right)
+        {
+            ContextMenuWindow.ContextRelease();
+            Build.SiteRelease();
+            Furniture.RockRelease();
+            Furniture.BedRelease();
+            Furniture.DummyRelease();
+            Furniture.SeatRelease();
+        }
         if (button == MouseButton.Right && Steering)
         {
             Steer(final: true);
@@ -585,6 +644,7 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         Select([member], shift, toggle: true);
         if (FlyTo?.Invoke(member) != true) CentreOn(member);
     }
+
     /// <summary>
     /// The host's camera flight to a double-clicked squad member (Advanced settings "Character flights"); false: centre on it at once.
     /// </summary>
@@ -722,7 +782,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
         o.Flush(width, height, null, pass);
     }
 
-    // The palette of data/gui/colours/kenshi_colours.xml (Verified): Main, Secondary (the text default), Title, Bad, Good, Alert; a mod's file replaces it (MyGuiColours.LoadPalette).
+    // The palette of data/gui/colours/kenshi_colours.xml (Verified): Main, Secondary (the text default), Title, Bad, Good, Alert; a mod's file
+    // replaces it (MyGuiColours.LoadPalette).
     internal static string MainColour => MyGuiColours.Named("Main", "afa68b");
     internal static string TitleColour => MyGuiColours.Named("Title", "492620");
     internal static string BadColour => MyGuiColours.Named("Bad", "59231a");
@@ -864,7 +925,9 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
     /// The standard text's em pixels at the window's height: the Faithful mode's as the original sizes its font at that scale
     /// (<see cref="UiPainter.StandardTextPixels"/>, smaller than linear above 1080 lines), Meitou's the 1080-line size scaled.
     /// </summary>
-    internal float StandardPixels => UiMode == UiMode.Faithful && UiPainter is { } painter ? painter.StandardTextPixels(Height) : StandardTextPixels * Height / 1080f;
+    internal float StandardPixels => UiMode == UiMode.Faithful && UiPainter is { } painter
+        ? painter.StandardTextPixels(Height)
+        : StandardTextPixels * Height / 1080f;
 
     internal float InventoryScale => Height / 1080f;
     internal float InventoryCell => 25 * InventoryScale;

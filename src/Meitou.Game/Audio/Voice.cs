@@ -85,7 +85,11 @@ sealed class Voice : IDisposable
     /// </summary>
     void Rewind(long frame = 0)
     {
-        if (_pcm is not null) { _pcmRead = frame * _clip.Channels; return; }
+        if (_pcm is not null)
+        {
+            _pcmRead = frame * _clip.Channels;
+            return;
+        }
         _reader!.Dispose();
         _reader = Open();
         if (frame > 0) _reader.SeekTo(frame);
@@ -132,7 +136,11 @@ sealed class Voice : IDisposable
         _cursor += _owed;
         _owed = 0;
         long done = (long)(_cursor / _framesPerPlay);
-        if (_plays > 0 && done >= _plays) { _ended = true; return; }
+        if (_plays > 0 && done >= _plays)
+        {
+            _ended = true;
+            return;
+        }
         long within = Math.Clamp((long)(_cursor - (double)done * _framesPerPlay), 0, _framesPerPlay - 1);
         try { Rewind(within); }
         catch (Exception e) when (e is InvalidDataException or InvalidOperationException or ArgumentException or IOException)

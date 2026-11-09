@@ -158,7 +158,9 @@ sealed class GameLoop(GameHost host)
         SetUpCameraFlights();
         ConnectInput();
         Console.WriteLine(GameOptions.Usage[GameOptions.Usage.IndexOf("Keys:", StringComparison.Ordinal)..]);
-        Console.WriteLine($"display   vsync {(_vsync ? "on" : "off")}, frame limit {(_vsync || _fpsLimit <= 0 ? "none" : _fpsLimit + " fps")}, control tick {host.Session.Ticks.TickRate:0} Hz, world tick {SimulationClock.TickRate:0} per game second; settings in {host.Config.Path}");
+        Console.WriteLine($"display   vsync {(_vsync ? "on" : "off")}, frame limit {(_vsync || _fpsLimit <= 0 ? "none" : _fpsLimit + " fps")}, "
+            + $"control tick {host.Session.Ticks.TickRate:0} Hz, world tick {SimulationClock.TickRate:0} per game second; "
+            + $"settings in {host.Config.Path}");
 
         _frame = Stopwatch.StartNew();
         ConnectGameEvents();
@@ -322,7 +324,8 @@ sealed class GameLoop(GameHost host)
                         _ => throw new ArgumentOutOfRangeException(nameof(index)) });
                     return $"UI mode: {host.Player.UiMode}";
                 })]);
-        var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0", Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps");
+        var frameLimit = new Slider("Frame limit", 0, 360, () => _fpsLimit, v => _fpsLimit = (int)MathF.Round(v / 5) * 5, "0",
+            Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps");
         _panel = new SettingsMenu(host.Player, values, host.Session.Bindings, SaveSettings, frameLimit, host.Config)
         {
             UpscalerStatus = () => host.Gpu.Post?.ActiveUpscaler ?? "Off",
@@ -363,11 +366,14 @@ sealed class GameLoop(GameHost host)
     {
         foreach (var population in host.Session.World.Systems.OfType<Simulation.Population.PopulationSystem>())
         {
-            (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing) = (host.Config.KeepRoamers, host.Config.OffscreenFights, host.Config.OffscreenHealing);
-            (population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) = (host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
+            (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing) =
+                (host.Config.KeepRoamers, host.Config.OffscreenFights, host.Config.OffscreenHealing);
+            (population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) =
+                (host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
         }
 
-        foreach (var production in host.Session.World.Systems.OfType<Simulation.Production.ProductionSystem>()) production.UnloadedProduction = host.Config.UnloadedProduction;
+        foreach (var production in host.Session.World.Systems.OfType<Simulation.Production.ProductionSystem>())
+            production.UnloadedProduction = host.Config.UnloadedProduction;
     }
 
     void ApplyCameraRotateSpeed(float speed) => host.Session.Camera.Settings.RotateSpeedX = host.Session.Camera.Settings.RotateSpeedY =
@@ -488,7 +494,11 @@ sealed class GameLoop(GameHost host)
         _keyboards = _silkInput is null ? [] : _silkInput.Keyboards;
         _mice = _silkInput is null ? [] : _silkInput.Mice;
         host.Player.ClipboardRead = () => _keyboards.Count > 0 ? ClipboardText.Read(_keyboards[0]) : _headless ? _headlessClipboard : null;
-        host.Player.ClipboardWrite = text => { if (_keyboards.Count > 0) _keyboards[0].ClipboardText = text; else if (_headless) _headlessClipboard = text; };
+        host.Player.ClipboardWrite = text =>
+        {
+            if (_keyboards.Count > 0) _keyboards[0].ClipboardText = text;
+            else if (_headless) _headlessClipboard = text;
+        };
         _lockOrbit = OperatingSystem.IsLinux();
         foreach (var kb in _keyboards) ConnectKeyboard(kb);
         foreach (var mouse in _mice) ConnectMouse(mouse);
@@ -627,7 +637,11 @@ sealed class GameLoop(GameHost host)
                 _shiftDown = false;
                 host.Player.SlowModifier = false;
             }
-            if (KeyMap.Map(k) is { } key) { host.Session.Input.SetKey(key, false); host.Player.Build.BuildKeyUp(key); }
+            if (KeyMap.Map(k) is { } key)
+            {
+                host.Session.Input.SetKey(key, false);
+                host.Player.Build.BuildKeyUp(key);
+            }
         };
         kb.KeyChar += (_, value) => OnKeyChar(value);
     }
@@ -907,12 +921,26 @@ sealed class GameLoop(GameHost host)
     {
         host.Player.UiVisible = PanelLive() && !host.GameOptions.NoPopulation;
         bool select = physical is { } pressed && host.PlayerButton(pressed) == EngineButton.Left;   // the Select button, whichever it is bound to
-        if (PanelLive() && physical is { } settingsButton && _panel?.MouseDown(at, settingsButton) == true) { _panelDrag = true; return; }
+        if (PanelLive() && physical is { } settingsButton && _panel?.MouseDown(at, settingsButton) == true)
+        {
+            _panelDrag = true;
+            return;
+        }
         if (PanelLive() && _panel?.Contains(at) == true) return;
         if (select && PanelLive() && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true) return;
         if (select && PanelLive() && host.Sandbox.SandboxToggleClick(at)) return;
-        if (select && host.DebugMenu.Profiler?.Click(at) == true) { _profilerClick = true; return; }   // F12's legend opens and closes rows
-        if (select && host.DebugOverlays.StatsToggleClick(at)) { _profilerClick = true; return; }   // F11's character boxes and paths
+        // F12's legend opens and closes rows
+        if (select && host.DebugMenu.Profiler?.Click(at) == true)
+        {
+            _profilerClick = true;
+            return;
+        }
+        // F11's character boxes and paths
+        if (select && host.DebugOverlays.StatsToggleClick(at))
+        {
+            _profilerClick = true;
+            return;
+        }
         // The cinema's editor: its clicks never select or move characters.
         if (select && _cinema.MouseDown(at)) return;
         if (_cinema.Contains(at)) return;
@@ -1042,7 +1070,11 @@ sealed class GameLoop(GameHost host)
             host.AgentChannel.ControlShotFailed("the frame cannot be drawn (window minimised or device lost)");
         UpdateStats(dt);
         _totalFrames++;
-        if (host.GameOptions.QuitAfter is { } quitAfter && now >= quitAfter) { PrintRunSummary(now); _quit = true; }
+        if (host.GameOptions.QuitAfter is { } quitAfter && now >= quitAfter)
+        {
+            PrintRunSummary(now);
+            _quit = true;
+        }
         // The limit is on presented frames: with frame generation on every rendered frame brings a generated one, so the render rate is half of it.
         if (!_display.VSync && _fpsLimit > 0) GameHost.Limit(_frame, now, (_frameGen is { Enabled: true } ? 2.0 : 1.0) / _fpsLimit);
         return true;
@@ -1342,7 +1374,11 @@ sealed class GameLoop(GameHost host)
         host.Gpu.Post!.Target = backbuffer;
         // Frame generation (the one loaded at start-up): made on the first frame; wanted except under the loading screen and for saved pictures.
         if (_frameGen is FrameGeneration && _display.FrameGenerationLayer is null)
-                { _frameGen.Dispose(); _frameGen = null; }   // the layer fell back to the plain swapchain
+                {
+                    // the layer fell back to the plain swapchain
+                    _frameGen.Dispose();
+                    _frameGen = null;
+                }
         if (!_frameGenTried)
         {
             _frameGenTried = true;
@@ -1605,10 +1641,12 @@ sealed class GameLoop(GameHost host)
         _stats.Add("Performance");
         string limit = _display.VSync ? "vsync" : _fpsLimit > 0 ? $"limit {_fpsLimit}" : "uncapped";
         string gpuMs = _gpuSamples > 0 ? $"{_gpuSum / _gpuSamples:0.0}" : "-";
-        _stats.Add($"  frame rate    {_statsFrames / _statsTimer:0} fps{FrameGenerationSetup.FrameGenerationShown(_frameGen)}, {limit}; graphics card {gpuMs} ms a frame");
+        _stats.Add($"  frame rate    {_statsFrames / _statsTimer:0} fps{FrameGenerationSetup.FrameGenerationShown(_frameGen)}, {limit}; "
+            + $"graphics card {gpuMs} ms a frame");
         long ticks = host.Session.Simulation.TotalTicks - _statsTicks;
         _statsTicks = host.Session.Simulation.TotalTicks;
-        _stats.Add($"  simulation    {ticks / _statsTimer:0} ticks/s, {host.Session.CurrentSnapshot.Characters.Count} characters, {host.Session.Simulation.DroppedTicks} ticks dropped since the start");
+        _stats.Add($"  simulation    {ticks / _statsTimer:0} ticks/s, {host.Session.CurrentSnapshot.Characters.Count} characters, "
+            + $"{host.Session.Simulation.DroppedTicks} ticks dropped since the start");
         long objectTris = host.Gpu.Objects?.Totals[0, 1] ?? 0;
         int frames = Math.Max(_statsFrames, 1);
         var triangles = new WorldStats.Triangles(_terrainTris / frames, (objectTris - _objectTris0) / (double)frames,
@@ -1628,15 +1666,28 @@ sealed class GameLoop(GameHost host)
     {
         var snapshot = host.Session.CurrentSnapshot;
         string characters = host.Gpu.Characters is { } chars ? chars.Statistics() : "no characters";
-        Console.WriteLine($"profile   {snapshot.Characters.Count} characters in the snapshot, {snapshot.Characters.Count(c => c.Appearance is not null)} drawable; per frame: simulation advance {host.AdvanceTotal / Math.Max(_totalFrames, 1):0.000} ms ({host.Session.Simulation.TotalTicks} ticks, {host.AdvanceTotal / Math.Max(host.Session.Simulation.TotalTicks, 1):0.000} ms per tick), host draw-list fill {host.FillTotal / Math.Max(host.FillCalls, 1):0.000} ms, world draw cpu {_drawTotal / Math.Max(_totalFrames, 1):0.00} ms, {characters}");
+        Console.WriteLine($"profile   {snapshot.Characters.Count} characters in the snapshot, "
+            + $"{snapshot.Characters.Count(c => c.Appearance is not null)} drawable; "
+            + $"per frame: simulation advance {host.AdvanceTotal / Math.Max(_totalFrames, 1):0.000} ms ({host.Session.Simulation.TotalTicks} ticks, "
+            + $"{host.AdvanceTotal / Math.Max(host.Session.Simulation.TotalTicks, 1):0.000} ms per tick), "
+            + $"host draw-list fill {host.FillTotal / Math.Max(host.FillCalls, 1):0.000} ms, "
+            + $"world draw cpu {_drawTotal / Math.Max(_totalFrames, 1):0.00} ms, "
+            + $"{characters}");
         if (host.Sound.Audio is not null)
         {
             Console.WriteLine($"audio     {host.Sound.Audio.StatsLine()}");
             Console.WriteLine($"audio     world: {host.Sound.World.Stats()}");
             Console.WriteLine($"audio     characters: {host.Sound.Characters.Stats()}, {host.Sound.Ui.Stats()}");
         }
-        if (host.MenuFrames > 0) Console.WriteLine($"menu      {host.MenuFrames} visible frames in {host.MenuFrameSeconds:0.0} s: {host.MenuFrames / host.MenuFrameSeconds:0} fps, {host.MenuSlowFrames} frames over 100 ms, longest {host.MenuLongestFrame * 1000:0.0} ms");
-        Console.WriteLine($"smoke     {_totalFrames} frames in {now:0.0} s: {_totalFrames / now:0} fps on average, {host.Session.Ticks.TotalTicks} control ticks, {host.Session.Simulation.TotalTicks} simulation ticks, game time {host.Session.Clock.TimeText}");
+        if (host.MenuFrames > 0)
+        {
+            Console.WriteLine($"menu      {host.MenuFrames} visible frames in {host.MenuFrameSeconds:0.0} s: "
+                + $"{host.MenuFrames / host.MenuFrameSeconds:0} fps, "
+                + $"{host.MenuSlowFrames} frames over 100 ms, longest {host.MenuLongestFrame * 1000:0.0} ms");
+        }
+        Console.WriteLine($"smoke     {_totalFrames} frames in {now:0.0} s: {_totalFrames / now:0} fps on average, "
+            + $"{host.Session.Ticks.TotalTicks} control ticks, "
+            + $"{host.Session.Simulation.TotalTicks} simulation ticks, game time {host.Session.Clock.TimeText}");
     }
 
     // ---- pictures and profiles ----
@@ -1706,7 +1757,12 @@ sealed class GameLoop(GameHost host)
                         column * width, row * height, width, height);
                 }
         }
-        finally { ViewWindow.Current = ViewWindow.Whole; post.Target = live; post.ResetHistory(); }
+        finally
+        {
+            ViewWindow.Current = ViewWindow.Whole;
+            post.Target = live;
+            post.ResetHistory();
+        }
         var dir = Path.GetDirectoryName(Path.GetFullPath(file));
         if (dir is not null) Directory.CreateDirectory(dir);
         Data.Textures.PngWriter.Write(file, n * width, n * height, picture);
@@ -1735,8 +1791,12 @@ sealed class GameLoop(GameHost host)
     {
         var (allocated, collections) = gc.Take();
         long total = allocated.Values.Sum();
-        Console.WriteLine($"spikes    allocated {total / 1048576.0:0} MB over the run (sampled); collections {string.Join(", ", collections.GroupBy(c => c.Generation).OrderBy(g => g.Key)
-            .Select(g => $"gen{g.Key} x{g.Count()} {g.Sum(c => c.PauseMs):0} ms"))}; the most allocated types (MB):");
+        var generations = collections
+            .GroupBy(c => c.Generation)
+            .OrderBy(g => g.Key)
+            .Select(g => $"gen{g.Key} x{g.Count()} {g.Sum(c => c.PauseMs):0} ms");
+        Console.WriteLine($"spikes    allocated {total / 1048576.0:0} MB over the run (sampled); collections {string.Join(", ", generations)}; "
+            + "the most allocated types (MB):");
         foreach (var (type, bytes) in allocated.OrderByDescending(p => p.Value).Take(30))
             Console.WriteLine($"spikes      {type,-90} {bytes / 1048576.0,9:0}");
     }
@@ -1750,7 +1810,11 @@ sealed class GameLoop(GameHost host)
         string path = Path.Combine(AppContext.BaseDirectory, $"vram-{DateTime.Now:yyyyMMdd-HHmmss}.txt");
         void Caches(TextWriter w)
         {
-            if (host.Gpu.Guard is { } guard) { w.WriteLine(guard.Status); w.WriteLine(); }
+            if (host.Gpu.Guard is { } guard)
+            {
+                w.WriteLine(guard.Status);
+                w.WriteLine();
+            }
             host.Gpu.Objects?.WriteViewReport(w);
             host.Gpu.Objects?.Textures.WriteReport(w);
             host.Gpu.Foliage?.Textures.WriteReport(w);
@@ -1786,7 +1850,10 @@ sealed class GameLoop(GameHost host)
         if (SpikeLog.Enabled) SpikeLog.PrintSummary();
         if (spikeGc is not null) PrintAllocations(spikeGc);
         if (Simulation.Navigation.NavQuery.Stats is { Searches: > 0 } paths)
-            Console.WriteLine($"paths     {paths.Searches} searches, {paths.Expanded / paths.Searches} polygons each on average, {paths.Exhausted} ran to the limit of {Simulation.Navigation.NavQuery.MaxIterations}");
+        {
+            Console.WriteLine($"paths     {paths.Searches} searches, {paths.Expanded / paths.Searches} polygons each on average, "
+                + $"{paths.Exhausted} ran to the limit of {Simulation.Navigation.NavQuery.MaxIterations}");
+        }
         host.DebugMenu.Profiler?.Dispose();
         host.Player.DisposeUi();
         host.EndLoadingScreen();

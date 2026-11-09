@@ -74,7 +74,8 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     internal static readonly string[] BuildHiddenHud =
     [
-        "InformationPanel", "MedicalPanel", "SquadPanel", "OrdersPanel", "FloorPanel", "ShortcutsPanel", "SpeedButtonsPanel", "TimeMoneyPanel", "BuildPanel",
+        "InformationPanel", "MedicalPanel", "SquadPanel", "OrdersPanel", "FloorPanel", "ShortcutsPanel", "SpeedButtonsPanel", "TimeMoneyPanel",
+        "BuildPanel",
     ];
 
     /// <summary>

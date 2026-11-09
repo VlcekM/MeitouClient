@@ -129,13 +129,25 @@ sealed partial class GameHost
             Player.DialogueLog.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.
         if (world.Systems.OfType<Simulation.Carrying.CarrySystem>().FirstOrDefault() is { Knockouts.Count: > 0 } carry)
+        {
             foreach (var k in carry.TakeKnockouts())
+            {
                 if (world.Characters.IsAlive(k.Attacker) && world.Characters.Cold(k.Attacker.Slot) is { IsPlayer: true } attacker)
-                    Player.Notice($"{attacker.Name}: {Loc.Tr(k.Success ? "*Thunk*" : "Failed!")}{(k.NoXp ? Loc.Tr(" (No XP)") : "")} ({Math.Clamp(k.Chance, 0, 100):0}%)", !k.Success);
+                {
+                    Player.Notice($"{attacker.Name}: {Loc.Tr(k.Success ? "*Thunk*" : "Failed!")}{(k.NoXp ? Loc.Tr(" (No XP)") : "")} "
+                        + $"({Math.Clamp(k.Chance, 0, 100):0}%)", !k.Success);
+                }
+            }
+        }
         if (Population is not null)
             foreach (var line in Population.TakeTownLog()) Console.WriteLine($"town      {line}");
         if (Population is not null)
+        {
             foreach (var w in Population.TakeWildLog())
-                Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {(w.Kind == Simulation.Population.WildKind.Nest ? "nest" : "sector of")} {w.Place}");
+            {
+                string from = w.Kind == Simulation.Population.WildKind.Nest ? "nest" : "sector of";
+                Console.WriteLine($"wild      tick {w.Tick}: {w.Squad} ({w.Members}) from the {from} {w.Place}");
+            }
+        }
     }
 }

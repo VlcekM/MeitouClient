@@ -178,44 +178,80 @@ public static class PlacementCheck
         if (resources != PlacementFailure.None) return resources;
         // A site of ours, or an owned town house being repaired (a level building that is also a site).
         if (q.On is not null && q.Sites.FirstOrDefault(s => s.Id == parent) is { Complete: false }) return PlacementFailure.InsideIncomplete;
+        var centre = CentreBlock(q, at, parent);
+        if (centre != PlacementFailure.None) return centre;
+
+        // Interior-only furniture must stand on a building's floor; what may also stand outside (exterior furniture or a node) goes either way.
+        if (parent is null && b.IsInteriorFurniture && !b.IsExteriorFurniture && !b.IsNode) return PlacementFailure.MustBeInside;
+
+        var overlap = hull is null ? PlacementFailure.None : HullBlock(q, hull, at, parent);
+        if (overlap != PlacementFailure.None) return overlap;
+
+        var ground = GroundBlock(q, b);
+        if (ground != PlacementFailure.None) return ground;
+
+        return SlopeBlock(q, b, at, parent);
+    }
+
+    /// <summary>
+    /// A building under the ghost's centre <paramref name="at"/> that blocks it; None when there is none.
+    /// </summary>
+    static PlacementFailure CentreBlock(PlacementQuery q, Vector2 at, string? parent)
+    {
         // A building under the ghost's centre (the one it stands in aside): another town's or the level's (not ours), or an unfinished site of ours.
         foreach (var site in q.Sites)
+        {
             if (site.Id != parent
                 && q.Ignore?.Invoke(site.Record, site.Position, site.Rotation) != true
                 && q.Services.Footprint(site.Record) is { } siteFootprint
                 && Contains(siteFootprint.Place(site.Position, site.Rotation), at))
                 return site.Complete ? PlacementFailure.TooCloseToBuilding : PlacementFailure.InsideIncomplete;
+        }
         foreach (var other in q.Services.StaticAround(at, 20))
             if (other.Id != parent && Contains(other.Hull, at)) return PlacementFailure.NotOwnedBuilding;
+        return PlacementFailure.None;
+    }
 
-        // Interior-only furniture must stand on a building's floor; what may also stand outside (exterior furniture or a node) goes either way.
-        if (parent is null && b.IsInteriorFurniture && !b.IsExteriorFurniture && !b.IsNode) return PlacementFailure.MustBeInside;
-
-        if (hull is not null)
+    /// <summary>
+    /// What the ghost's footprint <paramref name="hull"/> overlaps: the floor's edge, a building, a site, a queued ghost or a character;
+    /// None when nothing.
+    /// </summary>
+    static PlacementFailure HullBlock(PlacementQuery q, Vector2[] hull, Vector2 at, string? parent)
+    {
+        // Engine stand-in for the original's node boxes against the building's walls: on a floor the footprint stays within the building's
+        // indoor hull.
+        if (q.On is { } on && hull.Any(p => Distance(on.Footprint, p) > 0)) return PlacementFailure.TooCloseToBuilding;
+        float reach = hull.Max(p => Vector2.Distance(p, at)) + 150;
+        foreach (var other in q.Services.StaticAround(at, reach))
+            if (other.Id != parent && Overlap(hull, other.Hull)) return PlacementFailure.TooCloseToBuilding;
+        foreach (var site in q.Sites)
         {
-            // Engine stand-in for the original's node boxes against the building's walls: on a floor the footprint stays within the building's
-            // indoor hull.
-            if (q.On is { } on && hull.Any(p => Distance(on.Footprint, p) > 0)) return PlacementFailure.TooCloseToBuilding;
-            float reach = hull.Max(p => Vector2.Distance(p, at)) + 150;
-            foreach (var other in q.Services.StaticAround(at, reach))
-                if (other.Id != parent && Overlap(hull, other.Hull)) return PlacementFailure.TooCloseToBuilding;
-            foreach (var site in q.Sites)
-                if (site.Id != parent
-                    && q.Ignore?.Invoke(site.Record, site.Position, site.Rotation) != true
-                    && q.Services.Footprint(site.Record) is { } f
-                    && Overlap(hull, f.Place(site.Position, site.Rotation))) return PlacementFailure.TooCloseToBuilding;
-            foreach (var queued in q.Queued)
-                if (queued.Hull is not null
-                    && q.Ignore?.Invoke(queued.Building.Id, queued.Position, queued.Rotation) != true
-                    && Overlap(hull, queued.Hull))
-                    return PlacementFailure.TooCloseToBuilding;
-            foreach (var c in q.Characters)
-            {
-                if (c.Body is { Dead: true } || !c.CarriedBy.IsNone) continue;
-                if (Distance(hull, new Vector2(c.Position.X, c.Position.Z)) < CharacterRadius) return PlacementFailure.CharactersInTheWay;
-            }
+            if (site.Id != parent
+                && q.Ignore?.Invoke(site.Record, site.Position, site.Rotation) != true
+                && q.Services.Footprint(site.Record) is { } f
+                && Overlap(hull, f.Place(site.Position, site.Rotation)))
+                return PlacementFailure.TooCloseToBuilding;
         }
+        foreach (var queued in q.Queued)
+        {
+            if (queued.Hull is not null
+                && q.Ignore?.Invoke(queued.Building.Id, queued.Position, queued.Rotation) != true
+                && Overlap(hull, queued.Hull))
+                return PlacementFailure.TooCloseToBuilding;
+        }
+        foreach (var c in q.Characters)
+        {
+            if (c.Body is { Dead: true } || !c.CarriedBy.IsNone) continue;
+            if (Distance(hull, new Vector2(c.Position.X, c.Position.Z)) < CharacterRadius) return PlacementFailure.CharactersInTheWay;
+        }
+        return PlacementFailure.None;
+    }
 
+    /// <summary>
+    /// The ground and floor the ghost needs: land under its land parts, a ceiling over a ceiling ghost; None when it has them.
+    /// </summary>
+    static PlacementFailure GroundBlock(PlacementQuery q, BuildingBuildData b)
+    {
         // Parts that need land (BUILDING_PART `ground type` LAND, `affects footprint`): their node must not be below the water.
         var world = Matrix4x4.CreateFromQuaternion(Normalised(q.Rotation)) * Matrix4x4.CreateTranslation(q.Position);
         foreach (var part in q.Parts)
@@ -227,7 +263,14 @@ public static class PlacementCheck
         }
         // A ceiling ghost finds no ceiling over it: the floor-number text.
         if (b.CeilingPlacement && q.On?.Ceiling is null) return PlacementFailure.InvalidFloor;
+        return PlacementFailure.None;
+    }
 
+    /// <summary>
+    /// The slope test: a wall piece's own pitch, the floor's normal indoors, else the vertical margins and the ground's slope under the ghost.
+    /// </summary>
+    static PlacementFailure SlopeBlock(PlacementQuery q, BuildingBuildData b, Vector2 at, string? parent)
+    {
         // A wall piece pitches with the ground: its own up axis must be within `max slope` of the vertical (Verified, FUN_140429510).
         if (q.WallPiece)
         {
@@ -374,7 +417,11 @@ public static class PlacementCheck
             corners[i] = new Vector3(x, ground(x, z), z);
         }
         var normal = Vector3.Cross(corners[2] - corners[0], corners[3] - corners[1]);
-        if (normal.LengthSquared() < 1e-9f) { normalY = 1; return 0; }
+        if (normal.LengthSquared() < 1e-9f)
+        {
+            normalY = 1;
+            return 0;
+        }
         normal = Vector3.Normalize(normal);
         if (normal.Y < 0) normal = -normal;
         normalY = normal.Y;

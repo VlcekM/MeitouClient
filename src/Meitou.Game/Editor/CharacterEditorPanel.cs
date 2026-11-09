@@ -507,9 +507,17 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         Arrows(creation && !draft.Race.GetBool("single gender"), "GenderLeftButton", "GenderRightButton");
         // CHANGE CHARACTER stays with one character, its arrows and "1/1" disabled (FUN_1405f1a40; the original's screen shows them).
         if (s.Characters.Count > 1)
-            foreach (string name in new[] { "CharLeftArrow", "CharRightArrow" }) { b.Disabled.Remove(name); b.Actions[name] = name; }
+            foreach (string name in new[] { "CharLeftArrow", "CharRightArrow" })
+            {
+                b.Disabled.Remove(name);
+                b.Actions[name] = name;
+            }
         else b.Disabled.Add("CharIndexText");
-        foreach (string name in new[] { "ImportButton", "ExportButton" }) { b.Disabled.Remove(name); b.Actions[name] = name; }
+        foreach (string name in new[] { "ImportButton", "ExportButton" })
+        {
+            b.Disabled.Remove(name);
+            b.Actions[name] = name;
+        }
         // The captions the code sets (FUN_1405f1a40): the catalog's message, upper case; the layout's own captions (RESET ALL, SUBRACE...) never
         // show.
         foreach (var (name, key) in EditorCaptions) b.Text[name] = Loc.Tr(key).ToUpperInvariant();
@@ -638,7 +646,11 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         // A hair colour slider's own template widget (Slider1..3 of the multi-slider) owns its bar and texts.
         var widgets = player.FaithfulScreens.Layout("editor").Widgets.ToList();
         foreach (var (row, part, control) in parts)
-            _editorRows.Add((part is null ? row : widgets.FirstOrDefault(w => w.Properties.GetValueOrDefault("TemplateOwner") == row && w.Properties.GetValueOrDefault("TemplatePart") == part)?.Name ?? row, control));
+        {
+            string rowOwner = part is null ? row : widgets.FirstOrDefault(w => w.Properties.GetValueOrDefault("TemplateOwner") == row
+                && w.Properties.GetValueOrDefault("TemplatePart") == part)?.Name ?? row;
+            _editorRows.Add((rowOwner, control));
+        }
     }
 
     /// <summary>
@@ -679,14 +691,17 @@ sealed class CharacterEditorPanel(PlayerInterface player)
                 b.Properties[bar.Name] = new Dictionary<string, string> { ["Range"] = (c.Max - c.Min + 1).ToString(CultureInfo.InvariantCulture) };
                 player.FaithfulScreens.SetScroll("editor", bar.Name, value - c.Min);
             }
-            if (c.Kind == EditorControlKind.HairHue && _editorRowWidgets.FirstOrDefault(r => owner.StartsWith(r.Name + "@", StringComparison.Ordinal)).Name is { } multi)
+            if (c.Kind == EditorControlKind.HairHue
+                && _editorRowWidgets.FirstOrDefault(r => owner.StartsWith(r.Name + "@", StringComparison.Ordinal)).Name is { } multi)
                 b.Text[multi + ".Name"] = "Hair colour";
         }
         // Rows stacked at their templates' heights on a canvas as wide as the view: its client, less the vertical bar when the rows are taller than
         // it.
         var content = RealBounds(layout, "TabsPanelContent");
         float total = _editorRowWidgets.Sum(r => r.Height) * scale;
-        float barWidth = (layout.Widgets.FirstOrDefault(w => w.Properties.GetValueOrDefault("TemplateOwner") == EditorRowsView && w.Properties.GetValueOrDefault("TemplatePart") == "VScroll")?.Position.Width ?? 32) * scale;
+        var scrollBar = layout.Widgets.FirstOrDefault(w => w.Properties.GetValueOrDefault("TemplateOwner") == EditorRowsView
+            && w.Properties.GetValueOrDefault("TemplatePart") == "VScroll");
+        float barWidth = (scrollBar?.Position.Width ?? 32) * scale;
         float width = total > content.Height ? content.Width - barWidth : content.Width;
         if (total <= 0) return;
         b.Canvas[EditorRowsView] = (width, total);

@@ -101,7 +101,8 @@ sealed class DuelScenario(GameHost host)
         {
             if (!host.SimWalkability!.IsWalkable(spot.X + _duelShift.X, spot.Y + _duelShift.Y + z))
             {
-                Console.Error.WriteLine($"duel      {spot.X + _duelShift.X:0}, {spot.Y + _duelShift.Y + z:0} is under water: pick another spot with --duel x,z");
+                Console.Error.WriteLine($"duel      {spot.X + _duelShift.X:0}, {spot.Y + _duelShift.Y + z:0} is under water: "
+                    + "pick another spot with --duel x,z");
             }
         }
     }

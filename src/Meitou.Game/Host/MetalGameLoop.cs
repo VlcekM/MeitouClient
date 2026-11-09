@@ -268,7 +268,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _guardEnabled = Environment.GetEnvironmentVariable("MEITOU_VRAM_GUARD") != "0";
         if (_guardEnabled) Console.WriteLine($"metal     memory guard: {_memoryBudget / 1048576} MB of GPU allocation");
         if (budgetMb > 5120)
-            Console.WriteLine($"warning   metal GPU budget {budgetMb} MB is above the 5120 MB default; full screen and a busy world can exhaust the 16 GB M1 Pro. Use 5120 unless profiling.");
+        {
+            Console.WriteLine($"warning   metal GPU budget {budgetMb} MB is above the 5120 MB default; full screen and a busy world can exhaust "
+                + "the 16 GB M1 Pro. Use 5120 unless profiling.");
+        }
         _window = _display.Window;
         // The shared window setting: borderless full screen as the Vulkan path starts; --windowed keeps the window for one run.
         bool fullScreen = host.Config.FullScreen && !host.WorldOptions.Windowed;
@@ -336,7 +339,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _postChain = new MetalPostChain(_ctx, _composite, _taa, host.WorldOptions.Post,
             noTaa: () => _upscaling.NoTaa,
             temporal: () => _upscaling.Mode is MetalUpscalerMode.Temporal or MetalUpscalerMode.Taa,
-            jitter: (frame, sceneWidth, displayWidth) => _upscaling.NoTaa || _upscaling.Spatial ? Vector2.Zero : PostTaa.Offset(frame, sceneWidth, displayWidth));
+            jitter: (frame, sceneWidth, displayWidth) => _upscaling.NoTaa || _upscaling.Spatial
+                ? Vector2.Zero
+                : PostTaa.Offset(frame, sceneWidth, displayWidth));
     }
 
     /// <summary>
@@ -426,7 +431,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _metalFxSpatial?.Dispose();
         double elapsed = _clock.Elapsed.TotalSeconds;
         Console.WriteLine($"metal     {_frames} frames in {elapsed:0.0} s: {_frames / Math.Max(elapsed, 1e-3):0} fps, " +
-            $"camera {host.Camera.Target.X:0}, {host.Camera.Target.Z:0}, yaw {host.Camera.Yaw * 180 / MathF.PI:0}, pitch {host.Camera.Pitch * 180 / MathF.PI:0}, boom {host.Camera.Distance:0}");
+            $"camera {host.Camera.Target.X:0}, {host.Camera.Target.Z:0}, yaw {host.Camera.Yaw * 180 / MathF.PI:0}, " +
+            $"pitch {host.Camera.Pitch * 180 / MathF.PI:0}, boom {host.Camera.Distance:0}");
     }
 
     #endregion
@@ -597,7 +603,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             bool gpuCullWanted = Environment.GetEnvironmentVariable("MEITOU_METAL_GPU_CULL") is "1" or "true";
             _foliage.GpuCull = gpuCullWanted && Environment.GetEnvironmentVariable("MEITOU_METAL_CPU_CULL") != "1";
             Console.WriteLine(_foliage.GpuCull
-                ? "warning   metal foliage GPU cull is experimental (MEITOU_METAL_GPU_CULL=1): it has produced GPU progress timeouts after a few minutes"
+                ? "warning   metal foliage GPU cull is experimental (MEITOU_METAL_GPU_CULL=1): it has produced GPU progress timeouts "
+                    + "after a few minutes"
                 : "metal     foliage CPU cull (GPU cull off by default; MEITOU_METAL_GPU_CULL=1 enables the experimental path)");
         }
     }
@@ -630,11 +637,18 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             host.Render.NormalMaps = false;
             Console.WriteLine("metal     terrain normal maps off (MEITOU_TERRAIN_NO_NORMAL=1)");
         }
-        host.Session = new WorldSession(host.Scene.Focus, (host.Scene.X0, host.Scene.Z0, host.Scene.X1, host.Scene.Z1), _heights.HeightAt, host.WorldOptions.Hour, host.Config.TickRate,
-            clock: GameHost.GameClockFor(constants ??= host.Scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null,
+        host.Session = new WorldSession(host.Scene.Focus, (host.Scene.X0, host.Scene.Z0, host.Scene.X1, host.Scene.Z1), _heights.HeightAt,
+            host.WorldOptions.Hour, host.Config.TickRate,
+            clock: GameHost.GameClockFor(
+                constants ??= host.Scene.Database is { } clockDb ? Meitou.Data.Gameplay.GameConstants.FromDatabase(clockDb) : null,
                 host.WorldOptions.Hour, host.WorldOptions.Day ?? GameClock.DefaultStartDay),
-            simulation: host.Duel.WorldSettings = new Meitou.Simulation.WorldSettings { Seed = host.GameOptions.Seed, MinPartitionSize = 128,
-                Threads = Math.Max(1, host.Config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)), FarTickPeriod = GameHost.FarTickPeriod },
+            simulation: host.Duel.WorldSettings = new Meitou.Simulation.WorldSettings
+            {
+                Seed = host.GameOptions.Seed,
+                MinPartitionSize = 128,
+                Threads = Math.Max(1, host.Config.SimThreads ?? Math.Clamp(Environment.ProcessorCount / 2, 1, 8)),
+                FarTickPeriod = GameHost.FarTickPeriod,
+            },
             systems: systems, walkability: walkability);
         host.Session.World.BenchFacingFix = host.Config.FixBenchFacing;
         host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed);
@@ -681,7 +695,9 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (host.Nav is not null && host.Population is not null)
         {
             host.Population.ZoneGate = zone => host.Nav.Walkability.World.Contains(zone);
-            var around = host.PlayerSquad is not null ? host.Session.World.Characters.Previous[host.PlayerSquad.Leader.Slot].Position : host.Session.Focus;
+            var around = host.PlayerSquad is not null
+                ? host.Session.World.Characters.Previous[host.PlayerSquad.Leader.Slot].Position
+                : host.Session.Focus;
             var zones = Meitou.Simulation.Population.ZoneActivation.ZonesAround(around, 0);
             var watch = Stopwatch.StartNew();
             Task.WaitAll([.. zones.Select(z => (Task)host.Nav.LoadZone(z))]);
@@ -701,10 +717,13 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         if (_characters is not null) Console.WriteLine($"metal     crowd ready ({_characters.Assets} appearances)");
         else if (host.Scene.Database is { } characterDb && !host.GameOptions.NoPopulation)
         {
-            _characters = new CharacterRenderer(_ctx, host.Install, characterDb, host.Assets, host.CharacterRigs) { DrawDistance = GameplaySettings.NpcRange(host.Install),
+            _characters = new CharacterRenderer(_ctx, host.Install, characterDb, host.Assets, host.CharacterRigs)
+            {
+                DrawDistance = GameplaySettings.NpcRange(host.Install),
                 Source = host.FillWorldDrawList, SettleFirst = true, LoadBudget = 0, GeneratedLod = host.WorldOptions.CharacterLod,
                 SkinShading = host.WorldOptions.SkinShading, SkinRaces = host.Config.SkinRaces, EnhancedIcons = host.WorldOptions.MeitouIcons,
-                PoseClock = () => host.RealTime.Elapsed.TotalSeconds };
+                PoseClock = () => host.RealTime.Elapsed.TotalSeconds,
+            };
             _worldGpu.Characters = _characters;
             Console.WriteLine("metal     characters ready (population draw list)");
         }
@@ -830,8 +849,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     {
         _tour.Stop();
         _tourHolds = false;
-        host.Session.Camera.TakeOver(new CameraState(host.Camera.Eye, host.Camera.Forward, Vector3.UnitY, host.Camera.Target, host.Camera.Yaw, host.Camera.Pitch,
-            host.Camera.Distance, true), strategy: true);
+        host.Session.Camera.TakeOver(new CameraState(host.Camera.Eye, host.Camera.Forward, Vector3.UnitY, host.Camera.Target, host.Camera.Yaw,
+            host.Camera.Pitch, host.Camera.Distance, true), strategy: true);
         if (_tourFollows && _tour.Current is { } id) host.Player.Follow = id;
     }
 
@@ -869,8 +888,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void CreateInterface(DebugOverlay overlay)
     {
-        _hud = new PlayerInterface(host.Session, _heights.HeightAt, host.DrawnPosition) { SpeedUnit = host.Config.SpeedUnit, Floaters = host.Config.Floaters,
-            FeedbackButtonInPlay = host.Config.FeedbackButton };
+        _hud = new PlayerInterface(host.Session, _heights.HeightAt, host.DrawnPosition)
+        {
+            SpeedUnit = host.Config.SpeedUnit,
+            Floaters = host.Config.Floaters,
+            FeedbackButtonInPlay = host.Config.FeedbackButton,
+        };
         host.Player = _hud;
         _hud.LoadUi(host.GameOptions.UiMode ?? host.Config.UiMode, host.Assets.Find);
         _hud.CreateUiPainter(overlay, host.Assets.Find);
@@ -981,7 +1004,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void ConnectScreenActions()
     {
         // The title opens unless a start, a save or a picture chose the world; --title-preview opens it for a still.
-        bool showTitle = _hud is not null && (host.GameOptions.TitlePreview || host.WorldOptions.Screenshot is null && start is null && host.StartSave is null && !host.Sandbox.IsSandbox && !host.Duel.IsDuel && !host.GameOptions.NoPopulation);
+        bool showTitle = _hud is not null && (host.GameOptions.TitlePreview || host.WorldOptions.Screenshot is null && start is null
+            && host.StartSave is null && !host.Sandbox.IsSandbox && !host.Duel.IsDuel && !host.GameOptions.NoPopulation);
         if (_hud is not null)
         {
             _hud.ScreenAction += e =>
@@ -1051,20 +1075,36 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             UpscalerStatus = _upscaling.UpscalerStatusText,
             GameplayChanged = host.Saves.ApplyGameplay,
             ModSettings = () => host.Modding.Mods?.Settings ?? [],
-            AttackSlotsChanged = slots => { foreach (var combat in host.Session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots); },
-            LateDefencesChanged = on => { foreach (var combat in host.Session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on; },
+            AttackSlotsChanged = slots =>
+            {
+                foreach (var combat in host.Session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots);
+            },
+            LateDefencesChanged = on =>
+            {
+                foreach (var combat in host.Session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.LateDefences = on;
+            },
             TimeSpeedsChanged = () => host.Session.Simulation.SetFastSpeeds(host.Config.FastSpeed, host.Config.FastestSpeed),
-            DoorsCloseChanged = on => { foreach (var locks in host.Session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on; },
-            AnimalsPickUpChanged = on => { foreach (var players in host.Session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on; },
+            DoorsCloseChanged = on =>
+            {
+                foreach (var locks in host.Session.World.Systems.OfType<Meitou.Simulation.Locks.LockSystem>()) locks.DoorsCloseBehind = on;
+            },
+            AnimalsPickUpChanged = on =>
+            {
+                foreach (var players in host.Session.World.Systems.OfType<Meitou.Simulation.Player.PlayerSystem>()) players.AnimalsPickUp = on;
+            },
             BenchFacingChanged = on => host.Session.World.BenchFacingFix = on,
             TutorialsChanged = on => { if (host.Saves.Tutorials is { } t) t.Enabled = on; },
             ResetTutorials = () => host.Saves.Tutorials?.Reset(),
             OffscreenChanged = () =>
             {
                 foreach (var population in host.Session.World.Systems.OfType<Meitou.Simulation.Population.PopulationSystem>())
-                    (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing, population.CampaignAncestorsOnce, population.KeepWild, population.ResidentSchedule) =
-                        (host.Config.KeepRoamers, host.Config.OffscreenFights, host.Config.OffscreenHealing, host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
-                foreach (var production in host.Session.World.Systems.OfType<Meitou.Simulation.Production.ProductionSystem>()) production.UnloadedProduction = host.Config.UnloadedProduction;
+                {
+                    (population.KeepRoamers, population.OffscreenFights, population.OffscreenHealing, population.CampaignAncestorsOnce,
+                        population.KeepWild, population.ResidentSchedule) = (host.Config.KeepRoamers, host.Config.OffscreenFights,
+                        host.Config.OffscreenHealing, host.Config.CampaignAncestorsOnce, host.Config.KeepWild, host.Config.ResidentSchedule);
+                }
+                foreach (var production in host.Session.World.Systems.OfType<Meitou.Simulation.Production.ProductionSystem>())
+                    production.UnloadedProduction = host.Config.UnloadedProduction;
             },
             CameraRotateSpeedChanged = ApplyCameraRotateSpeed,
             CameraChanged = () => host.Config.ApplyCamera(host.Session.Camera.Settings),
@@ -1469,7 +1509,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 _shiftDown = false;
                 if (_hud is not null) _hud.SlowModifier = false;
             }
-            if (KeyMap.Map(key) is { } mapped) { host.Session.Input.SetKey(mapped, false); _hud?.Build.BuildKeyUp(mapped); }
+            if (KeyMap.Map(key) is { } mapped)
+            {
+                host.Session.Input.SetKey(mapped, false);
+                _hud?.Build.BuildKeyUp(mapped);
+            }
         };
         keyboard.KeyChar += (_, value) =>
         {
@@ -1671,7 +1715,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
                 return;
             }
             bool select = host.PlayerButton(mapped) == Meitou.Game.Host.Input.MouseButton.Left;
-            if (_hud is { UiVisible: true } && select && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true) return;
+            if (_hud is { UiVisible: true } && select && !host.Config.SandboxPanelCollapsed && host.Sandbox.SandboxPicker?.MouseDown(at) == true)
+                return;
             if (_hud is { UiVisible: true } && select && host.Sandbox.SandboxToggleClick(at)) return;
             // PlayerInterface sees every click: it takes the HUD's controls, selects, starts a drag box or gives a move order.
             if (_hud is not null && _hud.MouseDown(host.PlayerButton(mapped), at, _shiftDown, Ctrl(), Alt())) return;
@@ -1724,7 +1769,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         bool hold = _lastMouse is not null && host.OrbitHeld();
         _hud?.MouseMove(Pixels(hold ? _lastMouse!.Value : p));
         // The panels and their drags own the pointer: the camera must not also turn under them.
-        if (_hud is { UiCapturesPointer: true }) { _lastMouse = p; return; }
+        if (_hud is { UiCapturesPointer: true })
+        {
+            _lastMouse = p;
+            return;
+        }
         if (_lastMouse is { } last) host.Session.Input.AddMouseDelta(p.X - last.X, p.Y - last.Y);
         if (hold)
         {
@@ -1834,7 +1883,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         _still = host.WorldOptions.Screenshot is not null;
         _stillPanels = _hud is not null && _still ? host.ScreenshotScenes.StillPanels() : new string?[] { null };
         // A run can still open one shared layout by name for manual review; the still loop owns its panels.
-        if (!_still && _hud is not null && host.GameOptions.UiPanel is { Length: > 0 } selectedPanel && selectedPanel is not ("trade" or "talk" or "edited"))
+        if (!_still && _hud is not null && host.GameOptions.UiPanel is { Length: > 0 } selectedPanel
+            && selectedPanel is not ("trade" or "talk" or "edited"))
             _hud.ShowUiPanel(selectedPanel is "hud" or "hud-expanded" ? null : selectedPanel, selectedPanel == "hud-expanded");
     }
 
@@ -1936,7 +1986,10 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             {
                 string? panelName = _stillPanels[_stillPanel];
                 if (_foliage is not null && _stillPanel == _stillPanels.Length - 1)
-                    Console.WriteLine($"metal     foliage: {_foliage.DrawnInstances} instances, {_foliage.DrawnBlades} blades, {_foliage.DrawCalls} calls");
+                {
+                    Console.WriteLine($"metal     foliage: {_foliage.DrawnInstances} instances, {_foliage.DrawnBlades} blades, "
+                        + $"{_foliage.DrawCalls} calls");
+                }
                 Capture(_ctx, backbuffer, host.ScreenshotScenes.StillPicturePath(panelName));
                 _stillPanel++;
                 _stillPanelFrames = 0;
@@ -2189,7 +2242,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             Console.WriteLine($"metal     native {_display.NativeWindowState()}");
             Console.WriteLine($"metal     resources {_ctx.ResourceSummary()}");
             Console.WriteLine($"metal     streaming terrain {_streamer?.Pending ?? 0} ({(_streamer is null || _streamer.Idle ? "idle" : "busy")}), " +
-                $"objects {_objects?.Pending ?? 0}, foliage {_foliage?.Pending ?? 0}, cull groups {_foliage?.LastCullGroups ?? 0}, cull dispatches {_foliage?.GpuCullDispatches ?? 0}");
+                $"objects {_objects?.Pending ?? 0}, foliage {_foliage?.Pending ?? 0}, cull groups {_foliage?.LastCullGroups ?? 0}, " +
+                $"cull dispatches {_foliage?.GpuCullDispatches ?? 0}");
             if (_streamer is not null) Console.WriteLine($"metal     terrain stream: {_streamer.Describe()}");
             if (_memoryGuard is not null) Console.WriteLine($"metal     memory guard {_memoryGuard.Status}");
             if (_objects is not null) Console.WriteLine($"metal     objects resident: {_objects.ResidentDescription}");
@@ -2302,7 +2356,11 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // when it closes.
         host.CharacterEditor.OpenPendingEditor();
         host.CharacterEditor.ResumeAfterCreation();
-        if (_hud is not { CharacterEditor.EditorOpen: true }) { host.CharacterEditor.ClearEditorStage(); host.CharacterEditor.Bar.ClearEditorBar(); }
+        if (_hud is not { CharacterEditor.EditorOpen: true })
+        {
+            host.CharacterEditor.ClearEditorStage();
+            host.CharacterEditor.Bar.ClearEditorBar();
+        }
         if (!_tourHolds && _hud is not null) host.TitleScreen.ApplyTitleCamera();
         // A flight puts the focus where it lands, so the towns there populate during the flight; otherwise the
         // followed character's pivot is already in the rig.
@@ -2310,7 +2368,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         host.SendFocus(_tour.Active && _tour.Current is { } tourLanding && TourPosition(tourLanding) is { } tourAt ? tourAt
             : _tourHolds ? host.Camera.Target : null);
         // The strategy camera's eye clearance for the followed character and the tour's arcs over hills.
-        if (host.SkyArrival is null && _hud is not null && !host.TitleScreen.TitleVisible && (_tour.Active || !host.Session.Camera.IsFree && !_tourHolds))
+        if (host.SkyArrival is null && _hud is not null && !host.TitleScreen.TitleVisible
+            && (_tour.Active || !host.Session.Camera.IsFree && !_tourHolds))
         {
             var clearEye = host.Camera.Eye;
             float shortfall = host.Session.Camera.EyeGroundAt(clearEye.X, clearEye.Z) +
@@ -2340,8 +2399,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // It must run before the character draw list (which carries aboveFloor) and before the shadow casters.
         host.Interiors.UpdateInteriorView();
         // The next world tick may run on its own thread while the frame is drawn, as in the Vulkan loop (docs/simulation.md "Tick ahead").
-        host.TickAhead = !host.Covered && host.SkyArrival is null && !host.Duel.IsDuel && !host.TitleScreen.TitleVisible && !host.Player.CharacterEditor.EditorOpen
-            && host.GameOptions.PlayBench is null && host.TickAheadWanted();
+        host.TickAhead = !host.Covered && host.SkyArrival is null && !host.Duel.IsDuel && !host.TitleScreen.TitleVisible
+            && !host.Player.CharacterEditor.EditorOpen && host.GameOptions.PlayBench is null && host.TickAheadWanted();
     }
 
     /// <summary>
@@ -2447,7 +2506,12 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         // seam's Vulkan-only gaps (no reflection, GI, low-resolution particles or fog-rate target).
         PrepareSharedDraw();
         var savedParticles = host.Gpu.Particles;
-        if (titleLook) { host.Gpu.Weather = null; host.Gpu.Particles = null; }   // the staged title sky and its own dust, not the world's weather
+        // the staged title sky and its own dust, not the world's weather
+        if (titleLook)
+        {
+            host.Gpu.Weather = null;
+            host.Gpu.Particles = null;
+        }
         if (host.TickAhead) host.Session.BeginTickAhead();
         try
         {
@@ -2477,7 +2541,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     /// </summary>
     void StageTitleLook(float hour)
     {
-        float fill = Math.Clamp(host.Scene.Clock.SunDirection(hour).Y / MathF.Max(host.Scene.Clock.SunDirection(host.TitleScreen.TitleHour).Y, 1e-3f), 0, 1);
+        float fill = Math.Clamp(host.Scene.Clock.SunDirection(hour).Y
+            / MathF.Max(host.Scene.Clock.SunDirection(host.TitleScreen.TitleHour).Y, 1e-3f), 0, 1);
         fill = fill * fill * (3 - 2 * fill);
         _sky.Weather = Meitou.Data.World.SkyWeather.Default;
         _sky.CloudCoverage = 0.38f;
@@ -2567,10 +2632,15 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
         {
             _statsLines.Clear();
             _statsLines.Add($"{_fpsText}  {dt * 1000:0.00} ms  {size.X}x{size.Y}");
-            _statsLines.Add($"sim {host.Session.Simulation.TotalTicks} ticks  {host.Session.CurrentSnapshot.Characters.Count} characters  x{host.Session.TimeScale:0}  {host.Session.Clock.TimeText}");
-            _statsLines.Add($"camera {host.Camera.Target.X:0}, {host.Camera.Target.Y:0}, {host.Camera.Target.Z:0}  yaw {host.Camera.Yaw * 180 / MathF.PI:0}  pitch {host.Camera.Pitch * 180 / MathF.PI:0}  boom {host.Camera.Distance:0}");
+            var session = host.Session;
+            var camera = host.Camera;
+            _statsLines.Add($"sim {session.Simulation.TotalTicks} ticks  {session.CurrentSnapshot.Characters.Count} characters  "
+                + $"x{session.TimeScale:0}  {session.Clock.TimeText}");
+            _statsLines.Add($"camera {camera.Target.X:0}, {camera.Target.Y:0}, {camera.Target.Z:0}  yaw {camera.Yaw * 180 / MathF.PI:0}  "
+                + $"pitch {camera.Pitch * 180 / MathF.PI:0}  boom {camera.Distance:0}");
             if (_characters is not null) _statsLines.Add(_characters.Statistics());
-            if (_foliage is not null) _statsLines.Add($"foliage {_foliage.DrawnInstances} instances, {_foliage.DrawnBlades} blades, {_foliage.DrawCalls} calls");
+            if (_foliage is not null)
+                _statsLines.Add($"foliage {_foliage.DrawnInstances} instances, {_foliage.DrawnBlades} blades, {_foliage.DrawCalls} calls");
             overlay.Panel(size.X, size.Y, "Metal frame (F11 hides this)", _statsLines,
                 (_hud is { UiVisible: true } ? _hud.HudBottom : 0) + 8, textScale);
             wrote = true;
@@ -2666,7 +2736,8 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
             // Compacting the LOH is a stop-the-world move of every large object: on a 4+ GB heap it stalled
             // this loop for 1.6 s. Do it where a loading screen or a menu covers the pause, or when the heap
             // has grown past 4 GB; otherwise a background collection is enough and does not move live arrays.
-            bool safePoint = host.TitleScreen.TitleVisible || _settings?.Visible == true || host.ActiveSceneLoad is not null || host.Loading?.Exiting == true;
+            bool safePoint = host.TitleScreen.TitleVisible || _settings?.Visible == true || host.ActiveSceneLoad is not null
+                || host.Loading?.Exiting == true;
             bool compact = safePoint || managedHighWater;
             if (compact)
             {

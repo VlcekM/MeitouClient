@@ -219,7 +219,11 @@ public sealed partial class WwisePlayer : IDisposable
         {
             // A sound heard last block counts half as loud again: one at the cap's edge must get clearly quieter to give way, not flip every block.
             float heard = _sounds[i].Prepare(Gain) * (_sounds[i].Heard ? CapHysteresis : 1);
-            if (cap > 0 && _sounds[i].Cappable) { _loudness[cappable] = -heard; _order[cappable++] = i; }
+            if (cap > 0 && _sounds[i].Cappable)
+            {
+                _loudness[cappable] = -heard;
+                _order[cappable++] = i;
+            }
         }
         if (cap > 0 && cappable > cap)
         {

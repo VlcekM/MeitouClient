@@ -903,7 +903,7 @@ and `power capacity` (battery store, "in seconds" per fcs.def), plus research ([
     thunk `1400525e5`, the only caller of `FUN_140786100`), so it is reached indirectly, if at all.
   - Not read by production (slot 150 `FUN_140298700`, slot 109 `FUN_140296e00`), power (slots 163, 166, `FUN_140299370`), `Task_OperateMachine`, or the
     engineers' finder (slot 101 `FUN_1400f6b70`: progress below target).
-  Meitou: `Machine.Broken`, saved as `broken`, set and cleared by the dismantle, build, completion and ruin steps; the header (`PlayerInterface.BuildingLines`) and
+  Meitou: `Machine.Broken`, saved as `broken`, set and cleared by the dismantle, build, completion and ruin steps; the header (`BuildingSelection.SiteStatus`) and
   turret manning read it, and a town turret's saved `broken` (below). A player-built cage's or safe's lock is a fixture of its own ([locks](locks.md#lock-object)); a broken machine keeps its fixtures registered (doors, cage, bed) and its own lock counts as broken.
 - **What damages a building** (**Verified**, decompile): hits go to slot 62, which is `FUN_1402972c0` (returns 1, no effect) for every UseableStuff class (machines,
   turrets, storages, lights) and `FUN_1400d20b0` (returns 0, no effect either) for plain and gate buildings; only WallBuilding (`FUN_14029d560`, [walls](#walls)) and doors (`FUN_14029d690`)
