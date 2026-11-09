@@ -128,22 +128,67 @@ public sealed unsafe partial class ShadowPass
         set => _filterQuality = Math.Clamp(value, 0, 2);
     }
 
+    /// <summary>
+    /// The tier behind <see cref="FilterQuality"/> (0 to 2).
+    /// </summary>
     int _filterQuality = 2;
+
+    /// <summary>
+    /// The count behind <see cref="MeitouCascades"/>.
+    /// </summary>
     int _meitouCascades = MeitouShadowFit.DefaultCascades;
 
     #region Cascade schedule
 
+    /// <summary>
+    /// Each cascade as it was last drawn (null: never), kept between its redraws; the receivers read these.
+    /// </summary>
     readonly ShadowCascade?[] _stored = new ShadowCascade?[ShadowSettings.MaxCascades];
+
+    /// <summary>
+    /// The sun's direction each cascade was last drawn with.
+    /// </summary>
     readonly Vector3[] _storedSunDir = new Vector3[ShadowSettings.MaxCascades];
+
+    /// <summary>
+    /// The cascades that wanted drawing but waited for the far budget (drawn first next time).
+    /// </summary>
     readonly bool[] _owed = new bool[ShadowSettings.MaxCascades];
+
+    /// <summary>
+    /// The frames each deferred cascade has waited (<see cref="ShadowSchedule.Pick"/>).
+    /// </summary>
     readonly int[] _waited = new int[ShadowSettings.MaxCascades];
-    // The camera's flight (docs/render-shadows.md "Flights"): a far cascade drawn before a flight is stale until drawn again, and the published
-    // cascades stop before the first stale one.
+
+    /// <summary>
+    /// The cascades drawn before the camera's flight (docs/render-shadows.md "Flights"): stale until drawn again; the published cascades stop before
+    /// the first stale one.
+    /// </summary>
     readonly bool[] _stale = new bool[ShadowSettings.MaxCascades];
+
+    /// <summary>
+    /// The splits all the cascades were last drawn with at once (null: never).
+    /// </summary>
     float[]? _storedSplits;
+
+    /// <summary>
+    /// The sun's direction at the last redraw of every cascade.
+    /// </summary>
     Vector3 _storedSun;
+
+    /// <summary>
+    /// The map size at the last redraw of every cascade, and the Meitou frame counter the cadences run on.
+    /// </summary>
     int _storedMapSize, _meitouFrame;
+
+    /// <summary>
+    /// The Meitou cascades and block hold a frame's shadows (false after a frame of the game's CSM, or shadows off).
+    /// </summary>
     bool _meitouValid;
+
+    /// <summary>
+    /// Each cascade's redraw phase (<see cref="Phases"/>), made again when the count changes.
+    /// </summary>
     int[] _phases = [];
 
     /// <summary>
@@ -249,7 +294,14 @@ public sealed unsafe partial class ShadowPass
 
     #region Anchor
 
+    /// <summary>
+    /// Where the texel grids are anchored (null: not yet).
+    /// </summary>
     (double X, double Y, double Z)? _anchor;
+
+    /// <summary>
+    /// The sun's direction of the last frame (a different one means it is turning).
+    /// </summary>
     Vector3 _lastFrameSun;
 
     /// <summary>
@@ -323,6 +375,10 @@ public sealed unsafe partial class ShadowPass
 
     #region Cascade drawing
 
+    /// <summary>
+    /// One frame of the Meitou shadows: the splits, which cascades are drawn now (wanted, the far budget, a flight), the drawing, the blocker,
+    /// terrain and landmark maps, then the receivers' blocks.
+    /// </summary>
     void RenderMeitou(ShadowView view, Vector3 toSun, CasterDraw draw, LandmarkCasters? landmarks, CasterPrepare? prepare)
     {
         var watch = Stopwatch.StartNew();
@@ -518,10 +574,29 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public void SetTerrain(ushort[] heights, int size) => (_coarse, _coarseSize) = (heights, size);
 
+    /// <summary>
+    /// The whole-world height grid for the terrain shadow (<see cref="SetTerrain"/>; null: none).
+    /// </summary>
     ushort[]? _coarse;
+
+    /// <summary>
+    /// The grid's side in samples.
+    /// </summary>
     int _coarseSize;
+
+    /// <summary>
+    /// The terrain shadow map (made once the grid is set).
+    /// </summary>
     TerrainShadowMap? _terrainMap;
+
+    /// <summary>
+    /// The terrain shadow map the receivers sample, as the GL code bound it to its unit (kept while no new one is).
+    /// </summary>
     SampledTexture? _boundTerrain;   // the terrain shadow map the receivers sample, as the GL code bound it to its unit (kept while no new one is)
+
+    /// <summary>
+    /// The Meitou receiver block (<see cref="MeitouShadowShaders.Block"/>).
+    /// </summary>
     readonly FrameBlock _meitouBlock;
 
     /// <summary>
@@ -534,6 +609,10 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public GpuTexture? BlockerMap => _blockers.Map;
 
+    /// <summary>
+    /// Fills the receiver block and the Meitou block from the published cascades (slices, filter and search radii, penumbra scale), the fade and
+    /// noise, the terrain and landmark maps, and publishes the maps.
+    /// </summary>
     void PublishMeitou(ShadowView view, ShadowCascade[] cascades, Vector3 toSun, bool blockers)
     {
         var data = new float[ReceiverBytes / 4];
@@ -592,6 +671,9 @@ public sealed unsafe partial class ShadowPass
         if (blockers) _blockers.MarkPublished();
     }
 
+    /// <summary>
+    /// Frees the terrain, blocker and landmark maps.
+    /// </summary>
     void DisposeMeitou()
     {
         _terrainMap?.Dispose();

@@ -9,5 +9,8 @@ namespace Meitou.Game.Rendering.Shadows;
 /// </summary>
 public static class ShadowZoneBox
 {
+    /// <summary>
+    /// On (the default): the foliage's cascade work list leaves out the zones that miss the cascade's planes.
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 }

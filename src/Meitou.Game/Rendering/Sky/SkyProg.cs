@@ -10,6 +10,9 @@ namespace Meitou.Game.Rendering.Sky;
 public readonly record struct SkyColourHandles(UniformHandle Sun, UniformHandle Zenith, UniformHandle Horizon, UniformHandle SunColour,
     UniformHandle Twilight)
 {
+    /// <summary>
+    /// The handles in <paramref name="p"/> (unresolved names give invalid handles).
+    /// </summary>
     public static SkyColourHandles Resolve(LegacyProgram p) =>
         new(p.Uniform("uSkySun"), p.Uniform("uSkyZenith"), p.Uniform("uSkyHorizon"), p.Uniform("uSkySunColour"), p.Uniform("uSkyTwilight"));
 
@@ -31,15 +34,46 @@ public readonly record struct SkyColourHandles(UniformHandle Sun, UniformHandle 
 /// </summary>
 sealed class SkyProg : IDisposable
 {
+    /// <summary>
+    /// The program.
+    /// </summary>
     public readonly LegacyProgram P;
+
+    /// <summary>
+    /// The native segment the program is recorded in.
+    /// </summary>
     public readonly NativeSegment Segment;
+
+    /// <summary>
+    /// The physical sky's uniforms: the inverse view-projection, <c>uSkyExtra</c>, the planets' spin, the cloud layer's light, sun and wind, the
+    /// Meitou clouds' mode, key light, key direction and ambient, which textures it has, the Meitou stars and the celestial axes.
+    /// </summary>
     public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, CloudMeitou, CloudKey, CloudKeyDir,
         CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ;
+
+    /// <summary>
+    /// The two planets' bodies (direction, sine of the angular radius).
+    /// </summary>
     public readonly UniformHandle[] Planet;
+
+    /// <summary>
+    /// The simple model's colour uniforms.
+    /// </summary>
     public readonly SkyColourHandles Colours;
+
+    /// <summary>
+    /// The sky's textures: stars, the two planets, the cloud layer (colour, normal, tile and their smooth variants) and the volumetric clouds' image.
+    /// </summary>
     public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth, VolumeImage;
+
+    /// <summary>
+    /// The stars' and clouds' sampler reflection (null when the program has none).
+    /// </summary>
     public readonly Meitou.Game.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, CloudsInfo;
 
+    /// <summary>
+    /// Makes the program and its segment and resolves every handle.
+    /// </summary>
     public SkyProg(IGpuContext gpu, string vertex, string fragment, string name)
     {
         P = LegacyProgram.Create(gpu, vertex, fragment, name);
@@ -151,5 +185,8 @@ sealed class SkyProg : IDisposable
         p.Set(CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
     }
 
+    /// <summary>
+    /// Frees the program.
+    /// </summary>
     public void Dispose() => P.Dispose();
 }

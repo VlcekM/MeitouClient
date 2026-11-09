@@ -88,49 +88,175 @@ public sealed unsafe class WaterRenderer : IDisposable
     [StructLayout(LayoutKind.Explicit, Size = 512)]
     struct WaterConstants
     {
+        /// <summary>
+        /// The water height, the half world, the grid step and the animation time.
+        /// </summary>
         [FieldOffset(0)] public Vector4 Params;
+        /// <summary>
+        /// The eye's x, z, the plane's extent and the lean switch.
+        /// </summary>
         [FieldOffset(16)] public Vector4 CentreExtent;
+        /// <summary>
+        /// The open sea's first parameters (as the parameters A map: scale X, scale Y, invStrength, invOpacity).
+        /// </summary>
         [FieldOffset(32)] public Vector4 SeaA;
+        /// <summary>
+        /// The open sea's second parameters (as the parameters B map: gloss, glow, distortion).
+        /// </summary>
         [FieldOffset(48)] public Vector4 SeaB;
+        /// <summary>
+        /// The open sea's colour, and the water's far distance in w (<c>uWaterFar</c>: the plane's extent over 1.5).
+        /// </summary>
         [FieldOffset(64)] public Vector4 SeaColour;
+        /// <summary>
+        /// The sun's direction.
+        /// </summary>
         [FieldOffset(80)] public Vector4 SunDir;
+        /// <summary>
+        /// The sun's colour.
+        /// </summary>
         [FieldOffset(96)] public Vector4 SunColour;
+        /// <summary>
+        /// The specular glint's light direction (the sun's, or by night the planet's; <see cref="WorldLighting.Glint"/>).
+        /// </summary>
         [FieldOffset(112)] public Vector4 GlintDir;
+        /// <summary>
+        /// The glint's colour (faded by the clouds' shade on the Meitou water).
+        /// </summary>
         [FieldOffset(128)] public Vector4 GlintColour;
+        /// <summary>
+        /// The ocean's three wave cascade lengths and its FFT size (0: not ready).
+        /// </summary>
         [FieldOffset(144)] public Vector4 Ocean;
+        /// <summary>
+        /// The shore field's world rectangle (0: none yet).
+        /// </summary>
         [FieldOffset(160)] public Vector4 ShoreRect;
+        /// <summary>
+        /// The breaking waves' phase and sizes (<see cref="WaveSet.Shore"/>).
+        /// </summary>
         [FieldOffset(176)] public Vector4 Shore;
+        /// <summary>
+        /// Where the open-water waves and the shore waves fade (start, end each).
+        /// </summary>
         [FieldOffset(192)] public Vector4 WaveFade;
+        /// <summary>
+        /// The clarity: the inverse clarity, the far clarity and the clear distance.
+        /// </summary>
         [FieldOffset(208)] public Vector4 Clarity;
+        /// <summary>
+        /// One over the target's size, and whether the reflection and the refraction are read this frame.
+        /// </summary>
         [FieldOffset(224)] public Vector4 ScreenReflect;
+        /// <summary>
+        /// The reflection's view-projection (identity without one).
+        /// </summary>
         [FieldOffset(240)] public Matrix4x4 ReflectionViewProjection;
+        /// <summary>
+        /// The simple sky's sun direction.
+        /// </summary>
         [FieldOffset(304)] public Vector4 SkySun;
+        /// <summary>
+        /// The simple sky's zenith colour.
+        /// </summary>
         [FieldOffset(320)] public Vector4 SkyZenith;
+        /// <summary>
+        /// The simple sky's horizon colour.
+        /// </summary>
         [FieldOffset(336)] public Vector4 SkyHorizon;
+        /// <summary>
+        /// The simple sky's sun colour and twilight.
+        /// </summary>
         [FieldOffset(352)] public Vector4 SkySunColour;
+        /// <summary>
+        /// The coarse heightmap's world rectangle (<see cref="TerrainShaders.HeightFunctions"/>).
+        /// </summary>
         [FieldOffset(368)] public Vector4 CoarseRect;
+        /// <summary>
+        /// The fine heightmap's world rectangle.
+        /// </summary>
         [FieldOffset(384)] public Vector4 FineRect;
+        /// <summary>
+        /// The coarse heightmap's cells, the fine band, and whether there is a fine heightmap.
+        /// </summary>
         [FieldOffset(400)] public Vector4 CoarseCellsFineBand;
+        /// <summary>
+        /// The fine heightmap's cells.
+        /// </summary>
         [FieldOffset(416)] public Vector4 FineCells;
+        /// <summary>
+        /// The scene's near and far planes, and 1 with a scene depth copy this frame (<see cref="CaptureScene"/>).
+        /// </summary>
         [FieldOffset(432)] public Vector4 DepthPlanes;
+        /// <summary>
+        /// The colour map's bindless index (<c>watercolourmap.png</c>).
+        /// </summary>
         [FieldOffset(448)] public uint ColourMap;
+        /// <summary>
+        /// The flow map's bindless index (<c>flowmap.png</c>).
+        /// </summary>
         [FieldOffset(452)] public uint FlowMap;
+        /// <summary>
+        /// The foam lace's bindless index (Meitou).
+        /// </summary>
         [FieldOffset(456)] public uint FoamMap;
+        /// <summary>
+        /// The normal map's bindless index (<c>water.png</c>).
+        /// </summary>
         [FieldOffset(460)] public uint NormalMap;
+        /// <summary>
+        /// The rain ripples' bindless index (<c>rain-ripples.png</c>).
+        /// </summary>
         [FieldOffset(464)] public uint RainMap;
+        /// <summary>
+        /// The baked parameters A map's bindless index.
+        /// </summary>
         [FieldOffset(468)] public uint ParamsA;
+        /// <summary>
+        /// The baked parameters B map's bindless index.
+        /// </summary>
         [FieldOffset(472)] public uint ParamsB;
+        /// <summary>
+        /// The reflection's bindless index (the stand-in without one).
+        /// </summary>
         [FieldOffset(476)] public uint ReflectionMap;
+        /// <summary>
+        /// The refraction's bindless index (the stand-in without one).
+        /// </summary>
         [FieldOffset(480)] public uint RefractionMap;
+        /// <summary>
+        /// The ocean's wave maps (a 2D array), bindless index.
+        /// </summary>
         [FieldOffset(484)] public uint OceanMap;
+        /// <summary>
+        /// The shore field's bindless index.
+        /// </summary>
         [FieldOffset(488)] public uint ShoreMap;
+        /// <summary>
+        /// The river flow map's bindless index (<see cref="RiverFlowBake"/>).
+        /// </summary>
         [FieldOffset(492)] public uint RiverMap;
+        /// <summary>
+        /// The coarse heightmap's bindless index.
+        /// </summary>
         [FieldOffset(496)] public uint HeightCoarse;
+        /// <summary>
+        /// The fine heightmap's bindless index.
+        /// </summary>
         [FieldOffset(500)] public uint HeightFine;
+        /// <summary>
+        /// The scene depth copy's bindless index (the stand-in without one).
+        /// </summary>
         [FieldOffset(504)] public uint SceneDepthMap;
+        /// <summary>
+        /// Padding to the block's 512 bytes.
+        /// </summary>
         [FieldOffset(508)] public uint Spare1;
     }
 
+    /// <summary>
+    /// The game's water vertex stage: a quad at the water height that follows the eye, half its side past the far plane.
+    /// </summary>
     const string Vertex = """
         #version 330 core
         layout(location = 0) in vec2 aXZ;
@@ -172,6 +298,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The game's water fragment stage: the biomes' colour and parameters blended per pixel, flow, rain ripples, the reflection, the sun's glint and
+    /// the haze.
+    /// </summary>
     static readonly string Fragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions + """
 
         in vec3 vWorld;
@@ -470,6 +600,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         float breakerHeight(Shore s) { return breakerScale(s) * breakerProfile(s.g, smoothstep(s.breakAt + 160.0, s.breakAt, s.dist)); }
         """;
 
+    /// <summary>
+    /// The Meitou water's vertex stage: the polar grid around the eye (its outer ring out to the extent), displaced near the eye by the ocean waves
+    /// and the breakers' smooth hump; the undisplaced position goes on for the fragment.
+    /// </summary>
     const string MeitouVertex = "#version 330 core\n" + TerrainShaders.HeightFunctions + MeitouMotion + """
 
         layout(location = 0) in vec2 aXZ;   // the polar grid around the eye; the outer ring is marked by a length over 1e5
@@ -507,6 +641,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The Meitou water's fragment body (after the shared functions), shading the waves and the shore at the undisplaced position.
+    /// </summary>
     const string MeitouBody = """
 
         in vec3 vWorld;
@@ -995,6 +1132,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The Meitou water's fragment stage: the shared functions and <see cref="MeitouBody"/>.
+    /// </summary>
     static readonly string MeitouFragment = "#version 330 core\n" + TerrainShaders.HeightFunctions + SkyRenderer.SkyFunctions + ThicknessFunctions
         + MeitouMotion + MeitouBody;
 
@@ -1056,6 +1196,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         ["uDepthPlanes"] = "water.depthPlanes",
     };
 
+    /// <summary>
+    /// The uniforms' native forms: the common ones and <see cref="NativeOwn"/>.
+    /// </summary>
     static readonly Dictionary<string, string> NativeMap = NativeShaders.Map(NativeOwn);
 
     /// <summary>
@@ -1069,7 +1212,14 @@ public sealed unsafe class WaterRenderer : IDisposable
         return source[..(line + 1)] + ConstantsBlock + source[(line + 1)..];
     }
 
+    /// <summary>
+    /// A water vertex shader in the native model (the constants block put in, the uniforms mapped).
+    /// </summary>
     static string NativeVertex(string source) => NativeShaders.Port(WithConstants(source), NativeMap);
+
+    /// <summary>
+    /// A water fragment shader in the native model, its albedo for the GI resolve (none).
+    /// </summary>
     static string NativeFragment(string source) => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(WithConstants(source), NativeMap), none: true);
 
     #endregion
@@ -1080,25 +1230,101 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// The native GPU API (phase 8 stage 2: the water makes no GL call; docs/renderer-native.md 8.6).
     /// </summary>
     public IGpuContext Gpu { get; }
+
+    /// <summary>
+    /// The game's water quad (four corners, a triangle strip).
+    /// </summary>
     readonly DeviceBuffer _quad;
+
+    /// <summary>
+    /// The Meitou polar grid's vertices and indices (null without the Meitou waves).
+    /// </summary>
     readonly DeviceBuffer? _grid, _gridIndices;
+
+    /// <summary>
+    /// The grid's index count.
+    /// </summary>
     readonly uint _gridIndexCount;
-    // colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order of WaterProgram.MapNames
+
+    /// <summary>
+    /// The water's maps: colour, flow, normal, parameters A and B, rain ripples, foam (Meitou), river, in the order
+    /// of <see cref="WaterProgram.MapNames"/>.
+    /// </summary>
     readonly SampledImage[] _maps;
+
+    /// <summary>
+    /// The open sea's two parameter vectors (as the parameter maps').
+    /// </summary>
     readonly Vector4 _seaA, _seaB;
+
+    /// <summary>
+    /// The open sea's colour.
+    /// </summary>
     readonly Vector3 _seaColour;
+
+    /// <summary>
+    /// The frame and view constants of both programs.
+    /// </summary>
     readonly NativeFrame _frame;
+
+    /// <summary>
+    /// The game's water program (the quad).
+    /// </summary>
     readonly WaterProgram _faithful;
+
+    /// <summary>
+    /// The Meitou water program (the grid; null without the Meitou waves).
+    /// </summary>
     readonly WaterProgram? _meitou;
+
+    /// <summary>
+    /// The bindless entries of <see cref="_maps"/>.
+    /// </summary>
     readonly BindlessTexture[] _mapTextures;
+
+    /// <summary>
+    /// The bindless entries of the ocean's maps, the shore field, the reflection, the refraction, the heightmaps and the scene depth copy.
+    /// </summary>
     readonly BindlessTexture _oceanMap, _shoreMap, _reflectionMap, _refractionMap, _heightCoarse, _heightFine, _sceneDepthMap;
+
+    /// <summary>
+    /// The one-texel array the ocean's entry reads before its first FFT (every read is gated on the ocean's size).
+    /// </summary>
     readonly GpuTexture _standInArrayTexture;
+
+    /// <summary>
+    /// The stand-in array's bindless index.
+    /// </summary>
     readonly uint _standInArray;
+
+    /// <summary>
+    /// The constants set's layout: one uniform buffer, its offset given at bind.
+    /// </summary>
     readonly GpuSetLayout _constantsLayout;
+
+    /// <summary>
+    /// The breaking waves' phase and the normals' time, stepped by the game time and the wind.
+    /// </summary>
     readonly WaveSet _waves = new();
+
+    /// <summary>
+    /// The ocean's FFT waves (null without the Meitou waves).
+    /// </summary>
     readonly OceanWaves? _ocean;
+
+    /// <summary>
+    /// The shore field (null when off).
+    /// </summary>
     readonly ShoreField? _shore;
+
+    /// <summary>
+    /// The polar grid's spacing over its radius (2π over the segments).
+    /// </summary>
     readonly float _gridStep;
+
+    /// <summary>
+    /// The constants' alignment in the frame's buffer (the device's, at least 16).
+    /// </summary>
     readonly ulong _uniformAlign;
 
     /// <summary>
@@ -1116,14 +1342,40 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     sealed class WaterProgram : IDisposable
     {
+        /// <summary>
+        /// The water maps' sampler names, in the order of <see cref="_maps"/>.
+        /// </summary>
         public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap",
             "uRiverMap"];
+
+        /// <summary>
+        /// The native program.
+        /// </summary>
         public readonly NativeProg Program;
+
+        /// <summary>
+        /// The vertex layout of its one stream.
+        /// </summary>
         public readonly VertexLayout Layout;
+
+        /// <summary>
+        /// The vertex buffers by location.
+        /// </summary>
         public readonly GpuBufferBinding[] Vertices;
+
+        /// <summary>
+        /// The topology (the quad's strip, the grid's triangles).
+        /// </summary>
         public readonly PrimitiveType Topology;
+
+        /// <summary>
+        /// The program's GPU handle.
+        /// </summary>
         public GpuProgram Gpu => Program.P;
 
+        /// <summary>
+        /// Makes the native program with the water constants set, its vertex layout and buffers, and checks its samplers against Metal's budget.
+        /// </summary>
         public WaterProgram(IGpuContext gpu, NativeFrame frame, string vertex, string fragment, string name, PrimitiveType topology,
             ReadOnlySpan<LegacyProgram.Attribute?> attributes, GpuSetLayout constants)
         {
@@ -1136,6 +1388,9 @@ public sealed unsafe class WaterRenderer : IDisposable
                 SamplerBudget.Require(name, reflection.Samplers, NativeShaders.BindlessSet);
         }
 
+        /// <summary>
+        /// Frees the program.
+        /// </summary>
         public void Dispose() => Program.Dispose();
     }
 
@@ -1144,14 +1399,39 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     sealed class BindlessTexture : IDisposable
     {
+        /// <summary>
+        /// The context whose bindless table holds the entry.
+        /// </summary>
         readonly IGpuContext _gpu;
+
+        /// <summary>
+        /// The kind of the entry (2D or 2D array).
+        /// </summary>
         readonly BindlessKind _kind;
+
+        /// <summary>
+        /// The entry (made on first use).
+        /// </summary>
         BindlessHandle _handle;
+
+        /// <summary>
+        /// The view the entry last held, to update it only on a change.
+        /// </summary>
         SampledTexture _registered;
+
+        /// <summary>
+        /// The entry is registered.
+        /// </summary>
         bool _has;
 
+        /// <summary>
+        /// An entry of <paramref name="kind"/>, registered on first use.
+        /// </summary>
         public BindlessTexture(IGpuContext gpu, BindlessKind kind) => (this._gpu, this._kind) = (gpu, kind);
 
+        /// <summary>
+        /// The entry's index for <paramref name="texture"/>: registered the first time, updated when the view or sampler changed.
+        /// </summary>
         public uint Index(in SampledTexture texture)
         {
             if (!_has)
@@ -1164,14 +1444,23 @@ public sealed unsafe class WaterRenderer : IDisposable
             return _handle.Index;
         }
 
+        /// <summary>
+        /// <see cref="Index"/>, or <paramref name="fallback"/> for a null texture.
+        /// </summary>
         public uint IndexOr(in SampledTexture texture, uint fallback) => texture.IsNull ? fallback : Index(texture);
 
+        /// <summary>
+        /// Frees the entry.
+        /// </summary>
         public void Dispose()
         {
             if (_has) _gpu.Bindless.Free(_handle);
         }
     }
 
+    /// <summary>
+    /// Makes the ocean and shore field when asked, both programs (the grid with the Meitou waves), the bindless entries and the array stand-in.
+    /// </summary>
     WaterRenderer(IGpuContext gpu, SampledImage[] maps, Vector4 seaA, Vector4 seaB, Vector3 seaColour, int gridSegments, int oceanSize,
         bool meitouWaves, bool shoreField)
     {
@@ -1238,6 +1527,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         return (grid, gridIndices, program, (uint)indices.Length);
     }
 
+    /// <summary>
+    /// Logs the ocean's and the shore's costs and frees the programs, buffers, entries, maps and captures.
+    /// </summary>
     public void Dispose()
     {
         if (_ocean is { Dispatched: > 0 } waves)
@@ -1323,12 +1615,39 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     public sealed class Source
     {
+        /// <summary>
+        /// The colour, flow, normal and rain ripple images (null when not found).
+        /// </summary>
         internal RgbaImage? Colour, Flow, Normal, Rain;
+
+        /// <summary>
+        /// The biome water parameters baked per blend-map pixel (A and B).
+        /// </summary>
         internal Vector4[] A = [], B = [];
+
+        /// <summary>
+        /// The blend map's size, and the river map's side.
+        /// </summary>
         internal int BlendWidth, BlendHeight, RiverSize;
+
+        /// <summary>
+        /// The open sea's parameters and colour.
+        /// </summary>
         internal (Vector4 A, Vector4 B, Vector3 Colour) Sea;
+
+        /// <summary>
+        /// The river flow map baked from the world's heights (null: none).
+        /// </summary>
         internal byte[]? River;
+
+        /// <summary>
+        /// The foam lace (<see cref="WaterFoam"/>).
+        /// </summary>
         internal byte[] Foam = [];
+
+        /// <summary>
+        /// Warnings for the log (missing files).
+        /// </summary>
         internal readonly List<string> Messages = [];
     }
 
@@ -1430,6 +1749,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         return (best.Key.Item1, best.Key.Item2, rgb);
     }
 
+    /// <summary>
+    /// An image of the install's data directory, or null when the file is missing.
+    /// </summary>
     static RgbaImage? Load(GameInstall install, string relative)
     {
         var path = GameFiles.Resolve(Path.Combine(install.DataDirectory, relative));
@@ -1567,10 +1889,29 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     #region Scene capture
 
+    /// <summary>
+    /// The refraction: this frame's copy of the scene's colour (Meitou).
+    /// </summary>
     GpuTexture? _refraction;
+
+    /// <summary>
+    /// The frame the refraction was copied in (-1: never).
+    /// </summary>
     long _refractionFrame = -1;
+
+    /// <summary>
+    /// This frame's copy of the scene's depth.
+    /// </summary>
     GpuTexture? _sceneDepthCopy;
+
+    /// <summary>
+    /// The frame the depth was copied in (-1: never).
+    /// </summary>
     long _sceneDepthFrame = -1;
+
+    /// <summary>
+    /// The near and far planes of the copied depth.
+    /// </summary>
     Vector2 _sceneDepthPlanes;
 
     /// <summary>
@@ -1657,6 +1998,10 @@ public sealed unsafe class WaterRenderer : IDisposable
         return NeedsRefraction(near);   // without refraction (`--no-water-refraction`) the Meitou water keeps the slant path: no pass restart or copy
     }
 
+    /// <summary>
+    /// Whether water at <paramref name="near"/> can still be see-through: nearer than 1.5 times the clear distance (at least 100) or the shore
+    /// fade's end.
+    /// </summary>
     internal static bool SliceCanTransmit(float near, float clearDistance) =>
         near < Math.Max(Math.Max(clearDistance, 100f) * 1.5f, ShoreFadeEnd);
 
@@ -1664,16 +2009,36 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     #region Drawing
 
+    /// <summary>
+    /// The constants sets by frame buffer.
+    /// </summary>
     readonly Dictionary<ulong, GpuSet> _constantSets = [];
+
+    /// <summary>
+    /// The buffer of the last constants set.
+    /// </summary>
     ulong _constantSetKey;
+
+    /// <summary>
+    /// The last constants set.
+    /// </summary>
     GpuSet _constantSet;
 
+    /// <summary>
+    /// Linear, edge-clamped, no mipmaps (the array stand-in).
+    /// </summary>
     static readonly SamplerDesc ClampLinear = new(TextureMinFilter.Linear, TextureMagFilter.Linear, false,
         TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false,
         DepthFunction.Always, false, false, 1, 0);
 
+    /// <summary>
+    /// Nearest, edge-clamped (the scene depth copy).
+    /// </summary>
     static readonly SamplerDesc ClampNearest = ClampLinear with { Min = TextureMinFilter.Nearest, Mag = TextureMagFilter.Nearest };
 
+    /// <summary>
+    /// Straight alpha blending (the water over the scene, when the target has colour).
+    /// </summary>
     static readonly BlendState AlphaBlend = new(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
     /// <summary>
@@ -1840,6 +2205,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         c.SceneDepthMap = depth ? _sceneDepthMap.Index(new SampledTexture(Gpu.Samplers.Get(ClampNearest), _sceneDepthCopy!.View())) : Gpu.StandIn2D;
     }
 
+    /// <summary>
+    /// A published uniform's value from the frame globals (<paramref name="fallback"/> when not published).
+    /// </summary>
     static T ReadGlobal<T>(FrameGlobals globals, string name, T fallback) where T : unmanaged
     {
         var value = fallback;
@@ -1847,6 +2215,9 @@ public sealed unsafe class WaterRenderer : IDisposable
         return globals.UniformValue(name)?.TryRead(bytes) == true ? value : fallback;
     }
 
+    /// <summary>
+    /// The constants set for this frame's buffer, made once per buffer.
+    /// </summary>
     GpuSet ConstantSet(GpuBuffer buffer)
     {
         ulong key = (ulong)buffer.Index;

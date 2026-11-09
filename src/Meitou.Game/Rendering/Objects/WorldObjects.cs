@@ -12,19 +12,26 @@ namespace Meitou.Game.Rendering.Objects;
 /// </summary>
 sealed class ZoneObjects
 {
+    /// <summary>
+    /// The zone laid out.
+    /// </summary>
     public required ZoneCoordinate Zone { get; init; }
+
     /// <summary>
     /// Building parts and map features.
     /// </summary>
     public List<PlacedMesh> Items { get; } = [];
+
     /// <summary>
     /// Distant meshes of buildings in towns that have no baked distant town mesh (<see cref="PlacedKind.BuildingDistant"/>).
     /// </summary>
     public List<PlacedMesh> Stand { get; } = [];
+
     /// <summary>
     /// The indoor volumes of the zone's buildings that have an <c>interior mask</c> (docs/formats/zones.md, "Interior view").
     /// </summary>
     public List<InteriorVolume> Interiors { get; } = [];
+
     /// <summary>
     /// The hulls of gateway buildings: hit by the audio's indoor ray like any interior mask, but no room (<see cref="InteriorVolume.IsGateway"/>).
     /// </summary>
@@ -37,27 +44,70 @@ sealed class ZoneObjects
 /// </summary>
 sealed class WorldObjects : IDisposable
 {
+    /// <summary>
+    /// The game data the placements' records come from.
+    /// </summary>
     public required GameDatabase Database { get; init; }
+
+    /// <summary>
+    /// The install the heightmap, interior collisions and records' files are read from.
+    /// </summary>
     public required GameInstall Install { get; init; }
+
+    /// <summary>
+    /// The level data: the zones' buildings and their states.
+    /// </summary>
     public required WorldLevelData Levels { get; init; }
+
+    /// <summary>
+    /// Which town each building belongs to.
+    /// </summary>
     public required BuildingTowns Towns { get; init; }
+
+    /// <summary>
+    /// The world's map features (<c>features.dat</c>) by zone.
+    /// </summary>
     public required MapFeatureFile Features { get; init; }
+
     /// <summary>
     /// Building layouts of <c>interiors.level</c>; the exterior ones (signs, banners) are drawn (docs/formats/zones.md, "Building layouts").
     /// </summary>
     public required BuildingLayouts Layouts { get; init; }
+
     /// <summary>
     /// Towns with a baked distant mesh (docs/formats/zones.md, "Distant towns").
     /// </summary>
     public required List<DistantTown> DistantTowns { get; init; }
 
+    /// <summary>
+    /// The instance ids of the towns with a baked distant mesh: their buildings get no distant stand-ins.
+    /// </summary>
     readonly HashSet<string> _bakedTowns = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The level data's buildings by zone.
+    /// </summary>
     readonly Dictionary<ZoneCoordinate, List<BuildingPlacement>> _buildingsByZone = [];
+
+    /// <summary>
+    /// Staged placements by zone (the Meitou title's staging); null in play: the zones are laid out from the level data.
+    /// </summary>
     Dictionary<ZoneCoordinate, ZoneObjects>? _staged;
+
+    /// <summary>
+    /// A terrain heightmap per worker thread, for the placements' heights (null once disposed or when staged).
+    /// </summary>
     ThreadLocal<TerrainHeightmap>? _heights;
+
+    /// <summary>
+    /// The interior collision meshes the buildings' indoor volumes are made from (null when staged).
+    /// </summary>
     InteriorCollisions? _interiorCollisions;
 
-    // Totals over the zones laid out so far (for the log line).
+    /// <summary>
+    /// Totals over the zones laid out so far, for the log line: buildings, those without a record, at their state's world Y, destroyed, foliage
+    /// resources and others without meshes, map features, distant stand-ins, exterior layouts, their objects and layout names not found.
+    /// </summary>
     int _buildings, _missing, _fromState, _destroyed, _foliage, _empty, _features, _stand, _layouts, _layoutObjects, _layoutsNotFound;
 
     /// <summary>
@@ -136,9 +186,19 @@ sealed class WorldObjects : IDisposable
 
     // ---- runtime placements (buildings the player placed: docs/simulation.md "Buildings", host seam) ----
 
+    /// <summary>
+    /// Guards the runtime placements.
+    /// </summary>
     readonly object _runtimeLock = new();
+
+    /// <summary>
+    /// The runtime placements by placement key.
+    /// </summary>
     readonly Dictionary<string, BuildingPlacement> _runtime = new(StringComparer.Ordinal);
-    // Replaced whole on every change, so worker threads in BuildZone read a stable snapshot without the lock.
+
+    /// <summary>
+    /// <see cref="_runtime"/> by zone, replaced whole on every change so worker threads laying out zones read a stable snapshot without the lock.
+    /// </summary>
     volatile Dictionary<ZoneCoordinate, BuildingPlacement[]> _runtimeByZone = [];
 
     /// <summary>
@@ -191,15 +251,24 @@ sealed class WorldObjects : IDisposable
     /// </summary>
     public const string GroundKeyPrefix = "ground:";
 
+    /// <summary>
+    /// Rebuilds <see cref="_runtimeByZone"/>; a change other than a ground item's (<paramref name="key"/>) also makes the placement version new.
+    /// </summary>
     void Reindex(string? key = null)
     {
         _runtimeByZone = _runtime.Values.GroupBy(p => p.Zone).ToDictionary(g => g.Key, g => g.ToArray());
         if (key is null || !key.StartsWith(GroundKeyPrefix, StringComparison.Ordinal)) _placementVersion++;
     }
 
+    /// <summary>
+    /// The runtime placements in a zone (from the snapshot).
+    /// </summary>
     IReadOnlyList<BuildingPlacement> RuntimeIn(ZoneCoordinate zone) => _runtimeByZone.TryGetValue(zone, out var list) ? list : [];
 
-    // Level buildings the level editor cleared (docs/game/level-editor.md), by key; replaced whole on every change, like runtimeByZone.
+    /// <summary>
+    /// The level buildings the level editor cleared (docs/game/level-editor.md), by key; replaced whole on every change,
+    /// like <see cref="_runtimeByZone"/>.
+    /// </summary>
     volatile HashSet<string> _cleared = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -230,7 +299,14 @@ sealed class WorldObjects : IDisposable
         return gone.Count == 0 ? list : list.Where(b => !gone.Contains(b.Key));
     }
 
+    /// <summary>
+    /// The number behind <see cref="PlacementVersion"/>.
+    /// </summary>
     volatile int _placementVersion;
+
+    /// <summary>
+    /// The building floors behind <see cref="Floors"/>, made on first use.
+    /// </summary>
     BuildingFloors? _floors;
 
     /// <summary>
@@ -357,6 +433,9 @@ sealed class WorldObjects : IDisposable
     /// </summary>
     public ZoneObjects BuildRuntime(BuildingPlacement placement) => Lay(placement.Zone, [placement], withFeatures: false);
 
+    /// <summary>
+    /// Lays placements out into a zone's objects, with the zone's map features when <paramref name="withFeatures"/>; on a worker thread.
+    /// </summary>
     ZoneObjects Lay(ZoneCoordinate zone, IEnumerable<BuildingPlacement> placements, bool withFeatures)
     {
         var result = new ZoneObjects { Zone = zone };
@@ -482,6 +561,9 @@ sealed class WorldObjects : IDisposable
         $"{_layouts} exterior layouts ({_layoutObjects} objects, {_layoutsNotFound} layout names not found), {_features} map features, " +
         $"{_stand} distant stand-ins";
 
+    /// <summary>
+    /// Frees the worker threads' heightmaps.
+    /// </summary>
     public void Dispose()
     {
         if (_heights is null) return;

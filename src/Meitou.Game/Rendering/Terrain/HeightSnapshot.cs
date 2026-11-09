@@ -9,9 +9,24 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 internal readonly struct HeightSnapshot
 {
+    /// <summary>
+    /// The whole-world coarse heights (raw 16-bit, row-major).
+    /// </summary>
     readonly ushort[] _coarse;
+
+    /// <summary>
+    /// The coarse grid's side in samples.
+    /// </summary>
     readonly int _coarseSize;
+
+    /// <summary>
+    /// The streamed fine window.
+    /// </summary>
     readonly HeightWindow _fine;
+
+    /// <summary>
+    /// The fine window's fade band (world units) and its world rectangle (x0, z0, x1, z1, sample centre to sample centre).
+    /// </summary>
     readonly float _fineBand, _fx0, _fz0, _fx1, _fz1;
 
     /// <summary>
@@ -19,6 +34,9 @@ internal readonly struct HeightSnapshot
     /// </summary>
     public HeightWindow Fine => _fine;
 
+    /// <summary>
+    /// A snapshot of the given arrays (not copied).
+    /// </summary>
     public HeightSnapshot(ushort[] coarse, int coarseSize, HeightWindow fine, float fineBand)
     {
         this._coarse = coarse;
@@ -44,6 +62,9 @@ internal readonly struct HeightSnapshot
         return c + (Bilinear(_fine.Raw, _fine.Columns, _fine.Rows, x - _fx0, z - _fz0, _fine.Spacing) - c) * w;
     }
 
+    /// <summary>
+    /// Bilinear height of a raw grid at (<paramref name="x"/>, <paramref name="z"/>) from its corner, in world units (clamped to the grid).
+    /// </summary>
     static float Bilinear(ushort[] raw, int cols, int rows, float x, float z, float spacing)
     {
         float fx = Math.Clamp(x / spacing, 0, cols - 1), fz = Math.Clamp(z / spacing, 0, rows - 1);
@@ -62,9 +83,18 @@ internal readonly struct HeightSnapshot
 /// </summary>
 public sealed class TerrainHeights
 {
+    /// <summary>
+    /// The snapshot <see cref="HeightAt"/> reads.
+    /// </summary>
     HeightSnapshot _snapshot;
 
+    /// <summary>
+    /// Takes a new snapshot of <paramref name="terrain"/>.
+    /// </summary>
     public void Refresh(TerrainRenderer terrain) => _snapshot = terrain.Snapshot();
 
+    /// <summary>
+    /// The height at a world point in the last snapshot.
+    /// </summary>
     public float HeightAt(float x, float z) => _snapshot.HeightAt(x, z);
 }

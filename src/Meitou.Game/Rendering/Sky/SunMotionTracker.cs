@@ -18,12 +18,20 @@ sealed class SunMotionTracker
     /// The angles from the sun's centre (degrees) within which the sky takes all of the sun's motion, and past which none.
     /// </summary>
     const float InnerAngle = 10, OuterAngle = 16;
+
     /// <summary>
     /// A larger step of the sun in one frame (degrees) is a jump of the clock, not a motion to follow.
     /// </summary>
     const float JumpAngle = 2;
 
+    /// <summary>
+    /// The sun direction of the last frame.
+    /// </summary>
     Vector3 _previous;
+
+    /// <summary>
+    /// <see cref="_previous"/> holds a sun (false after <see cref="Reset"/>).
+    /// </summary>
     bool _previousValid;
 
     /// <summary>
@@ -76,6 +84,9 @@ sealed class SunMotionTracker
         return ViewWindow.Current.ToTile(new Vector2(x / (z * tanY * aspect), y / (z * tanY)));
     }
 
+    /// <summary>
+    /// Reads a published uniform's value from the frame globals (default when not published).
+    /// </summary>
     static T ReadGlobal<T>(FrameGlobals globals, string name) where T : unmanaged
     {
         T value = default;

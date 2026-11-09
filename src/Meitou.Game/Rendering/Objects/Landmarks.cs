@@ -23,12 +23,19 @@ sealed class LandmarkClass(AssetLocator assets)
     /// </summary>
     public const float MinRadius = 2000;
 
+    /// <summary>
+    /// Each mesh's bounding radius by path (0: not found), probed once.
+    /// </summary>
     readonly ConcurrentDictionary<string, float> _radii = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// The mesh's local bounds radius (0: the file was not found or unreadable). Safe from any thread; cached by path.
     /// </summary>
     public float MeshRadius(string meshPath) => _radii.GetOrAdd(meshPath, Probe);
 
+    /// <summary>
+    /// A mesh's bounding radius from its file's bounds chunk, else from its vertices (0 when it cannot be read).
+    /// </summary>
     float Probe(string name)
     {
         var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
@@ -58,6 +65,9 @@ sealed class LandmarkClass(AssetLocator assets)
     /// </summary>
     public float WorldRadius(PlacedMesh p) => MeshRadius(p.MeshPath) * Scale(p.Transform);
 
+    /// <summary>
+    /// Whether a placement is a landmark: its world radius is at least <see cref="MinRadius"/>.
+    /// </summary>
     public bool IsLandmark(PlacedMesh p) => WorldRadius(p) >= MinRadius;
 
     /// <summary>

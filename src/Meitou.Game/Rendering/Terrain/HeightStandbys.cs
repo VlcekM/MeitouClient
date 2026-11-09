@@ -34,6 +34,9 @@ sealed class HeightStandbys
     /// </summary>
     readonly List<TerrainRenderer.FineStandby> _windows = [];
 
+    /// <summary>
+    /// No standbys yet; they follow <paramref name="streamer"/>'s kept points and <paramref name="terrain"/> uploads them.
+    /// </summary>
     public HeightStandbys(TerrainStreamer streamer, TerrainRenderer terrain)
     {
         _streamer = streamer;

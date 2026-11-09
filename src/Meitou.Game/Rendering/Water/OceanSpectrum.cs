@@ -38,6 +38,9 @@ public static class OceanSpectrum
     /// </summary>
     public const float MinWind = 1.5f, MaxWind = 20f;
 
+    /// <summary>
+    /// Gravity (m/s²).
+    /// </summary>
     const float G = 9.81f;
 
     /// <summary>
@@ -112,6 +115,11 @@ public static class OceanSpectrum
         return texels;
     }
 
+    /// <summary>
+    /// The complex amplitude h0 of texel (<paramref name="x"/>, <paramref name="y"/>) of a cascade (units): a Gaussian pair scaled by the square root
+    /// of the variance the JONSWAP spectrum and its spreading give that wave vector; 0 outside the cascade's band and on the grid's first row
+    /// and column.
+    /// </summary>
     static Vector2 Amplitude(in Jonswap j, int cascade, int n, int x, int y, float heading, uint seed)
     {
         if (x == 0 || y == 0) return default;
@@ -148,6 +156,9 @@ public static class OceanSpectrum
         return ((float)(r * Math.Cos(2 * Math.PI * u2)), (float)(r * Math.Sin(2 * Math.PI * u2)));
     }
 
+    /// <summary>
+    /// A 32-bit integer hash (xor-shift and multiply).
+    /// </summary>
     static uint Hash(uint v)
     {
         v ^= v >> 16;
@@ -163,8 +174,14 @@ public static class OceanSpectrum
     /// </summary>
     readonly struct Jonswap
     {
+        /// <summary>
+        /// The Phillips constant α and the peak angular frequency ω_p (rad/s) of the wind's fetch-limited spectrum.
+        /// </summary>
         readonly float _alpha, _peak;
 
+        /// <summary>
+        /// The spectrum for a wind of <paramref name="u"/> m/s.
+        /// </summary>
         public Jonswap(float u)
         {
             _alpha = 0.076f * MathF.Pow(u * u / (Fetch * G), 0.22f);
@@ -172,6 +189,9 @@ public static class OceanSpectrum
             Wind = u;
         }
 
+        /// <summary>
+        /// The wind speed (m/s).
+        /// </summary>
         public float Wind { get; }
 
         /// <summary>

@@ -30,6 +30,9 @@ sealed unsafe class TerrainMeshGroups
     /// </summary>
     int[] _groupOf = new int[1024], _cursors = new int[64];
 
+    /// <summary>
+    /// An empty table on <paramref name="gpu"/>.
+    /// </summary>
     public TerrainMeshGroups(IGpuContext gpu) => _gpu = gpu;
 
     /// <summary>

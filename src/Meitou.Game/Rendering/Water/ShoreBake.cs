@@ -16,6 +16,9 @@ namespace Meitou.Game.Rendering.Water;
 /// </summary>
 internal sealed class ShoreGrid
 {
+    /// <summary>
+    /// The default clamp of the signed distance (world units).
+    /// </summary>
     public const float DefaultMaxDistance = 4000f;
 
     /// <summary>
@@ -26,6 +29,10 @@ internal sealed class ShoreGrid
     /// Beyond the grid's edge the water counts as open sea (reach = max) when the nearest edge block is water, else as land.
     /// </summary>
     public const float ReachRadius = 1500f, ReachLow = 600f, ReachHigh = 1200f;
+
+    /// <summary>
+    /// <see cref="ReachRadius"/>, <see cref="ReachLow"/> and <see cref="ReachHigh"/> as a readable rule.
+    /// </summary>
     public const string ExposureRule = "smoothstep(600, 1200, max distance-to-shore of water within 1500 units)";
 
     /// <summary>
@@ -34,27 +41,63 @@ internal sealed class ShoreGrid
     /// without this breakers ringed it on every side and met in the middle.
     /// </summary>
     public const float IsletAreaLow = MathF.PI * 250f * 250f, IsletAreaHigh = MathF.PI * 450f * 450f;
+
+    /// <summary>
+    /// <see cref="IsletAreaLow"/> and <see cref="IsletAreaHigh"/> as a readable rule.
+    /// </summary>
     public const string IsletRule = "x smoothstep(pi 250^2, pi 450^2, area of the nearest shore's land mass)";
 
+    /// <summary>
+    /// A grid over the given arrays (not copied).
+    /// </summary>
     public ShoreGrid(int size, float texel, float x0, float z0, float maxDistance, float[] distance, float[] exposure)
     {
         (Size, Texel, X0, Z0, MaxDistance, Distance, Exposure) = (size, texel, x0, z0, maxDistance, distance, exposure);
     }
 
+    /// <summary>
+    /// Texels along the grid's side.
+    /// </summary>
     public int Size { get; }
+
+    /// <summary>
+    /// World units per texel.
+    /// </summary>
     public float Texel { get; }
+
     /// <summary>
     /// World X and Z of the grid's low corner (the outer edge of texel (0, 0)).
     /// </summary>
     public float X0 { get; }
+
+    /// <summary>
+    /// See <see cref="X0"/>.
+    /// </summary>
     public float Z0 { get; }
+
+    /// <summary>
+    /// The clamp of <see cref="Distance"/> (world units).
+    /// </summary>
     public float MaxDistance { get; }
+
     /// <summary>
     /// Signed distance, row-major (row = Z).
     /// </summary>
     public float[] Distance { get; }
+
+    /// <summary>
+    /// The exposure, 0 to 1, row-major (row = Z).
+    /// </summary>
     public float[] Exposure { get; }
+
+    /// <summary>
+    /// World X of the grid's high edge.
+    /// </summary>
     public float X1 => X0 + Size * Texel;
+
+    /// <summary>
+    /// World Z of the grid's high edge.
+    /// </summary>
     public float Z1 => Z0 + Size * Texel;
 
     /// <summary>
@@ -106,16 +149,23 @@ internal sealed class ShoreGrid
     }
 }
 
+/// <summary>
+/// The shore field's CPU bake into a <see cref="ShoreGrid"/>.
+/// </summary>
 internal static class ShoreBake
 {
+    /// <summary>
+    /// No crossing found: the squared distance of a texel with none.
+    /// </summary>
     const float None = 1e20f;
+
     /// <summary>
     /// Texels per exposure block edge.
     /// </summary>
     const int Block = 8;
 
     /// <summary>
-    /// The centre a bake for <paramref name="eye"/> would use: snapped to whole texels.
+    /// The centre a bake for (<paramref name="x"/>, <paramref name="z"/>) would use: snapped to whole texels.
     /// </summary>
     public static (float X, float Z) SnapCentre(float x, float z, float texel) => (MathF.Round(x / texel) * texel, MathF.Round(z / texel) * texel);
 
@@ -168,6 +218,9 @@ internal static class ShoreBake
         });
     }
 
+    /// <summary>
+    /// The nearest waterline crossing on texel (<paramref name="i"/>, <paramref name="j"/>)'s four edges (<see cref="None"/> when there is none).
+    /// </summary>
     static Seed NearestCrossing(float[] s, int n, int i, int j)
     {
         float a = s[j * n + i], best = None, bx = 0, bz = 0;
@@ -353,8 +406,14 @@ internal static class ShoreBake
         return blurred;
     }
 
+    /// <summary>
+    /// A texel's nearest waterline crossing point.
+    /// </summary>
     internal struct Seed
     {
+        /// <summary>
+        /// D: the squared distance (texel units², <see cref="None"/> for none); X, Z: the crossing point in texel units.
+        /// </summary>
         public float D, X, Z;
     }
 
@@ -365,10 +424,24 @@ internal static class ShoreBake
     /// </summary>
     internal sealed class Scratch
     {
+        /// <summary>
+        /// The sign field (positive over water), the distance, the smoothing's scratch and the exposure.
+        /// </summary>
         internal float[]? S, Dist, Tmp, Exposure;
+
+        /// <summary>
+        /// The nearest crossing per texel.
+        /// </summary>
         internal Seed[]? Seeds;
+
+        /// <summary>
+        /// The land mass labels per texel and the flood fill's stack.
+        /// </summary>
         internal int[]? Label, Stack;
 
+        /// <summary>
+        /// <paramref name="array"/> when it has <paramref name="length"/> elements, else a new array stored in it.
+        /// </summary>
         internal static T[] Get<T>(ref T[]? array, int length) => array is { } a && a.Length == length ? a : array = new T[length];
     }
 
@@ -435,6 +508,9 @@ internal static class ShoreBake
         });
     }
 
+    /// <summary>
+    /// Hermite smoothstep of <paramref name="x"/> between <paramref name="lo"/> and <paramref name="hi"/> (0 to 1).
+    /// </summary>
     static float SmoothStep(float lo, float hi, float x)
     {
         float t = Math.Clamp((x - lo) / (hi - lo), 0, 1);

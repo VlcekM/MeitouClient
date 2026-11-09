@@ -11,6 +11,10 @@ namespace Meitou.Game.Rendering.Objects;
 /// </summary>
 static class LampShaders
 {
+    /// <summary>
+    /// The lamp functions (the class summary's inputs and switches): the game's attenuation, and <c>lampLight</c>, which adds the lamps around a
+    /// surface point like the sun.
+    /// </summary>
     public const string Lighting = """
         #ifndef LAMP_VISIBILITY
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) 1.0

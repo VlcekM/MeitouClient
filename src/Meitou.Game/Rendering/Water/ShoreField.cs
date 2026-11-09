@@ -19,7 +19,14 @@ namespace Meitou.Game.Rendering.Water;
 /// </summary>
 internal sealed class ShoreField : IDisposable
 {
+    /// <summary>
+    /// Texels along the field's side by default.
+    /// </summary>
     public const int DefaultSize = 1024;
+
+    /// <summary>
+    /// World units per texel by default (a 1024² field spans 10240 units).
+    /// </summary>
     public const float DefaultTexel = 10f;
 
     /// <summary>
@@ -27,6 +34,9 @@ internal sealed class ShoreField : IDisposable
     /// </summary>
     public const int RowsPerFrame = 256;
 
+    /// <summary>
+    /// Full-size textures kept for reuse at most (<see cref="_spare"/>).
+    /// </summary>
     const int KeptTextures = 2;
 
     /// <summary>
@@ -34,9 +44,25 @@ internal sealed class ShoreField : IDisposable
     /// </summary>
     sealed record Baked(float X0, float Z0, float X1, float Z1, bool Uniform, Vector2 Value, float[]? Texels, double Ms);
 
+    /// <summary>
+    /// The context the textures and their uploads go through.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// Texels along the field's side.
+    /// </summary>
     readonly int _size;
+
+    /// <summary>
+    /// World units per texel.
+    /// </summary>
     readonly float _texel;
+
+    /// <summary>
+    /// Textures replaced this frame or recently, with the frame they were replaced in; freed or kept four frames later (a frame in flight may
+    /// sample them).
+    /// </summary>
     readonly List<(TerrainTexture Texture, int Frame)> _retired = [];
 
     /// <summary>
@@ -44,10 +70,20 @@ internal sealed class ShoreField : IDisposable
     /// </summary>
     readonly List<TerrainTexture> _spare = [];
 
-    // The worker's arrays: the bake's, and two for the texels (one is read by the upload while the next bake fills the other).
+    /// <summary>
+    /// The worker's bake arrays (<see cref="ShoreBake.Scratch"/>), reused from one bake to the next.
+    /// </summary>
     readonly ShoreBake.Scratch _scratch = new();
+
+    /// <summary>
+    /// The worker's two texel buffers (distance and exposure interleaved, <see cref="Size"/>² × 2 floats, made on first use): one is read by the
+    /// upload while the next bake fills the other.
+    /// </summary>
     readonly float[][] _texelBuffers = new float[2][];
 
+    /// <summary>
+    /// The shown texture (null before the first bake is uploaded).
+    /// </summary>
     TerrainTexture? _texture;
 
     /// <summary>
@@ -55,15 +91,39 @@ internal sealed class ShoreField : IDisposable
     /// </summary>
     bool _textureIsUniform;
 
+    /// <summary>
+    /// The value of the shown one-texel stand-in.
+    /// </summary>
     Vector2 _uniformValue;
+
+    /// <summary>
+    /// The bake running on the worker (null: none).
+    /// </summary>
     Task<Baked>? _job;
+
+    /// <summary>
+    /// The centre the last bake was started at (null: none, or it failed; the next <see cref="Update"/> bakes).
+    /// </summary>
     (float X, float Z)? _centre;
+
+    /// <summary>
+    /// Frames counted by <see cref="Update"/>.
+    /// </summary>
     int _frame;
+
+    /// <summary>
+    /// The texel buffer the next bake fills (0 or 1).
+    /// </summary>
     int _nextBuffer;
 
-    // The upload in progress: a full-size texture filled a few rows a frame.
+    /// <summary>
+    /// The upload in progress: a full-size texture filled a few rows a frame.
+    /// </summary>
     (Baked Bake, TerrainTexture Target, int Row)? _uploading;
 
+    /// <summary>
+    /// A field of <paramref name="size"/>² texels of <paramref name="texel"/> world units; nothing is baked until the first <see cref="Update"/>.
+    /// </summary>
     public ShoreField(IGpuContext gpu, int size = DefaultSize, float texel = DefaultTexel)
     {
         this._gpu = gpu;
@@ -71,8 +131,14 @@ internal sealed class ShoreField : IDisposable
         this._texel = texel;
     }
 
+    /// <summary>
+    /// Texels along the field's side.
+    /// </summary>
     public int Size => _size;
 
+    /// <summary>
+    /// World units per texel.
+    /// </summary>
     public float Texel => _texel;
 
     /// <summary>
@@ -95,6 +161,9 @@ internal sealed class ShoreField : IDisposable
     /// </summary>
     public int UniformFields { get; private set; }
 
+    /// <summary>
+    /// Bakes uploaded whole (see <see cref="UniformFields"/>).
+    /// </summary>
     public int UploadedFields { get; private set; }
 
     /// <summary>
@@ -122,6 +191,9 @@ internal sealed class ShoreField : IDisposable
         StartBake(eye, heights);
     }
 
+    /// <summary>
+    /// Waits for a bake still running, then frees every texture.
+    /// </summary>
     public void Dispose()
     {
         try
@@ -160,6 +232,9 @@ internal sealed class ShoreField : IDisposable
         }
     }
 
+    /// <summary>
+    /// Takes a finished bake; a failed one is logged and the next <see cref="Update"/> bakes again.
+    /// </summary>
     void TakeFinishedJob(Task<Baked> finished)
     {
         _job = null;
@@ -174,6 +249,9 @@ internal sealed class ShoreField : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the eye is more than a quarter of the field's width from the last bake's centre in X or Z (true before the first bake).
+    /// </summary>
     bool IsFarFromCentre(Vector3 eye)
     {
         if (_centre is not { } c) return true;
@@ -200,6 +278,9 @@ internal sealed class ShoreField : IDisposable
         _centre = (cx, cz);
     }
 
+    /// <summary>
+    /// The worker's bake: the grid, then either its one value or its texels interleaved into buffer <paramref name="buffer"/>, timed.
+    /// </summary>
     Baked BakeOnWorker(HeightSnapshot heights, float cx, float cz, int n, float t, int buffer)
     {
         long start = System.Diagnostics.Stopwatch.GetTimestamp();

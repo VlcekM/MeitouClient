@@ -15,13 +15,27 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public sealed class UploadQueue
 {
+    /// <summary>
+    /// The queued steps with their labels.
+    /// </summary>
     readonly Queue<(Action Step, string Label)> _steps = new();
+
+    /// <summary>
+    /// What each label's steps have cost lately.
+    /// </summary>
     readonly StepCosts _costs = new();
+
+    /// <summary>
+    /// The clock in milliseconds.
+    /// </summary>
     readonly Func<double> _clock;
 
     /// <param name="clockMs">Milliseconds on any scale that only moves forward (tests pass their own); the real time by default.</param>
     public UploadQueue(Func<double>? clockMs = null) => _clock = clockMs ?? (() => Stopwatch.GetTimestamp() * 1000.0 / Stopwatch.Frequency);
 
+    /// <summary>
+    /// The steps queued.
+    /// </summary>
     public int Count => _steps.Count;
 
     /// <summary>
@@ -34,6 +48,9 @@ public sealed class UploadQueue
     /// </summary>
     public double ExpectedMs(string label) => _costs.Expected(label);
 
+    /// <summary>
+    /// Queues a step under <paramref name="label"/> (the label its cost is learnt by).
+    /// </summary>
     public void Add(Action step, string label = "step") => _steps.Enqueue((step, label));
 
     /// <summary>
@@ -79,11 +96,34 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     internal const double RecentreFraction = 0.15;
 
+    /// <summary>
+    /// The renderer whose fine window is replaced.
+    /// </summary>
     readonly TerrainRenderer _terrain;
+
+    /// <summary>
+    /// The biome and overlay/colour windows (null without textures).
+    /// </summary>
     readonly TerrainTextures? _textures;
+
+    /// <summary>
+    /// The upload steps of the windows and textures.
+    /// </summary>
     readonly UploadQueue _uploads = new();
+
+    /// <summary>
+    /// The worker's own handle on <c>fullmap.tif</c>.
+    /// </summary>
     readonly TerrainHeightmap _map;
+
+    /// <summary>
+    /// Cells per side of a window, and the heightmap's sample step it is read at (1: every sample).
+    /// </summary>
     readonly int _cells, _step;
+
+    /// <summary>
+    /// The window read running on the worker, with its bounds (null: none).
+    /// </summary>
     Task<(HeightWindow Window, TerrainHeightBounds.Patch Bounds)>? _job;
 
     /// <summary>
@@ -91,6 +131,9 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     bool _jobStandby;
 
+    /// <summary>
+    /// The drawn window's upload is under way (until its swap).
+    /// </summary>
     bool _swapping;
 
     /// <summary>
@@ -98,6 +141,9 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     readonly HeightStandbys _standbys;
 
+    /// <summary>
+    /// Opens <paramref name="install"/>'s heightmap again for the worker; windows are read every <paramref name="step"/> samples.
+    /// </summary>
     public TerrainStreamer(GameInstall install, TerrainRenderer terrain, TerrainTextures? textures, int step)
     {
         this._terrain = terrain;
@@ -125,8 +171,14 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     public double BudgetMs { get; set; } = 2;
 
+    /// <summary>
+    /// Height windows swapped in so far.
+    /// </summary>
     public int HeightWindows { get; private set; }
 
+    /// <summary>
+    /// Milliseconds the last window read took on the worker.
+    /// </summary>
     public double LastWindowMs { get; private set; }
 
     /// <summary>
@@ -134,6 +186,9 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     public double LastUpdateMs { get; private set; }
 
+    /// <summary>
+    /// The labels of the upload steps the last update ran.
+    /// </summary>
     public string LastSteps => _uploads.LastRun;
 
     /// <summary>
@@ -157,7 +212,9 @@ public sealed class TerrainStreamer : IDisposable
     /// </summary>
     public float GroundUnderEye { get; set; } = float.NegativeInfinity;
 
-    // A standby's read is not waited for (a far squad member does not hold up the loading screen).
+    /// <summary>
+    /// Nothing is being read, uploaded or swapped (a standby's read is not waited for: a far squad member does not hold up the loading screen).
+    /// </summary>
     public bool Idle => (_job is null || _jobStandby) && !_swapping && _uploads.Count == 0 && (_textures?.Idle ?? true);
 
     /// <summary>
@@ -174,6 +231,9 @@ public sealed class TerrainStreamer : IDisposable
         return $"height windows {HeightWindows}{textures}";
     }
 
+    /// <summary>
+    /// Streams round <paramref name="eye"/> within <see cref="BudgetMs"/>, timed into <see cref="LastUpdateMs"/>.
+    /// </summary>
     public void Update(Vector3 eye)
     {
         var watch = Stopwatch.StartNew();
@@ -199,6 +259,9 @@ public sealed class TerrainStreamer : IDisposable
         Console.WriteLine($"warning   streaming did not finish in {timeoutMs / 1000} s");
     }
 
+    /// <summary>
+    /// Waits up to 5 s for a window read still running, then drops the standbys and closes the heightmap.
+    /// </summary>
     public void Dispose()
     {
         try
@@ -213,6 +276,9 @@ public sealed class TerrainStreamer : IDisposable
         _map.Dispose();
     }
 
+    /// <summary>
+    /// The biomes resident and the overlay/colour maps' state, for <see cref="Describe"/>.
+    /// </summary>
     static string TextureSummary(TerrainTextures textures)
     {
         string resident = string.Join(", ", textures.Resident.Select(b => b.Name.Trim()));
@@ -220,6 +286,9 @@ public sealed class TerrainStreamer : IDisposable
         return $", biomes {textures.ResidentBiomes}/{textures.TotalBiomes} resident ({resident}), overlay/colour maps {maps}";
     }
 
+    /// <summary>
+    /// Takes a finished window, starts the next one the eye needs, streams the textures and runs the upload steps within <paramref name="budgetMs"/>.
+    /// </summary>
     void Update(Vector3 eye, double budgetMs)
     {
         ApplyFinishedJob();
@@ -286,6 +355,9 @@ public sealed class TerrainStreamer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Reads the window from (<paramref name="column0"/>, <paramref name="row0"/>) on the worker, with its bounds: the drawn window, or a standby.
+    /// </summary>
     void Read(int column0, int row0, bool standby)
     {
         var watch = Stopwatch.StartNew();

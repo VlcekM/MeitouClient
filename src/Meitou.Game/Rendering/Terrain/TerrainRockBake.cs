@@ -46,6 +46,9 @@ sealed unsafe class TerrainRockBake : IDisposable
     /// </summary>
     TerrainProgram? _rockBake;
 
+    /// <summary>
+    /// The bake for <paramref name="terrain"/>'s material; the program is made on first use.
+    /// </summary>
     public TerrainRockBake(TerrainRenderer terrain, IGpuContext gpu, NativeFrame nativeFrame, GpuSetLayout constantsLayout, ulong uniformAlign)
     {
         _terrain = terrain;
@@ -121,5 +124,8 @@ sealed unsafe class TerrainRockBake : IDisposable
         }
     }
 
+    /// <summary>
+    /// Frees the program.
+    /// </summary>
     public void Dispose() => _rockBake?.Dispose();
 }

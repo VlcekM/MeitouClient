@@ -620,6 +620,10 @@ static partial class TerrainShaders
     /// terrain's GPU time on swamp-low).
     /// </summary>
     const string TerrainNormalMaps = "TERRAIN_NORMAL_MAPS", ReliefQualityName = "RELIEF_QUALITY";
+
+    /// <summary>
+    /// The runtime defaults of <see cref="TerrainNormalMaps"/> and <see cref="ReliefQualityName"/>: the uniforms, unless a variant defined them.
+    /// </summary>
     const string VariantDefaults = """
         #ifndef TERRAIN_NORMAL_MAPS
         #define TERRAIN_NORMAL_MAPS uNormalMaps
@@ -630,6 +634,10 @@ static partial class TerrainShaders
 
         """;
 
+    /// <summary>
+    /// The terrain's colour stage (patches and, through <see cref="PerInstanceBiome"/>, the TERRAIN-mode meshes): the biomes' layers blended by the
+    /// cells, the overlay and colour windows, the far ground colour, relief, blood, wetness, lighting and haze.
+    /// </summary>
     public static readonly string Fragment = "#version 330 core\n#extension GL_ARB_derivative_control : require\n" + VariantDefaults + HeightFunctions
         + ReliefDepth + AtmosphereShaders.Functions + """
 
@@ -1409,6 +1417,10 @@ static partial class TerrainShaders
     /// </summary>
     public static readonly string MeshFragmentSolid = PerInstanceBiome(Fragment, fade: false);
 
+    /// <summary>
+    /// <paramref name="fragment"/> with the feature biome and the cross-fade per placement (flat inputs from the mesh vertex stage) instead of the
+    /// uniform; <paramref name="fade"/> keeps the cross-fade's dither <c>discard</c>.
+    /// </summary>
     static string PerInstanceBiome(string fragment, bool fade)
     {
         const string uniform = "uniform int uFeatureBiome;";
@@ -1616,6 +1628,9 @@ static partial class TerrainShaders
         ["uBakeReach"] = "terrain.bakeReach",
     };
 
+    /// <summary>
+    /// The derivative control extension line, moved up to the <c>#version</c> line in the native texts.
+    /// </summary>
     const string DerivativeControl = "#extension GL_ARB_derivative_control : require\n";
 
     /// <summary>
@@ -1710,19 +1725,40 @@ static partial class TerrainShaders
     /// </summary>
     public static string RockBakeVertexNative() => Native(MeshVertex, RockBakePushMembers);
 
+    /// <summary>
+    /// The patches' vertex stage, native.
+    /// </summary>
     public static string PatchVertexNative() => Native(PatchVertex);
+
     /// <summary>
     /// The ground displacement's stages (GroundRelief): <see cref="PatchVertexTess"/>, <see cref="PatchControl"/>, <see cref="PatchEvaluation"/>.
     /// </summary>
     public static string PatchVertexTessNative() => Native(PatchVertexTess);
+
+    /// <summary>
+    /// The displacement's control stage, native.
+    /// </summary>
     public static string PatchControlNative() => Native(PatchControl);
+
+    /// <summary>
+    /// The displacement's evaluation stage, native.
+    /// </summary>
     public static string PatchEvaluationNative() => Native(PatchEvaluation);
+
+    /// <summary>
+    /// The patches' colour stage, native, with the material cache's reads; <paramref name="interiorCut"/> adds the cut, <paramref name="march"/>
+    /// false leaves the parallax march out, and <paramref name="normalMaps"/> and <paramref name="reliefQuality"/> fix those switches (null:
+    /// the uniforms).
+    /// </summary>
     public static string FragmentNative(bool interiorCut = false, bool march = true, bool? normalMaps = null, int? reliefQuality = null)
     {
         string marched = interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march);
         return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Baked(marched)), normalMaps, reliefQuality));
     }
 
+    /// <summary>
+    /// <paramref name="fragment"/> with <c>TERRAIN_BAKED</c> defined (the material cache's reads).
+    /// </summary>
     static string Baked(string fragment) => fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_BAKED\n");
 
     /// <summary>
@@ -1733,11 +1769,6 @@ static partial class TerrainShaders
         void main() { gl_Position = vec4(vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) * 2.0 - 1.0, 0.0, 1.0); }
         """, RockBakePushMembers);
 
-    /// <summary>
-    /// The material cache's bake: <see cref="Fragment"/> run for the world point of each texel of level <c>bakePass</c> (its terrain height and
-    /// normal, the texel as the footprint, at distance 0, without the march), writing before the blood, the wetness and the lighting: the albedo and
-    /// gloss to the colour target, the shading normal and absorbance to the extra one.
-    /// </summary>
     /// <summary>
     /// The bake's outputs (<see cref="MaterialBakeFragmentNative"/>), before the blood: the layers' albedo and gloss; their tangent-space normal's x
     /// and y (z follows), the rain absorbance and the relief as one height field over <c>BakeSpan</c> (0.5 the surface): the ground's (pixelRelief's
@@ -1790,6 +1821,11 @@ static partial class TerrainShaders
         // Blood on the ground
         """;
 
+    /// <summary>
+    /// The material cache's bake: <see cref="Fragment"/> run for the world point of each texel of level <c>bakePass</c> (its terrain height and
+    /// normal, the texel as the footprint, at distance 0, without the march), writing before the blood, the wetness and the lighting: the albedo and
+    /// gloss to the colour target, the shading normal and absorbance to the extra one.
+    /// </summary>
     public static string MaterialBakeFragmentNative()
     {
         static string Patch(string text, string from, string to)
@@ -1831,6 +1867,7 @@ static partial class TerrainShaders
     /// 2.4 ms instead of 3.4 (docs/render-terrain.md "Cost"). TerrainRenderer keeps a set of each and draws with the one the setting asks for.
     /// </summary>
     static string Marched(string fragment, bool march) => march ? fragment : fragment.Insert(fragment.IndexOf('\n') + 1, "#define NO_MARCH\n");
+
     /// <summary>
     /// The terrain colour pass's depth-only twin: the same vertex stage (so the depths are the same), a fragment stage that writes nothing (<see
     /// cref="TerrainLateColour"/>).
@@ -1840,24 +1877,51 @@ static partial class TerrainShaders
         const string empty = "#version 330 core\nvoid main()\n{\n}\n";
         return Native(interiorCut ? InteriorMaskRenderer.WithCut(empty) : empty);
     }
+
+    /// <summary>
+    /// The TERRAIN-mode meshes' vertex stage, native.
+    /// </summary>
     public static string MeshVertexNative() => Native(MeshVertex);
+
     /// <summary>
     /// The TERRAIN-mode meshes' colour program, with the interior cut (on per draw: <see cref="TerrainConstants.InteriorCut"/>; the cross-fade
     /// already discards).
     /// </summary>
     public static string MeshFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
         Gi.GiResolveShaders.WithAlbedo(Variant(Native(InteriorMaskRenderer.WithCut(Marched(MeshFragment, march))), normalMaps, reliefQuality));
+
+    /// <summary>
+    /// <see cref="MeshFragmentSolid"/>, native: the placements not mid-fade (no <c>discard</c>, no interior cut).
+    /// </summary>
     public static string MeshFragmentSolidNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
         Gi.GiResolveShaders.WithAlbedo(Variant(Native(Marched(MeshFragmentSolid, march)), normalMaps, reliefQuality));
+
+    /// <summary>
+    /// The TERRAIN-mode meshes' instanced caster vertex stage, native.
+    /// </summary>
     public static string MeshInstancedDepthVertexNative() => Native(MeshInstancedDepthVertex);
+
     /// <summary>
     /// The rocks' smoothing (RockSmoothing): <see cref="MeshVertexTess"/>, <see cref="MeshControl"/>, <see cref="MeshEvaluation"/> and its casters'
     /// twin.
     /// </summary>
     public static string MeshVertexTessNative() => Native(MeshVertexTess);
+
+    /// <summary>
+    /// The rocks' smoothing control stage, native.
+    /// </summary>
     public static string MeshControlNative() => Native(MeshControl);
+
+    /// <summary>
+    /// The rocks' smoothing evaluation stage, native.
+    /// </summary>
     public static string MeshEvaluationNative() => Native(MeshEvaluation);
+
+    /// <summary>
+    /// The rocks' smoothing evaluation stage for the casters, native.
+    /// </summary>
     public static string MeshEvaluationDepthNative() => Native(MeshEvaluationDepth);
+
     /// <summary>
     /// <see cref="ShadowShaders.DepthFragment"/> (the caster block at set 0, binding 2) with the terrain's push block, so both stages of a depth
     /// program declare the same one.
@@ -1872,81 +1936,310 @@ static partial class TerrainShaders
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 960)]
 struct TerrainConstants
 {
+    /// <summary>
+    /// <c>uCoarseRect</c>: world x0, z0, x1, z1 of the coarse grid's first and last samples.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 CoarseRect;
+    /// <summary>
+    /// <c>uFineRect</c>: the same for the fine window.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(16)] public System.Numerics.Vector4 FineRect;
+    /// <summary>
+    /// <c>uRegion</c>: x0, z0, 1/width, 1/depth of the overlay and colour windows (they wrap: texel = world mod width).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(32)] public System.Numerics.Vector4 Region;
+    /// <summary>
+    /// <c>uSunColour</c>.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(48)] public System.Numerics.Vector3 SunColour;
+    /// <summary>
+    /// <c>uWaterHeight</c>: underwater ground is darkened (the game's wetness rule).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(60)] public float WaterHeight;
+    /// <summary>
+    /// <c>uAmbientSky</c>.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(64)] public System.Numerics.Vector3 AmbientSky;
+    /// <summary>
+    /// <c>uHalfWorld</c>: half the world's side.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(76)] public float HalfWorld;
+    /// <summary>
+    /// <c>uAmbientGround</c>.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(80)] public System.Numerics.Vector3 AmbientGround;
+    /// <summary>
+    /// <c>uFarStart</c>: the distance where the textured terrain gives way to the ground colour.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(92)] public float FarStart;
+    /// <summary>
+    /// <c>uCoarseCells</c>: the coarse grid's samples − 1 along X and Z.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(96)] public System.Numerics.Vector2 CoarseCells;
+    /// <summary>
+    /// <c>uFineCells</c>: the fine window's.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(104)] public System.Numerics.Vector2 FineCells;
+    /// <summary>
+    /// <c>uCellGrid</c>: the blend cells along X and Z.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(112)] public System.Numerics.Vector2 CellGrid;
+    /// <summary>
+    /// <c>uFineBand</c>: world units over which the fine window fades into the coarse grid.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(120)] public float FineBand;
+    /// <summary>
+    /// <c>uFarEnd</c>: the distance where the ground colour has taken over.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(124)] public float FarEnd;
+    /// <summary>
+    /// <c>uHasFine</c>: a fine window is bound.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(128)] public uint HasFine;
+    /// <summary>
+    /// <c>uWireframe</c>.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(132)] public uint Wireframe;
+    /// <summary>
+    /// <c>uHeightNormals</c>: patches take their normal from the height field; meshes (0) from their vertices.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(136)] public uint HeightNormals;
+    /// <summary>
+    /// <c>uTextured</c>: the biome layers are available.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(140)] public uint Textured;
+    /// <summary>
+    /// <c>uNormalMaps</c>.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(144)] public uint NormalMaps;
+    /// <summary>
+    /// <c>uHasMaps</c>: the overlay and colour windows are available.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(148)] public uint HasMaps;
+    /// <summary>
+    /// <c>uMapState</c>: 0 no maps, 1 maps still loading (ground colour only), 2 ready.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(152)] public int MapState;
+    /// <summary>
+    /// <c>uDebug</c>: 0 normal, 1 slot weights, 2 layer weights, 3 LOD-free shading.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(156)] public int Debug;
+    /// <summary>
+    /// <c>uFeature</c>: map features (no road layer, slope clamped to 1, cliff weights per vertex).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(160)] public uint Feature;
+    /// <summary>
+    /// <c>uFeatureBiome</c>: a feature's one biome (parameter row); -1 blends as the terrain.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(164)] public int FeatureBiome;
+    /// <summary>
+    /// <c>uHasGround</c>: the whole-world ground colour map is available.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(168)] public uint HasGround;
+    /// <summary>
+    /// <c>uHasWorldColour</c>: the whole-world colour map is available.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(172)] public uint HasWorldColour;
+    /// <summary>
+    /// Bindless index of <c>uHeightCoarse</c> (the whole world, R16).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(176)] public uint HeightCoarse;
+    /// <summary>
+    /// Bindless index of <c>uHeightFine</c> (the fine window).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(180)] public uint HeightFine;
+    /// <summary>
+    /// Bindless index of <c>uDiffuse</c> (the near diffuse array).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(184)] public uint Diffuse;
+    /// <summary>
+    /// Bindless index of <c>uNormal</c> (the near normal array).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(188)] public uint Normal;
+    /// <summary>
+    /// Bindless index of <c>uParams</c> (a row per biome).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(192)] public uint Params;
+    /// <summary>
+    /// Bindless index of <c>uCells</c> (the blend cells, integer).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(196)] public uint Cells;
+    /// <summary>
+    /// Bindless index of <c>uBlendMap</c> (the whole world's slot weights).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(200)] public uint BlendMap;
+    /// <summary>
+    /// Bindless index of <c>uOverlay</c> (the overlay window: grass, dirt, road).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(204)] public uint Overlay;
+    /// <summary>
+    /// Bindless index of <c>uColour</c> (the colour window: tint and gloss).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(208)] public uint Colour;
+    /// <summary>
+    /// Bindless index of <c>uGround</c> (the whole world's ground colour).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(212)] public uint Ground;
+    /// <summary>
+    /// Bindless index of <c>uWorldColour</c> (the whole world's colour map, downsampled).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(216)] public uint WorldColour;
+    /// <summary>
+    /// <c>uGrid</c>: the sandbox's floor grid.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(220)] public uint Grid;
+    /// <summary>
+    /// <c>uCliffEps</c>: the cliff weights up to this are dropped, the next as much ramp in (0: every nonzero weight
+    /// counts; <see cref="TerrainLayerSkip"/>).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(224)] public float CliffEps;
+    /// <summary>
+    /// Bindless index of <c>uInteriorMask</c> (<see cref="InteriorMaskRenderer"/>).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(228)] public uint InteriorMask;
+    /// <summary>
+    /// <c>uInteriorCut</c>: the interior cut is on for the draw.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(232)] public uint InteriorCut;
+    /// <summary>
+    /// Bindless index of <c>uBlood</c> (the blood cells' layers, <see cref="TerrainDecalRenderer"/>).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(236)] public uint Blood;
+    /// <summary>
+    /// <c>uBloodCount</c>: the blood cells in use (0: no blood).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(240)] public int BloodCount;
+    /// <summary>
+    /// <c>uBloodCellSize</c>: a blood cell's side (world units).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(244)] public float BloodCellSize;
+    /// <summary>
+    /// Bindless index of <c>uHeight</c> (the layers' heights, GroundRelief).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(248)] public uint Height;
+    /// <summary>
+    /// <c>uParallax</c>: the ground parallax's depth of the height range (world units; 0 off).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(252)] public float Parallax;
+    /// <summary>
+    /// <c>uBloodCells</c>: column, row, layer per cell in use.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(256)] public BloodCells BloodCells;
+    /// <summary>
+    /// <c>uDisplace</c>: the ground displacement near the eye (world units; 0 off).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(768)] public float Displace;
+    /// <summary>
+    /// Bindless index of <c>uRelief</c> (per layer slot: 1 / (side × its height's steepness), 0 flat).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(772)] public uint Relief;
+    /// <summary>
+    /// <c>uDisplaceEnd</c>: GroundRelief.DisplaceDistance (displaced in full to 60% of it).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(776)] public float DisplaceEnd;
+    /// <summary>
+    /// <c>uParallaxEnd</c>: GroundRelief.ParallaxDistance (the parallax in full to half of it, none from it).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(780)] public float ParallaxEnd;
+    /// <summary>
+    /// <c>uOverlayRelief</c>: the grass, slope, dirt and road layers' share of relief (0: the base layer alone).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(784)] public float OverlayRelief;
+    /// <summary>
+    /// <c>uSelfShadow</c>: the relief self-shadow's darkening.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(788)] public float SelfShadow;
+    /// <summary>
+    /// <c>uTessDetail</c>: GroundRelief.TessDetail (the segments' length divided by it).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(792)] public float TessDetail;
+    /// <summary>
+    /// <c>uRockRound</c>: RockSmoothing.Roundness, the curve's share.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(796)] public float RockRound;
+    /// <summary>
+    /// <c>uFieldOrigin</c>: the texture field's corner (the terrain sandbox).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(800)] public System.Numerics.Vector2 FieldOrigin;
+    /// <summary>
+    /// <c>uFieldTile</c>: a field tile's side (world units).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(808)] public float FieldTile;
+    /// <summary>
+    /// <c>uFieldColumns</c>: the field's tiles a row.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(812)] public int FieldColumns;
+    /// <summary>
+    /// <c>uFieldCount</c>: the field's tiles (0: no field).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(816)] public int FieldCount;
+    /// <summary>
+    /// Bindless index of <c>uFieldTiles</c> (per tile: biome row, layer, resident).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(820)] public uint FieldTiles;
+    /// <summary>
+    /// <c>uMaxDepth</c>: GroundRelief.MaxDepth over ReferenceDepth, the most a layer's depth gives.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(824)] public float MaxDepth;
+    /// <summary>
+    /// <c>uTargetSlope</c>: the root-mean-square slope a layer is given at its tile's size.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(828)] public float TargetSlope;
+    /// <summary>
+    /// <c>uScaleFollow</c>: the power the layer depth is raised to (0 every layer as deep, 1 in proportion).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(832)] public float ScaleFollow;
+    /// <summary>
+    /// <c>uCliffScale</c>: the cliff layer's depth times this (its cap too).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(836)] public float CliffScale;
+    /// <summary>
+    /// <c>uRefine</c>: the deviation in pixels past which a displaced edge is split (0 off).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(840)] public float Refine;
+    /// <summary>
+    /// <c>uPixelScale</c>: pixels per radian of the picture.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(844)] public float PixelScale;
+    /// <summary>
+    /// <c>uBroadCut</c>: the displacement leaves out shapes wider than this (world units; 0 keeps all).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(848)] public float BroadCut;
+    /// <summary>
+    /// <c>uReliefQuality</c>: 0 low, 1 medium, 2 high.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(852)] public int ReliefQuality;
+    /// <summary>
+    /// Bindless index of <c>uDiffuseFar</c> (every resident pair, smaller).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(856)] public uint DiffuseFar;
+    /// <summary>
+    /// Bindless index of <c>uNormalFar</c>.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(860)] public uint NormalFar;
+    /// <summary>
+    /// <c>uFarLod</c>: the near level from which a sample reads the far arrays.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(864)] public float FarLod;
+    /// <summary>
+    /// Bindless index of <c>uBakeAlbedo</c> (the material cache's albedo and gloss; <see cref="MaterialCache"/>).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(868)] public uint BakeAlbedo;
+    /// <summary>
+    /// Bindless index of <c>uBakeNormal</c> (its shading normal and rain absorbance).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(872)] public uint BakeNormal;
+    /// <summary>
+    /// <c>uBakeLevels</c>: the cache's levels (0: none, every pixel shades the layers).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(876)] public int BakeLevels;
+    /// <summary>
+    /// <c>uBakeOrigin</c>: per cache level.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(880)] public BakeOrigins BakeOrigin;
+    /// <summary>
+    /// <c>uBakeReach</c>: the cache is read nearer than this (beyond it a biome's distance fade, which the bake has not, may begin).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(944)] public float BakeReach;
 }
 
@@ -1957,6 +2250,9 @@ struct TerrainConstants
 [System.Runtime.CompilerServices.InlineArray(4)]
 struct BakeOrigins
 {
+    /// <summary>
+    /// One level.
+    /// </summary>
     System.Numerics.Vector4 _level;
 }
 
@@ -1966,6 +2262,9 @@ struct BakeOrigins
 [System.Runtime.CompilerServices.InlineArray(TerrainDecalRenderer.MaxSlots)]
 struct BloodCells
 {
+    /// <summary>
+    /// One cell.
+    /// </summary>
     System.Numerics.Vector4 _cell;
 }
 
@@ -1975,7 +2274,13 @@ struct BloodCells
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 24)]
 struct TerrainPush
 {
+    /// <summary>
+    /// <c>uNode</c>: the patch's x0, z0, size and cells.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector4 Node;
+    /// <summary>
+    /// <c>uMorph</c>: the distances where morphing starts and ends (start at least 1e30: never).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(16)] public System.Numerics.Vector2 Morph;
 }
 
@@ -1986,8 +2291,20 @@ struct TerrainPush
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 96)]
 struct TerrainBakePush
 {
+    /// <summary>
+    /// The frame's direction towards the viewer; w the distance the material is shaded at.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(32)] public System.Numerics.Vector4 Dir;
+    /// <summary>
+    /// The image's right axis.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(48)] public System.Numerics.Vector4 Right;
+    /// <summary>
+    /// The image's up axis.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(64)] public System.Numerics.Vector4 Up;
+    /// <summary>
+    /// The output pass (the rock bake's output; the material cache's level).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(80)] public int Pass;
 }

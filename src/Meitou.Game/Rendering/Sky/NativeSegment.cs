@@ -9,11 +9,25 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 internal sealed class NativeSegment(IGpuContext gpu, LegacyProgram program, PrimitiveType topology, string label)
 {
+    /// <summary>
+    /// What a pipeline is made for besides the program: the formats and the state's blend, mask, polygon mode, alpha to coverage and depth clamp.
+    /// </summary>
     readonly record struct Key(AttachmentFormats Formats, BlendState Blend, ColorMask Mask, PolygonKind Polygon,
         bool AlphaToCoverage, bool DepthClamp);
 
+    /// <summary>
+    /// The last two segment states (0 the newest).
+    /// </summary>
     Key _key0, _key1;
+
+    /// <summary>
+    /// The pipelines made for them.
+    /// </summary>
     GpuPipeline? _pipeline0, _pipeline1;
+
+    /// <summary>
+    /// The vertex exports they were made for (compared by reference).
+    /// </summary>
     VertexArrayBindings? _source0, _source1;
 
     /// <summary>

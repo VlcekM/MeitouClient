@@ -20,12 +20,19 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 public readonly record struct SkyColours(Vector3 Sun, Vector3 Zenith, Vector3 Horizon, Vector3 SunColour, float Twilight)
 {
+    /// <summary>
+    /// Hermite smoothstep of <paramref name="x"/> between <paramref name="a"/> and <paramref name="b"/> (0 below, 1 above).
+    /// </summary>
     static float Smooth(float a, float b, float x)
     {
         float t = Math.Clamp((x - a) / (b - a), 0, 1);
         return t * t * (3 - 2 * t);
     }
 
+    /// <summary>
+    /// The simple model's colours for a sun direction: night to day by the sun's height, the warm twilight band at the horizon, the sun's colour
+    /// fading out just below it.
+    /// </summary>
     public static SkyColours For(Vector3 sun)
     {
         float e = sun.Y;
@@ -62,29 +69,86 @@ public sealed unsafe class SkyRenderer : IDisposable
 {
     #region Fields
 
-    // Native programs (docs/renderer-native.md 7.1, wave 3 agent D): the same SPIR-V as the GL programs they replace.
+    /// <summary>
+    /// The simple sky's and the physical sky's native programs (docs/renderer-native.md 7.1, wave 3 agent D): the same SPIR-V as the GL programs
+    /// they replace.
+    /// </summary>
     readonly SkyProg _simple, _sky;
 
     /// <summary>
     /// The sky's textures and the game's lighting textures.
     /// </summary>
     readonly SkyTextures _textures;
+
+    /// <summary>
+    /// Times the sky pass on the GPU.
+    /// </summary>
     readonly PassTimer _skyTimer;
+
+    /// <summary>
+    /// The GPU times read back this frame (scratch).
+    /// </summary>
     readonly List<double> _gpuSamples = [];
+
+    /// <summary>
+    /// The sum of the GPU times in the running mean (ms; halved with the count past 120 samples).
+    /// </summary>
     double _gpuTotal;
+
+    /// <summary>
+    /// The samples in the running mean.
+    /// </summary>
     int _gpuCount;
+
+    /// <summary>
+    /// The cloud layer's offset (world units), moved by the wind (<see cref="StepClouds(float)"/>).
+    /// </summary>
     (double X, double Z) _cloudOffset;
+
+    /// <summary>
+    /// The real time since the clouds last stepped.
+    /// </summary>
     readonly Stopwatch _cloudClock = new();
 
+    /// <summary>
+    /// This frame's sky state (<see cref="Prepare(Vector3, float, float)"/>): sun, light, cloud lights, luminance band, night air.
+    /// </summary>
     State _state;
+
+    /// <summary>
+    /// The sun direction the physical state was last built for (NaN: never).
+    /// </summary>
     Vector3 _builtSun = new(float.NaN);
+
+    /// <summary>
+    /// The planetshine and ambient settings the physical state was last built with.
+    /// </summary>
     (bool On, float Strength, Vector3 Albedo, bool Air, float Ambient, float NightAmbient) _builtPlanetshine;
+
+    /// <summary>
+    /// The weather the physical state was last built with.
+    /// </summary>
     SkyWeather? _builtWeather;
+
+    /// <summary>
+    /// The sky colour multiplier the physical state was last built with.
+    /// </summary>
     Vector3 _builtTint;
+
+    /// <summary>
+    /// A physical state was built (false after a simple one): the next physical prepare builds again.
+    /// </summary>
     bool _builtPhysical;
 
-    // The values the getters above share, computed once per ApplyGlobals call (FrameGlobals.ApplyCount) instead of once per name.
+    /// <summary>
+    /// The values the published getters share, computed once per <c>ApplyGlobals</c> call (<see cref="FrameGlobals.ApplyCount"/>) instead of once
+    /// per name.
+    /// </summary>
     AtmosphereUniforms _published;
+
+    /// <summary>
+    /// The <see cref="FrameGlobals.ApplyCount"/> <see cref="_published"/> was computed at (-1: never).
+    /// </summary>
     int _publishedAt = -1;
 
     /// <summary>
@@ -152,6 +216,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         vec3 skyColour(vec3 dir, bool disc) { return uAtmoParams.x > 0.5 ? atmoSky(dir) : skySimple(dir, disc); }
         """;
 
+    /// <summary>
+    /// The fullscreen vertex stage: one triangle covering the screen at the far plane, with its NDC position.
+    /// </summary>
     const string Vertex = """
         #version 330 core
         out vec2 vNdc;
@@ -163,6 +230,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The simple sky's fragment stage: the old colour model per pixel, with the sun disc.
+    /// </summary>
     const string SimpleFragment = "#version 330 core\n" + DepthConvention.Glsl + """
 
         in vec2 vNdc;
@@ -210,6 +280,10 @@ public sealed unsafe class SkyRenderer : IDisposable
     // The Meitou night sky (the `stars` switch; docs/formats/sky.md "Meitou night sky"): procedural point stars on the celestial sphere, evaluated
     // per pixel. StarField / NightAtmosphere (Meitou.Data) are the reference for every number here.
 
+    /// <summary>
+    /// The Meitou night sky (the <c>stars</c> switch; docs/formats/sky.md "Meitou night sky"): procedural point stars on the celestial sphere,
+    /// evaluated per pixel. StarField and NightAtmosphere (Meitou.Data) are the reference for every number here.
+    /// </summary>
     static readonly string StarShader = $$"""
 
         uniform vec4 uStarsMeitou;     // x: 1 stars computed, -1 Meitou but the sun is up (none), 0 the game's texture; y: layers drawn; z: seconds (twinkle); w: star gain
@@ -317,6 +391,10 @@ public sealed unsafe class SkyRenderer : IDisposable
 
         """;
 
+    /// <summary>
+    /// SkyX's skydome per pixel (HDR): the scattered light, its night glow and starfield, the clouds and planets; no sun disc (the game's sun is the
+    /// Mie lobe).
+    /// </summary>
     static readonly string SkyFragment = "#version 330 core\n" + DepthConvention.Glsl + AtmosphereShaders.Functions + StarShader + $$"""
 
         in vec2 vNdc;
@@ -527,9 +605,19 @@ public sealed unsafe class SkyRenderer : IDisposable
         }
         """;
 
-    // SkyX's skydome per pixel (HDR): the scattered light, its night glow and starfield; no sun disc (the game's sun is the Mie lobe).
+    /// <summary>
+    /// A float as a GLSL literal (invariant culture, always with a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.#########", System.Globalization.CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
+
+    /// <summary>
+    /// A vector as a GLSL <c>vec3</c> literal.
+    /// </summary>
     static string Vec3(Vector3 v) => $"vec3({F(v.X)}, {F(v.Y)}, {F(v.Z)})";
+
+    /// <summary>
+    /// Four floats as a GLSL <c>vec4</c> literal.
+    /// </summary>
     static string Vec4(float a, float b, float c, float d) => $"vec4({F(a)}, {F(b)}, {F(c)}, {F(d)})";
 
     #endregion
@@ -540,19 +628,23 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// The native GPU API (phase 8 stage 2: the sky makes no GL call; docs/renderer-native.md 8.6).
     /// </summary>
     public IGpuContext Gpu { get; }
+
     /// <summary>
     /// The game's sky and light (default) or the old simple colour model.
     /// </summary>
     public bool Physical { get; set; } = true;
+
     /// <summary>
     /// Haze: Kenshi's own (default, docs/formats/sky.md "Haze") or the physical integral over SkyX's air.
     /// </summary>
     public bool KenshiHaze { get; set; } = true;
+
     /// <summary>
     /// Kenshi's far distance D (<c>view distance × 10</c>, 50000 with the install's setting); its haze ramps in between 0.06 D and 0.6 D.
     /// Independent of the viewer's far clip: past it the game's own formula goes on.
     /// </summary>
     public float HazeDistance { get; set; } = Meitou.Data.World.KenshiHaze.FarDistance(Meitou.Data.World.KenshiHaze.ViewDistanceSetting);
+
     /// <summary>
     /// The Meitou haze switch: the haze at <see cref="HazeStrength"/>; Faithful is the game's (1).
     /// </summary>
@@ -563,6 +655,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// physical haze's amount), not the weather's fog.
     /// </summary>
     public float HazeStrength { get; set; } = Enhancements.MeitouHazeStrength;
+
     /// <summary>
     /// The Meitou <c>night</c> switch, "night air" (viewer, not the game's; docs/formats/sky.md "Night air"): the game's haze colour is SkyX's sunlit
     /// in-scattering, which is black once the sun is down, so its ramp turns everything past 0.6 D black against a black sky. With this on the air
@@ -630,6 +723,7 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// which sits on the ground within that distance, so in-game this stays under about 1840 (plus a roof the pivot may stand on).
     /// </summary>
     public float EyeClearance { get; private set; }
+
     /// <summary>
     /// 0 within the game's camera heights, rising to 1 across the altitude band (smoothstep of <see cref="EyeClearance"/>).
     /// </summary>
@@ -662,11 +756,16 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// Game hours since the load (the starfield's shift: SkyX's time runs at game speed, from the sky's creation, docs/formats/sky.md "Stars").
     /// </summary>
     public double StarHours { get; set; }
+
     /// <summary>
     /// The game's day and hour, which turn the planets (<see cref="SkyPlanet.Spin"/>) and, with the Meitou <c>stars</c> switch, the stars (<see
     /// cref="CelestialSphere"/>).
     /// </summary>
     public int Day { get; set; }
+
+    /// <summary>
+    /// The game's hour of the day (0-24; see <see cref="Day"/>).
+    /// </summary>
     public float Hour { get; set; } = 13;
 
     /// <summary>
@@ -684,6 +783,10 @@ public sealed unsafe class SkyRenderer : IDisposable
         get => _meitouStars;
         set => _meitouStars = value;
     }
+
+    /// <summary>
+    /// The switch behind <see cref="MeitouStars"/>.
+    /// </summary>
     bool _meitouStars = true;
 
     /// <summary>
@@ -714,10 +817,15 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// otherwise darken too much (the swamp, the Deadlands).
     /// </summary>
     public bool CloudFog { get; set; } = true;
+
     /// <summary>
     /// The cloud shadows' strength factor near placed fog blocks (<see cref="FogVolumes.CloudShadowScale"/>; the frame sets it): 0 inside one.
     /// </summary>
     public float CloudShadowScale { get; set; } = 1;
+
+    /// <summary>
+    /// The cloud shadow's scale on the haze: <see cref="CloudShadowScale"/> with <see cref="CloudFog"/>, else 1.
+    /// </summary>
     float FogScale => CloudFog ? CloudShadowScale : 1;
 
     /// <summary>
@@ -752,44 +860,57 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// The physical haze only: world units in one density scale height of SkyX's air (the game's world unit is Unknown; a viewer choice).
     /// </summary>
     public float ScaleHeightUnits { get; set; } = 40000;
+
+    /// <summary>
+    /// The weather's sky numbers (cloud density, colour multiplier and the rest) that the inputs do not override.
+    /// </summary>
     public SkyWeather Weather { get; set; } = SkyWeather.Default;
+
     /// <summary>
     /// Test override of the cloud density c (<c>--clouds</c>); wins over <see cref="CloudDensityInput"/> and the weather's.
     /// </summary>
     public float? CloudCoverage { get; set; }
+
     /// <summary>
     /// The cloud density c the weather system gives (after the sky's 30 s transition), when it drives the sky; null takes the forced
     /// <see cref="Weather"/> record's. Clamped to 0..1 as the game's sky controller does.
     /// </summary>
     public float? CloudDensityInput { get; set; }
+
     /// <summary>
     /// The sky colour multiplier the weather system gives (after the transition); null takes the forced <see cref="Weather"/> record's.
     /// </summary>
     public Vector3? SkyColourMultiplierInput { get; set; }
+
     /// <summary>
     /// The clouds' drift velocity (the weather's wind direction.xz × speed, world units per second); <see cref="StepClouds"/> accumulates it.
     /// </summary>
     public Vector2 CloudWind { get; set; }
+
     /// <summary>
     /// The cloud density in use, 0..1.
     /// </summary>
     public float CloudDensity => Math.Clamp(CloudCoverage ?? CloudDensityInput ?? Weather.CloudDensity, 0, 1);
+
     /// <summary>
     /// The sky colour multiplier in use.
     /// </summary>
     public Vector3 SkyColourMultiplier => SkyColourMultiplierInput ?? Weather.SkyColourMultiplier;
+
     /// <summary>
     /// The weather fog the weather system gives (the camera's blend over up to four regions, <see cref="Meitou.Data.World.WeatherState"/>): the
     /// weight 0..1 (the game's
     /// <c>fogColour.a</c>), the colour and the distance where it is complete; null takes the forced <see cref="Weather"/> record's.
     /// </summary>
     public (float Weight, Vector3 Colour, float Distance)? FogInput { get; set; }
+
     /// <summary>
     /// The weather fog's share by the eye's height over the ground under it: 1 up to <see cref="FlightFogFade"/> below <see
     /// cref="KenshiCamera.FlightHeight"/> (the platoons' gate), easing to 0 at it, where the weather's effects stop too. Set each frame by <see
     /// cref="SetFlightHeight"/>.
     /// </summary>
     public float WeatherFogScale { get; private set; } = 1;
+
     /// <summary>
     /// Sets <see cref="WeatherFogScale"/> for an eye <paramref name="height"/> above the ground under it (1 with the ground unknown, not finite).
     /// </summary>
@@ -824,16 +945,23 @@ public sealed unsafe class SkyRenderer : IDisposable
         _cloudClock.Restart();
         StepClouds(dt);
     }
+
     /// <summary>
     /// CONSTANTS <c>exposure min</c> / <c>exposure max</c> / <c>night darkness</c>: the composite's luminance band.
     /// </summary>
     public ExposureConstants Exposure { get; set; } = ExposureConstants.Default;
+
     /// <summary>
     /// This frame's <c>MIN_LUMINANCE</c> / <c>MAX_LUMINANCE</c> (game mode); the composite scales by 0.55 over the scene's mean luminance clamped to
     /// them.
     /// </summary>
     public float MinLuminance => _state.MinLuminance;
+
+    /// <summary>
+    /// This frame's <c>MAX_LUMINANCE</c>: the exposure constants' max (see <see cref="MinLuminance"/>).
+    /// </summary>
     public float MaxLuminance => Exposure.Max;
+
     /// <summary>
     /// CPU time of the last <see cref="Prepare"/> in ms.
     /// </summary>
@@ -844,16 +972,51 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// </summary>
     public string LightingTextures => _textures.LightingTextures;
 
+    /// <summary>
+    /// The sky state of one frame, as <see cref="Prepare(Vector3, float, float)"/> built it.
+    /// </summary>
     internal struct State
     {
-        public Vector3 Sun, SunLight, LightDirection, CloudSun, CloudZenith;   // the last two: sunColour.rgb and zenithLight of the cloud pass
-        public Vector3 CloudKey, CloudKeyDirection, CloudAmbient;   // the Meitou clouds' key light (colour, direction) and ambient (MeitouClouds)
+        /// <summary>
+        /// The sun direction, its light and the lighting direction, and the cloud pass's sunColour.rgb and zenithLight.
+        /// </summary>
+        public Vector3 Sun, SunLight, LightDirection, CloudSun, CloudZenith;
+
+        /// <summary>
+        /// The Meitou clouds' key light (colour, direction) and ambient (MeitouClouds).
+        /// </summary>
+        public Vector3 CloudKey, CloudKeyDirection, CloudAmbient;
+
+        /// <summary>
+        /// The environment map strength, this frame's <c>MIN_LUMINANCE</c> and the fog distance.
+        /// </summary>
         public float Environment, MinLuminance, FogDistance;
+
+        /// <summary>
+        /// The colours for the simple model and the water.
+        /// </summary>
         public SkyColours Colours;
+
+        /// <summary>
+        /// The light the world shaders get.
+        /// </summary>
         public WorldLighting Light;
-        public Vector4 Night;           // the night air (Meitou.Data NightAir): rgb its colour at full night, w its weight (0: none)
-        public bool Valid, PlanetLit;   // PlanetLit: planetshine adds light of the planet in this state (ShadowSunHeight)
+
+        /// <summary>
+        /// The night air (Meitou.Data NightAir): rgb its colour at full night, w its weight (0: none).
+        /// </summary>
+        public Vector4 Night;
+
+        /// <summary>
+        /// The state is built; planetshine adds light of the planet in this state (<see cref="ShadowSunHeight"/>).
+        /// </summary>
+        public bool Valid, PlanetLit;
     }
+
+    /// <summary>
+    /// Makes the sky's textures, the clouds, both programs and the timer, takes the integrated GPU's star layers, loads the game's sky textures when
+    /// given the assets, becomes the active sky and publishes its globals (and the shadows-off ones).
+    /// </summary>
     public SkyRenderer(IGpuContext gpu, AssetLocator? assets = null)
     {
         Gpu = gpu;
@@ -1139,6 +1302,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         g.Publish("uAtmoCloudsTile", () => _state.Valid && _textures.CloudsTileSmooth is { } t ? t.Sampled() : default);
     }
 
+    /// <summary>
+    /// This apply's atmosphere uniforms, computed once per <see cref="FrameGlobals.ApplyCount"/>.
+    /// </summary>
     AtmosphereUniforms Published()
     {
         int at = Gpu.Globals.ApplyCount;
@@ -1175,6 +1341,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         _skyTimer.End();
     }
 
+    /// <summary>
+    /// Sets a program's inverse view-projection, colours (and the physical sky's own uniforms) and applies the frame globals.
+    /// </summary>
     void Prepare(SkyProg program, in Matrix4x4 inverse, SkyColours colours)
     {
         var p = program.P;
@@ -1184,6 +1353,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         p.ApplyGlobals();   // the atmosphere's uniforms and textures, through the frame globals
     }
 
+    /// <summary>
+    /// Draws the sky as a guest of the open pass: depth neither tested nor written, one fullscreen triangle.
+    /// </summary>
     void Record(SkyProg program)
     {
         var cmd = Gpu.BeginGuest(program == _sky ? "sky" : "sky simple");
@@ -1326,6 +1498,9 @@ public sealed unsafe class SkyRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// A line on the sky's cost: CPU prepare and GPU pass (and the clouds'), or the simple sky's GPU time.
+    /// </summary>
     public string DescribeCost() =>
         Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)" + Clouds.CostText(VolumeEnabled)
                  : $"simple sky: GPU {GpuMs:0.00} ms/frame";
@@ -1335,6 +1510,9 @@ public sealed unsafe class SkyRenderer : IDisposable
     /// </summary>
     public double GpuMs => _gpuCount == 0 ? 0 : _gpuTotal / _gpuCount;
 
+    /// <summary>
+    /// Frees the textures, the clouds and the programs; no longer the active sky.
+    /// </summary>
     public void Dispose()
     {
         if (Active == this) Active = null;
