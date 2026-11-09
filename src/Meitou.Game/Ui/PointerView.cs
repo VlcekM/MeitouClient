@@ -122,6 +122,9 @@ sealed class PointerView(PlayerInterface player)
         return _pointer = (snapshot.Tick, player.Mouse, player.CtrlHeld, player.AltHeld, chosen.Name, chosen.Target, hovered);
     }
 
+    /// <summary>
+    /// Whether the last pointer pick still holds: recent enough, the mouse, modifiers and view unchanged.
+    /// </summary>
     bool PointerStillValid(long tick) =>
         _pointer.Tick >= 0 && (ulong)(tick - _pointer.Tick) < RepickTicks
         && _pointer.Mouse == player.Mouse && _pointer.Ctrl == player.CtrlHeld && _pointer.Alt == player.AltHeld
@@ -184,9 +187,9 @@ sealed class PointerView(PlayerInterface player)
     #region Highlight
 
     /// <summary>
-    /// The characters the held Highlight key (Alt) outlines (docs/game/ui-input.md "Hover outline"): every character, the squad's, people and animals, within
-    /// <paramref name="radius"/> of <paramref name="centre"/>, each in the colour hovering it would give (the quick order's rules applied to it alone), and the
-    /// hovered one as <see cref="HoverTarget"/>.
+    /// The characters the held Highlight key (Alt) outlines (docs/game/ui-input.md "Hover outline"): every character, the squad's, people and
+    /// animals, within <paramref name="radius"/> of <paramref name="centre"/>, each in the colour hovering it would give (the quick order's rules
+    /// applied to it alone), and the hovered one as <see cref="HoverTarget"/>.
     /// </summary>
     public List<(CharacterId Id, Vector4 Colour)> HighlightTargets(Vector3 centre, float radius)
     {
@@ -244,8 +247,8 @@ sealed class PointerView(PlayerInterface player)
         };
 
     /// <summary>
-    /// The pick chance of the lock under the <c>lockpick</c> pointer, for the selected character nearest it, without the minimum the menu applies: a caged
-    /// <paramref name="target"/>'s cage, else the container, else the door under the mouse.
+    /// The pick chance of the lock under the <c>lockpick</c> pointer, for the selected character nearest it, without the minimum the menu applies: a
+    /// caged <paramref name="target"/>'s cage, else the container, else the door under the mouse.
     /// </summary>
     float? PointedLockChance(CharacterId? target)
     {
@@ -267,14 +270,15 @@ sealed class PointerView(PlayerInterface player)
     #region Drawing
 
     /// <summary>
-    /// Draws the pointer <paramref name="name"/> at <paramref name="at"/> (framebuffer pixels) over everything drawn so far; nothing without the UI painter.
+    /// Draws the pointer <paramref name="name"/> at <paramref name="at"/> (framebuffer pixels) over everything drawn so far; nothing without the UI
+    /// painter.
     /// </summary>
     public void DrawPointer(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
         => player.UiPainter?.DrawPointer(name, at, width, height, pass);
 
     /// <summary>
-    /// Draws the pointer <paramref name="name"/> to the right of the Windows cursor at <paramref name="at"/> (the enhanced Hardware mouse): its left edge
-    /// <see cref="BesideOffset"/> right of the mouse, its middle 14 px below it (both at 1080); nothing for <c>arrow</c>, the walk or no order.
+    /// Draws the pointer <paramref name="name"/> to the right of the Windows cursor at <paramref name="at"/> (the enhanced Hardware mouse): its left
+    /// edge <see cref="BesideOffset"/> right of the mouse, its middle 14 px below it (both at 1080); nothing for <c>arrow</c>, the walk or no order.
     /// </summary>
     public void DrawPointerBeside(string name, Vector2 at, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {

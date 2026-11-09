@@ -35,13 +35,7 @@ public sealed class LevelEdits
     /// counting on from the zone's highest <c>nextId</c> (the original's form for an id made in game, docs/formats/zones.md "Placement keys"), its
     /// state id the instance id with <c>-S23</c>.
     /// </summary>
-    public BuildingPlacement Add(
-        string record,
-        Vector3 position,
-        Quaternion rotation,
-        float ground,
-        WorldLevelData levels,
-        string? interiorLayout = null,
+    public BuildingPlacement Add(string record, Vector3 position, Quaternion rotation, float ground, WorldLevelData levels, string? interiorLayout = null,
         string? exteriorLayout = null)
     {
         var zone = WorldLayout.ZoneOf(position.X, position.Z);

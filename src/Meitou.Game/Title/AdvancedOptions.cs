@@ -250,8 +250,8 @@ sealed class AdvancedOptions(PlayerInterface player)
                 Properties = new Dictionary<string, string>(text) { ["TextScroll"] = scroll.ToString(CultureInfo.InvariantCulture) },
             };
             controls.Add(shown);
-            player.ScrollBars.AddScrollBar(screen, controls, new(view.X + view.Width - bar, view.Y, bar, view.Height), view.Height, content, scroll,
-                maximum, footer.Clip);
+            var track = new UiRect(view.X + view.Width - bar, view.Y, bar, view.Height);
+            player.ScrollBars.AddScrollBar(screen, controls, track, view.Height, content, scroll, maximum, footer.Clip);
         }
         else
         {

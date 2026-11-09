@@ -38,11 +38,15 @@ static class MarkdownView
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.AbsolutePath.EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
             return VideoView.Create(url, feed, fullVideo);
-        var image = new Image { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly,
-                HorizontalAlignment = HorizontalAlignment.Left };
+        var image = new Image
+        {
+            Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Left,
+        };
         RenderOptions.SetBitmapInterpolationMode(image, BitmapInterpolationMode.HighQuality);
-        var frame = new Border { CornerRadius = new CornerRadius(6), ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left,
-                Child = image, IsVisible = false };
+        var frame = new Border
+        {
+            CornerRadius = new CornerRadius(6), ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left, Child = image, IsVisible = false,
+        };
         _ = Task.Run(async () =>
         {
             var bytes = await feed.ImageAsync(url);
@@ -54,7 +58,10 @@ static class MarkdownView
                     image.Source = new Bitmap(new MemoryStream(bytes));
                     frame.IsVisible = true;
                 }
-                catch (Exception) { } // not an image the decoder knows: leave it out
+                catch (Exception)
+                {
+                    // not an image the decoder knows: leave it out
+                }
             });
         });
         return frame;
@@ -99,8 +106,7 @@ static class MarkdownView
     {
         // A paragraph of only images shows them as pictures.
         var inlines = paragraph.Inline?.ToList() ?? [];
-        if (inlines.Count > 0 && inlines.All(i => i is LinkInline { IsImage: true } or LineBreakInline || i is LiteralInline l
-                && string.IsNullOrWhiteSpace(l.Content.ToString())))
+        if (inlines.Count > 0 && inlines.All(IsPictureInline))
         {
             var images = new StackPanel { Spacing = 8 };
             foreach (var link in inlines.OfType<LinkInline>())
@@ -110,6 +116,12 @@ static class MarkdownView
 
         return Text(paragraph.Inline, post, open);
     }
+
+    /// <summary>
+    /// Whether an inline belongs in a picture paragraph: an image, a line break or blank text.
+    /// </summary>
+    static bool IsPictureInline(Markdig.Syntax.Inlines.Inline inline) =>
+        inline is LinkInline { IsImage: true } or LineBreakInline || inline is LiteralInline l && string.IsNullOrWhiteSpace(l.Content.ToString());
 
     /// <summary>
     /// A bulleted or numbered list: each item a marker beside its blocks.
@@ -221,15 +233,15 @@ static class MarkdownView
                 target.Add(span);
                 break;
             case CodeInline code:
-                target.Add(new Run(code.Content) { FontFamily = Mono, FontWeight = FontWeight.Normal, FontSize = 13,
-                        Foreground = Brush("PaperLight") });
+                var run = new Run(code.Content) { FontFamily = Mono, FontWeight = FontWeight.Normal, FontSize = 13, Foreground = Brush("PaperLight") };
+                target.Add(run);
                 break;
             case LineBreakInline lineBreak:
                 target.Add(new Run(lineBreak.IsHard ? "\n" : " ")); // a Run, so text positions are plain character counts
                 break;
             case LinkInline { IsImage: false } link:
-                target.Add(Link(string.Concat(link.Descendants<LiteralInline>().Select(l => l.Content.ToString())), NewsFeed.Resolve(post, link.Url
-                        ?? "")));
+                string text = string.Concat(link.Descendants<LiteralInline>().Select(l => l.Content.ToString()));
+                target.Add(Link(text, NewsFeed.Resolve(post, link.Url ?? "")));
                 break;
             case AutolinkInline auto:
                 target.Add(Link(auto.Url, auto.Url));

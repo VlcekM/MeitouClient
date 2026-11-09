@@ -71,7 +71,8 @@ sealed class TitleComposition
     const float CloudSpeed = 125;
 
     /// <summary>
-    /// The ghost-town ruin under the logo (houses and scrap piles the foliage system places round this x, z), and how far left across the view it is moved.
+    /// The ghost-town ruin under the logo (houses and scrap piles the foliage system places round this x, z), and how far left across the view it is
+    /// moved.
     /// </summary>
     static readonly Vector3 RuinCentre = new(-52860, 0, -22715);
 
@@ -262,8 +263,8 @@ sealed class TitleComposition
     }
 
     /// <summary>
-    /// Where on the plateau the ray through <paramref name="screen"/> lands: on its top (<paramref name="top"/>), raised or lowered to the highest of its
-    /// top-surface vertices (within 8 units of it) within 12 units across; null when there is no plateau.
+    /// Where on the plateau the ray through <paramref name="screen"/> lands: on its top (<paramref name="top"/>), raised or lowered to the highest of
+    /// its top-surface vertices (within 8 units of it) within 12 units across; null when there is no plateau.
     /// </summary>
     static Vector3? OnPlateau(WorldCamera view, float? top, IReadOnlyList<Vector3> plateau, Vector2 screen)
     {
@@ -325,7 +326,8 @@ sealed class TitleComposition
     #region Sky
 
     /// <summary>
-    /// The turn that moves the planets <see cref="MoonsLeft"/> and <see cref="MoonsUp"/> in <paramref name="camera"/>'s view (<see cref="SkyRenderer.PlanetTurn"/>).
+    /// The turn that moves the planets <see cref="MoonsLeft"/> and <see cref="MoonsUp"/> in <paramref name="camera"/>'s view
+    /// (<see cref="SkyRenderer.PlanetTurn"/>).
     /// </summary>
     public static Quaternion MoonTurn(WorldCamera camera)
     {
@@ -343,7 +345,8 @@ sealed class TitleComposition
     }
 
     /// <summary>
-    /// The <see cref="SkyClock.SunTurn"/> that puts the sun of <paramref name="hour"/> <see cref="SunBearing"/> right of <paramref name="camera"/>'s heading.
+    /// The <see cref="SkyClock.SunTurn"/> that puts the sun of <paramref name="hour"/> <see cref="SunBearing"/> right of <paramref name="camera"/>'s
+    /// heading.
     /// </summary>
     public static float SunTurn(SkyClock clock, float hour, WorldCamera camera)
     {

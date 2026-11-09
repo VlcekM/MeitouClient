@@ -200,7 +200,8 @@ sealed class InventoryLayout(PlayerInterface player)
             int index = controls.FindIndex(c => c.Name == section);
             if (index < 0) continue;
 
-            controls[index] = controls[index] with { Properties = new Dictionary<string, string>(controls[index].Properties) { ["State"] = "disabled" } };
+            var closed = new Dictionary<string, string>(controls[index].Properties) { ["State"] = "disabled" };
+            controls[index] = controls[index] with { Properties = closed };
         }
     }
 
@@ -233,7 +234,8 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Grids
 
     /// <summary>
-    /// The grid is laid in the window with <paramref name="above"/> (default 50) layout pixels over it and <paramref name="below"/> (default 58) under it.
+    /// The grid is laid in the window with <paramref name="above"/> (default 50) layout pixels over it and <paramref name="below"/> (default 58)
+    /// under it.
     /// </summary>
     internal void ArrangeContainerGrid(string id, List<UiControl> controls, int columns, int rows, float above = 50, float below = 58)
     {
@@ -262,7 +264,8 @@ sealed class InventoryLayout(PlayerInterface player)
         int arrange = controls.FindIndex(c => c.Name == "ArrangeButton");
         if (arrange >= 0)
         {
-            controls[arrange] = controls[arrange] with { Bounds = new(r.X + (r.Width - 110 * scale) / 2, r.Y + r.Height - 44 * scale, 110 * scale, 32 * scale) };
+            var button = new UiRect(r.X + (r.Width - 110 * scale) / 2, r.Y + r.Height - 44 * scale, 110 * scale, 32 * scale);
+            controls[arrange] = controls[arrange] with { Bounds = button };
         }
 
         if (maximum <= 0)
@@ -314,12 +317,10 @@ sealed class InventoryLayout(PlayerInterface player)
         if (slave.Owner.Length > 0)
             lines.Add(new(Loc.Tr("Slave of:"), slave.Owner, ValueColour: PlayerInterface.BadColour, Tooltip: Loc.Tr("The faction that owns you.")));
 
-        lines.Add(new(
-            Loc.Tr("Looks like slave:"),
-            Loc.Tr("{1,num}%", (int)(slave.Looks * 100)),
-            ValueColour: slave.Looks > 0.1f ? PlayerInterface.BadColour : null,
-            Tooltip: Loc.Tr("How much you look like an escaped slave. Based on how you are dressed/undressed. Wearing shackles and rags is a big giveaway. "
-                + "Try to avoid hanging around too long near people who may recognise you.")));
+        string? looksColour = slave.Looks > 0.1f ? PlayerInterface.BadColour : null;
+        string looksTip = Loc.Tr("How much you look like an escaped slave. Based on how you are dressed/undressed. Wearing shackles and rags is a big giveaway. "
+            + "Try to avoid hanging around too long near people who may recognise you.");
+        lines.Add(new(Loc.Tr("Looks like slave:"), Loc.Tr("{1,num}%", (int)(slave.Looks * 100)), ValueColour: looksColour, Tooltip: looksTip));
         return lines;
     }
 

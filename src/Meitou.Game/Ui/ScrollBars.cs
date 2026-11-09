@@ -108,6 +108,7 @@ sealed class ScrollBars(PlayerInterface player)
     {
         if (name.StartsWith("hud-jobs", StringComparison.Ordinal)) return "JobsPanel";
         if (name.StartsWith("hud-squad", StringComparison.Ordinal)) return "SquadPanel";
+
         return null;
     }
 

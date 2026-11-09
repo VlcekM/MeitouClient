@@ -11,12 +11,7 @@ namespace Meitou.Game.Building;
 /// A ghost waiting for Confirm: what it is and where it stands, with its footprint in the world.
 /// </summary>
 public sealed record QueuedGhost(
-    BuildingBuildData Building,
-    Vector3 Position,
-    Quaternion Rotation,
-    int Floor,
-    Vector2[]? Hull,
-    string? Parent = null);
+    BuildingBuildData Building, Vector3 Position, Quaternion Rotation, int Floor, Vector2[]? Hull, string? Parent = null);
 
 /// <summary>
 /// A ghost standing on a building's floor: the building (its placement id, a player site's own id), its indoor hull in the world, and the floor
@@ -121,18 +116,9 @@ public sealed class PlacementServices
 /// <param name="Parts">The building's parts laid out at the origin with no rotation (<c>WorldObjectLayout.Building</c>), for the ground-type
 /// check.</param>
 public sealed record PlacementQuery(
-    BuildingBuildData Building,
-    Vector3 Position,
-    Quaternion Rotation,
-    float Yaw,
-    int Floor,
-    IReadOnlyList<PlacedMesh> Parts,
-    IReadOnlyList<QueuedGhost> Queued,
-    IReadOnlyList<CharacterSnapshot> Characters,
-    IReadOnlyList<BuildingSnapshot> Sites,
-    IReadOnlyList<PlacementTown> Towns,
-    string PlayerFactionId,
-    PlacementServices Services)
+    BuildingBuildData Building, Vector3 Position, Quaternion Rotation, float Yaw, int Floor, IReadOnlyList<PlacedMesh> Parts,
+    IReadOnlyList<QueuedGhost> Queued, IReadOnlyList<CharacterSnapshot> Characters, IReadOnlyList<BuildingSnapshot> Sites,
+    IReadOnlyList<PlacementTown> Towns, string PlayerFactionId, PlacementServices Services)
 {
     /// <summary>
     /// A piece of a wall line (docs/game/buildings-production.md "Walls"): its slope is its own pitch, not the ground under its box.

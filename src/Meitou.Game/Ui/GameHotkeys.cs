@@ -18,7 +18,8 @@ sealed class GameHotkeys(PlayerInterface player)
     static readonly InputAction[] SelectMemberActions = [.. Enumerable.Range(0, 10).Select(i => InputAction.SelectMember1 + i)];
 
     /// <summary>
-    /// The actions handled by <see cref="Key"/> and <see cref="PlayerInterface.UiKey"/>: a key bound to one of them is the game's, not the cinema's numpad key.
+    /// The actions handled by <see cref="Key"/> and <see cref="PlayerInterface.UiKey"/>: a key bound to one of them is the game's, not the cinema's
+    /// numpad key.
     /// </summary>
     static readonly InputAction[] HotkeyActions =
     [
@@ -95,7 +96,6 @@ sealed class GameHotkeys(PlayerInterface player)
         // toggle_build: the build window and the placement ghost; not over the title, the editor or while the free camera flies.
         if (Bound(InputAction.ToggleBuild, key) && !free && !player.TitleOpen && !player.CharacterEditor.EditorOpen)
             player.Build.ToggleBuildMode();
-
         // focus_char: put the pivot on the lead selected character without following it (the free camera's F is its down key).
         else if (Bound(InputAction.FocusCharacter, key) && !free && player.Selected().FirstOrDefault() is { } lead)
             player.CentreOn(lead.Id, follow: false);
@@ -107,7 +107,6 @@ sealed class GameHotkeys(PlayerInterface player)
             player.Say(new StopCommand(player.SelectedIds()) { Tick = player.Session.World.Tick });
         else if (OrderHotkey(key) is { } order) player.ExecuteUiAction("order." + order, "");
         else if (Bound(InputAction.CycleRunSpeed, key)) player.ExecuteUiAction("runspeed.1", "");   // the right speed arrow (FUN_140722630)
-
         // Medic and Rescue: one search each, with Shift the job (58, with 57 for a squad with a robot / 148) added to the lists, as their buttons.
         else if (Bound(InputAction.Medic, key))
             player.Say(new Simulation.FirstAid.MedicJobCommand(player.SelectedIds(), shift) { Tick = player.Session.World.Tick });

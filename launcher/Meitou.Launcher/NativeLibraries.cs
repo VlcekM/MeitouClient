@@ -18,8 +18,10 @@ static class NativeLibraries
     public static void Load()
     {
         var assembly = typeof(NativeLibraries).Assembly;
-        var names = assembly.GetManifestResourceNames().Where(n => n.StartsWith(Prefix,
-                StringComparison.Ordinal)).Order(StringComparer.Ordinal).ToArray();
+        var names = assembly.GetManifestResourceNames()
+            .Where(n => n.StartsWith(Prefix, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
         var handles = new Dictionary<string, IntPtr>(StringComparer.OrdinalIgnoreCase);
         RegisterImportResolver(assembly, handles);
         if (names.Length == 0) return;
@@ -41,8 +43,8 @@ static class NativeLibraries
             string[] candidates = library switch
             {
                 "openal" => ["soft_oal", "libopenal", "libopenal.so.1", "/System/Library/Frameworks/OpenAL.framework/OpenAL"],
-                "vpx" => ["vpx", "libvpx.so.9", "libvpx.so.8", "libvpx.so.7", "libvpx", "/opt/homebrew/lib/libvpx.dylib",
-                        "/usr/local/lib/libvpx.dylib"],
+                "vpx" =>
+                    ["vpx", "libvpx.so.9", "libvpx.so.8", "libvpx.so.7", "libvpx", "/opt/homebrew/lib/libvpx.dylib", "/usr/local/lib/libvpx.dylib"],
                 _ => [],
             };
             foreach (var candidate in candidates)
@@ -53,7 +55,8 @@ static class NativeLibraries
     }
 
     /// <summary>
-    /// Writes the embedded libraries to the content-named folder (a changed one is written again) and loads each by its full path. Returns the folder.
+    /// Writes the embedded libraries to the content-named folder (a changed one is written again) and loads each by its full path. Returns the
+    /// folder.
     /// </summary>
     static string WriteLibraries(Assembly assembly, string[] names, Dictionary<string, IntPtr> handles)
     {
@@ -80,8 +83,8 @@ static class NativeLibraries
         // records each library's hash (the csproj's NativeLibraries metadata); without it, the names and sizes stand in.
         var contents = assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "NativeLibraries")?.Value
             ?? string.Join(";", names.Select(n => { using var s = assembly.GetManifestResourceStream(n)!; return $"{n}={s.Length}"; }));
-        return Path.Combine(LauncherConfig.DataDirectory, "native",
-                Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(contents)))[..16]);
+        string hash = Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(contents)))[..16];
+        return Path.Combine(LauncherConfig.DataDirectory, "native", hash);
     }
 
     /// <summary>
@@ -109,7 +112,9 @@ static class NativeLibraries
             {
                 Directory.Delete(old, recursive: true);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
         }
     }
 

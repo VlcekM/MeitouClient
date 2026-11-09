@@ -62,7 +62,8 @@ sealed class QualityTiers(SettingsMenu menu)
     ];
 
     /// <summary>
-    /// A quality switch: on or off at Low, Medium and Ultra (High is its start default). Meitou features only: Faithful keeps them off whatever the tier.
+    /// A quality switch: on or off at Low, Medium and Ultra (High is its start default). Meitou features only: Faithful keeps them off whatever the
+    /// tier.
     /// </summary>
     internal sealed record PresetToggle(string Label, bool Low, bool Medium, bool Ultra);
 
@@ -90,7 +91,8 @@ sealed class QualityTiers(SettingsMenu menu)
     internal const string PresetHint = "Distances, shadows and detail together. Low is the same as --low-end.";
 
     /// <summary>
-    /// The tier being applied (<see cref="ApplyPreset"/>, <see cref="LookPresets.SetFaithful"/>), so the Low cut follows it before the sliders reach it.
+    /// The tier being applied (<see cref="ApplyPreset"/>, <see cref="LookPresets.SetFaithful"/>), so the Low cut follows it before the sliders reach
+    /// it.
     /// </summary>
     internal int? TierOverride;
 
@@ -136,9 +138,7 @@ sealed class QualityTiers(SettingsMenu menu)
 
         // A Faithful shadow distance stays within the game's slider.
         if (p.Mode == "Shadows" && !menu.Values.Toggles.Any(t => t.Label == "Shadows" && t.Get()) && value > slider.Min)
-        {
             value = Math.Min(value, Data.World.KenshiShadows.MaxRange);
-        }
 
         return Math.Clamp(value, slider.Min, slider.Max);
     }
@@ -170,12 +170,15 @@ sealed class QualityTiers(SettingsMenu menu)
     /// <summary>
     /// The graphics keys a preset may set: a launcher that changes one of them no longer asks for a preset.
     /// </summary>
-    internal static IEnumerable<string> PresetKeys() =>
-        PresetSliders.Select(p => p.Label)
+    internal static IEnumerable<string> PresetKeys()
+    {
+        var switches = LowOffSwitches.Concat(LowOffToggles).Concat(PresetToggles.Select(p => p.Label));
+        return PresetSliders.Select(p => p.Label)
             .Append(WorldFrame.ParticleSliders[0])
             .Concat(WorldFrame.UpscalerSliders.Take(2))
-            .Concat(LowOffSwitches.Concat(LowOffToggles).Concat(PresetToggles.Select(p => p.Label)).Select(label => SettingsMenu.SwitchKeyPrefix + label))
+            .Concat(switches.Select(label => SettingsMenu.SwitchKeyPrefix + label))
             .Distinct();
+    }
 
     /// <summary>
     /// At start, after the saved sliders and switches: applies the saved preset when the settings do not sit at it, so a preset the launcher chose
@@ -200,8 +203,8 @@ sealed class QualityTiers(SettingsMenu menu)
     }
 
     /// <summary>
-    /// <c>--benchmark-baseline</c>, at start instead of the saved settings: the Medium tier, then no GI, ground parallax or tessellation (Medium's rock
-    /// smoothing too), no upscaler and SMAA at full size. Nothing is saved (GameHost leaves the saved graphics as they are).
+    /// <c>--benchmark-baseline</c>, at start instead of the saved settings: the Medium tier, then no GI, ground parallax or tessellation (Medium's
+    /// rock smoothing too), no upscaler and SMAA at full size. Nothing is saved (GameHost leaves the saved graphics as they are).
     /// </summary>
     internal void ApplyBenchmarkBaseline()
     {
@@ -253,7 +256,8 @@ sealed class QualityTiers(SettingsMenu menu)
             .Select(x => (x.p, menu.Values.Toggles[x.Index], menu.ToggleDefaults[x.Index]));
 
     /// <summary>
-    /// The tier every tier slider (and, with the Meitou look, every tier switch) sits at, else <see cref="CustomPreset"/>; the look switches do not count.
+    /// The tier every tier slider (and, with the Meitou look, every tier switch) sits at, else <see cref="CustomPreset"/>; the look switches do not
+    /// count.
     /// </summary>
     bool CascadeFor(int preset) => preset switch
     {
@@ -310,24 +314,18 @@ sealed class QualityTiers(SettingsMenu menu)
         if (preset == LowPreset)
         {
             // --low-end's switches outside the look (anti-aliasing), then no anti-aliasing at all (not even FXAA) at its render scale.
-            foreach (var toggle in menu.Values.Toggles.Where(t => t.Remaster && LowOffSwitches.Contains(t.Label) && !LookPresets.IsLook(t.Label, true) && t.Get()))
-            {
-                toggle.Set(false);
-            }
+            var lowOff = menu.Values.Toggles.Where(t => t.Remaster && LowOffSwitches.Contains(t.Label) && !LookPresets.IsLook(t.Label, true) && t.Get());
+            foreach (var toggle in lowOff) toggle.Set(false);
 
             if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(0);
             if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[1]) is { } scale)
-            {
                 scale.Set(WorldOptions.LowEndRenderScale);
-            }
         }
 
         if (preset == HighPreset) SetHighRenderScale();
         foreach (var (p, slider) in PresetPairs()) slider.Set(PresetTarget(p, slider, preset));
         if (menu.Values.Toggles.FirstOrDefault(t => t.Label == FifthCascade) is { } cascade && cascade.Get() != CascadeFor(preset))
-        {
             cascade.Set(CascadeFor(preset));
-        }
     }
 
     /// <summary>

@@ -219,8 +219,8 @@ sealed partial class VideoAudio : IDisposable
         public NVorbis.Contracts.IPacket? GetNextPacket() => _next < Count ? Packet(_next++) : null;
         public NVorbis.Contracts.IPacket? PeekNextPacket() => _next < Count ? Packet(_next) : null;
         public long GetGranuleCount() => (long)((file.AudioFrames.Count > 0 ? file.AudioFrames[^1].Time.TotalSeconds : 0) * file.SampleRate);
-        public long SeekTo(long granulePos, int preRoll,
-                NVorbis.Contracts.GetPacketGranuleCount getPacketGranuleCount) => throw new NotSupportedException();
+        public long SeekTo(long granulePos, int preRoll, NVorbis.Contracts.GetPacketGranuleCount getPacketGranuleCount) =>
+            throw new NotSupportedException();
 
         Packet Packet(int index) =>
             new(index < 3 ? file.AudioHeaders[index] : file.AudioFrames[first + index - 3].Data) { IsEndOfStream = index == Count - 1 };

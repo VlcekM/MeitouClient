@@ -84,7 +84,8 @@ sealed class SandboxScenario(GameHost host)
             .FirstOrDefault(r => string.Equals(r.Name, want, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// <c>--sandbox-races</c>: every person race with the first CHARACTER record that lists it as its only race (records with a choice of races are skipped), by race name.
+    /// <c>--sandbox-races</c>: every person race with the first CHARACTER record that lists it as its only race (records with a choice of races are
+    /// skipped), by race name.
     /// </summary>
     static List<(string Race, string Record)> SandboxRaces(Data.GameDatabase db) =>
         db.Records.Values.Where(r => r.Type == FcsRecordType.Character)
@@ -103,9 +104,7 @@ sealed class SandboxScenario(GameHost host)
         float half = host.GameOptions.Sandbox >= 2 ? 15 : 0;
         SandboxHero = host.Population!.SpawnSandbox(world, record, new Vector2(-half, 0), player: true, yaw: MathF.PI / 2);
         if (host.GameOptions.Sandbox >= 2)
-        {
             SandboxFoe = host.Population.SpawnSandbox(world, record, new Vector2(half, 0), player: false, yaw: -MathF.PI / 2);
-        }
 
         // n above 2: the rest stand idle in rings round the pair (the player's faction, so they keep out of the fight), 15 units apart, a look each;
         // --sandbox-races: then one of every person race, in the rings after them.

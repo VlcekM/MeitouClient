@@ -34,8 +34,8 @@ static class JitWarmup
 
     public static void Start() => Spawn(List);
 
-    static void Spawn(ThreadStart body) => new Thread(body) { IsBackground = true, Priority = ThreadPriority.BelowNormal,
-            Name = "jit warm-up" }.Start();
+    static void Spawn(ThreadStart body) =>
+        new Thread(body) { IsBackground = true, Priority = ThreadPriority.BelowNormal, Name = "jit warm-up" }.Start();
 
     // Nothing may leave these threads: an exception unhandled on one would end the game. A method that cannot be compiled ahead (an assembly its
     // signature needs is missing on this platform, say) is counted and left to compile on its first call, if it ever has one.
@@ -54,13 +54,14 @@ static class JitWarmup
 
     static void Enqueue()
     {
-        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
-            | BindingFlags.Static | BindingFlags.DeclaredOnly;
-        var assemblies = typeof(JitWarmup)
-                .Assembly.GetReferencedAssemblies()
-                .Where(a => a.Name?.StartsWith("Meitou", StringComparison.Ordinal) == true)
-            .Select(TryLoad).OfType<Assembly>().Prepend(typeof(JitWarmup).Assembly)
-            .OrderBy(a => Array.IndexOf(Order, a.GetName().Name) is var i and >= 0 ? i : Order.Length).ToList();
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var assemblies = typeof(JitWarmup).Assembly.GetReferencedAssemblies()
+            .Where(a => a.Name?.StartsWith("Meitou", StringComparison.Ordinal) == true)
+            .Select(TryLoad)
+            .OfType<Assembly>()
+            .Prepend(typeof(JitWarmup).Assembly)
+            .OrderBy(a => Array.IndexOf(Order, a.GetName().Name) is var i and >= 0 ? i : Order.Length)
+            .ToList();
         foreach (var assembly in assemblies)
         {
             Type[] types;
@@ -89,7 +90,7 @@ static class JitWarmup
                 }
                 foreach (var method in methods)
                     if (!method.IsAbstract && !method.ContainsGenericParameters
-                            && (method.MethodImplementationFlags & (MethodImplAttributes.InternalCall | MethodImplAttributes.Runtime)) == 0
+                        && (method.MethodImplementationFlags & (MethodImplAttributes.InternalCall | MethodImplAttributes.Runtime)) == 0
                         && (method.Attributes & MethodAttributes.PinvokeImpl) == 0)
                         Queue.Enqueue(method);
             }

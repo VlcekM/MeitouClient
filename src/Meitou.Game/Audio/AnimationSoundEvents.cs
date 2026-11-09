@@ -30,13 +30,7 @@ public sealed class AnimationSoundEvents
     public static AnimationSoundEvents FromDatabase(GameDatabase db)
     {
         var result = new AnimationSoundEvents();
-        var types = new[]
-        {
-            FcsRecordType.Animation,
-            FcsRecordType.AnimalAnimation,
-            FcsRecordType.CombatTechnique,
-            FcsRecordType.BuildingFunctionality,
-        };
+        var types = new[] { FcsRecordType.Animation, FcsRecordType.AnimalAnimation, FcsRecordType.CombatTechnique, FcsRecordType.BuildingFunctionality };
         foreach (var type in types)
         {
             foreach (var record in db.OfType(type))
@@ -59,13 +53,8 @@ public sealed class AnimationSoundEvents
                 if (db.Find(reference.TargetStringId) is not { Type: FcsRecordType.AnimationEvent } def) continue;
                 if (def.GetString("event") is not { Length: > 0 } ev) continue;
 
-                var sound = new AnimationSoundEvent(
-                    ev,
-                    def.GetString("override state"),
-                    def.GetString("override value"),
-                    def.GetString("stop"),
-                    ev == "Footsteps",
-                    reference.Values.Value0 * 0.01f);
+                var sound = new AnimationSoundEvent(ev, def.GetString("override state"), def.GetString("override value"), def.GetString("stop"),
+                    ev == "Footsteps", reference.Values.Value0 * 0.01f);
                 Insert(list ??= [], sound);
             }
         }

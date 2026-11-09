@@ -39,7 +39,8 @@ sealed class WorldPicking(PlayerInterface player)
     public Func<Vector3, Vector3, float, float?>? ClosedBuildingHit { get; set; }
 
     /// <summary>
-    /// The host's test for where a ray meets a shown floor or wall of a building in the interior view, within a distance; null when none is in the way.
+    /// The host's test for where a ray meets a shown floor or wall of a building in the interior view, within a distance; null when none is in the
+    /// way.
     /// </summary>
     public Func<Vector3, Vector3, float, float?>? ShownInteriorHit { get; set; }
 
@@ -80,12 +81,18 @@ sealed class WorldPicking(PlayerInterface player)
         return null;
     }
 
+    /// <summary>
+    /// How far the point at <paramref name="t"/> along the ray is above the ground.
+    /// </summary>
     float AboveGround(Vector3 origin, Vector3 direction, float t)
     {
         var p = origin + direction * t;
         return p.Y - player.Ground(p.X, p.Z);
     }
 
+    /// <summary>
+    /// The ground point between two distances along the ray, by bisection.
+    /// </summary>
     Vector3 GroundBetween(Vector3 origin, Vector3 direction, float lo, float hi)
     {
         for (int i = 0; i < 24; i++)
@@ -159,7 +166,8 @@ sealed class WorldPicking(PlayerInterface player)
     internal CharacterId? PickWhere(Vector2 pixel, Func<CharacterSnapshot, bool> accept) => PickWhereAt(pixel, accept)?.Id;
 
     /// <summary>
-    /// The nearest accepted character under the pixel with its ray distance; null when none, or when the nearest is hidden behind a building seen from outside.
+    /// The nearest accepted character under the pixel with its ray distance; null when none, or when the nearest is hidden behind a building seen
+    /// from outside.
     /// </summary>
     internal (CharacterId Id, float T)? PickWhereAt(Vector2 pixel, Func<CharacterSnapshot, bool> accept)
     {
@@ -201,7 +209,8 @@ sealed class WorldPicking(PlayerInterface player)
     /// </summary>
     (CharacterId Id, float T)? CageOccupant(Vector2 pixel, Func<CharacterSnapshot, bool> accept, (CharacterId Id, float T)? picked)
     {
-        if (player.Furniture.PickCageAt(pixel) is not { Cage: { OccupantSelection: true, Occupant: { IsNone: false } occupant }, T: var cageT }) return null;
+        var cage = player.Furniture.PickCageAt(pixel);
+        if (cage is not { Cage: { OccupantSelection: true, Occupant: { IsNone: false } occupant }, T: var cageT }) return null;
         if (picked is { } nearer && !(cageT < nearer.T)) return null;
         if (player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == occupant) is not { } held) return null;
         if (!accept(held) || player.StealthView.HiddenInWorld?.Invoke(occupant) == true) return null;
@@ -222,9 +231,8 @@ sealed class WorldPicking(PlayerInterface player)
     /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest
     /// along the ray of a character with a quick order, a ground item, a container, a door, a rock and a site that is an object (unfinished, a
     /// machine, storage, furnace or turret), as the original's pick walks its hits nearest first. What a building seen from outside hides is left out
-    /// (each helper's
-    /// <see cref="PlayerInterface.Hidden"/> test, the original's floor rule). A plain building is not a candidate: it takes the click only when nothing is
-    /// (<see cref="BuildMode.SitePress"/>). Hover and click share it, as in the original.
+    /// (each helper's <see cref="PlayerInterface.Hidden"/> test, the original's floor rule). A plain building is not a candidate: it takes the click
+    /// only when nothing is (<see cref="BuildMode.SitePress"/>). Hover and click share it, as in the original.
     /// </summary>
     internal (Picked Kind, float T) PickAt(Vector2 p)
     {
@@ -368,7 +376,8 @@ sealed class WorldPicking(PlayerInterface player)
     }
 
     /// <summary>
-    /// The nearest hit of the ray on the triangles (double sided), the mesh turned by <paramref name="rotation"/> and put at <paramref name="at"/>; null for none.
+    /// The nearest hit of the ray on the triangles (double sided), the mesh turned by <paramref name="rotation"/> and put at <paramref name="at"/>;
+    /// null for none.
     /// </summary>
     internal static float? RayMesh((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
     {

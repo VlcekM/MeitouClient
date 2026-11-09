@@ -153,6 +153,9 @@ sealed class GamePages(SettingsMenu menu)
         v => SetGameplay((menu.Config.Gameplay ?? new()) with { HarpoonLimit = ClampHarpoonLimit(v) }), "0", Logarithmic: true,
         Faithful: Simulation.Combat.RangedTuning.DefaultStuckLimit);
 
+    /// <summary>
+    /// A stuck-limit slider value as a whole count within the ranged tuning's bounds.
+    /// </summary>
     static int ClampHarpoonLimit(float v) =>
         Math.Clamp((int)MathF.Round(v), Simulation.Combat.RangedTuning.MinStuckLimit, Simulation.Combat.RangedTuning.MaxStuckLimit);
 
@@ -219,6 +222,9 @@ sealed class GamePages(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// The UI font size, rounded and clamped, into the config and the player interface.
+    /// </summary>
     void SetFontSize(float v)
     {
         float size = Math.Clamp(MathF.Round(v), UserConfig.MinFontSize, UserConfig.MaxFontSize);
@@ -374,9 +380,7 @@ sealed class GamePages(SettingsMenu menu)
     {
         // A graphics switch that changes play: the stealth sight counts the lamps it lights, so no look preset or Faithful sets it.
         if (menu.Values.Toggles.FirstOrDefault(t => t.Label == "Interior lamps") is { } lamps)
-        {
             result.Add(new("Interior lamps", SettingHints.ToggleHint(lamps.Label), Toggle: lamps));
-        }
 
         AddFightRows(result);
         AddOffscreenRows(result);
@@ -386,6 +390,9 @@ sealed class GamePages(SettingsMenu menu)
             "gameplay change"));
     }
 
+    /// <summary>
+    /// The fight rows: attack slots, the stuck bolt and harpoon limit and late dodges and blocks.
+    /// </summary>
     void AddFightRows(List<SettingsMenu.Entry> result)
     {
         result.Add(new(AttackSlotsSlider.Label,
@@ -402,6 +409,9 @@ sealed class GamePages(SettingsMenu menu)
                 v => { menu.Config.LateDefences = v; menu.LateDefencesChanged?.Invoke(v); }, Remaster: true, OnOff: true)));
     }
 
+    /// <summary>
+    /// The rows for what goes on away from the player's squads: roaming squads, fights, healing, towns and production.
+    /// </summary>
     void AddOffscreenRows(List<SettingsMenu.Entry> result)
     {
         result.Add(new("Squads keep their people",
@@ -435,6 +445,9 @@ sealed class GamePages(SettingsMenu menu)
                 v => { menu.Config.UnloadedProduction = v; menu.OffscreenChanged?.Invoke(); }, Remaster: true, OnOff: true)));
     }
 
+    /// <summary>
+    /// The world and play rows: doors, decapitation, ragdolls, the speeds, pausing, animals, outlines, selection and ground items.
+    /// </summary>
     void AddWorldRows(List<SettingsMenu.Entry> result)
     {
         result.Add(new("Doors close behind",
@@ -488,6 +501,9 @@ sealed class GamePages(SettingsMenu menu)
             Slider: GroundItemsSlider));
     }
 
+    /// <summary>
+    /// The scene rows: splash screens, the sky flights and the texture keeping.
+    /// </summary>
     void AddSceneRows(List<SettingsMenu.Entry> result)
     {
         result.Add(new("Splash screens",

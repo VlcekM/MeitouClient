@@ -10,8 +10,8 @@ namespace Meitou.Launcher;
 /// A news post: <c>news/&lt;yyyy-mm-dd&gt;-&lt;slug&gt;/index.md</c> with an optional front matter block, its images beside it (docs/launcher.md,
 /// "News"). <see cref="Video"/>: the full video's web page, opened from a video cover.
 /// </summary>
-public sealed record NewsPost(string File, string Title, DateOnly? Date, string? Author, string? Image, string Body, string BaseUrl,
-        string? Video = null);
+public sealed record NewsPost(
+    string File, string Title, DateOnly? Date, string? Author, string? Image, string Body, string BaseUrl, string? Video = null);
 
 /// <summary>
 /// The Home page's posts, from the repository's <c>news/</c> folder, one folder per article: listed through the contents API (one call, cached
@@ -70,8 +70,8 @@ public sealed class NewsFeed(HttpClient http)
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(20));
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                    $"https://api.github.com/repos/{Releases.Repository}/contents/{Folder}?ref={Branch}");
+            string url = $"https://api.github.com/repos/{Releases.Repository}/contents/{Folder}?ref={Branch}";
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             if (listJson is not null && File.Exists(etagFile))
                 request.Headers.TryAddWithoutValidation("If-None-Match", await File.ReadAllTextAsync(etagFile, ct));
@@ -88,8 +88,8 @@ public sealed class NewsFeed(HttpClient http)
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
         {
-            problem = LauncherText.Translate("News: GitHub not reachable") + (listJson is null ? ""
-                    : LauncherText.Translate("; showing what was read before"));
+            problem = LauncherText.Translate("News: GitHub not reachable")
+                + (listJson is null ? "" : LauncherText.Translate("; showing what was read before"));
         }
 
         return (listJson, problem);
@@ -135,11 +135,18 @@ public sealed class NewsFeed(HttpClient http)
     static List<(string Name, string Sha)> ArticleFolders(JsonDocument doc) =>
         doc.RootElement.ValueKind == JsonValueKind.Array
             ? doc.RootElement.EnumerateArray()
-                .Where(f => f.GetProperty("type").GetString() == "dir" && f.GetProperty("name").GetString() is { Length: > 10 } n
-                        && DateOnly.TryParse(n[..10], out _))
+                .Where(IsArticleFolder)
                 .Select(f => (Name: f.GetProperty("name").GetString()!, Sha: f.GetProperty("sha").GetString()!))
-                .OrderByDescending(f => f.Name, StringComparer.Ordinal).Take(MaxPosts).ToList()
+                .OrderByDescending(f => f.Name, StringComparer.Ordinal)
+                .Take(MaxPosts)
+                .ToList()
             : [];
+
+    /// <summary>
+    /// Whether a contents-list entry is an article folder: a directory whose name starts with a date.
+    /// </summary>
+    static bool IsArticleFolder(JsonElement f) =>
+        f.GetProperty("type").GetString() == "dir" && f.GetProperty("name").GetString() is { Length: > 10 } n && DateOnly.TryParse(n[..10], out _);
 
     static async Task<List<NewsPost>> ReadLocalAsync(string folder, CancellationToken ct)
     {
@@ -176,8 +183,8 @@ public sealed class NewsFeed(HttpClient http)
         DateOnly? date = meta.TryGetValue("date", out var d) && DateOnly.TryParse(d, out var parsed) ? parsed
             : file.Length >= 10 && DateOnly.TryParse(file[..10], out var fromName) ? fromName : null;
         var title = meta.GetValueOrDefault("title") ?? Path.GetFileNameWithoutExtension(file);
-        return new NewsPost(file, title, date, meta.GetValueOrDefault("author"), meta.GetValueOrDefault("image"), string.Join("\n",
-                lines[bodyStart..]).Trim(), baseUrl,
+        string body = string.Join("\n", lines[bodyStart..]).Trim();
+        return new NewsPost(file, title, date, meta.GetValueOrDefault("author"), meta.GetValueOrDefault("image"), body, baseUrl,
             meta.GetValueOrDefault("video"));
     }
 

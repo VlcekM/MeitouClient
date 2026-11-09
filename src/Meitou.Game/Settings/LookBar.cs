@@ -87,10 +87,16 @@ sealed class LookBar(SettingsMenu menu)
         if (menu.LookPresets.SaveLook(name) is { } saved) menu.Notice = $"Saved as {saved.Name}.";
     }
 
+    /// <summary>
+    /// Whether a name is Meitou's look or one of the example looks (case ignored).
+    /// </summary>
     static bool IsBuiltInName(string name) =>
         name.Equals(LookPresets.MeitouLook.Name, StringComparison.OrdinalIgnoreCase)
         || LookPresets.ExampleLooks.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// The line naming the active look and how many of its settings were changed.
+    /// </summary>
     string LookSummary()
     {
         int changes = menu.LookPresets.LookChanges().Count;
@@ -150,6 +156,9 @@ sealed class LookBar(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// The active look's drop-down and beside it its unsaved changes with Revert, or where the look comes from.
+    /// </summary>
     void DrawNamedLook()
     {
         var look = menu.LookPresets.ActiveLook;
@@ -205,6 +214,9 @@ sealed class LookBar(SettingsMenu menu)
         menu.Canvas.Button("Paste", menu.Canvas.R(x + 154, 100, 74, 26), menu.LookPresets.PasteLook);
     }
 
+    /// <summary>
+    /// The Quality drop-down and, beside it, what the Low preset holds off.
+    /// </summary>
     void DrawQualityRow()
     {
         menu.Canvas.Text("Quality", menu.Canvas.R(212, 134, 70, 30), 15, SettingsCanvas.LightInk);

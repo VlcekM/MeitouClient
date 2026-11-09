@@ -70,6 +70,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// The MyGUI skin of a surface kind: a window, paper or a button.
+    /// </summary>
     static string SurfaceSkin(string kind) =>
         kind == "window" ? "Kenshi_GenericWindowSkin" : kind == "paper" ? "Kenshi_GenericTextBoxSkin" : "Kenshi_Button1Skin";
 
@@ -197,6 +200,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         DrawControl(entry, y, row, buttonY);
     }
 
+    /// <summary>
+    /// The entry's picture, when it has one and its texture is loaded.
+    /// </summary>
     void DrawPicture(SettingsMenu.Entry entry, float y, float row)
     {
         if (entry.Picture is { } picture && menu.Player.SettingsPainter is { } painter)
@@ -210,6 +216,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// The band behind a feature's settings and the light on an open header.
+    /// </summary>
     void DrawFeatureBand(SettingsMenu.Entry entry, float y, float row)
     {
         // A feature's settings sit in a darker band with a brass edge under its header; an open header is lightly lit.
@@ -224,6 +233,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// A feature header's arrow and the click that opens or closes it.
+    /// </summary>
     void DrawGroupHeader(SettingsMenu.Entry entry, float y, float row)
     {
         if (entry is { Open: { } open, GroupId: { } group })
@@ -231,15 +243,16 @@ sealed class SettingsCanvas(SettingsMenu menu)
             // A feature's header: the arrow, and a click anywhere on its text opens or closes its settings.
             var header = R(212, y, 456, row);
             if (header.Intersect(menu.Viewport).Height >= header.Height - 1)
-            {
                 menu.Hits.Add(new(header, () => menu.Grouping.ToggleGroup(group), Label: entry.Label));
-            }
 
             var mark = R(212, y + 2, 22, entry.Hint.Length > 0 ? 20 : 32);
             Arrow(mark.X + mark.Width / 2, mark.Y + mark.Height / 2, !open, header.Contains(menu.Pointer.X, menu.Pointer.Y), menu.Viewport);
         }
     }
 
+    /// <summary>
+    /// The entry's name, in brass when it differs from the preset, and its impact.
+    /// </summary>
     void DrawName(SettingsMenu.Entry entry, float y, float row, float indent, float labelSize, float labelHeight, bool labelWrap)
     {
         // A setting that differs from the preset: its name in brass and a Reset link back to the preset's value (a header's resets the feature).
@@ -247,21 +260,22 @@ sealed class SettingsCanvas(SettingsMenu menu)
         Text(entry.Label, R(212 + indent, y + 2, 456 - indent, entry.Hint.Length > 0 ? labelHeight + 1 : row - 4), labelSize, nameInk,
             clip: menu.Viewport, wrap: labelWrap);
         if (entry.Impact is { } impact)
-        {
             Text(impact, R(212, y + 2, 456, 20), 11, ImpactInk(impact), "Right VCenter", menu.Viewport);
-        }
     }
 
+    /// <summary>
+    /// The ink of an impact note: brass for high, the main ink for medium, muted otherwise.
+    /// </summary>
     static Vector4 ImpactInk(string impact)
     {
-        if (impact.StartsWith("High", StringComparison.Ordinal))
-        {
-            return Brass;
-        }
+        if (impact.StartsWith("High", StringComparison.Ordinal)) return Brass;
 
         return impact.StartsWith("Medium", StringComparison.Ordinal) ? MainInk : MutedInk;
     }
 
+    /// <summary>
+    /// The Reset link of a changed entry, underlined, back to the preset's value.
+    /// </summary>
     void DrawResetLink(SettingsMenu.Entry entry, float y)
     {
         if (entry is { Changed: true, Reset: { } reset })
@@ -272,12 +286,13 @@ sealed class SettingsCanvas(SettingsMenu menu)
             Rect(new(link.X + link.Width - 30 * menu.Scale, link.Y + link.Height - menu.Scale, 30 * menu.Scale, menu.Scale),
                 (over ? LightInk : Brass) with { W = 0.6f }, menu.Viewport);
             if (link.Intersect(menu.Viewport).Height >= link.Height - 1)
-            {
                 menu.Hits.Add(new(link, reset, Label: "Reset " + entry.Label));
-            }
         }
     }
 
+    /// <summary>
+    /// The entry's hint under its name, wrapped.
+    /// </summary>
     void DrawHint(SettingsMenu.Entry entry, float y, float indent, float labelHeight)
     {
         if (entry.Hint.Length > 0)
@@ -288,6 +303,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// The entry's control: a Faithful / Meitou switch, a worded or plain toggle, a choice, a slider, a key binding or a run button.
+    /// </summary>
     void DrawControl(SettingsMenu.Entry entry, float y, float row, float buttonY)
     {
         if (entry.Toggle is { Remaster: true, Optional: false } remaster)
@@ -340,6 +358,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// A choice's drop-down showing the current option.
+    /// </summary>
     void DrawChoiceButton(SettingsMenu.Choice choice, float buttonY)
     {
         var options = choice.Options();
@@ -356,6 +377,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         }, menu.Viewport);
     }
 
+    /// <summary>
+    /// A slider row: the bar, and its value or the number being typed into it.
+    /// </summary>
     void DrawSliderRow(SettingsMenu.Entry entry, Rendering.Frame.Slider slider, float y, float row)
     {
         var valueAt = R(908, y, 192, 20);
@@ -390,6 +414,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         if (valueAt.Intersect(menu.Viewport).Height >= valueAt.Height - 1) menu.Hits.Add(new(valueAt, () => menu.BeginNumber(slider, valueAt)));
     }
 
+    /// <summary>
+    /// The box a slider's value is typed into.
+    /// </summary>
     void DrawNumberEdit(UiRect valueAt)
     {
         menu.NumberBounds = valueAt;
@@ -408,6 +435,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
             }, Vector4.Zero, LightInk, Clip: menu.Viewport, Pickable: false));
     }
 
+    /// <summary>
+    /// A slider's value at the row's right, lit under the pointer.
+    /// </summary>
     void DrawSliderValue(SettingsMenu.Entry entry, Rendering.Frame.Slider slider, float y, UiRect valueAt)
     {
         if (valueAt.Contains(menu.Pointer.X, menu.Pointer.Y))
@@ -419,6 +449,9 @@ sealed class SettingsCanvas(SettingsMenu menu)
         Text(slider.Display, R(688, y, 412, 20), 13, entry.Locked ? MutedInk : LightInk, "Right VCenter", menu.Viewport);
     }
 
+    /// <summary>
+    /// The switch between the game's value and Meitou's for a slider, the one it is at marked.
+    /// </summary>
     void DrawQuickSwitch(Rendering.Frame.Slider slider, float f, float m, float y)
     {
         // The quick switch: jump to the game's value or Meitou's; the one the slider is at is marked.

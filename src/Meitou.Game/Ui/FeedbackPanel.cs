@@ -235,12 +235,8 @@ sealed class FeedbackPanel(PlayerInterface player)
         player.FaithfulScreens.SetText(FeedbackScreen, FeedbackBodyBox, "");
         (_feedbackStatus, _feedbackStatusError) = ("", false);
         player.FaithfulScreens.Close(FeedbackScreen);
-        player.Confirm(
-            "THANK YOU",
-            $"Thanks for the feedback! It is now issue #{number} on GitHub.",
-            () => player.ClipboardWrite?.Invoke(url),
-            "COPY LINK",
-            cancel: "OK");
+        string thanks = $"Thanks for the feedback! It is now issue #{number} on GitHub.";
+        player.Confirm("THANK YOU", thanks, () => player.ClipboardWrite?.Invoke(url), "COPY LINK", cancel: "OK");
         player.UpdateMenuPause();
     }
 
@@ -311,26 +307,30 @@ sealed class FeedbackPanel(PlayerInterface player)
     /// </summary>
     void SendFeedbackOrAsk()
     {
-        void Send() => player.RaiseScreenAction(new(FeedbackScreen, "SendButton", "feedback-send"));
-
         if (FeedbackNewer is not { } newer || _feedbackOldConfirmed)
         {
             Send();
             return;
         }
 
-        player.Confirm(
-            "Newer version out",
-            $"You are playing {BuildVersion.Tag}, and {newer} is out. It may already be fixed there: please update and check "
-                + "whether it still happens before sending.",
-            () =>
-            {
-                _feedbackOldConfirmed = true;
-                Send();
-            },
-            "Send anyway",
-            cancel: "Cancel");
+        string warning = $"You are playing {BuildVersion.Tag}, and {newer} is out. It may already be fixed there: please update and check "
+            + "whether it still happens before sending.";
+        player.Confirm("Newer version out", warning, SendAnyway, "Send anyway", cancel: "Cancel");
     }
+
+    /// <summary>
+    /// The player sends from the older version anyway: the form does not ask again until it is opened again.
+    /// </summary>
+    void SendAnyway()
+    {
+        _feedbackOldConfirmed = true;
+        Send();
+    }
+
+    /// <summary>
+    /// Raises the form's send for the host, which makes the attachments and sends the report.
+    /// </summary>
+    void Send() => player.RaiseScreenAction(new(FeedbackScreen, "SendButton", "feedback-send"));
 
     #endregion
 }

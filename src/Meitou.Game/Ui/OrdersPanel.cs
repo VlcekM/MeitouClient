@@ -14,8 +14,8 @@ sealed class OrdersPanel(PlayerInterface player)
 
     /// <summary>
     /// The orders panel's toggles by the words in their widget names (the layout names only <c>OrdersChaseButton</c>, <c>OrdersMedicButton</c> and
-    /// <c>OrdersRescueButton</c> for certain, docs/game/ui-screens.md section 4; the rest are matched by the button's word, so a differently spelt name still
-    /// binds). Prospect is its own action (ProspectingPanel).
+    /// <c>OrdersRescueButton</c> for certain, docs/game/ui-screens.md section 4; the rest are matched by the button's word, so a differently spelt
+    /// name still binds). Prospect is its own action (ProspectingPanel).
     /// </summary>
     static readonly (string Word, CharacterOrders Order)[] OrderWords =
     [
@@ -30,7 +30,8 @@ sealed class OrdersPanel(PlayerInterface player)
     static readonly string[] RunSpeedIcons = ["Walk", "Jog", "Run", "Group"];
 
     /// <summary>
-    /// The jobs list's row layout (<c>Kenshi_OrdersPanelOrder.layout</c>: a <c>Kenshi_ConnectBarSkin</c> bar, <c>OrderText</c> and <c>RemoveButton</c>).
+    /// The jobs list's row layout (<c>Kenshi_OrdersPanelOrder.layout</c>: a <c>Kenshi_ConnectBarSkin</c> bar, <c>OrderText</c> and
+    /// <c>RemoveButton</c>).
     /// </summary>
     internal MyGuiLayout? OrdersRowLayout;
 
@@ -167,7 +168,8 @@ sealed class OrdersPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// Narrows the jobs rows and their parts by the scroll bar's width (<paramref name="barWidth"/> and <paramref name="gap"/>) and clips them to the list's view.
+    /// Narrows the jobs rows and their parts by the scroll bar's width (<paramref name="barWidth"/> and <paramref name="gap"/>) and clips them to the
+    /// list's view.
     /// </summary>
     static void NarrowJobRows(List<UiControl> controls, UiRect view, float barWidth, float gap)
     {
@@ -221,8 +223,7 @@ sealed class OrdersPanel(PlayerInterface player)
     /// <summary>
     /// The row layout's text and X at <paramref name="row"/>: the layout is 300 x 20 px and sized to the row, so the text keeps its 10 px left and 35
     /// px right margins and the X (Right VStretch) stays 30 px wide at the right end, a pixel short of the row's height. The text is the Main colour
-    /// (the original's
-    /// <c>#afa68b</c> prefix).
+    /// (the original's <c>#afa68b</c> prefix).
     /// </summary>
     List<UiControl> JobRowParts(UiControl row, bool dimmed)
     {

@@ -99,7 +99,7 @@ sealed class LookPresets(SettingsMenu menu)
 
     #endregion
 
-    #region Classification
+    #region Setting keys
 
     /// <summary>
     /// The <c>graphics</c> keys a look sets: every Faithful / Meitou graphics switch (Faithful turns them all off; the fifth cascade and the
@@ -145,10 +145,7 @@ sealed class LookPresets(SettingsMenu menu)
 
     List<LookPreset> Looks()
     {
-        if (_looks is not null)
-        {
-            return _looks;
-        }
+        if (_looks is not null) return _looks;
 
         _looks = [MeitouLook, .. ExampleLooks];
         try
@@ -167,17 +164,11 @@ sealed class LookPresets(SettingsMenu menu)
     /// </summary>
     void AddDiskLooks()
     {
-        if (menu.NoDiskWrites || !Directory.Exists(PresetFolder))
-        {
-            return;
-        }
+        if (menu.NoDiskWrites || !Directory.Exists(PresetFolder)) return;
 
         foreach (var file in Directory.GetFiles(PresetFolder, "*.json").Order(StringComparer.OrdinalIgnoreCase))
         {
-            if (ReadLook(File.ReadAllText(file), "mine") is { } look)
-            {
-                _looks!.Add(look with { File = file });
-            }
+            if (ReadLook(File.ReadAllText(file), "mine") is { } look) _looks!.Add(look with { File = file });
         }
     }
 
@@ -195,23 +186,18 @@ sealed class LookPresets(SettingsMenu menu)
 
     #endregion
 
-    #region Classification
+    #region Roles
 
     /// <summary>
     /// Whether a setting is part of the look or of the quality: the look's (<see cref="LookRoles"/>) are the effects and their strengths, the
     /// quality's the distances and the detail. As the Graphics tabs were split before they were grouped by feature, so the looks and the tiers set
     /// what they set before.
     /// </summary>
-    static string Role(string label, bool toggle)
-    {
-        if (toggle)
-        {
-            return ToggleRole(label);
-        }
+    static string Role(string label, bool toggle) => toggle ? ToggleRole(label) : SliderRole(label);
 
-        return SliderRole(label);
-    }
-
+    /// <summary>
+    /// A look switch's role (its group) by its label.
+    /// </summary>
     static string ToggleRole(string label) => label switch
     {
         "Interior lamps" => "Advanced",
@@ -225,32 +211,27 @@ sealed class LookPresets(SettingsMenu menu)
         _ => "Detail",
     };
 
+    /// <summary>
+    /// A look slider's role (its group) by its label prefix.
+    /// </summary>
     static string SliderRole(string label)
     {
         bool S(string prefix) => label.StartsWith(prefix, StringComparison.Ordinal);
-        if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine"))
-        {
-            return "Light";
-        }
+        if (S("Ambient") || S("Night ambient") || S("Light shafts") || S("Planetshine")) return "Light";
 
-        if (S("Haze") || S("Heat haze"))
-        {
-            return "Sky";
-        }
+        if (S("Haze") || S("Heat haze")) return "Sky";
 
-        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom"))
-        {
-            return "Colour";
-        }
+        if (S("Tone map") || S("Hybrid") || S("Grading") || S("Night grading") || S("Bloom")) return "Colour";
 
         if (label.Contains("clarity", StringComparison.Ordinal) || label.Contains("see-through", StringComparison.Ordinal))
-        {
             return "Water";
-        }
 
         return IsDistanceSlider(label) ? "Distances" : "Detail";
     }
 
+    /// <summary>
+    /// Whether a slider sets a draw or detail distance.
+    /// </summary>
     static bool IsDistanceSlider(string label)
     {
         bool S(string prefix) => label.StartsWith(prefix, StringComparison.Ordinal);
@@ -370,18 +351,13 @@ sealed class LookPresets(SettingsMenu menu)
         var changed = new HashSet<string>();
         foreach (var (key, toggle, meitou) in LookToggles())
         {
-            if (toggle.Get() != BaseToggle(key, meitou) && !(CutAtLow(toggle.Label) && !toggle.Get()))
-            {
-                changed.Add(key);
-            }
+            if (toggle.Get() != BaseToggle(key, meitou) && !(CutAtLow(toggle.Label) && !toggle.Get())) changed.Add(key);
         }
 
         foreach (var (key, slider, meitou) in LookSliders())
         {
             if (MathF.Abs(slider.Get() - BaseSlider(key, slider, meitou)) > 0.002f * (slider.Max - slider.Min))
-            {
                 changed.Add(key);
-            }
         }
 
         return changed;
@@ -528,9 +504,7 @@ sealed class LookPresets(SettingsMenu menu)
         foreach (var (key, slider, meitou) in LookSliders())
         {
             if (MathF.Abs(slider.Get() - meitou) > 0.002f * (slider.Max - slider.Min))
-            {
                 set[key] = MathF.Round(slider.Get(), 3);
-            }
         }
 
         var saved = new LookPreset(name, "mine", MeitouVersion, set, Path.Combine(PresetFolder, MakeFileName(name)));
@@ -582,9 +556,7 @@ sealed class LookPresets(SettingsMenu menu)
         }
 
         if (SaveLookAs(FreeName(pasted.Name), pasted.Values, pasted.Made) is { } look)
-        {
             menu.Notice = $"{look.Name} pasted and loaded (made on Meitou {look.Made}).";
-        }
     }
 
     /// <summary>
@@ -642,10 +614,7 @@ sealed class LookPresets(SettingsMenu menu)
     internal SettingsMenu.Entry LookRow(SettingsMenu.Entry entry, string key, string label, bool toggle, HashSet<string> changes)
     {
         entry = entry with { Impact = ImpactOf(label), Raw = label };
-        if (!IsLook(label, toggle))
-        {
-            return entry;
-        }
+        if (!IsLook(label, toggle)) return entry;
 
         if (toggle && entry.Toggle is { } cut && CutAtLow(label) && !cut.Get())
         {

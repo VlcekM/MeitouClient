@@ -26,10 +26,9 @@ sealed class TutorialPanel(PlayerInterface player)
     /// </summary>
     const float TutorialWait = 5;
 
-    // The tutorials (docs/game/ui-screens.md "Tutorials"): what their triggers see.
-
     /// <summary>
-    /// The management tabs of the crafting and research triggers (overview tabs 3 and 2).
+    /// The tutorials' triggers (docs/game/ui-screens.md "Tutorials"): the management tabs of the crafting and research triggers (overview tabs 3
+    /// and 2).
     /// </summary>
     internal const int CraftingTab = 3, ResearchTab = 2;
 
@@ -38,6 +37,9 @@ sealed class TutorialPanel(PlayerInterface player)
     /// </summary>
     static readonly Vector4 TutorialHighlightColour = new(0.909f, 0.913f, 0.125f, 1);
 
+    /// <summary>
+    /// The highlight alpha's low and high ends and its change per second.
+    /// </summary>
     const float HighlightLow = 0.1f, HighlightHigh = 0.4f, HighlightRate = 0.4f;
 
     TutorialManager? _tutorials;
@@ -55,11 +57,17 @@ sealed class TutorialPanel(PlayerInterface player)
     readonly HashSet<CharacterId> _tutorialPrisoners = [];
     readonly Dictionary<CharacterId, Vector3> _tutorialLastPositions = [];
 
-    // The Tutorials window (F1, <c>Kenshi_TutorialsWindow</c>): every tutorial by title; a row's pages paged read-only; ACTIVATE puts it in the panel from its first page.
+    /// <summary>
+    /// The Tutorials window (F1, <c>Kenshi_TutorialsWindow</c>): every tutorial by title; a row's pages paged read-only; ACTIVATE puts it in the
+    /// panel from its first page. Its selected row and page.
+    /// </summary>
     int _tutorialsRow, _tutorialsPage;
 
-    // The tutorial highlight (<c>TutorialGUI</c>'s yellow box, <c>_setHightlightCoords</c>, docs/game/ui-screens.md "Tutorials"): the shown page's HUD part under a box of
-    // (0.909, 0.913, 0.125) whose alpha swings between 0.1 and 0.4 at 0.4 a second; a run page's box shows only while its condition holds.
+    /// <summary>
+    /// The tutorial highlight (<c>TutorialGUI</c>'s yellow box, <c>_setHightlightCoords</c>, docs/game/ui-screens.md "Tutorials"): the shown page's
+    /// HUD part under a box of (0.909, 0.913, 0.125) whose alpha swings between 0.1 and 0.4 at 0.4 a second; a run page's box shows only while its
+    /// condition holds.
+    /// </summary>
     float _highlightAlpha, _highlightDirection = 1;
     TutorialHighlight _highlightShown;
     long _highlightClock;
@@ -293,7 +301,8 @@ sealed class TutorialPanel(PlayerInterface player)
             string? argument = c.Name switch { "NextTutorialButton" => "next", "PrevTutorialButton" => "prev", "DismissButton" => "dismiss", _ => null };
             var control = c with { Name = c.Name.Length > 0 ? "tutorial-window-" + c.Name : c.Name };
             if (argument is not null) control = control with { Action = "meitou:tutorial", Argument = argument };
-            else if (c.Action.StartsWith("mygui:close", StringComparison.Ordinal)) control = control with { Action = "meitou:tutorial", Argument = "hide" };
+            else if (c.Action.StartsWith("mygui:close", StringComparison.Ordinal))
+                control = control with { Action = "meitou:tutorial", Argument = "hide" };
             else if (c.Name == "Root") control = control with { Pickable = false };
             controls.Add(control);
         }
@@ -302,7 +311,10 @@ sealed class TutorialPanel(PlayerInterface player)
     internal void BindTutorialsWindow(UiBindings b)
     {
         b.Text["Root"] = "TUTORIALS";
-        b.Lists["TutorialList"] = [.. TutorialCatalog.Items.Select((item, i) => new UiListItem(i.ToString(CultureInfo.InvariantCulture), TutorialTexts.TextAt(item.Title)))];
+        b.Lists["TutorialList"] =
+        [
+            .. TutorialCatalog.Items.Select((item, i) => new UiListItem(i.ToString(CultureInfo.InvariantCulture), TutorialTexts.TextAt(item.Title))),
+        ];
         b.SelectedItems["TutorialList"] = _tutorialsRow;
         var pages = TutorialCatalog.Items[_tutorialsRow].Pages;
         _tutorialsPage = Math.Clamp(_tutorialsPage, 0, pages.Length - 1);

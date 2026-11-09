@@ -23,8 +23,8 @@ sealed class StealthView(PlayerInterface player)
 
     /// <summary>
     /// Hands the world renderer this frame's stealth arrows (the original's <c>FUN_1408586d0</c>): per watcher of a sneaking player character an
-    /// <c>arrow.mesh</c> pointing from it at the looker, its tail 12 up and min(d - 7, 15) out towards the looker (d the 3D distance; negative puts it
-    /// on the far side, as in the original).
+    /// <c>arrow.mesh</c> pointing from it at the looker, its tail 12 up and min(d - 7, 15) out towards the looker (d the 3D distance; negative puts
+    /// it on the far side, as in the original).
     /// </summary>
     internal void UpdateStealthArrows()
     {
@@ -72,8 +72,8 @@ sealed class StealthView(PlayerInterface player)
 
     /// <summary>
     /// A drawn head this far above the feet or higher is upright (standing 17.4, on a chair 13.1); from <see cref="UprightHead"/> down to
-    /// <see cref="LyingHead"/> the tag moves over to the head (crouching 9.7, sitting on the ground 6.8, in a bed 7.4; heights of the clips' <c>Bip01 Head</c>,
-    /// measured), so a sneaker's tag does not jump.
+    /// <see cref="LyingHead"/> the tag moves over to the head (crouching 9.7, sitting on the ground 6.8, in a bed 7.4; heights of the clips'
+    /// <c>Bip01 Head</c>, measured), so a sneaker's tag does not jump.
     /// </summary>
     const float UprightHead = 12, LyingHead = 8;
 
@@ -90,11 +90,10 @@ sealed class StealthView(PlayerInterface player)
     /// <summary>
     /// The name tag over each of the player's characters within the original's range: the <c>Kenshi_CharacterNamePanel</c> layout (<b>Verified</b>),
     /// 0.1057 x 0.0296 of the screen, the name centred in <c>Kenshi_StandardFont_Large</c> with a shadow in the middle 0.655, and while the character
-    /// sneaks the
-    /// <c>Stealth</c> icon on the left in the state's tag colour. The name is white and in square brackets when the character is selected, grey and bare
-    /// otherwise (<c>NameTagSelected</c> / <c>NameTagUnselected</c>, the brackets from a screenshot of the original; <b>Observed</b>);
-    /// while it sneaks, also the <c>LightLevel</c> icon on the right from its light level. The panel stands on the head like a speech bubble does (the
-    /// original's anchor is not mapped).
+    /// sneaks the <c>Stealth</c> icon on the left in the state's tag colour. The name is white and in square brackets when the character is selected,
+    /// grey and bare otherwise (<c>NameTagSelected</c> / <c>NameTagUnselected</c>, the brackets from a screenshot of the original; <b>Observed</b>);
+    /// while it sneaks, also the <c>LightLevel</c> icon on the right from its light level. The panel stands on the head like a speech bubble does
+    /// (the original's anchor is not mapped).
     /// </summary>
     internal void AddNameTags(List<UiControl> controls)
     {
@@ -195,9 +194,9 @@ sealed class StealthView(PlayerInterface player)
     string? _taskBarTrack;
 
     /// <summary>
-    /// The floating progress bar over a player character at work (<c>FloatingProgressBar::ProgressBarWidget</c>, the <c>Kenshi_ProgressBarPanel</c> layout,
-    /// <b>Verified</b>): the bar's fill and the centred caption of <see cref="CharacterSnapshot.Bar"/>. It stands just above the name tag (the original's anchor
-    /// is not mapped).
+    /// The floating progress bar over a player character at work (<c>FloatingProgressBar::ProgressBarWidget</c>, the <c>Kenshi_ProgressBarPanel</c>
+    /// layout, <b>Verified</b>): the bar's fill and the centred caption of <see cref="CharacterSnapshot.Bar"/>. It stands just above the name tag
+    /// (the original's anchor is not mapped).
     /// </summary>
     internal void AddTaskBars(List<UiControl> controls)
     {

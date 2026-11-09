@@ -35,8 +35,10 @@ public sealed partial class MainWindow
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             var file = JsonNode.Parse(await Http.GetStringAsync(RoadmapUrl, cts.Token));
-            rows = (file?["rows"] as JsonArray ?? []).OfType<JsonObject>().Select(r => new RoadmapRow((string)r["id"]!,
-                    (string)r["system"]!)).ToList();
+            rows = (file?["rows"] as JsonArray ?? [])
+                .OfType<JsonObject>()
+                .Select(r => new RoadmapRow((string)r["id"]!, (string)r["system"]!))
+                .ToList();
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -55,17 +57,27 @@ public sealed partial class MainWindow
         // The system picker: a plate button that drops a searchable list (a ComboBox cannot hold a search box), the pick committed by a
         // click or Enter; arrows move the highlight, Esc closes.
         RoadmapRow? chosen = null;
-        var systemLabel = new TextBlock { Text = "Roadmap system", Foreground = (IBrush)this.FindResource("Quiet")!,
-                VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var chevron = new Avalonia.Controls.Shapes.Path { Data = StreamGeometry.Parse("M0,0 H12 L6,7 Z"), Fill = main,
-                VerticalAlignment = VerticalAlignment.Center, Margin = new(12, 0, 0, 0) };
+        var systemLabel = new TextBlock
+        {
+            Text = "Roadmap system", Foreground = (IBrush)this.FindResource("Quiet")!, VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var chevron = new Avalonia.Controls.Shapes.Path
+        {
+            Data = StreamGeometry.Parse("M0,0 H12 L6,7 Z"), Fill = main, VerticalAlignment = VerticalAlignment.Center, Margin = new(12, 0, 0, 0),
+        };
         DockPanel.SetDock(chevron, Dock.Right);
-        var system = new Button { HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Padding = new(12, 6), Content = new DockPanel { Children = { chevron, systemLabel } } };
+        var system = new Button
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new(12, 6),
+            Content = new DockPanel { Children = { chevron, systemLabel } },
+        };
         var search = new TextBox { PlaceholderText = LauncherText.Translate("Search"), Margin = new(8, 8, 8, 4) };
         var list = new ListBox { MaxHeight = 280 };
-        var noMatch = new TextBlock { Classes = { "desc" }, Text = LauncherText.Translate("No match"), Margin = new(16, 6, 16, 10),
-                IsVisible = false };
+        var noMatch = new TextBlock
+        {
+            Classes = { "desc" }, Text = LauncherText.Translate("No match"), Margin = new(16, 6, 16, 10), IsVisible = false,
+        };
         var picker = new StackPanel { Children = { search, list, noMatch } };
 
         // Anchored on a border around the button, not the button: keys typed in the popup bubble to its anchor, and a Button treats Space
@@ -137,7 +149,7 @@ public sealed partial class MainWindow
         var version = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var v in _installedVersions) version.Items.Add(new ComboBoxItem { Content = v, Tag = v });
         version.SelectedItem = version.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag! == PlayVersion)
-                ?? version.Items.OfType<ComboBoxItem>().FirstOrDefault();
+            ?? version.Items.OfType<ComboBoxItem>().FirstOrDefault();
         var note = new TextBox { PlaceholderText = "What you did or saw (needed for Broken)", MaxLength = 300 };
         var attach = new CheckBox { Content = "Attach the end of this version's log.txt (it can show folder names, such as your user name)" };
         var problem = new TextBlock { Classes = { "desc" }, TextWrapping = TextWrapping.Wrap };
@@ -148,24 +160,29 @@ public sealed partial class MainWindow
             new StackPanel { Spacing = 4, Children = { new TextBlock { Classes = { "desc" }, Text = label }, control } };
         var plate = new Border
         {
-            Classes = { "plate" }, Width = 560, Padding = new(20,
-                    16), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Classes = { "plate" }, Width = 560, Padding = new(20, 16), HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
             Child = new StackPanel
             {
                 Spacing = 10,
                 Children =
                 {
                     new Border { Classes = { "header" }, Child = new TextBlock { Text = "Report to the roadmap" } },
-                    new TextBlock { Classes = { "desc" }, TextWrapping = TextWrapping.Wrap,
-                            Text = "Tell the roadmap how one of Kenshi's systems plays in Meitou. Bugs with steps are best as a GitHub issue." },
+                    new TextBlock
+                    {
+                        Classes = { "desc" }, TextWrapping = TextWrapping.Wrap,
+                        Text = "Tell the roadmap how one of Kenshi's systems plays in Meitou. Bugs with steps are best as a GitHub issue.",
+                    },
                     Labelled("System", anchor),
                     new StackPanel { Orientation = Orientation.Horizontal, Children = { works, broken } },
                     Labelled("Meitou version", version),
                     note,
                     attach,
                     problem,
-                    new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { cancel,
-                            send } },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { cancel, send },
+                    },
                 },
             },
         };

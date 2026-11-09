@@ -80,7 +80,8 @@ public sealed class UiTextBuffer(string text = "")
     int LineEnd(int at) => MultiLine && Text.IndexOf('\n', at) is var end and >= 0 ? end : Text.Length;
 
     /// <summary>
-    /// The text replaced from outside (not typed): the caret goes to the end and, when the text changed, the history is gone (MyGUI's <c>setText</c>).
+    /// The text replaced from outside (not typed): the caret goes to the end and, when the text changed, the history is gone (MyGUI's
+    /// <c>setText</c>).
     /// </summary>
     public void Set(string value)
     {
@@ -218,7 +219,8 @@ public sealed class UiTextBuffer(string text = "")
     }
 
     /// <summary>
-    /// An edit that changed the text is one undo step; every edit, changed or not, ends the redo (MyGUI resets it for Backspace, Delete, typing and paste).
+    /// An edit that changed the text is one undo step; every edit, changed or not, ends the redo (MyGUI resets it for Backspace, Delete, typing and
+    /// paste).
     /// </summary>
     void Commit(State before)
     {

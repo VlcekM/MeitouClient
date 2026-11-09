@@ -104,8 +104,14 @@ public sealed partial class MainWindow
             notes.Add("The launch arguments have --low-end: the game ignores the graphics sliders while it is set.");
         if (SplitArguments(_config.LaunchArguments).Contains("--benchmark-baseline"))
             notes.Add("The launch arguments have --benchmark-baseline: the game ignores the graphics sliders while it is set.");
-        foreach (var note in notes) GraphicsPanel.Children.Add(new TextBlock { Classes = { "warn" }, Text = note,
-                TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new(0, 0, 0, 6) });
+        foreach (var note in notes)
+        {
+            var warning = new TextBlock
+            {
+                Classes = { "warn" }, Text = note, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new(0, 0, 0, 6),
+            };
+            GraphicsPanel.Children.Add(warning);
+        }
 
         var rows = new StackPanel { IsEnabled = locked is null };
         _presets = schema.Presets is { Names.Count: > 0, Key.Length: > 0 } p ? p : null;
@@ -151,8 +157,8 @@ public sealed partial class MainWindow
             SaveGame();
             ShowGraphics();
         };
-        var footer = Row("Reset graphics", "Every graphics setting back to the game's defaults, also those only in the game's Tab panel.", reset,
-                150);
+        var footer = Row("Reset graphics", "Every graphics setting back to the game's defaults, also those only in the game's Tab panel.",
+            reset, 150);
         footer.BorderThickness = new(0);
         GraphicsFooter.Child = footer;
         GraphicsFooter.IsEnabled = locked is null;
@@ -166,12 +172,10 @@ public sealed partial class MainWindow
     string? Locked(SettingsSchema schema) =>
         _game.Problem is { } problem ? problem + " Start the game once to write it again; nothing is changed here until then."
         // The keys of another layout may be gone or mean something else; the game converts the file to its own when it next starts.
-        : _game.Version is { } v
-                && v > schema.SettingsVersion
-                        ? $"The settings were saved by a newer Meitou than v{PlayVersion}: play that version, or change them in the game."
-        : _game.Version is { } w
-                && w < schema.SettingsVersion
-                        ? $"The settings are from an older Meitou: start v{PlayVersion} once to update them, then change them here."
+        : _game.Version is { } v && v > schema.SettingsVersion
+            ? $"The settings were saved by a newer Meitou than v{PlayVersion}: play that version, or change them in the game."
+        : _game.Version is { } w && w < schema.SettingsVersion
+            ? $"The settings are from an older Meitou: start v{PlayVersion} once to update them, then change them here."
         : null;
 
     static bool Shown(SettingDescription s) => s.Kind == SettingKind.Toggle || s.Kind == SettingKind.Slider && s.Max > s.Min;
@@ -204,14 +208,21 @@ public sealed partial class MainWindow
     Border SettingRow(SettingDescription s)
     {
         var row = s.Kind == SettingKind.Toggle ? s.Graphics ? SwitchRow(s) : ToggleRow(s)
-                        : s.Labels is { Length: 2 } ? CheckRow(s, s.Labels[0], s.Labels[1], v =>
-            {
-                if (s.Graphics) _game.SetGraphics(s.Key, s.Min + v);
-                else _game.Set(s.Key, s.Min + v);
-            })
-            : s.Labels is { Length: > 0 } ? ChoiceRow(s) : s.Modes is { Count: > 0 } ? ModesRow(s) : SliderRow(s);
+            : s.Labels is { Length: 2 } ? CheckRow(s, s.Labels[0], s.Labels[1], v => WriteCheck(s, v))
+            : s.Labels is { Length: > 0 } ? ChoiceRow(s)
+            : s.Modes is { Count: > 0 } ? ModesRow(s)
+            : SliderRow(s);
         if (s.ShownWhen is { } when) ShowWhen(row, when);
         return row;
+    }
+
+    /// <summary>
+    /// Writes a two-label setting's checked value (0 or 1) above its minimum: into the graphics block or at the top level.
+    /// </summary>
+    void WriteCheck(SettingDescription s, float v)
+    {
+        if (s.Graphics) _game.SetGraphics(s.Key, s.Min + v);
+        else _game.Set(s.Key, s.Min + v);
     }
 
     /// <summary>
@@ -351,11 +362,8 @@ public sealed partial class MainWindow
         }
         if (!faithful)
         {
-            var box = new ComboBox
-            {
-                MinWidth = 220, ItemsSource = all.Select(x => x.Source == "built in" ? Tr(x.Look.Name)
-                        : x.Look.Name).ToList(), SelectedIndex = all.IndexOf(active),
-            };
+            var names = all.Select(x => x.Source == "built in" ? Tr(x.Look.Name) : x.Look.Name).ToList();
+            var box = new ComboBox { MinWidth = 220, ItemsSource = names, SelectedIndex = all.IndexOf(active) };
             box.SelectionChanged += (_, _) =>
             {
                 if (box.SelectedIndex >= 0 && all[box.SelectedIndex] != active)
@@ -402,8 +410,11 @@ public sealed partial class MainWindow
                     {
                         if (active.File is { } file) File.Delete(file);
                     }
-                    catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status(Tr("Could not delete the preset: {1}",
-                            e.Message)); }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                    {
+                        Status(Tr("Could not delete the preset: {1}", e.Message));
+                    }
+
                     ApplyLook(l, false, all[0]);
                     Status(Tr("{1} deleted; the look is Meitou.", active.Look.Name));
                 };
@@ -478,11 +489,10 @@ public sealed partial class MainWindow
                     e.Handled = true;
                 }
             };
+            var label = new TextBlock { Classes = { "desc" }, Text = Tr("Preset name"), VerticalAlignment = VerticalAlignment.Center };
             panel.Children.Add(new StackPanel
             {
-                Orientation = Orientation.Horizontal, Spacing = 6, Margin = new(0, 6, 0, 0),
-                Children = { new TextBlock { Classes = { "desc" }, Text = Tr("Preset name"), VerticalAlignment = VerticalAlignment.Center }, name,
-                        save, cancel },
+                Orientation = Orientation.Horizontal, Spacing = 6, Margin = new(0, 6, 0, 0), Children = { label, name, save, cancel },
             });
             Dispatcher.UIThread.Post(() =>
             {
@@ -496,8 +506,8 @@ public sealed partial class MainWindow
     /// <summary>
     /// The Meitou version a look was made on: its file's, else this release's.
     /// </summary>
-    string MadeOf(LookChoice look) => look.File is { } file && File.Exists(file)
-            && LookPresetFile.Read(File.ReadAllText(file)) is { } read ? read.Made : _looks?.Made ?? "";
+    string MadeOf(LookChoice look) =>
+        look.File is { } file && File.Exists(file) && LookPresetFile.Read(File.ReadAllText(file)) is { } read ? read.Made : _looks?.Made ?? "";
 
     /// <summary>
     /// Makes a look the active one and writes its values: Faithful's, or Meitou's with the preset's own over them (Faithful keeps the preset to go
@@ -552,8 +562,9 @@ public sealed partial class MainWindow
     /// as the game reads it.
     /// </summary>
     bool IsFaithful(SettingsLooks l) => _game.GetBool(l.FaithfulKey)
-        ?? l.Faithful.Keys.Where(key => key.StartsWith("Meitou: ", StringComparison.Ordinal) && l.Meitou.TryGetValue(key, out float meitou)
-                && meitou >= 0.5f).All(key => _game.GetGraphics(key) is { } v && v < 0.5f);
+        ?? l.Faithful.Keys
+            .Where(key => key.StartsWith("Meitou: ", StringComparison.Ordinal) && l.Meitou.TryGetValue(key, out float meitou) && meitou >= 0.5f)
+            .All(key => _game.GetGraphics(key) is { } v && v < 0.5f);
 
     /// <summary>
     /// A Meitou look's values: Meitou's, with the preset's own over them.
@@ -596,8 +607,8 @@ public sealed partial class MainWindow
     Border PresetRow(SettingsPresets p)
     {
         string current = _game.GetString(p.Key) is { } saved && p.Names.Contains(saved) ? saved : _game.HasGraphics ? p.Custom : p.Default;
-        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = p.Names.Select(name => Tr(name)).ToList(),
-                SelectedIndex = p.Names.IndexOf(current) };
+        var names = p.Names.Select(name => Tr(name)).ToList();
+        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = names, SelectedIndex = p.Names.IndexOf(current) };
         box.SelectionChanged += (_, _) =>
         {
             if (box.Tag is not null || box.SelectedIndex < 0) return;
@@ -605,8 +616,10 @@ public sealed partial class MainWindow
             SaveGame();
         };
         _presetBox = box;
-        var detect = new Button { Content = _detecting ? "Detecting" : "Detect", Margin = new(6, 0, 0, 0), IsEnabled = !_detecting,
-                IsVisible = p.Detect is { Length: > 0 } };
+        var detect = new Button
+        {
+            Content = _detecting ? "Detecting" : "Detect", Margin = new(6, 0, 0, 0), IsEnabled = !_detecting, IsVisible = p.Detect is { Length: > 0 },
+        };
         ToolTip.SetTip(detect, "Choose the preset for this computer's graphics card, memory and processor.");
         detect.Click += async (_, _) => await DetectPresetAsync();
         var dock = new DockPanel();
@@ -632,8 +645,8 @@ public sealed partial class MainWindow
                 || Releases.FindGame(Releases.VersionDirectory(version)) is not { } exe)
             return false;
         _game = GameSettings.Load();
-        if ((Locked(schema)
-                ?? (_running is { HasExited: false } ? "The game is running: close it before detecting the preset." : null)) is { } locked)
+        string? locked = Locked(schema) ?? (_running is { HasExited: false } ? "The game is running: close it before detecting the preset." : null);
+        if (locked is not null)
         {
             Status(locked);
             return false;
@@ -671,7 +684,9 @@ public sealed partial class MainWindow
             {
                 File.Delete(file);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+            }
             if (GraphicsPage.IsVisible) ShowGraphics();
         }
         return done;
@@ -682,8 +697,10 @@ public sealed partial class MainWindow
     /// </summary>
     async Task RunProbeAsync(string exe, string flag, string file)
     {
-        var start = new ProcessStartInfo(exe) { WorkingDirectory = LauncherConfig.DataDirectory, UseShellExecute = false, CreateNoWindow = true,
-                ArgumentList = { flag, file } };
+        var start = new ProcessStartInfo(exe)
+        {
+            WorkingDirectory = LauncherConfig.DataDirectory, UseShellExecute = false, CreateNoWindow = true, ArgumentList = { flag, file },
+        };
         using var probe = Process.Start(start) ?? throw new InvalidOperationException("the game did not start");
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         try
@@ -742,8 +759,9 @@ public sealed partial class MainWindow
     /// A setting's value: saved, else the game's start value (a top-level one: the schema's default).
     /// </summary>
     float CurrentValue(SettingDescription s) =>
-        (s.Graphics ? _game.GetGraphics(s.Key) : s.Kind == SettingKind.Toggle ? _game.GetBool(s.Key) is { } on ? on ? 1 : 0 : null
-                : _game.GetNumber(s.Key))
+        (s.Graphics ? _game.GetGraphics(s.Key)
+            : s.Kind == SettingKind.Toggle ? _game.GetBool(s.Key) is { } on ? on ? 1 : 0 : null
+            : _game.GetNumber(s.Key))
         ?? (s.Graphics ? s.Shown : s.Default ?? s.Shown);
 
     /// <summary>
@@ -776,8 +794,11 @@ public sealed partial class MainWindow
     Border Frame(string text, string description, IReadOnlyList<SettingDescription> settings, Control control, int width, string? impact = null)
     {
         var name = new TextBlock { Classes = { "name" }, Text = text };
-        var reset = new TextBlock { Classes = { "reset" }, Text = Tr("Reset"), Margin = new(10, 0, 0, 2),
-                VerticalAlignment = VerticalAlignment.Bottom, Cursor = new Cursor(StandardCursorType.Hand) };
+        var reset = new TextBlock
+        {
+            Classes = { "reset" }, Text = Tr("Reset"), Margin = new(10, 0, 0, 2), VerticalAlignment = VerticalAlignment.Bottom,
+            Cursor = new Cursor(StandardCursorType.Hand),
+        };
         ToolTip.SetTip(reset, Tr("Back to the look's value"));
         void Mark()
         {
@@ -823,8 +844,7 @@ public sealed partial class MainWindow
     static TextBlock? ImpactText(string? impact)
     {
         if (impact is not { Length: > 0 }) return null;
-        var text = new TextBlock { Classes = { "desc" }, Text = Tr(impact), Margin = new(12, 0, 12, 0),
-                VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Classes = { "desc" }, Text = Tr(impact), Margin = new(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
         if (impact.StartsWith("High", StringComparison.Ordinal)
                 && Avalonia.Application.Current?.FindResource("BrassLight") is Avalonia.Media.IBrush brass)
             text.Foreground = brass;
@@ -911,8 +931,10 @@ public sealed partial class MainWindow
                 RefreshMarks();
             };
         }
-        var pair = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { halves[0],
-                halves[1] } };
+        var pair = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Children = { halves[0], halves[1] },
+        };
         return SettingFrame(s, pair, 260, Show);
     }
 
@@ -942,8 +964,8 @@ public sealed partial class MainWindow
     Border ModesRow(SettingDescription s)
     {
         var modes = s.Modes!;
-        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch,
-                ItemsSource = modes.Select(m => Tr(m.Name)).Append(Tr("Custom")).ToList() };
+        var names = modes.Select(m => Tr(m.Name)).Append(Tr("Custom")).ToList();
+        var box = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, ItemsSource = names };
         var custom = SliderRow(s with { Name = "Custom value", Description = "", Impact = null });
         custom.Margin = new(GutterWidth, 0, 0, 0);
         bool loading = false, customChosen = false;
@@ -1028,14 +1050,14 @@ public sealed partial class MainWindow
         // A value typed as the row shows it: the suffix may stay, the off text is the left end, a comma counts as a decimal point.
         float? Parse(string input)
         {
-            if (s.OffBelow is not null && (input.Equals(s.OffText, StringComparison.OrdinalIgnoreCase) || input.Equals(Tr(s.OffText),
-                    StringComparison.OrdinalIgnoreCase)))
+            if (s.OffBelow is not null
+                    && (input.Equals(s.OffText, StringComparison.OrdinalIgnoreCase) || input.Equals(Tr(s.OffText), StringComparison.OrdinalIgnoreCase)))
                 return s.Min;
             string suffix = s.Suffix.Trim();
             if (suffix.Length > 0 && input.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 input = input[..^suffix.Length].Trim();
-            return float.TryParse(input.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float n)
-                    && float.IsFinite(n) ? Snap(n / s.Scale) : null;
+            bool parsed = float.TryParse(input.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float n);
+            return parsed && float.IsFinite(n) ? Snap(n / s.Scale) : null;
         }
         void Commit()
         {

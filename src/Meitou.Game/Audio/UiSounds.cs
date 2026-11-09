@@ -10,12 +10,7 @@ namespace Meitou.Game.Audio;
 /// building without one posts nothing).
 /// </summary>
 public readonly record struct UiSoundEvent(
-    string Event,
-    string? Group = null,
-    string? Value = null,
-    bool State = false,
-    string? Item = null,
-    string? Building = null);
+    string Event, string? Group = null, string? Value = null, bool State = false, string? Item = null, string? Building = null);
 
 /// <summary>
 /// Plays the interface's sounds on the GUI object, 110 (<b>Verified</b>: every handler of the exe posts on it; <c>FUN_140257d00</c> and the handlers

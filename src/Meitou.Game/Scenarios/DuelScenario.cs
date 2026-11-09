@@ -39,9 +39,10 @@ sealed class DuelScenario(GameHost host)
     const int DuelOrderTick = 45;
 
     /// <summary>
-    /// Two Samurai of the same record are evenly matched: in the built-in duel the first one goes down after 165 s (28 hits, 61 blocks). A lap is the last
-    /// <see cref="DuelLeadTicks"/> (40 s) before that and <see cref="DuelHoldTicks"/> (4 s) after; the fight before the lap is run headless at each restart
-    /// (about 0.06 ms a tick). A duel with nobody down in <see cref="DuelMaxTicks"/> (5 min) loops its first <see cref="DuelOpenTicks"/> (60 s).
+    /// Two Samurai of the same record are evenly matched: in the built-in duel the first one goes down after 165 s (28 hits, 61 blocks). A lap is the
+    /// last <see cref="DuelLeadTicks"/> (40 s) before that and <see cref="DuelHoldTicks"/> (4 s) after; the fight before the lap is run headless at
+    /// each restart (about 0.06 ms a tick). A duel with nobody down in <see cref="DuelMaxTicks"/> (5 min) loops its first <see cref="DuelOpenTicks"/>
+    /// (60 s).
     /// </summary>
     const int DuelLeadTicks = 1200, DuelHoldTicks = 120, DuelMaxTicks = 9000, DuelOpenTicks = 1800;
 
@@ -109,7 +110,8 @@ sealed class DuelScenario(GameHost host)
     }
 
     /// <summary>
-    /// The Samurai's clothing is rolled from the record's lists, and many rolls have no helmet: the first two variants whose roll has one (else 1 and 2).
+    /// The Samurai's clothing is rolled from the record's lists, and many rolls have no helmet: the first two variants whose roll has one (else 1 and
+    /// 2).
     /// </summary>
     (int, int) HelmetedVariants()
     {
@@ -169,9 +171,7 @@ sealed class DuelScenario(GameHost host)
                 bool a = combat.StateOf(_duelA).Down, b = combat.StateOf(_duelB).Down;
                 if (world.Tick == DuelOpenTicks) openHash = world.StateHash();
                 if (down < 0 && (a || b))
-                {
                     (down, winner) = (world.Tick, a && b ? "both down" : a ? "the one that started at +Z wins" : "the one that started at -Z wins");
-                }
             }
 
             (_duelSkipTicks, _duelEndTick) = down < 0 ? (0, DuelOpenTicks) : (Math.Max(down - DuelLeadTicks, 0), down + DuelHoldTicks);
@@ -260,6 +260,9 @@ sealed class DuelScenario(GameHost host)
         DuelRestartRequested = false;
     }
 
+    /// <summary>
+    /// Prints whether a lap ended in the measured run's state, by its state hash.
+    /// </summary>
     void ReportLapEnd(ulong hash)
     {
         bool same = hash == _duelEndHash;

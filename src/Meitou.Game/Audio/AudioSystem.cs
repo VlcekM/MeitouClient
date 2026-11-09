@@ -10,33 +10,20 @@ namespace Meitou.Game.Audio;
 /// sends them as the <c>User_Volume_*</c> parameters × 100) and how often biome music starts (<see cref="MusicFrequency"/>, minutes); and Meitou's
 /// own <see cref="Voices"/>, the most sounds mixed at once, and <see cref="Range"/>, how far sounds carry (neither in <c>settings.cfg</c>).
 /// </summary>
-public sealed record AudioSettings(
-    float Music = 0.5f,
-    float Ambient = 0.5f,
-    float Footstep = 0.5f,
-    float Sfx = 0.5f,
-    float Ui = 0.5f,
-    float Vo = 0.5f,
-    float MusicFrequency = 5,
-    int Voices = AudioSettings.MeitouVoices,
-    float Range = AudioSettings.MeitouRange)
+public sealed record AudioSettings(float Music = 0.5f, float Ambient = 0.5f, float Footstep = 0.5f, float Sfx = 0.5f, float Ui = 0.5f, float Vo = 0.5f,
+    float MusicFrequency = 5, int Voices = AudioSettings.MeitouVoices, float Range = AudioSettings.MeitouRange)
 {
-    public const float MinFrequency = 1;
-    public const float MaxFrequency = 20;
+    public const float MinFrequency = 1, MaxFrequency = 20;
 
     /// <summary>
     /// The voice cap's range and Meitou's default (docs/audio.md "Voice cap"); <see cref="MaxVoices"/> means every sound is mixed.
     /// </summary>
-    public const int MinVoices = 16;
-    public const int MaxVoices = 256;
-    public const int MeitouVoices = 96;
+    public const int MinVoices = 16, MaxVoices = 256, MeitouVoices = 96;
 
     /// <summary>
     /// The hearing range's factor on every distance (docs/audio.md "Hearing range"): 1 is the original, Meitou's default carries twice as far.
     /// </summary>
-    public const float MinRange = 1;
-    public const float MaxRange = 4;
-    public const float MeitouRange = 2;
+    public const float MinRange = 1, MaxRange = 4, MeitouRange = 2;
 
     /// <summary>
     /// What <see cref="WwisePlayer.VoiceCap"/> takes: the cap, 0 at <see cref="MaxVoices"/> (no cap).
@@ -184,14 +171,7 @@ public sealed class AudioSystem : IDisposable
     /// <paramref name="hour"/> the game hour against <paramref name="sunrise"/> and <paramref name="sunset"/>, <paramref name="eyeAboveGround"/> the
     /// eye's height over the ground under it and <paramref name="realSeconds"/> the real time since the last call.
     /// </summary>
-    public void Update(
-        WeatherRegion? region,
-        WeatherState? weather,
-        double hour,
-        double sunrise,
-        double sunset,
-        float eyeAboveGround,
-        double realSeconds)
+    public void Update(WeatherRegion? region, WeatherState? weather, double hour, double sunrise, double sunset, float eyeAboveGround, double realSeconds)
     {
         Ambience.Update(new AmbienceInput
         {
