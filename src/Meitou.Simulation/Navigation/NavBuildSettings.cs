@@ -11,8 +11,8 @@ public sealed record NavBuildSettings
     public float CellSize { get; init; } = 2f;
 
     /// <summary>
-    /// Vertical cell size. Havok compares exact heights; cells round each surface up, so at 1 a 5.9 step could come out as the 5 cells of the climb (Y-House's
-    /// wall top joined its upper floor, zone 23.22). At 0.5 such a step is 11 or 12 cells against 10.
+    /// Vertical cell size. Havok compares exact heights; cells round each surface up, so at 1 a 5.9 step could come out as the 5 cells of the climb
+    /// (Y-House's wall top joined its upper floor, zone 23.22). At 0.5 such a step is 11 or 12 cells against 10.
     /// </summary>
     public float CellHeight { get; init; } = 0.5f;
 
@@ -39,13 +39,13 @@ public sealed record NavBuildSettings
     public float MaxSimplificationError { get; init; } = 1.3f;
 
     /// <summary>
-    /// Longest contour edge in cells (0: unlimited). Unlimited, polygons spanning a canyon floor and its slopes took heights 30..43 off the ground and walkers
-    /// floated on them (docs/game/pathfinding.md "Search cost").
+    /// Longest contour edge in cells (0: unlimited). Unlimited, polygons spanning a canyon floor and its slopes took heights 30..43 off the ground
+    /// and walkers floated on them (docs/game/pathfinding.md "Search cost").
     /// </summary>
     public int MaxEdgeLength { get; init; } = 24;
 
     /// <summary>
-    /// Watershed regions (chunky polygons) rather than monotone ones (strips; ZoneNavMeshBuilder.Partition).
+    /// Watershed regions (chunky polygons) rather than monotone ones (strips; NavTileBuilder.Partition).
     /// </summary>
     public bool Watershed { get; init; } = true;
 

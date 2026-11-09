@@ -16,6 +16,8 @@ namespace Meitou.Simulation.Carrying;
 // looting").
 public sealed partial class CarrySystem
 {
+    #region NPC looting
+
     /// <summary>
     /// How near a body must be for the finder (<b>Observed</b>: squared distance 10000, <c>FUN_14099ae10</c>).
     /// </summary>
@@ -30,6 +32,16 @@ public sealed partial class CarrySystem
     /// A looter whose hunger floor is below this takes only food (<b>Observed</b>, the start's slot 0x348 test).
     /// </summary>
     public const float FoodOnlyFloor = 2.8f;
+
+    /// <summary>
+    /// Seconds at the body before a law-enforcement looter confiscates (<b>Observed</b>, <c>Task_Loot_AI</c> update: the 0.8 s branch).
+    /// </summary>
+    public const float ConfiscateSeconds = 0.8f;
+
+    /// <summary>
+    /// The sections a looted weapon can be worn in.
+    /// </summary>
+    static readonly string[] WeaponSections = ["back", "hip"];
 
     /// <summary>
     /// Each tick (serial, slot order), every <see cref="CarrySettings.AutoEveryTicks"/> ticks per character on its slot's turn (slot mod the period,
@@ -234,11 +246,6 @@ public sealed partial class CarrySystem
     }
 
     /// <summary>
-    /// Seconds at the body before a law-enforcement looter confiscates (<b>Observed</b>, <c>Task_Loot_AI</c> update: the 0.8 s branch).
-    /// </summary>
-    public const float ConfiscateSeconds = 0.8f;
-
-    /// <summary>
     /// A law-enforcement looter's take (<c>Task_Loot_AI</c> update with the confiscate flag, <c>Inventory::getAllStolenItems(inventory, false)</c>;
     /// <b>Observed</b>): one unit of each item of the victim's own inventory (worn gear included, not what is inside its backpack) that is stolen for
     /// it, in list order, into the looter's inventory; the first that does not fit stays and ends the take. Returns the items moved.
@@ -328,8 +335,6 @@ public sealed partial class CarrySystem
     static bool WeaponSectionFree(CharacterCold looter) =>
         looter.Inventory is { } inv && WeaponSections.Any(s => !InventoryCommands.SectionClosed(looter, s) && !inv.Items.Any(i => i.Section == s));
 
-    static readonly string[] WeaponSections = ["back", "hip"];
-
     /// <summary>
     /// Moves <paramref name="items"/> of the body (its inventory or backpack) to the looter: its inventory (equipping where a slot is free), else its
     /// backpack; what fits nowhere stays.
@@ -369,4 +374,6 @@ public sealed partial class CarrySystem
     /// </summary>
     static bool WeaponEquipped(CharacterCold c) =>
         c.Inventory?.Items.Any(x => x.Type == FcsRecordType.Weapon && InventoryCommands.IsEquipmentSection(x.Section)) == true;
+
+    #endregion
 }

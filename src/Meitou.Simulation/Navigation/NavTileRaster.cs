@@ -3,15 +3,20 @@ using DotRecast.Recast;
 
 namespace Meitou.Simulation.Navigation;
 
-internal static partial class ZoneNavMeshBuilder
+/// <summary>
+/// Rasterizes a tile's triangles into its heightfield, the walkable and the cutting ones apart and merged column by column.
+/// </summary>
+internal static class NavTileRaster
 {
     /// <summary>
-    /// The tile's heightfield: the walkable and the cutting triangles are rasterized into two fields and merged column by column, a merged span walkable at
-    /// its walkable top when that reaches within the climb of its top. Recast's own merge (rcAddSpan) first raises a new span to the top of an existing one it
-    /// overlaps and then compares the tops, so a floor rasterized into a taller cutting span walks that span's top: the cells along a steep wall rising from a
-    /// floor to a walkable roof slope became a walkable stair (docs/game/pathfinding.md, "Own builder", rasterization).
+    /// The tile's heightfield: the walkable and the cutting triangles are rasterized into two fields and merged column by column, a merged span
+    /// walkable at its walkable top when that reaches within the climb of its top. Recast's own merge (rcAddSpan) first raises a new span to the top
+    /// of an existing one it overlaps and then compares the tops, so a floor rasterized into a taller cutting span walks that span's top: the cells
+    /// along a steep wall rising from a floor to a walkable roof slope became a walkable stair (docs/game/pathfinding.md, "Own builder",
+    /// rasterization).
     /// </summary>
-    static RcHeightfield Rasterize(RcContext ctx, float[] verts, int[] indices, int[] areas, List<int> tris, Func<RcHeightfield> field, int climb)
+    internal static RcHeightfield Rasterize(RcContext ctx, float[] verts, int[] indices, int[] areas, List<int> tris, Func<RcHeightfield> field,
+        int climb)
     {
         var walk = field();
         var cut = field();

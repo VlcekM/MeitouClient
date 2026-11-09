@@ -13,6 +13,8 @@ namespace Meitou.Simulation.Carrying;
 // looting").
 public sealed partial class CarrySystem
 {
+    #region Arming
+
     /// <summary>
     /// How near a weapon must be for <c>AI::findWeapon</c> (<b>Verified</b>: squared distance 10000 in each pass).
     /// </summary>
@@ -130,4 +132,6 @@ public sealed partial class CarrySystem
         }
         return (-1, dead >= 0 ? dead : down);
     }
+
+    #endregion
 }

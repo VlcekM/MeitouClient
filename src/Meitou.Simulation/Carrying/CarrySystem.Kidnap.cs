@@ -15,6 +15,8 @@ namespace Meitou.Simulation.Carrying;
 /// </summary>
 public sealed partial class CarrySystem
 {
+    #region Kidnapping
+
     /// <summary>
     /// The knock-out a kidnap gives a sleeper: lerp(2, 300, the kidnapper's assassination / 100) seconds (<b>Verified</b> literals).
     /// </summary>
@@ -123,4 +125,6 @@ public sealed partial class CarrySystem
         }
         return false;
     }
+
+    #endregion
 }
