@@ -37,7 +37,7 @@ sealed class ProductionWindows(PlayerInterface player)
 
     /// <summary>
     /// The storage window's layout pixels above its grid (caption and item heading) and in all around it, with the two-line Max Capacity text below
-    /// (measured on the original's window).
+    /// (measured on the original's window); the research bench uses the same frame, its SHOW RESEARCH button in the heading's strip.
     /// </summary>
     const float StorageAbove = 86, StorageChrome = 150;
 
@@ -145,7 +145,7 @@ sealed class ProductionWindows(PlayerInterface player)
             if (m?.Storage is { } grid)
             {
                 b.Positions["Root"] = new(0, 0, grid.Width * player.InventoryCell + 40 * player.InventoryScale,
-                    Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + 108 * player.InventoryScale));
+                    Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + StorageChrome * player.InventoryScale));
             }
 
             b.TemplateScale = player.InventoryScale;
@@ -293,6 +293,22 @@ sealed class ProductionWindows(PlayerInterface player)
         controls.Add(new($"{name}-ghost", "ImageBox", area, "", "", "", true, image, Vector4.Zero, Pickable: false, Clip: clip));
     }
 
+    /// <summary>
+    /// The bench's SHOW RESEARCH button in the strip above the grid, at the original's fixed height: the layout gives it a share of the window
+    /// (<c>position_real</c>) with <c>HCenter Top</c> alignment, so it keeps its size when the window grows to fit the grid (#434); scaled with the
+    /// window it covered the grid's first rows.
+    /// </summary>
+    void PlaceResearchButton(List<UiControl> controls)
+    {
+        int index = controls.FindIndex(c => c.Name == "ResearchButton");
+        var root = controls.FirstOrDefault(c => c.Type == "Window");
+        if (index < 0 || root is null) return;
+
+        float scale = player.InventoryScale;
+        var r = root.Bounds;
+        controls[index] = controls[index] with { Bounds = new(r.X + 18 * scale, r.Y + 50 * scale, Math.Max(0, r.Width - 40 * scale), 32 * scale) };
+    }
+
     internal void AddMachineContent(string id, List<UiControl> controls)
     {
         if (Machine(ShownMachine) is not { } m) return;
@@ -300,9 +316,8 @@ sealed class ProductionWindows(PlayerInterface player)
         if (id is "bench" or "storage")
         {
             if (m.Storage is not { } grid) return;
-            if (id == "storage")
-                player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
-            else player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height);
+            player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
+            if (id == "bench") PlaceResearchButton(controls);
             if (controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
 
             var area = slot.Bounds;
