@@ -2,7 +2,9 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game.Rendering.Frame;
 
-/// <summary>The viewer's own GLSL (GLSL 3.30 core): skinning, a directional light, optional normal and dual maps.</summary>
+/// <summary>
+/// The viewer's own GLSL (GLSL 3.30 core): skinning, a directional light, optional normal and dual maps.
+/// </summary>
 static class Shaders
 {
     public const int MaxBones = 128;

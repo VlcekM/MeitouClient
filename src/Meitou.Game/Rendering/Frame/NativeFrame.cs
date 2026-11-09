@@ -36,7 +36,9 @@ sealed unsafe class NativeFrame : IDisposable
     readonly (SampledTexture Texture, uint Index, bool Has)[] _entries = new (SampledTexture, uint, bool)[FrameConstants.Textures.Length];
     readonly SamplerInfo[] _standIns;
 
-    /// <summary>The shadow blocks of set 0: name, binding, std140 size.</summary>
+    /// <summary>
+    /// The shadow blocks of set 0: name, binding, std140 size.
+    /// </summary>
     static readonly (string Name, uint Binding, int Size)[] Blocks =
     [
         (ShadowShaders.ReceiverBlock, NativeShaders.ReceiverBinding, ShadowPass.ReceiverBytes),
@@ -45,10 +47,15 @@ sealed unsafe class NativeFrame : IDisposable
     ];
     const int BonesBytes = 128 * 64;
 
-    /// <summary>The empty bone block written once a frame (a new array each time was garbage).</summary>
+    /// <summary>
+    /// The empty bone block written once a frame (a new array each time was garbage).
+    /// </summary>
     static readonly byte[] NoBones = new byte[BonesBytes];
 
-    /// <summary>Storage buffers a consumer's own programs read at set 0, bindings 6 and up (<c>readonly buffer</c> in the shader), given to <see cref="Bind"/>.</summary>
+    /// <summary>
+    /// Storage buffers a consumer's own programs read at set 0, bindings 6 and up (<c>readonly buffer</c> in the shader), given to <see
+    /// cref="Bind"/>.
+    /// </summary>
     readonly int _extraStorage;
 
     public NativeFrame(IGpuContext ctx, int extraStorage = 0)
@@ -63,12 +70,18 @@ sealed unsafe class NativeFrame : IDisposable
         ]);
         SetLayouts = [SetLayout, GpuSetLayout.Bindless];
         _standIns = [.. FrameConstants.Textures.Select(t => FrameGlobals.Sampler2D(t.Name, cube: t.Kind == BindlessKind.Cube,
-            shadow: t.Kind is BindlessKind.Shadow2D or BindlessKind.ShadowArray, arrayed: t.Kind is BindlessKind.Texture2DArray or BindlessKind.ShadowArray))];
+            shadow: t.Kind is BindlessKind.Shadow2D or BindlessKind.ShadowArray,
+            arrayed: t.Kind is BindlessKind.Texture2DArray or BindlessKind.ShadowArray))];
     }
 
-    /// <summary>Set 0 of the native model (six uniform buffers; a push-descriptor set where the device has them).</summary>
+    /// <summary>
+    /// Set 0 of the native model (six uniform buffers; a push-descriptor set where the device has them).
+    /// </summary>
     public GpuSetLayout SetLayout { get; }
-    /// <summary>The native model's sets: the bindless table, then <see cref="SetLayout"/>.</summary>
+
+    /// <summary>
+    /// The native model's sets: the bindless table, then <see cref="SetLayout"/>.
+    /// </summary>
     public GpuSetLayout[] SetLayouts { get; }
 
     /// <summary>A native program with the model's layout, then the consumer's <paramref name="own"/> sets (set 2 and up), and the shared
@@ -76,7 +89,9 @@ sealed unsafe class NativeFrame : IDisposable
     public GpuProgram Program(string vertexGlsl, string fragmentGlsl, string name, params GpuSetLayout[] own) =>
         _ctx.Shaders.Native(vertexGlsl, fragmentGlsl, name, [.. SetLayouts, .. own], NativeShaders.PushBytes);
 
-    /// <summary>The frame constants as the last <see cref="Bind"/> wrote them (diagnostics and tests).</summary>
+    /// <summary>
+    /// The frame constants as the last <see cref="Bind"/> wrote them (diagnostics and tests).
+    /// </summary>
     public FrameConstants Constants => _constants;
 
     void Resolve()
@@ -106,7 +121,8 @@ sealed unsafe class NativeFrame : IDisposable
     public FrameBinding Prepare(in ViewConstants view, ReadOnlySpan<GpuBufferBinding> extra = default)
     {
         RenderJobs.AssertNotInJob();
-        if (extra.Length != _extraStorage) throw new ArgumentException($"this frame's set has {_extraStorage} extra storage bindings, {extra.Length} given", nameof(extra));
+        if (extra.Length != _extraStorage)
+            throw new ArgumentException($"this frame's set has {_extraStorage} extra storage bindings, {extra.Length} given", nameof(extra));
         var frame = _ctx.Frame;
         var g = _ctx.Globals;
         if (g.Version != _resolvedVersion) Resolve();
@@ -140,9 +156,12 @@ sealed unsafe class NativeFrame : IDisposable
         int count = 6 + _extraStorage;
         var result = new FrameBinding { Count = count };
         Span<GpuBinding> bindings = result.Bindings;
-        bindings[(int)NativeShaders.FrameBinding] = GpuBinding.Uniform(NativeShaders.FrameBinding, new GpuBufferBinding(_frameSlice.Handle, _frameSlice.Offset, (ulong)sizeof(FrameConstants)));
-        bindings[(int)NativeShaders.ViewBinding] = GpuBinding.Uniform(NativeShaders.ViewBinding, new GpuBufferBinding(viewSlice.Handle, viewSlice.Offset, (ulong)sizeof(ViewConstants)));
-        bindings[(int)NativeShaders.BonesBinding] = GpuBinding.Uniform(NativeShaders.BonesBinding, new GpuBufferBinding(_bones.Handle, _bones.Offset, BonesBytes));
+        var frameBuffer = new GpuBufferBinding(_frameSlice.Handle, _frameSlice.Offset, (ulong)sizeof(FrameConstants));
+        var viewBuffer = new GpuBufferBinding(viewSlice.Handle, viewSlice.Offset, (ulong)sizeof(ViewConstants));
+        var bonesBuffer = new GpuBufferBinding(_bones.Handle, _bones.Offset, BonesBytes);
+        bindings[(int)NativeShaders.FrameBinding] = GpuBinding.Uniform(NativeShaders.FrameBinding, frameBuffer);
+        bindings[(int)NativeShaders.ViewBinding] = GpuBinding.Uniform(NativeShaders.ViewBinding, viewBuffer);
+        bindings[(int)NativeShaders.BonesBinding] = GpuBinding.Uniform(NativeShaders.BonesBinding, bonesBuffer);
         for (int i = 0; i < Blocks.Length; i++)
         {
             var (name, binding, size) = Blocks[i];
@@ -172,7 +191,9 @@ sealed unsafe class NativeFrame : IDisposable
         cmd.BindProgramResources(program, NativeShaders.FrameSet, new ReadOnlySpan<GpuBinding>(&copy, count));
     }
 
-    /// <summary>A frame texture's bindless index: the same while its view and sampler are, a new one (the old freed) after a change.</summary>
+    /// <summary>
+    /// A frame texture's bindless index: the same while its view and sampler are, a new one (the old freed) after a change.
+    /// </summary>
     uint Entry(int i, BindlessKind kind, in SampledTexture t)
     {
         ref var e = ref _entries[i];
@@ -198,7 +219,10 @@ unsafe struct FrameBinding
     public const int MaxBindings = 10;
     [System.Runtime.CompilerServices.InlineArray(MaxBindings)]
     public struct BindingArray { GpuBinding _first; }
-    /// <summary>Set 0's bindings: the uniform buffers 0 to 5 and the storage buffers after them.</summary>
+
+    /// <summary>
+    /// Set 0's bindings: the uniform buffers 0 to 5 and the storage buffers after them.
+    /// </summary>
     public BindingArray Bindings;
     public int Count;
 }

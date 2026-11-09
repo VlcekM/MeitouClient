@@ -17,17 +17,29 @@ namespace Meitou.Game.Rendering.Gi;
 /// columns, each <see cref="Layers"/> probes high, standing on the terrain. Every frame each probe traces <see cref="Rays"/> rays into the
 /// <see cref="GiScene"/> and blends them into its tiles of an octahedral irradiance atlas and distance atlas. The world shaders' lighting
 /// (<c>kenshiLight</c>) takes its ambient from them instead of the sky's flat irradiance while <see cref="Enabled"/>. The grids scroll in whole
-/// cells: a probe's tile is its world column modulo the grid (toroidal), so nothing is copied, and a probe that moved starts over. Render thread only.
+/// cells: a probe's tile is its world column modulo the grid (toroidal), so nothing is copied, and a probe that moved starts over. Render thread
+/// only.
 /// </summary>
 internal sealed unsafe class GiProbes : IDisposable
 {
+    #region Constants and state
+
     public const int Columns = 32, Layers = 8, IrradianceTexels = 8, DistanceTexels = 16, Cascades = 2;
-    /// <summary>Rays per probe by default (32 or 64: the trace's workgroup size).</summary>
+
+    /// <summary>
+    /// Rays per probe by default (32 or 64: the trace's workgroup size).
+    /// </summary>
     public const int DefaultRays = 32;
-    /// <summary>The most rays per probe (the ray buffer's stride).</summary>
+
+    /// <summary>
+    /// The most rays per probe (the ray buffer's stride).
+    /// </summary>
     public const int MaxRays = 64;
     public const int ProbesPerCascade = Columns * Columns * Layers, Probes = ProbesPerCascade * Cascades;
-    /// <summary>Per cascade: the spacing across, the spacing up, the rays' length.</summary>
+
+    /// <summary>
+    /// Per cascade: the spacing across, the spacing up, the rays' length.
+    /// </summary>
     static readonly (float Spacing, float SpacingY, float RayLength)[] Grid = [(128, 96, 4000), (512, 384, 16000)];
     bool _interiorGrid;
     int _interiorLevel;
@@ -37,18 +49,23 @@ internal sealed unsafe class GiProbes : IDisposable
     readonly GpuContext _ctx;
     readonly GpuProgram _invalidateProgram;
     readonly GpuComputePipeline _invalidatePipeline;
-    // The trace and blend programs by the rays per probe (the workgroup size): the default, and the other one once the bench's gi-rays switch asks for it.
+    // The trace and blend programs by the rays per probe (the workgroup size): the default, and the other one once the bench's gi-rays switch asks
+    // for it.
     readonly Dictionary<int, (GpuProgram Trace, GpuProgram Blend, GpuComputePipeline TracePipeline, GpuComputePipeline BlendPipeline)> _variants = [];
     readonly GpuTexture _irradiance, _distance;
     readonly GpuTexture[] _bases;
     readonly DeviceBuffer _rays, _state;
     // Per frame slot: the probes this frame traces and blends, written by the CPU (GiFogHide): the probe index, bit 31 a hidden probe's slow update.
     readonly BufferAllocation[] _lists;
-    readonly byte[] _hiddenLayers = new byte[Cascades * Columns * Columns];   // per tile (cascade, toroidal row, toroidal column): the layers the fog hides
+    // per tile (cascade, toroidal row, toroidal column): the layers the fog hides
+    readonly byte[] _hiddenLayers = new byte[Cascades * Columns * Columns];
     (object? Block, float Radius, float Weather) _hiddenState;
     Vector3 _hiddenEye;
     bool _hiddenValid;
-    /// <summary>How far the eye may move before the hidden layers are worked out again (the reach boxes are widened by twice that).</summary>
+
+    /// <summary>
+    /// How far the eye may move before the hidden layers are worked out again (the reach boxes are widened by twice that).
+    /// </summary>
     const float HiddenSlack = 96;
     readonly GpuSampler _linear, _nearest;
     readonly Vector4[] _grid = new Vector4[Cascades * 2];
@@ -60,64 +77,125 @@ internal sealed unsafe class GiProbes : IDisposable
     int _slot;
     bool _updated;
 
-    /// <summary>Whether the world shaders take their ambient from the probes (the <c>gi</c> switch).</summary>
+    #endregion
+
+    #region Settings
+
+    /// <summary>
+    /// Whether the world shaders take their ambient from the probes (the <c>gi</c> switch).
+    /// </summary>
     public bool Enabled { get; set; } = true;
-    /// <summary>How much of the last value a probe keeps each frame (0.97: about 30 frames to settle).</summary>
+
+    /// <summary>
+    /// How much of the last value a probe keeps each frame (0.97: about 30 frames to settle).
+    /// </summary>
     public float Hysteresis { get; set; } = 0.97f;
-    /// <summary>The objects' albedo at a bounce (their textures are not read yet).</summary>
+
+    /// <summary>
+    /// The objects' albedo at a bounce (their textures are not read yet).
+    /// </summary>
     public Vector3 ObjectAlbedo { get; set; } = new(0.35f, 0.32f, 0.28f);
-    /// <summary>The probes are updated in this many interleaved shares, one share a frame (each probe every Phases-th frame; 1, 2, 4 or 8).</summary>
+
+    /// <summary>
+    /// The probes are updated in this many interleaved shares, one share a frame (each probe every Phases-th frame; 1, 2, 4 or 8).
+    /// </summary>
     public int Phases { get; set; } = 4;
-    /// <summary>Rays each probe traces per update (32 or 64; the bench's gi-rays switch). The hysteresis is scaled with it so that the noise stays the same (<see cref="UpdateHysteresis"/>).</summary>
+
+    /// <summary>
+    /// Rays each probe traces per update (32 or 64; the bench's gi-rays switch). The hysteresis is scaled with it so that the noise stays the same
+    /// (<see cref="UpdateHysteresis"/>).
+    /// </summary>
     public int Rays { get; set; } = DefaultRays;
-    /// <summary>The probes of the far cascade are traced and blended on one of every this many of their rounds, with the hysteresis of that many updates in one (1: every round; the bench's gi-far switch).</summary>
+
+    /// <summary>
+    /// The probes of the far cascade are traced and blended on one of every this many of their rounds, with the hysteresis of that many updates in
+    /// one (1: every round; the bench's gi-far switch).
+    /// </summary>
     public int FarPeriod { get; set; } = 2;
     public long Updates { get; private set; }
 
-    /// <summary>How much the probes replace the sky's light (1: fully, 0: not at all; <c>--gi-strength</c>).</summary>
+    /// <summary>
+    /// How much the probes replace the sky's light (1: fully, 0: not at all; <c>--gi-strength</c>).
+    /// </summary>
     public float Strength { get; set; } = 1;
 
-    /// <summary>Indoor surface indirect-light gain; applied once at display, without amplifying probe feedback.</summary>
+    /// <summary>
+    /// Indoor surface indirect-light gain; applied once at display, without amplifying probe feedback.
+    /// </summary>
     public float InteriorGain { get; set; } = 4;
 
-    /// <summary>False: indoor surfaces keep the original ambient while outdoor surfaces still use GI.</summary>
+    /// <summary>
+    /// False: indoor surfaces keep the original ambient while outdoor surfaces still use GI.
+    /// </summary>
     public bool InteriorEnabled { get; set; } = true;
 
-    /// <summary>Render globals: x on/filled, y strength, z resolve, w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.</summary>
-    Vector4 Params => new(Enabled && Active && Shade && !InReflection && _updated ? 1 : 0, Strength, Resolve ? 1 : 0, InteriorEnabled ? MathF.Max(1, InteriorGain) : 0);
-    /// <summary>True: the lit fragments write their albedo and the post pass adds the probes' light (<c>--gi-resolve</c>, docs/render-gi.md "Resolve").</summary>
+    /// <summary>
+    /// Render globals: x on/filled, y strength, z resolve, w indoor gain (0 bypasses indoor GI). The compute block carries hysteresis.
+    /// </summary>
+    Vector4 Params => new(Enabled && Active && Shade && !InReflection && _updated ? 1 : 0, Strength, Resolve ? 1 : 0, InteriorEnabled ? MathF.Max(1,
+            InteriorGain) : 0);
+
+    /// <summary>
+    /// True: the lit fragments write their albedo and the post pass adds the probes' light (<c>--gi-resolve</c>, docs/render-gi.md "Resolve").
+    /// </summary>
     public bool Resolve { get; set; }
-    /// <summary>True while the water reflection draws: the mirrored scene keeps the flat ambient (the frame block is re-read per segment).</summary>
+
+    /// <summary>
+    /// True while the water reflection draws: the mirrored scene keeps the flat ambient (the frame block is re-read per segment).
+    /// </summary>
     public bool InReflection { get; set; }
-    /// <summary>True: the water reflection reads the probes too (off by default; the bench's gi-reflection switch).</summary>
+
+    /// <summary>
+    /// True: the water reflection reads the probes too (off by default; the bench's gi-reflection switch).
+    /// </summary>
     public bool Reflected { get; set; }
+
     /// <summary>
     /// A probe with no surface within reach of its cell (no pixel and no bounce weights it) sleeps: it is traced and blended only every
     /// <c>SleepPeriod</c>-th of its updates, to find out whether something came near (0: never sleeps; the bench's gi-sleep switch).
     /// </summary>
     public int SleepPeriod { get; set; } = 8;
+
     /// <summary>
-    /// A probe that no surface the fog leaves visible can read (<see cref="GiFogHide"/>) is traced and blended only every <c>HiddenPeriod</c>-th of its
+    /// A probe that no surface the fog leaves visible can read (<see cref="GiFogHide"/>) is traced and blended only every <c>HiddenPeriod</c>-th of
+    /// its
     /// updates, with the hysteresis of that many updates in one (0: every probe at its normal rate; the bench's gi-fog switch).
     /// </summary>
     public int HiddenPeriod { get; set; } = 16;
-    /// <summary>Probes this frame's list holds, and those the fog hides (all of them, not only the share of this frame) at the last list.</summary>
+
+    /// <summary>
+    /// Probes this frame's list holds, and those the fog hides (all of them, not only the share of this frame) at the last list.
+    /// </summary>
     public int Listed { get; private set; }
     public int[] Hidden { get; } = new int[Cascades];
-    /// <summary>How many times the hidden layers were worked out (statistics).</summary>
+
+    /// <summary>
+    /// How many times the hidden layers were worked out (statistics).
+    /// </summary>
     public int Solves { get; private set; }
     public double SolveMs { get; private set; }
-    /// <summary>False: the probes are updated but the world's shading does not read them (the bench's gi-shade switch, the reads' cost).</summary>
+
+    /// <summary>
+    /// False: the probes are updated but the world's shading does not read them (the bench's gi-shade switch, the reads' cost).
+    /// </summary>
     public bool Shade { get; set; } = true;
-    /// <summary>False while the frame does not update the probes (the bench's gi-scene switch): the shaders then do not read them.</summary>
+
+    /// <summary>
+    /// False while the frame does not update the probes (the bench's gi-scene switch): the shaders then do not read them.
+    /// </summary>
     public bool Active { get; set; } = true;
+
+    #endregion
+
+    #region Construction
 
     public GiProbes(GpuContext ctx)
     {
         this._ctx = ctx;
         _invalidateProgram = ctx.Shaders.Compute(GiShaders.ProbeInvalidate, "gi probe invalidate",
         [
-            (0, DescriptorType.StorageBuffer), (1, DescriptorType.UniformBuffer), (2, DescriptorType.StorageImage), (3, DescriptorType.CombinedImageSampler),
+            (0, DescriptorType.StorageBuffer), (1, DescriptorType.UniformBuffer), (2, DescriptorType.StorageImage), (3,
+                    DescriptorType.CombinedImageSampler),
         ]);
         _invalidatePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_invalidateProgram, "gi probe invalidate"));
         Variant(Rays);
@@ -129,7 +207,8 @@ internal sealed unsafe class GiProbes : IDisposable
         // One per frame slot: the CPU writes the base heights of the frame being recorded while the one before may still read its own.
         _bases = new GpuTexture[ctx.Device.Frames.Count];
         for (int i = 0; i < _bases.Length; i++)
-            _bases[i] = ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, Columns, Columns * Cascades, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "gi probe bases"));
+            _bases[i] = ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, Columns, Columns * Cascades,
+                    Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "gi probe bases"));
         _rays = DeviceBuffer.Create(ctx, (ulong)Probes * MaxRays * 16, BufferUse.Storage, "gi probe rays");
         _state = DeviceBuffer.Create(ctx, (ulong)Probes * 16, BufferUse.Storage | BufferUse.TransferDst, "gi probe state");
         _lists = new BufferAllocation[ctx.Device.Frames.Count];
@@ -143,9 +222,11 @@ internal sealed unsafe class GiProbes : IDisposable
         ctx.Device.Vk.CmdClearColorImage(cmd, ctx.Device.NativeImage(_irradiance), ImageLayout.General, &clear, 1, &range);
         ctx.Device.Vk.CmdClearColorImage(cmd, ctx.Device.NativeImage(_distance), ImageLayout.General, &clear, 1, &range);
         ctx.Device.EndImmediate(cmd);
-        _linear = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+        _linear = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
+                TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
-        _nearest = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+        _nearest = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+                TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
         var g = ctx.Globals;
@@ -156,9 +237,15 @@ internal sealed unsafe class GiProbes : IDisposable
         g.Publish("uGiBase", () => new SampledTexture(_nearest, _bases[_slot].View()));
     }
 
+    #endregion
+
+    #region Probe lists
+
     /// <summary>
-    /// This frame's share of the probes (every <paramref name="phases"/>-th from <paramref name="phase"/>) into the slot's list. A probe the fog hides
-    /// (<see cref="GiFogHide"/>) is listed only on every <see cref="HiddenPeriod"/>-th of its rounds, with <see cref="GiFogHide.SlowBit"/> set (the blend then uses
+    /// This frame's share of the probes (every <paramref name="phases"/>-th from <paramref name="phase"/>) into the slot's list. A probe the fog
+    /// hides
+    /// (<see cref="GiFogHide"/>) is listed only on every <see cref="HiddenPeriod"/>-th of its rounds, with <see cref="GiFogHide.SlowBit"/> set (the
+    /// blend then uses
     /// the hysteresis of that many updates).
     /// </summary>
     void BuildList(int phases, int phase, FogVolumes? fog, Vector3 eye, bool scrolled)
@@ -167,11 +254,15 @@ internal sealed unsafe class GiProbes : IDisposable
         if (hide)
         {
             var now = fog!.CullState;
-            // The cached answer holds while the eye has moved less than HiddenSlack and the hide distances have grown by no more than the margin left of
-            // the boxes' widening (twice the slack, less the move): the nearest point of a hidden box was at least cached + widening from the old eye.
+            // The cached answer holds while the eye has moved less than HiddenSlack and the hide distances have grown by no more than the margin left
+            // of
+            // the boxes' widening (twice the slack, less the move): the nearest point of a hidden box was at least cached + widening from the old
+            // eye.
             float moved = Vector3.Distance(eye, _hiddenEye), margin = 2 * HiddenSlack - moved;
-            static bool Holds(float now, float cached, float margin) => now == 0 ? cached == 0 : cached > 0 && now <= cached + margin && now >= cached - 100;
-            bool same = _hiddenValid && !scrolled && now.Block == _hiddenState.Block && moved <= HiddenSlack && Holds(now.Radius, _hiddenState.Radius, margin) && Holds(now.Weather, _hiddenState.Weather, margin);
+            static bool Holds(float now, float cached, float margin) =>
+                now == 0 ? cached == 0 : cached > 0 && now <= cached + margin && now >= cached - 100;
+            bool same = _hiddenValid && !scrolled && now.Block == _hiddenState.Block && moved <= HiddenSlack && Holds(now.Radius, _hiddenState.Radius,
+                    margin) && Holds(now.Weather, _hiddenState.Weather, margin);
             if (!same)
             {
                 long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -188,10 +279,13 @@ internal sealed unsafe class GiProbes : IDisposable
                         for (int i = 0; i < Columns; i++)
                         {
                             int column = (c * Columns + (offZ + k) % Columns) * Columns + (offX + i) % Columns;
-                            // Nearer than the nearest hide distance (in x, z alone, a lower bound of the box's distance): nothing there can be hidden.
-                            float dx = MathF.Max(MathF.Abs(x0 + i * s - eye.X) - across, 0), dz = MathF.Max(MathF.Abs(z0 + k * s - eye.Z) - across, 0);
+                            // Nearer than the nearest hide distance (in x, z alone, a lower bound of the box's distance): nothing there can be
+                            // hidden.
+                            float dx = MathF.Max(MathF.Abs(x0 + i * s - eye.X) - across, 0), dz = MathF.Max(MathF.Abs(z0 + k * s - eye.Z) - across,
+                                    0);
                             if (dx * dx + dz * dz < nearest * nearest) { _hiddenLayers[column] = 0; continue; }
-                            int layers = GiFogHide.HiddenLayers(fog.Covers, x0 + i * s, z0 + k * s, _baseHeights[column], s, sy, Layers, fog.CullFloor, 2 * HiddenSlack);
+                            int layers = GiFogHide.HiddenLayers(fog.Covers, x0 + i * s, z0 + k * s, _baseHeights[column], s, sy, Layers,
+                                    fog.CullFloor, 2 * HiddenSlack);
                             _hiddenLayers[column] = (byte)layers;
                             Hidden[c] += layers;
                         }
@@ -204,16 +298,20 @@ internal sealed unsafe class GiProbes : IDisposable
         }
         else _hiddenValid = false;
         var list = new Span<uint>((void*)_lists[_slot].Mapped, Probes);
-        Listed = GiFogHide.List(list, phases, phase, (uint)(Updates / phases), hide ? HiddenPeriod : 0, FarPeriod, _hiddenLayers, [_grid[1].X, _grid[1].Y, _grid[3].X, _grid[3].Y]);
+        Listed = GiFogHide.List(list, phases, phase, (uint)(Updates / phases), hide ? HiddenPeriod : 0, FarPeriod, _hiddenLayers, [_grid[1].X,
+                _grid[1].Y, _grid[3].X, _grid[3].Y]);
     }
 
-    /// <summary>The trace and blend for <paramref name="rays"/> rays a probe (the workgroup size), made on first use.</summary>
+    /// <summary>
+    /// The trace and blend for <paramref name="rays"/> rays a probe (the workgroup size), made on first use.
+    /// </summary>
     (GpuProgram Trace, GpuProgram Blend, GpuComputePipeline TracePipeline, GpuComputePipeline BlendPipeline) Variant(int rays)
     {
         if (_variants.TryGetValue(rays, out var made)) return made;
         var trace = _ctx.Shaders.Compute(GiShaders.ProbeTrace(rays), "gi probe trace " + rays,
         [
-            (0, DescriptorType.AccelerationStructureKhr), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer), (3, DescriptorType.UniformBuffer),
+            (0, DescriptorType.AccelerationStructureKhr), (1, DescriptorType.StorageBuffer), (2, DescriptorType.StorageBuffer), (3,
+                    DescriptorType.UniformBuffer),
             (4, DescriptorType.CombinedImageSampler), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.CombinedImageSampler),
             (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.CombinedImageSampler),
             (10, DescriptorType.CombinedImageSampler), (11, DescriptorType.CombinedImageSampler), (12, DescriptorType.CombinedImageSampler),
@@ -222,14 +320,18 @@ internal sealed unsafe class GiProbes : IDisposable
         var blend = _ctx.Shaders.Compute(GiShaders.ProbeBlend(rays), "gi probe blend " + rays,
         [
             (0, DescriptorType.StorageBuffer), (1, DescriptorType.StorageBuffer), (2, DescriptorType.UniformBuffer),
-            (3, DescriptorType.StorageImage), (4, DescriptorType.StorageImage), (5, DescriptorType.CombinedImageSampler), (6, DescriptorType.StorageBuffer),
+            (3, DescriptorType.StorageImage), (4, DescriptorType.StorageImage), (5, DescriptorType.CombinedImageSampler), (6,
+                    DescriptorType.StorageBuffer),
         ]);
-        return _variants[rays] = (trace, blend, _ctx.Pipelines.Get(new ComputePipelineDesc(trace, "gi probe trace " + rays)), _ctx.Pipelines.Get(new ComputePipelineDesc(blend, "gi probe blend " + rays)));
+        return _variants[rays] = (trace, blend, _ctx.Pipelines.Get(new ComputePipelineDesc(trace, "gi probe trace " + rays)),
+                _ctx.Pipelines.Get(new ComputePipelineDesc(blend, "gi probe blend " + rays)));
     }
 
     /// <summary>
-    /// The hysteresis of one update. <see cref="Hysteresis"/> is the per-frame figure for 64 rays; with fewer rays the same noise needs a longer memory: an exponential
-    /// average of independent samples has a variance of (1 - h) / (1 + h) of one sample's, and a sample of n rays has the variance of 64 / n times that of 64 rays, so
+    /// The hysteresis of one update. <see cref="Hysteresis"/> is the per-frame figure for 64 rays; with fewer rays the same noise needs a longer
+    /// memory: an exponential
+    /// average of independent samples has a variance of (1 - h) / (1 + h) of one sample's, and a sample of n rays has the variance of 64 / n times
+    /// that of 64 rays, so
     /// (1 - h) / (1 + h) is scaled by n / 64.
     /// </summary>
     float UpdateHysteresis(int phases)
@@ -249,11 +351,16 @@ internal sealed unsafe class GiProbes : IDisposable
         public Vector4 Origin, SunLight, LightDir, Maps, Albedo, RayLength, LightGrid, Extra;
     }
 
+    #endregion
+
+    #region Update
+
     /// <summary>
     /// Places the grids around <paramref name="eye"/> (bases from <paramref name="heights"/>) and records this frame's probe trace and blend against
     /// <paramref name="scene"/>'s structure, after its <see cref="GiScene.Update"/>.
     /// </summary>
-    public void Update(GiScene scene, Vector3 eye, HeightSnapshot heights, WorldLamps? lamps = null, FogVolumes? fog = null, Vector3? interiorFocus = null)
+    public void Update(GiScene scene, Vector3 eye, HeightSnapshot heights, WorldLamps? lamps = null, FogVolumes? fog = null,
+            Vector3? interiorFocus = null)
     {
         if (scene.Top is null) return;
         _slot = _ctx.Frame.Slot;
@@ -274,7 +381,8 @@ internal sealed unsafe class GiProbes : IDisposable
             // The bases only change when the grid scrolls or the terrain's fine window is swapped.
             bool sameHeights = ReferenceEquals(_placedHeights, heights.Fine) && (c != 0 || !layoutChanged);
             if (_placed[c] == (ox, oz) && sameHeights) continue;
-            // A column that stays in the window keeps its tile (toroidal) and its height (the snapshot is immutable): only the columns that scrolled in are sampled.
+            // A column that stays in the window keeps its tile (toroidal) and its height (the snapshot is immutable): only the columns that scrolled
+            // in are sampled.
             var (oldX, oldZ) = _placed[c];
             bool keep = sameHeights && _basesPlaced[c];
             _placed[c] = (ox, oz);
@@ -325,7 +433,14 @@ internal sealed unsafe class GiProbes : IDisposable
         cmd.BeginLabel("gi probes");
         cmd.Barrier(BarrierBatch.Full);
         // With the pass meter the full barrier that starts the probe passes is timed apart (it waits for the top level's build).
-        if (StageClock.OnClose is not null) { cmd.EndLabel(); _ctx.EndNative(cmd); StageClock.Sub("gi probes barrier"); cmd = (CommandList)_ctx.BeginNative("gi probes"); cmd.BeginLabel("gi probes"); }
+        if (StageClock.OnClose is not null)
+        {
+            cmd.EndLabel();
+            _ctx.EndNative(cmd);
+            StageClock.Sub("gi probes barrier");
+            cmd = (CommandList)_ctx.BeginNative("gi probes");
+            cmd.BeginLabel("gi probes");
+        }
         if (moved)
         {
             // The tiles whose probe moved hold another place's light until their update: hide them (GiShaders.ProbeInvalidate).
@@ -337,8 +452,16 @@ internal sealed unsafe class GiProbes : IDisposable
             var writes = stackalloc WriteDescriptorSet[4];
             writes[0] = Buffer(0, DescriptorType.StorageBuffer, &stateInfo);
             writes[1] = Buffer(1, DescriptorType.UniformBuffer, &uniform);
-            writes[2] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 2, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &images[0] };
-            writes[3] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 3, DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[1] };
+            writes[2] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet, DstBinding = 2, DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageImage, PImageInfo = &images[0],
+            };
+            writes[3] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet, DstBinding = 3, DescriptorCount = 1,
+                DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[1],
+            };
             cmd.BindPipeline(_invalidatePipeline);
             cmd.PushDescriptors(_invalidateProgram, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 4), GpuBindPoint.Compute);
             cmd.Dispatch((uint)(Probes / 64));
@@ -346,35 +469,55 @@ internal sealed unsafe class GiProbes : IDisposable
         }
         {
             var top = scene.Top.Handle;
-            var asWrite = new WriteDescriptorSetAccelerationStructureKHR { SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1, PAccelerationStructures = &top };
+            var asWrite = new WriteDescriptorSetAccelerationStructureKHR
+            {
+                SType = StructureType.WriteDescriptorSetAccelerationStructureKhr, AccelerationStructureCount = 1,
+                PAccelerationStructures = &top,
+            };
             var records = new DescriptorBufferInfo(_ctx.Device.BufferAt(scene.Records.Buffer.Index), scene.Records.Offset, scene.Records.Size);
             var rayInfo = new DescriptorBufferInfo(_ctx.Device.BufferAt(_rays.Handle.Index), 0, _rays.Size);
             var uniform = new DescriptorBufferInfo(_ctx.Device.BufferAt(block.Handle.Index), block.Offset, (ulong)sizeof(Constants));
             var images = stackalloc DescriptorImageInfo[9];
-            images[0] = new DescriptorImageInfo(_ctx.Device.SamplerAt(_linear.Index), _ctx.Device.ViewAt(_irradiance.View().Index), ImageLayout.General);
-            images[1] = new DescriptorImageInfo(_ctx.Device.SamplerAt(_linear.Index), _ctx.Device.ViewAt(_distance.View().Index), ImageLayout.General);
+            images[0] = new DescriptorImageInfo(_ctx.Device.SamplerAt(_linear.Index), _ctx.Device.ViewAt(_irradiance.View().Index),
+                    ImageLayout.General);
+            images[1] = new DescriptorImageInfo(_ctx.Device.SamplerAt(_linear.Index), _ctx.Device.ViewAt(_distance.View().Index),
+                    ImageLayout.General);
             images[2] = new DescriptorImageInfo(_ctx.Device.SamplerAt(_nearest.Index), _ctx.Device.ViewAt(bases.View().Index), ImageLayout.General);
             images[3] = Image(g, "uAtmoIrradiance", cube: true);
             images[4] = Image(g, "uAtmoAmbientMap", cube: false);
-            images[5] = ground.IsNull ? images[2] : new DescriptorImageInfo(_ctx.Device.SamplerAt(ground.Sampler.Index), _ctx.Device.ViewAt(ground.View.Index), ImageLayout.General);
+            images[5] = ground.IsNull ? images[2] : new DescriptorImageInfo(_ctx.Device.SamplerAt(ground.Sampler.Index),
+                    _ctx.Device.ViewAt(ground.View.Index), ImageLayout.General);
             // The lamps' textures (a stand-in while there are none: the shader reads them only when LightGrid.w is set).
             if (lamps is not null)
             {
                 var (lampCells, lampIndex, lampData) = lamps.Current;
-                images[6] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampCells.View().Index), ImageLayout.General);
-                images[7] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampIndex.View().Index), ImageLayout.General);
-                images[8] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampData.View().Index), ImageLayout.General);
+                images[6] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampCells.View().Index),
+                        ImageLayout.General);
+                images[7] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampIndex.View().Index),
+                        ImageLayout.General);
+                images[8] = new DescriptorImageInfo(_ctx.Device.SamplerAt(lamps.NearestSampler.Index), _ctx.Device.ViewAt(lampData.View().Index),
+                        ImageLayout.General);
             }
             else images[6] = images[7] = images[8] = images[2];
             var stateInfo = new DescriptorBufferInfo(_ctx.Device.BufferAt(_state.Handle.Index), 0, _state.Size);
             var listInfo = new DescriptorBufferInfo(_lists[_slot].Buffer, 0, (ulong)Math.Max(listed, 1) * 4);
             var writes = stackalloc WriteDescriptorSet[15];
-            writes[0] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1, DescriptorType = DescriptorType.AccelerationStructureKhr };
+            writes[0] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet, PNext = &asWrite, DstBinding = 0, DescriptorCount = 1,
+                DescriptorType = DescriptorType.AccelerationStructureKhr,
+            };
             writes[1] = Buffer(1, DescriptorType.StorageBuffer, &records);
             writes[2] = Buffer(2, DescriptorType.StorageBuffer, &rayInfo);
             writes[3] = Buffer(3, DescriptorType.UniformBuffer, &uniform);
             for (int i = 0; i < 9; i++)
-                writes[4 + i] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(4 + i), DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[i] };
+            {
+                writes[4 + i] = new WriteDescriptorSet
+                {
+                    SType = StructureType.WriteDescriptorSet, DstBinding = (uint)(4 + i), DescriptorCount = 1,
+                    DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[i],
+                };
+            }
             writes[13] = Buffer(13, DescriptorType.StorageBuffer, &stateInfo);
             writes[14] = Buffer(14, DescriptorType.StorageBuffer, &listInfo);
             cmd.BindPipeline(variant.TracePipeline);
@@ -403,9 +546,21 @@ internal sealed unsafe class GiProbes : IDisposable
             writes[0] = Buffer(0, DescriptorType.StorageBuffer, &rayInfo);
             writes[1] = Buffer(1, DescriptorType.StorageBuffer, &stateInfo);
             writes[2] = Buffer(2, DescriptorType.UniformBuffer, &uniform);
-            writes[3] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 3, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &images[0] };
-            writes[4] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 4, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &images[1] };
-            writes[5] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[2] };
+            writes[3] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet, DstBinding = 3, DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageImage, PImageInfo = &images[0],
+            };
+            writes[4] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet, DstBinding = 4, DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageImage, PImageInfo = &images[1],
+            };
+            writes[5] = new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1,
+                DescriptorType = DescriptorType.CombinedImageSampler, PImageInfo = &images[2],
+            };
             writes[6] = Buffer(6, DescriptorType.StorageBuffer, &listInfo);
             cmd.BindPipeline(variant.BlendPipeline);
             cmd.PushDescriptors(variant.Blend, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 7), GpuBindPoint.Compute);
@@ -417,6 +572,10 @@ internal sealed unsafe class GiProbes : IDisposable
         _updated = true;
         Updates++;
     }
+
+    #endregion
+
+    #region Shader helpers
 
     /// <summary>
     /// The probe passes' writes (storage buffers and images) before the next pass's reads, in compute and in the world's shading: unlike a full
@@ -436,7 +595,8 @@ internal sealed unsafe class GiProbes : IDisposable
     DescriptorImageInfo Image(FrameGlobals g, string name, bool cube)
     {
         var t = g.Texture(name)?.Invoke() ?? default;
-        if (!t.IsNull) return new DescriptorImageInfo(_ctx.Device.SamplerAt(t.Sampler.Index), _ctx.Device.ViewAt(t.View.Index), ImageLayout.General);
+        if (!t.IsNull)
+            return new DescriptorImageInfo(_ctx.Device.SamplerAt(t.Sampler.Index), _ctx.Device.ViewAt(t.View.Index), ImageLayout.General);
         // Not published yet (the game sky off): a stand-in the shader never reads (uAtmoMaps says the map is absent).
         var standIn = _ctx.Dummy(FrameGlobals.Sampler2D(name, cube));
         return new DescriptorImageInfo(_ctx.Device.SamplerAt(standIn.Sampler.Index), _ctx.Device.ViewAt(standIn.View.Index), ImageLayout.General);
@@ -451,13 +611,27 @@ internal sealed unsafe class GiProbes : IDisposable
 
     Matrix4x4 RandomRotation()
     {
-        var axis = Vector3.Normalize(new Vector3(_random.NextSingle() * 2 - 1, _random.NextSingle() * 2 - 1, _random.NextSingle() * 2 - 1) + new Vector3(1e-4f));
+        var axis = Vector3.Normalize(new Vector3(_random.NextSingle() * 2 - 1, _random.NextSingle() * 2 - 1,
+                _random.NextSingle() * 2 - 1) + new Vector3(1e-4f));
         return Matrix4x4.CreateFromAxisAngle(axis, _random.NextSingle() * MathF.Tau);
     }
 
     static int Mod(int a, int n) => ((a % n) + n) % n;
 
-    public string Describe() => $"{Cascades} cascades of {Columns}×{Layers}×{Columns} probes ({Layout(0).Spacing:0} and {Grid[1].Spacing:0} apart), {Rays} rays each, 1/{Phases} a frame, {(Enabled ? "lighting" : "not lighting")}" + (_hiddenValid ? $"; fog hides {Hidden[0]} + {Hidden[1]} probes (each updated every {HiddenPeriod}th round; solved {Solves} times, {SolveMs / Math.Max(Solves, 1):0.00} ms each), {Listed} listed this frame" : "");
+    #endregion
+
+    #region Diagnostics and disposal
+
+    public string Describe()
+    {
+        string state = $"{Cascades} cascades of {Columns}×{Layers}×{Columns} probes ({Layout(0).Spacing:0} and {Grid[1].Spacing:0} apart), "
+            + $"{Rays} rays each, 1/{Phases} a frame, {(Enabled ? "lighting" : "not lighting")}";
+        string hidden = _hiddenValid
+            ? $"; fog hides {Hidden[0]} + {Hidden[1]} probes (each updated every {HiddenPeriod}th round; "
+                + $"solved {Solves} times, {SolveMs / Math.Max(Solves, 1):0.00} ms each), {Listed} listed this frame"
+            : "";
+        return state + hidden;
+    }
 
     public void Dispose()
     {
@@ -470,4 +644,6 @@ internal sealed unsafe class GiProbes : IDisposable
         foreach (var v in _variants.Values) { _ctx.Shaders.Dispose(v.Trace); _ctx.Shaders.Dispose(v.Blend); }
         _ctx.Shaders.Dispose(_invalidateProgram);
     }
+
+    #endregion
 }

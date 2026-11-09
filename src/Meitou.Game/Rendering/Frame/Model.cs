@@ -5,18 +5,29 @@ using Meitou.Game.Rendering.Foliage;
 
 namespace Meitou.Game.Rendering.Frame;
 
-/// <summary>The viewer's vertex: Ogre's per-source buffers deinterleaved into one fixed layout.</summary>
+/// <summary>
+/// The viewer's vertex: Ogre's per-source buffers deinterleaved into one fixed layout.
+/// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct Vertex
 {
     public Vector3 Position;
     public Vector3 Normal;
     public Vector2 Uv;
-    /// <summary>xyz tangent, w handedness (bitangent = cross(normal, tangent) * w).</summary>
+
+    /// <summary>
+    /// xyz tangent, w handedness (bitangent = cross(normal, tangent) * w).
+    /// </summary>
     public Vector4 Tangent;
-    /// <summary>Vertex colour RGBA 0–1 (white when the mesh has none).</summary>
+
+    /// <summary>
+    /// Vertex colour RGBA 0–1 (white when the mesh has none).
+    /// </summary>
     public Vector4 Colour;
-    /// <summary>Four bone handles, one byte each.</summary>
+
+    /// <summary>
+    /// Four bone handles, one byte each.
+    /// </summary>
     public uint Bones;
     public Vector4 Weights;
 
@@ -33,11 +44,17 @@ public sealed class ModelPart
     public bool HasTangents { get; init; }
     public bool HasColours { get; init; }
     public bool Skinned { get; init; }
-    /// <summary>The triangle list with the alpha-tested cards cut to their opaque outline (<see cref="FoliageCardTrimmer"/>), indexing <see cref="Vertices"/> (which then also hold the new corners after the originals); null: none.</summary>
+
+    /// <summary>
+    /// The triangle list with the alpha-tested cards cut to their opaque outline (<see cref="FoliageCardTrimmer"/>), indexing <see cref="Vertices"/>
+    /// (which then also hold the new corners after the originals); null: none.
+    /// </summary>
     public uint[]? TrimmedIndices { get; init; }
 }
 
-/// <summary>A mesh ready for upload: triangle lists per submesh, bounds, and skinning weights built from bone assignments.</summary>
+/// <summary>
+/// A mesh ready for upload: triangle lists per submesh, bounds, and skinning weights built from bone assignments.
+/// </summary>
 public sealed class Model
 {
     public List<ModelPart> Parts { get; } = [];
@@ -48,7 +65,9 @@ public sealed class Model
     public Vector3 Center => (Min + Max) / 2;
     public float Radius => Math.Max((Max - Min).Length() / 2, 1e-3f);
 
-    /// <summary>Bounds of the vertices posed with <paramref name="skin"/> (as the vertex shader does), for framing an animated pose.</summary>
+    /// <summary>
+    /// Bounds of the vertices posed with <paramref name="skin"/> (as the vertex shader does), for framing an animated pose.
+    /// </summary>
     public (Vector3 Min, Vector3 Max) PosedBounds(Matrix4x4[] skin)
     {
         var min = new Vector3(float.MaxValue);
@@ -74,9 +93,12 @@ public sealed class Model
     }
 
     /// <param name="boneCount">Bones in the skeleton the mesh will be skinned with, or null to drop skinning.</param>
-    /// <param name="gameBinormals">Characters: the tangent's w makes cross(normal, tangent) × w the game's binormal, the mesh's BINORMAL × the stored w (1 when the
-    /// tangent has three components; character.hlsl, skin.hlsl's skinning; docs/characters.md "Shading, poses and LOD"). Otherwise the stored w is kept (objects).</param>
-    /// <param name="tangentSign">Inventory icons (rtticons.hlsl): the tangent's own w, 1 when it has three components, the stored binormals ignored (the shader takes
+    /// <param name="gameBinormals">Characters: the tangent's w makes cross(normal, tangent) × w the game's binormal, the mesh's BINORMAL × the
+    /// stored w (1 when the
+    /// tangent has three components; character.hlsl, skin.hlsl's skinning; docs/characters.md "Shading, poses and LOD"). Otherwise the stored w is
+    /// kept (objects).</param>
+    /// <param name="tangentSign">Inventory icons (rtticons.hlsl): the tangent's own w, 1 when it has three components, the stored binormals ignored
+    /// (the shader takes
     /// cross(tangent, normal) x w).</param>
     public static Model Build(OgreMesh mesh, int? boneCount, bool gameBinormals = false, bool tangentSign = false)
     {
@@ -133,7 +155,8 @@ public sealed class Model
         }
     }
 
-    static ModelPart BuildPart(int s, OgreSubMesh sub, OgreVertexData vd, List<OgreBoneAssignment> assignments, int? boneCount, uint[] indices, List<string> warnings, bool gameBinormals, bool tangentSign)
+    static ModelPart BuildPart(int s, OgreSubMesh sub, OgreVertexData vd, List<OgreBoneAssignment> assignments, int? boneCount, uint[] indices,
+            List<string> warnings, bool gameBinormals, bool tangentSign)
     {
         int n = (int)vd.VertexCount;
         var verts = new Vertex[n];
@@ -195,13 +218,20 @@ public sealed class Model
                 v.Bones = packed;
                 v.Weights = new Vector4(w[0], w[1], w[2], w[3]);
             }
-            if (dropped > 0) warnings.Add($"submesh {s}: {dropped} bone assignments name bones past the skeleton's {boneCount} and were dropped");
-            // A vertex without assignments follows blend index 0 fully (Ogre's Mesh::compileBoneAssignments): the lowest bone the vertex data's assignments use
+            if (dropped > 0)
+                warnings.Add($"submesh {s}: {dropped} bone assignments name bones past the skeleton's {boneCount} and were dropped");
+            // A vertex without assignments follows blend index 0 fully (Ogre's Mesh::compileBoneAssignments): the lowest bone the vertex data's
+            // assignments use
             // (docs/formats/ogre-mesh.md "Bone assignments"), so a hair's unweighted cards move with its head.
-            int lowest = assignments.Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256).Select(a => (int)a.BoneIndex).DefaultIfEmpty(-1).Min();
+            int lowest = assignments
+                .Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256)
+                .Select(a => (int)a.BoneIndex)
+                .DefaultIfEmpty(-1)
+                .Min();
             if (lowest >= 0)
                 for (int i = 0; i < n; i++)
-                    if (verts[i].Weights == Vector4.Zero) (verts[i].Bones, verts[i].Weights) = ((uint)lowest, new Vector4(1, 0, 0, 0));
+                    if (verts[i].Weights == Vector4.Zero)
+                        (verts[i].Bones, verts[i].Weights) = ((uint)lowest, new Vector4(1, 0, 0, 0));
         }
 
         return new ModelPart

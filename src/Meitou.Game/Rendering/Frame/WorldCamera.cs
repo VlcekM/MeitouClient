@@ -10,17 +10,32 @@ namespace Meitou.Game.Rendering.Frame;
 public sealed class WorldCamera
 {
     public Vector3 Target { get; set; }
-    /// <summary>Radians; 0 looks along −Z from +Z (the eye sits at +Z of the target).</summary>
+
+    /// <summary>
+    /// Radians; 0 looks along −Z from +Z (the eye sits at +Z of the target).
+    /// </summary>
     public float Yaw { get; set; }
-    /// <summary>Radians above the horizon of the eye, as seen from the target.</summary>
+
+    /// <summary>
+    /// Radians above the horizon of the eye, as seen from the target.
+    /// </summary>
     public float Pitch { get; set; } = 0.5f;
     public float Distance { get; set; } = 2000;
     public float FieldOfView { get; set; } = 50 * MathF.PI / 180;
-    /// <summary>The view distance asked for; the app raises <see cref="ViewDistance"/> above it when the haze reaches further (high eye).</summary>
+
+    /// <summary>
+    /// The view distance asked for; the app raises <see cref="ViewDistance"/> above it when the haze reaches further (high eye).
+    /// </summary>
     public float MinViewDistance { get; set; } = 60000;
-    /// <summary>Furthest distance anything is drawn at.</summary>
+
+    /// <summary>
+    /// Furthest distance anything is drawn at.
+    /// </summary>
     public float ViewDistance { get; set; } = 60000;
-    /// <summary>Height of the eye above the terrain (set by the app each frame), for the near plane.</summary>
+
+    /// <summary>
+    /// Height of the eye above the terrain (set by the app each frame), for the near plane.
+    /// </summary>
     public float EyeClearance { get; set; } = 100;
 
     Vector3 Back => new(MathF.Cos(Pitch) * MathF.Sin(Yaw), MathF.Sin(Pitch), MathF.Cos(Pitch) * MathF.Cos(Yaw));
@@ -31,6 +46,7 @@ public sealed class WorldCamera
     public Matrix4x4 View => Matrix4x4.CreateLookAt(Eye, Target, Vector3.UnitY);
 
     public float Near => Math.Clamp(Math.Min(EyeClearance, Distance) * 0.25f, 0.5f, MaxNear);
+
     /// <summary>
     /// The scene projection's near plane. Reversed (Vulkan): where the former GL-mapped clip volume (-1..1 over a 0..1 depth matrix) clipped a
     /// <see cref="Near"/> projection, <c>n f / (2 f - n)</c> with f = <see cref="ViewDistance"/>, about half of it; the reversed float depth
@@ -39,21 +55,29 @@ public sealed class WorldCamera
     /// </summary>
     public float ClipNear => DepthConvention.Reversed ? Near * ViewDistance / (2 * ViewDistance - Near) : Near;
 
-    /// <summary>The farthest the near plane may sit (200; the Meitou title lowers it to draw its wanderer close in front of a high eye).</summary>
+    /// <summary>
+    /// The farthest the near plane may sit (200; the Meitou title lowers it to draw its wanderer close in front of a high eye).
+    /// </summary>
     public float MaxNear { get; set; } = 200;
 
-    /// <summary>The scene projection in <see cref="DepthConvention"/> (reversed on Vulkan: depth 1 at the near plane, 0 at the far one).</summary>
+    /// <summary>
+    /// The scene projection in <see cref="DepthConvention"/> (reversed on Vulkan: depth 1 at the near plane, 0 at the far one).
+    /// </summary>
     public Matrix4x4 Projection(float aspect, float near, float far) =>
         ViewWindow.Current.Apply(DepthConvention.Perspective(FieldOfView, aspect, near, far));
 
-    /// <summary>Rotates the eye around the target.</summary>
+    /// <summary>
+    /// Rotates the eye around the target.
+    /// </summary>
     public void Orbit(float dx, float dy)
     {
         Yaw -= dx * 0.005f;
         Pitch = Math.Clamp(Pitch + dy * 0.005f, -1.5f, 1.55f);
     }
 
-    /// <summary>Turns the view around the eye (the target moves).</summary>
+    /// <summary>
+    /// Turns the view around the eye (the target moves).
+    /// </summary>
     public void Look(float dx, float dy)
     {
         var eye = Eye;
@@ -64,7 +88,10 @@ public sealed class WorldCamera
 
     public void Zoom(float steps) => Distance = Math.Clamp(Distance * MathF.Pow(0.85f, steps), 5f, ViewDistance);
 
-    /// <summary>Moves eye and target: <paramref name="forward"/> along the view projected on the ground, <paramref name="right"/> sideways, <paramref name="up"/> vertically.</summary>
+    /// <summary>
+    /// Moves eye and target: <paramref name="forward"/> along the view projected on the ground, <paramref name="right"/> sideways, <paramref
+    /// name="up"/> vertically.
+    /// </summary>
     public void Fly(float forward, float right, float up)
     {
         var f = Forward;
@@ -74,7 +101,10 @@ public sealed class WorldCamera
         Target += ground * forward + side * right + Vector3.UnitY * up;
     }
 
-    /// <summary>Free flight: moves eye and target <paramref name="forward"/> along the view direction (pitch included), <paramref name="right"/> sideways, <paramref name="up"/> along world Y.</summary>
+    /// <summary>
+    /// Free flight: moves eye and target <paramref name="forward"/> along the view direction (pitch included), <paramref name="right"/> sideways,
+    /// <paramref name="up"/> along world Y.
+    /// </summary>
     public void FlyFree(float forward, float right, float up)
     {
         var f = Forward;
@@ -84,7 +114,9 @@ public sealed class WorldCamera
         Target += f * forward + side * right + Vector3.UnitY * up;
     }
 
-    /// <summary>The six frustum planes (normal pointing inwards, d) of a view-projection matrix.</summary>
+    /// <summary>
+    /// The six frustum planes (normal pointing inwards, d) of a view-projection matrix.
+    /// </summary>
     public static Vector4[] FrustumPlanes(Matrix4x4 m)
     {
         // System.Numerics uses row vectors: clip = p * M, so the planes come from the matrix columns.
@@ -97,7 +129,9 @@ public sealed class WorldCamera
         return [c4 + c1, c4 - c1, c4 + c2, c4 - c2, c3, c4 - c3];
     }
 
-    /// <summary>Whether an axis-aligned box is at least partly inside the planes.</summary>
+    /// <summary>
+    /// Whether an axis-aligned box is at least partly inside the planes.
+    /// </summary>
     public static bool Intersects(Vector4[] planes, Vector3 min, Vector3 max)
     {
         foreach (var p in planes)

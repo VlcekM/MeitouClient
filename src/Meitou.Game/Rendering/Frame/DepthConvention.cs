@@ -18,7 +18,9 @@ public static class DepthConvention
     /// </summary>
     public static bool Reversed { get; set; } = true;
 
-    /// <summary>The cleared scene depth: no surface, the sky (0 reversed, 1 conventional).</summary>
+    /// <summary>
+    /// The cleared scene depth: no surface, the sky (0 reversed, 1 conventional).
+    /// </summary>
     public static float Clear => Reversed ? 0f : 1f;
 
     /// <summary>The scene compare op for a GL-semantics one: Less/Greater and Lequal/Gequal swap when reversed; Equal, Notequal, Always
@@ -32,7 +34,9 @@ public static class DepthConvention
         _ => gl,
     };
 
-    /// <summary>The scene's compare op: less-or-equal in GL terms.</summary>
+    /// <summary>
+    /// The scene's compare op: less-or-equal in GL terms.
+    /// </summary>
     public static DepthFunction SceneCompare => Compare(DepthFunction.Lequal);
 
     /// <summary>Depth bias (constant, slope factor) that pulls a draw <paramref name="units"/> toward the viewer: <c>(+u, +u)</c> reversed,
@@ -53,7 +57,9 @@ public static class DepthConvention
         return m;
     }
 
-    /// <summary>A standard 0..1 projection in this backend's scene convention (<see cref="Reverse"/> when <see cref="Reversed"/>).</summary>
+    /// <summary>
+    /// A standard 0..1 projection in this backend's scene convention (<see cref="Reverse"/> when <see cref="Reversed"/>).
+    /// </summary>
     public static Matrix4x4 Apply(Matrix4x4 standard) => Reversed ? Reverse(standard) : standard;
 
     /// <summary>The scene's perspective projection: <see cref="Matrix4x4.CreatePerspectiveFieldOfView"/> in this backend's convention.
@@ -61,24 +67,36 @@ public static class DepthConvention
     public static Matrix4x4 Perspective(float fieldOfView, float aspect, float near, float far) =>
         Apply(Matrix4x4.CreatePerspectiveFieldOfView(fieldOfView, aspect, near, far));
 
-    /// <summary>The clip z of the near plane in the scene convention (1 reversed, 0 conventional).</summary>
+    /// <summary>
+    /// The clip z of the near plane in the scene convention (1 reversed, 0 conventional).
+    /// </summary>
     public static float NearZ => Reversed ? 1f : 0f;
 
-    /// <summary>The clip z of the far plane in the scene convention (0 reversed, 1 conventional).</summary>
+    /// <summary>
+    /// The clip z of the far plane in the scene convention (0 reversed, 1 conventional).
+    /// </summary>
     public static float FarZ => Reversed ? 0f : 1f;
 
-    /// <summary>View distance along the axis of a stored depth <paramref name="d"/> drawn with planes <paramref name="near"/>, <paramref name="far"/>.</summary>
+    /// <summary>
+    /// View distance along the axis of a stored depth <paramref name="d"/> drawn with planes <paramref name="near"/>, <paramref name="far"/>.
+    /// </summary>
     public static float ViewZ(float d, float near, float far) =>
         Reversed ? near * far / (near + d * (far - near)) : near * far / (far - d * (far - near));
 
-    /// <summary>The stored depth of view distance <paramref name="z"/> (the inverse of <see cref="ViewZ"/>).</summary>
+    /// <summary>
+    /// The stored depth of view distance <paramref name="z"/> (the inverse of <see cref="ViewZ"/>).
+    /// </summary>
     public static float DepthOf(float z, float near, float far) =>
         Reversed ? near * (far - z) / ((far - near) * z) : far * (z - near) / (z * (far - near));
 
-    /// <summary>Whether a stored depth is the cleared value (no surface: the sky).</summary>
+    /// <summary>
+    /// Whether a stored depth is the cleared value (no surface: the sky).
+    /// </summary>
     public static bool IsSky(float d) => Reversed ? d <= 0f : d >= 1f;
 
-    /// <summary>View-depth error of one float ulp of the stored depth at view distance <paramref name="z"/>.</summary>
+    /// <summary>
+    /// View-depth error of one float ulp of the stored depth at view distance <paramref name="z"/>.
+    /// </summary>
     public static float Precision(float z, float near) => Reversed ? 1.2e-7f * z : 1.2e-7f * z * z / MathF.Max(near, 1e-3f);
 
     /// <summary>

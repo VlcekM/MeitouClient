@@ -30,14 +30,16 @@ static partial class GiResolveShaders
     /// </summary>
     public static string WithAlbedo(string fragment, bool inShader = false, bool none = false)
     {
-        if (!MainRegex().IsMatch(fragment)) throw new InvalidOperationException("WithAlbedo: the fragment shader has no main()");
+        if (!MainRegex().IsMatch(fragment))
+            throw new InvalidOperationException("WithAlbedo: the fragment shader has no main()");
         string body = MainRegex().Replace(fragment, "void giLitMain()", 1);
         // With two outputs every one needs its location: the colour's is 0.
         body = ColourOutRegex().Replace(body, "layout(location = 0) out vec4 fragColour;", 1);
         if (inShader)
         {
             int line = body.IndexOf('\n');
-            if (line < 0 || !body.StartsWith("#version", StringComparison.Ordinal)) throw new InvalidOperationException("WithAlbedo: no #version line");
+            if (line < 0 || !body.StartsWith("#version", StringComparison.Ordinal))
+                throw new InvalidOperationException("WithAlbedo: no #version line");
             body = body[..(line + 1)] + "#define GI_IN_SHADER\n" + body[(line + 1)..];
         }
         return body + $$"""
@@ -48,7 +50,9 @@ static partial class GiResolveShaders
             """;
     }
 
-    /// <summary>The scene's position from the scene depth, shared by both passes.</summary>
+    /// <summary>
+    /// The scene's position from the scene depth, shared by both passes.
+    /// </summary>
     const string Reconstruct = """
         uniform sampler2D uNearDepth;
         uniform vec2 uNearPlanes;               // near, far of the scene depth
@@ -106,7 +110,8 @@ static partial class GiResolveShaders
             vec3 sky = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * atmoAmbientMapAt(p).rgb * uAtmoLight.w;
             bool interior = (surface.w & 512u) != 0u;
             gi.rgb = giSurfaceIrradiance(gi.rgb, sky, interior);
-            // The haze is linear in the colour (colour · T + in-scattering): T from two evaluations, so the added light is hazed as the fragment's was.
+            // The haze is linear in the colour (colour · T + in-scattering): T from two evaluations, so the added light is hazed as the fragment's
+            // was.
             vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
             fragColour = vec4((gi.rgb - sky) * share * transmittance, interior ? -z : z);
         }

@@ -4,7 +4,9 @@ using Meitou.Game.Rendering.Overlays;
 
 namespace Meitou.Game.Rendering.Frame;
 
-/// <summary>The keys the cinema answers to (named as Silk.NET.Input's, so a host maps one with <c>Enum.TryParse(key.ToString(), out CinemaKey k)</c>).</summary>
+/// <summary>
+/// The keys the cinema answers to (named as Silk.NET.Input's, so a host maps one with <c>Enum.TryParse(key.ToString(), out CinemaKey k)</c>).
+/// </summary>
 enum CinemaKey
 {
     Keypad0, Keypad1, Keypad2, Keypad3, Keypad4, Keypad5, Keypad6, Keypad7, Keypad8, Keypad9,
@@ -13,7 +15,8 @@ enum CinemaKey
 }
 
 /// <summary>
-/// The viewer's and the game's cinematic camera (docs/viewer.md "Cinematic camera"), for trailers. Keys are shots on a timeline (<see cref="CameraKey"/>):
+/// The viewer's and the game's cinematic camera (docs/viewer.md "Cinematic camera"), for trailers. Keys are shots on a timeline (<see
+/// cref="CameraKey"/>):
 /// Ctrl+numpad 1-9 save the camera (with its lens and the time of day) as key 1-9, numpad 1-9 cut to one, numpad Enter flies through them
 /// (<see cref="CameraPath"/>), Shift+numpad Enter records the flight to PNG frames at a fixed frame rate. F6 opens the timeline editor along
 /// the bottom of the window (<see cref="Draw"/>): drag keys to retime them, drag the ruler to scrub, buttons to add, replace, delete and ease keys,
@@ -22,27 +25,49 @@ enum CinemaKey
 /// <paramref name="setHour"/> (the game, whose hour is the simulation clock's) "time follows" is unavailable. PageUp/PageDown zoom the lens wherever
 /// <see cref="LensZoomLive"/>: elsewhere in the game they are its floor keys. Home puts the lens back wherever <see cref="LensResetLive"/>.
 /// </summary>
-sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>? setHour, Func<bool> fullScreenOn, Action toggleFullScreen, string file, bool lensKeysAlways = true)
+sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>? setHour, Func<bool> fullScreenOn, Action toggleFullScreen,
+        string file, bool lensKeysAlways = true)
 {
-    /// <summary>The game's other times for the lens keys (and for Home besides the open editor): its free camera and a camera the cinema holds.</summary>
+    #region Playback
+
+    /// <summary>
+    /// The game's other times for the lens keys (and for Home besides the open editor): its free camera and a camera the cinema holds.
+    /// </summary>
     public Func<bool>? LensKeys { get; set; }
 
-    /// <summary>Whether Home puts the lens back (the viewer always; the game in the free camera, on a camera the cinema holds, and with its editor open).</summary>
+    /// <summary>
+    /// Whether Home puts the lens back (the viewer always; the game in the free camera, on a camera the cinema holds, and with its editor open).
+    /// </summary>
     public bool LensResetLive => lensKeysAlways || EditorVisible || LensKeys?.Invoke() == true;
 
-    /// <summary>Whether PageUp/PageDown zoom the lens (the viewer always; the game in the free camera and on a camera the cinema holds).</summary>
+    /// <summary>
+    /// Whether PageUp/PageDown zoom the lens (the viewer always; the game in the free camera and on a camera the cinema holds).
+    /// </summary>
     public bool LensZoomLive => lensKeysAlways || LensKeys?.Invoke() == true;
 
-    /// <summary>The viewer's keys file.</summary>
-    public static string ViewerFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "viewer-shots.json");
-    /// <summary>The game's keys file (its own: a world position means the same in both, so the viewer's file can be copied over it).</summary>
-    public static string GameFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "game-shots.json");
+    /// <summary>
+    /// The viewer's keys file.
+    /// </summary>
+    public static string ViewerFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
+            "viewer-shots.json");
+
+    /// <summary>
+    /// The game's keys file (its own: a world position means the same in both, so the viewer's file can be copied over it).
+    /// </summary>
+    public static string GameFile => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
+            "game-shots.json");
 
     const int MaxKeys = 999, RecordFps = 60;
-    /// <summary>Seconds between the keys a recorded camera path drops.</summary>
+
+    /// <summary>
+    /// Seconds between the keys a recorded camera path drops.
+    /// </summary>
     const float PathStep = 1;
     const float DefaultFov = 50 * MathF.PI / 180, MinFov = 10 * MathF.PI / 180, MaxFov = 100 * MathF.PI / 180, MinGap = 0.05f;
-    /// <summary>The letterbox's picture shape (2.39:1, anamorphic widescreen).</summary>
+
+    /// <summary>
+    /// The letterbox's picture shape (2.39:1, anamorphic widescreen).
+    /// </summary>
     const float Scope = 2.39f;
     readonly string _file = file;
 
@@ -55,29 +80,53 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     }
 
     readonly List<Entry> _keys = [];
-    /// <summary>The time a new key is placed after the last one, and a loop takes from the last key back to the first.</summary>
+
+    /// <summary>
+    /// The time a new key is placed after the last one, and a loop takes from the last key back to the first.
+    /// </summary>
     float _spacing = 6;
     bool _loop, _followTime;
-    /// <summary>The playhead, seconds on the timeline.</summary>
+
+    /// <summary>
+    /// The playhead, seconds on the timeline.
+    /// </summary>
     double _time;
-    /// <summary>The playhead moved without playing (a scrub, a click): the camera goes there on the next frame.</summary>
+
+    /// <summary>
+    /// The playhead moved without playing (a scrub, a click): the camera goes there on the next frame.
+    /// </summary>
     bool _preview;
     string? _takeFolder;
     int _takeFrame;
     bool _endTake;
-    /// <summary>Recording a camera path: the playhead time of the next key it drops; null when off.</summary>
+
+    /// <summary>
+    /// Recording a camera path: the playhead time of the next key it drops; null when off.
+    /// </summary>
     double? _pathNext;
-    /// <summary>"Delete all keys" was clicked once: a second click before this tick count deletes them.</summary>
+
+    /// <summary>
+    /// "Delete all keys" was clicked once: a second click before this tick count deletes them.
+    /// </summary>
     long _deleteAllUntil;
 
-    /// <summary>Called whenever the cinema puts the camera somewhere (a cut, a scrub, each frame of a flight): a host with its own camera control lets the cinema hold it.</summary>
+    /// <summary>
+    /// Called whenever the cinema puts the camera somewhere (a cut, a scrub, each frame of a flight): a host with its own camera control lets the
+    /// cinema hold it.
+    /// </summary>
     public Action? Moved { get; set; }
 
     public bool Playing { get; private set; }
-    /// <summary>Clean picture: no panels, letterbox bars (numpad *).</summary>
+
+    /// <summary>
+    /// Clean picture: no panels, letterbox bars (numpad *).
+    /// </summary>
     public bool Clean { get; private set; }
     public bool Recording => _takeFolder is not null;
-    /// <summary>The timeline editor (F6).</summary>
+
+    /// <summary>
+    /// The timeline editor (F6).
+    /// </summary>
     public bool EditorVisible { get; private set; }
 
     List<Entry> Sorted => [.. _keys.OrderBy(k => k.Time)];
@@ -87,7 +136,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
     float End => _keys.Count == 0 ? 0 : _keys.Max(k => k.Time) + (LoopBack ?? 0);
     Entry? Find(int label) => _keys.FirstOrDefault(k => k.Label == label);
 
-    /// <summary>Handles a cinematic key; false when <paramref name="key"/> is not one.</summary>
+    /// <summary>
+    /// Handles a cinematic key; false when <paramref name="key"/> is not one.
+    /// </summary>
     public bool OnKey(CinemaKey key, bool ctrl, bool shift)
     {
         var cam = camera();
@@ -101,33 +152,60 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         }
         switch (key)
         {
-            case CinemaKey.F6: EditorVisible = !EditorVisible; Say(EditorVisible ? "timeline editor open (F6 closes)" : "timeline editor closed"); return true;
+            case CinemaKey.F6:
+                EditorVisible = !EditorVisible;
+                Say(EditorVisible ? "timeline editor open (F6 closes)" : "timeline editor closed");
+                return true;
             case CinemaKey.Space when EditorVisible: TogglePlay(fromPlayhead: true); return true;
             case CinemaKey.Delete when EditorVisible: DeleteSelected(); return true;
             case CinemaKey.KeypadEnter:
                 if (shift && !Playing) StartRecording();
                 else TogglePlay(fromPlayhead: false);
                 return true;
-            case CinemaKey.Keypad0: _loop = !_loop; Say(_loop ? $"loop on ({_spacing:0.#} s back to the first key)" : "loop off"); return true;
+            case CinemaKey.Keypad0:
+                _loop = !_loop;
+                Say(_loop ? $"loop on ({_spacing:0.#} s back to the first key)" : "loop off");
+                return true;
             case CinemaKey.KeypadAdd: Scale(1.25f); return true;
             case CinemaKey.KeypadSubtract: Scale(1 / 1.25f); return true;
-            case CinemaKey.KeypadMultiply: Clean = !Clean; Say(Clean ? "clean picture: panels hidden, 2.39:1 letterbox" : "panels back, no letterbox"); return true;
-            case CinemaKey.KeypadDivide when setHour is null: Say("the time of day is the game clock's here: it does not follow the keys"); return true;
-            case CinemaKey.KeypadDivide: _followTime = !_followTime; Say(_followTime ? "the time of day follows the keys" : "the time of day stays put"); return true;
+            case CinemaKey.KeypadMultiply:
+                Clean = !Clean;
+                Say(Clean ? "clean picture: panels hidden, 2.39:1 letterbox" : "panels back, no letterbox");
+                return true;
+            case CinemaKey.KeypadDivide when setHour is null:
+                Say("the time of day is the game clock's here: it does not follow the keys");
+                return true;
+            case CinemaKey.KeypadDivide:
+                _followTime = !_followTime;
+                Say(_followTime ? "the time of day follows the keys" : "the time of day stays put");
+                return true;
             case CinemaKey.KeypadDecimal when ctrl: DeleteAll(); return true;
             case CinemaKey.KeypadDecimal:
                 Say(Summary());
                 foreach (var k in Sorted) Console.WriteLine($"  {k.Label,2}  {k.Time,6:0.00} s{(k.Ease ? " ease" : "     ")}  {Describe(k.Shot)}");
                 return true;
-            // PageUp/PageDown zoom the lens in the viewer and in the game's free and held cameras: in its strategy camera they are floor_up / floor_down.
-            case CinemaKey.PageUp when LensZoomLive: cam.FieldOfView = MathF.Max(cam.FieldOfView - 2.5f * MathF.PI / 180, MinFov); Say($"field of view {Degrees(cam.FieldOfView):0.#} deg"); return true;
-            case CinemaKey.PageDown when LensZoomLive: cam.FieldOfView = MathF.Min(cam.FieldOfView + 2.5f * MathF.PI / 180, MaxFov); Say($"field of view {Degrees(cam.FieldOfView):0.#} deg"); return true;
-            case CinemaKey.Home when LensResetLive: cam.FieldOfView = DefaultFov; Say($"field of view {Degrees(DefaultFov):0} deg"); return true;
+            // PageUp/PageDown zoom the lens in the viewer and in the game's free and held cameras: in its strategy camera they are floor_up /
+            // floor_down.
+            case CinemaKey.PageUp when LensZoomLive:
+                cam.FieldOfView = MathF.Max(cam.FieldOfView - 2.5f * MathF.PI / 180, MinFov);
+                Say($"field of view {Degrees(cam.FieldOfView):0.#} deg");
+                return true;
+            case CinemaKey.PageDown when LensZoomLive:
+                cam.FieldOfView = MathF.Min(cam.FieldOfView + 2.5f * MathF.PI / 180, MaxFov);
+                Say($"field of view {Degrees(cam.FieldOfView):0.#} deg");
+                return true;
+            case CinemaKey.Home when LensResetLive:
+                cam.FieldOfView = DefaultFov;
+                Say($"field of view {Degrees(DefaultFov):0} deg");
+                return true;
         }
         return false;
     }
 
-    /// <summary>Saves the camera as key <paramref name="label"/>: a new key goes <see cref="_spacing"/> after the last (or at <paramref name="at"/>); an existing one keeps its time.</summary>
+    /// <summary>
+    /// Saves the camera as key <paramref name="label"/>: a new key goes <see cref="_spacing"/> after the last (or at <paramref name="at"/>); an
+    /// existing one keeps its time.
+    /// </summary>
     void SaveKey(int label, float? at = null)
     {
         var shot = CameraShot.Of(camera(), getHour());
@@ -162,7 +240,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Say($"playing from {_time:0.00} s, {Summary()} (numpad Enter{(EditorVisible ? " or Space" : "")} stops)");
     }
 
-    /// <summary>Flies the keys on a loop from the first (<c>--play-shots</c>).</summary>
+    /// <summary>
+    /// Flies the keys on a loop from the first (<c>--play-shots</c>).
+    /// </summary>
     public void PlayLoop()
     {
         _loop = true;
@@ -200,7 +280,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Say($"camera path recorded; {Summary()}");
     }
 
-    /// <summary>Saves the camera as a new key at the playhead; false (and the recording stopped) when the keys are full.</summary>
+    /// <summary>
+    /// Saves the camera as a new key at the playhead; false (and the recording stopped) when the keys are full.
+    /// </summary>
     bool DropPathKey()
     {
         if (_keys.Count >= MaxKeys) { _pathNext = null; Save(); Say($"{MaxKeys} keys at most: the camera path stops here"); return false; }
@@ -210,7 +292,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         return true;
     }
 
-    /// <summary>Deletes every key (Ctrl+numpad ., or "Delete all keys" clicked twice).</summary>
+    /// <summary>
+    /// Deletes every key (Ctrl+numpad ., or "Delete all keys" clicked twice).
+    /// </summary>
     void DeleteAll()
     {
         Stop();
@@ -240,10 +324,14 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Save();
     }
 
-    /// <summary>The frame's time step: the real one, or exactly one frame of the recording's rate while recording.</summary>
+    /// <summary>
+    /// The frame's time step: the real one, or exactly one frame of the recording's rate while recording.
+    /// </summary>
     public double FrameTime(double real) => Recording ? 1.0 / RecordFps : Math.Min(real, 0.25);
 
-    /// <summary>Moves the camera (and the hour) along the flight, or to a scrubbed playhead; call once a frame before drawing.</summary>
+    /// <summary>
+    /// Moves the camera (and the hour) along the flight, or to a scrubbed playhead; call once a frame before drawing.
+    /// </summary>
     public void Advance(double dt)
     {
         if (_pathNext is { } next)
@@ -266,13 +354,17 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         // An open flight ends on its last key (drawn this frame); a recording of a loop is one lap.
         if (_time > End + dt * 0.5)
         {
-            if (Recording) Say($"recorded {_takeFrame + 1} frames into {_takeFolder}; to a video: ffmpeg -framerate {RecordFps} -i \"{_takeFolder}\\%05d.png\" -c:v libx264 -crf 16 -pix_fmt yuv420p take.mp4");
+            if (Recording)
+                Say($"recorded {_takeFrame + 1} frames into {_takeFolder}; "
+                    + $"to a video: ffmpeg -framerate {RecordFps} -i \"{_takeFolder}\\%05d.png\" -c:v libx264 -crf 16 -pix_fmt yuv420p take.mp4");
             _time = End;
             Stop(keepTake: true);
         }
     }
 
-    /// <summary>The file this frame is saved to while recording (then the frame is drawn without panels), else null.</summary>
+    /// <summary>
+    /// The file this frame is saved to while recording (then the frame is drawn without panels), else null.
+    /// </summary>
     public string? TakeFrame() => _takeFolder is null ? null : Path.Combine(_takeFolder, $"{_takeFrame++:00000}.png");
 
     void Stop(bool keepTake = false)
@@ -282,13 +374,19 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         else _takeFolder = null;
     }
 
-    /// <summary>Call after the frame is saved: a recording that reached its end lets go of its folder.</summary>
+    /// <summary>
+    /// Call after the frame is saved: a recording that reached its end lets go of its folder.
+    /// </summary>
     public void FrameDone()
     {
         if (_endTake) (_takeFolder, _endTake) = (null, false);
     }
 
     // ---- The timeline editor (F6) ----
+
+    #endregion
+
+    #region Timeline editor
 
     static readonly Vector4 Track = new(0.3f, 0.3f, 0.32f, 1), Fill = new(0.85f, 0.65f, 0.35f, 1), Dim = new(0.7f, 0.7f, 0.68f, 1),
         EaseColour = new(0.45f, 0.7f, 0.95f, 1), PlayheadColour = new(0.95f, 0.3f, 0.25f, 1), Background = new(0.05f, 0.05f, 0.06f, 0.92f);
@@ -332,9 +430,11 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         Button("Add key at playhead", () => SaveKey(Enumerable.Range(1, MaxKeys).First(l => Find(l) is null), (float)_time));
         Button("Set key to camera", () => { if (_selected is { } s) SaveKey(s.Label); else Say("no key selected"); });
         Button("Go to key", () => { if (_selected is { } s) { Stop(); GoTo(s); } else Say("no key selected"); });
-        Button(_selected is { Ease: true } ? "Ease: on" : "Ease: off", () => { if (_selected is { } s) { s.Ease = !s.Ease; Save(); _preview = true; } else Say("no key selected"); });
+        Button(_selected is { Ease: true } ? "Ease: on" : "Ease: off",
+                () => { if (_selected is { } s) { s.Ease = !s.Ease; Save(); _preview = true; } else Say("no key selected"); });
         Button("Delete key", DeleteSelected);
-        Button(setHour is null ? "Time follows: n/a" : _followTime ? "Time follows: on" : "Time follows: off", () => OnKey(CinemaKey.KeypadDivide, false, false));
+        Button(setHour is null ? "Time follows: n/a" : _followTime ? "Time follows: on" : "Time follows: off", () => OnKey(CinemaKey.KeypadDivide,
+                false, false));
         Button("Slower", () => Scale(1.25f));
         Button("Faster", () => Scale(1 / 1.25f));
         Button("Record", () => { if (!Playing) StartRecording(); });
@@ -356,10 +456,14 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         _rulerTop = _buttonsBottom + 6 + line + 6 + line + line;
     }
 
-    /// <summary>Whether a point (window pixels) is on the editor.</summary>
+    /// <summary>
+    /// Whether a point (window pixels) is on the editor.
+    /// </summary>
     public bool Contains(Vector2 p) => EditorVisible && _ui is not null && p.X >= _x0 && p.X <= _x1 && p.Y >= _y0 && p.Y <= _y1;
 
-    /// <summary>A click on the editor: a button, a key (select, then drag to retime) or the ruler (scrub); true when the editor took it.</summary>
+    /// <summary>
+    /// A click on the editor: a button, a key (select, then drag to retime) or the ruler (scrub); true when the editor took it.
+    /// </summary>
     public bool MouseDown(Vector2 p)
     {
         if (!Contains(p)) return false;
@@ -374,7 +478,8 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         {
             if (_pathNext is not null) StopPath();
             // The nearest key within reach of the pointer, else the playhead.
-            var hit = _keys.Select(k => (k, d: MathF.Abs(XAt(k.Time) - p.X))).Where(h => h.d <= MarkerHalf + 3).OrderBy(h => h.d).Select(h => h.k).FirstOrDefault();
+            var hit = _keys.Select(k => (k,
+                    d: MathF.Abs(XAt(k.Time) - p.X))).Where(h => h.d <= MarkerHalf + 3).OrderBy(h => h.d).Select(h => h.k).FirstOrDefault();
             Stop();
             if (hit is not null) { (_selected, _drag) = (hit, Drag.Key); return true; }
             _drag = Drag.Playhead;
@@ -383,7 +488,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         return true;
     }
 
-    /// <summary>Moves a dragged key (past other keys too, which reorders them; never onto one) or the playhead; true while dragging.</summary>
+    /// <summary>
+    /// Moves a dragged key (past other keys too, which reorders them; never onto one) or the playhead; true while dragging.
+    /// </summary>
     public bool MouseMove(Vector2 p)
     {
         if (_drag == Drag.None || _ui is null) return false;
@@ -401,7 +508,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         return true;
     }
 
-    /// <summary>Ends a drag; true when one was in progress.</summary>
+    /// <summary>
+    /// Ends a drag; true when one was in progress.
+    /// </summary>
     public bool MouseUp()
     {
         if (_drag == Drag.None) return false;
@@ -430,7 +539,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         if (EditorVisible) { DrawEditor(o, width, height); return; }
         _ui = null;
         if (!showStatus || Clean || (_keys.Count == 0 && !Playing)) return;
-        string line = $"keys {Summary()}   {(_pathNext is not null ? $"recording the camera path {_time:0.0} s" : Playing ? $"{(Recording ? "recording" : "playing")} {_time:0.0} / {End:0.0} s" : "numpad Enter plays, F6 edits")}";
+        string mode = _pathNext is not null ? $"recording the camera path {_time:0.0} s"
+            : Playing ? $"{(Recording ? "recording" : "playing")} {_time:0.0} / {End:0.0} s" : "numpad Enter plays, F6 edits";
+        string line = $"keys {Summary()}   {mode}";
         float y = height - o.LineHeight - 12;
         o.Rect(8, y - 4, 16 + line.Length * o.CharWidth, y + o.LineHeight + 2, new Vector4(0.05f, 0.05f, 0.06f, 0.8f));
         o.Text(line, 12, y, DebugOverlay.TextColour);
@@ -452,7 +563,8 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
             ? $"key {s.Label} at {s.Time:0.00} s{(s.Ease ? ", eases to a stop" : "")}: {Describe(s.Shot)}"
             : "no key selected: click a key on the timeline";
         o.Text(sel, _x0 + Pad, infoTop, DebugOverlay.TextColour);
-        string help = $"playhead {_time:0.00} s, flight {Start:0.00} to {End:0.00} s{(_loop ? " (loop)" : "")}.  Drag a key to retime it, drag the ruler to scrub; " +
+        string loopNote = _loop ? " (loop)" : "";
+        string help = $"playhead {_time:0.00} s, flight {Start:0.00} to {End:0.00} s{loopNote}.  Drag a key to retime it, drag the ruler to scrub; " +
             "Space play, Del delete, Ctrl+Num1-9 save, Num1-9 go, F6 close";
         o.Text(help, _x0 + Pad, infoTop + line + 6, Dim);
 
@@ -472,7 +584,8 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         {
             float last = _keys.Max(k => k.Time);
             o.Rect(XAt(Start), _rulerTop + RulerHeight * 0.45f, XAt(last), _rulerTop + RulerHeight * 0.55f, Fill * new Vector4(0.6f, 0.6f, 0.6f, 1));
-            if (_loop) o.Rect(XAt(last), _rulerTop + RulerHeight * 0.47f, XAt(last + _spacing), _rulerTop + RulerHeight * 0.53f, Dim);
+            if (_loop)
+                o.Rect(XAt(last), _rulerTop + RulerHeight * 0.47f, XAt(last + _spacing), _rulerTop + RulerHeight * 0.53f, Dim);
         }
         // A recorded path's keys sit close together: a number only where it clears the one before (the selected key's always).
         float labelEnd = float.MinValue;
@@ -491,17 +604,32 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         o.Rect(ph - 1, _rulerTop - 2, ph + 1, _rulerTop + RulerHeight, PlayheadColour);
     }
 
-    string Summary() => _keys.Count == 0 ? "none saved"
-        : $"{_keys.Count} ({string.Join(" ", Sorted.Select(k => k.Label))}), {End - Start:0.#} s{(_loop ? " a lap" : "")}{(_followTime ? "" : ", time held")}";
+    #endregion
+
+    #region Persistence and reporting
+
+    string Summary()
+    {
+        if (_keys.Count == 0) return "none saved";
+        string lap = _loop ? " a lap" : "";
+        string hold = _followTime ? "" : ", time held";
+        return $"{_keys.Count} ({string.Join(" ", Sorted.Select(k => k.Label))}), {End - Start:0.#} s{lap}{hold}";
+    }
 
     static float Degrees(float radians) => radians * 180 / MathF.PI;
 
-    static string Describe(CameraShot s) =>
-        $"eye {s.Eye.X:0}, {s.Eye.Y:0}, {s.Eye.Z:0}, yaw {Degrees(s.Yaw):0}, pitch {Degrees(s.Pitch):0}, lens {Degrees(s.FieldOfView):0} deg, {WorldFrame.TimeText(s.Hour)}";
+    static string Describe(CameraShot s)
+    {
+        string time = WorldFrame.TimeText(s.Hour);
+        var eye = s.Eye;
+        return $"eye {eye.X:0}, {eye.Y:0}, {eye.Z:0}, yaw {Degrees(s.Yaw):0}, pitch {Degrees(s.Pitch):0}, "
+            + $"lens {Degrees(s.FieldOfView):0} deg, {time}";
+    }
 
     static void Say(string text) => Console.WriteLine($"cinema    {text}");
 
-    sealed record Saved(int Slot, float[] Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour, float? Time = null, bool Ease = false);
+    sealed record Saved(int Slot, float[] Eye, float Yaw, float Pitch, float Distance, float FieldOfView, float Hour, float? Time = null,
+            bool Ease = false);
 
     void Save()
     {
@@ -515,7 +643,9 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Say($"could not save the keys to {_file}: {e.Message}"); }
     }
 
-    /// <summary>Reads the saved keys (a file from before the timeline has no times: its shots go <see cref="_spacing"/> apart in slot order).</summary>
+    /// <summary>
+    /// Reads the saved keys (a file from before the timeline has no times: its shots go <see cref="_spacing"/> apart in slot order).
+    /// </summary>
     public void Load()
     {
         try
@@ -534,4 +664,6 @@ sealed class Cinema(Func<WorldCamera> camera, Func<float> getHour, Action<float>
         }
         catch (Exception e) when (e is IOException or JsonException) { Say($"could not read {_file}: {e.Message}"); }
     }
+
+    #endregion
 }

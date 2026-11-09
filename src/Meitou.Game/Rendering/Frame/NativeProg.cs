@@ -13,7 +13,10 @@ internal sealed class NativeProg : IDisposable
     public readonly GpuProgram P;
     readonly int[] _locations;
     readonly Meitou.Game.Rendering.Gpu.Shaders.ScalarKind[] _kinds;
-    /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
+
+    /// <summary>
+    /// The program's own input locations (below the instance rows): 0 .. Own − 1.
+    /// </summary>
     public readonly int Own;
     VertexLayout? _last;
 
@@ -38,10 +41,13 @@ internal sealed class NativeProg : IDisposable
                 : new VertexInput((uint)loc, GlConventions.DummyVertexFormat(_kinds[i]), _ctx.ConstantVertexAttributes ? 0u : 16u, false);
         }
         if (_last is { } l && inputs.SequenceEqual(l.Inputs)) return l;
+
         return _last = new VertexLayout(inputs.ToArray());
     }
 
-    /// <summary>Locations 0 .. <paramref name="count"/> − 1 as one array for one bind: each attribute's buffer, GL's constant where none.</summary>
+    /// <summary>
+    /// Locations 0 .. <paramref name="count"/> − 1 as one array for one bind: each attribute's buffer, GL's constant where none.
+    /// </summary>
     public GpuBufferBinding[] Buffers(ReadOnlySpan<LegacyProgram.Attribute?> byLocation, int count)
     {
         var result = new GpuBufferBinding[count];
@@ -51,9 +57,14 @@ internal sealed class NativeProg : IDisposable
             result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                 ? a.Buffer
                 : _ctx.ConstantVertexAttributes
-                        ? new GpuBufferBinding(_ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float))
-                        : new GpuBufferBinding(_ctx.DummyVertexArray(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float), 0);
+                    ? new GpuBufferBinding(
+                        _ctx.DummyVertex,
+                        GlConventions.DummyVertexOffset(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float))
+                    : new GpuBufferBinding(
+                        _ctx.DummyVertexArray(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float),
+                        0);
         }
+
         return result;
     }
 

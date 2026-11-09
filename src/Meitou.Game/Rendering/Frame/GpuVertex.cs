@@ -14,7 +14,10 @@ namespace Meitou.Game.Rendering.Frame;
 public static class GpuVertex
 {
     public const int ObjectSize = 44, CharacterSize = 64;
-    /// <summary>Where the texture coordinates sit in both layouts (the GI shaders read them by address).</summary>
+
+    /// <summary>
+    /// Where the texture coordinates sit in both layouts (the GI shaders read them by address).
+    /// </summary>
     public const uint UvOffset = 20;
 
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
@@ -66,7 +69,14 @@ public static class GpuVertex
         for (int i = 0; i < vertices.Length; i++)
         {
             ref readonly var v = ref vertices[i];
-            packed[i] = new ObjectVertex { Position = v.Position, Normal = new(new Vector4(v.Normal, 0)), Uv = v.Uv, Tangent = new(v.Tangent), Colour = new(v.Colour) };
+            packed[i] = new ObjectVertex
+            {
+                Position = v.Position,
+                Normal = new(new Vector4(v.Normal, 0)),
+                Uv = v.Uv,
+                Tangent = new(v.Tangent),
+                Colour = new(v.Colour),
+            };
         }
         return bytes;
     }
@@ -92,7 +102,9 @@ public static class GpuVertex
         return bytes;
     }
 
-    /// <summary>The object layout's attributes at locations 0 to 4 (position, normal, uv, tangent, colour) over <paramref name="vertices"/>.</summary>
+    /// <summary>
+    /// The object layout's attributes at locations 0 to 4 (position, normal, uv, tangent, colour) over <paramref name="vertices"/>.
+    /// </summary>
     public static LegacyProgram.Attribute?[] ObjectAttributes(DeviceBuffer vertices) =>
     [
         Attribute(vertices, 0, InternalFormat.Rgb32F, ObjectSize), Attribute(vertices, 12, InternalFormat.Rgba16Snorm, ObjectSize),
@@ -100,7 +112,9 @@ public static class GpuVertex
         Attribute(vertices, 36, InternalFormat.Rgba16F, ObjectSize),
     ];
 
-    /// <summary>The character layout's attributes at locations 0 to 6 (the object's five, bones, weights) over <paramref name="vertices"/>.</summary>
+    /// <summary>
+    /// The character layout's attributes at locations 0 to 6 (the object's five, bones, weights) over <paramref name="vertices"/>.
+    /// </summary>
     public static LegacyProgram.Attribute?[] CharacterAttributes(DeviceBuffer vertices) =>
     [
         Attribute(vertices, 0, InternalFormat.Rgb32F, CharacterSize), Attribute(vertices, 12, InternalFormat.Rgba16Snorm, CharacterSize),

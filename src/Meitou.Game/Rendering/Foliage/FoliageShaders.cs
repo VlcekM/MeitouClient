@@ -36,7 +36,8 @@ static class FoliageShaders
             out float vFade;
             #define uModel mat4(vec4(aInstance0.xyz, 0.0), vec4(aInstance1.xyz, 0.0), vec4(aInstance2.xyz, 0.0), vec4(aInstance3.xyz, 1.0))
             """, required: true);
-        // invariant: the depth prepass (FoliagePrepass) and the colour pass compile this stage next to different fragment stages, and the colour pass tests depth EQUAL.
+        // invariant: the depth prepass (FoliagePrepass) and the colour pass compile this stage next to different fragment stages, and the colour pass
+        // tests depth EQUAL.
         v = Replace(v, @"void\s+main\s*\(\s*\)\s*\{", """
             invariant gl_Position;
             void main()
@@ -47,9 +48,12 @@ static class FoliageShaders
     }
 
     /// <summary>
-    /// The depth prepass's fragment stage (<see cref="FoliagePrepass"/>): only what decides whether a fragment is seen, no lighting. The fade dither and the
-    /// cut-out's hard alpha test are those of <see cref="MeshFragment"/>, on the same interpolants and samples (the colour pass has neither and tests depth EQUAL,
-    /// so this is the one visibility test). <paramref name="solid"/>: nothing at all (an empty program keeps the early depth test) for the instances that are
+    /// The depth prepass's fragment stage (<see cref="FoliagePrepass"/>): only what decides whether a fragment is seen, no lighting. The fade dither
+    /// and the
+    /// cut-out's hard alpha test are those of <see cref="MeshFragment"/>, on the same interpolants and samples (the colour pass has neither and tests
+    /// depth EQUAL,
+    /// so this is the one visibility test). <paramref name="solid"/>: nothing at all (an empty program keeps the early depth test) for the instances
+    /// that are
     /// fully visible in a part without a cut-out. Only normal-map alpha (<c>uAlphaSource</c> 2) is handled, which is all the foliage meshes use.
     /// </summary>
     public static string MeshPrepassFragment(bool solid = false)
@@ -96,7 +100,8 @@ static class FoliageShaders
             """;
     }
 
-    /// <param name="solid">For fully visible instances of a material without a cut-out: no <c>discard</c> in the program (the depth test runs before it).</param>
+    /// <param name="solid">For fully visible instances of a material without a cut-out: no <c>discard</c> in the program (the depth test runs before
+    /// it).</param>
     public static string MeshFragment(bool solid = false)
     {
         string f = Shaders.MeshFragment;
@@ -114,8 +119,10 @@ static class FoliageShaders
             {
                 if (vFade < 1.0 && foliageDither() >= vFade) discard;
             """, required: true);
-        // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have no cut-out.)
-        f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;", solid ? "float foliageCoverage = 1.0;" : """
+        // The cut-out: a hard test, or with alpha to coverage a one-pixel ramp around the threshold. (The solid variant has none: its materials have
+        // no cut-out.)
+        f = Replace(f, @"if\s*\(\s*uAlphaThreshold\s*>\s*0\.0\s*&&\s*alpha\s*<\s*uAlphaThreshold\s*\)\s*discard\s*;",
+            solid ? "float foliageCoverage = 1.0;" : """
             float foliageCoverage = 1.0;
             if (uAlphaThreshold > 0.0)
             {
@@ -131,7 +138,8 @@ static class FoliageShaders
         return f;
     }
 
-    /// <remarks>The aerial perspective is linear in the colour (<c>atmoApply</c> mixes), so it is evaluated per vertex as a multiply and an add: grass covers much of the screen.</remarks>
+    /// <remarks>The aerial perspective is linear in the colour (<c>atmoApply</c> mixes), so it is evaluated per vertex as a multiply and an add:
+    /// grass covers much of the screen.</remarks>
     public static readonly string GrassVertex = "#version 330 core\n" + AtmosphereShaders.Functions + """
         layout(location = 0) in vec4 aBlade;     // x, y, z, scale 0..1
         layout(location = 1) in float aYaw;
@@ -304,17 +312,32 @@ static class FoliageShaders
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
 
-    /// <summary><see cref="MeshVertex"/> in the native model (the shared mesh uniforms on <see cref="MeshPush"/> and <see cref="ViewConstants"/>).</summary>
+    /// <summary>
+    /// <see cref="MeshVertex"/> in the native model (the shared mesh uniforms on <see cref="MeshPush"/> and <see cref="ViewConstants"/>).
+    /// </summary>
     public static string MeshVertexNative() => NativeShaders.Port(MeshVertex());
-    /// <summary><see cref="MeshFragment"/> in the native model; the full one (not <paramref name="solid"/>) also has the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>, on while the view has it).</summary>
+
+    /// <summary>
+    /// <see cref="MeshFragment"/> in the native model; the full one (not <paramref name="solid"/>) also has the interior cut
+    /// (<see cref="InteriorMaskRenderer.WithCut"/>, on while the view has it).
+    /// </summary>
     public static string MeshFragmentNative(bool solid = false) =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(solid ? MeshFragment(true) : InteriorMaskRenderer.WithCut(MeshFragment())), inShader: true);
-    /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> in the native model, for <see cref="MeshVertexNative"/>.</summary>
-    public static string MeshDepthNative() => NativeShaders.MeshDepthFragment();
-    /// <summary><see cref="MeshPrepassFragment"/> in the native model, for <see cref="MeshVertexNative"/>; the full one also has the interior cut.</summary>
-    public static string MeshPrepassNative(bool solid = false) => NativeShaders.Port(solid ? MeshPrepassFragment(true) : InteriorMaskRenderer.WithCut(MeshPrepassFragment()));
 
-    /// <summary>The blade programs' push constants (<see cref="GrassPush"/> is the C# side; std430).</summary>
+    /// <summary>
+    /// <see cref="ShadowShaders.MeshDepthFragment"/> in the native model, for <see cref="MeshVertexNative"/>.
+    /// </summary>
+    public static string MeshDepthNative() => NativeShaders.MeshDepthFragment();
+
+    /// <summary>
+    /// <see cref="MeshPrepassFragment"/> in the native model, for <see cref="MeshVertexNative"/>; the full one also has the interior cut.
+    /// </summary>
+    public static string MeshPrepassNative(bool solid = false) =>
+        NativeShaders.Port(solid ? MeshPrepassFragment(true) : InteriorMaskRenderer.WithCut(MeshPrepassFragment()));
+
+    /// <summary>
+    /// The blade programs' push constants (<see cref="GrassPush"/> is the C# side; std430).
+    /// </summary>
     public const string GrassPushMembers = """
             vec4 size;
             vec4 colourBounds;
@@ -330,7 +353,9 @@ static class FoliageShaders
             uint nearDepth;
         """;
 
-    /// <summary>The blade programs' own uniforms: <see cref="GrassPush"/> members (the camera, light, fog and sway phases are <see cref="ViewConstants"/>).</summary>
+    /// <summary>
+    /// The blade programs' own uniforms: <see cref="GrassPush"/> members (the camera, light, fog and sway phases are <see cref="ViewConstants"/>).
+    /// </summary>
     static readonly Dictionary<string, string> GrassMap = new()
     {
         ["uSize"] = "pc.size",
@@ -348,8 +373,12 @@ static class FoliageShaders
     };
 
     public static string GrassVertexNative() => NativeShaders.Port(GrassVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
-    /// <summary>The blades' colour program, with the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>; the cut-out already has a <c>discard</c>).</summary>
-    public static string GrassFragmentNative() => Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(InteriorMaskRenderer.WithCut(GrassFragment), NativeShaders.Map(GrassMap), GrassPushMembers), inShader: true);
+
+    /// <summary>
+    /// The blades' colour program, with the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>; the cut-out already has a <c>discard</c>).
+    /// </summary>
+    public static string GrassFragmentNative() =>
+        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(InteriorMaskRenderer.WithCut(GrassFragment), NativeShaders.Map(GrassMap), GrassPushMembers), inShader: true);
     public static string GrassMotionVertexNative() => NativeShaders.Port(GrassMotionVertex, NativeShaders.Map(GrassMap), GrassPushMembers);
     public static string GrassMotionFragmentNative() => NativeShaders.Port(GrassMotionFragment, NativeShaders.Map(GrassMap), GrassPushMembers);
 
@@ -361,7 +390,9 @@ static class FoliageShaders
     // of a decision is `precise` (no FMA contraction) and written out in the C#'s order: IEEE adds and multiplies are correctly rounded in
     // Vulkan, so the decisions are the CPU's bit for bit; the square root of the fade is corrected to the correctly rounded one (CrSqrt).
 
-    /// <summary>The workgroup size and the largest chunk (instances of one group per workgroup).</summary>
+    /// <summary>
+    /// The workgroup size and the largest chunk (instances of one group per workgroup).
+    /// </summary>
     public const int CullChunk = 256;
 
     /// <summary>
@@ -391,7 +422,8 @@ static class FoliageShaders
                 if (k < 0 || k > 38) return r;
                 if (!CrLess(CrShift(X, k), CrSquare(2u * M + 1u))) { r = uintBitsToFloat(rb + 1u); continue; }
                 bool power = M == 0x800000u;   // below a power of two the gap is half as wide
-                if (!CrLess(power ? CrSquare(4u * M - 1u) : CrSquare(2u * M - 1u), power ? CrShift(X, k + 2) : CrShift(X, k))) { r = uintBitsToFloat(rb - 1u); continue; }
+                if (!CrLess(power ? CrSquare(4u * M - 1u) : CrSquare(2u * M - 1u), power ? CrShift(X, k + 2) : CrShift(X,
+                        k))) { r = uintBitsToFloat(rb - 1u); continue; }
                 return r;
             }
             return r;
@@ -403,27 +435,34 @@ static class FoliageShaders
         layout(local_size_x = 256) in;
         // 17 floats a record (FoliageInstanceRecord.Pack): rows 1 to 4 xyz at 0..11, the sphere at 12..15, a rock's bits at 16; std430 stride 68.
         struct Instance { float f[17]; };
-        // batchStart and batchEnd: the chunk range of the chunk's batch (the split: a batch's visible instances are laid out solid first, then fading, see ScanCompute).
+        // batchStart and batchEnd: the chunk range of the chunk's batch (the split: a batch's visible instances are laid out solid first, then
+        // fading, see ScanCompute).
         struct Chunk { uint first; uint count; float range; float rangeSquared; float inverseBand; uint flags; float transition; float inverseTransitionBand; float lodError; float lodNextError; uint batchStart; uint batchEnd; };
         // A TERRAIN-mode rock chunk (flags 1; with 2 its group's mirroring placements, else the others): ground.w is 1024 when the placement
         // mirrors, plus its biome map row + 1 (0: none). The view's biome rows switch (mode.x) and the resident biomes (a bit per row).
         // A mesh chunk of a group with an impostor (flags 4) keeps the instances before the transition, the group's impostor chunk (flags 8,
         // the same instances) those from the crossfade band on (docs/impostors.md "Drawing"). Not drawn: -2 (visible values are above -1.5).
-        // mode.y: the fog cull is on (main colour pass; FogVolumes.WriteCull): fog[0] box min and in w the weather fog's distance squared (0: none), fog[1] box max and in w 1 when the eye's block
+        // mode.y: the fog cull is on (main colour pass; FogVolumes.WriteCull): fog[0] box min and in w the weather fog's distance squared (0: none),
+        // fog[1] box max and in w 1 when the eye's block
         // is there, fog[2] eye + hide distance squared, fog[3..9] the block's planes.
         // mode.z: the occlusion cull is on (main colour pass; HizPyramid.ViewFor): hz and hzOff as OcclusionView.Vectors says.
-        // mode.w: the interior masks' X/Z boxes in interior (min x, min z, max x, max z; the main colour pass with the split, docs/render-interior-cut.md): a fully visible mesh
-        // or rock instance over one gets the fade 1.5 (drawn whole, as 2) and is laid out with the fading ones, so it is drawn with the program that has the cut.
+        // mode.w: the interior masks' X/Z boxes in interior (min x, min z, max x, max z; the main colour pass with the split,
+        // docs/render-interior-cut.md): a fully visible mesh
+        // or rock instance over one gets the fade 1.5 (drawn whole, as 2) and is laid out with the fading ones, so it is drawn with the program that
+        // has the cut.
         struct ViewData { vec4 planes[8]; vec4 lengths[2]; uvec4 resident[2]; uvec4 mode; vec4 fog[10]; vec4 hz[6]; uvec4 hzOff[3]; vec4 lod; vec4 interior[32]; };
         layout(push_constant) uniform Push { vec2 eye; uint planeCount; uint chunkCount; uint drawCount; float fullThreshold; uint split; } pc;
-        // The split (pc.split, the colour views with EarlyDepth): an instance whose mesh shader dithers it (a fade below 1; not an impostor, and a rock only with its impostor transition,
-        // the only one whose fade reaches the shader) is laid out after the batch's others, so the others can be drawn with the program that has no discard.
+        // The split (pc.split, the colour views with EarlyDepth): an instance whose mesh shader dithers it (a fade below 1; not an impostor, and a
+        // rock only with its impostor transition,
+        // the only one whose fade reaches the shader) is laid out after the batch's others, so the others can be drawn with the program that has no
+        // discard.
         bool IsFading(uint flags, float packed)
         {
             return pc.split != 0u && packed > -1.5 && (flags & 8u) == 0u && (packed == 1.5 || packed < 1.0 && ((flags & 1u) == 0u || (flags & 4u) != 0u));
         }
         uint ChunkIndex() { return gl_WorkGroupID.y * gl_NumWorkGroups.x + gl_WorkGroupID.x; }
-        // FogVolumes.Covers: the box wholly inside the eye's fog block (its box and seven planes) and its nearest point at least the hide distance away.
+        // FogVolumes.Covers: the box wholly inside the eye's fog block (its box and seven planes) and its nearest point at least the hide distance
+        // away.
         bool FogHidden(ViewData v, vec3 mn, vec3 mx)
         {
             vec3 eye = v.fog[2].xyz;
@@ -458,14 +497,18 @@ static class FoliageShaders
             for (uint b = 0u; b < view.mode.w; b++)
             {
                 vec4 box = view.interior[b];
-                if (sphere.x + sphere.w >= box.x && sphere.x - sphere.w <= box.z && sphere.z + sphere.w >= box.y && sphere.z - sphere.w <= box.w) return true;
+                if (sphere.x + sphere.w >= box.x && sphere.x - sphere.w <= box.z && sphere.z + sphere.w >= box.y && sphere.z - sphere.w <= box.w)
+                    return true;
             }
             return false;
         }
-        // The occlusion cull (HizPyramid, docs/formats/foliage.md "Occlusion culling"): the sphere seen from the previous frame's eye, against that frame's nearest and
-        // farthest view distance per block of pixels. view.hz[0] the previous eye and the eye's step, [1..3] its right, up and back axes, [4] tan x, tan y, width, height,
+        // The occlusion cull (HizPyramid, docs/formats/foliage.md "Occlusion culling"): the sphere seen from the previous frame's eye, against that
+        // frame's nearest and
+        // farthest view distance per block of pixels. view.hz[0] the previous eye and the eye's step, [1..3] its right, up and back axes, [4] tan x,
+        // tan y, width, height,
         // [5] pixels per unit of tangent, level count, level 0's width and height; view.hzOff the levels' offsets.
-        // The texels covering the pixel rectangle r (x0, y0, x1, y1): the level where it spans at most 2 x 2 texels; false when it leaves the picture.
+        // The texels covering the pixel rectangle r (x0, y0, x1, y1): the level where it spans at most 2 x 2 texels; false when it leaves the
+        // picture.
         bool HizRegion(vec4 r, out float least, out float most)
         {
             least = 3.0e38; most = 0.0;
@@ -485,9 +528,12 @@ static class FoliageShaders
                 }
             return true;
         }
-        // True when every ray from the eye to the sphere is stopped by the surfaces of the previous frame: the pixel rectangle the sphere's box covers there, grown by
-        // a pixel (the depth was drawn with a jitter) and by the parallax of the eye's step against the nearest surface in it, holds nothing but surfaces nearer than the
-        // sphere by a margin. The step's parallax: a ray from the new eye to a point of the sphere crosses the old view's picture within delta * f / z pixels of that
+        // True when every ray from the eye to the sphere is stopped by the surfaces of the previous frame: the pixel rectangle the sphere's box
+        // covers there, grown by
+        // a pixel (the depth was drawn with a jitter) and by the parallax of the eye's step against the nearest surface in it, holds nothing but
+        // surfaces nearer than the
+        // sphere by a margin. The step's parallax: a ray from the new eye to a point of the sphere crosses the old view's picture within delta * f /
+        // z pixels of that
         // point's, at the depth z where it passes the surface it hits; so the rectangle must cover delta * f / (the nearest surface in it).
         bool HizOccluded(vec4 sphere)
         {
@@ -512,9 +558,12 @@ static class FoliageShaders
             }
             return false;
         }
-        // Generated mesh levels (flag 16, FoliageLod): a chunk holds the instances of one level, whose deviation from the original (lodError, in radii of the mesh) is
-        // below view.lod.z pixels (shadow cascades: texels) while the next level's (lodNextError, infinite for the last) is not. view.lod: the eye's height, the
-        // pixels per radian (ortho views: 1 / the texel), the tolerance, 1 for an ortho view (a perspective view: minus the distance from which the tolerance grows with the distance, 0 for none). The distance is to the nearest point of the sphere.
+        // Generated mesh levels (flag 16, FoliageLod): a chunk holds the instances of one level, whose deviation from the original (lodError, in
+        // radii of the mesh) is
+        // below view.lod.z pixels (shadow cascades: texels) while the next level's (lodNextError, infinite for the last) is not. view.lod: the eye's
+        // height, the
+        // pixels per radian (ortho views: 1 / the texel), the tolerance, 1 for an ortho view (a perspective view: minus the distance from which the
+        // tolerance grows with the distance, 0 for none). The distance is to the nearest point of the sphere.
         bool LodSelected(Chunk k, vec4 sphere)
         {
             float s;
@@ -572,7 +621,8 @@ static class FoliageShaders
                         else packed = m > 0.0 ? (m < 1.0 ? m : packed) : -2.0;
                     }
                     // The fog cull last, so it counts only what would have been drawn: the sphere's box (FoliageCull.CullGroup).
-                    if (packed > -1.5 && view.mode.y != 0u && FogHidden(view, sphere.xyz - vec3(sphere.w), sphere.xyz + vec3(sphere.w))) { packed = -2.0; fogged = 1u; }
+                    if (packed > -1.5 && view.mode.y != 0u && FogHidden(view, sphere.xyz - vec3(sphere.w),
+                            sphere.xyz + vec3(sphere.w))) { packed = -2.0; fogged = 1u; }
                     if (packed > -1.5 && view.mode.z != 0u && HizOccluded(sphere)) { packed = -2.0; occluded = 1u; }
                     // A rock without an impostor transition is drawn whole from a fade of 0.5, so it takes the mark from there.
                     if (view.mode.w != 0u && (k.flags & 8u) == 0u && (packed >= 1.0 || packed > -1.5 && (k.flags & 5u) == 1u) && InInterior(sphere)) packed = 1.5;
@@ -599,7 +649,8 @@ static class FoliageShaders
     public static readonly string ScanCompute = CullCommon + """
         struct Draw { uint indexCount; uint chunkStart; uint chunkEnd; uint firstIndex; };
         struct Args { uint indexCount; uint instanceCount; uint firstIndex; int vertexOffset; uint firstInstance; };
-        layout(std430, set = 0, binding = 4) readonly buffer Counts { uint counts[]; };   // [0, n) the visible, [n, 2n) the fog cull's, [2n, 3n) the occlusion cull's, [3n, 4n) the fading
+        layout(std430, set = 0,
+                binding = 4) readonly buffer Counts { uint counts[]; };   // [0, n) the visible, [n, 2n) the fog cull's, [2n, 3n) the occlusion cull's, [3n, 4n) the fading
         layout(std430, set = 0, binding = 5) writeonly buffer Offsets { uint offsets[]; };
         layout(std430, set = 0, binding = 6) readonly buffer Draws { Draw draws[]; };
         layout(std430, set = 0, binding = 7) writeonly buffer ArgsBuffer { Args args[]; };
@@ -706,7 +757,8 @@ static class FoliageShaders
             if (visible != 0u)
             {
                 uint n = pc.chunkCount;
-                // Solid: after the batch's earlier chunks' solid ones and every fading one before the batch (S(c) + F(cs)); fading: after all the batch's solid ones (S(ce) + F(c)).
+                // Solid: after the batch's earlier chunks' solid ones and every fading one before the batch (S(c) + F(cs)); fading: after all the
+                // batch's solid ones (S(ce) + F(c)).
                 uint position = fading ? offsets[chunks[c].batchEnd] + offsets[n + 3u + c] + rankFading[i] - 1u
                                        : offsets[c] + offsets[n + 3u + chunks[c].batchStart] + rank[i] - 1u;
                 uint o = position * 4u;
@@ -718,7 +770,8 @@ static class FoliageShaders
                     int row = int(uint(instances[at].f[16]) & 1023u) - 1;
                     bool resident = row >= 0 && ((view.resident[row >> 7][(row >> 5) & 3] >> uint(row & 31)) & 1u) != 0u;
                     w = view.mode.x != 0u ? (resident ? float(row) : -1.0) : 0.0;
-                    // A rock with an impostor (flag 4) in its transition band: row 1's w, which the terrain's mesh vertex program passes on as the dither threshold.
+                    // A rock with an impostor (flag 4) in its transition band: row 1's w, which the terrain's mesh vertex program passes on as the
+                    // dither threshold.
                     if ((flags & 4u) != 0u && f < 1.0) lane = f;
                 }
                 // The fourth column is 0, 0, 0, 1 (FoliageInstanceRecord.Pack checks it); row 0's w is the fade.
@@ -742,7 +795,9 @@ static class FoliageShaders
     }
 }
 
-/// <summary>The C# side of <see cref="FoliageShaders.GrassPushMembers"/> (std430 push constants). GLSL bools are 32-bit (0 / 1).</summary>
+/// <summary>
+/// The C# side of <see cref="FoliageShaders.GrassPushMembers"/> (std430 push constants). GLSL bools are 32-bit (0 / 1).
+/// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 72)]
 struct GrassPush
 {

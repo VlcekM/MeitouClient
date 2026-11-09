@@ -12,10 +12,15 @@ namespace Meitou.Game.Rendering.Frame;
 /// vec4s <see cref="FoliageShaders"/>' <c>ViewData.hz</c> and <c>hzOff</c> hold (<see cref="Vectors"/>).</summary>
 public readonly struct OcclusionView(GpuBufferBinding buffer, Vector4[] vectors)
 {
-    /// <summary>The pyramid's storage buffer.</summary>
+    /// <summary>
+    /// The pyramid's storage buffer.
+    /// </summary>
     public GpuBufferBinding Buffer { get; } = buffer;
-    /// <summary><see cref="HizPyramid.ViewVectors"/> vec4s: [0] the previous eye and the eye's step, [1..3] the previous view's right, up and back axes,
-    /// [4] tan x, tan y, width and height of the depth, [5] pixels per unit of tangent, level count, level 0's width and height, [6..8] the level offsets (as uints).</summary>
+
+    /// <summary><see cref="HizPyramid.ViewVectors"/> vec4s: [0] the previous eye and the eye's step, [1..3] the previous view's right, up and back
+    /// axes,
+    /// [4] tan x, tan y, width and height of the depth, [5] pixels per unit of tangent, level count, level 0's width and height, [6..8] the level
+    /// offsets (as uints).</summary>
     public Vector4[] Vectors { get; } = vectors;
     public bool IsEmpty => Buffer.IsNull;
 }
@@ -29,13 +34,26 @@ public readonly struct OcclusionView(GpuBufferBinding buffer, Vector4[] vectors)
 /// </summary>
 public sealed unsafe class HizPyramid : IDisposable
 {
-    /// <summary>Texels of level 0 are this many depth pixels on a side.</summary>
+    #region Constants and state
+
+    /// <summary>
+    /// Texels of level 0 are this many depth pixels on a side.
+    /// </summary>
     public const int BaseBlock = 4;
-    /// <summary>Most levels (level 0 is 4 pixels a texel; 12 levels reach 8192 texels).</summary>
+
+    /// <summary>
+    /// Most levels (level 0 is 4 pixels a texel; 12 levels reach 8192 texels).
+    /// </summary>
     public const int MaxLevels = 12;
-    /// <summary>The vec4s <see cref="ViewFor"/> writes (and <c>ViewData</c> reads): 6 vec4 and 3 uvec4.</summary>
+
+    /// <summary>
+    /// The vec4s <see cref="ViewFor"/> writes (and <c>ViewData</c> reads): 6 vec4 and 3 uvec4.
+    /// </summary>
     public const int ViewVectors = 9;
-    /// <summary>The levels the first kernel makes (the others come from the second).</summary>
+
+    /// <summary>
+    /// The levels the first kernel makes (the others come from the second).
+    /// </summary>
     const int FusedLevels = 5;
 
     readonly GpuContext _ctx;
@@ -50,6 +68,10 @@ public sealed unsafe class HizPyramid : IDisposable
     long _builtFrame = long.MinValue;
     readonly GpuSampler _sampler;
 
+    #endregion
+
+    #region Pyramid
+
     public HizPyramid(GpuContext ctx)
     {
         this._ctx = ctx;
@@ -57,19 +79,31 @@ public sealed unsafe class HizPyramid : IDisposable
         _reduceProgram = ctx.Shaders.Compute(HizShaders.Reduce, "hiz reduce");
         _basePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_baseProgram, "hiz base"));
         _reducePipeline = ctx.Pipelines.Get(new ComputePipelineDesc(_reduceProgram, "hiz reduce"));
-        _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
+        _sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+                TextureWrapMode.ClampToEdge,
             TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
     }
 
-    /// <summary>Whether a pyramid is held (built since the depth's size last changed).</summary>
+    /// <summary>
+    /// Whether a pyramid is held (built since the depth's size last changed).
+    /// </summary>
     public bool HasData => _buffer is not null && _builtFrame != long.MinValue;
-    /// <summary>The level count and level 0's size, for the statistics.</summary>
+
+    /// <summary>
+    /// The level count and level 0's size, for the statistics.
+    /// </summary>
     public string Describe => HasData ? $"{_levelCount} levels from {_baseWidth} x {_baseHeight}, {_buffer!.Size / 1024} KB" : "none";
     internal DeviceBuffer? Storage => _buffer;
-    /// <summary>Frames built.</summary>
+
+    /// <summary>
+    /// Frames built.
+    /// </summary>
     public long Builds { get; private set; }
 
-    /// <summary>The level sizes of a depth of <paramref name="w"/> x <paramref name="h"/> pixels: level 0 is a quarter of it on each side (rounded up), each next one half, to 1 x 1 or <see cref="MaxLevels"/>.</summary>
+    /// <summary>
+    /// The level sizes of a depth of <paramref name="w"/> x <paramref name="h"/> pixels: level 0 is a quarter of it on each side (rounded up), each
+    /// next one half, to 1 x 1 or <see cref="MaxLevels"/>.
+    /// </summary>
     public static List<(int W, int H)> Levels(int w, int h)
     {
         var levels = new List<(int, int)>();
@@ -86,7 +120,8 @@ public sealed unsafe class HizPyramid : IDisposable
 
     /// <summary>
     /// Records the pyramid of the scene's depth <paramref name="depth"/>, drawn with the planes <paramref name="planes"/> (near, far), into
-    /// <paramref name="cmd"/> (outside any rendering). <paramref name="viewRotation"/> is the camera's view without its translation (the world to view
+    /// <paramref name="cmd"/> (outside any rendering). <paramref name="viewRotation"/> is the camera's view without its translation (the world to
+    /// view
     /// rotation, as <c>PostProcess</c> keeps it), <paramref name="fieldOfView"/> and <paramref name="aspect"/> the projection's.
     /// </summary>
     public void Build(IGpuCommandList cmd, GpuTexture depth, Vector2 planes, int w, int h, Vector3 eyePosition, Matrix4x4 viewRotation,
@@ -113,7 +148,9 @@ public sealed unsafe class HizPyramid : IDisposable
         Builds++;
     }
 
-    /// <summary>Sizes the storage for the <paramref name="levels"/> of a <paramref name="w"/> x <paramref name="h"/> depth and lays them out.</summary>
+    /// <summary>
+    /// Sizes the storage for the <paramref name="levels"/> of a <paramref name="w"/> x <paramref name="h"/> depth and lays them out.
+    /// </summary>
     void Allocate(List<(int W, int H)> levels, int w, int h)
     {
         ulong texels = 0;
@@ -132,7 +169,9 @@ public sealed unsafe class HizPyramid : IDisposable
         }
     }
 
-    /// <summary>The camera the depth was drawn from, for <see cref="ViewFor"/>.</summary>
+    /// <summary>
+    /// The camera the depth was drawn from, for <see cref="ViewFor"/>.
+    /// </summary>
     void KeepCamera(Vector3 eyePosition, Matrix4x4 viewRotation, float fieldOfView, float aspect)
     {
         _eye = eyePosition;
@@ -143,7 +182,9 @@ public sealed unsafe class HizPyramid : IDisposable
         _tanX = _tanY * aspect;
     }
 
-    /// <summary>Levels 0 to 4 in one dispatch (a 16 x 16 tile of level 0 per workgroup, the rest through shared memory).</summary>
+    /// <summary>
+    /// Levels 0 to 4 in one dispatch (a 16 x 16 tile of level 0 per workgroup, the rest through shared memory).
+    /// </summary>
     void RecordBase(IGpuCommandList cmd, GpuTexture depth, Vector2 planes, List<(int W, int H)> levels)
     {
         var bindings = stackalloc GpuBinding[2];
@@ -169,7 +210,9 @@ public sealed unsafe class HizPyramid : IDisposable
         cmd.Dispatch((uint)((levels[0].W + 15) / 16), (uint)((levels[0].H + 15) / 16));
     }
 
-    /// <summary>The rest (at most about a thousand texels a level) in one workgroup, a level at a time.</summary>
+    /// <summary>
+    /// The rest (at most about a thousand texels a level) in one workgroup, a level at a time.
+    /// </summary>
     void RecordReduce(IGpuCommandList cmd, List<(int W, int H)> levels)
     {
         var bindings = stackalloc GpuBinding[1];
@@ -182,11 +225,18 @@ public sealed unsafe class HizPyramid : IDisposable
         cmd.Dispatch(1);
     }
 
-    /// <summary>Forgets the pyramid (the depth's size or the camera's continuity changed): no frame uses it until the next <see cref="Build"/>.</summary>
+    /// <summary>
+    /// Forgets the pyramid (the depth's size or the camera's continuity changed): no frame uses it until the next <see cref="Build"/>.
+    /// </summary>
     public void Invalidate() => _builtFrame = long.MinValue;
 
+    #endregion
+
+    #region Occlusion view
+
     /// <summary>
-    /// What the current frame's cull may use: the last frame's pyramid when it is the frame just before this one, and the eye <paramref name="current"/> has not
+    /// What the current frame's cull may use: the last frame's pyramid when it is the frame just before this one, and the eye <paramref
+    /// name="current"/> has not
     /// moved <paramref name="maxStep"/> since (a cut or a teleport reads as a reset, as <c>PostProcess.RunUpscale</c> does at 5000); else empty.
     /// </summary>
     public OcclusionView ViewFor(Vector3 current, float maxStep = 5000f)
@@ -194,11 +244,16 @@ public sealed unsafe class HizPyramid : IDisposable
         if (!HasData || _ctx.Frame.Number - _builtFrame > 1) return default;
         float step = Vector3.Distance(current, _eye);
         if (!(step <= maxStep)) return default;
-        return new OcclusionView(new GpuBufferBinding(_buffer!.Handle, 0, _buffer.Size), Vectors(_eye, step, _right, _up, _back, _tanX, _tanY, _width, _height, _levelCount, _baseWidth, _baseHeight, _offsets));
+        return new OcclusionView(new GpuBufferBinding(_buffer!.Handle, 0, _buffer.Size), Vectors(_eye, step, _right, _up, _back, _tanX, _tanY, _width,
+                _height, _levelCount, _baseWidth, _baseHeight, _offsets));
     }
 
-    /// <summary>The vec4s of <see cref="OcclusionView.Vectors"/>: the camera the depth was drawn from (<paramref name="eye"/>, view axes, tangents of half the field of view, size) and the eye's step since.</summary>
-    internal static Vector4[] Vectors(Vector3 eye, float step, Vector3 right, Vector3 up, Vector3 back, float tanX, float tanY, int width, int height, int levelCount, int baseWidth, int baseHeight, uint[] offsets)
+    /// <summary>
+    /// The vec4s of <see cref="OcclusionView.Vectors"/>: the camera the depth was drawn from (<paramref name="eye"/>, view axes, tangents of half the
+    /// field of view, size) and the eye's step since.
+    /// </summary>
+    internal static Vector4[] Vectors(Vector3 eye, float step, Vector3 right, Vector3 up, Vector3 back, float tanX, float tanY, int width, int height,
+            int levelCount, int baseWidth, int baseHeight, uint[] offsets)
     {
         var v = new Vector4[ViewVectors];
         v[0] = new Vector4(eye, step);
@@ -235,6 +290,10 @@ public sealed unsafe class HizPyramid : IDisposable
         public struct OffsetArray { uint _first; }
     }
 
+    #endregion
+
+    #region Disposal
+
     public void Dispose()
     {
         foreach (var p in new[] { _baseProgram, _reduceProgram })
@@ -244,19 +303,27 @@ public sealed unsafe class HizPyramid : IDisposable
         }
         _buffer?.Dispose();
     }
+
+    #endregion
 }
 
-/// <summary>The kernels of <see cref="HizPyramid"/>.</summary>
+/// <summary>
+/// The kernels of <see cref="HizPyramid"/>.
+/// </summary>
 static class HizShaders
 {
-    /// <summary>Distances beyond this stand for "no geometry" (the sky): nothing is hidden by them.</summary>
+    /// <summary>
+    /// Distances beyond this stand for "no geometry" (the sky): nothing is hidden by them.
+    /// </summary>
     public const float Infinite = 1e9f;
 
     /// <summary>
-    /// Levels 0 to 4: a workgroup of 16 x 16 threads takes 64 x 64 pixels. Each thread makes a texel of level 0 (the least and greatest view distance over its 4 x 4
+    /// Levels 0 to 4: a workgroup of 16 x 16 threads takes 64 x 64 pixels. Each thread makes a texel of level 0 (the least and greatest view distance
+    /// over its 4 x 4
     /// pixels; the distance is rebuilt from the scene depth as the velocity pass does, <c>UpscaleShaders.Velocity</c>, through
     /// <see cref="DepthConvention.Glsl"/>; a cleared pixel, the sky, is infinitely far), and the later levels come through shared memory (a texel
-    /// out of range is the neutral (+inf, 0), which gives the clamped result of a ceiling-sized level). Level k at (x, y) is written when it exists (k below the level count).
+    /// out of range is the neutral (+inf, 0), which gives the clamped result of a ceiling-sized level). Level k at (x, y) is written when it exists
+    /// (k below the level count).
     /// </summary>
     public const string Base = """
         #version 450
@@ -315,7 +382,9 @@ static class HizShaders
         }
         """;
 
-    /// <summary>The levels from 5 up, one workgroup, a level at a time (each texel the least and greatest of the 2 x 2 below it, clamped at the edge).</summary>
+    /// <summary>
+    /// The levels from 5 up, one workgroup, a level at a time (each texel the least and greatest of the 2 x 2 below it, clamped at the edge).
+    /// </summary>
     public const string Reduce = """
         #version 450
         layout(local_size_x = 256) in;

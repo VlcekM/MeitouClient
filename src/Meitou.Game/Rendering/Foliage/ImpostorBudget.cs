@@ -17,29 +17,52 @@ namespace Meitou.Game.Rendering.Foliage;
 /// </summary>
 public static class ImpostorBudget
 {
-    /// <summary>The share of the device-local budget, for a discrete and an integrated GPU.</summary>
+    /// <summary>
+    /// The share of the device-local budget, for a discrete and an integrated GPU.
+    /// </summary>
     public const double Share = 0.08, IntegratedShare = 0.05;
-    /// <summary>The most the default may be (MB), for a discrete and an integrated GPU: all 267 base-game atlases at full detail are 1637 MB; far mips need far less.</summary>
+
+    /// <summary>
+    /// The most the default may be (MB), for a discrete and an integrated GPU: all 267 base-game atlases at full detail are 1637 MB;
+    /// far mips need far less.
+    /// </summary>
     public const double CapMb = 1024, IntegratedCapMb = 256;
-    /// <summary>The least the default may be (MB), unless that is more than <see cref="MaxShare"/> of the budget.</summary>
+
+    /// <summary>
+    /// The least the default may be (MB), unless that is more than <see cref="MaxShare"/> of the budget.
+    /// </summary>
     public const double FloorMb = 48;
-    /// <summary>The default never exceeds this share of the budget, whatever the floor says.</summary>
+
+    /// <summary>
+    /// The default never exceeds this share of the budget, whatever the floor says.
+    /// </summary>
     public const double MaxShare = 0.12;
-    /// <summary>The budget when the card's is not known (before the guard's first sample, or no VK_EXT_memory_budget): the fixed 192 MB of before.</summary>
+
+    /// <summary>
+    /// The budget when the card's is not known (before the guard's first sample, or no VK_EXT_memory_budget): the fixed 192 MB of before.
+    /// </summary>
     public const double UnknownMb = 192;
-    /// <summary>The factor on the limit while the guard is under pressure.</summary>
+
+    /// <summary>
+    /// The factor on the limit while the guard is under pressure.
+    /// </summary>
     public const double PressureFactor = 0.75;
 
-    /// <summary>The default budget (MB) for a device-local budget of <paramref name="deviceBudgetBytes"/> (0: unknown).</summary>
+    /// <summary>
+    /// The default budget (MB) for a device-local budget of <paramref name="deviceBudgetBytes"/> (0: unknown).
+    /// </summary>
     public static double DefaultMb(long deviceBudgetBytes, bool integrated)
     {
         if (deviceBudgetBytes <= 0) return UnknownMb;
+
         double mb = deviceBudgetBytes / 1048576.0;
         double value = Math.Clamp(mb * (integrated ? IntegratedShare : Share), FloorMb, integrated ? IntegratedCapMb : CapMb);
         return Math.Min(value, mb * MaxShare);
     }
 
-    /// <summary>The limit in force (MB): <paramref name="overrideMb"/> or the default, three quarters of it under pressure.</summary>
+    /// <summary>
+    /// The limit in force (MB): <paramref name="overrideMb"/> or the default, three quarters of it under pressure.
+    /// </summary>
     public static double LimitMb(double? overrideMb, long deviceBudgetBytes, bool integrated, bool pressure) =>
         (overrideMb is > 0 ? overrideMb.Value : DefaultMb(deviceBudgetBytes, integrated)) * (pressure ? PressureFactor : 1);
 }

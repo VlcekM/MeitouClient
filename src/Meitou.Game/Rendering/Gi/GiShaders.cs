@@ -4,7 +4,9 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game.Rendering.Gi;
 
-/// <summary>The global illumination's shaders (docs/render-gi.md).</summary>
+/// <summary>
+/// The global illumination's shaders (docs/render-gi.md).
+/// </summary>
 static class GiShaders
 {
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
@@ -12,7 +14,8 @@ static class GiShaders
     /// <summary>
     /// The probe volume's layout and how a surface reads it (docs/render-gi.md "Probes"), shared by every world shader (through
     /// <see cref="AtmosphereShaders.Functions"/>, GLSL 330) and the probe trace (the bounces beyond the first). Needs <c>uGiParams</c>,
-    /// <c>uGiGrid[4]</c>, <c>uGiIrradiance</c>, <c>uGiDistance</c> and <c>uGiBase</c> declared before it. Per cascade c: <c>uGiGrid[2c]</c> = the world x and z
+    /// <c>uGiGrid[4]</c>, <c>uGiIrradiance</c>, <c>uGiDistance</c> and <c>uGiBase</c> declared before it. Per cascade c: <c>uGiGrid[2c]</c> = the
+    /// world x and z
     /// of window column 0, the spacing across and up; <c>uGiGrid[2c + 1]</c> = the toroidal offset of window column 0 in x and z, the distance
     /// atlas's normalisation, 0. A probe of window column (i, k), layer l stands at (x0 + i·s, base + (l + 0.5)·sy, z0 + k·s), base the terrain
     /// height of its column (<c>uGiBase</c>).
@@ -620,7 +623,8 @@ static class GiShaders
         bool visible(vec3 origin, vec3 dir, float tMax)
         {
             rayQueryEXT rq;
-            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF, origin, 0.0, dir, tMax);
+            rayQueryInitializeEXT(rq, uScene, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT, 0xFF,
+                    origin, 0.0, dir, tMax);
             while (rayQueryProceedEXT(rq)) { }
             return rayQueryGetIntersectionTypeEXT(rq, true) == gl_RayQueryCommittedIntersectionNoneEXT;
         }

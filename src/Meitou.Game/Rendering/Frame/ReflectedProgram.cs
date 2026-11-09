@@ -15,7 +15,10 @@ sealed class ReflectedProgram : IDisposable
     public readonly GpuProgram P;
     readonly int[] _locations;
     readonly ScalarKind[] _kinds;
-    /// <summary>The program's own input locations (below the instance rows): 0 .. Own − 1.</summary>
+
+    /// <summary>
+    /// The program's own input locations (below the instance rows): 0 .. Own − 1.
+    /// </summary>
     public readonly int Own;
     VertexLayout? _last;
 
@@ -44,7 +47,9 @@ sealed class ReflectedProgram : IDisposable
         return _last = new VertexLayout(inputs.ToArray());
     }
 
-    /// <summary>Locations 0 .. <paramref name="count"/> − 1 as one array for one bind: each attribute's buffer, GL's constant where none.</summary>
+    /// <summary>
+    /// Locations 0 .. <paramref name="count"/> − 1 as one array for one bind: each attribute's buffer, GL's constant where none.
+    /// </summary>
     public GpuBufferBinding[] Buffers(ReadOnlySpan<LegacyProgram.Attribute?> byLocation, int count)
     {
         var result = new GpuBufferBinding[count];
@@ -67,14 +72,19 @@ sealed class ReflectedProgram : IDisposable
     }
 }
 
-/// <summary>Frustum tests shared by the renderers.</summary>
+/// <summary>
+/// Frustum tests shared by the renderers.
+/// </summary>
 static class FrustumTests
 {
-    /// <summary>Whether a sphere is not wholly outside any of the (not necessarily normalised) <paramref name="planes"/>.</summary>
+    /// <summary>
+    /// Whether a sphere is not wholly outside any of the (not necessarily normalised) <paramref name="planes"/>.
+    /// </summary>
     public static bool SphereVisible(Vector4[] planes, Vector3 centre, float radius)
     {
         foreach (var p in planes)
-            if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z)) return false;
+            if (p.X * centre.X + p.Y * centre.Y + p.Z * centre.Z + p.W < -radius * MathF.Sqrt(p.X * p.X + p.Y * p.Y + p.Z * p.Z))
+                return false;
         return true;
     }
 }
