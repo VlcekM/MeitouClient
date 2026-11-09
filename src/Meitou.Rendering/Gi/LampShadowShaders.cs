@@ -261,7 +261,7 @@ static class LampShadowShaders
         // What stands on the ground: the nearest kept surface.
         float objectHit(vec3 from, vec3 dir, float near, float reach, uint emitter, uint mask)
         {
-            uint flags = gl_RayFlagsCullBackFacingTrianglesEXT;
+            uint flags = mask == {{TracedSunShaders.Characters}}u ? 0u : gl_RayFlagsCullBackFacingTrianglesEXT;   // a character's cloth is one-sided: seen from behind it must still block
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
             rayQueryEXT q;
             rayQueryInitializeEXT(q, uScene, flags, mask, from, near, dir, reach);

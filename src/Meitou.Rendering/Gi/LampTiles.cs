@@ -15,12 +15,12 @@ namespace Meitou.Rendering.Gi;
 /// </summary>
 sealed unsafe class LampTiles : IDisposable
 {
-    public const int AtlasSize = 8192, MoverAtlasSize = 4096, MinTile = 64, MaxTile = 2048;
+    public const int AtlasSize = 8192, MoverAtlasSize = 8192, MinTile = 64, MaxTile = 2048, MaxMoverSide = 1024;
     const int Bindings = 4, JobLimit = 350, JobVectors = 5;
     /// <summary>Rays spent on still tiles in a frame (at least one tile is filled): what a town costs to come in, spread over a few frames.</summary>
     const long RaysPerFrame = 3_000_000;
-    /// <summary>Rays spent on what moves in a frame: past it the lamps furthest from the eye keep last frame's.</summary>
-    const long MoverRaysPerFrame = 2_000_000;
+    /// <summary>Rays spent on what moves in a frame: past it the lamps furthest from the eye have no moving layer (a stale one would leave a shadow behind).</summary>
+    const long MoverRaysPerFrame = 4_000_000;
     /// <summary>World units a tile's texel covers at the end of the lamp's reach, near the eye.</summary>
     const float TexelAtReach = 1.25f;
     /// <summary>Past this distance from the eye (to the lamp's reach) a lamp has no tile: the traced scene ends about here.</summary>
@@ -35,7 +35,7 @@ sealed unsafe class LampTiles : IDisposable
     const int NearRefillFrames = 2, FarRefillFrames = 16;
 
     /// <summary>Debug (console <c>lamps tiles</c>): off goes back to the per-pixel rays.</summary>
-    public static bool Enabled { get; set; } = true;
+    public static bool Enabled { get; set; }
 
     /// <summary>What a tile texel's rays see: a still tile, the characters alone, everything (a carried lamp), or nothing (a layer made ready).</summary>
     enum Mode { Still = 0, Characters = 1, Everything = 2, Clear = 3 }
@@ -133,7 +133,7 @@ sealed unsafe class LampTiles : IDisposable
     readonly List<(WorldLight Light, int Slot)> movingNow = [];
     readonly List<(long Key, Vector3 Centre, float Radius)> characters = [];
     readonly List<long> gone = [];
-    readonly Job[] jobs = new Job[JobLimit];
+    readonly Job[] jobs = new Job[JobLimit], clearJobs = new Job[JobLimit], savedJobs = new Job[JobLimit];
     readonly byte[] block = new byte[16 + JobLimit * JobVectors * 16];
     long frame;
     Vector3 eye;
@@ -307,36 +307,43 @@ sealed unsafe class LampTiles : IDisposable
         RaysLast = rays;
     }
 
-    /// <summary>The moving layers: for each lamp with a tile, the texels each character in reach covers or covered last frame.</summary>
+    /// <summary>The moving layers: for each lamp with a tile, nearest the eye first, the texels each character in reach covers or covered last frame. Twice the still tile's resolution, at most <see cref="MaxMoverSide"/>.</summary>
     void FillMoving(CommandList cmd, GiScene scene)
     {
         characters.Clear();
         scene.CollectMovers(characters);
         lit.Sort((a, b) => a.EyeDistance.CompareTo(b.EyeDistance));
-        int count = 0;
-        uint groups = 0;
+        int count = 0, clears = 0;
+        uint groups = 0, clearGroups = 0;
         long rays = 0;
+        bool spent = false;
         foreach (var e in lit)
         {
-            if (count + e.Rects.Count + 1 > JobLimit || rays > MoverRaysPerFrame) break;
+            spent |= rays > MoverRaysPerFrame || count + clears + e.Rects.Count + 16 > JobLimit;
+            if (spent)
+            {
+                DropMovers(e);
+                continue;
+            }
             var l = e.Light;
+            int side = Math.Min(e.Size * 2, MaxMoverSide);
+            if (e.MoverSide != 0 && e.MoverSide != side) DropMovers(e);
             bool any = false;
             gone.Clear();
             foreach (var key in e.Rects.Keys) gone.Add(key);
             foreach (var (key, centre, radius) in characters)
             {
                 if (Vector3.DistanceSquared(centre, l.Position) > (l.Radius + radius) * (l.Radius + radius)) continue;
-                if (count + 9 > JobLimit) break;
-                int found = AreasOf(e, centre, radius, areas);
+                int found = AreasOf(e, side, centre, radius, areas);
                 if (found == 0) continue;
-                any = true;
                 if (e.MoverSide == 0)
                 {
-                    if (!moverSquares.Allocate(e.Size, out int mx, out int my)) break;
-                    (e.MoverX, e.MoverY, e.MoverSide) = (mx, my, e.Size);
-                    // A fresh place may hold another lamp's layer: all of it is made ready first.
-                    jobs[count++] = JobFor(scene, l, mx, my, e.Size, e.Oct, new Rect(0, 0, e.Size, e.Size), Mode.Clear, 0, ref groups);
+                    if (!moverSquares.Allocate(side, out int mx, out int my)) break;
+                    (e.MoverX, e.MoverY, e.MoverSide) = (mx, my, side);
+                    // A fresh place may hold another lamp's layer: made ready in a dispatch of its own, before the traces (run side by side, it wrote over them in blocks).
+                    clearJobs[clears++] = JobFor(scene, l, mx, my, side, e.Oct, new Rect(0, 0, side, side), Mode.Clear, 0, ref clearGroups);
                 }
+                any = true;
                 for (int a = 0; a < found && count < JobLimit; a++)
                 {
                     long part = key * 8 + areas[a].Part;
@@ -346,6 +353,7 @@ sealed unsafe class LampTiles : IDisposable
                     jobs[count++] = JobFor(scene, l, e.MoverX, e.MoverY, e.MoverSide, e.Oct, traced, Mode.Characters, 0, ref groups);
                     rays += traced.W * traced.H;
                 }
+                if (count + 16 > JobLimit) break;
             }
             foreach (var key in gone)
             {
@@ -356,9 +364,16 @@ sealed unsafe class LampTiles : IDisposable
                 e.Rects.Remove(key);
             }
             if (any) e.MoverSeen = frame;
-            else if (e.MoverSide > 0 && frame - e.MoverSeen > MoverKeepFrames) DropMovers(e);
+            else if (e.MoverSide > 0 && e.Rects.Count == 0 && frame - e.MoverSeen > MoverKeepFrames) DropMovers(e);
         }
         MoverRaysLast = rays;
+        if (clears > 0)
+        {
+            Array.Copy(jobs, savedJobs, count);
+            Array.Copy(clearJobs, jobs, clears);
+            Run(cmd, scene, movers, clears, clearGroups);
+            Array.Copy(savedJobs, jobs, count);
+        }
         if (count > 0) Run(cmd, scene, movers, count, groups);
     }
 
@@ -372,10 +387,9 @@ sealed unsafe class LampTiles : IDisposable
     /// The areas of the tile <paramref name="centre"/>'s sphere covers, with a margin of two texels: one on a cone's plane; on a sphere's map one per octant it reaches, as the map folds between them. The whole
     /// tile when it stands at the lamp. Returns how many.
     /// </summary>
-    int AreasOf(Entry e, Vector3 centre, float radius, (int Part, Rect Area)[] into)
+    int AreasOf(Entry e, int side, Vector3 centre, float radius, (int Part, Rect Area)[] into)
     {
         var l = e.Light;
-        int side = e.Size;
         var v = centre - l.Position;
         float dist = v.Length();
         if (dist <= radius + 2)
@@ -411,7 +425,9 @@ sealed unsafe class LampTiles : IDisposable
             return found;
         }
         var axis = l.Direction;
-        float along = Vector3.Dot(v, axis), cosOuter = MathF.Cos(MathF.Max(l.InnerAngle, l.OuterAngle) * 0.5f);
+        float along = Vector3.Dot(v, axis), halfOuter = MathF.Max(l.InnerAngle, l.OuterAngle) * 0.5f, cosOuter = MathF.Cos(halfOuter);
+        // Outside the cone: nothing there falls in the tile (beside a lamp a character stands near its plane, and would otherwise take the whole tile).
+        if (MathF.Acos(Math.Clamp(along / dist, -1, 1)) - MathF.Asin(Math.Min(radius / dist, 1)) > halfOuter * 1.04f) return 0;
         if (along <= radius)
         {
             if (along + radius <= 0) return 0;

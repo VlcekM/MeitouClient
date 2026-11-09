@@ -46,23 +46,40 @@ static class LampShaders
     /// point's own depth (a slope turned from the lamp would shade itself). Nothing here changes from frame to frame.
     /// </summary>
     public const string TileVisibility = """
-        ivec2 lampMoverCorner = ivec2(-1);   // the lamp's moving layer in uLampMovers, set by lampTileVisibility (x -1: none)
+        ivec2 lampMoverCorner = ivec2(-1);   // the lamp's moving layer in uLampMovers, set by lampTileVisibility (x -1: none), its side
+        int lampMoverSide = 0;
+        float lampMoverAt(ivec2 q)
+        {
+            return texelFetch(uLampMovers, lampMoverCorner + clamp(q, ivec2(0), ivec2(lampMoverSide - 1)), 0).r;
+        }
         float lampTileAt(ivec2 corner, int side, ivec2 q)
         {
             ivec2 at = clamp(q, ivec2(0), ivec2(side - 1));
             float v = texelFetch(uLampTiles, corner + at, 0).r;
-            return lampMoverCorner.x < 0 ? v : min(v, texelFetch(uLampMovers, lampMoverCorner + at, 0).r);
+            if (lampMoverCorner.x < 0) return v;
+            return min(v, lampMoverAt(ivec2(floor((vec2(at) + 0.5) * float(lampMoverSide) / float(side)))));
         }
         // Whether a point at depth receiver gets past the blockers, filtered over a texel.
         float lampTileLit(ivec2 corner, int side, vec2 st, float receiver)
         {
             vec2 at = st - 0.5, base = floor(at), f = at - base;
-            ivec2 q = ivec2(base);
-            float l00 = step(receiver, lampTileAt(corner, side, q));
-            float l10 = step(receiver, lampTileAt(corner, side, q + ivec2(1, 0)));
-            float l01 = step(receiver, lampTileAt(corner, side, q + ivec2(0, 1)));
-            float l11 = step(receiver, lampTileAt(corner, side, q + ivec2(1, 1)));
-            return mix(mix(l00, l10, f.x), mix(l01, l11, f.x), f.y);
+            ivec2 q = clamp(ivec2(base), ivec2(0), ivec2(side - 1)), r = clamp(ivec2(base) + 1, ivec2(0), ivec2(side - 1));
+            float l00 = step(receiver, texelFetch(uLampTiles, corner + ivec2(q.x, q.y), 0).r);
+            float l10 = step(receiver, texelFetch(uLampTiles, corner + ivec2(r.x, q.y), 0).r);
+            float l01 = step(receiver, texelFetch(uLampTiles, corner + ivec2(q.x, r.y), 0).r);
+            float l11 = step(receiver, texelFetch(uLampTiles, corner + ivec2(r.x, r.y), 0).r);
+            float still = mix(mix(l00, l10, f.x), mix(l01, l11, f.x), f.y);
+            if (lampMoverCorner.x < 0) return still;
+            // The moving layer at its own, finer resolution.
+            at = st * float(lampMoverSide) / float(side) - 0.5;
+            base = floor(at);
+            f = at - base;
+            q = ivec2(base);
+            float m00 = step(receiver, lampMoverAt(q));
+            float m10 = step(receiver, lampMoverAt(q + ivec2(1, 0)));
+            float m01 = step(receiver, lampMoverAt(q + ivec2(0, 1)));
+            float m11 = step(receiver, lampMoverAt(q + ivec2(1, 1)));
+            return min(still, mix(mix(m00, m10, f.x), mix(m01, m11, f.x), f.y));
         }
         // How far from the lamp the surface lies along another ray: the plane through the point, a lookup beside it reads the surface beside it.
         float lampTilePlane(float d, float facing, vec3 n, vec3 ray)
@@ -86,7 +103,8 @@ static class LampShaders
             vec4 m = texelFetch(uLightData, ivec2(5, lamp), 0);
             float reach = texelFetch(uLightData, ivec2(0, lamp), 0).w, radius = m.x;
             int moverPlace = int(m.y), moverRow = moverPlace / 128;
-            lampMoverCorner = int(m.z) == side ? ivec2(moverPlace - moverRow * 128, moverRow) * LAMP_TILE_UNIT : ivec2(-1);
+            lampMoverSide = int(m.z);
+            lampMoverCorner = lampMoverSide > 0 ? ivec2(moverPlace - moverRow * 128, moverRow) * LAMP_TILE_UNIT : ivec2(-1);
             vec3 l = toLamp / max(d, 1e-4);
             // The drawn triangle's plane, not the normal map's: the bumps would bend the plane the lookups compare with and draw the penumbra's steps along the ripples.
             vec3 n = shading;
@@ -138,7 +156,7 @@ static class LampShaders
             }
             if (held < 0.5) return 1.0;
             float blocker = sum / held * reach;
-            float spread = clamp(radius * max(d - blocker, 0.0) / max(blocker, 1.0) / texel, 1.0, 64.0);
+            float spread = clamp(radius * max(d - blocker, 0.0) / max(blocker, 1.0) / texel, 1.5, 64.0);
 
             // The filter: a fixed spiral of lookups over the penumbra, more for a wide one.
             float lit = 0.0;
