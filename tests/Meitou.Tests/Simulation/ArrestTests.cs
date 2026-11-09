@@ -79,64 +79,102 @@ public class ArrestTests
     {
         var data = Town();
         var relations = data.Relations;
+        using var world = ScriptedWorld(data, relations, threads, out var arrest);
+        int city = data.FactionIndex("50-a");
+        var playerSquad = new Squad { Id = 1000, TemplateId = "p", Faction = relations.PlayerFaction };
+        world.Squads.Add(playerSquad);
+
+        Police(world, city, new Vector2(0, 60));
+        Police(world, city, new Vector2(-200, 200));
+        var hero = Hero(world, relations, city, playerSquad, new Vector2(0, 0), "hero", 5000,
+                new Combatant { Attack = 20, Defence = 40, Dodge = 40, Toughness = 50 });
+        world.Characters.Cold(hero.Slot)!.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;
+        var picker = Hero(world, relations, city, playerSquad, new Vector2(-200, 0), "picker", 2500, new Combatant());
+        world.Characters.Cold(picker.Slot)!.Stats![StatsEnumerated.Lockpicking] = 60;
+        var cageB = world.Fixtures.Find("0.0:cageB")!;
+
+        Assert.True(world.Fixtures.Imprison(world, picker, cageB));
+
+        var (hashes, picked) = RunTheScript(world, picker, cageB);
+        var heroCold = world.Characters.Cold(hero.Slot)!;
+        var seen = (Jailed: heroCold.IsImprisoned && heroCold.InWhat == "0.0:cageA" && arrest.Log.Any(e => e.Kind == ArrestEventKind.Jailed
+                && e.Target == hero),
+            Picked: picked, Escaped: world.Characters.Cold(picker.Slot)!.Escaped || arrest.Log.Any(e => e.Target == picker));
+
+        // It covers what it is for: the arrest reached the cage, the prisoner's pick opened the other cage, and getting out was an escape.
+        Assert.True(seen.Jailed && seen.Picked && seen.Escaped, $"{seen}");
+
+        return hashes;
+    }
+
+    /// <summary>
+    /// The world of <see cref="Scripted"/>: player, pursuit, movement, bodies, carrying, combat, retaliation, aggro, crime, arrest and locks, the
+    /// town's site registered.
+    /// </summary>
+    static SimWorld ScriptedWorld(PopulationData data, FactionRelations relations, int threads, out ArrestSystem arrest)
+    {
         var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
                 new CombatOptions { SelfApproach = false, TickMedical = false }) { Relations = relations };
         var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = relations };
         var crime = new CrimeSystem(relations);
         combat.Crimes = crime;
         carry.Crimes = crime;
-        var arrest = new ArrestSystem(crime, BaseGame, new ArrestSettings { RecordLog = true }) { Carry = carry };
+        arrest = new ArrestSystem(crime, BaseGame, new ArrestSettings { RecordLog = true }) { Carry = carry };
         var locks = new LockSystem(BaseGame, BodyOptions.Default) { Crimes = crime };
         var walk = new OpenGroundWalkability((_, _) => 150);
-        using var world = new SimWorld(new WorldSettings { Seed = 31, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
+        var world = new SimWorld(new WorldSettings { Seed = 31, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
             [new PlayerSystem(), new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), carry, combat,
              new RetaliationSystem(combat), new AggroSystem(relations), crime, arrest, locks]);
         world.Fixtures.RegisterSite(world, data, 0);
-        int city = data.FactionIndex("50-a");
-        var playerSquad = new Squad { Id = 1000, TemplateId = "p", Faction = relations.PlayerFaction };
-        world.Squads.Add(playerSquad);
+        return world;
+    }
 
-        CharacterId Police(Vector2 at)
-        {
-            var cold = new Combatant { Name = "officer", Attack = 70, Strength = 70 }.MakeCold();
-            cold.Faction = city;
-            cold.NpcClass = FundamentalType.LawEnforcement;
-            var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = city, Town = 0,
-                    HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 500 };
-            world.Squads.Add(squad);
-            cold.SquadId = squad.Id;
-            var id = world.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60,
-                    WalkSpeed = 15, Yaw = MathF.Atan2(-at.X, -at.Y), Task = (byte)CharacterTask.Idle }, cold, 0);
-            squad.Members.Add(id);
-            squad.Leader = id;
-            return id;
-        }
-        CharacterId Hero(Vector2 at, string name, int bounty, Combatant stats)
-        {
-            var cold = stats.MakeCold(name);
-            cold.Race = Person;
-            cold.Faction = relations.PlayerFaction;
-            cold.IsPlayer = true;
-            cold.NpcClass = FundamentalType.Adventurer;
-            cold.SquadId = playerSquad.Id;
-            var entry = (cold.Bounties = new BountyLedger()).Get(city, "city");
-            entry.Amount = bounty;
-            var id = world.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60,
-                    WalkSpeed = 15, Yaw = MathF.PI }, cold, 0);
-            playerSquad.Members.Add(id);
-            return id;
-        }
+    /// <summary>
+    /// A city policeman in a squad of his own homed on the town, standing at <paramref name="at"/> from the centre and facing it.
+    /// </summary>
+    static CharacterId Police(SimWorld world, int city, Vector2 at)
+    {
+        var cold = new Combatant { Name = "officer", Attack = 70, Strength = 70 }.MakeCold();
+        cold.Faction = city;
+        cold.NpcClass = FundamentalType.LawEnforcement;
+        var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = city, Town = 0,
+                HomeCentre = new Vector2(Centre.X, Centre.Z), HomeRadius = 500 };
+        world.Squads.Add(squad);
+        cold.SquadId = squad.Id;
+        var id = world.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60,
+                WalkSpeed = 15, Yaw = MathF.Atan2(-at.X, -at.Y), Task = (byte)CharacterTask.Idle }, cold, 0);
+        squad.Members.Add(id);
+        squad.Leader = id;
+        return id;
+    }
 
-        Police(new Vector2(0, 60));
-        Police(new Vector2(-200, 200));
-        var hero = Hero(new Vector2(0, 0), "hero", 5000, new Combatant { Attack = 20, Defence = 40, Dodge = 40, Toughness = 50 });
-        world.Characters.Cold(hero.Slot)!.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;
-        var picker = Hero(new Vector2(-200, 0), "picker", 2500, new Combatant());
-        world.Characters.Cold(picker.Slot)!.Stats![StatsEnumerated.Lockpicking] = 60;
-        var cageB = world.Fixtures.Find("0.0:cageB")!;
+    /// <summary>
+    /// A player character of the player's squad, wanted by the city for <paramref name="bounty"/>, standing at <paramref name="at"/> from the
+    /// centre.
+    /// </summary>
+    static CharacterId Hero(SimWorld world, FactionRelations relations, int city, Squad playerSquad, Vector2 at, string name, int bounty,
+            Combatant stats)
+    {
+        var cold = stats.MakeCold(name);
+        cold.Race = Person;
+        cold.Faction = relations.PlayerFaction;
+        cold.IsPlayer = true;
+        cold.NpcClass = FundamentalType.Adventurer;
+        cold.SquadId = playerSquad.Id;
+        var entry = (cold.Bounties = new BountyLedger()).Get(city, "city");
+        entry.Amount = bounty;
+        var id = world.Characters.Spawn(new CharacterHot { Position = Centre + new Vector3(at.X, 0, at.Y), Health = 100, MaxSpeed = 60,
+                WalkSpeed = 15, Yaw = MathF.PI }, cold, 0);
+        playerSquad.Members.Add(id);
+        return id;
+    }
 
-        Assert.True(world.Fixtures.Imprison(world, picker, cageB));
-
+    /// <summary>
+    /// Runs to the five checkpoints: the prisoner starts picking at the first and gets out at tick 900; returns the hashes at the checkpoints and
+    /// whether the cage was picked open by then.
+    /// </summary>
+    static (List<ulong> Hashes, bool Picked) RunTheScript(SimWorld world, CharacterId picker, Fixture cageB)
+    {
         var hashes = new List<ulong>();
         bool picked = false;
         foreach (int target in new[] { 1, 300, 900, 1800, 3000 })
@@ -150,15 +188,7 @@ public class ArrestTests
             }
             hashes.Add(world.StateHash());
         }
-        var heroCold = world.Characters.Cold(hero.Slot)!;
-        var seen = (Jailed: heroCold.IsImprisoned && heroCold.InWhat == "0.0:cageA" && arrest.Log.Any(e => e.Kind == ArrestEventKind.Jailed
-                && e.Target == hero),
-            Picked: picked, Escaped: world.Characters.Cold(picker.Slot)!.Escaped || arrest.Log.Any(e => e.Target == picker));
-
-        // It covers what it is for: the arrest reached the cage, the prisoner's pick opened the other cage, and getting out was an escape.
-        Assert.True(seen.Jailed && seen.Picked && seen.Escaped, $"{seen}");
-
-        return hashes;
+        return (hashes, picked);
     }
 
     [Fact]

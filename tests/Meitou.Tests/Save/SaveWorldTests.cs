@@ -92,7 +92,10 @@ public class SaveWorldTests
             Assert.Equal(("70-t", "main", 2, 1, 3, 40f), (item.Record, item.Section, item.X, item.Y, item.Quantity, item.Charges));
             Assert.NotNull(item.Saved);
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 
     [Fact]
@@ -136,7 +139,10 @@ public class SaveWorldTests
             Assert.Equal([folk], world3.Player.KnownFactions);
             Assert.Equal(["20-t"], SaveCapture.Capture(world3, g.Data, new SaveClock(1, 12, 0), imported).PlayerFaction!.Known);
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 
     [Fact]
@@ -229,6 +235,9 @@ public class SaveWorldTests
 
             Assert.Equal(expected.Order(), world2.Player.KnownFactions.Order());
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 }

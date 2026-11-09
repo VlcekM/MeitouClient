@@ -53,7 +53,8 @@ public class DecisionTests
         for (int t = 0; t < max && !done(); t++) rig.World.RunTick();
 
         Assert.True(done(),
-                $"{what} within {max} ticks; last decision: {(rig.Cold(rig.Fighter).Decision is { } d ? $"{d.Winner} | {string.Join(" | ", d.Lines)}" : "none")}");
+                $"{what} within {max} ticks; "
+                + $"last decision: {(rig.Cold(rig.Fighter).Decision is { } d ? $"{d.Winner} | {string.Join(" | ", d.Lines)}" : "none")}");
     }
 
     static bool Hurt(CharacterCold cold) => cold.Medical!.Parts.Any(p => p.Flesh < p.MaxHp);

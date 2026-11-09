@@ -80,19 +80,7 @@ public class OrderSaveTests
         {
             first.Write(folder);
             var save = SaveGame.Load(folder);
-            var ai = AiOf(save, 0);
-
-            Assert.Equal([(int)TaskType.MoveCusOrdered, (int)TaskType.MoveCusOrdered, (int)TaskType.Rest, (int)TaskType.FirstAidOrder],
-                    Enumerable.Range(0, 4).Select(k => ai.Ints[$"tjob{k}"]));
-            Assert.False(ai.Ints.ContainsKey("tjob4"));
-            Assert.Equal(First, ai.Vector3S["tjobP0"]);
-            Assert.Equal(Second, ai.Vector3S["tjobP1"]);
-
-            var patientHand = save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[1].Handle;
-
-            Assert.Equal(patientHand, Hand.Read(ai, "tjobT3"));
-            Assert.True(Hand.Read(ai, "tjobT0").IsNull);
-            Assert.DoesNotContain(AiOf(save, 1).Ints.Keys, k => k.StartsWith("tjob", StringComparison.Ordinal));   // the patient holds no order
+            var (ai, patientHand) = AssertTheSaveHoldsTheQueue(save);
 
             using var b = NewGame(start: false);
             var loaded = SaveLoader.Load(b.World, save, b.Data);
@@ -138,7 +126,33 @@ public class OrderSaveTests
             Assert.Equal([TaskType.MoveCusOrdered, TaskType.MoveCusOrdered, TaskType.Rest],
                     Rows(d.World, d.World.Squads.Find(d.World.Player.Squad)!.Members[0]));
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The medic's queue in the save: its four jobs, the two points and the patient's handle as the last one's target; the patient holds no
+    /// order. Returns the medic's AI record and the patient's handle.
+    /// </summary>
+    static (FcsRecord Ai, Hand PatientHand) AssertTheSaveHoldsTheQueue(SaveGame save)
+    {
+        var ai = AiOf(save, 0);
+
+        Assert.Equal([(int)TaskType.MoveCusOrdered, (int)TaskType.MoveCusOrdered, (int)TaskType.Rest, (int)TaskType.FirstAidOrder],
+                Enumerable.Range(0, 4).Select(k => ai.Ints[$"tjob{k}"]));
+        Assert.False(ai.Ints.ContainsKey("tjob4"));
+        Assert.Equal(First, ai.Vector3S["tjobP0"]);
+        Assert.Equal(Second, ai.Vector3S["tjobP1"]);
+
+        var patientHand = save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[1].Handle;
+
+        Assert.Equal(patientHand, Hand.Read(ai, "tjobT3"));
+        Assert.True(Hand.Read(ai, "tjobT0").IsNull);
+        Assert.DoesNotContain(AiOf(save, 1).Ints.Keys, k => k.StartsWith("tjob", StringComparison.Ordinal));   // the patient holds no order
+
+        return (ai, patientHand);
     }
 
     /// <summary>

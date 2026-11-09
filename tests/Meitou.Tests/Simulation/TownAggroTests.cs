@@ -78,9 +78,11 @@ public class TownAggroTests(ITestOutputHelper output)
                 factionsAtBlows.Add((fa, fd));
             }
             var factionsHere = world.Squads.All.Select(s => s.Faction).Where(f => f >= 0).Distinct().Select(f => data.Factions[f].Name);
-            output.WriteLine($"{name}: {alive} characters ({fighters} fighters) of {string.Join(", ", factionsHere)}; {systems.Aggro.Started} fights started, {systems.Combat.Log.Count} blows" +
-                (factionsAtBlows.Count > 0
-                    ? $" between {string.Join("; ", factionsAtBlows.Select(p => $"{data.Factions[p.Item1].Name} -> {data.Factions[p.Item2].Name}"))}" : ""));
+            output.WriteLine($"{name}: {alive} characters ({fighters} fighters) of {string.Join(", ", factionsHere)}; "
+                + $"{systems.Aggro.Started} fights started, {systems.Combat.Log.Count} blows"
+                + (factionsAtBlows.Count > 0
+                    ? $" between {string.Join("; ", factionsAtBlows.Select(p => $"{data.Factions[p.Item1].Name} -> {data.Factions[p.Item2].Name}"))}"
+                    : ""));
         }
         Assert.True(checkedTowns >= 3, "the towns are placed in the world");
         Assert.True(totalFighters > 100, "the residents can fight");

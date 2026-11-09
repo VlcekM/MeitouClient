@@ -104,7 +104,8 @@ public class PopulationTests
     }
 
     static int LivingOf(SimWorld world) =>
-        world.Squads.All.Sum(s => s.Members.Count) + world.Platoons.All.Where(p => p.State != PlatoonState.Loaded && p.Stored is not null).Sum(p => p.Stored!.Members.Count);
+        world.Squads.All.Sum(s => s.Members.Count)
+            + world.Platoons.All.Where(p => p.State != PlatoonState.Loaded && p.Stored is not null).Sum(p => p.Stored!.Members.Count);
 
     [Fact]
     public void A_town_that_unloads_keeps_only_the_squad_near_the_player_and_stores_the_rest()

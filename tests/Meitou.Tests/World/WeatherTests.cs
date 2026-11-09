@@ -58,7 +58,8 @@ public class WeatherTests
                 colours[z * WeatherAreas.Cells + x] = x < WeatherAreas.Origin ? 1 : 2;
         var data = WeatherData.FromDefinitions([west, east],
             [],
-            [Region("West", 1, (Season("w", 1, 1, Entry(west, 1, 100000, 100000)), 1)), Region("East", 2, (Season("e", 1, 1, Entry(east, 1, 100000, 100000)), 1))]);
+            [Region("West", 1, (Season("w", 1, 1, Entry(west, 1, 100000, 100000)), 1)),
+                Region("East", 2, (Season("e", 1, 1, Entry(east, 1, 100000, 100000)), 1))]);
         return new WeatherWorld(data, new WeatherAreas(colours), seed, WeatherTime.At(0));
     }
 
@@ -165,8 +166,9 @@ public class WeatherTests
         // The fog distance is complete at fog distance max for every base weather (misty rain has different wind values but equal distances).
         var expected = new Dictionary<string, float>
         {
-            ["Dust Storm Approach"] = 25000, ["Dust Storm Approach SHORT"] = 190000, ["Heavy_Rain sonorous"] = 30000, ["Heavy_Rain sonorous acid"] = 30000,
-            ["Kenshi_Ash-Flakes"] = 35000, ["Kenshi_Ash-Flakes_BLACK_and_Rising Steam"] = 35000, ["misty rain"] = 20000, ["Sand stream"] = 20000, ["shek desert storm"] = 15000,
+            ["Dust Storm Approach"] = 25000, ["Dust Storm Approach SHORT"] = 190000, ["Heavy_Rain sonorous"] = 30000,
+            ["Heavy_Rain sonorous acid"] = 30000, ["Kenshi_Ash-Flakes"] = 35000, ["Kenshi_Ash-Flakes_BLACK_and_Rising Steam"] = 35000,
+            ["misty rain"] = 20000, ["Sand stream"] = 20000, ["shek desert storm"] = 15000,
         };
         Assert.Equal(expected.Keys.Order(), data.Weathers.Where(w => w.FogEnabled).Select(w => w.Name).Order());
         foreach (var w in data.Weathers.Where(w => w.FogEnabled))

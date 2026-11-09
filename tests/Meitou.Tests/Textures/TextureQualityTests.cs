@@ -93,6 +93,9 @@ public class TextureQualityTests
             }
             Assert.Equal(0, kept.TrailingBytes);
         }
-        finally { File.Delete(path); }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 }

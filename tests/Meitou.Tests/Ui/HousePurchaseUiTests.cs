@@ -86,6 +86,9 @@ public class HousePurchaseUiTests
             Assert.Contains(lines.Stats, line => line.Action == "meitou:building-public");
             CheckRuinCondition();
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 }

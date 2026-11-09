@@ -14,11 +14,20 @@ namespace Meitou.Tests.Rendering;
 /// </summary>
 public class FoliageGrassGpuTests
 {
+    /// <summary>
+    /// The side of a grass page, in world units.
+    /// </summary>
     const float PageSize = 576;
 
+    /// <summary>
+    /// A Vulkan 1.3 device with validation, or null where there is none.
+    /// </summary>
     static VulkanDevice? TryCreate()
     {
-        try { return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
+        try
+        {
+            return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true });
+        }
         catch (Exception e)
             when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
         {
@@ -36,8 +45,14 @@ public class FoliageGrassGpuTests
         return MathF.Sqrt(dx * dx + dz * dz);
     }
 
+    /// <summary>
+    /// One synthetic page: its slot, its density prefix, its range, whether it is active and its vertex count.
+    /// </summary>
     sealed record Page(GrassSlot Slot, int[] Prefix, float Range, bool Active, uint Vertices);
 
+    /// <summary>
+    /// Random pages round the eye, a third of their ranges on the page's distance or a step beside it.
+    /// </summary>
     static Page[] MakePages(int count, Random random, float ex, float ez)
     {
         var pages = new Page[count];
@@ -59,6 +74,9 @@ public class FoliageGrassGpuTests
         return pages;
     }
 
+    /// <summary>
+    /// The CPU's decisions for the pages: the draws that exist, nearest first (ties by the slot's tie key).
+    /// </summary>
     static (uint First, uint Shown, uint Vertices, uint Row, float Distance, uint Tie)[] Reference(Page[] pages, Vector4[] planes, float ex, float ez,
             float fraction)
     {
@@ -81,6 +99,9 @@ public class FoliageGrassGpuTests
         return [.. list.OrderBy(e => e.Item5).ThenBy(e => e.Item6)];
     }
 
+    /// <summary>
+    /// The GPU cull's draws for random views at several densities against the CPU's, field by field.
+    /// </summary>
     [Fact]
     [Slow]
     public unsafe void Gpu_grass_cull_matches_the_CPU_decisions_on_synthetic_data()
@@ -99,6 +120,30 @@ public class FoliageGrassGpuTests
         using var store = new FoliageGrassGpu(ctx, 1 << 20, 2048);
         var pages = MakePages(1500, random, ex, ez);
         var densities = new[] { 0f, 0.0001f, 0.25f, 0.5f, 0.5078125f, 0.73f, 1f };
+        var planeSets = RandomPlaneSets(random, ex, ez);
+        ctx.BeginFrame();
+        var zoneRows = new GrassZoneRow[pages.Length];
+        var patchRows = new GrassPatchRow[pages.Length];
+        WriteSlots(store, pages, zoneRows, patchRows);
+        ctx.EndFrame();
+        d!.Frames.WaitAll();
+        foreach (var fraction in densities)
+            foreach (var planes in planeSets)
+            {
+                draws += CullOneView(d, ctx, store, pages, zoneRows, patchRows, planes, ex, ez, fraction, views);
+                views++;
+            }
+        TestContext.Current.TestOutputHelper?.WriteLine($"{views} views, {draws} draws equal");
+
+        Assert.True(draws > 100, "the synthetic views draw something");
+        Assert.True(d.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
+    }
+
+    /// <summary>
+    /// Six random frustums round the eye (the last of four planes), each further out than the one before.
+    /// </summary>
+    static List<Vector4[]> RandomPlaneSets(Random random, float ex, float ez)
+    {
         var planeSets = new List<Vector4[]>();
         for (int v = 0; v < 6; v++)
         {
@@ -113,9 +158,14 @@ public class FoliageGrassGpuTests
             }
             planeSets.Add(planes);
         }
-        ctx.BeginFrame();
-        var zoneRows = new GrassZoneRow[pages.Length];
-        var patchRows = new GrassPatchRow[pages.Length];
+        return planeSets;
+    }
+
+    /// <summary>
+    /// Writes every page into its own slot (the slots come in order) and fills one zone row and one patch row per page.
+    /// </summary>
+    static void WriteSlots(FoliageGrassGpu store, Page[] pages, GrassZoneRow[] zoneRows, GrassPatchRow[] patchRows)
+    {
         for (int i = 0; i < pages.Length; i++)
         {
             int slot = store.AllocateSlot();
@@ -127,39 +177,37 @@ public class FoliageGrassGpuTests
             patchRows[i] = new GrassPatchRow { Range = pages[i].Range, VertexCount = pages[i].Vertices,
                     Flags = pages[i].Active ? FoliageGrassShaders.FlagActive : 0 };
         }
+    }
+
+    /// <summary>
+    /// One view at one density culled on the GPU, its draws against the CPU's; returns how many draws there are.
+    /// </summary>
+    static int CullOneView(VulkanDevice d, GpuContext ctx, FoliageGrassGpu store, Page[] pages, GrassZoneRow[] zoneRows,
+            GrassPatchRow[] patchRows, Vector4[] planes, float ex, float ez, float fraction, int views)
+    {
+        ctx.BeginFrame();
+        var tables = store.Prepare(zoneRows, patchRows);
+        var (index, frac) = FoliageGrassGpu.DensityStep(fraction);
+        var result = store.Dispatch(planes, new Vector2(ex, ez), PageSize, index, frac, in tables);
+        using var readback = ReadbackBuffer.Create(ctx, FoliageGrassGpu.ReadbackBytes(result), "grass test");
+        store.CopyForReadback(result, readback);
         ctx.EndFrame();
-        d!.Frames.WaitAll();
-        foreach (var fraction in densities)
-            foreach (var planes in planeSets)
-            {
-                ctx.BeginFrame();
-                var tables = store.Prepare(zoneRows, patchRows);
-                var (index, frac) = FoliageGrassGpu.DensityStep(fraction);
-                var result = store.Dispatch(planes, new Vector2(ex, ez), PageSize, index, frac, in tables);
-                using var readback = ReadbackBuffer.Create(ctx, FoliageGrassGpu.ReadbackBytes(result), "grass test");
-                store.CopyForReadback(result, readback);
-                ctx.EndFrame();
-                d.Frames.WaitAll();
-                var all = MemoryMarshal.Cast<byte, uint>(readback.Read(0, FoliageGrassGpu.ReadbackBytes(result)));
-                var expected = Reference(pages, planes, ex, ez, fraction);
+        d.Frames.WaitAll();
+        var all = MemoryMarshal.Cast<byte, uint>(readback.Read(0, FoliageGrassGpu.ReadbackBytes(result)));
+        var expected = Reference(pages, planes, ex, ez, fraction);
 
-                Assert.True(expected.Length == all[0], $"fraction {fraction}, view {views}: {all[0]} draws on the GPU, {expected.Length} on the CPU");
+        Assert.True(expected.Length == all[0], $"fraction {fraction}, view {views}: {all[0]} draws on the GPU, {expected.Length} on the CPU");
 
-                for (int k = 0; k < expected.Length; k++)
-                {
-                    var e = expected[k];
-                    uint[] got = [all[4 + k * 4], all[4 + k * 4 + 1], all[4 + k * 4 + 2], all[4 + k * 4 + 3]];
+        for (int k = 0; k < expected.Length; k++)
+        {
+            var e = expected[k];
+            uint[] got = [all[4 + k * 4], all[4 + k * 4 + 1], all[4 + k * 4 + 2], all[4 + k * 4 + 3]];
 
-                    Assert.True(got[0] == e.Vertices && got[1] == e.Shown && got[2] == e.Row * 16 && got[3] == e.First,
+            Assert.True(got[0] == e.Vertices && got[1] == e.Shown && got[2] == e.Row * 16 && got[3] == e.First,
 
-                        $"fraction {fraction}, view {views}, draw {k}: GPU ({got[0]}, {got[1]}, {got[2]}, {got[3]}), CPU ({e.Vertices}, {e.Shown}, {e.Row * 16}, {e.First})");
-                }
-                views++;
-                draws += expected.Length;
-            }
-        TestContext.Current.TestOutputHelper?.WriteLine($"{views} views, {draws} draws equal");
-
-        Assert.True(draws > 100, "the synthetic views draw something");
-        Assert.True(d.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
+                $"fraction {fraction}, view {views}, draw {k}: GPU ({got[0]}, {got[1]}, {got[2]}, {got[3]}), "
+                + $"CPU ({e.Vertices}, {e.Shown}, {e.Row * 16}, {e.First})");
+        }
+        return expected.Length;
     }
 }

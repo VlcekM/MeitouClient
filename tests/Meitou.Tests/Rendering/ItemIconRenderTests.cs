@@ -15,7 +15,10 @@ public class ItemIconRenderTests
 {
     static VulkanDevice? TryCreate()
     {
-        try { return VulkanDevice.Create(new VulkanDeviceOptions { Validation = false }); }
+        try
+        {
+            return VulkanDevice.Create(new VulkanDeviceOptions { Validation = false });
+        }
         catch (Exception e)
             when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
         {

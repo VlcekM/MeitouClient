@@ -32,7 +32,8 @@ public class InteriorCoverageTests
         var zone = new ZoneCoordinate(x, z);
         var groups = OriginalNavTiles.LoadInteriors(install!, zone);
         Assert.NotEmpty(groups);
-        using var gatherer = new ZoneGeometryGatherer(install!, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!, new CollisionCache(install!));
+        using var gatherer = new ZoneGeometryGatherer(install!, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!,
+            new CollisionCache(install!));
         var settings = new NavBuildSettings();
         var g = gatherer.Gather(zone);
         var mesh = ZoneKeptClosure.ResolveAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _, interiors: true), settings);
@@ -43,7 +44,8 @@ public class InteriorCoverageTests
         var worst = coverage.Where(c => c.Faces > 0 && c.Covered < 0.9 * c.Faces)
             .OrderBy(c => (double)c.Covered / c.Faces)
             .Take(5)
-            .Select(c => $"{c.Group.Uid} at {c.Group.Origin.X:0},{c.Group.Origin.Z:0} {c.Covered}/{c.Faces} missing y {c.MissingLow:0}..{c.MissingHigh:0}");
+            .Select(c => $"{c.Group.Uid} at {c.Group.Origin.X:0},{c.Group.Origin.Z:0} {c.Covered}/{c.Faces} "
+                + $"missing y {c.MissingLow:0}..{c.MissingHigh:0}");
         string worstText = string.Join("; ", worst);
         Assert.True(
             percent >= floorPercent,

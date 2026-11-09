@@ -35,7 +35,8 @@ public class RangedTests(ITestOutputHelper output)
     /// <summary>
     /// A crossbowman: the given skills, a Ranger at quality 0 (or none) and <paramref name="bolts"/> bolts in one item, plus a katana for melee.
     /// </summary>
-    internal static CharacterCold Shooter(float crossbows, float perception, int bolts, int faction = 0, CrossbowData? bow = null, float friendlyFire = 0)
+    internal static CharacterCold Shooter(float crossbows, float perception, int bolts, int faction = 0, CrossbowData? bow = null,
+        float friendlyFire = 0)
     {
         var cold = new Combatant { Name = "shooter" }.MakeCold();
         cold.Stats![StatsEnumerated.Crossbows] = crossbows;
@@ -288,10 +289,15 @@ public class RangedInstallTests(ITestOutputHelper output)
         world.Commands.Enqueue(new AttackOrder([a], b) { Tick = 0 });
         world.Commands.Enqueue(new AttackOrder([b], a) { Tick = 0 });
         world.RunTicks(1800);
-        output.WriteLine($"fired {combat.ProjectilesFired}, bolt hits {combat.Log.Count(e => e.Ranged)}, melee blows {combat.Log.Count(e => !e.Ranged)}, bolts left {Ammunition.Count(world.Characters.Cold(a.Slot)!.Inventory, ranger.AmmoId)}");
+        output.WriteLine($"fired {combat.ProjectilesFired}, bolt hits {combat.Log.Count(e => e.Ranged)}, "
+            + $"melee blows {combat.Log.Count(e => !e.Ranged)}, "
+            + $"bolts left {Ammunition.Count(world.Characters.Cold(a.Slot)!.Inventory, ranger.AmmoId)}");
         foreach (var e in combat.Log.Where(e => e.Ranged)) output.WriteLine($"  t{e.Tick} part {e.Part} pierce {e.Pierce:0.0} stun {e.Stun:0.0}");
+
         Assert.True(combat.ProjectilesFired >= 1);
+
         // Every bolt taken is fired or still loaded (a bolt loaded when the fight turned to melee stays loaded).
-        Assert.Equal(30 - combat.ProjectilesFired - combat.StateOf(a).Loaded, Ammunition.Count(world.Characters.Cold(a.Slot)!.Inventory, ranger.AmmoId));
+        Assert.Equal(30 - combat.ProjectilesFired - combat.StateOf(a).Loaded,
+            Ammunition.Count(world.Characters.Cold(a.Slot)!.Inventory, ranger.AmmoId));
     }
 }

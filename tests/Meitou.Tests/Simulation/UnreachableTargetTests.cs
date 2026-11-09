@@ -43,7 +43,8 @@ public class UnreachableTargetTests
                 new CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = true });
         IWalkability walk = blocked ? new BoxWalk(new(1080, 900), new(1200, 1100)) : new OpenGroundWalkability((_, _) => 150);
         var world = new SimWorld(new WorldSettings { Seed = 1, Threads = 1, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
-            [new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat, new RetaliationSystem(combat)]);
+            [new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat,
+                new RetaliationSystem(combat)]);
         var cold = new Combatant { Name = "a" }.MakeCold();
         cold.IsPlayer = player;
         var a = world.Characters.Spawn(new CharacterHot { Position = new(1000, 150, 1000), Health = 100, MaxSpeed = 60, WalkSpeed = 15,

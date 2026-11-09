@@ -191,7 +191,10 @@ public class CombatHitObserverTests
         Assert.NotEmpty(one.Hits);
         Assert.Contains(one.Log, entry => entry.Outcome != BlowOutcome.Hit);
         Assert.Equal(one.Log.Count(entry => entry.Outcome == BlowOutcome.Hit), one.Hits.Length);
-        Assert.Equal(one.Hits.Length, one.Hits.Select(hit => (hit.Tick, hit.Source, hit.Attacker, hit.Victim, hit.Sequence, hit.Blow)).Distinct().Count());
+        Assert.Equal(one.Hits.Length, one.Hits
+            .Select(hit => (hit.Tick, hit.Source, hit.Attacker, hit.Victim, hit.Sequence, hit.Blow))
+            .Distinct()
+            .Count());
 
         foreach (int threads in new[] { 4, 16 })
         {

@@ -23,10 +23,19 @@ namespace Meitou.Tests.Save;
 /// </summary>
 public class QuickSaveTests
 {
+    /// <summary>
+    /// The systems of the synthetic worlds.
+    /// </summary>
     const StandardParts Parts = StandardParts.Population | StandardParts.Player | StandardParts.Movement | StandardParts.Body;
 
+    /// <summary>
+    /// A synthetic world, its data and the player's squad; disposing it disposes the world and its systems.
+    /// </summary>
     sealed record Game(SimWorld World, PopulationData Data, Squad Squad) : IDisposable
     {
+        /// <summary>
+        /// Disposes the world and then each disposable system.
+        /// </summary>
         public void Dispose()
         {
             World.Dispose();
@@ -34,6 +43,9 @@ public class QuickSaveTests
         }
     }
 
+    /// <summary>
+    /// A synthetic town's world with the standard systems of <see cref="Parts"/>.
+    /// </summary>
     static SimWorld NewWorld(PopulationData data, int threads, ulong seed = 11, int minPartition = 4)
     {
         var walk = new OpenGroundWalkability(SyntheticTown.Ground);
@@ -42,6 +54,9 @@ public class QuickSaveTests
                 systems.Systems);
     }
 
+    /// <summary>
+    /// A new synthetic world with the player's squad started and the camera on the town.
+    /// </summary>
     static Game Start(PopulationData data, int threads = 1)
     {
         var world = NewWorld(data, threads);
@@ -50,7 +65,6 @@ public class QuickSaveTests
         world.Commands.Enqueue(new FocusCommand(SyntheticTown.Centre) { Tick = 0 });
         return new Game(world, data, squad);
     }
-
 
     /// <summary>
     /// The fields MEDICAL_STATE holds, part by part, equal.
@@ -72,6 +86,9 @@ public class QuickSaveTests
                 (b.Blood, b.Bleeding, b.Hunger, b.Fed, b.KoTimer, b.Unconscious, b.Dead));
     }
 
+    /// <summary>
+    /// Captures the game into a quicksave folder under a fresh temporary folder and reads it back.
+    /// </summary>
     static (SaveClock Clock, string Folder, SaveGame Save) Quicksave(Game g, string name)
     {
         var clock = new SaveClock(3, 7, 45);
@@ -82,6 +99,9 @@ public class QuickSaveTests
         return (clock, folder, SaveGame.Load(folder));
     }
 
+    /// <summary>
+    /// A walked, wounded and trained squad with a changed purse and selection, quicksaved and loaded into a fresh world.
+    /// </summary>
     [Fact]
     public void A_running_world_is_quicksaved_and_a_fresh_world_loaded_from_it_holds_the_same_player_state()
     {
@@ -106,18 +126,7 @@ public class QuickSaveTests
         var (clock, folder, save) = Quicksave(a, "quick");
         try
         {
-            // What the file holds: the CAMERA, the player's platoon and its counter.
-            Assert.Equal((3, 7, 45), (save.Camera.Day, save.Camera.Hour, save.Camera.Minute));
-            Assert.Equal(1234, save.Camera.PlayerMoney);
-            Assert.Equal((1, a.Squad.Members.Count), (save.Camera.Squads, save.Camera.Members));
-            Assert.Equal(data.Factions.Count, save.Factions.Count);
-
-            var platoon = save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id);
-
-            Assert.Equal("Nameless_0", platoon.Name);
-            Assert.Equal(a.Squad.Members.Count, platoon.Characters.Count);
-            Assert.Equal(1, save.PlayerFaction!.PlatoonCounter);
-            Assert.Equal(platoon.Characters[1].Handle, save.Camera.SelectedCharacter);   // the one selected member
+            AssertTheFileHoldsTheCameraAndThePlatoon(a, data, save);
 
             using var b = new Game(NewWorld(data, 1), data, null!);
             var loaded = SaveLoader.Load(b.World, save, data);
@@ -137,35 +146,7 @@ public class QuickSaveTests
             Assert.Equal(a.World.Characters.Cold(a.Squad.Leader.Slot)!.Name, b.World.Characters.Cold(squadB.Leader.Slot)!.Name);
 
             for (int i = 0; i < a.Squad.Members.Count; i++)
-            {
-                var ida = a.Squad.Members[i];
-                var idb = squadB.Members[i];
-                var ca = a.World.Characters.Cold(ida.Slot)!;
-                var cb = b.World.Characters.Cold(idb.Slot)!;
-                var ha = a.World.Characters.Previous[ida.Slot];
-                var hb = b.World.Characters.Previous[idb.Slot];
-
-                Assert.Equal(ca.Name, cb.Name);
-                Assert.Equal(ca.RecordId, cb.RecordId);
-                Assert.Equal(ca.Role, cb.Role);
-                Assert.Equal(ha.Position, hb.Position);
-                Assert.Equal(ha.Yaw, hb.Yaw, 3);
-
-                // The body systems run on the loaded character: race, the saved stats and medical state, inventory and fighter.
-                Assert.NotNull(cb.Race);
-                Assert.NotNull(cb.Inventory);
-                Assert.NotNull(cb.Fighter);
-                Assert.True(cb.IsPlayer);
-                Assert.Equal(ca.Stats!.ToArray(), cb.Stats!.ToArray());
-                Assert.Equal(ca.Medical!.Blood, cb.Medical!.Blood, 3);
-
-                SameSavedMedicalState(ca.Medical!, cb.Medical!);
-
-                // Not in the save's keys (docs/formats/save.md): the wound list and the pain, which the medical tick works out again.
-                Assert.Empty(cb.Medical.Wounds);
-                Assert.Equal(ha.MaxSpeed, hb.MaxSpeed, 2);
-                Assert.Equal(ca.Inventory!.Items.Count, cb.Inventory!.Items.Count);
-            }
+                SameLoadedMember(a, b, a.Squad.Members[i], squadB.Members[i]);
 
             // The selection comes back as saved (CAMERA selected_character / selected_characters<k>).
             Assert.Equal(a.World.Player.Selection.Select(m => a.World.Characters.Cold(m.Slot)!.Name),
@@ -179,9 +160,66 @@ public class QuickSaveTests
             Assert.All(squadB.Members, m => Assert.Empty(b.World.Characters.Cold(m.Slot)!.OrderQueue));
             Assert.All(squadB.Members, m => Assert.Empty(b.World.Characters.Cold(m.Slot)!.Path));
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 
+    /// <summary>
+    /// What the file holds: the CAMERA, the player's platoon and its counter.
+    /// </summary>
+    static void AssertTheFileHoldsTheCameraAndThePlatoon(Game a, PopulationData data, SaveGame save)
+    {
+        Assert.Equal((3, 7, 45), (save.Camera.Day, save.Camera.Hour, save.Camera.Minute));
+        Assert.Equal(1234, save.Camera.PlayerMoney);
+        Assert.Equal((1, a.Squad.Members.Count), (save.Camera.Squads, save.Camera.Members));
+        Assert.Equal(data.Factions.Count, save.Factions.Count);
+
+        var platoon = save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id);
+
+        Assert.Equal("Nameless_0", platoon.Name);
+        Assert.Equal(a.Squad.Members.Count, platoon.Characters.Count);
+        Assert.Equal(1, save.PlayerFaction!.PlatoonCounter);
+        Assert.Equal(platoon.Characters[1].Handle, save.Camera.SelectedCharacter);   // the one selected member
+    }
+
+    /// <summary>
+    /// A member of the saved world and the same member loaded: name, record, role, place, the saved stats and medical state, and what the save
+    /// leaves out.
+    /// </summary>
+    static void SameLoadedMember(Game a, Game b, CharacterId ida, CharacterId idb)
+    {
+        var ca = a.World.Characters.Cold(ida.Slot)!;
+        var cb = b.World.Characters.Cold(idb.Slot)!;
+        var ha = a.World.Characters.Previous[ida.Slot];
+        var hb = b.World.Characters.Previous[idb.Slot];
+
+        Assert.Equal(ca.Name, cb.Name);
+        Assert.Equal(ca.RecordId, cb.RecordId);
+        Assert.Equal(ca.Role, cb.Role);
+        Assert.Equal(ha.Position, hb.Position);
+        Assert.Equal(ha.Yaw, hb.Yaw, 3);
+
+        // The body systems run on the loaded character: race, the saved stats and medical state, inventory and fighter.
+        Assert.NotNull(cb.Race);
+        Assert.NotNull(cb.Inventory);
+        Assert.NotNull(cb.Fighter);
+        Assert.True(cb.IsPlayer);
+        Assert.Equal(ca.Stats!.ToArray(), cb.Stats!.ToArray());
+        Assert.Equal(ca.Medical!.Blood, cb.Medical!.Blood, 3);
+
+        SameSavedMedicalState(ca.Medical!, cb.Medical!);
+
+        // Not in the save's keys (docs/formats/save.md): the wound list and the pain, which the medical tick works out again.
+        Assert.Empty(cb.Medical.Wounds);
+        Assert.Equal(ha.MaxSpeed, hb.MaxSpeed, 2);
+        Assert.Equal(ca.Inventory!.Items.Count, cb.Inventory!.Items.Count);
+    }
+
+    /// <summary>
+    /// A loaded world hashes the same on one thread and on four, and captures the same player squad again.
+    /// </summary>
     [Fact]
     public void A_world_loaded_from_a_quicksave_runs_the_same_whatever_the_thread_count_and_captures_again()
     {
@@ -217,7 +255,10 @@ public class QuickSaveTests
 
             Assert.Equal(hashes[0], hashes[1]);
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 
     // ------------------------------------------------------------------ with the install's data
@@ -228,6 +269,9 @@ public class QuickSaveTests
     static List<(string Name, string[] Members)> SquadsOf(SimWorld world) =>
         [.. SquadManagement.PlayerSquads(world).Select(s => (s.Name, s.Members.Select(m => world.Characters.Cold(m.Slot)!.Name).ToArray()))];
 
+    /// <summary>
+    /// A member moved to another squad and an empty renamed squad come back from a save and from a save of the loaded world.
+    /// </summary>
     [Fact]
     public void A_member_moved_to_another_squad_and_an_empty_renamed_squad_are_saved_through_two_saves()
     {
@@ -302,15 +346,7 @@ public class QuickSaveTests
                 n => assets.Find(n));
         var lengths = AnimationLengths.Load(install.Root, db);
         var walk = new OpenGroundWalkability((_, _) => 300);
-        SimWorld Make() => new(new WorldSettings { Seed = 5, Threads = 2, PublishSnapshots = false }, walk,
-                StandardSystems.Build(data, walk, new StandardSystemOptions
-        {
-            Parts = StandardParts.Population | StandardParts.Player | StandardParts.Trade | StandardParts.Movement
-                | StandardParts.Body | StandardParts.Animation,
-            SynchronousPaths = true, Population = new PopulationSettings { CheckEveryTicks = 1 }, Ragdolls = rigs, AnimationLengths = lengths,
-        }).Systems);
-        static Meitou.Simulation.Ragdolls.RagdollSystem Ragdolls(SimWorld w) => w.Systems.OfType<Meitou.Simulation.Ragdolls.RagdollSystem>().Single();
-        static List<(string, int, int, int)> Stock(Squad s) => [.. s.Shop!.Stock.Items.Select(i => (i.Record, i.Quantity, i.X, i.Y))];
+        SimWorld Make() => MakeInstallWorld(data, walk, rigs, lengths);
 
         using var a = Make();
         var squad = a.Systems.OfType<PopulationSystem>().Single().StartPlayer(a,
@@ -344,38 +380,12 @@ public class QuickSaveTests
             Assert.Equal(squad.Members.Count, squadB.Members.Count);
 
             for (int i = 0; i < squad.Members.Count; i++)
-            {
-                var ca = a.Characters.Cold(squad.Members[i].Slot)!;
-                var cb = b.Characters.Cold(squadB.Members[i].Slot)!;
-
-                Assert.Equal(ca.Name, cb.Name);
-                Assert.NotNull(ca.Appearance);
-                // the look's seed is the saved handle serial
-                Assert.Equal(ca.Appearance!.Loadout!.Seed, save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[i].Handle.S);
-                Assert.NotNull(cb.Appearance);
-
-                // The same look: the roll's seed, hence the same body, head, hair and clothes; and so the same inventory.
-                Assert.Equal(ca.Appearance.Loadout.Seed, cb.Appearance!.Loadout!.Seed);
-                Assert.Equal(ca.Appearance.BodyMesh, cb.Appearance.BodyMesh);
-                Assert.Equal(ca.Appearance.Female, cb.Appearance.Female);
-                Assert.Equal(ca.Appearance.Parts.Select(p => p.Mesh), cb.Appearance.Parts.Select(p => p.Mesh));
-                Assert.Equal(ca.Inventory!.Items.Select(x => x.Record), cb.Inventory!.Items.Select(x => x.Record));
-                Assert.Equal(ca.Stats!.ToArray(), cb.Stats!.ToArray());
-
-                SameSavedMedicalState(ca.Medical!, cb.Medical!);
-            }
+                SameLook(a, b, squad.Members[i], squadB.Members[i], save, i);
             b.RunTicks(300);   // the shop's town loads and makes its saved platoons
             var again = Ragdolls(b).SaveState(b.Squads.Find(b.Player.Squad)!.Members[0]);
 
-            Assert.NotNull(again);
-            Assert.Equal((ragdoll!.Frozen, ragdoll.Age), (again!.Frozen, again.Age));
-            Assert.Equal(ragdoll.Pose.Length, again.Pose.Length);
+            SameRagdoll(ragdoll, again);
 
-            for (int i = 0; i < ragdoll.Pose.Length; i++)   // the rotations are normalised again when read
-            {
-                Assert.Equal(ragdoll.Pose[i].Position, again.Pose[i].Position);
-                Assert.True(MathF.Abs(Quaternion.Dot(ragdoll.Pose[i].Rotation, again.Pose[i].Rotation)) > 1 - 1e-5f, $"body {i}");
-            }
             var shopB = b.Squads.All.Single(s => s.TemplateId == shop.TemplateId && s.Town == shop.Town && s.Shop is not null);
 
             Assert.Equal(Stock(shop), Stock(shopB));
@@ -399,6 +409,71 @@ public class QuickSaveTests
         {
             Directory.Delete(root, recursive: true);
             foreach (var s in a.Systems) (s as IDisposable)?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// A world of the install's data with trade, bodies, animation and ragdolls, paths found at once.
+    /// </summary>
+    static SimWorld MakeInstallWorld(PopulationData data, OpenGroundWalkability walk, Meitou.Data.Characters.CharacterRigs rigs,
+            AnimationLengths lengths) =>
+        new(new WorldSettings { Seed = 5, Threads = 2, PublishSnapshots = false }, walk,
+                StandardSystems.Build(data, walk, new StandardSystemOptions
+        {
+            Parts = StandardParts.Population | StandardParts.Player | StandardParts.Trade | StandardParts.Movement
+                | StandardParts.Body | StandardParts.Animation,
+            SynchronousPaths = true, Population = new PopulationSettings { CheckEveryTicks = 1 }, Ragdolls = rigs, AnimationLengths = lengths,
+        }).Systems);
+
+    /// <summary>
+    /// The world's ragdoll system.
+    /// </summary>
+    static Meitou.Simulation.Ragdolls.RagdollSystem Ragdolls(SimWorld w) => w.Systems.OfType<Meitou.Simulation.Ragdolls.RagdollSystem>().Single();
+
+    /// <summary>
+    /// The squad's shop stock: record, quantity and place of each item.
+    /// </summary>
+    static List<(string, int, int, int)> Stock(Squad s) => [.. s.Shop!.Stock.Items.Select(i => (i.Record, i.Quantity, i.X, i.Y))];
+
+    /// <summary>
+    /// A member of the saved world and the same member loaded: the same look (the roll's seed, the saved handle serial, hence the same body,
+    /// head, hair and clothes), inventory, stats and medical state.
+    /// </summary>
+    static void SameLook(SimWorld a, SimWorld b, CharacterId ida, CharacterId idb, SaveGame save, int i)
+    {
+        var ca = a.Characters.Cold(ida.Slot)!;
+        var cb = b.Characters.Cold(idb.Slot)!;
+
+        Assert.Equal(ca.Name, cb.Name);
+        Assert.NotNull(ca.Appearance);
+        // the look's seed is the saved handle serial
+        Assert.Equal(ca.Appearance!.Loadout!.Seed, save.Platoons.Single(p => p.FactionId == save.PlayerFaction!.Id).Characters[i].Handle.S);
+        Assert.NotNull(cb.Appearance);
+
+        // The same look: the roll's seed, hence the same body, head, hair and clothes; and so the same inventory.
+        Assert.Equal(ca.Appearance.Loadout.Seed, cb.Appearance!.Loadout!.Seed);
+        Assert.Equal(ca.Appearance.BodyMesh, cb.Appearance.BodyMesh);
+        Assert.Equal(ca.Appearance.Female, cb.Appearance.Female);
+        Assert.Equal(ca.Appearance.Parts.Select(p => p.Mesh), cb.Appearance.Parts.Select(p => p.Mesh));
+        Assert.Equal(ca.Inventory!.Items.Select(x => x.Record), cb.Inventory!.Items.Select(x => x.Record));
+        Assert.Equal(ca.Stats!.ToArray(), cb.Stats!.ToArray());
+
+        SameSavedMedicalState(ca.Medical!, cb.Medical!);
+    }
+
+    /// <summary>
+    /// The settled ragdoll after the load as it was saved: frozen, age, and each body's place and rotation.
+    /// </summary>
+    static void SameRagdoll(SavedRagdoll? ragdoll, SavedRagdoll? again)
+    {
+        Assert.NotNull(again);
+        Assert.Equal((ragdoll!.Frozen, ragdoll.Age), (again!.Frozen, again.Age));
+        Assert.Equal(ragdoll.Pose.Length, again.Pose.Length);
+
+        for (int i = 0; i < ragdoll.Pose.Length; i++)   // the rotations are normalised again when read
+        {
+            Assert.Equal(ragdoll.Pose[i].Position, again.Pose[i].Position);
+            Assert.True(MathF.Abs(Quaternion.Dot(ragdoll.Pose[i].Rotation, again.Pose[i].Rotation)) > 1 - 1e-5f, $"body {i}");
         }
     }
 }

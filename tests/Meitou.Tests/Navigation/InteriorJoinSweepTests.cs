@@ -15,8 +15,9 @@ public class InteriorJoinSweepTests
 {
     static readonly (int X, int Z, int MatchedFloor, string Place)[] Zones =
     [
-        (18, 35, 8, "Squin"), (19, 29, 11, "Stack"), (50, 33, 5, "Black Scratch"), (47, 16, 10, "Heft"), (20, 32, 2, "The Hub"), (43, 11, 19, "Sho-Battai"),
-        (26, 13, 14, "World's End"), (48, 45, 5, "Snailhouse lagoon"), (28, 43, 1, "Ancient Lab"), (37, 35, 1, "Ancient Lab"), (54, 59, 2, "Ash Domes"),
+        (18, 35, 8, "Squin"), (19, 29, 11, "Stack"), (50, 33, 5, "Black Scratch"), (47, 16, 10, "Heft"), (20, 32, 2, "The Hub"),
+        (43, 11, 19, "Sho-Battai"), (26, 13, 14, "World's End"), (48, 45, 5, "Snailhouse lagoon"), (28, 43, 1, "Ancient Lab"),
+        (37, 35, 1, "Ancient Lab"), (54, 59, 2, "Ash Domes"),
     ];
 
     [Fact]
@@ -32,7 +33,8 @@ public class InteriorJoinSweepTests
         var zone = new ZoneCoordinate(x, z);
         var groups = OriginalNavTiles.LoadInteriors(install!, zone);
         Assert.NotEmpty(groups);
-        using var gatherer = new ZoneGeometryGatherer(install!, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!, new CollisionCache(install!));
+        using var gatherer = new ZoneGeometryGatherer(install!, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!,
+            new CollisionCache(install!));
         var settings = new NavBuildSettings();
         var full = NavMeshPipeline.BuildZone(gatherer, gatherer.Gather(zone), settings, out _, out var inner, interiors: true);
         var joins = InteriorJoinSweep.Compare(gatherer, zone, groups, InteriorJoinSweep.Sites(gatherer, zone, settings),

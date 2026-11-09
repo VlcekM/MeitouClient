@@ -326,7 +326,9 @@ public class CarryTests
             }
             hashes.Add(rig.World.StateHash());
         }
-        string happened = $"carried {string.Join(", ", carried)}; loots {string.Join(", ", rig.Carry.Loots.Select(l => $"{l.Taken}/{l.Left}{(l.Witnessed ? " seen" : "")}"))}; relation {relations.Get(0, 1)}";
+        string happened = $"carried {string.Join(", ", carried)}; "
+            + $"loots {string.Join(", ", rig.Carry.Loots.Select(l => $"{l.Taken}/{l.Left}{(l.Witnessed ? " seen" : "")}"))}; "
+            + $"relation {relations.Get(0, 1)}";
 
         // The script lifts (p1 a townsman, p2 a downed mate, an NPC its leader; p3's rescue job finds no bed in this bedless world, so it lifts no
         // one), loots in sight of the townsfolk (the relation stays 10) and loots an emptied body.

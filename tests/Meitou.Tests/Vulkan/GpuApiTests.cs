@@ -16,7 +16,8 @@ public class GpuApiTests
         {
             return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = sync });
         }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
+        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException
+            or Silk.NET.Core.Loader.SymbolLoadingException)
         {
             return null;
         }
@@ -355,6 +356,9 @@ public class GpuApiTests
             }
             ExpectClean(d!);
         }
-        finally { (Recording.Mode, Recording.MinThreadedDraws) = (mode, min); }
+        finally
+        {
+            (Recording.Mode, Recording.MinThreadedDraws) = (mode, min);
+        }
     }
 }

@@ -12,7 +12,8 @@ public unsafe class CoreTests(ITestOutputHelper output)
         {
             return VulkanDevice.Create(new VulkanDeviceOptions { Validation = validation, FramesInFlight = frames });
         }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
+        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException
+            or Silk.NET.Core.Loader.SymbolLoadingException)
         {
             return null;
         }
@@ -82,7 +83,8 @@ public unsafe class CoreTests(ITestOutputHelper output)
 
         Assert.True(d.Allocator.BlockCount > 0);
         Assert.True(d.Allocator.TotalUsedBytes > 0 && d.Allocator.TotalAllocatedBytes >= d.Allocator.TotalUsedBytes);
-        output.WriteLine($"{d.Allocator.BlockCount} blocks, {d.Allocator.TotalAllocatedBytes >> 20} MB held, {d.Allocator.TotalUsedBytes >> 10} KB used");
+        output.WriteLine($"{d.Allocator.BlockCount} blocks, {d.Allocator.TotalAllocatedBytes >> 20} MB held, "
+            + $"{d.Allocator.TotalUsedBytes >> 10} KB used");
 
         foreach (var b in buffers.OrderBy(_ => rng.Next())) d.Allocator.Free(b);
         foreach (var i in images.OrderBy(_ => rng.Next())) d.Allocator.Free(i);

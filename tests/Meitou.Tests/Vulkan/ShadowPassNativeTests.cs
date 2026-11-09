@@ -17,8 +17,15 @@ public class ShadowPassNativeTests
     public void The_Meitou_pass_owns_named_native_targets_publishes_them_and_builds_the_blocker_map()
     {
         VulkanDevice? d;
-        try { d = VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { d = null; }
+        try
+        {
+            d = VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true });
+        }
+        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException
+            or Silk.NET.Core.Loader.SymbolLoadingException)
+        {
+            d = null;
+        }
         using var device = d;
         Assert.SkipWhen(device is null, "No Vulkan 1.3 device");
         using (var ctx = new GpuContext(device!))

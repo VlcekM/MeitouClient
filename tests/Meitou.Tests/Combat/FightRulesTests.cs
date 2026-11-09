@@ -52,8 +52,8 @@ public class FightRulesTests
     }
 
     /// <summary>
-    /// The fight's own target down (docs/game/combat.md "Leaving a fight", CombatClassAI update FUN_14060d6a0): the fight ends once a swing in progress reaches its end marker
-    /// ("Pacing"), though another still attacks the fighter.
+    /// The fight's own target down (docs/game/combat.md "Leaving a fight", CombatClassAI update FUN_14060d6a0): the fight ends once a swing in
+    /// progress reaches its end marker ("Pacing"), though another still attacks the fighter.
     /// </summary>
     [Fact]
     public void A_fighter_whose_task_target_drops_ends_its_fight_at_once()

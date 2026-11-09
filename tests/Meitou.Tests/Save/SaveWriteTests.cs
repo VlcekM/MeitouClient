@@ -57,6 +57,9 @@ public partial class SaveWriteTests
 
             Assert.Equal(99, SaveGame.Load(folder).Camera.Day);
         }
-        finally { Directory.Delete(root, recursive: true); }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 }
