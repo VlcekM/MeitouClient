@@ -374,9 +374,9 @@ internal static class SavedCharacters
         }
 
         // The kit: a character with an INVENTORY_STATE gets its items, none when it is empty (the original loads an emptied inventory empty and saves
-        // it so again: a dog saved with nothing does not get its death items back), and its look is its saved appearance wearing them. One without
-        // the state (a Meitou save from before inventories were written) keeps the old rule for its clothes: rolled from the handle's serial, with the
-        // inventory a new character of the look would have.
+        // it so again: a dog saved with nothing does not get its death items back), and its look is its saved appearance wearing them. So a Meitou
+        // save written before items were (2026-10-08 to 10-14, empty states) loads its characters with nothing. One without the state keeps the old
+        // rule for its clothes: rolled from the handle's serial, with the inventory a new character of the look would have.
         var savedItems = sc.Inventory is { } invState && sc.Platoon.File is { } platoonFile ? SaveInventory.Read(platoonFile, invState) : [];
         var handle = sc.Handle;
         string ownerId = sc.OwnerFactionId;
@@ -391,7 +391,8 @@ internal static class SavedCharacters
 
         look ??= appearances?.Create(sc.RecordId, ownerId.Length > 0 ? ownerId : null, serial);
 
-        // Without items the clothes are rolled, but the body and face are still the saved ones (the CHARACTER_APPEARANCE holds the whole look).
+        // With no saved items the look's clothes (rolled, or none for an empty INVENTORY_STATE) go on the saved body and face (the
+        // CHARACTER_APPEARANCE holds the whole look).
         if (savedItems.Count == 0 && appearances is { } again && look?.Loadout is { } rolled)
         {
             var worn = SavedKit.Wear(rolled, sc.Appearance, data.Db);
