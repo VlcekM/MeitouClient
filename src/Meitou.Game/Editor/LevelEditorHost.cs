@@ -84,9 +84,9 @@ sealed class LevelEditorHost(GameHost host)
     /// <summary>
     /// The builder of town buildings from placements (the boot pass's own), null without the population or the database.
     /// </summary>
-    TownBuildings.Builder? MakeTownBuilder(WorldObjects objects) =>
+    TownBuildingBuilder? MakeTownBuilder(WorldObjects objects) =>
         host.PopData is null || host.Scene.Database is not { } database ? null
-            : new TownBuildings.Builder(database, objects.Levels, objects.Layouts, (x, z) => host.Gpu.Terrain.HeightAt((float)x, (float)z));
+            : new TownBuildingBuilder(database, objects.Levels, objects.Layouts, (x, z) => host.Gpu.Terrain.HeightAt((float)x, (float)z));
 
     /// <summary>
     /// The edits a game save holds (<see cref="SaveGame.LevelEdits"/>), applied to the world just loaded as the live edits were: Called once the host
@@ -162,7 +162,7 @@ sealed class LevelEditorHost(GameHost host)
     /// A placement (made in the session, or read from a game save) into the level data, the renderer, the navmesh, the lights and the town
     /// simulation.
     /// </summary>
-    void ApplyPlaced(WorldObjects objects, BuildingPlacement placement, int pathMode, TownBuildings.Builder? townBuilder)
+    void ApplyPlaced(WorldObjects objects, BuildingPlacement placement, int pathMode, TownBuildingBuilder? townBuilder)
     {
         objects.Levels.ApplyEdit(placement.Zone,
             LevelEdits.PlacedFile(placement, host.Scene.Database?.Find(placement.BuildingId)?.Name ?? placement.BuildingId), LevelEdits.ModName);
@@ -178,7 +178,7 @@ sealed class LevelEditorHost(GameHost host)
     /// simulation, which adds it to its town's list and registers its doors, beds, fixtures, item slots and sight like a loaded one's. A building no
     /// town takes is in no list, as a loaded one outside every town is not.
     /// </summary>
-    void TownPlaced(TownBuildings.Builder? builder, BuildingPlacement placement)
+    void TownPlaced(TownBuildingBuilder? builder, BuildingPlacement placement)
     {
         if (builder?.Build(placement) is not var (town, building)) return;
         host.Session.World.Commands.Enqueue(new DebugPlaceBuilding(town, building) { Tick = host.Session.World.Tick });

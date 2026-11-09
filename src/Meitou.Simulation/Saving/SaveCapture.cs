@@ -728,7 +728,7 @@ public static partial class SaveCapture
         if (stats is not null && sc.Stats is { } sr)
         {
             stats.WriteSave(sr.Floats);
-            SaveBuilder.FillLegacyStats(sr, isNew ? WarriorSpiritOf(data.Db, recordId) : 0);
+            LegacyStats.Fill(sr, isNew ? WarriorSpiritOf(data.Db, recordId) : 0);
         }
 
         if (medical is null && isNew && RaceOf(recordId, data.Db, races) is { } race)

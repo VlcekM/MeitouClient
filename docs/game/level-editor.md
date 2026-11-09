@@ -69,7 +69,7 @@ F10 → Tools → "Level editor..." (`LevelEditorHost`, `LevelEditorPanel`, `Bui
 - Meitou reads each active mod's `leveldata/` as a layer in load order ([zones](../formats/zones.md), "Level data layers"), so after a
   restart with the mod `Meitou Level Editor` active the saved buildings are level buildings read at load, as the session's were.
 - **Simulation side**: a building placed or cleared in the session is a town building at once, as one the level data holds at load. The host makes the placed building's `TownBuilding` with
-  `TownBuildings.Builder`, the code the boot pass (`TownBuildings.Build`) runs for every level building (town by radius, owner from the state or the town, doors, beds, seats, containers, item slots, interior layouts),
+  `TownBuildingBuilder`, the code the boot pass (`TownBuildings.Build`) runs for every level building (town by radius, owner from the state or the town, doors, beds, seats, containers, item slots, interior layouts),
   and queues `DebugPlaceBuilding` (cleared: `DebugClearBuilding`) with the current tick. The simulation applies it in the serial phase (`TownEdits`): the town's list in `PopulationData.Sites[].Buildings` is replaced by
   a changed copy (copy on write, `PopulationData.BuildingsRevision` counts it for the host's caches), and a town the registries already hold gets the building registered (`FixtureRegistry.RegisterAdded`: doors with their
   locks, own lock, cages, containers, beds, seats, property, `SightMap` room and lamps; `ItemSlots.AddBuilding`); any other town takes it from the list when it is first registered. Clearing (placed or loaded building) takes it out of the

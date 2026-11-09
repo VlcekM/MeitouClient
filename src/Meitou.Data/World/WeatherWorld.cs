@@ -66,7 +66,7 @@ public sealed class WeatherWorld
     /// The world made from a game database and its install (<c>areasmap.tga</c>).
     /// </summary>
     public static WeatherWorld Create(GameDatabase db, GameInstall install, int seed, WeatherTime start) =>
-        new(WeatherData.Load(db), WeatherAreas.Load(install), seed, start);
+        new(WeatherDataReader.Read(db), WeatherAreas.Load(install), seed, start);
 
     public WeatherData Data { get; }
     public WeatherAreas Areas => _areas;
