@@ -701,13 +701,6 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     }
 
     /// <summary>
-    /// Whether an inventory (or its backpack) holds an item of the function: the medic finder's kit flags test only the item function, no charge,
-    /// quantity or type (<c>FUN_14004b84e</c>).
-    /// </summary>
-    internal static bool HasFunction(Inventory? inventory, int function) => inventory is not null
-            && inventory.All().Any(item => item.ItemFunction == function);
-
-    /// <summary>
     /// The item function of a robot kit or a first-aid kit.
     /// </summary>
     static int FunctionOf(bool robot) => robot ? ItemInfo.RobotKitFunction : ItemInfo.FirstAidKitFunction;

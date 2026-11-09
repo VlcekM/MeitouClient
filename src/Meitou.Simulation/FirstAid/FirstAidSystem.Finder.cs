@@ -379,7 +379,7 @@ public sealed partial class FirstAidSystem
         var cold = table.Cold(i)!;
         if (!MayLook(world, cold, ordered)) return (-1, 0);
 
-        bool organic = HasFunction(cold.Inventory, ItemInfo.FirstAidKitFunction), robotic = HasFunction(cold.Inventory, ItemInfo.RobotKitFunction);
+        bool organic = HoldsKit(cold, ItemInfo.FirstAidKitFunction), robotic = HoldsKit(cold, ItemInfo.RobotKitFunction);
         bool healAllies = (world.Player.SquadAi & SquadAi.Heal) != 0;
         bool healAll = cold.IsPlayer && (world.Player.SquadAi & SquadAi.HealAll) != 0, healNeutrals = healAll || cold.IsPlayer
                 && (world.Player.SquadAi & SquadAi.HealNeutrals) != 0;
