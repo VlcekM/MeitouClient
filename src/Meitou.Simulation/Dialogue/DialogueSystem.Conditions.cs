@@ -13,9 +13,10 @@ namespace Meitou.Simulation.Dialogue;
 public sealed partial class DialogueSystem
 {
     /// <summary>
-    /// One condition (<c>FUN_140676950</c>, docs/game/dialogue.md "Conditions"): <c>who</c> 0 tests the speaker, any other value the target. Yes/no conditions pass when the computed
-    /// answer equals value &gt; 0; counts compare by <c>compare by</c> (Num3: 1 &lt;, 2 &gt;, else ==; Num2: 1 &lt;, else &gt;=). Conditions whose inputs Meitou does not have
-    /// (town wall locks, strength ratings, head counts, training equipment) compute "no".
+    /// One condition (<c>FUN_140676950</c>, docs/game/dialogue.md "Conditions"): <c>who</c> 0 tests the speaker, any other value the target. Yes/no
+    /// conditions pass when the computed answer equals value &gt; 0; counts compare by <c>compare by</c> (Num3: 1 &lt;, 2 &gt;, else ==; Num2: 1
+    /// &lt;, else &gt;=). Conditions whose inputs Meitou does not have (town wall locks, strength ratings, head counts, training equipment) compute
+    /// "no".
     /// </summary>
     bool Condition(World world, Conversation c, DialogueCondition dc, CharacterId me, CharacterCold mc, CharacterId other)
     {
@@ -28,7 +29,8 @@ public sealed partial class DialogueSystem
         if (dc.Condition == 76) return Bool(s is not null);
         if (dc.Condition == 13) return Num3(_counters.GetValueOrDefault((me, c.Event)).Count);
         var relations = _data.Relations;
-        // A missing target (who != 0) becomes the player's nearest selected character, else the active squad's first, for this and the later conditions and as the conversation's target.
+        // A missing target (who != 0) becomes the player's nearest selected character, else the active squad's first, for this and the later
+        // conditions and as the conversation's target.
         if (s is null && dc.Who != 0 && SubjectFallback(world, me) is { } found)
         {
             if (!c.DryRun) c.Player = found;
@@ -39,7 +41,8 @@ public sealed partial class DialogueSystem
         if (dc.Condition == 12) return Num3(world.Research.TechLevel);   // the research manager's tech level (*(*(game + 0x38) + 8), FUN_140676950), whatever the subject
         if (s is null)
         {
-            // No player character at all: the faction-level test (FUN_140671530) against the player's faction; everything else passes; DC 11 is the speaker's own squad's.
+            // No player character at all: the faction-level test (FUN_140671530) against the player's faction; everything else passes; DC 11 is the
+            // speaker's own squad's.
             int player = world.Player.Faction;
             return dc.Condition switch
             {
@@ -100,7 +103,8 @@ public sealed partial class DialogueSystem
             case 38: return Bool(SquadOf(world, subjectId).All(m => Cold(world, m)?.Fighter?.IsAnimal == true));
             case 39:
                 {
-                    // IS_OUTNUMBERED: S's sensed enemies above 1.3 x its sensed conscious allies, strict (SensoryData +0x94 numEnemies, +0x4c numConsciousAllies; the same counts as playing dead).
+                    // IS_OUTNUMBERED: S's sensed enemies above 1.3 x its sensed conscious allies, strict (SensoryData +0x94 numEnemies, +0x4c
+                    // numConsciousAllies; the same counts as playing dead).
                     if (world.SystemOf<Combat.CombatSystem>() is not { } combat || !world.Characters.TryResolveNext(subjectId, out int ss)) return !b;
                     var (enemies, _, allies) = BodySystem.Senses(world, combat, ss, s);
                     return Bool(enemies > allies * 1.3f);
@@ -122,9 +126,11 @@ public sealed partial class DialogueSystem
             case 54: return Bool(ScrewOver(world, me, mc, subjectId, s));
             case 55: return Bool(Helps(world, me, mc, subjectId, s));
             case 56: return Bool(s.InCombat);
-            // WITHIN_TOWN_WALLS: S's gate code above 0 (Character slot 35, docs/game/pathfinding.md "Gate codes"); no gate pass yet reads as the open world.
+            // WITHIN_TOWN_WALLS: S's gate code above 0 (Character slot 35, docs/game/pathfinding.md "Gate codes"); no gate pass yet reads as the open
+            // world.
             case 57: return Bool(Position(world, subjectId) is { } walled && world.SystemOf<Locks.LockSystem>()?.Regions?.CodeAt(walled) > 0);
-            // TOWN_WALLS_LOCKED_UP: S's current town has gates and none of their doors is open (FUN_140929820 behind Town vfunc 0x300); S in no town reads false.
+            // TOWN_WALLS_LOCKED_UP: S's current town has gates and none of their doors is open (FUN_140929820 behind Town vfunc 0x300); S in no town
+            // reads false.
             case 58: return Bool(Position(world, subjectId) is { } inTown && TownAt(inTown) is >= 0 and var walledTown && Locks.LockSystem.TownLockedUp(world, _data.Sites[walledTown]));
             case 59: return Bool(s.SlaveState is 1 or 2);
             case 61: return Bool(s.SlaveState is 1 or 2 && s.SlaveOwner >= 0 && s.SlaveOwner == meF);
@@ -145,8 +151,8 @@ public sealed partial class DialogueSystem
                     return Bool(looks.Length == 0 || (looks.Contains(true) && looks.Contains(false)));
                 }
             case 73:
-                // The speaker's current town when it is the player's: that town's level (Town +0x388); false otherwise, whatever the value. Engine reading of "current town": the player outpost
-                // whose centre is within the player-town extent of the speaker.
+                // The speaker's current town when it is the player's: that town's level (Town +0x388); false otherwise, whatever the value. Engine
+                // reading of "current town": the player outpost whose centre is within the player-town extent of the speaker.
                 return _population is not null && Position(world, me) is { } standing && PlayerTownAt(world, standing) is { } ownTown && Num3(_population.TownLevel(world, ownTown.Number));
             case 74: return Num3(PlayersBestTownLevel(world));
             case 75:
@@ -161,16 +167,17 @@ public sealed partial class DialogueSystem
     }
 
     /// <summary>
-    /// DC 11 BUILDING_IS_CLOSED_AND_SECURED (<c>FUN_140676950</c> case 0xb): the speaker's squad's "house locked" flag (<c>homelok</c>, <c>FUN_140791ba0</c> +0xe8), which
-    /// Meitou keeps per home building (<see cref="Locks.LockSystem.IsHouseLocked"/>).
+    /// DC 11 BUILDING_IS_CLOSED_AND_SECURED (<c>FUN_140676950</c> case 0xb): the speaker's squad's "house locked" flag (<c>homelok</c>,
+    /// <c>FUN_140791ba0</c> +0xe8), which Meitou keeps per home building (<see cref="Locks.LockSystem.IsHouseLocked"/>).
     /// </summary>
     static bool HouseLocked(World world, CharacterCold mc) =>
         mc.SquadId >= 0 && world.Squads.Find(mc.SquadId) is { } squad && (squad.Ai?.OwnHome ?? squad.HomeBuilding)?.Key is { } home
         && world.SystemOf<Locks.LockSystem>()?.IsHouseLocked(world, home) == true;
 
     /// <summary>
-    /// The subject a condition about a missing target takes (<c>FUN_140676950</c>): the character the player has selected that is nearest to <paramref name="me"/> (<c>FUN_1407f4ba0</c>: squared
-    /// distance, no cap, the first of equals), else the first member of the player's active squad (<c>FUN_1407f5710</c>, <see cref="ActiveSquad"/>); none when the player has neither.
+    /// The subject a condition about a missing target takes (<c>FUN_140676950</c>): the character the player has selected that is nearest to
+    /// <paramref name="me"/> (<c>FUN_1407f4ba0</c>: squared distance, no cap, the first of equals), else the first member of the player's active
+    /// squad (<c>FUN_1407f5710</c>, <see cref="ActiveSquad"/>); none when the player has neither.
     /// </summary>
     CharacterId? SubjectFallback(World world, CharacterId me)
     {
@@ -199,9 +206,9 @@ public sealed partial class DialogueSystem
     readonly Dictionary<(CharacterId, string), double> _smugglingPosted = [];
 
     /// <summary>
-    /// DC_HAS_ILLEGAL_ITEM (<c>FUN_140676950</c>, docs/game/dialogue.md "Conditions"): a member of S's squad that Me perceives (<see cref="Known"/>) carries an item on the
-    /// <c>illegal goods</c> of the culture of Me's town's faction, else of Me's faction. Each carrier found posts the smuggling message (not on the Talk menu's dry run, and once
-    /// per carrier and item per game hour: engine choice).
+    /// DC_HAS_ILLEGAL_ITEM (<c>FUN_140676950</c>, docs/game/dialogue.md "Conditions"): a member of S's squad that Me perceives (<see cref="Known"/>)
+    /// carries an item on the <c>illegal goods</c> of the culture of Me's town's faction, else of Me's faction. Each carrier found posts the
+    /// smuggling message (not on the Talk menu's dry run, and once per carrier and item per game hour: engine choice).
     /// </summary>
     bool HasIllegalItem(World world, Conversation c, CharacterId me, CharacterCold mc, CharacterId subject)
     {
@@ -220,7 +227,9 @@ public sealed partial class DialogueSystem
         return found;
     }
 
-    /// <summary>The player's nearest outpost whose radius holds <paramref name="at"/>, or null.</summary>
+    /// <summary>
+    /// The player's nearest outpost whose radius holds <paramref name="at"/>, or null.
+    /// </summary>
     Construction.PlayerTown? PlayerTownAt(World world, Vector3 at)
     {
         Construction.PlayerTown? best = null;
@@ -234,7 +243,10 @@ public sealed partial class DialogueSystem
         return best;
     }
 
-    /// <summary>DC_PLAYERS_BEST_TOWN_LEVEL (<c>FUN_140676950</c>): the highest level over the player faction's towns (Town +0x388, <see cref="PopulationSystem.TownLevel"/>); -1 with none.</summary>
+    /// <summary>
+    /// DC_PLAYERS_BEST_TOWN_LEVEL (<c>FUN_140676950</c>): the highest level over the player faction's towns (Town +0x388,
+    /// <see cref="PopulationSystem.TownLevel"/>); -1 with none.
+    /// </summary>
     int PlayersBestTownLevel(World world)
     {
         int best = -1;
@@ -244,7 +256,10 @@ public sealed partial class DialogueSystem
         return best;
     }
 
-    /// <summary>DC_IN_MY_BUILDING, engine reading (as the lock rounds'): within the building's farthest node or bed + 10 (at least 30) of its origin, on the ground.</summary>
+    /// <summary>
+    /// DC_IN_MY_BUILDING, engine reading (as the lock rounds'): within the building's farthest node or bed + 10 (at least 30) of its origin, on the
+    /// ground.
+    /// </summary>
     static bool InBuilding(Meitou.Data.World.TownBuilding b, Vector3 at)
     {
         float r = 0;
@@ -262,7 +277,9 @@ public sealed partial class DialogueSystem
     static float Speed(World world, CharacterId id) =>
         world.Characters.TryResolveNext(id, out int s) ? new Vector2(world.Characters.Next[s].Velocity.X, world.Characters.Next[s].Velocity.Z).Length() : 0;
 
-    /// <summary>DC_COPS_AROUND, engine reading of the speaker's sensed law enforcement: an awake law-enforcement NPC within the outdoor sight.</summary>
+    /// <summary>
+    /// DC_COPS_AROUND, engine reading of the speaker's sensed law enforcement: an awake law-enforcement NPC within the outdoor sight.
+    /// </summary>
     static bool CopsAround(World world, CharacterId me)
     {
         if (Position(world, me) is not { } at) return false;
@@ -274,7 +291,9 @@ public sealed partial class DialogueSystem
         return false;
     }
 
-    /// <summary>The ground distance from <paramref name="at"/> to the nearest placed town of <paramref name="faction"/>; null: none.</summary>
+    /// <summary>
+    /// The ground distance from <paramref name="at"/> to the nearest placed town of <paramref name="faction"/>; null: none.
+    /// </summary>
     float? NearestTownOf(int faction, Vector3 at)
     {
         float? best = null;

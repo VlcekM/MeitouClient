@@ -9,79 +9,112 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Dialogue;
 
-/// <summary>The player's Talk order: <see cref="Talker"/> walks up to <see cref="Target"/> and the conversation opens in reach (the original's task 12, then event 1).</summary>
+/// <summary>
+/// The player's Talk order: <see cref="Talker"/> walks up to <see cref="Target"/> and the conversation opens in reach (the original's task 12, then
+/// event 1).
+/// </summary>
 public sealed record TalkOrder(CharacterId Talker, CharacterId Target) : OrderCommand;
-/// <summary>Clicks choice <see cref="Index"/> of the open conversation.</summary>
+/// <summary>
+/// Clicks choice <see cref="Index"/> of the open conversation.
+/// </summary>
 public sealed record DialogueChoice(int Index) : SimCommand;
-/// <summary>Leaves the open conversation (its window closed).</summary>
+/// <summary>
+/// Leaves the open conversation (its window closed).
+/// </summary>
 public sealed record EndConversation : SimCommand;
 /// <summary>
-/// Fires dialogue event <see cref="Event"/> at <see cref="Npc"/> with <see cref="Target"/> as its partner (the original's <c>FUN_140684990</c>, from the systems that witness it):
-/// a line of the NPC's list for the event, or of <see cref="Dialogue"/> when given, said as speech bubbles.
+/// Fires dialogue event <see cref="Event"/> at <see cref="Npc"/> with <see cref="Target"/> as its partner (the original's <c>FUN_140684990</c>, from
+/// the systems that witness it): a line of the NPC's list for the event, or of <see cref="Dialogue"/> when given, said as speech bubbles.
 /// </summary>
 public sealed record DialogueEvent(CharacterId Npc, CharacterId Target, int Event, string? Dialogue = null) : SimCommand;
 
-/// <summary>The open player conversation as the conversation window shows it (published with the snapshot).</summary>
+/// <summary>
+/// The open player conversation as the conversation window shows it (published with the snapshot).
+/// </summary>
 public sealed record ConversationView(CharacterId Npc, CharacterId Player, CharacterId Speaker, string SpeakerName, string PlayerName, string Text,
     IReadOnlyList<string> Choices, IReadOnlyList<string> Log, long PlayerMoney);
 
 /// <summary>
-/// What a conversation asks the host to do once it has ended: DA_CHARACTER_EDITOR, the surgeon's editor on <see cref="DialogueRequest.Player"/>, already paid; DA_JOIN_SQUAD_WITH_EDIT,
-/// the in-play editor on the recruit (<see cref="DialogueRequest.Player"/>); the animal buying window's confirm, the in-play editor on the bought animals
-/// (<see cref="DialogueRequest.Characters"/>, to name them).
+/// What a conversation asks the host to do once it has ended: DA_CHARACTER_EDITOR, the surgeon's editor on <see cref="DialogueRequest.Player"/>,
+/// already paid; DA_JOIN_SQUAD_WITH_EDIT, the in-play editor on the recruit (<see cref="DialogueRequest.Player"/>); the animal buying window's
+/// confirm, the in-play editor on the bought animals (<see cref="DialogueRequest.Characters"/>, to name them).
 /// </summary>
 public enum DialogueRequestKind : byte { CharacterEditor, RecruitEditor, AnimalEditor }
 public sealed record DialogueRequest(long Id, DialogueRequestKind Kind, CharacterId Player, CharacterId Npc)
 {
-    /// <summary>The characters an <see cref="DialogueRequestKind.AnimalEditor"/> request opens the editor on.</summary>
+    /// <summary>
+    /// The characters an <see cref="DialogueRequestKind.AnimalEditor"/> request opens the editor on.
+    /// </summary>
     public IReadOnlyList<CharacterId> Characters { get; init; } = [];
 }
 
-/// <summary>A system with a conversation to publish (the dialogue system).</summary>
+/// <summary>
+/// A system with a conversation to publish (the dialogue system).
+/// </summary>
 public interface IDialogueSource
 {
     ConversationView? PublishConversation();
     DialogueRequest? PublishRequest();
-    /// <summary>The open character trading window (DA 41 / 42; null: none).</summary>
+    /// <summary>
+    /// The open character trading window (DA 41 / 42; null: none).
+    /// </summary>
     CharacterTradeView? PublishCharacterTrade() => null;
-    /// <summary>The character answers the player's Talk (it has event-1 dialogue, and with <paramref name="talker"/> given, a line of it passes now).</summary>
+    /// <summary>
+    /// The character answers the player's Talk (it has event-1 dialogue, and with <paramref name="talker"/> given, a line of it passes now).
+    /// </summary>
     bool CanTalk(World world, int slot, CharacterId? talker = null);
-    /// <summary>The character holds a line it wants to say to the player (the original's Dialogue <c>playerInterruptionDialog</c>, +0xc8): its quick right click pointer is <c>s_talk</c>.</summary>
+    /// <summary>
+    /// The character holds a line it wants to say to the player (the original's Dialogue <c>playerInterruptionDialog</c>, +0xc8): its quick right
+    /// click pointer is <c>s_talk</c>.
+    /// </summary>
     bool HasInterrupt(CharacterId npc) => false;
-    /// <summary>The lines on show over characters' heads (speech bubbles).</summary>
+    /// <summary>
+    /// The lines on show over characters' heads (speech bubbles).
+    /// </summary>
     IReadOnlyList<SpeechBubble> PublishSpeech() => [];
 }
 
 public sealed class DialogueSettings
 {
-    /// <summary>Game seconds the talker may spend not moving on its walk to the target before the order is dropped (engine choice, <see cref="WalkUp"/>).</summary>
+    /// <summary>
+    /// Game seconds the talker may spend not moving on its walk to the target before the order is dropped (engine choice, <see cref="WalkUp"/>).
+    /// </summary>
     public float ApproachSeconds { get; init; } = 60;
     /// <summary>
-    /// NPCs react to a player character they see with an ambient line (events 3 neutral, 66 enemy, 67 ally) as a speech bubble. Engine choice for the Unknown perception rules
-    /// (docs/game/dialogue.md "Ambient conversations"): off by default (the pinned scenarios), the game turns it on.
+    /// NPCs react to a player character they see with an ambient line (events 3 neutral, 66 enemy, 67 ally) as a speech bubble. Engine choice for the
+    /// Unknown perception rules (docs/game/dialogue.md "Ambient conversations"): off by default (the pinned scenarios), the game turns it on.
     /// </summary>
     public bool AmbientEvents { get; init; }
     /// <summary>
-    /// How near a player character NPCs must be for their exchanges with each other to be run (a player character is seen by the sight test instead), how often (ticks) the NPCs look,
-    /// how many speak per look and the game hours before a squad reacts to the same character again (engine choices).
+    /// How near a player character NPCs must be for their exchanges with each other to be run (a player character is seen by the sight test instead),
+    /// how often (ticks) the NPCs look, how many speak per look and the game hours before a squad reacts to the same character again (engine
+    /// choices).
     /// </summary>
     public float AmbientRange { get; init; } = 600;
     public int AmbientEveryTicks { get; init; } = 30;
     public int AmbientPerScan { get; init; } = 2;
     public float AmbientRepeatHours { get; init; } = 0.5f;
-    /// <summary>Whether the displayed lines go through <see cref="Censorship"/> (the player's setting, read when a line is built).</summary>
+    /// <summary>
+    /// Whether the displayed lines go through <see cref="Censorship"/> (the player's setting, read when a line is built).
+    /// </summary>
     public Func<bool>? Censored { get; init; }
 }
 
 /// <summary>
-/// Dialogue (docs/game/dialogue.md; the engine design is its "Meitou design"): the player's conversations with NPCs. A <see cref="TalkOrder"/> walks the talker up and fires event 1
-/// (PLAYER_TALK_TO_ME) at the NPC: its event-1 dialogue is chosen (score, line checks, a random pick at the top score), the NPC's line is said (its effects run at once) and the
-/// passing replies become choices. The window pauses the game, so <see cref="DialogueChoice"/> and <see cref="EndConversation"/> apply between ticks (<see cref="World.ApplyPausedInterfaceCommands"/>);
+/// Dialogue (docs/game/dialogue.md; the engine design is its "Meitou design"): the player's conversations with NPCs. A <see cref="TalkOrder"/> walks
+/// the talker up and fires event 1
+/// (PLAYER_TALK_TO_ME) at the NPC: its event-1 dialogue is chosen (score, line checks, a random pick at the top score), the NPC's line is said (its
+/// effects run at once) and the
+/// passing replies become choices. The window pauses the game, so <see cref="DialogueChoice"/> and <see cref="EndConversation"/> apply between ticks
+/// (<see cref="World.ApplyPausedInterfaceCommands"/>);
 /// effects that give AI orders start on the next tick.
 /// <list type="bullet">
-/// <item><b>Engine choices</b>: a childless NPC line is shown with a single <c>[Leave]</c> (the original ends at once and how it shows such a line is <b>Unknown</b>); a reply whose best
-/// next line is another reply shows that reply as the only choice; conditions whose inputs Meitou lacks compute "no" (<see cref="Condition"/>).</item>
-/// <item><b>State</b> (hashed): last use per line (global, as the original's), permanent chance rolls and event counters per character, the squads' memories (<see cref="Memory"/>), pending
+/// <item><b>Engine choices</b>: a childless NPC line is shown with a single <c>[Leave]</c> (the original ends at once and how it shows such a line is
+/// <b>Unknown</b>); a reply whose best
+/// next line is another reply shows that reply as the only choice; conditions whose inputs Meitou lacks compute "no"
+/// (<see cref="Condition"/>).</item>
+/// <item><b>State</b> (hashed): last use per line (global, as the original's), permanent chance rolls and event counters per character, the squads'
+/// memories (<see cref="Memory"/>), pending
 /// interrupts, the open conversation. The characters' dialogue locks are on <see cref="CharacterCold.DialogueLocks"/>.</item>
 /// </list>
 /// </summary>
@@ -118,25 +151,37 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     public DialogueSettings Settings { get; }
 
-    /// <summary>The squads' memories of characters (docs/game/dialogue.md "Squad memory"): written by dialogue effects and player conversations, read by the conditions.</summary>
+    /// <summary>
+    /// The squads' memories of characters (docs/game/dialogue.md "Squad memory"): written by dialogue effects and player conversations, read by the
+    /// conditions.
+    /// </summary>
     public SquadMemory Memory { get; } = new();
 
     static int CompareIds(CharacterId a, CharacterId b) => a.Slot != b.Slot ? a.Slot.CompareTo(b.Slot) : a.Generation.CompareTo(b.Generation);
 
-    /// <summary>One open player conversation.</summary>
+    /// <summary>
+    /// One open player conversation.
+    /// </summary>
     sealed class Conversation
     {
         public required CharacterId Npc, Player;
         public required int Event;
-        /// <summary>The Talk menu's dry run of the pick: conditions post no messages.</summary>
+        /// <summary>
+        /// The Talk menu's dry run of the pick: conditions post no messages.
+        /// </summary>
         public bool DryRun { get; init; }
         public DialogueNode? Root;
-        /// <summary>The NPC-side line on screen and who said it.</summary>
+        /// <summary>
+        /// The NPC-side line on screen and who said it.
+        /// </summary>
         public DialogueNode? Line;
         public CharacterId Speaker;
         public string Text = "";
         public readonly CharacterId[] Interjectors = [CharacterId.None, CharacterId.None, CharacterId.None];
-        /// <summary>The choices: a reply line, or <c>null</c> for <c>[...]</c> (continue <see cref="Line"/>) / <c>[Leave]</c> (when <see cref="Line"/> has no next).</summary>
+        /// <summary>
+        /// The choices: a reply line, or <c>null</c> for <c>[...]</c> (continue <see cref="Line"/>) / <c>[Leave]</c> (when <see cref="Line"/> has no
+        /// next).
+        /// </summary>
         public readonly List<(DialogueNode? Reply, string Text)> Choices = [];
         public readonly List<string> Log = [];
         public bool Ended;
@@ -219,7 +264,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             return;
         }
         if (!Awake(table, n)) return;
-        // A campaign member with a pending interrupt (its negotiation) talks even when its faction is hostile (docs/game/factions-squads-towns.md "Campaigns", announcement).
+        // A campaign member with a pending interrupt (its negotiation) talks even when its faction is hostile (docs/game/factions-squads-towns.md
+        // "Campaigns", announcement).
         if (_data.Relations.IsHostile(nc.Faction, world.Player.Faction) && !_interrupts.ContainsKey(order.Target))
         {
             world.Defer(new Combat.AttackOrder([order.Talker], order.Target) { Tick = world.Tick + 1 });
@@ -237,14 +283,19 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _talker = _target = CharacterId.None;
     }
 
-    /// <summary>The talk distance beyond the target's radius while walking (7 x 3, <c>AI::isWithinChoppingRange</c> for a character, docs/game/dialogue.md "Player conversation").</summary>
+    /// <summary>
+    /// The talk distance beyond the target's radius while walking (7 x 3, <c>AI::isWithinChoppingRange</c> for a character, docs/game/dialogue.md
+    /// "Player conversation").
+    /// </summary>
     public const float TalkReach = 21;
-    /// <summary>The largest height difference to talk across (the original's on the same floor; engine choice, the sim has no floors here).</summary>
+    /// <summary>
+    /// The largest height difference to talk across (the original's on the same floor; engine choice, the sim has no floors here).
+    /// </summary>
     public const float TalkHeight = 35;
 
     /// <summary>
-    /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's scaled radius (footprint x body scale) + <see cref="TalkReach"/>, twice the reach once
-    /// the talker has stopped, and within <see cref="TalkHeight"/> in height.
+    /// Whether <paramref name="talker"/> is near enough <paramref name="target"/> to talk: X/Z within the target's scaled radius (footprint x body
+    /// scale) + <see cref="TalkReach"/>, twice the reach once the talker has stopped, and within <see cref="TalkHeight"/> in height.
     /// </summary>
     internal static bool InTalkRange(CharacterTable table, int talker, int target)
     {
@@ -255,7 +306,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     static bool Awake(CharacterTable table, int slot) => table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
 
-    /// <summary>Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends.</summary>
+    /// <summary>
+    /// Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends.
+    /// </summary>
     static void Hold(World world, int slot)
     {
         var table = world.Characters;
@@ -268,14 +321,21 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot) is { } c) c.Engaged = false;
     }
 
-    /// <summary>The farthest the talking player character may be from the camera for a player conversation to start (<c>FUN_140684320</c>, constant 9216).</summary>
+    /// <summary>
+    /// The farthest the talking player character may be from the camera for a player conversation to start (<c>FUN_140684320</c>, constant 9216).
+    /// </summary>
     public const float CameraReach = 9216;
 
-    /// <summary>Whether the talker is more than <see cref="CameraReach"/> from the camera focus (no focus known: never; headless runs and tests have none).</summary>
+    /// <summary>
+    /// Whether the talker is more than <see cref="CameraReach"/> from the camera focus (no focus known: never; headless runs and tests have none).
+    /// </summary>
     bool TooFarFromCamera(CharacterTable table, CharacterId talker) =>
         _population?.Focus is { } focus && table.TryResolveNext(talker, out int p) && Vector3.Distance(table.Next[p].Position, focus) > CameraReach;
 
-    /// <summary>Fires <paramref name="ev"/> at <paramref name="npc"/> with <paramref name="player"/> as its target and opens the conversation (docs/game/dialogue.md "Player conversation").</summary>
+    /// <summary>
+    /// Fires <paramref name="ev"/> at <paramref name="npc"/> with <paramref name="player"/> as its target and opens the conversation
+    /// (docs/game/dialogue.md "Player conversation").
+    /// </summary>
     void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false)
     {
         var table = world.Characters;
@@ -298,7 +358,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (c.Ended) End(world);
     }
 
-    /// <summary>The character's dialogue (its record, its squad's template and its role, docs/game/dialogue.md "Who has which dialogue").</summary>
+    /// <summary>
+    /// The character's dialogue (its record, its squad's template and its role, docs/game/dialogue.md "Who has which dialogue").
+    /// </summary>
     internal DialogueSet SetOf(World world, int slot)
     {
         var cold = world.Characters.Cold(slot)!;
@@ -309,8 +371,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     }
 
     /// <summary>
-    /// The character offers Trade: its squad has a shop, or has no home building and a template with <c>vendors</c> (a Caravan, stocked at its first trade), and its record says
-    /// <c>is trader</c> or its dialogue reaches a Trade line (docs/game/economy.md "Who trades"); the guards and other members of a trader squad do not.
+    /// The character offers Trade: its squad has a shop, or has no home building and a template with <c>vendors</c> (a Caravan, stocked at its first
+    /// trade), and its record says <c>is trader</c> or its dialogue reaches a Trade line (docs/game/economy.md "Who trades"); the guards and other
+    /// members of a trader squad do not.
     /// </summary>
     public bool Trades(World world, int slot) =>
         world.Characters.Cold(slot) is { IsPlayer: false, SquadId: >= 0 } cold && world.Squads.Find(cold.SquadId) is { } squad
@@ -325,7 +388,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         var roots = SetOf(world, slot).For(DialogueEvents.PlayerTalkToMe);
         if (roots.Count == 0) return false;
         if (talker is not { } player) return true;
-        // A dry run of Start's pick (it rolls dice and memoizes permanent chances: both put back), so the menu never offers a Talk that ends in "has nothing to say".
+        // A dry run of Start's pick (it rolls dice and memoizes permanent chances: both put back), so the menu never offers a Talk that ends in "has
+        // nothing to say".
         var (savedRolls, known) = (_rolls, _permanent.Keys.ToList());
         bool says = Pick(world, new Conversation { Npc = npc, Player = player, Event = DialogueEvents.PlayerTalkToMe, DryRun = true }, roots) is not null;
         _rolls = savedRolls;
@@ -335,7 +399,9 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     static bool IsNpcSide(Talker t) => t is Talker.Me or Talker.Interjector1 or Talker.Interjector2 or Talker.Interjector3 or Talker.WholeSquad;
 
-    /// <summary>The NPC side says <paramref name="line"/> (docs/game/dialogue.md "Saying a line"): a text, marked used, its effects at once, then the choices.</summary>
+    /// <summary>
+    /// The NPC side says <paramref name="line"/> (docs/game/dialogue.md "Saying a line"): a text, marked used, its effects at once, then the choices.
+    /// </summary>
     void Say(World world, Conversation c, DialogueNode line, CharacterId speaker)
     {
         c.Line = line;
@@ -351,7 +417,10 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         Offer(world, c, line);
     }
 
-    /// <summary>The choices after <paramref name="line"/> (docs/game/dialogue.md "Choices"): the passing children in order; an NPC-side one makes a single <c>[...]</c>.</summary>
+    /// <summary>
+    /// The choices after <paramref name="line"/> (docs/game/dialogue.md "Choices"): the passing children in order; an NPC-side one makes a single
+    /// <c>[...]</c>.
+    /// </summary>
     void Offer(World world, Conversation c, DialogueNode line)
     {
         c.Choices.Clear();
@@ -400,7 +469,10 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         }
     }
 
-    /// <summary>Ends the open conversation (<c>FUN_140674830</c>): the event counter and its time, the speaker squad's memory of the partner, the NPC released.</summary>
+    /// <summary>
+    /// Ends the open conversation (<c>FUN_140674830</c>): the event counter and its time, the speaker squad's memory of the partner, the NPC
+    /// released.
+    /// </summary>
     void End(World world)
     {
         if (_open is not { } c) return;
@@ -431,8 +503,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         line.Texts.Count switch { 0 => "", 1 => line.Texts[0], var n => line.Texts[Rng.Int(NextRoll(world, who), n)] };
 
     /// <summary>
-    /// The cost a line's text shows (<c>FUN_140675320</c>, for a said line and a choice button alike): " [c.N]" once for every DA_TAKE_MONEY effect, N its own val0 with thousands
-    /// separators, in effect order. DA_GIVE_MONEY adds nothing.
+    /// The cost a line's text shows (<c>FUN_140675320</c>, for a said line and a choice button alike): " [c.N]" once for every DA_TAKE_MONEY effect,
+    /// N its own val0 with thousands separators, in effect order. DA_GIVE_MONEY adds nothing.
     /// </summary>
     static string MoneySuffix(DialogueNode line)
     {
@@ -452,10 +524,14 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
             [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
     }
 
-    /// <summary>The engine's own choice that ends the conversation. The simulation keeps this English marker; only the published view shows it translated.</summary>
+    /// <summary>
+    /// The engine's own choice that ends the conversation. The simulation keeps this English marker; only the published view shows it translated.
+    /// </summary>
     internal const string LeaveChoice = "[Leave]";
 
-    /// <summary>A choice as the window shows it: the engine's [Leave] in the player's language; a reply's text is the data's own and stays as it is.</summary>
+    /// <summary>
+    /// A choice as the window shows it: the engine's [Leave] in the player's language; a reply's text is the data's own and stays as it is.
+    /// </summary>
     static string Shown((DialogueNode? Reply, string Text) choice) => choice.Reply is null && choice.Text == LeaveChoice ? Loc.Tr(LeaveChoice) : choice.Text;
 
     public ConversationView? PublishConversation() => _view;

@@ -7,17 +7,22 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Factions;
 
 /// <summary>
-/// Which WORLD_EVENT_STATE records hold (the population's own answers them live, <see cref="WorldStates"/>). A <c>world state</c> list entry passes when its state's answer is
-/// V0 = 1 (<see cref="Passes"/>; the original's <c>FUN_1409a9a70</c>), so V0 0 asks for a state that does not hold.
+/// Which WORLD_EVENT_STATE records hold (the population's own answers them live, <see cref="WorldStates"/>). A <c>world state</c> list entry passes
+/// when its state's answer is V0 = 1 (<see cref="Passes"/>; the original's <c>FUN_1409a9a70</c>), so V0 0 asks for a state that does not hold.
 /// </summary>
 public interface IWorldStates
 {
     bool IsTrue(string worldStateId);
 
-    /// <summary>No state holds (a plan given it); a population given it answers live instead (<see cref="PopulationSystem.States"/>).</summary>
+    /// <summary>
+    /// No state holds (a plan given it); a population given it answers live instead (<see cref="PopulationSystem.States"/>).
+    /// </summary>
     public static IWorldStates None { get; } = new NoStates();
 
-    /// <summary>One <c>world state</c> list entry: the state holds exactly when <paramref name="v0"/> is 1. A record the data lacks passes, as the original skips it.</summary>
+    /// <summary>
+    /// One <c>world state</c> list entry: the state holds exactly when <paramref name="v0"/> is 1. A record the data lacks passes, as the original
+    /// skips it.
+    /// </summary>
     public static bool Passes(IWorldStates states, GameDatabase db, string worldStateId, int v0) =>
         db.Find(worldStateId) is not { Type: FcsRecordType.WorldEventState } || states.IsTrue(worldStateId) == (v0 == 1);
 
@@ -27,13 +32,19 @@ public interface IWorldStates
     }
 }
 
-/// <summary>One character a squad will have: which record, in which role, where relative to the squad position.</summary>
+/// <summary>
+/// One character a squad will have: which record, in which role, where relative to the squad position.
+/// </summary>
 public sealed record MemberPlan(string RecordId, SquadRole Role, int Index, Vector2 Offset, bool IsAnimal, float Age);
 
-/// <summary>What a squad template makes, before any character exists: the members in creation order and the squads made recursively for <c>slaves</c>.</summary>
+/// <summary>
+/// What a squad template makes, before any character exists: the members in creation order and the squads made recursively for <c>slaves</c>.
+/// </summary>
 public sealed record SquadPlan(SquadTemplate Template, IReadOnlyList<MemberPlan> Members, IReadOnlyList<SquadPlan> Slaves, IReadOnlyList<string> Problems)
 {
-    /// <summary>Members of this squad and, recursively, of its slave squads.</summary>
+    /// <summary>
+    /// Members of this squad and, recursively, of its slave squads.
+    /// </summary>
     public int TotalMembers => Members.Count + Slaves.Sum(s => s.TotalMembers);
 }
 
@@ -57,10 +68,14 @@ public sealed record SquadPlan(SquadTemplate Template, IReadOnlyList<MemberPlan>
 /// </summary>
 public static class SquadFactory
 {
-    /// <summary>Whether a record is something a squad is made from: a SQUAD_TEMPLATE or a UNIQUE_SQUAD_TEMPLATE (null: no).</summary>
+    /// <summary>
+    /// Whether a record is something a squad is made from: a SQUAD_TEMPLATE or a UNIQUE_SQUAD_TEMPLATE (null: no).
+    /// </summary>
     public static bool IsTemplate(GameRecord? record) => record is { Type: FcsRecordType.SquadTemplate or FcsRecordType.UniqueSquadTemplate };
 
-    /// <summary>The count of one member list entry (section 5.1): the range rule, then the multiplier.</summary>
+    /// <summary>
+    /// The count of one member list entry (section 5.1): the range rule, then the multiplier.
+    /// </summary>
     public static int Count(int v0, int v1, float multiplier, bool dontMultiply, ulong roll)
     {
         int n = v0;
@@ -69,7 +84,9 @@ public static class SquadFactory
         return n;
     }
 
-    /// <summary>Offset of member number <paramref name="i"/> from the squad position.</summary>
+    /// <summary>
+    /// Offset of member number <paramref name="i"/> from the squad position.
+    /// </summary>
     public static Vector2 Offset(int i, float spacing = 3) => new(spacing * (i % 8), spacing * (i / 8) + (i % 2));
 
     public static SquadPlan Plan(GameDatabase db, SquadTemplate template, float multiplier, ulong seed, ulong key, IWorldStates? states = null, bool checkWorldState = true)
@@ -91,7 +108,8 @@ public static class SquadFactory
 
         bool Gated(string recordId) => db.Find(recordId) is { } r && r.GetReferences("world state").Any(w => !IWorldStates.Passes(states, db, w.TargetStringId, w.Values.Value0));
 
-        // The squad itself can be gated by its own world state (section 4: the AND gate for the spawn); not a slave squad made by its owner's recursion (FUN_140583a10 never tests it).
+        // The squad itself can be gated by its own world state (section 4: the AND gate for the spawn); not a slave squad made by its owner's
+        // recursion (FUN_140583a10 never tests it).
         if (checkWorldState && template.WorldState.Any(w => !IWorldStates.Passes(states, db, w.Id, w.V0)))
         {
             problems.Add($"squad '{template.Name}' is gated by a world state that does not hold");
@@ -154,9 +172,9 @@ public static class SquadFactory
     }
 
     /// <summary>
-    /// The expected size of a squad (section 6.1, <c>FUN_1408fe0f0</c>, Observed), what the pool budgets count: 1 for a leader, plus for every <c>squad</c>,
-    /// <c>squad2</c>, <c>animals</c>, <c>animals2</c> entry v0 when v1 is 0 or the sentinel 100 (not scaled), else (v0 + v1) / 2 (integer) times the squad
-    /// size multiplier when that is below 1, at least 1; entries with v0 and v1 both &lt;= 0 are skipped.
+    /// The expected size of a squad (section 6.1, <c>FUN_1408fe0f0</c>, Observed), what the pool budgets count: 1 for a leader, plus for every
+    /// <c>squad</c>, <c>squad2</c>, <c>animals</c>, <c>animals2</c> entry v0 when v1 is 0 or the sentinel 100 (not scaled), else (v0 + v1) / 2
+    /// (integer) times the squad size multiplier when that is below 1, at least 1; entries with v0 and v1 both &lt;= 0 are skipped.
     /// </summary>
     public static int ExpectedSize(SquadTemplate template, float multiplier)
     {
@@ -171,7 +189,10 @@ public static class SquadFactory
         return n;
     }
 
-    /// <summary>The generic weighted pick (section 6.1): weight v0 with 0 meaning 100, gated entries and non-positive weights skipped; a single candidate needs no roll.</summary>
+    /// <summary>
+    /// The generic weighted pick (section 6.1): weight v0 with 0 meaning 100, gated entries and non-positive weights skipped; a single candidate
+    /// needs no roll.
+    /// </summary>
     public static string? WeightedPick(IReadOnlyList<RecordLink> list, Func<string, bool> gated, Func<ulong> nextRoll)
     {
         var candidates = new List<(string Id, int Weight)>();

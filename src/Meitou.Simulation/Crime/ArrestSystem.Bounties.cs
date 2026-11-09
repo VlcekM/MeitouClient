@@ -8,7 +8,9 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Crime;
 
-/// <summary>A player character carrying a body to a cage (<see cref="PutInCageOrder"/>; serial state of the <see cref="ArrestSystem"/>).</summary>
+/// <summary>
+/// A player character carrying a body to a cage (<see cref="PutInCageOrder"/>; serial state of the <see cref="ArrestSystem"/>).
+/// </summary>
 public sealed class Caging
 {
     public required CharacterId Carrier { get; init; }
@@ -22,14 +24,21 @@ public sealed class Caging
     }
 }
 
-/// <summary>A bounty hunter after a player character (economy.md 11.8): chasing until the target is down, then resting from it (<see cref="Rest"/> game seconds left).</summary>
+/// <summary>
+/// A bounty hunter after a player character (economy.md 11.8): chasing until the target is down, then resting from it (<see cref="Rest"/> game
+/// seconds left).
+/// </summary>
 public sealed class Hunt
 {
     public required CharacterId Hunter { get; init; }
     public required CharacterId Target { get; init; }
-    /// <summary>Game seconds since the last attack order.</summary>
+    /// <summary>
+    /// Game seconds since the last attack order.
+    /// </summary>
     public float Time { get; set; }
-    /// <summary>Above 0: the hunt is over and the hunter leaves this target alone for that many more game seconds.</summary>
+    /// <summary>
+    /// Above 0: the hunt is over and the hunter leaves this target alone for that many more game seconds.
+    /// </summary>
     public float Rest { get; set; }
 
     internal void Hash(ref StateHasher h)
@@ -40,9 +49,14 @@ public sealed class Hunt
 
 public sealed partial class ArrestSystem : IOrderOwner
 {
-    /// <summary>Bounty hunters go after a bounty above this (their "bounty spotted" dialogues answer only <c>b &gt; 4000</c>, economy.md 11.8, <b>Verified</b> by probe).</summary>
+    /// <summary>
+    /// Bounty hunters go after a bounty above this (their "bounty spotted" dialogues answer only <c>b &gt; 4000</c>, economy.md 11.8, <b>Verified</b>
+    /// by probe).
+    /// </summary>
     public const int HuntLimit = 4000;
-    /// <summary>The least bail for a prisoner not of the player's faction (economy.md 11.5, <b>Observed</b>).</summary>
+    /// <summary>
+    /// The least bail for a prisoner not of the player's faction (economy.md 11.5, <b>Observed</b>).
+    /// </summary>
     public const int MinNpcBail = 2000;
 
     readonly List<Caging> _cagings = [];
@@ -68,8 +82,9 @@ public sealed partial class ArrestSystem : IOrderOwner
     // ------------------------------------------------------------------ bail
 
     /// <summary>
-    /// The bail of a caged character (economy.md 11.5, <b>Observed</b>): twice its bounty with the jail (the cage owner's faction), at least <see cref="MinNpcBail"/> when it is not of the
-    /// player's faction. Null when none is offered: not caged, or the cage is the player's or of a lawless faction (<b>engine</b> stand-in for the original's speaker and hostility tests).
+    /// The bail of a caged character (economy.md 11.5, <b>Observed</b>): twice its bounty with the jail (the cage owner's faction), at least
+    /// <see cref="MinNpcBail"/> when it is not of the player's faction. Null when none is offered: not caged, or the cage is the player's or of a
+    /// lawless faction (<b>engine</b> stand-in for the original's speaker and hostility tests).
     /// </summary>
     public int? BailFor(World world, CharacterCold c)
     {
@@ -82,9 +97,10 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// The prisoners <paramref name="speaker"/>'s bail list offers (<c>DA_CHOOSE_PRISONER_BAIL</c>'s <c>CharacterTrading_PrisonerBailout</c>, economy.md 11.5, <b>Observed</b>): the living
-    /// occupants of cages in the speaker's home town (<b>engine reading</b>: within <see cref="ArrestSettings.TownSlack"/> times its resident squad's home radius) that are of the player's
-    /// faction or not hostile to the speaker's, with their bail (<see cref="BailFor"/>). Empty when the speaker has no town.
+    /// The prisoners <paramref name="speaker"/>'s bail list offers (<c>DA_CHOOSE_PRISONER_BAIL</c>'s <c>CharacterTrading_PrisonerBailout</c>,
+    /// economy.md 11.5, <b>Observed</b>): the living occupants of cages in the speaker's home town (<b>engine reading</b>: within
+    /// <see cref="ArrestSettings.TownSlack"/> times its resident squad's home radius) that are of the player's faction or not hostile to the
+    /// speaker's, with their bail (<see cref="BailFor"/>). Empty when the speaker has no town.
     /// </summary>
     public List<(CharacterId Prisoner, string Name, int Price)> BailOffers(World world, CharacterId speaker)
     {
@@ -102,7 +118,10 @@ public sealed partial class ArrestSystem : IOrderOwner
         return offers;
     }
 
-    /// <summary>The bail list's Pay (<c>FUN_1406ae170</c>): <paramref name="payer"/>'s faction pays <paramref name="prisoner"/>'s bail at the desk, which frees it. False: not offered or too little money.</summary>
+    /// <summary>
+    /// The bail list's Pay (<c>FUN_1406ae170</c>): <paramref name="payer"/>'s faction pays <paramref name="prisoner"/>'s bail at the desk, which
+    /// frees it. False: not offered or too little money.
+    /// </summary>
     public bool PayBail(World world, CharacterId prisoner, CharacterId payer)
     {
         var table = world.Characters;
@@ -114,8 +133,8 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// <see cref="PayBailOrder"/>, the engine's bail without the desk (kept for tests and scripts; the game offers bail only through the dialogue): a free, awake player character within
-    /// <see cref="ArrestSettings.BailRange"/> of the cage and money for it.
+    /// <see cref="PayBailOrder"/>, the engine's bail without the desk (kept for tests and scripts; the game offers bail only through the dialogue): a
+    /// free, awake player character within <see cref="ArrestSettings.BailRange"/> of the cage and money for it.
     /// </summary>
     void PayBail(World world, CharacterId prisoner)
     {
@@ -136,7 +155,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         Bail(world, p, pc, cage, price, payer);
     }
 
-    /// <summary>Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the prisoner freed (no escape).</summary>
+    /// <summary>
+    /// Paying (<c>FUN_1406ae170</c>, economy.md 11.5): the money, the jail's entry erased, the prisoner freed (no escape).
+    /// </summary>
     void Bail(World world, int p, CharacterCold pc, Fixture cage, int price, int payer)
     {
         var table = world.Characters;
@@ -152,7 +173,8 @@ public sealed partial class ArrestSystem : IOrderOwner
         FixtureRegistry.ClearSlave(world, pc);   // bail frees a slave (FUN_1406ae170)
         pc.Freed = true;
         pc.Recognition = 0;
-        // Its squad remembers the payer as the one who freed it, and it says event 51 at the payer (FUN_1406ae170: FUN_140673930 tag 3, FUN_140684990 event 0x33; Verified).
+        // Its squad remembers the payer as the one who freed it, and it says event 51 at the payer (FUN_1406ae170: FUN_140673930 tag 3, FUN_140684990
+        // event 0x33; Verified).
         var payerId = table.IdOf(payer);
         Talk?.Memory.Remember(world, pc.SquadId, payerId, Dialogue.MemoryTag.FreedMe);
         bool spoke = Talk?.FireEvent(world, prisoner, payerId, Dialogue.DialogueSystem.BoughtMeFromSlavery) == true;
@@ -161,9 +183,10 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c>: one that could not speak (event 51 returned 0) is given 128 Retreat to hometown, then every one 133 Get out of cage (legit).
-    /// Whether the later give replaces the earlier or queues behind it is <b>Unknown</b> (<c>FUN_1405d20d0</c>): Meitou walks a prisoner that spoke out of the cage to its payer
-    /// (<see cref="Dialogue.DialogueSystem.WalkOutOfCage"/>, 133) and one that did not to its squad's home (128 standing for the pair).
+    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c>: one that could not speak (event 51 returned 0) is given 128 Retreat to
+    /// hometown, then every one 133 Get out of cage (legit). Whether the later give replaces the earlier or queues behind it is <b>Unknown</b>
+    /// (<c>FUN_1405d20d0</c>): Meitou walks a prisoner that spoke out of the cage to its payer (<see cref="Dialogue.DialogueSystem.WalkOutOfCage"/>,
+    /// 133) and one that did not to its squad's home (128 standing for the pair).
     /// </summary>
     void SendOut(World world, int p, CharacterCold pc, int payer, bool spoke)
     {
@@ -182,7 +205,10 @@ public sealed partial class ArrestSystem : IOrderOwner
         PlayerOrders.Give(world, s, new OrderEntry(TaskType.PutInCage, this) { Site = chosen }, queued);
     }
 
-    /// <summary>The cage a put-in-cage order takes its body to: the one it named while free and nobody else's goal, else the nearest such one in reach; the carrier's own caging is no rival.</summary>
+    /// <summary>
+    /// The cage a put-in-cage order takes its body to: the one it named while free and nobody else's goal, else the nearest such one in reach; the
+    /// carrier's own caging is no rival.
+    /// </summary>
     Fixture? CageFor(World world, int s, CharacterCold c, string? chosen)
     {
         var carrier = world.Characters.IdOf(s);
@@ -192,7 +218,10 @@ public sealed partial class ArrestSystem : IOrderOwner
             : FindCageFor(world, s, c, own);
     }
 
-    /// <summary>Put in prison 108 needs a player character carrying someone (else it leaves the queue), awake and free, and a free cage ("no free cage nearby", posted).</summary>
+    /// <summary>
+    /// Put in prison 108 needs a player character carrying someone (else it leaves the queue), awake and free, and a free cage ("no free cage
+    /// nearby", posted).
+    /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         if (Carry is null || world.Characters.Cold(slot) is not { IsPlayer: true, Carrying.IsNone: false } c) return OrderCheck.Gone;
@@ -211,7 +240,9 @@ public sealed partial class ArrestSystem : IOrderOwner
 
     public void RegisterTasks(TaskHandlers tasks) => tasks.Register(TaskType.PutInCage, this);
 
-    /// <summary>The put-in-cage order's walk (row 108): the carrier takes its body to the cage <see cref="TaskRequest.Site"/>.</summary>
+    /// <summary>
+    /// The put-in-cage order's walk (row 108): the carrier takes its body to the cage <see cref="TaskRequest.Site"/>.
+    /// </summary>
     void ITaskHandler.Start(World world, int slot, in TaskRequest request)
     {
         var table = world.Characters;
@@ -222,14 +253,19 @@ public sealed partial class ArrestSystem : IOrderOwner
         MovementSystem.GoTo(table, slot, new Vector2(cage.Position.X, cage.Position.Z), table.Cold(slot)!.RunSpeed);
     }
 
-    /// <summary>A caging another task replaces or the Stop order ends is given up.</summary>
+    /// <summary>
+    /// A caging another task replaces or the Stop order ends is given up.
+    /// </summary>
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var carrier = world.Characters.IdOf(slot);
         _cagings.RemoveAll(k => k.Carrier == carrier);
     }
 
-    /// <summary>The cage finder from the carrier (other cagings' and arrests' cages reserved), within <see cref="ArrestSettings.CageSearchRange"/>; null when none.</summary>
+    /// <summary>
+    /// The cage finder from the carrier (other cagings' and arrests' cages reserved), within <see cref="ArrestSettings.CageSearchRange"/>; null when
+    /// none.
+    /// </summary>
     Fixture? FindCageFor(World world, int s, CharacterCold c, Caging? self)
     {
         var at = world.Characters.Next[s].Position;
@@ -238,7 +274,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         return cage is not null && Vector2.DistanceSquared(new Vector2(at.X, at.Z), new Vector2(cage.Position.X, cage.Position.Z)) <= r * r ? cage : null;
     }
 
-    /// <summary>One tick of a caging; false when it is over (put in, dropped, or another order).</summary>
+    /// <summary>
+    /// One tick of a caging; false when it is over (put in, dropped, or another order).
+    /// </summary>
     bool StepCaging(World world, Caging k)
     {
         var table = world.Characters;
@@ -278,11 +316,12 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// The reward for a captive the carrier just put in <paramref name="cage"/> (the game's <c>FUN_140330d50</c>, economy.md 11.4, <b>Observed</b>): a carrier whose faction is the player's (the faction object's player flag, not
-    /// whether the carrier is player-controlled, <b>Verified</b>), a captive not of the
-    /// player's faction, a cage whose owner is not the player's faction and not lawless (<c>not real</c> or BANDIT), neither of them escaped; the captive's unclaimed entry for the cage owner's
-    /// faction pays, halved (truncated) when the captive is dead, into the player's money, and is marked claimed. The slaver exception does not apply (the player's characters are never
-    /// slaves here). Returns what it paid (0: nothing).
+    /// The reward for a captive the carrier just put in <paramref name="cage"/> (the game's <c>FUN_140330d50</c>, economy.md 11.4, <b>Observed</b>):
+    /// a carrier whose faction is the player's (the faction object's player flag, not whether the carrier is player-controlled, <b>Verified</b>), a
+    /// captive not of the player's faction, a cage whose owner is not the player's faction and not lawless (<c>not real</c> or BANDIT), neither of
+    /// them escaped; the captive's unclaimed entry for the cage owner's faction pays, halved (truncated) when the captive is dead, into the player's
+    /// money, and is marked claimed. The slaver exception does not apply (the player's characters are never slaves here). Returns what it paid (0:
+    /// nothing).
     /// </summary>
     public int Claim(World world, int carrier, CharacterId captive, Fixture cage)
     {
@@ -301,9 +340,9 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// <c>DA_ARREST_TARGET</c> (29, <c>FUN_140680560</c>): in his own town the speaker captures the target and cages it (the original's tasks 240 and 112: an arrest with no fine);
-    /// elsewhere he and his squad attack it (task 4). <paramref name="capture"/> is <see cref="CapturesInTown"/>, asked once by the caller, which tags the memory by the same answer.
-    /// False: the speaker is busy, or either is gone or down.
+    /// <c>DA_ARREST_TARGET</c> (29, <c>FUN_140680560</c>): in his own town the speaker captures the target and cages it (the original's tasks 240 and
+    /// 112: an arrest with no fine); elsewhere he and his squad attack it (task 4). <paramref name="capture"/> is <see cref="CapturesInTown"/>, asked
+    /// once by the caller, which tags the memory by the same answer. False: the speaker is busy, or either is gone or down.
     /// </summary>
     public bool ArrestFromDialogue(World world, CharacterId guard, CharacterId target, bool capture)
     {
@@ -315,15 +354,17 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// DA 29's one predicate (<c>FUN_140680560</c> case 0x1d, Verified): the guard stands in his own town (<see cref="InOwnTown"/>) and the target is no animal (vfunc <c>0x248</c>) - capture
-    /// (tasks 240 and 112, the target's squad remembers him as its captor); else attack (task 4, his squad tags the target a temporary enemy).
+    /// DA 29's one predicate (<c>FUN_140680560</c> case 0x1d, Verified): the guard stands in his own town (<see cref="InOwnTown"/>) and the target is
+    /// no animal (vfunc <c>0x248</c>) - capture (tasks 240 and 112, the target's squad remembers him as its captor); else attack (task 4, his squad
+    /// tags the target a temporary enemy).
     /// </summary>
     public bool CapturesInTown(World world, CharacterId guard, CharacterCold target) =>
         world.Characters.TryResolveNext(guard, out int g) && InOwnTown(world, g) && !SquadRegistry.IsAnimal(target);
 
     /// <summary>
-    /// The bounty desk's <c>DA_PAY_BOUNTY</c> (10, <c>FUN_140680560</c>, economy.md 11.4, <b>Observed</b>): the body <paramref name="carrier"/> carries pays its unclaimed entry for the
-    /// speaker's booking faction, halved (truncated) when dead, into the player's money, and the entry is marked claimed. Returns what it paid (0: nothing).
+    /// The bounty desk's <c>DA_PAY_BOUNTY</c> (10, <c>FUN_140680560</c>, economy.md 11.4, <b>Observed</b>): the body <paramref name="carrier"/>
+    /// carries pays its unclaimed entry for the speaker's booking faction, halved (truncated) when dead, into the player's money, and the entry is
+    /// marked claimed. Returns what it paid (0: nothing).
     /// </summary>
     public int PayBounty(World world, CharacterId speaker, CharacterId carrier)
     {
@@ -342,9 +383,10 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// <c>DA_ARREST_TARGETS_CARRIED_PERSON</c> (30, economy.md 11.7, <b>Observed</b>): <paramref name="carrier"/> drops the body it carries and <paramref name="guard"/> takes it over: he lifts
-    /// it and carries it to a free cage as an arrest does (no cage: he drops it). False: no body, or the guard is busy. <paramref name="enslave"/>: <c>DA_ENSLAVE_TARGETS_CARRIED_PERSON</c>
-    /// (40, the same hand-over, <c>FUN_140680560</c>): once caged the captive is the guard faction's slave (engine: the original's slaver processing, task 182, is not built).
+    /// <c>DA_ARREST_TARGETS_CARRIED_PERSON</c> (30, economy.md 11.7, <b>Observed</b>): <paramref name="carrier"/> drops the body it carries and
+    /// <paramref name="guard"/> takes it over: he lifts it and carries it to a free cage as an arrest does (no cage: he drops it). False: no body, or
+    /// the guard is busy. <paramref name="enslave"/>: <c>DA_ENSLAVE_TARGETS_CARRIED_PERSON</c> (40, the same hand-over, <c>FUN_140680560</c>): once
+    /// caged the captive is the guard faction's slave (engine: the original's slaver processing, task 182, is not built).
     /// </summary>
     public bool TakeOver(World world, CharacterId guard, CharacterId carrier, bool enslave = false)
     {
@@ -363,14 +405,22 @@ public sealed partial class ArrestSystem : IOrderOwner
 
     // ------------------------------------------------------------------ bounty hunters
 
-    /// <summary>The bounty a hunter of <paramref name="faction"/> sees on <paramref name="c"/>: the unclaimed entry of its faction's booking faction (<see cref="CrimeFactions.BookingOf"/>).</summary>
+    /// <summary>
+    /// The bounty a hunter of <paramref name="faction"/> sees on <paramref name="c"/>: the unclaimed entry of its faction's booking faction
+    /// (<see cref="CrimeFactions.BookingOf"/>).
+    /// </summary>
     int HuntBounty(CharacterCold c, int faction) =>
         Crimes.Factions.BookingOf(faction) is var f and >= 0 && c.Bounties?.Of(f) is { Claimed: false } e ? e.Amount : 0;
 
-    /// <summary>The looker is a bounty hunter (<see cref="CrimeFactions.Hunts"/>) that would go after <paramref name="target"/>'s bounty.</summary>
+    /// <summary>
+    /// The looker is a bounty hunter (<see cref="CrimeFactions.Hunts"/>) that would go after <paramref name="target"/>'s bounty.
+    /// </summary>
     bool HuntsFor(CharacterCold looker, CharacterCold target) => Crimes.Factions.Hunts(looker.Faction) && HuntBounty(target, looker.Faction) > HuntLimit;
 
-    /// <summary>A hunter free to start a hunt on <paramref name="target"/>: awake, not fighting or carrying, in no arrest or hunt, and not resting from this target.</summary>
+    /// <summary>
+    /// A hunter free to start a hunt on <paramref name="target"/>: awake, not fighting or carrying, in no arrest or hunt, and not resting from this
+    /// target.
+    /// </summary>
     bool FreeHunter(World world, int slot, CharacterId target)
     {
         var table = world.Characters;
@@ -382,7 +432,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         return true;
     }
 
-    /// <summary>The hunter and his squad attack the target and chase it (the dialogue's <c>DA_ATTACK_CHASE_FOREVER</c>, economy.md 11.8).</summary>
+    /// <summary>
+    /// The hunter and his squad attack the target and chase it (the dialogue's <c>DA_ATTACK_CHASE_FOREVER</c>, economy.md 11.8).
+    /// </summary>
     void BeginHunt(World world, int hunter, int target)
     {
         var table = world.Characters;
@@ -394,7 +446,10 @@ public sealed partial class ArrestSystem : IOrderOwner
         Note(world, ArrestEventKind.Hunt, table.IdOf(hunter), table.IdOf(target), hc.Faction, HuntBounty(table.Cold(target)!, hc.Faction));
     }
 
-    /// <summary>One tick of a hunt; false when it is gone. The chase ends when the target is down (the hunter leaves it: nothing in the data cages it), carried, caged or beyond the leash.</summary>
+    /// <summary>
+    /// One tick of a hunt; false when it is gone. The chase ends when the target is down (the hunter leaves it: nothing in the data cages it),
+    /// carried, caged or beyond the leash.
+    /// </summary>
     bool StepHunt(World world, Hunt h)
     {
         var table = world.Characters;
