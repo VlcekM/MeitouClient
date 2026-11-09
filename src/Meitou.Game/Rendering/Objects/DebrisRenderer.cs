@@ -147,7 +147,14 @@ public sealed unsafe class DebrisRenderer : IDisposable
             if (!gl_FrontFacing) n = -n;
             vec3 v = normalize(uEye - vWorld);
             vec3 colour;
-            if (uAtmoParams.x > 0.5) colour = limb && uLimbSkin != 0u ? kenshiLight(base.rgb, n, v, gloss, vWorld, skinDiffuse(n, n, uAtmoLight.xyz, vCurvature, base.rgb)) : kenshiLight(base.rgb, n, v, gloss, vWorld);
+            if (uAtmoParams.x > 0.5)
+            {
+                // Two lighting calls can duplicate the shadow code after inlining and crash the Metal compiler under MoltenVK.
+                vec3 diffuseNl = limb && uLimbSkin != 0u
+                    ? skinDiffuse(n, n, uAtmoLight.xyz, vCurvature, base.rgb)
+                    : vec3(clamp(dot(n, uAtmoLight.xyz), 0.0, 1.0));
+                colour = kenshiLight(base.rgb, n, v, gloss, vWorld, diffuseNl);
+            }
             else
             {
                 vec3 ambient = mix(uAmbientGround, uAmbientSky, 0.5 + 0.5 * n.y);

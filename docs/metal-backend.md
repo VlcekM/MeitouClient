@@ -835,6 +835,9 @@ default.
 - Debris now uses the shared `kenshiLight`/`atmoApply` fragment: the atmosphere, shadows, GI, lamps and its diffuse map
   come through the bindless set, with the model matrix, fallback light and per-part diffuse/cut-out values in one
   128-byte push block. That removes the old Metal-only simple sun/ambient path.
+- **Verified** on Apple M4 Pro (macOS 27.2, MoltenVK 1.4.2): the generated debris shader with separate skin and ordinary lighting calls
+  can abort the Metal compiler with fast math enabled. A standalone Metal pipeline probe compiled when the shader selected the diffuse
+  term first and called the shared lighting routine once. Both diffuse terms retain their original formulas.
 - UI shots: the Metal HUD is part of every screenshot. `--new-game --ui-panel inventory|stats|overview|menu`
   opens a panel; `MEITOU_METAL_OVERLAY=1` adds the frame-stats lines at the top-left. The Vulkan HUD/panel still
   renders (verified with `--ui-panel inventory` after the shared changes).
