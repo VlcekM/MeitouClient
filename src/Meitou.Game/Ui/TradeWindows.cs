@@ -102,7 +102,12 @@ sealed class TradeWindows(PlayerInterface player)
             .OrderByDescending(c => c.Bounds.Width * c.Bounds.Height)
             .FirstOrDefault()?.Name;
 
-    string? TraderGrid(string screen) => GridIn(player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen, player.ScreenRouter.AddFaithfulContent).First(f => f.Id == screen).Controls);
+    string? TraderGrid(string screen)
+    {
+        var frames = player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen,
+            player.ScreenRouter.AddFaithfulContent);
+        return GridIn(frames.First(f => f.Id == screen).Controls);
+    }
 
     /// <summary>
     /// The trader's name in the caption, its ARRANGE button; the money line is added after arranging.
@@ -148,7 +153,8 @@ sealed class TradeWindows(PlayerInterface player)
             // generic ScrollView draws the template's bars.
             if (layout.Find("Content") is { } content && layout.Find("scrollview_backpack_content") is { } view)
             {
-                float contentW = content.Position.Width * (r.Width + dx), contentH = content.Position.Height * (r.Height + dy), w0 = content.Position.Width * r.Width, h0 = content.Position.Height * r.Height;
+                float contentW = content.Position.Width * (r.Width + dx), contentH = content.Position.Height * (r.Height + dy);
+                float w0 = content.Position.Width * r.Width, h0 = content.Position.Height * r.Height;
                 b.RelativePositions[view] = new(view.Position.X * w0 / contentW, view.Position.Y * h0 / contentH,
                     (view.Position.Width * w0 + dx) / contentW, (view.Position.Height * h0 + dy) / contentH);
                 b.Canvas[view.Name] = (columns * player.InventoryCell, rows * player.InventoryCell);
@@ -202,7 +208,7 @@ sealed class TradeWindows(PlayerInterface player)
         // The scroll view (the generic ScrollView, bars and offset included) has the canvas where it put it; the grid is that canvas, so it draws
         // over the view's frame, under its bars.
         var scrollView = controls[viewIndex];
-        var client = controls.FirstOrDefault(x => x.Properties.GetValueOrDefault("TemplateOwner") == scrollView.Name && x.Properties.GetValueOrDefault("TemplatePart") == "Client")?.Bounds ?? scrollView.Bounds;
+        var client = controls.FirstOrDefault(x => IsTemplateClient(x, scrollView.Name))?.Bounds ?? scrollView.Bounds;
         int gridIndex = controls.FindIndex(x => x.Name == "backpack_content");
         if (gridIndex < 0) return;
 
@@ -211,11 +217,18 @@ sealed class TradeWindows(PlayerInterface player)
         viewIndex = controls.FindIndex(x => x.Name == "scrollview_backpack_content");
         controls.Insert(viewIndex + 1, slot with
         {
-            Bounds = new(MyGuiPresentation.Num(scrollView.Properties, "CanvasX", client.X), MyGuiPresentation.Num(scrollView.Properties, "CanvasY", client.Y), columns * cell, rows * cell),
+            Bounds = new(MyGuiPresentation.Num(scrollView.Properties, "CanvasX", client.X),
+                MyGuiPresentation.Num(scrollView.Properties, "CanvasY", client.Y), columns * cell, rows * cell),
             Clip = client.Intersect(slot.Clip ?? client),
             Properties = new Dictionary<string, string>(slot.Properties) { ["TileSize"] = FormattableString.Invariant($"{cell} {cell}") },
         });
     }
+
+    /// <summary>
+    /// The Client part of a scroll view's template (the area its canvas shows).
+    /// </summary>
+    static bool IsTemplateClient(UiControl c, string owner) =>
+        c.Properties.GetValueOrDefault("TemplateOwner") == owner && c.Properties.GetValueOrDefault("TemplatePart") == "Client";
 
     /// <summary>
     /// The money line and the stock in the trader window's grid.
@@ -233,7 +246,8 @@ sealed class TradeWindows(PlayerInterface player)
         foreach (var (r, k) in trade.Unused.Select((r, k) => (r, k)))
         {
             controls.Add(new($"trade-unused-{k}", "Widget",
-                new(area.X + r.X * area.Width / columns, area.Y + r.Y * area.Height / rows, r.Width * area.Width / columns, r.Height * area.Height / rows),
+                new(area.X + r.X * area.Width / columns, area.Y + r.Y * area.Height / rows,
+                    r.Width * area.Width / columns, r.Height * area.Height / rows),
                 "", "", "", true, new Dictionary<string, string>(), new Vector4(0, 0, 0, 0.65f), Pickable: false, Clip: slot.Clip));
         }
 
@@ -255,7 +269,9 @@ sealed class TradeWindows(PlayerInterface player)
     /// who cannot take the trade.
     /// </summary>
     internal TradeItemView? SellTip(CharacterId owner, int index) =>
-        player.Session.CurrentSnapshot.Trade is { } trade && trade.GoodsOf.TryGetValue(owner, out var goods) ? goods.FirstOrDefault(g => g.Index == index) : null;
+        player.Session.CurrentSnapshot.Trade is { } trade && trade.GoodsOf.TryGetValue(owner, out var goods)
+            ? goods.FirstOrDefault(g => g.Index == index)
+            : null;
 
     /// <summary>
     /// The fencing prompt beside a seller's item (<see cref="TradeView.GoodsOf"/>) held over the stock (<c>FUN_140712920</c>, <b>Observed</b> by
@@ -265,13 +281,15 @@ sealed class TradeWindows(PlayerInterface player)
     /// </summary>
     internal void AddFencePrompt(List<UiControl> controls)
     {
-        if (player.InventoryWindows.Held is not { } item || player.Session.CurrentSnapshot.Trade is not { } trade || item.From.Holder != ItemHolder.Character
+        if (player.InventoryWindows.Held is not { } item || player.Session.CurrentSnapshot.Trade is not { } trade
+            || item.From.Holder != ItemHolder.Character
             || player.FaithfulScreens.HitTest(player.Mouse) is not { Screen: "trader" } || trade.Held is not { } goods)
         {
             return;
         }
 
-        (string Label, string Value, string Colour)? prompt = goods.Illegal ? (trade.BuysIllegal ? ("Illegal goods?", "No problem!", PlayerInterface.GoodColour) : ("ILLEGAL GOODS!", "NO!", PlayerInterface.BadColour))
+        (string Label, string Value, string Colour)? prompt = goods.Illegal
+            ? (trade.BuysIllegal ? ("Illegal goods?", "No problem!", PlayerInterface.GoodColour) : ("ILLEGAL GOODS!", "NO!", PlayerInterface.BadColour))
             : !goods.Stolen ? null
             : goods.FenceChance is { } chance ? ("Fencing chance:", $"{(int)(chance * 100)}%", PlayerInterface.BadColour)
             : trade.BuysStolen ? ("Stolen goods?", "No problem!", PlayerInterface.GoodColour) : null;
@@ -440,7 +458,7 @@ sealed class TradeWindows(PlayerInterface player)
             return;
         }
 
-        var client = controls.FirstOrDefault(x => x.Properties.GetValueOrDefault("TemplateOwner") == view.Name && x.Properties.GetValueOrDefault("TemplatePart") == "Client")?.Bounds ?? view.Bounds;
+        var client = controls.FirstOrDefault(x => IsTemplateClient(x, view.Name))?.Bounds ?? view.Bounds;
         var clip = view.Clip is { } outer ? client.Intersect(outer) : client;
         float x0 = MyGuiPresentation.Num(view.Properties, "CanvasX", client.X), y0 = MyGuiPresentation.Num(view.Properties, "CanvasY", client.Y);
         float rowHeight = CharacterRowHeight;
@@ -461,7 +479,11 @@ sealed class TradeWindows(PlayerInterface player)
             b.Text["NameTextBox"] = row.Name;
             b.Text["PriceTextBox"] = "c." + Money(row.Price);
             b.Actions["CheckBox"] = "character-tick:" + i.ToString(CultureInfo.InvariantCulture);
-            b.Properties["CheckBox"] = new Dictionary<string, string> { ["Checked"] = ticked ? "true" : "false", ["StateSelected"] = ticked ? "true" : "false" };
+            b.Properties["CheckBox"] = new Dictionary<string, string>
+            {
+                ["Checked"] = ticked ? "true" : "false",
+                ["StateSelected"] = ticked ? "true" : "false",
+            };
 
             foreach (var c in MyGuiPresentation.Arrange(CharacterRowLayout, (int)MathF.Round(box.Width / rootShare.Item1),
                 (int)MathF.Round(box.Height / rootShare.Item2), b, player.UiResources.Layers))
@@ -474,7 +496,12 @@ sealed class TradeWindows(PlayerInterface player)
                 if (c.Name == "Portrait" && cells.TryGetValue(row.Character, out int cell))
                 {
                     controls.Add(new(prefix + "portrait", "ImageBox", bounds, "", "", "", true,
-                        new Dictionary<string, string> { ["ImageTexture"] = PortraitBar.PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = player.PortraitBar.PortraitRect(cell) },
+                        new Dictionary<string, string>
+                        {
+                            ["ImageTexture"] = PortraitBar.PortraitTexture,
+                            ["ImageFlipV"] = "true",
+                            ["ImageRect"] = player.PortraitBar.PortraitRect(cell),
+                        },
                         Vector4.Zero, Pickable: false, Clip: own));
                 }
             }
@@ -505,7 +532,10 @@ sealed class TradeWindows(PlayerInterface player)
             var (count, total) = TickedRows(trade);
             if (count == 0 || total > trade.BuyerMoney) return;
 
-            player.Say(new ConfirmCharacterTrade([.. trade.Rows.Select(r => r.Character).Where(_characterTradeTicked.Contains)]) { Tick = player.Session.World.Tick });
+            player.Say(new ConfirmCharacterTrade([.. trade.Rows.Select(r => r.Character).Where(_characterTradeTicked.Contains)])
+            {
+                Tick = player.Session.World.Tick,
+            });
             _characterTradeCloseSent = true;
             player.FaithfulScreens.Close(CharacterTradeScreen);
         }
@@ -521,7 +551,8 @@ sealed class TradeWindows(PlayerInterface player)
         if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade || !player.FaithfulScreens.IsOpen(CharacterTradeScreen))
             return [];
 
-        int next = player.PortraitBar.PortraitMembers().Count, end = player.Session.CurrentSnapshot.Conversation is null ? PortraitBar.PortraitCells : PortraitBar.DialogueNpcCell;
+        int next = player.PortraitBar.PortraitMembers().Count;
+        int end = player.Session.CurrentSnapshot.Conversation is null ? PortraitBar.PortraitCells : PortraitBar.DialogueNpcCell;
         var list = new List<(CharacterId, int)>();
 
         foreach (var row in trade.Rows)
@@ -654,7 +685,10 @@ sealed class TradeWindows(PlayerInterface player)
     internal void BindLootScreen(string id, UiBindings b)
     {
         var body = LootBody();
-        b.Text["Root"] = (id == "loot-bag" ? body?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach")?.Name ?? "BACKPACK" : body?.Name ?? "INVENTORY").ToUpperInvariant();
+        string caption = id == "loot-bag"
+            ? body?.ItemGrid?.Items.FirstOrDefault(i => i.Section == "backpack_attach")?.Name ?? "BACKPACK"
+            : body?.Name ?? "INVENTORY";
+        b.Text["Root"] = caption.ToUpperInvariant();
 
         if (id == "loot-bag")
         {

@@ -119,7 +119,8 @@ sealed class OrdersPanel(PlayerInterface player)
         };
         b.ScrollOffsets["JobsPanel"] = player.ScrollBars.InventoryScroll.GetValueOrDefault("JobsPanel");
 
-        // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an order").
+        // The brackets are the panel's, not the catalog's (its keys have none: "No jobs assigned", "To add jobs, hold shift key when giving an
+        // order").
         if (jobs.Count > 0)
         {
             b.Hidden.Add("JobsPanelInfo");

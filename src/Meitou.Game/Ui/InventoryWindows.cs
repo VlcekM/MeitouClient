@@ -251,74 +251,13 @@ sealed class InventoryWindows(PlayerInterface player)
     /// </summary>
     bool LiftAt(string screen, UiControl control, Vector2 p)
     {
-        var snapshot = player.Session.CurrentSnapshot;
-        int code;
-        ItemOwner window;
-        CharacterId actor;
-        InventoryItemToken token;
-        HeldItemView view;
-        bool whole;
+        Lift? lift = control.Properties.TryGetValue("TradeItem", out var stockIndex) ? StockLift(stockIndex)
+            : control.Properties.TryGetValue("MachineItem", out var raw) ? MachineLift(raw)
+            : control.Properties.TryGetValue("InventoryItem", out var index) ? InventoryLift(screen, index)
+            : null;
+        if (lift is not { } chosen) return false;
 
-        HeldItemView View(string record, string name, string material, int quantity, int width, int height, float? charge, ItemOwner from) =>
-            new(record, name, material, default, "", whole ? quantity : 1, width, height, charge, from, -1);
-
-        if (control.Properties.TryGetValue("TradeItem", out var stockIndex))
-        {
-            code = int.Parse(stockIndex, CultureInfo.InvariantCulture);
-            if (snapshot.Trade is not { } trade || trade.Stock.FirstOrDefault(i => i.Index == code) is not { } stock)
-                return false;
-
-            (window, actor, token, whole) = (ItemOwner.Stock, trade.Customer, stock.Token, PressShift || PressCtrl || stock.Quantity <= 1);
-            view = View(stock.Record, stock.Name, stock.Material, stock.Quantity, stock.Width, stock.Height, stock.Charge, window);
-        }
-        else if (control.Properties.TryGetValue("MachineItem", out var raw))
-        {
-            code = int.Parse(raw, CultureInfo.InvariantCulture);
-
-            if (player.Production.Machine(player.Production.ShownMachine) is not { } m
-                || (InventoryOwner() ?? player.Selected().FirstOrDefault()) is not { } who)
-            {
-                return false;
-            }
-
-            (window, actor) = (ItemOwner.AtSite(m.Site), who.Id);
-            int k = code - 10;
-
-            if (code >= 1000 && m.Storage?.Items.FirstOrDefault(i => i.Index == code - 1000) is { } stored)
-            {
-                (token, whole) = (new(stored.Index, stored.Record, "main", stored.X, stored.Y, stored.Quantity, stored.Quality), PressShift
-                    || PressCtrl || stored.Quantity <= 1);
-                view = View(stored.Record, stored.Name, stored.Material, stored.Quantity, stored.Width, stored.Height, stored.Charge, window);
-            }
-            else if (code == 8 && m.Craft is { Done: [var made, ..] })
-            {
-                (token, whole) = (new(0, made.Record, "out", 0, 0, made.Quantity, made.Quality), PressShift || PressCtrl || made.Quantity <= 1);
-                view = View(made.Record, made.Name, made.Material, made.Quantity, made.Width, made.Height, made.Charge, window);
-            }
-            else if ((code == 8 ? m.Output : k >= 0 && k < m.Inputs.Count ? m.Inputs[k] : null) is { Count: > 0 } slot)
-            {
-                (token, whole) = (new(0, slot.Item, code == 8 ? "out" : $"in{k + 1}", 0, 0, slot.Count, 0), PressShift || PressCtrl || slot.Count <= 1);
-                view = View(slot.Item, slot.Name, "", slot.Count, slot.Width, slot.Height, null, window);
-            }
-            else return false;
-        }
-        else if (control.Properties.TryGetValue("InventoryItem", out var index))
-        {
-            code = int.Parse(index, CultureInfo.InvariantCulture);
-            bool loot = TradeWindows.IsLootScreen(screen);
-
-            if (WindowCharacter(screen) is not { ItemGrid: { } grid } owner || grid.Items.FirstOrDefault(i => i.Index == code) is not { } item
-                || !(InventoryCommands.IsMovableSection(item.Section) || InventoryCommands.IsLimbSection(item.Section)))
-            {
-                return false;
-            }
-
-            (window, actor) = (ItemOwner.Of(owner.Id), loot ? snapshot.LootOpener : owner.Id);
-            (token, whole) = (new(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality), PressShift || PressCtrl
-                || item.Quantity <= 1);
-            view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window);
-        }
-        else return false;
+        var (code, window, actor, token, whole, view) = chosen;
 
         SayHeld(new LiftItem(actor, window, token, whole) { Tick = player.Session.World.Tick });
         Held = view;
@@ -329,6 +268,97 @@ sealed class InventoryWindows(PlayerInterface player)
         LiftPress = p;
         player.InterfaceSounds.Sound("Item_Lift", item: view.Record);
         return true;
+    }
+
+    /// <summary>
+    /// What a press lifts: the cell's code, the window it comes from, the character who takes it, the item, whether the whole stack goes, and the
+    /// item as the mouse holds it.
+    /// </summary>
+    readonly record struct Lift(int Code, ItemOwner Window, CharacterId Actor, InventoryItemToken Token, bool Whole, HeldItemView View);
+
+    /// <summary>
+    /// The held view of a lifted item: one unit unless the whole stack goes.
+    /// </summary>
+    static HeldItemView View(string record, string name, string material, int quantity, int width, int height, float? charge, ItemOwner from,
+        bool whole) =>
+        new(record, name, material, default, "", whole ? quantity : 1, width, height, charge, from, -1);
+
+    /// <summary>
+    /// A stock item of the open trade, taken by the customer.
+    /// </summary>
+    Lift? StockLift(string stockIndex)
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        int code = int.Parse(stockIndex, CultureInfo.InvariantCulture);
+        if (snapshot.Trade is not { } trade || trade.Stock.FirstOrDefault(i => i.Index == code) is not { } stock)
+            return null;
+
+        var (window, actor, token, whole) = (ItemOwner.Stock, trade.Customer, stock.Token, PressShift || PressCtrl || stock.Quantity <= 1);
+        var view = View(stock.Record, stock.Name, stock.Material, stock.Quantity, stock.Width, stock.Height, stock.Charge, window, whole);
+        return new(code, window, actor, token, whole, view);
+    }
+
+    /// <summary>
+    /// An item of the shown machine (its storage, a bench's finished craft, its output or an input), taken by the inventory's or the selected
+    /// character.
+    /// </summary>
+    Lift? MachineLift(string raw)
+    {
+        int code = int.Parse(raw, CultureInfo.InvariantCulture);
+
+        if (player.Production.Machine(player.Production.ShownMachine) is not { } m
+            || (InventoryOwner() ?? player.Selected().FirstOrDefault()) is not { } who)
+        {
+            return null;
+        }
+
+        var (window, actor) = (ItemOwner.AtSite(m.Site), who.Id);
+        int k = code - 10;
+        InventoryItemToken token;
+        bool whole;
+        HeldItemView view;
+
+        if (code >= 1000 && m.Storage?.Items.FirstOrDefault(i => i.Index == code - 1000) is { } stored)
+        {
+            (token, whole) = (new(stored.Index, stored.Record, "main", stored.X, stored.Y, stored.Quantity, stored.Quality), PressShift
+                || PressCtrl || stored.Quantity <= 1);
+            view = View(stored.Record, stored.Name, stored.Material, stored.Quantity, stored.Width, stored.Height, stored.Charge, window, whole);
+        }
+        else if (code == 8 && m.Craft is { Done: [var made, ..] })
+        {
+            (token, whole) = (new(0, made.Record, "out", 0, 0, made.Quantity, made.Quality), PressShift || PressCtrl || made.Quantity <= 1);
+            view = View(made.Record, made.Name, made.Material, made.Quantity, made.Width, made.Height, made.Charge, window, whole);
+        }
+        else if ((code == 8 ? m.Output : k >= 0 && k < m.Inputs.Count ? m.Inputs[k] : null) is { Count: > 0 } slot)
+        {
+            (token, whole) = (new(0, slot.Item, code == 8 ? "out" : $"in{k + 1}", 0, 0, slot.Count, 0), PressShift || PressCtrl || slot.Count <= 1);
+            view = View(slot.Item, slot.Name, "", slot.Count, slot.Width, slot.Height, null, window, whole);
+        }
+        else return null;
+
+        return new(code, window, actor, token, whole, view);
+    }
+
+    /// <summary>
+    /// An item of a character window (a loot window's taken by the looter) that may be moved: a grid, slot or limb item.
+    /// </summary>
+    Lift? InventoryLift(string screen, string index)
+    {
+        var snapshot = player.Session.CurrentSnapshot;
+        int code = int.Parse(index, CultureInfo.InvariantCulture);
+        bool loot = TradeWindows.IsLootScreen(screen);
+
+        if (WindowCharacter(screen) is not { ItemGrid: { } grid } owner || grid.Items.FirstOrDefault(i => i.Index == code) is not { } item
+            || !(InventoryCommands.IsMovableSection(item.Section) || InventoryCommands.IsLimbSection(item.Section)))
+        {
+            return null;
+        }
+
+        var (window, actor) = (ItemOwner.Of(owner.Id), loot ? snapshot.LootOpener : owner.Id);
+        var (token, whole) = (new InventoryItemToken(item.Index, item.Record, item.Section, item.X, item.Y, item.Quantity, item.Quality),
+            PressShift || PressCtrl || item.Quantity <= 1);
+        var view = View(item.Record, item.Name, item.Material, item.Quantity, item.Width, item.Height, item.Charge, window, whole);
+        return new(code, window, actor, token, whole, view);
     }
 
     /// <summary>
@@ -350,10 +380,17 @@ sealed class InventoryWindows(PlayerInterface player)
     /// </summary>
     static (string Widget, string Section)[] SectionsOf(string screen) => (IsPinnedInventory(screen) ? "inventory" : screen) switch
     {
-        "inventory" or "loot" => [("backpack_attach", "backpack_attach"), ("back", "back"), ("hip", "hip"), ("shirt", "shirt"), ("head", "head"), ("legs", "legs"), ("boots", "boots"),
-            ("armour", "armour"), ("belt", "belt"), ("main", "main")],
+        "inventory" or "loot" =>
+        [
+            ("backpack_attach", "backpack_attach"), ("back", "back"), ("hip", "hip"), ("shirt", "shirt"), ("head", "head"), ("legs", "legs"),
+            ("boots", "boots"), ("armour", "armour"), ("belt", "belt"), ("main", "main"),
+        ],
         "bag" or "loot-bag" => [("backpack_content", "backpack_content")],
-        "limbs" => [("left_arm_replace", "left_arm_replace"), ("right_arm_replace", "right_arm_replace"), ("left_leg_replace", "left_leg_replace"), ("right_leg_replace", "right_leg_replace")],
+        "limbs" =>
+        [
+            ("left_arm_replace", "left_arm_replace"), ("right_arm_replace", "right_arm_replace"), ("left_leg_replace", "left_leg_replace"),
+            ("right_leg_replace", "right_leg_replace"),
+        ],
         "trader" or "bench" or "storage" => [("backpack_content", "main")],
         "building" => [("in1", "in1"), ("Input1Panel", "in1"), ("in2", "in2"), ("Input2Panel", "in2"), ("out", "out"), ("OutputColumn", "out")],
         _ => [],
@@ -387,7 +424,9 @@ sealed class InventoryWindows(PlayerInterface player)
                         && c.Properties.GetValueOrDefault("State") != "disabled") is { } slot)
                 {
                     // A furnace's in1 grid is its storage, the sim's "main".
-                    return Spot(window, name == "in1" && window.Holder == ItemHolder.Site && ProductionWindows.FurnaceGrid(player.Production.Machine(window.Site)) is not null ? "main" : section, slot, topLeft, h);
+                    bool furnaceGrid = name == "in1" && window.Holder == ItemHolder.Site
+                        && ProductionWindows.FurnaceGrid(player.Production.Machine(window.Site)) is not null;
+                    return Spot(window, furnaceGrid ? "main" : section, slot, topLeft, h);
                 }
             }
         }
@@ -399,7 +438,9 @@ sealed class InventoryWindows(PlayerInterface player)
     {
         var b = slot.Bounds;
         var (columns, rows) = GridOf(window, section);
-        var look = window.Holder == ItemHolder.Character ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == window.Character)?.Appearance : null;
+        var look = window.Holder == ItemHolder.Character
+            ? player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == window.Character)?.Appearance
+            : null;
         bool takes = InventoryCommands.SlotRefusal(section, h.Type, h.EquipmentSection, h.BagItems,
             h.WearableBy(look?.Race.StringId, look?.Animal is not null)) is null;
 
@@ -411,9 +452,11 @@ sealed class InventoryWindows(PlayerInterface player)
 
         if (columns == 0) return new(DropKind.Section, window, section, 0, 0, b, slot.Clip, takes);
 
-        float cw = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Width / columns, ch = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Height / rows;
+        float cw = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Width / columns;
+        float ch = InventoryCommands.IsEquipmentSection(section) ? player.InventoryCell : b.Height / rows;
         bool fits = h.Width <= columns && h.Height <= rows;
-        int x = Math.Clamp((int)MathF.Round((topLeft.X - b.X) / cw), 0, Math.Max(0, columns - h.Width)), y = Math.Clamp((int)MathF.Round((topLeft.Y - b.Y) / ch), 0, Math.Max(0, rows - h.Height));
+        int x = Math.Clamp((int)MathF.Round((topLeft.X - b.X) / cw), 0, Math.Max(0, columns - h.Width));
+        int y = Math.Clamp((int)MathF.Round((topLeft.Y - b.Y) / ch), 0, Math.Max(0, rows - h.Height));
         return new(DropKind.Section, window, section, x, y, new(b.X + x * cw, b.Y + y * ch, h.Width * cw, h.Height * ch), slot.Clip, takes && fits);
     }
 

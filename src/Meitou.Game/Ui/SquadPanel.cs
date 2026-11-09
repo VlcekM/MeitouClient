@@ -98,6 +98,9 @@ sealed class SquadPanel(PlayerInterface player)
             b.Properties["DismissCharPanel"] = new Dictionary<string, string> { ["State"] = "highlighted" };
     }
 
+    /// <summary>
+    /// The SQUADS tab's list: a squad box per squad (scrolled, clipped to the panel) with its members' portraits, and the portrait being dragged.
+    /// </summary>
     internal void AddSquadsContent(List<UiControl> controls)
     {
         if (!SquadsShown || SquadBoxLayout is null || controls.FirstOrDefault(c => c.Name == "SquadsPanel") is not { } panel)
@@ -126,72 +129,11 @@ sealed class SquadPanel(PlayerInterface player)
             if (box.Intersect(clip).Height <= 0) continue;
 
             string nameBox = SquadNameBox(squad.Id);
-            bool typing = focus is { } fc && fc.Item2 == nameBox;
-
-            // The box shows the squad's name, or what is being typed; a box not being typed in starts from the name when it is next pressed.
-            if (!typing) player.FaithfulScreens.SetText("overview", nameBox, squad.Name);
-
-            var b = new UiBindings { TemplateScale = player.InventoryScale };
-            b.Text["SquadNameText"] = typing ? player.FaithfulScreens.GetText("overview", nameBox) : squad.Name;
-            int count = squad.Members.Count;
-            b.Text["SquadSizeText"] = $"{count}/{maxSize}";
-            if (count >= maxSize)
-                b.Properties["SquadSizeText"] = new Dictionary<string, string> { ["TextColour"] = PlayerInterface.BadColour };
-
-            b.Actions["SquadRemoveButton"] = "squad-remove:" + squad.Id.ToString(CultureInfo.InvariantCulture);
-
-            if (typing && focus is { } edit)
-            {
-                foreach (var widget in SquadBoxLayout.Widgets.Where(w => w.Name == "SquadNameText" || w.Properties.GetValueOrDefault("CaptionOwner") == "SquadNameText"))
-                {
-                    b.Properties[widget.Name] = new Dictionary<string, string>
-                    {
-                        ["Focused"] = "true",
-                        ["CaretIndex"] = edit.Item3.ToString(CultureInfo.InvariantCulture),
-                        ["SelectionStart"] = edit.Item4.ToString(CultureInfo.InvariantCulture),
-                        ["SelectionLength"] = edit.Item5.ToString(CultureInfo.InvariantCulture),
-                    };
-                }
-            }
-
+            var b = BindSquadBox(squad, nameBox, maxSize, focus);
             string squadId = squad.Id.ToString(CultureInfo.InvariantCulture);
-            UiRect? portraitsArea = null;
+            if (AddSquadBox(controls, b, box, clip, squadId, nameBox) is not { } cellsArea) continue;
 
-            foreach (var c in MyGuiPresentation.Arrange(SquadBoxLayout, (int)MathF.Round(box.Width), (int)MathF.Round(box.Height), b,
-                player.UiResources.Layers))
-            {
-                var bounds = c.Bounds with { X = c.Bounds.X + box.X, Y = c.Bounds.Y + box.Y };
-                var own = c.Clip is { } inner ? (inner with { X = inner.X + box.X, Y = inner.Y + box.Y }).Intersect(clip) : clip;
-                var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { ["SquadOf"] = squadId };
-
-                // The box is dragged by its frame and panels: anything but the name box, DELETE and their skins' parts.
-                if (c.Type is not ("EditBox" or "Button") && c.Action.Length == 0
-                    && c.Properties.GetValueOrDefault("TemplateOwner") is not ("SquadNameText" or "SquadRemoveButton"))
-                {
-                    properties["SquadBox"] = squadId;
-                }
-
-                string name = c.Name == "SquadNameText" ? nameBox : c.Name.Length > 0 ? $"squad-{squadId}-{c.Name}" : c.Name;
-                controls.Add(c with { Name = name, Bounds = bounds, Clip = own, Properties = properties });
-                if (c.Name == "PortraitsPanel") portraitsArea = bounds;
-            }
-
-            if (portraitsArea is not { } cellsArea) continue;
-
-            var members = squad.Members.Where(byId.ContainsKey).ToList();
-            float size = Math.Min(Math.Min(player.Width * SquadCellWidth, player.Height * SquadCellHeight), cellsArea.Height - 4);
-            if (members.Count * size > cellsArea.Width) size = cellsArea.Width / members.Count;
-
-            var cellClip = cellsArea.Intersect(clip);
-
-            for (int k = 0; k < members.Count; k++)
-            {
-                if (dragging && _portraitDrag!.Value.Character == members[k]) continue;   // it follows the pointer
-
-                var cell = new UiRect(cellsArea.X + 2 + k * size, cellsArea.Y + (cellsArea.Height - size) / 2, size, size);
-                AddSquadPortrait(controls, $"squad-{squadId}-cell-{k}", cell, byId[members[k]], cells.GetValueOrDefault(members[k], -1), cellClip,
-                    new Dictionary<string, string> { ["SquadOf"] = squadId, ["SquadPortrait"] = $"{squadId}:{k}" });
-            }
+            AddSquadMembers(controls, squad, cellsArea, clip, squadId, byId, cells, dragging);
         }
 
         if (dragging && byId.TryGetValue(_portraitDrag!.Value.Character, out var held))
@@ -199,6 +141,98 @@ sealed class SquadPanel(PlayerInterface player)
             float size = Math.Min(player.Width * SquadCellWidth, player.Height * SquadCellHeight);
             AddSquadPortrait(controls, "squad-drag", new(player.Mouse.X - size / 2, player.Mouse.Y - size / 2, size, size), held,
                 cells.GetValueOrDefault(held.Id, -1), null, null);
+        }
+    }
+
+    /// <summary>
+    /// A squad box's bindings: its name (or what is being typed, with the caret), its size against the limit (red when full) and its DELETE.
+    /// </summary>
+    UiBindings BindSquadBox(SquadView squad, string nameBox, int maxSize, (string, string, int, int, int)? focus)
+    {
+        bool typing = focus is { } fc && fc.Item2 == nameBox;
+
+        // The box shows the squad's name, or what is being typed; a box not being typed in starts from the name when it is next pressed.
+        if (!typing) player.FaithfulScreens.SetText("overview", nameBox, squad.Name);
+
+        var b = new UiBindings { TemplateScale = player.InventoryScale };
+        b.Text["SquadNameText"] = typing ? player.FaithfulScreens.GetText("overview", nameBox) : squad.Name;
+        int count = squad.Members.Count;
+        b.Text["SquadSizeText"] = $"{count}/{maxSize}";
+        if (count >= maxSize)
+            b.Properties["SquadSizeText"] = new Dictionary<string, string> { ["TextColour"] = PlayerInterface.BadColour };
+
+        b.Actions["SquadRemoveButton"] = "squad-remove:" + squad.Id.ToString(CultureInfo.InvariantCulture);
+
+        if (typing && focus is { } edit)
+        {
+            foreach (var widget in SquadBoxLayout!.Widgets.Where(IsSquadNameWidget))
+            {
+                b.Properties[widget.Name] = new Dictionary<string, string>
+                {
+                    ["Focused"] = "true",
+                    ["CaretIndex"] = edit.Item3.ToString(CultureInfo.InvariantCulture),
+                    ["SelectionStart"] = edit.Item4.ToString(CultureInfo.InvariantCulture),
+                    ["SelectionLength"] = edit.Item5.ToString(CultureInfo.InvariantCulture),
+                };
+            }
+        }
+
+        return b;
+    }
+
+    /// <summary>
+    /// The squad box's name box or a part of its skin.
+    /// </summary>
+    static bool IsSquadNameWidget(MyGuiWidget w) => w.Name == "SquadNameText" || w.Properties.GetValueOrDefault("CaptionOwner") == "SquadNameText";
+
+    /// <summary>
+    /// The squad box's controls, laid out at <paramref name="box"/> and tagged with the squad; returns its portraits panel (null: none).
+    /// </summary>
+    UiRect? AddSquadBox(List<UiControl> controls, UiBindings b, UiRect box, UiRect clip, string squadId, string nameBox)
+    {
+        UiRect? portraitsArea = null;
+
+        foreach (var c in MyGuiPresentation.Arrange(SquadBoxLayout!, (int)MathF.Round(box.Width), (int)MathF.Round(box.Height), b,
+            player.UiResources.Layers))
+        {
+            var bounds = c.Bounds with { X = c.Bounds.X + box.X, Y = c.Bounds.Y + box.Y };
+            var own = c.Clip is { } inner ? (inner with { X = inner.X + box.X, Y = inner.Y + box.Y }).Intersect(clip) : clip;
+            var properties = new Dictionary<string, string>(c.Properties, StringComparer.Ordinal) { ["SquadOf"] = squadId };
+
+            // The box is dragged by its frame and panels: anything but the name box, DELETE and their skins' parts.
+            if (c.Type is not ("EditBox" or "Button") && c.Action.Length == 0
+                && c.Properties.GetValueOrDefault("TemplateOwner") is not ("SquadNameText" or "SquadRemoveButton"))
+            {
+                properties["SquadBox"] = squadId;
+            }
+
+            string name = c.Name == "SquadNameText" ? nameBox : c.Name.Length > 0 ? $"squad-{squadId}-{c.Name}" : c.Name;
+            controls.Add(c with { Name = name, Bounds = bounds, Clip = own, Properties = properties });
+            if (c.Name == "PortraitsPanel") portraitsArea = bounds;
+        }
+
+        return portraitsArea;
+    }
+
+    /// <summary>
+    /// The squad's present members' portraits in a row of its portraits panel, shrunk to fit; the one being dragged follows the pointer instead.
+    /// </summary>
+    void AddSquadMembers(List<UiControl> controls, SquadView squad, UiRect cellsArea, UiRect clip, string squadId,
+        Dictionary<CharacterId, CharacterSnapshot> byId, Dictionary<CharacterId, int> cells, bool dragging)
+    {
+        var members = squad.Members.Where(byId.ContainsKey).ToList();
+        float size = Math.Min(Math.Min(player.Width * SquadCellWidth, player.Height * SquadCellHeight), cellsArea.Height - 4);
+        if (members.Count * size > cellsArea.Width) size = cellsArea.Width / members.Count;
+
+        var cellClip = cellsArea.Intersect(clip);
+
+        for (int k = 0; k < members.Count; k++)
+        {
+            if (dragging && _portraitDrag!.Value.Character == members[k]) continue;   // it follows the pointer
+
+            var cell = new UiRect(cellsArea.X + 2 + k * size, cellsArea.Y + (cellsArea.Height - size) / 2, size, size);
+            AddSquadPortrait(controls, $"squad-{squadId}-cell-{k}", cell, byId[members[k]], cells.GetValueOrDefault(members[k], -1), cellClip,
+                new Dictionary<string, string> { ["SquadOf"] = squadId, ["SquadPortrait"] = $"{squadId}:{k}" });
         }
     }
 
@@ -224,12 +258,23 @@ sealed class SquadPanel(PlayerInterface player)
         if (atlasCell >= 0)
         {
             controls.Add(new($"{name}-image", "ImageBox", At(0.0375f, 0.0375f, 0.9125f, 0.9125f), "", "", "", true,
-                new Dictionary<string, string> { ["ImageTexture"] = PortraitBar.PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = player.PortraitBar.PortraitRect(atlasCell) },
+                new Dictionary<string, string>
+                {
+                    ["ImageTexture"] = PortraitBar.PortraitTexture,
+                    ["ImageFlipV"] = "true",
+                    ["ImageRect"] = player.PortraitBar.PortraitRect(atlasCell),
+                },
                 Vector4.Zero, Pickable: false, Clip: clip));
         }
 
         controls.Add(new($"{name}-name", "TextBox", At(0.05f, 0.05f, 0.9f, 0.8875f), member.Name, "", "Kenshi_TextboxStandardText", true,
-            new Dictionary<string, string> { ["TextAlign"] = "HCenter Bottom", ["TextColour"] = "0.707602 0.707602 0.707602", ["TextShadow"] = "true", ["FontName"] = "Kenshi_StandardFont_MediumSmall" },
+            new Dictionary<string, string>
+            {
+                ["TextAlign"] = "HCenter Bottom",
+                ["TextColour"] = "0.707602 0.707602 0.707602",
+                ["TextShadow"] = "true",
+                ["FontName"] = "Kenshi_StandardFont_MediumSmall",
+            },
             Vector4.Zero, Pickable: false, Clip: clip));
         var frame = new Dictionary<string, string>(tags ?? [], StringComparer.Ordinal) { ["Checked"] = member.Selected ? "true" : "false" };
         controls.Add(new($"{name}-frame", "Button", At(-0.0375f, -0.025f, 1.0625f, 1.05f), "", "", "Kenshi_PortraitFrameSkin", true, frame,
@@ -297,7 +342,7 @@ sealed class SquadPanel(PlayerInterface player)
         if (!SquadsShown) return;
 
         var target = player.FaithfulScreens.HitTest(p) is { Screen: "overview" } hit ? hit.Control : null;
-        int? targetSquad = target is not null && target.Properties.TryGetValue("SquadOf", out var of) && int.TryParse(of, NumberStyles.None, CultureInfo.InvariantCulture, out int s) ? s : null;
+        int? targetSquad = SquadOf(target);
 
         if (portrait is { } drag)
         {
@@ -327,6 +372,16 @@ sealed class SquadPanel(PlayerInterface player)
             int index = player.Session.CurrentSnapshot.PlayerSquads.ToList().FindIndex(q => q.Id == onto);
             player.Say(new ReorderSquadCommand(moved.Squad, index) { Tick = player.Session.World.Tick });
         }
+    }
+
+    /// <summary>
+    /// The squad a control is tagged with (<c>SquadOf</c>); null for none.
+    /// </summary>
+    static int? SquadOf(UiControl? target)
+    {
+        if (target is null || !target.Properties.TryGetValue("SquadOf", out var of)) return null;
+
+        return int.TryParse(of, NumberStyles.None, CultureInfo.InvariantCulture, out int s) ? s : null;
     }
 
     /// <summary>
@@ -386,7 +441,8 @@ sealed class SquadPanel(PlayerInterface player)
 
     static readonly (SquadAi Option, string Caption, string Tip)[] AiOptionRows =
     [
-        (SquadAi.Ditch, "Ditch items", "If they have nothing else to do, characters will automatically put any excess materials they are carrying into storage.  This can help to un-block the base AI when things grind to a halt from over-filled inventories."),
+        (SquadAi.Ditch, "Ditch items", "If they have nothing else to do, characters will automatically put any excess materials they are carrying "
+            + "into storage.  This can help to un-block the base AI when things grind to a halt from over-filled inventories."),
         (SquadAi.Sleep, "Sleep when injured", "Characters will automatically go to bed if they are injured and have nothing else to do"),
         (SquadAi.Sit, "Sit when idle", "Idle characters at home will sit down on chairs and benches, if you have any"),
         (SquadAi.Heal, "Heal Allies", "Characters with the medic job will also heal characters of allied factions"),
@@ -394,7 +450,8 @@ sealed class SquadPanel(PlayerInterface player)
         (SquadAi.Rescue, "Rescue Allies", "Characters with the rescue job will also rescue allied characters from other factions"),
         (SquadAi.Share, "Share Food", "Characters in a squad will automatically share any of their food that is in a backpack (if in range)."),
         (SquadAi.Feed, "Feed Animals", "If food is running low, you can elect not to feed your animals."),
-        (SquadAi.ShootFirst, "Shoot first, ask later", "Your turret gunners will shoot at any potentially dangerous but neutral targets, such as wild animals or bandits, without waiting for them to attack the base first."),
+        (SquadAi.ShootFirst, "Shoot first, ask later", "Your turret gunners will shoot at any potentially dangerous but neutral targets, such as "
+            + "wild animals or bandits, without waiting for them to attack the base first."),
         // Meitou-only lines (not in the original's tab).
         (SquadAi.HealNeutrals, "Heal Neutrals", "Characters with the medic job will also heal downed characters of factions that are not hostile"),
         (SquadAi.HealAll, "Heal All", "Characters with the medic job will heal any downed character, enemies included"),
@@ -413,9 +470,16 @@ sealed class SquadPanel(PlayerInterface player)
         for (int i = 0; i < AiOptionRows.Length; i++)
         {
             bool ticked = (on & AiOptionRows[i].Option) != 0;
-            controls.Add(new($"ai-option-{i}", "Button", new(panel.Bounds.X + 6, panel.Bounds.Y + i * line, panel.Bounds.Width - 12, line - 4), Loc.Tr(AiOptionRows[i].Caption),
+            var bounds = new UiRect(panel.Bounds.X + 6, panel.Bounds.Y + i * line, panel.Bounds.Width - 12, line - 4);
+            controls.Add(new($"ai-option-{i}", "Button", bounds, Loc.Tr(AiOptionRows[i].Caption),
                 "ai-option:" + i.ToString(CultureInfo.InvariantCulture), "Kenshi_TickButton1Skin", true,
-                new Dictionary<string, string>(UiTooltips.TextProperties(AiOptionRows[i].Tip, "static:AIToolTip")) { ["Checked"] = ticked ? "true" : "false", ["StateSelected"] = ticked ? "true" : "false", ["FontName"] = "Kenshi_PaintedTextFont_Medium", ["TextAlign"] = "Center" },
+                new Dictionary<string, string>(UiTooltips.TextProperties(AiOptionRows[i].Tip, "static:AIToolTip"))
+                {
+                    ["Checked"] = ticked ? "true" : "false",
+                    ["StateSelected"] = ticked ? "true" : "false",
+                    ["FontName"] = "Kenshi_PaintedTextFont_Medium",
+                    ["TextAlign"] = "Center",
+                },
                 Vector4.Zero, Pickable: true, Clip: panel.Bounds));
         }
 
@@ -425,7 +489,8 @@ sealed class SquadPanel(PlayerInterface player)
     /// <summary>
     /// The Follow Formation items in the original's order (<c>FUN_140494ce0</c>: Random 0, Military 2, Caravan 1).
     /// </summary>
-    static readonly (SquadFormation Formation, string Caption)[] FormationItems = [(SquadFormation.Random, "Random"), (SquadFormation.Military, "Military"), (SquadFormation.Caravan, "Caravan")];
+    static readonly (SquadFormation Formation, string Caption)[] FormationItems =
+        [(SquadFormation.Random, "Random"), (SquadFormation.Military, "Military"), (SquadFormation.Caravan, "Caravan")];
     const string FormationCombo = "FormationCombo";
     /// <summary>
     /// Where the formation combo box was put into the overview layout (fractions of <c>AIOptions</c>); it is put there again when the panel's size
@@ -445,9 +510,10 @@ sealed class SquadPanel(PlayerInterface player)
 
         const float width = 0.35f;
         float y = top / panel.Height, h = height / panel.Height;
-        controls.Add(new("ai-formation-label", "TextBox", new(panel.X + 6, panel.Y + top, panel.Width * (0.97f - width) - 6, height), Loc.Tr("Follow Formation"), "", "Kenshi_TextboxStandardText", true,
-            new Dictionary<string, string>(UiTooltips.TextProperties("Formation used when squad members are following a leader", "static:AIToolTip")) { ["TextAlign"] = "Left VCenter" },
-            Vector4.Zero, Pickable: true, Clip: panel));
+        var labelBounds = new UiRect(panel.X + 6, panel.Y + top, panel.Width * (0.97f - width) - 6, height);
+        var labelTip = UiTooltips.TextProperties("Formation used when squad members are following a leader", "static:AIToolTip");
+        controls.Add(new("ai-formation-label", "TextBox", labelBounds, Loc.Tr("Follow Formation"), "", "Kenshi_TextboxStandardText", true,
+            new Dictionary<string, string>(labelTip) { ["TextAlign"] = "Left VCenter" }, Vector4.Zero, Pickable: true, Clip: panel));
         string place = string.Create(CultureInfo.InvariantCulture, $"{y:0.0000} {h:0.0000}");
         if (place == _formationComboPlace) return;
 
@@ -455,10 +521,13 @@ sealed class SquadPanel(PlayerInterface player)
         var layout = player.FaithfulScreens.Layout("overview");
 
         // The screen's layout is expanded already (its expansion stops at resolved templates), so the combo's template is expanded on its own first.
-        var combo = MyGuiTemplates.Expand(new MyGuiLayout(layout.Version, [new MyGuiWidget("ComboBox", FormationCombo, "Kenshi_ComboBox", "", "Left Top", new(0.97f - width, y, width, h), true,
-            new Dictionary<string, string> { ["ReadOnly"] = "true" }, new Dictionary<string, string>(), [])]), player.UiResources).Roots[0];
+        var widget = new MyGuiWidget("ComboBox", FormationCombo, "Kenshi_ComboBox", "", "Left Top", new(0.97f - width, y, width, h), true,
+            new Dictionary<string, string> { ["ReadOnly"] = "true" }, new Dictionary<string, string>(), []);
+        var combo = MyGuiTemplates.Expand(new MyGuiLayout(layout.Version, [widget]), player.UiResources).Roots[0];
 
-        MyGuiWidget Put(MyGuiWidget w) => w.Name == "AIOptions" ? w with { Children = [.. w.Children.Where(c => c.Name != FormationCombo), combo] } : w with { Children = [.. w.Children.Select(Put)] };
+        MyGuiWidget Put(MyGuiWidget w) => w.Name == "AIOptions"
+            ? w with { Children = [.. w.Children.Where(c => c.Name != FormationCombo), combo] }
+            : w with { Children = [.. w.Children.Select(Put)] };
 
         player.FaithfulScreens.Replace("overview", layout with { Roots = [.. layout.Roots.Select(Put)] });
     }
@@ -471,7 +540,8 @@ sealed class SquadPanel(PlayerInterface player)
         if (_formationComboPlace is null) return;
 
         int current = SquadAiKeys.FormationOf(player.Session.World, player.Session.World.Player.Faction, null);
-        b.Lists[FormationCombo] = [.. FormationItems.Select(f => new UiListItem(((int)f.Formation).ToString(CultureInfo.InvariantCulture), Loc.Tr(f.Caption)))];
+        b.Lists[FormationCombo] =
+            [.. FormationItems.Select(f => new UiListItem(((int)f.Formation).ToString(CultureInfo.InvariantCulture), Loc.Tr(f.Caption)))];
         b.SelectedItems[FormationCombo] = Array.FindIndex(FormationItems, f => (int)f.Formation == current);
     }
 

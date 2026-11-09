@@ -1,8 +1,8 @@
 namespace Meitou.Game.Tutorials;
 
 /// <summary>
-/// What the tutorial triggers look at, filled by the interface at each poll (docs/game/ui-screens.md "Tutorials"). "PCs" are the player's characters; the building
-/// tests are over the player's buildings.
+/// What the tutorial triggers look at, filled by the interface at each poll (docs/game/ui-screens.md "Tutorials"). "PCs" are the player's characters;
+/// the building tests are over the player's buildings.
 /// </summary>
 readonly record struct TutorialPoll
 {
@@ -52,8 +52,9 @@ readonly record struct TutorialPoll
 }
 
 /// <summary>
-/// The tutorial manager (<c>TutorialManager</c>, docs/game/ui-screens.md "Tutorials"): 34 items, each pending until its trigger holds at a poll (every 2 real seconds), then
-/// active (listed in the panel) until dismissed, then ended. Its state is <c>__tutorials.data</c>: the active ids, then the pending ones.
+/// The tutorial manager (<c>TutorialManager</c>, docs/game/ui-screens.md "Tutorials"): 34 items, each pending until its trigger holds at a poll
+/// (every 2 real seconds), then active (listed in the panel) until dismissed, then ended. Its state is <c>__tutorials.data</c>: the active ids, then
+/// the pending ones.
 /// </summary>
 sealed class TutorialManager
 {
@@ -170,8 +171,8 @@ sealed class TutorialManager
     bool Ended(int id) => !_active.Contains(id) && !_pending.Contains(id);
 
     /// <summary>
-    /// One frame: drops, then every 2 s the pending items whose trigger holds turn active (returned, for the panel's flash and <c>Thing_Complete</c>);
-    /// saves when changed.
+    /// One frame: drops, then every 2 s the pending items whose trigger holds turn active (returned, for the panel's flash and
+    /// <c>Thing_Complete</c>); saves when changed.
     /// </summary>
     public List<int>? Update(double seconds, Func<TutorialPoll> poll)
     {
@@ -182,6 +183,7 @@ sealed class TutorialManager
             _drops.Clear();
             _dirty = true;
         }
+
         List<int>? started = null;
         _timer -= seconds;
         if (_timer <= 0)
@@ -197,6 +199,7 @@ sealed class TutorialManager
                 }
             _timer = PollSeconds;
         }
+
         if (_dirty) Save();
         return started;
     }

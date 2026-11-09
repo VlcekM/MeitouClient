@@ -188,7 +188,8 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
 
     #region Arrange
 
-    public IReadOnlyList<MyGuiScreenFrame> Arrange(int width, int height, Func<string, UiBindings> bind, Action<string, List<UiControl>>? decorate = null)
+    public IReadOnlyList<MyGuiScreenFrame> Arrange(int width, int height, Func<string, UiBindings> bind,
+        Action<string, List<UiControl>>? decorate = null)
     {
         var result = new List<MyGuiScreenFrame>();
         RepeatTick();

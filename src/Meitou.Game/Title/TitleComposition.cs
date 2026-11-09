@@ -153,7 +153,9 @@ sealed class TitleComposition
         Ruins = new(RuinCentre, RuinRadius, left * RuinMove, name => name.StartsWith("Ghost", StringComparison.Ordinal), ground);
         var gear = new[] { "Iron Hat", "Dustcoat", "Drifter's Leather Pants", "Drifter's Boots", "Katana", "Small Backpack" }
             .Where(n => database.Records.Values.Any(r => r.Name == n)).ToArray();
-        Appearance = savedCharacter ?? CharacterAppearance.Build(database, install.Root, character, new CharacterOptions { Female = false, Naked = true, Equip = gear });
+        Appearance = savedCharacter
+            ?? CharacterAppearance.Build(database, install.Root, character, new CharacterOptions { Female = false, Naked = true, Equip = gear });
+
         // A strongish build that reads from behind: more muscle, broader shoulders and back, thicker arms and neck.
         if (savedCharacter is null)
         {
@@ -175,8 +177,8 @@ sealed class TitleComposition
     /// The foreground's pieces, the plateau's vertices in the world and the height of its top (the wanderer is stood on it). Nothing when the cliff
     /// feature is missing.
     /// </summary>
-    static (IReadOnlyList<PlacedMesh> Staged, IReadOnlyList<Vector3> Plateau, float? Top) Ridge(GameInstall install, GameDatabase database, WorldCamera view,
-        Func<float, float, float> ground)
+    static (IReadOnlyList<PlacedMesh> Staged, IReadOnlyList<Vector3> Plateau, float? Top) Ridge(GameInstall install, GameDatabase database,
+        WorldCamera view, Func<float, float, float> ground)
     {
         var look = RidgeRecord(database);
         if (look is null) return ([], [], null);
@@ -218,6 +220,7 @@ sealed class TitleComposition
             {
                 continue;
             }
+
             if (points.Length == 0) continue;
             float highest = points.Max(p => p.Y), lowest = points.Min(p => p.Y);
             var ray = RayThrough(view, screen);
@@ -240,7 +243,9 @@ sealed class TitleComposition
                     at -= Vector3.Normalize(Vector3.Cross(view.Forward, Vector3.UnitY) with { Y = 0 }) * PlateauLeft;
                 }
             }
-            var transform = WorldObjectLayout.InstanceTransform(at, Quaternion.CreateFromAxisAngle(Vector3.UnitY, view.Yaw + yaw * MathF.PI / 180), new Vector3(scale));
+
+            var rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, view.Yaw + yaw * MathF.PI / 180);
+            var transform = WorldObjectLayout.InstanceTransform(at, rotation, new Vector3(scale));
             placed.Add(new PlacedMesh(meshPath, transform, pieceLook, pieceLook, $"meitou title ridge {placed.Count}", PlacedKind.MapFeature));
             if (part == Part.Plateau) surface.AddRange(points.Select(p => Vector3.Transform(p, transform)));
         }
@@ -363,5 +368,8 @@ sealed class TitleComposition
     /// The wanderer, held in one frame of the relaxed idle: a still figure, as on the poster.
     /// </summary>
     public void Fill(CharacterDrawList list) =>
-        list.Add(new CharacterInstance(long.MinValue + 1, Appearance, Wanderer, WandererYaw, [new("idle_stand_confident", 0.5f, 1)]) { Build = SavedBuild });
+        list.Add(new CharacterInstance(long.MinValue + 1, Appearance, Wanderer, WandererYaw, [new("idle_stand_confident", 0.5f, 1)])
+        {
+            Build = SavedBuild,
+        });
 }

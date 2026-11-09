@@ -132,7 +132,9 @@ sealed class SkyArrival(WorldCamera source, float hour, float speed = 1, bool im
 
         float lift = _phase switch { Phase.Ascent => Ease((float)(_elapsed / AscentSeconds)), Phase.Stars => 1, _ => 0 };
         Place(camera, _sourceEye, _sourceYaw, float.Lerp(_sourcePitch, SkyPitch, lift), _sourceDistance, _sourceFov);
-        return _destinationHour is null ? _sourceHour : ForwardHour(_sourceHour, to, Ease(TurnSeconds > 0 ? (float)(_turnElapsed / TurnSeconds) : 1, 0.5f, 0.5f));
+        return _destinationHour is null
+            ? _sourceHour
+            : ForwardHour(_sourceHour, to, Ease(TurnSeconds > 0 ? (float)(_turnElapsed / TurnSeconds) : 1, 0.5f, 0.5f));
     }
 
     /// <summary>

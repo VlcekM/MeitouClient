@@ -198,7 +198,8 @@ sealed class GamePages(SettingsMenu menu)
         result.Add(new("Font size", "Points added to every interface font's default height (the game: 3).",
             Slider: new("Font size", UserConfig.MinFontSize, UserConfig.MaxFontSize, () => menu.Config.FontSize ?? KenshiFontSize.DefaultSetting,
                 v => SetFontSize(v), "0", Faithful: KenshiFontSize.DefaultSetting)));
-        result.Add(new("Show names", "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
+        result.Add(new("Show names",
+            "The name over each of your characters (the game's Show names option). Off, only the stealth and light icons stay.",
             Toggle: new("Show names", () => menu.Config.ShowNames, v => menu.Player.ShowNames = menu.Config.ShowNames = v, OnOff: true)));
         result.Add(new("Show movement marker", "The green marker where a move order sends your characters (the game: on).",
             Toggle: new("Show movement marker", () => menu.Config.MovementMarker != false,
@@ -208,16 +209,19 @@ sealed class GamePages(SettingsMenu menu)
                 v => menu.Player.RotationMarker = (menu.Config.RotationMarker = v) == true, OnOff: true)));
         result.Add(new("Censorship", "Swaps a few strong words in the dialogue for milder ones (the game's censorship option).",
             Toggle: new("Censorship", () => menu.Config.Censorship, v => menu.Config.Censorship = v, OnOff: true)));
-        result.Add(new("Feedback button", "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu.",
+        result.Add(new("Feedback button",
+            "The FEEDBACK button at the top right during play. Off, it still shows on the title screen and in the Esc menu.",
             Toggle: new("Feedback button", () => menu.Config.FeedbackButton, v => menu.Player.FeedbackButtonInPlay = menu.Config.FeedbackButton = v,
                 OnOff: true)));
-        result.Add(new("Hardware mouse", "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on).",
+        result.Add(new("Hardware mouse",
+            "Use the Windows cursor instead of the game's drawn pointer (no hover pointers unless Enhanced hardware mouse is on).",
             Toggle: new("Hardware mouse", () => menu.Config.HardwareMouse, v => menu.Config.HardwareMouse = v)));
         if (menu.Config.HardwareMouse)
         {
             result.Add(new("Enhanced hardware mouse",
                 "The icon of what a right click would do beside the Windows cursor (none for a walk), and the hand over buttons and targets.",
-                Toggle: new("Enhanced hardware mouse", () => menu.Config.EnhancedHardwareMouse, v => menu.Config.EnhancedHardwareMouse = v, OnOff: true),
+                Toggle: new("Enhanced hardware mouse", () => menu.Config.EnhancedHardwareMouse, v => menu.Config.EnhancedHardwareMouse = v,
+                    OnOff: true),
                 Depth: 1));
         }
     }
@@ -237,7 +241,8 @@ sealed class GamePages(SettingsMenu menu)
     /// </summary>
     internal void ControlsRows(List<SettingsMenu.Entry> result)
     {
-        result.Add(new(CameraRotateSpeed.Label, "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6).", Slider: CameraRotateSpeed));
+        result.Add(new(CameraRotateSpeed.Label, "How fast the rotate and tilt keys and the mouse turn the camera (the game: 6).",
+            Slider: CameraRotateSpeed));
         result.Add(new(CameraMoveSpeed.Label,
             "How fast the arrow keys and the screen edge pan the camera (the game: 500; faster the higher the camera).", Slider: CameraMoveSpeed));
         result.Add(new(CameraZoomSpeed.Label, "How fast the wheel and the zoom keys move the camera in and out (the game: 125).",
@@ -311,8 +316,8 @@ sealed class GamePages(SettingsMenu menu)
                 v => SetGameplay((menu.Config.Gameplay ?? new()) with { AutoSave = v }), OnOff: true)));
         result.Add(new(AutoSaveSlider.Label, "Minutes of unpaused play between autosaves (the game: 10).", Slider: AutoSaveSlider));
         result.Add(new("Fast zone hopping",
-            "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; uses "
-            + "more memory).",
+            "Keeps a larger area loaded round each of your characters, so switching between distant ones skips most of the loading (the game: off; "
+            + "uses more memory).",
             Toggle: new("Fast zone hopping", () => (menu.Config.Gameplay ??= new()).FastZoneHopping,
                 v => SetGameplay((menu.Config.Gameplay ?? new()) with { FastZoneHopping = v }), OnOff: true)));
         result.Add(new("Tutorials", "Shows the tutorial hints as you play (the game: on).",

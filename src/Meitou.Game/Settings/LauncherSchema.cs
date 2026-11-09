@@ -85,7 +85,8 @@ static class LauncherSchema
         // Lighting
         Graphics(WorldFrame.ShadowDistanceSlider, KenshiShadows.MinRange * 0.9f, 200000, 100, Enhancements.MeitouShadowRange) with
             { Logarithmic = true, OffBelow = KenshiShadows.MinRange },
-        Graphics(WorldFrame.ShadowMapSlider, 0, 2, 1, 2) with { Labels = [.. KenshiShadows.QualitySizes.Select((s, i) => $"{LowMediumHigh[i]} · {s}")] },
+        Graphics(WorldFrame.ShadowMapSlider, 0, 2, 1, 2) with
+            { Labels = [.. KenshiShadows.QualitySizes.Select((s, i) => $"{LowMediumHigh[i]} · {s}")] },
         Graphics(WorldFrame.ShadowFilterSlider, 0, 2, 1, 2) with { Labels = LowMediumHigh },
         Graphics(WorldFrame.HazeStrengthSlider, 0, 3, 0.01f, Enhancements.MeitouHazeStrength) with { Format = "0.00" },
         Graphics(WorldFrame.PlanetshineStrengthSlider, 0, 200, 1, Enhancements.MeitouPlanetshineStrength),
@@ -175,7 +176,8 @@ static class LauncherSchema
             Description = "FSR 3: AMD's, any GPU, needs the FidelityFX library (amd_fidelityfx_vk.dll, libamd_fidelityfx_vk.so). "
                 + "DLSS: NVIDIA's, Windows with an RTX 40 or later, needs Streamline's frame generation DLLs "
                 + "(sl.dlss_g.dll, nvngx_dlssg.dll, sl.reflex.dll, sl.pcl.dll) and turns Reflex on. Takes effect at start-up.",
-            Default = (int)defaults.FrameGenerationVendor, Shown = (int)defaults.FrameGenerationVendor, Min = 0, Max = 1, Step = 1, Labels = ["FSR 3", "DLSS"],
+            Default = (int)defaults.FrameGenerationVendor, Shown = (int)defaults.FrameGenerationVendor, Min = 0, Max = 1, Step = 1,
+            Labels = ["FSR 3", "DLSS"],
         },
     ];
 

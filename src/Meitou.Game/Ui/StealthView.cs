@@ -233,7 +233,8 @@ sealed class StealthView(PlayerInterface player)
         var parts = new List<UiControl>(arranged.Count + 1);
         foreach (var u in arranged) parts.Add(u with { Name = u.Name.Length > 0 ? prefix + u.Name : u.Name, Pickable = false });
 
-        // The fill is the skin's TrackSkin from the start of TrackPlace (MyGUI ProgressBar, as ResourceLoadBar draws it), under the frame that follows it.
+        // The fill is the skin's TrackSkin from the start of TrackPlace (MyGUI ProgressBar, as ResourceLoadBar draws it), under the frame that
+        // follows it.
         int place = parts.FindIndex(u => u.Properties.GetValueOrDefault("TemplateOwner") == "ProgressBar"
             && u.Properties.GetValueOrDefault("TemplatePart") == "TrackPlace");
         if (place >= 0 && TaskBarTrack() is { } track)
