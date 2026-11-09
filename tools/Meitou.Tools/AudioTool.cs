@@ -60,11 +60,11 @@ static class AudioTool
         return 0;
     }
 
-    // Loads the banks, sets parameters, states and the listener, and returns the events to post while mixing.
+    /// <summary>
+    /// Loads the banks, sets parameters, states and the listener, and returns the events to post while mixing.
+    /// </summary>
     static List<(double At, string Event, ulong Object)> ReadRenderArguments(
-        Meitou.Game.Audio.WwisePlayer player,
-        string[] args,
-        List<Task> loads)
+        Meitou.Game.Audio.WwisePlayer player, string[] args, List<Task> loads)
     {
         var events = new List<(double At, string Event, ulong Object)>();
         ulong nextObject = 2000;
@@ -114,11 +114,7 @@ static class AudioTool
     }
 
     static void MixRender(
-        Meitou.Game.Audio.WwisePlayer player,
-        List<(double At, string Event, ulong Object)> events,
-        float[] all,
-        int rate,
-        int total)
+        Meitou.Game.Audio.WwisePlayer player, List<(double At, string Event, ulong Object)> events, float[] all, int rate, int total)
     {
         int nextEvent = 0;
         var block = new float[Meitou.Game.Audio.AudioOutput.BlockFrames * 2];
@@ -141,7 +137,9 @@ static class AudioTool
         }
     }
 
-    // The level of the last second mixed up to block start 'at': RMS and peak, with the left and right RMS.
+    /// <summary>
+    /// The level of the last second mixed up to block start 'at': RMS and peak, with the left and right RMS.
+    /// </summary>
     static void PrintLevel(Meitou.Game.Audio.WwisePlayer player, float[] all, int at, int rate)
     {
         var (instances, voices, _, clips) = player.Stats;

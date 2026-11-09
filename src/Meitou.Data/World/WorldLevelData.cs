@@ -410,6 +410,9 @@ public sealed record BuildingPlacement(
     string? StateId,
     float? WorldY)
 {
+    /// <summary>
+    /// The <see cref="Key"/> given at init, or null for the zone and instance id's.
+    /// </summary>
     readonly string? _key;
 
     /// <summary>

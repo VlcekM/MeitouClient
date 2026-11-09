@@ -52,13 +52,10 @@ static class ParticleWarmup
         Console.WriteLine(line);
     }
 
-    // The first pass only compiles what it touches; the second one is printed.
-    static string MeasurePass(
-        Func<EffectGroup?> make,
-        WeatherEffectEntry entry,
-        EffectCamera camera,
-        WeatherEffectInput weather,
-        float warm)
+    /// <summary>
+    /// One warm-up and frame measurement of the effect, as its printed line. The first pass only compiles what it touches; the second one is printed.
+    /// </summary>
+    static string MeasurePass(Func<EffectGroup?> make, WeatherEffectEntry entry, EffectCamera camera, WeatherEffectInput weather, float warm)
     {
         var serialGroup = make()!;
         var clock = Stopwatch.StartNew();
@@ -74,18 +71,17 @@ static class ParticleWarmup
         double parallel = clock.Elapsed.TotalMilliseconds;
         var (frameSerial, frameParallel) = MeasureFrames(serialGroup, parallelGroup, camera, weather);
         string head = $"  {entry.Effect.Name,-28} {entry.Effect.Type,-12} units {serialGroup.Units.Count,3} particles {serialGroup.ParticleCount,6}";
-        string schedule = $"  warm-up of {warm,2:0} s: schedule {begin,6:0.0} ms, simulation {serial,7:0.0} ms on one thread, "
-            + $"{parallel,7:0.0} ms in parallel";
+        string simulation = $"simulation {serial,7:0.0} ms on one thread, {parallel,7:0.0} ms in parallel";
+        string schedule = $"  warm-up of {warm,2:0} s: schedule {begin,6:0.0} ms, {simulation}";
         string frame = $" | a frame: {frameSerial,5:0.00} ms serial, {frameParallel,5:0.00} ms parallel";
         return head + schedule + frame;
     }
 
-    // Average milliseconds per 1/60 s frame of the warmed groups, serial then parallel.
+    /// <summary>
+    /// Average milliseconds per 1/60 s frame of the warmed groups, serial then parallel.
+    /// </summary>
     static (double Serial, double Parallel) MeasureFrames(
-        EffectGroup serialGroup,
-        EffectGroup parallelGroup,
-        EffectCamera camera,
-        WeatherEffectInput weather)
+        EffectGroup serialGroup, EffectGroup parallelGroup, EffectCamera camera, WeatherEffectInput weather)
     {
         double frameSerial = 0, frameParallel = 0;
         const int frames = 120;

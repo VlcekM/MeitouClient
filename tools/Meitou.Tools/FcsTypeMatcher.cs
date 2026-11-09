@@ -64,7 +64,9 @@ static class FcsTypeMatcher
         return best;
     }
 
-    // Cross-check: the list a field is stored in vs. the kind fcs.def gives it.
+    /// <summary>
+    /// Cross-check: the list a field is stored in vs. the kind fcs.def gives it.
+    /// </summary>
     static void PrintKindCrossCheck(
         FcsSchema schema,
         SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> used,

@@ -60,7 +60,9 @@ static class WeatherTool
         return 0;
     }
 
-    // Each region's cells: how many, the bounding box and the cell nearest the mean in world units (for placing a camera in a region).
+    /// <summary>
+    /// Each region's cells: how many, the bounding box and the cell nearest the mean in world units (for placing a camera in a region).
+    /// </summary>
     static int PrintExtents(WeatherData data, WeatherAreas areas)
     {
         var byRegion = CellsByRegion(data, areas);

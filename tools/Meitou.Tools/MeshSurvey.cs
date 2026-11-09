@@ -64,7 +64,9 @@ static class MeshSurvey
         return failures.Count == 0 ? 0 : 1;
     }
 
-    // Vertex buffers that have a position outside the mesh bounds (with a small tolerance), one count per buffer.
+    /// <summary>
+    /// Vertex buffers that have a position outside the mesh bounds (with a small tolerance), one count per buffer.
+    /// </summary>
     static int CountOutOfBounds(OgreMesh mesh, OgreBounds b)
     {
         int count = 0;
