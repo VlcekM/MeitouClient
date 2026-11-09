@@ -58,7 +58,7 @@ sealed class CorpseFlies(GameHost host)
         {
             _flyCorpses.Remove(id);
             particles?.RemoveBuildingEffects(FlyKey(id));
-            host.Sound.WorldEmitters?.Remove(FlyKey(id));
+            host.Sound.World.Emitters?.Remove(FlyKey(id));
         }
     }
 

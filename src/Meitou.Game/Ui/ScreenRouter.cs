@@ -25,7 +25,7 @@ sealed class ScreenRouter(PlayerInterface player)
         }
 
         if (e.Screen == "editor") player.CharacterEditor.EditorAction(e);
-        else if (e.Screen == "file") player.CharacterEditor.FileDialogAction(e);
+        else if (e.Screen == "file") player.CharacterEditor.Files.FileDialogAction(e);
         else if (e.Screen == FeedbackPanel.FeedbackScreen) player.FeedbackPanel.FeedbackFormAction(e);
         else if (player.Frontend.HandleFrontendAction(e)) player.UpdateMenuPause();
         else if (e.Screen == "stats" && e.Action == "select") player.StatsWindow.SelectedStat = e.Text;
@@ -88,7 +88,7 @@ sealed class ScreenRouter(PlayerInterface player)
 
         if (id == "file")
         {
-            player.CharacterEditor.BindFileDialog(b);
+            player.CharacterEditor.Files.BindFileDialog(b);
             return b;
         }
         else if (id == "trader") player.TradeWindows.BindTraderScreen(b);
@@ -156,7 +156,7 @@ sealed class ScreenRouter(PlayerInterface player)
             foreach (var tab in layout.Widgets.Where(w => w.Type == "TabItem"))
                 b.Properties[tab.Name] = new Dictionary<string, string> { ["Visible"] = "true" };
             player.FactionWindow.BindFactionTab(b);
-            b.Text["MessagesTextBox"] = player.MessageRoller.MessagesText();
+            b.Text["MessagesTextBox"] = player.DialogueLog.MessagesText();
             b.Properties["MessagesTextBox"] = new Dictionary<string, string> { ["Static"] = "true", ["WordWrap"] = "true", ["TextAlign"] = "Left Top" };
             player.SquadWindows.BindSquadsTab(b);
             player.Production.BindResearchTab(b);

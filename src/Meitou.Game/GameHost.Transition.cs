@@ -232,10 +232,10 @@ sealed partial class GameHost
 
     /// <summary>
     /// Whether the loading screen still waits for a character's look: one in its reach whose drawn look is not prepared. An operator's tool look,
-    /// once prepared, is the drawn one (<see cref="HeldLook"/>) and its plain look is listed no more, so that may never be built.
+    /// once prepared, is the drawn one (<see cref="Host.HeldToolLooks.HeldLook"/>) and its plain look is listed no more, so that may never be built.
     /// </summary>
     bool AwaitsLook(Simulation.CharacterSnapshot c, Rendering.Characters.CharacterRenderer characters) =>
-        c.Appearance is { } look && InLoadingReach(c) && !characters.IsPrepared(look) && !HeldPrepared(look, c.HeldTool, characters);
+        c.Appearance is { } look && InLoadingReach(c) && !characters.IsPrepared(look) && !HeldLooks.HeldPrepared(look, c.HeldTool, characters);
 
     internal void AdvanceSkyArrival(double seconds)
     {

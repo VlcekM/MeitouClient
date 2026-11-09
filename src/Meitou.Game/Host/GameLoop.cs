@@ -1111,7 +1111,7 @@ sealed class GameLoop(GameHost host)
         double advanceMs = Stopwatch.GetElapsedTime(a0).TotalMilliseconds;
         host.AdvanceTotal += advanceMs;
         host.PlayBench.PlayBenchUpdated(advanceMs);   // before SimProfile, which clears the world's tick profile
-        if (host.DebugMenu.Profiler is not null) SimProfile(host.DebugMenu.Profiler, advanceMs);   // F12's sim row and its parts
+        if (host.DebugMenu.Profiler is not null) _simProfile.SimProfile(host.DebugMenu.Profiler, advanceMs);   // F12's sim row and its parts
         host.PlayBench.BenchLap(1);
         host.WorldNews();
         host.Saves.HandleSaves(frameDt);   // a quicksave or quickload asked for by a key, the autosave: between ticks, none in flight
@@ -1548,25 +1548,10 @@ sealed class GameLoop(GameHost host)
 
     #region Statistics and profiling
 
-    World? _simNamesFor;
-
-    string[] _simNames = [];
-
-    double[] _simMs = [];
-
-    const double SimWindowSeconds = 5;
-
-    readonly Dictionary<string, double> _simWindowMs = [];
-
-    double _simWindowStart = -1, _simWindowMain, _simWindowAhead;
-
-    long _simWindowTicks;
-
-    int _simWindowFrames;
-
-    long _simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowCarried, _simWindowWhole, _simWindowLimbs;
-
-    int _simWindowStepping;
+    /// <summary>
+    /// F12's simulation row and --log-spikes' steady simulation cost.
+    /// </summary>
+    readonly SimProfileWindow _simProfile = new(host);
 
     /// <summary>
     /// The graphics card's time and the drawn triangles, summed for F11's statistics.
@@ -1647,8 +1632,8 @@ sealed class GameLoop(GameHost host)
         if (host.Sound.Audio is not null)
         {
             Console.WriteLine($"audio     {host.Sound.Audio.StatsLine()}");
-            Console.WriteLine($"audio     world: {host.Sound.WorldAudioStats()}");
-            Console.WriteLine($"audio     characters: {host.Sound.CharacterAudioStats()}, {host.Sound.UiAudioStats()}");
+            Console.WriteLine($"audio     world: {host.Sound.World.Stats()}");
+            Console.WriteLine($"audio     characters: {host.Sound.Characters.Stats()}, {host.Sound.Ui.Stats()}");
         }
         if (host.MenuFrames > 0) Console.WriteLine($"menu      {host.MenuFrames} visible frames in {host.MenuFrameSeconds:0.0} s: {host.MenuFrames / host.MenuFrameSeconds:0} fps, {host.MenuSlowFrames} frames over 100 ms, longest {host.MenuLongestFrame * 1000:0.0} ms");
         Console.WriteLine($"smoke     {_totalFrames} frames in {now:0.0} s: {_totalFrames / now:0} fps on average, {host.Session.Ticks.TotalTicks} control ticks, {host.Session.Simulation.TotalTicks} simulation ticks, game time {host.Session.Clock.TimeText}");
@@ -1774,94 +1759,6 @@ sealed class GameLoop(GameHost host)
         try { profiler.DumpVram(path, Caches); Console.WriteLine($"vram      dumped to {path}"); }
         catch (IOException e) { Console.WriteLine($"vram      dump failed: {e.Message}"); }
     }
-
-    // F12's sim parts: the names (the tick phases, the time outside the world's ticks, the world's systems), made again when the world is, and the
-    // frame's ms.
-
-    /// <summary>
-    /// Hands the frame's <paramref name="advanceMs"/> to the profiler with the world's tick profile split into phases and systems, and clears the
-    /// profile.
-    /// </summary>
-    internal void SimProfile(FrameProfiler profiler, double advanceMs)
-    {
-        var world = host.Session.World;
-        var profile = world.Profile;
-        int phases = TickProfile.PhaseNames.Length;
-        int systems = world.Systems.Count, parts = phases + 1 + systems;
-        if (_simNamesFor != world || _simNames.Length != parts + profile.Parts.Count + 1)
-        {
-            _simNamesFor = world;
-            _simNames =
-            [
-                .. TickProfile.PhaseNames,
-                "outside ticks",
-                .. world.Systems.Select(s => s.GetType().Name is var n && n.EndsWith("System", StringComparison.Ordinal) && n.Length > 6 ? n[..^6] : n),
-                .. profile.Parts.Select(p => p.Name),
-                "tick ahead",
-            ];
-            _simMs = new double[_simNames.Length];
-        }
-        Array.Clear(_simMs);
-        double inTicks = 0, ahead = host.Session.TakeAheadMs();
-        for (int p = 0; p < phases; p++) inTicks += _simMs[p] = profile.PhaseMs[p];
-        // The phases also hold the tick run ahead during the last draw (docs/simulation.md "Tick ahead"), which is not in this frame's advance.
-        _simMs[phases] = Math.Max(0, advanceMs - Math.Max(0, inTicks - ahead));
-        for (int k = 0; k < profile.SystemMs.Length && phases + 1 + k < parts; k++) _simMs[phases + 1 + k] = profile.SystemMs[k];
-        for (int k = 0; k < profile.Parts.Count && parts + k < _simMs.Length; k++) _simMs[parts + k] = profile.Parts[k].Ms;
-        _simMs[^1] = ahead;
-        int paths = world.Systems.OfType<MovementSystem>().FirstOrDefault()?.Paths.Pending ?? 0;
-        profiler.Outside(advanceMs, profile.Ticks, _simNames, _simMs, phases + 1, systems, paths);
-        // --log-spikes: a slow frame's simulation by system and part (the phases only add up what these hold).
-        if (SpikeLog.Enabled && advanceMs > GameHost.SpikeSimMs)
-            for (int k = phases + 1; k < _simMs.Length; k++)
-                if (_simMs[k] >= 2) SpikeLog.Note($"sim {_simNames[k]}", ms: _simMs[k]);
-        if (SpikeLog.Enabled) SimWindow(profile, advanceMs, ahead, phases + 1, parts);
-        profile.Clear();
-    }
-
-    // --log-spikes: the simulation's steady cost, summed over a window of real time (the spike notes only see frames over SpikeSimMs).
-    // The ragdolls sampled once a frame: in play, moving, the physics' awake bodies, frames with any moving.
-
-    /// <summary>
-    /// --log-spikes: every <see cref="SimWindowSeconds"/> one line of the speed, ticks a second, the sim's ms a frame, then ms a tick by phase, by
-    /// system, by system in the slow world phase and by part, biggest first. Keys carry their list's prefix: '#' phase, '~' slow world, '.' part.
-    /// </summary>
-    void SimWindow(TickProfile profile, double advanceMs, double ahead, int firstSystem, int firstPart)
-    {
-        double now = host.RealTime.Elapsed.TotalSeconds;
-        if (_simWindowStart < 0) _simWindowStart = now;
-        (_simWindowTicks, _simWindowMain, _simWindowAhead, _simWindowFrames) = (_simWindowTicks + profile.Ticks, _simWindowMain + advanceMs, _simWindowAhead + ahead, _simWindowFrames + 1);
-        void Add(string key, double ms) => _simWindowMs[key] = _simWindowMs.GetValueOrDefault(key) + ms;
-        for (int p = 0; p < firstSystem - 1; p++) Add("#" + _simNames[p], _simMs[p]);
-        for (int k = firstSystem; k < _simMs.Length - 1; k++) Add((k >= firstPart ? "." : "") + _simNames[k], _simMs[k]);
-        for (int k = 0; k < profile.SystemMs.Length && firstSystem + k < firstPart; k++)
-            Add("~" + _simNames[firstSystem + k], profile.Ms(TickProfile.SlowWorld, k));
-        if (host.Session.World.Systems.OfType<Simulation.Ragdolls.RagdollSystem>().FirstOrDefault() is { } rag)
-        {
-            (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping) = (_simWindowRagdolls + rag.Count, _simWindowMoving + rag.Moving, _simWindowAwake + rag.AwakeBodies, _simWindowStepping + (rag.Moving > 0 ? 1 : 0));
-            (_simWindowCarried, _simWindowWhole, _simWindowLimbs) = (_simWindowCarried + rag.MovingCarried, _simWindowWhole + rag.MovingWhole, _simWindowLimbs + rag.MovingLimbs);
-        }
-        double seconds = now - _simWindowStart;
-        if (seconds < SimWindowSeconds) return;
-        if (_simWindowTicks > 0)
-        {
-            var inv = CultureInfo.InvariantCulture;
-            string Top(char kind, int count) => string.Join(", ",
-                _simWindowMs.Where(p => (p.Key[0] is '#' or '~' or '.' ? p.Key[0] : ' ') == kind && p.Value / _simWindowTicks >= 0.01)
-                .OrderByDescending(p => p.Value).Take(count)
-                .Select(p => string.Create(inv, $"{p.Key.TrimStart('#', '~', '.')} {p.Value / _simWindowTicks:0.00}")));
-            double tickMs = _simWindowMs.Where(p => p.Key[0] == '#').Sum(p => p.Value) / _simWindowTicks;
-            Console.WriteLine(string.Create(inv, $"simprof   {host.Session.Simulation.Speed:0}x {_simWindowFrames / seconds:0} fps, {_simWindowTicks / seconds:0} ticks/s, {host.Session.World.Snapshot.Characters.Count} characters; ") +
-                string.Create(inv, $"ms a frame: in frame {_simWindowMain / _simWindowFrames:0.00}, ahead {_simWindowAhead / _simWindowFrames:0.00}; ms a tick {tickMs:0.00}: ") +
-                $"phases: {Top('#', 10)}; systems: {Top(' ', 12)}; slow world: {Top('~', 12)}; parts: {Top('.', 12)}; " +
-                string.Create(inv, $"ragdolls {(double)_simWindowRagdolls / _simWindowFrames:0.0}, moving {(double)_simWindowMoving / _simWindowFrames:0.0} (carried {(double)_simWindowCarried / _simWindowFrames:0.0}, whole {(double)_simWindowWhole / _simWindowFrames:0.0}, limbs {(double)_simWindowLimbs / _simWindowFrames:0.0}), awake bodies {(double)_simWindowAwake / _simWindowFrames:0}, stepping {100.0 * _simWindowStepping / _simWindowFrames:0}% of frames"));
-        }
-        _simWindowMs.Clear();
-        (_simWindowStart, _simWindowTicks, _simWindowMain, _simWindowAhead, _simWindowFrames) = (now, 0, 0, 0, 0);
-        (_simWindowRagdolls, _simWindowMoving, _simWindowAwake, _simWindowStepping, _simWindowCarried, _simWindowWhole, _simWindowLimbs) = (0, 0, 0, 0, 0, 0, 0);
-    }
-
-    // ---- shut-down ----
 
     #endregion
 

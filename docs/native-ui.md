@@ -18,7 +18,7 @@ only reads and writes the value.
 
 Mods (`ModsPage`): the mods of the load order with each `.mod` header and its game data problems (`ModReport`), a Copy
 button for the selected mod and one for all problems; a summary line under the version text opens it. Separator files (`[1]---[...]---.mod`) are listed without detail.
-Under a mod's row, a Settings group holds the settings its code registered (`ModsPage`, [modding](modding.md), "Settings"),
+Under a mod's row, a Settings group holds the settings its code registered (`ModSettingsRows`, [modding](modding.md), "Settings"),
 open the first time it is shown, its rows the page's own switches, sliders and lists; a changed row is brass with a Reset link. A group whose mod
 mods.cfg does not list comes after the list under the mod's name.
 

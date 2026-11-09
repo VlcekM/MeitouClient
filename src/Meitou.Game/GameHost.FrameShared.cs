@@ -95,7 +95,7 @@ sealed partial class GameHost
 
     /// <summary>
     /// --log-spikes: a tick run ahead over <see cref="SpikeSimMs"/>, by system and part, in the frame whose draw waited for it (its profile holds
-    /// that tick alone then: <see cref="GameLoop.SimProfile"/> cleared it before the draw).
+    /// that tick alone then: <see cref="Host.SimProfileWindow.SimProfile"/> cleared it before the draw).
     /// </summary>
     void NoteAheadTick()
     {
@@ -126,7 +126,7 @@ sealed partial class GameHost
             }
         }
         foreach (var line in world.TakeSaid())
-            Player.MessageRoller.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
+            Player.DialogueLog.LogMessage(line.Owner, line.Text, line.Player ? MessageTone.Player : MessageTone.Normal);
         // Stealth knock-outs: the original's floating "*Thunk*" (a hit) or "Failed!" over the attacker, here as a notice.
         if (world.Systems.OfType<Simulation.Carrying.CarrySystem>().FirstOrDefault() is { Knockouts.Count: > 0 } carry)
             foreach (var k in carry.TakeKnockouts())

@@ -556,7 +556,7 @@ also finds `MessagesTextBox`). The tag replaces the `Kenshi_EditBoxStandardText`
 character, test `FUN_1407916d0`), the conversation window's NPC line (`140674170`, ML_NORMAL), the player's chosen reply (`140683df0`, the player character's name or
 "Player", ML_PLAYER) and each MessageRoller message (`140724a20`, empty owner, ML_SYSTEM). **Unknown**: whether a system line closes its `[`.
 
-Meitou: `World.Said` from `DialogueSystem` (bubble lines, conversation lines, replies) → `MessageRoller.LogMessage`, each line tagged with its colour (ML_NORMAL is
+Meitou: `World.Said` from `DialogueSystem` (bubble lines, conversation lines, replies) → `DialogueLog.LogMessage`, each line tagged with its colour (ML_NORMAL is
 the kit's Main colour in the Meitou mode, for its dark panel); notices log as ML_SYSTEM without the `[`. The newest 200 lines are kept; not saved (the original's saving of
 the log is **Unknown**).
 

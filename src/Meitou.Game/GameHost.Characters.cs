@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
 using Meitou.Game.Editor;
+using Meitou.Game.Host;
 using Meitou.Game.Rendering.Characters;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Overlays;
@@ -139,6 +140,16 @@ sealed partial class GameHost
     #endregion
 
     #region Draw list
+
+    /// <summary>
+    /// The edited character's idle stances, cross-faded.
+    /// </summary>
+    EditorStances EditorStances => field ??= new(this);
+
+    /// <summary>
+    /// The looks with the tool an operator holds.
+    /// </summary>
+    internal HeldToolLooks HeldLooks => field ??= new(this);
 
     readonly HashSet<CharacterId> _fullRate = [];
     readonly HashSet<long> _portraitKeys = [];
@@ -285,7 +296,7 @@ sealed partial class GameHost
     /// </summary>
     void AddDistant(CharacterDrawList list, CharacterSnapshot c)
     {
-        var look = HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
+        var look = HeldLooks.HeldLook(c.Appearance!, c.HeldTool, out var heldPending);
         Decapitation.CutHead(c, look);
         bool hidden = Interiors.HiddenIndoors.Contains(c.Id);
         list.Distant.Add(new CharacterInstance(DrawKey(c.Id), look, c.Position, DrawnYaw(c), []) { Scale = c.Scale,
@@ -322,7 +333,7 @@ sealed partial class GameHost
         DistantFor = reachOf is null ? default : distantKey;
         foreach (var c in current.Characters)
         {
-            var inBar = editing is { } shown ? CharacterEditor.EditorBarPlace(c.Id, shown) : null;
+            var inBar = editing is { } shown ? CharacterEditor.Bar.EditorBarPlace(c.Id, shown) : null;
             if (c.Appearance is null || editing is { } edited && c.Id != edited && inBar is null) continue;
             // The snapshot's place: a tick's motion is well inside InReach's margin.
             if (reachOf is not null && !reachOf.InReach(c.Position, eye, c.DrawDistanceScale) && !_portraitKeys.Contains(DrawKey(c.Id))
@@ -371,23 +382,23 @@ sealed partial class GameHost
                         }
                 poses[i] = new CharacterPose(layer.Name, time, weight);
             }
-            if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStancePoses(c.Id, stance);
+            if (Player.CharacterEditor.EditorIdle(c.Id) is { } stance) poses = EditorStances.EditorStancePoses(c.Id, stance);
             // An animal in the editor plays its own idle in real time (the world may stand paused behind the editor).
             else if (Player.CharacterEditor.IsEditorAnimal(c.Id))
-                poses = [.. poses.Select(p => p with { Time = CharacterEditor.EditorClipTime(p.Animation, (float)RealTime.Elapsed.TotalSeconds) })];
+                poses = [.. poses.Select(p => p with { Time = CharacterEditor.Bar.EditorClipTime(p.Animation, (float)RealTime.Elapsed.TotalSeconds) })];
             // The Meitou editor's bar (CharacterEditorHost): the shown character stands in it, the others sit on its seats.
             if (inBar is { } place)
             {
                 (position, yaw, rotation) = (place.Position, place.Yaw, null);
                 if (place.Clip is { } clip)
-                    poses = [new CharacterPose(clip, CharacterEditor.EditorClipTime(clip, (float)RealTime.Elapsed.TotalSeconds), 1)];
+                    poses = [new CharacterPose(clip, CharacterEditor.Bar.EditorClipTime(clip, (float)RealTime.Elapsed.TotalSeconds), 1)];
             }
             if (c.Id == Sandbox.SandboxHero && Sandbox.SandboxPicker?.Pose() is { } forced)
                 poses = forced;   // the sandbox drop-down loops a picked clip on the hero
-            var held = HeldLook(c.Appearance, c.HeldTool, out var heldPending);
-            var look = Player.CharacterEditor.EditorPreview(c.Id, c.Appearance) ?? held;
+            var held = HeldLooks.HeldLook(c.Appearance, c.HeldTool, out var heldPending);
+            var look = Player.CharacterEditor.Previews.EditorPreview(c.Id, c.Appearance) ?? held;
             if (editing is null) Decapitation.CutHead(c, look);
-            var glide = Player.CharacterEditor.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
+            var glide = Player.CharacterEditor.Previews.EditorBlend(c.Id);   // after the preview, which may just have swapped the look
             var bones = !posed ? null
                 : Blend(before is null || Reanchored(before, c) ? null : before.Ragdoll, c.Ragdoll, alpha, ref Slot(ref _ragdollsBySlot, c.Id.Slot),
                 ref Slot(ref _spareRagdollsBySlot, c.Id.Slot));
@@ -398,79 +409,18 @@ sealed partial class GameHost
             if (glide is { } mixed) instance = instance with { BlendFrom = mixed.From, Blend = mixed.Blend };
             list.Add(instance);
             // The editor's next preview look, listed hidden so the renderer prepares it while the last one is still shown.
-            if (Player.CharacterEditor.EditorPending(c.Id) is { } pending)
+            if (Player.CharacterEditor.Previews.EditorPending(c.Id) is { } pending)
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), pending, position, yaw, poses) { Hidden = true });
             else if (heldPending is not null)
                 list.Add(new CharacterInstance(DrawKey(c.Id) ^ (1L << 55), heldPending, position, yaw, poses) { Hidden = true });
         }
         if (editing is null) Decapitation.AddHeads(list);
-        else CharacterEditor.AddEditorCrowd(list);
+        else CharacterEditor.Bar.AddEditorCrowd(list);
     }
 
     #endregion
 
-    #region Editor stances
-
-    // The editor's stances and their weights, of the character last shown, and when they were last stepped (EditorStancePoses).
-    readonly List<(string Stance, float Weight)> _editorStances = [];
-    CharacterId _editorStancesOf;
-    double _editorStancesAt;
-
-    /// <summary>
-    /// The edited character's poses: the chosen idle stance at its record's play speed, as the simulation plays it (0 for the stances: a held pose of
-    /// a 1-frame clip; 0.01 for squat; a mod's one-shot stance held at its last frame, <see cref="CharacterEditorHost.EditorClipTime"/>), cross-faded
-    /// from the stances chosen before at the simulation's blend rate (<c>animation blend rate</c>).
-    /// </summary>
-    CharacterPose[] EditorStancePoses(CharacterId id, string stance)
-    {
-        double now = RealTime.Elapsed.TotalSeconds;
-        if (id != _editorStancesOf || _editorStances.Count == 0)
-        {
-            _editorStances.Clear();
-            _editorStances.Add((stance, 1));
-            _editorStancesOf = id;
-        }
-        else if (!_editorStances.Exists(s => s.Stance == stance)) _editorStances.Add((stance, 0));
-        float step = (float)(now - _editorStancesAt) * (PopData?.Bodies.Constants.AnimationBlendRate ?? 4);
-        _editorStancesAt = now;
-        for (int i = _editorStances.Count - 1; i >= 0; i--)
-        {
-            var (name, weight) = _editorStances[i];
-            weight = name == stance ? MathF.Min(weight + step, 1) : weight - step;
-            if (weight <= 0) _editorStances.RemoveAt(i);
-            else _editorStances[i] = (name, weight);
-        }
-        return [.. _editorStances.Select(s => new CharacterPose(s.Stance, CharacterEditor.EditorClipTime(s.Stance, (float)now), s.Weight))];
-    }
-
-    #endregion
-
-    #region Looks
-
-    readonly System.Runtime.CompilerServices.ConditionalWeakTable<Data.Characters.CharacterAppearance,
-        Dictionary<string, Data.Characters.CharacterAppearance>> _heldLooks = new();
-
-    /// <summary>
-    /// The look with the tool an operator holds (<see cref="CharacterSnapshot.HeldTool"/>), made once per look and tool. Until the renderer has
-    /// prepared it the plain look is drawn and the tool's look is <paramref name="pending"/>, to be listed hidden so it gets prepared.
-    /// </summary>
-    Data.Characters.CharacterAppearance HeldLook(Data.Characters.CharacterAppearance look, string? tool,
-        out Data.Characters.CharacterAppearance? pending)
-    {
-        pending = null;
-        if (tool is null || Scene.Database is not { } db) return look;
-        var byTool = _heldLooks.GetOrCreateValue(look);
-        if (!byTool.TryGetValue(tool, out var held)) byTool[tool] = held = db.Find(tool) is { } item ? look.WithHeld(item) : look;
-        if (Gpu.Characters is not { } characters || characters.IsPrepared(held)) return held;
-        pending = held;
-        return look;
-    }
-
-    /// <summary>
-    /// Whether the look with the operator's tool (<see cref="HeldLook"/>) is made and prepared: then it is the one drawn.
-    /// </summary>
-    bool HeldPrepared(Data.Characters.CharacterAppearance look, string? tool, CharacterRenderer characters) =>
-        tool is not null && _heldLooks.TryGetValue(look, out var byTool) && byTool.TryGetValue(tool, out var held) && characters.IsPrepared(held);
+    #region Ragdoll poses
 
     /// <summary>
     /// Whether the character's place changed meaning between the two ticks: a whole ragdoll moves it to its root body the tick it starts and back

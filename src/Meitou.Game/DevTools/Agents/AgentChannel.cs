@@ -230,7 +230,7 @@ sealed class AgentChannel(GameHost host)
     {
         host.AgentWorld.ControlCameraTick();
         var now = ControlSnapshot();
-        if (now.Loaded) { host.Player.AgentOrders.ControlKills(); host.Player.AgentOrders.ControlCombatSample(); host.AgentPlay.ControlSpawnPoll(); host.AgentPlay.ControlMoveWaitPoll(); }
+        if (now.Loaded) { host.Player.AgentOrders.Kills.ControlKills(); host.Player.AgentOrders.Combat.ControlCombatSample(); host.AgentPlay.ControlSpawnPoll(); host.AgentPlay.ControlMoveWaitPoll(); }
         if (_lastSnap is { } old && ControlEvents && old != now)
         {
             if (old.Screens != now.Screens) ControlEvent("screen", w => { w.WriteString("screen", now.Screen); w.WriteStartArray("screens"); foreach (string s in ControlScreenSet()) w.WriteStringValue(s); w.WriteEndArray(); });
