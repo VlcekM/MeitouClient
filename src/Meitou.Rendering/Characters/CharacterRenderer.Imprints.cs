@@ -8,8 +8,8 @@ internal sealed unsafe partial class CharacterRenderer : ITrailImprints
     /// <summary>A tile of the imprint atlas in pixels and the tiles across it (one tile per mark pressed this frame).</summary>
     const int ImprintTile = 128;
     public const int ImprintColumns = 8;
-    /// <summary>How high above a mark's floor the body still counts as touching the ground (world units): the part of a foot that presses, a heel strike's raised toe included.</summary>
-    const float ImprintBand = 2.5f;
+    /// <summary>How high above a mark's floor the body still counts as touching the ground (world units): the sole and no more, the foot's sides and the ankle stand wider than what presses.</summary>
+    const float ImprintBand = 1.3f;
 
     GpuTexture? imprintColour, imprintDepth;
     uint imprintIndex;

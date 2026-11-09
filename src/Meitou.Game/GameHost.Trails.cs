@@ -39,6 +39,7 @@ sealed partial class GameHost
         public float Walked;
         public int Frame;
         public Contact[]? Contacts;
+        public Limb[]? Limbs;
         public Vector3[]? Recent;   // the last prints: x, z, length
         public int RecentNext;
     }

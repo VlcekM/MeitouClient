@@ -39,8 +39,8 @@ sealed partial class GameHost
 
     /// <summary>An imprint's tile: how far it reaches past the contact's size (the mesh goes beyond its capsule), its least half side, and how far under the ground its band starts.</summary>
     const float ImprintMargin = 2, ImprintLeast = 3, ImprintBelow = 0.4f;
-    /// <summary>A print's depth against a full mark's 12 cm: about 4 cm, what a foot sinks in sand; its walls are then gentle enough for the relief march to show without stairs.</summary>
-    const float ImprintDepth = 0.35f;
+    /// <summary>A print's depth against a full mark's 12 cm: about 7 cm: visible from the game's camera, its slope spread enough to show no stairs.</summary>
+    const float ImprintDepth = 0.6f;
 
     /// <summary>
     /// A part must be off the ground (swinging, sliding or hovering) this long (seconds) before it may print again: the animation's contact phase makes a foot bob a little, which is no new step.
@@ -65,7 +65,21 @@ sealed partial class GameHost
     }
 
     /// <summary>Where a capsule's underside meets the ground: the centre, direction and whole size of the stadium it presses, how hard (0 to 1) and its lowest point.</summary>
-    readonly record struct ContactPatch(Vector2 At, Vector2 Along, float Length, float Width, float Sink, float Bottom, bool Valid);
+    readonly record struct ContactPatch(Vector2 At, Vector2 Along, float Length, float Width, float Sink, float Bottom, bool Valid, bool Whole);
+
+    /// <summary>How long (game seconds) a limb stays planted before it prints, at most: a foot lands on its heel and rolls flat, and what presses is the foot once flat. A capsule lying whole on the ground prints at once.</summary>
+    const float SettleTime = 0.12f;
+
+    /// <summary>One limb's footfall (<see cref="BodyCapsule.Limb"/>): one print from landing to lifting, however its heel and toes touch in turn.</summary>
+    struct Limb
+    {
+        public float Planted, Air;
+        public bool Down, Printed;
+        public ContactPatch Patch;
+        public float Depth;
+        public Vector3 At;
+        public bool Seen;
+    }
 
     readonly List<BodyCapsule> contactBodies = [];
     ContactPatch[] contactPatches = new ContactPatch[64];
@@ -86,8 +100,16 @@ sealed partial class GameHost
         float rootGround = gpu.Terrain.HeightAt(root.X, root.Z);
         for (int i = 0; i < count; i++) contactPatches[i] = Contacting(contactBodies[i], rootGround);
         if (upright) Unshadowed(count);
+        if (upright)
+        {
+            int bones = 0;
+            foreach (var c in contactBodies) bones = Math.Max(bones, c.Limb + 1);
+            if (w.Limbs is null || w.Limbs.Length != bones) w.Limbs = new Limb[bones];
+            foreach (ref var l in w.Limbs.AsSpan()) (l.Down, l.Seen) = (false, false);
+        }
         for (int i = 0; i < count; i++)
             Touch(trails, ground, key, contactBodies[i], contactPatches[i], ref w, i, animal, upright, speed, known);
+        if (upright) Footfalls(trails, ground, key, ref w, animal);
         return true;
     }
 
@@ -150,11 +172,47 @@ sealed partial class GameHost
             return;
         }
         st.Air = 0;
+        if (upright)
+        {
+            // The limb's longest contact stands for it (a foot's sole, not a toe).
+            ref var limb = ref w.Limbs![cap.Limb];
+            if (!limb.Down || patch.Length > limb.Patch.Length) (limb.Patch, limb.Depth, limb.At) = (patch, depth, at);
+            limb.Down = true;
+            return;
+        }
         if (st.Printed) return;
         st.Printed = true;
-        var print = PrintOf(patch, depth, upright, key);
-        if (upright && !Remember(ref w, print, !animal)) return;
-        Press(trails, ground, at, print);
+        Press(trails, ground, at, new TrailStamp(patch.At, patch.Along, patch.Length, patch.Width, depth, TrailKind.Press));
+    }
+
+    /// <summary>
+    /// The frame's limbs of an upright body: a limb that has landed prints once, when it has settled (or lies whole on the ground), or as it leaves if it never did; it may print again once it has
+    /// been off the ground for <see cref="LiftTime"/> of game time.
+    /// </summary>
+    void Footfalls(TerrainTrailRenderer trails, GroundSurfaces ground, long key, ref Walker w, bool animal)
+    {
+        float dt = trailDt * (float)session.Simulation.Speed;
+        foreach (ref var l in w.Limbs!.AsSpan())
+        {
+            if (l.Down)
+            {
+                l.Air = 0;
+                if (l.Printed) continue;
+                l.Planted += dt;
+                if (l.Planted >= SettleTime || l.Patch.Whole) Print(trails, ground, key, ref w, ref l, animal);
+                continue;
+            }
+            if (l.Planted > 0 && !l.Printed) Print(trails, ground, key, ref w, ref l, animal);
+            l.Air += dt;
+            if (l.Air >= LiftTime) (l.Printed, l.Planted) = (false, 0);
+        }
+    }
+
+    void Print(TerrainTrailRenderer trails, GroundSurfaces ground, long key, ref Walker w, ref Limb limb, bool animal)
+    {
+        limb.Printed = true;
+        var print = PrintOf(limb.Patch, limb.Depth, key);
+        if (Remember(ref w, print, !animal)) Press(trails, ground, limb.At, print);
     }
 
     /// <summary>A part that is not planted this frame: once it has been off the ground for <see cref="LiftTime"/> it may print again.</summary>
@@ -181,10 +239,9 @@ sealed partial class GameHost
         return true;
     }
 
-    /// <summary>The mark a planted part leaves: an upright body's foot, paw or hoof prints the shape of its own mesh, a lying body's part a stadium.</summary>
-    TrailStamp PrintOf(in ContactPatch patch, float depth, bool upright, long key)
+    /// <summary>The mark a planted limb leaves: the shape of the body's own mesh.</summary>
+    TrailStamp PrintOf(in ContactPatch patch, float depth, long key)
     {
-        if (!upright) return new TrailStamp(patch.At, patch.Along, patch.Length, patch.Width, depth, TrailKind.Press);
         float floor = MathF.Min(patch.Bottom, gpu.Terrain.HeightAt(patch.At.X, patch.At.Y)) - ImprintBelow;
         return new TrailStamp(patch.At, Vector2.UnitY, patch.Length, patch.Width, depth * ImprintDepth, TrailKind.Imprint)
         {
@@ -210,6 +267,6 @@ sealed partial class GameHost
         var mid = Vector3.Lerp(cap.A, cap.B, (t0 + t1) / 2);
         float sink = Math.Clamp(pen / ContactPlane, 0, 1);
         return new ContactPatch(new Vector2(mid.X, mid.Z), flatLength > 1e-3f ? axis / flatLength : Vector2.UnitX, (t1 - t0) * flatLength + 2 * half, 2 * half, sink,
-            MathF.Min(cap.A.Y, cap.B.Y) - r, sink >= MinSink);
+            MathF.Min(cap.A.Y, cap.B.Y) - r, sink >= MinSink, flatLength > 2 * r && MathF.Max(ca, cb) <= ContactPlane);
     }
 }

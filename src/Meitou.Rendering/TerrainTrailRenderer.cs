@@ -179,10 +179,14 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             return smoothstep(1.0, 0.92, d) * mix(1.0, 0.72, d);
         }
 
-        // The same over a disc of 0.4 world units: a mesh's outline is a cliff a texel wide, which the terrain's relief cannot show without stairs; sand slumps to a slope anyway.
+        // Tile uv per world unit.
+        float uvPerUnit() { return 1.0 / (2.0 * vHalf.x * 0.25 / K); }
+
+        // The same over a disc of 0.4 world units: a mesh's outline is a cliff a texel wide, which the terrain's relief cannot show without stairs; sand slumps to a slope anyway. The mean is
+        // then narrowed back round its middle, so the slope lies on the outline and the print does not grow by the disc.
         float imprintPress(vec2 uv)
         {
-            float r = (K < 2.0 ? 0.9 : 0.4) / (2.0 * vHalf.x * 0.25 / K);   // the coarse image (K 1, a texel of 0.25) needs the wider disc: an outline under three of its texels turns to stairs
+            float r = (K < 2.0 ? 0.9 : 0.4) * uvPerUnit();   // the coarse image (K 1, a texel of 0.25) needs the wider disc: an outline under three of its texels turns to stairs
             float sum = imprintAt(uv) * 2.0, total = 2.0;
             for (int ring = 1; ring <= 2; ring++)
                 for (int k = 0; k < 8; k++)
@@ -191,7 +195,8 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
                     sum += imprintAt(uv + vec2(cos(a), sin(a)) * r * float(ring) * 0.5) * w;
                     total += w;
                 }
-            return sum / total;
+            float mean = sum / total;
+            return smoothstep(0.38, 0.72, mean) * max(mean, 0.72);
         }
 
         // A planted foot, paw or hoof: the shape of the body itself where it meets the ground (its lowest parts deepest), edge and depth carrying the image's noise, and the ground pushed aside
@@ -199,13 +204,13 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
         void imprint(float strength)
         {
             float n = vnoise(16.0 * K), m = vnoise(48.0 * K);
-            vec2 uv = vUv * 0.5 + 0.5 + (vec2(n, m) - 0.5) * 0.012;
+            vec2 uv = vUv * 0.5 + 0.5 + (vec2(n, m) - 0.5) * 0.08 * uvPerUnit();
             float press = imprintPress(uv);
             float near = 0.0;
             for (int k = 0; k < 8; k++)
             {
                 float a = float(k) * 0.7853982;
-                near = max(near, imprintAt(uv + vec2(cos(a), sin(a)) * 0.07));
+                near = max(near, imprintAt(uv + vec2(cos(a), sin(a)) * 0.22 * uvPerUnit()));
             }
             float rim = max(near - press, 0.0) * 0.3 * (0.75 + 0.5 * m);
             // Written whole out to a margin round the shape: where the fine image has only part of a mark, the coarse one (four times coarser) shows through as a row of beads along its outline.
@@ -213,7 +218,7 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             for (int k = 0; k < 8; k++)
             {
                 float a = float(k) * 0.7853982;
-                around = max(around, imprintAt(uv + vec2(cos(a), sin(a)) * 0.13));
+                around = max(around, imprintAt(uv + vec2(cos(a), sin(a)) * 0.7 * uvPerUnit()));
             }
             fragColour = vec4((rim - press * (0.88 + 0.12 * n)) * strength, 1.0, 0.0, smoothstep(0.0, 0.05, around));
         }

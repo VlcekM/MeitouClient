@@ -3,13 +3,25 @@ using System.Runtime.CompilerServices;
 
 namespace Meitou.Rendering.Characters;
 
-/// <summary>One bone of a posed body as a capsule in world space, for the ground trails: its ends, its radius and the direction its bone points in (zero: none).</summary>
-public readonly record struct BodyCapsule(Vector3 A, Vector3 B, float Radius, Vector3 Forward);
+/// <summary>One bone of a posed body as a capsule in world space, for the ground trails: its ends, its radius, the direction its bone points in (zero: none) and its limb (<see cref="CharacterRenderer"/>'s
+/// <c>LimbOf</c>: the capsules of one foot, heel and toes, share it).</summary>
+public readonly record struct BodyCapsule(Vector3 A, Vector3 B, float Radius, Vector3 Forward, int Limb);
 
 internal sealed partial class CharacterRenderer
 {
     /// <summary>A bone's capsule in the binding pose's model space: round the vertices it moves most (its <see cref="PickBox"/>es, all the skinned parts' together).</summary>
-    readonly record struct BoneCapsule(int Bone, Vector3 A, Vector3 B, float Radius, int Child);
+    readonly record struct BoneCapsule(int Bone, Vector3 A, Vector3 B, float Radius, int Child, int Limb);
+
+    /// <summary>A bone's limb reaches up its chain this share of the body's size in the binding pose: a foot takes in its toes, but not the knee, and never the other leg.</summary>
+    const float LimbShare = 0.17f;
+
+    /// <summary>The bone a capsule's limb goes by: its furthest ancestor within <see cref="LimbShare"/> of the body's size. From the skeleton alone, for any body: a foot, a paw, a stick leg.</summary>
+    static int LimbOf(CharacterAsset asset, int bone, float size)
+    {
+        int limb = bone;
+        for (int up = asset.Rig.Parent[bone]; up >= 0 && Vector3.Distance(asset.Rig.BindPosition[up], asset.Rig.BindPosition[bone]) < LimbShare * size; up = asset.Rig.Parent[up]) limb = up;
+        return limb;
+    }
 
     readonly ConditionalWeakTable<CharacterAsset, BoneCapsule[]> boneCapsules = [];
 
@@ -53,7 +65,7 @@ internal sealed partial class CharacterRenderer
             var forward = Vector3.Zero;
             if (c.Child >= 0 && c.Child < s.Bones.Length)
                 forward = Vector3.Transform(asset.Rig.BindPosition[c.Child], s.Bones[c.Child] * s.World) - Vector3.Transform(asset.Rig.BindPosition[c.Bone], m);
-            into.Add(new BodyCapsule(Vector3.Transform(c.A, m), Vector3.Transform(c.B, m), c.Radius * Vector3.TransformNormal(Vector3.UnitY, m).Length(), forward));
+            into.Add(new BodyCapsule(Vector3.Transform(c.A, m), Vector3.Transform(c.B, m), c.Radius * Vector3.TransformNormal(Vector3.UnitY, m).Length(), forward, c.Limb));
         }
     }
 
@@ -82,6 +94,10 @@ internal sealed partial class CharacterRenderer
                     boxes[box.Bone] = boxes.TryGetValue(box.Bone, out var b) ? (Vector3.Min(b.Min, box.Min), Vector3.Max(b.Max, box.Max)) : (box.Min, box.Max);
         }
         var capsules = new List<BoneCapsule>();
+        Vector3 low = new(float.MaxValue), high = new(float.MinValue);
+        foreach (var at in asset.Rig.BindPosition) (low, high) = (Vector3.Min(low, at), Vector3.Max(high, at));
+        var extent = high - low;
+        float bodySize = MathF.Max(extent.X, MathF.Max(extent.Y, extent.Z));
         foreach (var (bone, (min, max)) in boxes)
         {
             var size = max - min;
@@ -91,7 +107,7 @@ internal sealed partial class CharacterRenderer
             var along = axis == 0 ? Vector3.UnitX : axis == 1 ? Vector3.UnitY : Vector3.UnitZ;
             var centre = (min + max) / 2;
             var half = along * MathF.Max(length / 2 - radius, 0);
-            capsules.Add(new BoneCapsule(bone, centre - half, centre + half, radius, ChildOf(asset, bone)));
+            capsules.Add(new BoneCapsule(bone, centre - half, centre + half, radius, ChildOf(asset, bone), LimbOf(asset, bone, bodySize)));
         }
         return [.. capsules];
     }
