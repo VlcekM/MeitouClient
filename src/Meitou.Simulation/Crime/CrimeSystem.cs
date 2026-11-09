@@ -52,10 +52,22 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public IReadOnlyList<Booking> BookingsOf(long tick) => _bounties.BookingsOf(tick);
 
+    /// <summary>
+    /// The crime log, kept while <see cref="CrimeSettings.RecordLog"/> is on.
+    /// </summary>
     readonly List<CrimeEvent> _log = [];
 
+    /// <summary>
+    /// The settings; the defaults when none were given.
+    /// </summary>
     public CrimeSettings Settings { get; } = settings ?? new CrimeSettings();
+    /// <summary>
+    /// Who books bounties and whose goods are free, built from the relations.
+    /// </summary>
     public CrimeFactions Factions { get; } = new(relations);
+    /// <summary>
+    /// The faction relations the crime rules read.
+    /// </summary>
     public FactionRelations Relations => Factions.Relations;
 
     /// <summary>
@@ -63,7 +75,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public IReadOnlyList<CrimeEvent> Log => _log;
 
-    // ------------------------------------------------------------------ who is who
+    #region Who is who
 
     /// <summary>
     /// Police-like (the game's <c>FUN_140599600</c>, <b>Observed</b>): never of a BANDIT-type faction; <c>NPC class</c> LAW_ENFORCEMENT; or MILITARY
@@ -88,7 +100,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public bool IsWantedBy(CharacterCold c, int faction) => c.Bounties?.BookedFor(Factions.Relations, faction) is { Amount: > 0, Claimed: false };
 
-    // ------------------------------------------------------------------ deeds
+    #endregion
+
+    #region Deeds
 
     /// <summary>
     /// Sets a pending crime on the culprit (the game's setter <c>FUN_140852c80</c>, <b>Verified</b>): refused for a police-like culprit, an
@@ -233,16 +247,23 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         if (c.Pending is not null) Book(world, culprit, p.Faction, table.IdOf(police));
     }
 
-    // ------------------------------------------------------------------ booking
+    #endregion
+
+    #region Booking
 
     /// <summary>
-    /// Books the culprit's pending crime with <paramref name="faction"/> (the game's <c>FUN_140853ec0</c>, <see cref="BountyBook.Book"/>); true when a
-    /// bounty was raised.
+    /// Books the culprit's pending crime with <paramref name="faction"/> (the game's <c>FUN_140853ec0</c>, <see cref="BountyBook.Book"/>); true when
+    /// a bounty was raised.
     /// </summary>
     public bool Book(World world, int culprit, int faction, CharacterId witness) => _bounties.Book(this, world, culprit, faction, witness);
 
-    // ------------------------------------------------------------------ the sweep
+    #endregion
 
+    #region The sweep
+
+    /// <summary>
+    /// The slow-world step: the witness sweep for the characters whose turn it is; on the shared beat the investigators and the alarms' countdown.
+    /// </summary>
     public void SlowWorld(World world)
     {
         int every = world.Every(Settings.SweepEveryTicks);
@@ -258,6 +279,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             if ((_alarms[k].Life -= every * world.TickSeconds) < 0) _alarms.RemoveAt(k);
     }
 
+    /// <summary>
+    /// One sweep over the living characters on their turn: the recently wanted marker, the bounties' expiry and the pending crime's timer (none for
+    /// the dead), then the witnesses of a pending crime, or for a player character of a kidnapping or premises.
+    /// </summary>
     void Sweep(World world, float seconds, int every)
     {
         var table = world.Characters;
@@ -293,7 +318,13 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         }
     }
 
+    /// <summary>
+    /// The aggro system whose spot meters <see cref="Spotted"/> reads; looked up once.
+    /// </summary>
     AggroSystem? _aggro;
+    /// <summary>
+    /// Whether <see cref="_aggro"/> has been looked up.
+    /// </summary>
     bool _aggroLooked;
 
     /// <summary>
@@ -412,11 +443,23 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public const int OpensAt = 7, ClosesAfter = 22;
 
+    /// <summary>
+    /// The key of the building the squad lives in (its AI's own home, else its home building); null for none.
+    /// </summary>
     static string? HomeKey(Squad q) => (q.Ai?.OwnHome ?? q.HomeBuilding)?.Key;
 
+    /// <summary>
+    /// The lock system whose house locks <see cref="LockedUp"/> reads; looked up once.
+    /// </summary>
     Locks.LockSystem? _locks;
+    /// <summary>
+    /// Whether <see cref="_locks"/> has been looked up.
+    /// </summary>
     bool _locksLooked;
 
+    /// <summary>
+    /// Whether the house of building <paramref name="key"/> is locked up (false without a lock system).
+    /// </summary>
     bool LockedUp(World world, string key)
     {
         if (!_locksLooked)
@@ -522,6 +565,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         _alarms.Add(new TownAlarm { Town = town, Code = code, Faction = faction, Position = at, Place = place, Floor = floor });
     }
 
+    /// <summary>
+    /// The towns' raised alarms, oldest first.
+    /// </summary>
     readonly List<TownAlarm> _alarms = [];
 
     /// <summary>
@@ -545,14 +591,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     public const float AlarmApproach = 30;
 
     /// <summary>
-    /// The alarm an investigator of <paramref name="town"/> at <paramref name="at"/> on <paramref name="floor"/> answers (<c>FUN_14092a810</c>,
-    /// <b>Verified</b>): the nearest within <see cref="AlarmReach"/>, half of it when the alarm was raised in a building
-    /// (<see cref="TownAlarm.Place"/>), whatever the crime; with <paramref name="faction"/> (goal 210, allies only) only its faction's. An alarm in a
-    /// building is skipped when its floor is more than one from the investigator's. An alarm inside a closed building (no open entrance,
-    /// <see cref="Locks.FixtureRegistry.HasOpenDoor"/>) is skipped for an investigator in the same place and halves the reach a second time otherwise
-    /// (needs <paramref name="place"/> and <paramref name="world"/>). Engine: its skip of any other floor in some buildings (building byte
-    /// <c>+0xc2</c>, meaning <b>Unknown</b>), are not modelled. Null when none. </summary> <summary>An alarm in a building whose entrances are all
-    /// closed is skipped for an investigator in the same place.
+    /// An alarm in a building whose entrances are all closed is skipped for an investigator in the same place.
     /// </summary>
     internal static bool AlarmSkipped(bool closed, int alarmPlace, int investigatorPlace) =>
         closed && alarmPlace >= 0 && alarmPlace == investigatorPlace;
@@ -562,6 +601,15 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     internal static float ReachOfAlarm(bool inBuilding, bool closed) => AlarmReach * (inBuilding ? 0.5f : 1) * (inBuilding && closed ? 0.5f : 1);
 
+    /// <summary>
+    /// The alarm an investigator of <paramref name="town"/> at <paramref name="at"/> on <paramref name="floor"/> answers (<c>FUN_14092a810</c>,
+    /// <b>Verified</b>): the nearest within <see cref="AlarmReach"/>, half of it when the alarm was raised in a building
+    /// (<see cref="TownAlarm.Place"/>), whatever the crime; with <paramref name="faction"/> (goal 210, allies only) only its faction's. An alarm in a
+    /// building is skipped when its floor is more than one from the investigator's. An alarm inside a closed building (no open entrance,
+    /// <see cref="Locks.FixtureRegistry.HasOpenDoor"/>) is skipped for an investigator in the same place and halves the reach a second time otherwise
+    /// (needs <paramref name="place"/> and <paramref name="world"/>). Engine: its skip of any other floor in some buildings (building byte
+    /// <c>+0xc2</c>, meaning <b>Unknown</b>), are not modelled. Null when none.
+    /// </summary>
     public TownAlarm? AlarmFor(int town, Vector3 at, int faction = -1, int floor = 0, int place = -1, World? world = null)
     {
         TownAlarm? best = null;
@@ -641,14 +689,27 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
         }
     }
 
+    /// <summary>
+    /// Adds the town alarms (town, code, faction, position, life; place and floor for one raised in a building) to the world hash, only while there
+    /// are any.
+    /// </summary>
     public void Hash(ref StateHasher hasher)
     {
         if (_alarms.Count == 0) return;
         hasher.Add(_alarms.Count);
         foreach (var a in _alarms)
         {
-            hasher.Add(a.Town); hasher.Add((int)a.Code); hasher.Add(a.Faction); hasher.Add(a.Position); hasher.Add(a.Life);
-            if (a.Place >= 0) { hasher.Add(a.Place); hasher.Add(a.Floor); }   // only an alarm raised in a building, so the others hash as before
+            hasher.Add(a.Town);
+            hasher.Add((int)a.Code);
+            hasher.Add(a.Faction);
+            hasher.Add(a.Position);
+            hasher.Add(a.Life);
+            // only an alarm raised in a building, so the others hash as before
+            if (a.Place >= 0)
+            {
+                hasher.Add(a.Place);
+                hasher.Add(a.Floor);
+            }
         }
     }
 
@@ -662,6 +723,9 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// it; the town update <c>FUN_14092bfe0</c> counts it down and deletes it below 0: <b>Verified</b>).
     /// </summary>
     public const float AlarmLife = 8;
+    /// <summary>
+    /// The game hour "Alarm raised" was last posted at (<see cref="AlarmPostSeconds"/> apart).
+    /// </summary>
     double _lastAlarmHours = double.NegativeInfinity;
 
     /// <summary>
@@ -716,4 +780,6 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     {
         if (Settings.RecordLog) _log.Add(new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness));
     }
+
+    #endregion
 }

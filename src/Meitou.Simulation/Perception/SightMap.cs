@@ -34,14 +34,18 @@ public interface ISightSource
 /// <summary>
 /// Where each character is for sight and how lit it is (docs/game/perception.md "Sight"): the original keeps both on the character (its location
 /// handle and light level <c>+0xd8</c>); here they are worked out in the schedule phase of every tick from the last tick's positions and read by
-/// every sight test (<see cref="Sees"/>). Derived, not state. <list type="bullet"> <item><b>Place</b>: the building whose indoor volume holds the
-/// character (a carried one takes its carrier's, a caged or bedded one its fixture's building), else outdoors. Standing in a building with nothing
-/// over it (a roof, a roofless part: the original's overhead query <c>0x8079e00</c>) is <b>on top</b>.</item> <item><b>Light</b>
-/// (<c>FUN_140a0af10</c>): 1 while the daylight factor is above 0.5, else 2 x daylight plus the lit lamps within their radius: <c>1.5 x power x (1 -
-/// d^2 / r^2)</c> (x the spot cone) for a lamp of the character's own indoor state, and on its floor when both are inside; interior lamps lit at any
-/// daylight with <see cref="InteriorLampsAllDay"/>. An NPC keeps the bare daylight factor while it is 0.75 or more.</item> </list> Rooms are the
-/// registered towns' buildings only (ruins and the player's buildings are outdoors); the lamps of completed player buildings and the lanterns
-/// characters carry (at their owner) light too.
+/// every sight test (<see cref="Sees"/>). Derived, not state.
+/// <list type="bullet">
+/// <item><b>Place</b>: the building whose indoor volume holds the character (a carried one takes its carrier's, a caged or bedded one its fixture's
+/// building), else outdoors. Standing in a building with nothing over it (a roof, a roofless part: the original's overhead query <c>0x8079e00</c>)
+/// is <b>on top</b>.</item>
+/// <item><b>Light</b> (<c>FUN_140a0af10</c>): 1 while the daylight factor is above 0.5, else 2 x daylight plus the lit lamps within their radius:
+/// <c>1.5 x power x (1 - d^2 / r^2)</c> (x the spot cone) for a lamp of the character's own indoor state, and on its floor when both are inside;
+/// interior lamps lit at any daylight with <see cref="InteriorLampsAllDay"/>. An NPC keeps the bare daylight factor while it is 0.75 or
+/// more.</item>
+/// </list>
+/// Rooms are the registered towns' buildings only (ruins and the player's buildings are outdoors); the lamps of completed player buildings and the
+/// lanterns characters carry (at their owner) light too.
 /// </summary>
 public sealed class SightMap
 {
@@ -66,29 +70,84 @@ public sealed class SightMap
     /// </summary>
     public const float InsideFloor = 0.2f, OutsideFloor = 0.4f;
 
+    /// <summary>
+    /// The side of the square grid cells the rooms and lamps are indexed by.
+    /// </summary>
     const float Cell = 500;
 
+    /// <summary>
+    /// A building's indoor volume, its key and whether it enforces its ceiling.
+    /// </summary>
     readonly record struct Room(string Key, InteriorVolume Volume, bool EnforcesCeiling);
+    /// <summary>
+    /// A lamp and the room it lights (-1: outdoors or not an interior lamp).
+    /// </summary>
     readonly record struct Lamp(WorldLight Light, int Room);
 
+    /// <summary>
+    /// The keys of the buildings added.
+    /// </summary>
     readonly HashSet<string> _added = new(StringComparer.Ordinal);
-    // Each added building's room (-1: none) and lamps, and those a ruin took out of the cells (Remove).
+    /// <summary>
+    /// Each added building's room (-1: none) and lamps, and those a ruin took out of the cells (Remove).
+    /// </summary>
     readonly Dictionary<string, (int Room, List<int> Lamps)> _entries = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The keys of the buildings a ruin took out.
+    /// </summary>
     readonly HashSet<string> _hidden = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The rooms, by place number.
+    /// </summary>
     readonly List<Room> _rooms = [];
+    /// <summary>
+    /// The place number of each building with a room, by key (a ruin's removed).
+    /// </summary>
     readonly Dictionary<string, int> _roomOf = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The rooms whose footprint overlaps each cell.
+    /// </summary>
     readonly Dictionary<(int, int), List<int>> _roomCells = [];
+    /// <summary>
+    /// The town buildings' lamps.
+    /// </summary>
     readonly List<Lamp> _lamps = [];
+    /// <summary>
+    /// The lamps whose radius overlaps each cell.
+    /// </summary>
     readonly Dictionary<(int, int), List<int>> _lampCells = [];
-    // The completed player buildings' lamps, rebuilt when the building registry changes (outdoor lights, no room).
+    /// <summary>
+    /// The completed player buildings' lamps, rebuilt when the building registry changes (outdoor lights, no room).
+    /// </summary>
     readonly List<Lamp> _siteLamps = [];
+    /// <summary>
+    /// The completed player buildings' lamps whose radius overlaps each cell.
+    /// </summary>
     readonly Dictionary<(int, int), List<int>> _siteCells = [];
+    /// <summary>
+    /// The building registry's revision <see cref="_siteLamps"/> were built for (-1: never).
+    /// </summary>
     long _sitesRevision = -1;
+    /// <summary>
+    /// The sight source of the first building added (for the player buildings' lamps).
+    /// </summary>
     ISightSource? _source;
 
+    /// <summary>
+    /// Each character's place: its room, -1 outdoors.
+    /// </summary>
     int[] _place = [];
+    /// <summary>
+    /// Each character stands on top of its building (nothing over it).
+    /// </summary>
     bool[] _onTop = [];
+    /// <summary>
+    /// Each character's light of this tick.
+    /// </summary>
     float[] _light = [];
+    /// <summary>
+    /// The characters known this tick (the table's high water at the update).
+    /// </summary>
     int _count;
 
     /// <summary>
@@ -176,6 +235,9 @@ public sealed class SightMap
         foreach (int k in e.Lamps) LampCells(k, add: true);
     }
 
+    /// <summary>
+    /// Adds or removes room <paramref name="room"/> in the cells its footprint's bounds cover.
+    /// </summary>
     void RoomCells(int room, bool add)
     {
         var footprint = _rooms[room].Volume.Footprint;
@@ -186,6 +248,9 @@ public sealed class SightMap
                 Toggle(_roomCells, (x, z), room, add);
     }
 
+    /// <summary>
+    /// Adds or removes lamp <paramref name="lamp"/> in the cells its radius covers.
+    /// </summary>
     void LampCells(int lamp, bool add)
     {
         var l = _lamps[lamp].Light;
@@ -194,14 +259,23 @@ public sealed class SightMap
                 Toggle(_lampCells, (x, z), lamp, add);
     }
 
+    /// <summary>
+    /// Adds <paramref name="item"/> to the cell's list, or takes it out.
+    /// </summary>
     static void Toggle(Dictionary<(int, int), List<int>> cells, (int, int) key, int item, bool add)
     {
         if (add) Into(cells, key, item);
         else if (cells.TryGetValue(key, out var list)) list.Remove(item);
     }
 
+    /// <summary>
+    /// The cell of coordinate <paramref name="v"/>.
+    /// </summary>
     static int CellOf(float v) => (int)MathF.Floor(v / Cell);
 
+    /// <summary>
+    /// Adds <paramref name="item"/> to the cell's list, made when there is none.
+    /// </summary>
     static void Into(Dictionary<(int, int), List<int>> cells, (int, int) key, int item)
     {
         if (!cells.TryGetValue(key, out var list)) cells[key] = list = [];
@@ -327,8 +401,10 @@ public sealed class SightMap
         }
     }
 
-    // Each character's light request (Character +0xdc): raised by a sight test on its looker and target, and by the stat multiplier; the resample
-    // clears it (set from any worker, only ever to true).
+    /// <summary>
+    /// Each character's light request (Character +0xdc): raised by a sight test on its looker and target, and by the stat multiplier; the resample
+    /// clears it (set from any worker, only ever to true).
+    /// </summary>
     bool[] _wanted = [];
 
     /// <summary>
@@ -344,26 +420,42 @@ public sealed class SightMap
         return LightOf(slot, at, player);
     }
 
+    /// <summary>
+    /// Raises the light request of <paramref name="slot"/>.
+    /// </summary>
     void Request(int slot)
     {
         if ((uint)slot < (uint)_wanted.Length) _wanted[slot] = true;
     }
 
+    /// <summary>
+    /// The brightest light of a living character this tick (the sight range's light term).
+    /// </summary>
     float _brightest = 1;
 
     /// <summary>
     /// Where a character's overhead and floor queries were last made (<see cref="SightMap._floorOf"/> -1: not asked yet there).
     /// </summary>
     readonly record struct Probe(Vector3 At, int Room, int Generation);
+    /// <summary>
+    /// Each character's last overhead and floor query.
+    /// </summary>
     Probe[] _probed = [];
-    // Each character crawling or staying low at the last update (the sight test's ground posture).
+    /// <summary>
+    /// Each character crawling or staying low at the last update (the sight test's ground posture).
+    /// </summary>
     bool[] _low = [];
     /// <summary>
     /// Each character's sight-cone forward: its drawn facing (<see cref="CharacterAnimation.DrawYaw"/>), else its facing.
     /// </summary>
     float[] _facing = [];
+    /// <summary>
+    /// Each character's floor in its room (-1: not known yet, worked out when needed).
+    /// </summary>
     int[] _floorOf = [];
-    // The carried lights of this update: owner slot, light, position.
+    /// <summary>
+    /// The carried lights of this update: owner slot, light, position.
+    /// </summary>
     readonly List<(int Owner, WorldLight Light, Vector3 At)> _carried = [];
 
     /// <summary>
@@ -382,6 +474,9 @@ public sealed class SightMap
     /// </summary>
     public int PlaceAt(Vector3 at) => RoomAt(at);
 
+    /// <summary>
+    /// The room holding <paramref name="at"/>, -1 outdoors.
+    /// </summary>
     int RoomAt(Vector3 at)
     {
         if (!_roomCells.TryGetValue((CellOf(at.X), CellOf(at.Z)), out var list)) return -1;
@@ -390,6 +485,10 @@ public sealed class SightMap
         return -1;
     }
 
+    /// <summary>
+    /// The full light at <paramref name="at"/>: 1 above <see cref="LitDaylight"/>, else 2 x daylight plus the building lamps, the player buildings'
+    /// lamps and the carried lights (an NPC keeps the bare daylight from <see cref="NpcDaylight"/>).
+    /// </summary>
     float LightOf(int slot, Vector3 at, bool player)
     {
         if (!player && Daylight >= NpcDaylight) return Daylight;
@@ -462,6 +561,9 @@ public sealed class SightMap
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="slot"/> was in the table at the last update.
+    /// </summary>
     bool Known(int slot) => (uint)slot < (uint)_count;
 
     /// <summary>

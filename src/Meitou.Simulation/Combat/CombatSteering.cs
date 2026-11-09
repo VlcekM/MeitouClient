@@ -14,6 +14,9 @@ public sealed class SteerState
     /// Steering this tick (else the fighter walks paths or stands), at the target in <see cref="Target"/>.
     /// </summary>
     public bool Active;
+    /// <summary>
+    /// The slot it steers at (-1: none).
+    /// </summary>
     public int Target = -1;
 
     /// <summary>
@@ -28,12 +31,18 @@ public sealed class SteerState
     /// <c>powerThrough</c>.
     /// </summary>
     public float Min = 10, Max = 20, Limit = 200;
+    /// <summary>
+    /// The fight state's <c>powerThrough</c>: the crowd's push is turned to the side of its facing (<see cref="CombatSteering"/>).
+    /// </summary>
     public bool PowerThrough;
 
     /// <summary>
     /// The tick of the next same-place and clear-line check, and its answer.
     /// </summary>
     public long LineTick;
+    /// <summary>
+    /// Whether the last check found the line to the target clear.
+    /// </summary>
     public bool LineClear;
 
     /// <summary>
@@ -42,6 +51,9 @@ public sealed class SteerState
     /// <c>FUN_14060d6a0</c>). Hashed while chasing.
     /// </summary>
     public int ChaseTarget = -1;
+    /// <summary>
+    /// The tick the path chase may end at the earliest.
+    /// </summary>
     public long PathUntil;
 
     /// <summary>
@@ -49,10 +61,21 @@ public sealed class SteerState
     /// </summary>
     internal readonly float[] HistX = new float[CombatSteering.FilterLength], HistZ = new float[CombatSteering.FilterLength];
 
+    /// <summary>
+    /// Adds the steering state to <paramref name="h"/>: the band, the line check, the smoothing's samples and, while chasing, the chase.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(0x53746572);
-        h.Add(Active); h.Add(Target); h.Add(Face); h.Add(Min); h.Add(Max); h.Add(Limit); h.Add(PowerThrough); h.Add(LineTick); h.Add(LineClear);
+        h.Add(Active);
+        h.Add(Target);
+        h.Add(Face);
+        h.Add(Min);
+        h.Add(Max);
+        h.Add(Limit);
+        h.Add(PowerThrough);
+        h.Add(LineTick);
+        h.Add(LineClear);
         for (int k = 0; k < CombatSteering.FilterLength; k++)
         {
             h.Add(HistX[k]);
@@ -118,6 +141,9 @@ public static class CombatSteering
     /// The smoothing: samples and the weight ratio per 60 fps frame (<c>MotionFilter</c>, 10 and 0.8).
     /// </summary>
     public const int FilterLength = 10;
+    /// <summary>
+    /// The weight ratio between one smoothing sample and the next, per 60 fps frame (<see cref="FilterLength"/>).
+    /// </summary>
     public const float FilterDecay = 0.8f;
 
     /// <summary>
@@ -164,19 +190,62 @@ public static class CombatSteering
         return (15 + 30 * U(0), 1.5f * r + 30 * U(1), stop, start);
     }
 
+    /// <summary>
+    /// The slots of the nearest bodies (<see cref="Gathered"/> at most), kept on the stack.
+    /// </summary>
     [System.Runtime.CompilerServices.InlineArray(Gathered)]
-    struct NearSlots { int _slot; }
-    [System.Runtime.CompilerServices.InlineArray(Gathered)]
-    struct NearDistances { float _distance; }
+    struct NearSlots
+    {
+        /// <summary>
+        /// One slot.
+        /// </summary>
+        int _slot;
+    }
 
+    /// <summary>
+    /// The squared distances of the nearest bodies, parallel to <see cref="NearSlots"/>.
+    /// </summary>
+    [System.Runtime.CompilerServices.InlineArray(Gathered)]
+    struct NearDistances
+    {
+        /// <summary>
+        /// One squared distance.
+        /// </summary>
+        float _distance;
+    }
+
+    /// <summary>
+    /// The state of one fighter's crowd push: who it is, its reaches and facing, and the nearest bodies the grid query gathered.
+    /// </summary>
     struct Push
     {
+        /// <summary>
+        /// The world the bodies are read from.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// The combat system, for the enemy test.
+        /// </summary>
         public CombatSystem Combat;
+        /// <summary>
+        /// The fighter's slot, its target's (never gathered) and its faction.
+        /// </summary>
         public int Me, Target, Faction;
+        /// <summary>
+        /// The fighter's position.
+        /// </summary>
         public Vector3 At;
+        /// <summary>
+        /// The fighter's steering radius, its own footprint radius, the push reach of an enemy and of an ally, and the gathering's reach now.
+        /// </summary>
         public float Radius, Own, EnemyReach, AllyReach, Reach;
+        /// <summary>
+        /// The fighter's facing (X/Z), the side a <c>powerThrough</c> push is turned to.
+        /// </summary>
         public Vector2 Face;
+        /// <summary>
+        /// Whether the push is turned to the side of the facing (<see cref="SteerState.PowerThrough"/>).
+        /// </summary>
         public bool Turn;
 
         /// <summary>
@@ -188,10 +257,22 @@ public static class CombatSteering
         /// The nearest bodies so far, by squared distance, ascending (ties: the first seen first); <see cref="Overflow"/> once one was left out.
         /// </summary>
         public NearSlots Slots;
+        /// <summary>
+        /// The squared distances parallel to <see cref="Slots"/>.
+        /// </summary>
         public NearDistances Distances;
+        /// <summary>
+        /// How many bodies are gathered, and how many may be.
+        /// </summary>
         public int Count, Capacity;
+        /// <summary>
+        /// Whether a body was left out (the list was full and it was not nearer).
+        /// </summary>
         public bool Overflow;
 
+        /// <summary>
+        /// Puts body <paramref name="c"/> at <paramref name="distance"/> (squared) into the sorted list, dropping the farthest when it is full.
+        /// </summary>
         public void Add(int c, float distance)
         {
             if (Count == Capacity && distance >= Distances[Count - 1])
@@ -244,13 +325,21 @@ public static class CombatSteering
         return true;
     }
 
+    /// <summary>
+    /// Adds body <paramref name="c"/>'s push to the enemies' or the allies' sum; 1 when it pushes, else 0.
+    /// </summary>
     static int Add(ref Push p, int c, ref Vector2 enemies, ref Vector2 allies)
     {
         if (!Repulsion(ref p, c, out var v, out bool enemy)) return 0;
-        if (enemy) enemies += v; else allies += v;
+        if (enemy) enemies += v;
+        else allies += v;
         return 1;
     }
 
+    /// <summary>
+    /// The grid query's visit: keeps body <paramref name="c"/> when it is alive, not the fighter or its target, within <see cref="FlockHeight"/> and
+    /// the reach (and, in the pushers' pass, pushes).
+    /// </summary>
     static void Gather(int c, ref Push p)
     {
         if (c == p.Me || c == p.Target) return;

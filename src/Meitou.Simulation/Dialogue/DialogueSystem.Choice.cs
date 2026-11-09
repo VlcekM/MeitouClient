@@ -6,6 +6,9 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Dialogue;
 
+/// <summary>
+/// The dialogue system's line choice: the line picked, its speaker or interjector, and the checks a line passes.
+/// </summary>
 public sealed partial class DialogueSystem
 {
     /// <summary>
@@ -354,6 +357,9 @@ public sealed partial class DialogueSystem
     /// </summary>
     int PersonalityOf(World world, CharacterId id, CharacterCold cold) => Personality.Of(world, _data.Db, id, cold, FactionId(cold.Faction));
 
+    /// <summary>
+    /// The record id of <paramref name="faction"/>, empty for a missing one.
+    /// </summary>
     string FactionId(int faction) => _data.Relations.Contains(faction) ? _data.Factions[faction].Id : "";
 
     /// <summary>
@@ -362,6 +368,9 @@ public sealed partial class DialogueSystem
     /// </summary>
     int TownAt(Vector3 at) => _data.TownAt(at);
 
+    /// <summary>
+    /// The record id of the faction of the placed town at <paramref name="at"/>; null outside every town or for a town of none.
+    /// </summary>
     string? TownFaction(World world, Vector3 at) =>
         TownAt(at) is >= 0 and var site && site < _data.SiteFactions.Count && _data.SiteFactions[site] is >= 0 and var f ? FactionId(f) : null;
 }

@@ -15,8 +15,14 @@ public sealed record InventoryItemToken(int Index, string Record, string Section
 /// </summary>
 public sealed record ArrangeInventory(CharacterId Character) : SimCommand;
 
+/// <summary>
+/// Moving items between inventory sections and grids, and the sections' rules.
+/// </summary>
 public static class InventoryCommands
 {
+    /// <summary>
+    /// Whether <paramref name="section"/> is a worn item's (equipment) section.
+    /// </summary>
     public static bool IsEquipmentSection(string section) => section is "back" or "hip" or "shirt" or "head" or "legs" or "boots" or "armour"
             or "belt" or "backpack_attach";
 
@@ -90,8 +96,14 @@ public static class InventoryCommands
         }
     }
 
+    /// <summary>
+    /// The sections a race or a missing limb can close (<see cref="ValidateSections"/>).
+    /// </summary>
     static readonly string[] ClosableSections = ["shirt", "head", "boots"];
 
+    /// <summary>
+    /// Whether items may be moved into <paramref name="section"/>: the main grid, a backpack's contents or an equipment section.
+    /// </summary>
     public static bool IsMovableSection(string section) => section is "main" or "backpack_content" || IsEquipmentSection(section);
     /// <summary>
     /// A fitted prosthetic's section (<see cref="Meitou.Data.Gameplay.Bodies.LimbReplacement.SlotOf"/>): the limbs window's slots; not traded, not
@@ -104,7 +116,9 @@ public static class InventoryCommands
     public static int LimbSlotOf(string section)
             => section switch { "left_arm_replace" => 0, "right_arm_replace" => 1, "left_leg_replace" => 2, "right_leg_replace" => 3, _ => -1 };
 
-    // Engine slot capacities, in inventory cells. Clothing and backpack slots hold one item.
+    /// <summary>
+    /// Engine slot capacities, in inventory cells. Clothing and backpack slots hold one item.
+    /// </summary>
     public static (int Width, int Height) SectionSize(string section) => section switch
     {
         "back" => (10, 2),
@@ -155,6 +169,10 @@ public static class InventoryCommands
         return false;
     }
 
+    /// <summary>
+    /// Moves the item of <paramref name="token"/> within <paramref name="root"/> to <paramref name="section"/> at (<paramref name="x"/>,
+    /// <paramref name="y"/>); prosthetic sections allowed; false when it cannot go there.
+    /// </summary>
     public static bool Move(Inventory root, InventoryItemToken token, string section, int x, int y, CharacterCold? wearer = null)
             => Transfer(root, token, root, section, x, y, limbs: true, wearer);
 

@@ -9,8 +9,10 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Carrying;
 
-// Goal 42 "Don't be unarmed" and its step 8 FIND_WEAPON (docs/game/ai-tasks.md "Finders of the jobs", docs/simulation.md "Carrying, rescue and
-// looting").
+/// <summary>
+/// Arming: Goal 42 "Don't be unarmed" and its step 8 FIND_WEAPON (docs/game/ai-tasks.md "Finders of the jobs", docs/simulation.md "Carrying, rescue
+/// and looting").
+/// </summary>
 public sealed partial class CarrySystem
 {
     #region Arming

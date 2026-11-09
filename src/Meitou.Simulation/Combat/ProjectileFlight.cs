@@ -241,7 +241,8 @@ sealed class ProjectileFlight
     }
 
     /// <summary>
-    /// A spent bolt's direction after one tick of its nose pitching down (<see cref="RangedFormulas.DropDegreesPerSecond"/>), never past straight down.
+    /// A spent bolt's direction after one tick of its nose pitching down (<see cref="RangedFormulas.DropDegreesPerSecond"/>), never past
+    /// straight down.
     /// </summary>
     static Vector3 Dropped(Vector3 direction, float dt)
     {
@@ -255,8 +256,8 @@ sealed class ProjectileFlight
 
     /// <summary>
     /// Tests the bolt at index <paramref name="k"/> along its step <paramref name="seg"/>: up to four passes, each the ground or a building first
-    /// along the step, then the nearest body before it; a friend passed lets the next pass look beyond it. True when the bolt hit a body or the ground
-    /// (removed or stored stuck, <paramref name="k"/> moved to where the loop goes on), false when it flies the whole step.
+    /// along the step, then the nearest body before it; a friend passed lets the next pass look beyond it. True when the bolt hit a body or the
+    /// ground (removed or stored stuck, <paramref name="k"/> moved to where the loop goes on), false when it flies the whole step.
     /// </summary>
     bool Step(World world, CombatSystem combat, ref int k, ref Projectile p, Vector3 seg, float step)
     {

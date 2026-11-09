@@ -7,7 +7,21 @@ namespace Meitou.Simulation.Combat;
 /// The ordinary damage path that resolved a landed contact: a melee blow, a projectile, or an execution blow of a captive
 /// (<c>CombatSystem.Execute</c>, worked by the captives' <c>SlowWorld</c>).
 /// </summary>
-public enum CombatHitSource { Melee, Projectile, Execution }
+public enum CombatHitSource
+{
+    /// <summary>
+    /// A melee blow.
+    /// </summary>
+    Melee,
+    /// <summary>
+    /// A projectile (a bolt or a harpoon).
+    /// </summary>
+    Projectile,
+    /// <summary>
+    /// An execution blow on a captive.
+    /// </summary>
+    Execution
+}
 
 /// <summary>
 /// A value-only observation of one resolved melee or projectile contact, after its ordinary consequences. A landed contact fully absorbed by armour
@@ -39,5 +53,8 @@ public readonly record struct CombatHit(
 /// </summary>
 public interface ICombatHitObserver : ITickSystem
 {
+    /// <summary>
+    /// Called once for each ordinary resolved hit, serially on the tick thread.
+    /// </summary>
     void HitResolved(World world, in CombatHit hit);
 }

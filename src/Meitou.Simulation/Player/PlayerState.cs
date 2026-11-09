@@ -110,7 +110,11 @@ public sealed class PlayerState
     /// </summary>
     public CharacterId Pointed
     {
-        get { long v = Volatile.Read(ref _pointed); return new((int)v, (int)(v >> 32)); }
+        get
+        {
+            long v = Volatile.Read(ref _pointed);
+            return new((int)v, (int)(v >> 32));
+        }
         set => Volatile.Write(ref _pointed, (long)value.Generation << 32 | (uint)value.Slot);
     }
 
@@ -218,8 +222,8 @@ public sealed class PlayerState
     public CharacterId DoorWalker { get; set; } = CharacterId.None;
 
     /// <summary>
-    /// The item on the mouse (<see cref="Items.HeldItem"/>, <see cref="HeldItems"/>), or null. Hashed; not saved: a save puts it back where it came from
-    /// first (<see cref="World.ReturnHeldItem"/>).
+    /// The item on the mouse (<see cref="Items.HeldItem"/>, <see cref="HeldItems"/>), or null. Hashed; not saved: a save puts it back where it came
+    /// from first (<see cref="World.ReturnHeldItem"/>).
     /// </summary>
     public Items.HeldItem? Held { get; set; }
 
@@ -270,7 +274,8 @@ public sealed class PlayerState
         var next = (old ?? camp) with { Known = (old?.Known ?? 0) | flags, Position = old?.Position ?? camp.Position };
         if (next == old) return false;
         var list = Camps.ToList();
-        if (i >= 0) list[i] = next; else list.Add(next);
+        if (i >= 0) list[i] = next;
+        else list.Add(next);
         Camps = list;
         return true;
     }
@@ -343,6 +348,9 @@ public sealed class PlayerState
 [Flags]
 public enum TownKnowledge : byte
 {
+    /// <summary>
+    /// The player knows nothing of the town.
+    /// </summary>
     None = 0,
     /// <summary>
     /// On the map.

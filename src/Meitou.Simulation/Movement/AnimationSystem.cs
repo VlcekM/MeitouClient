@@ -26,7 +26,13 @@ public sealed class CharacterAnimation
     /// </summary>
     public struct Layer
     {
+        /// <summary>
+        /// The clip's index in the <see cref="AnimationLibrary"/> definitions.
+        /// </summary>
         public int Definition;
+        /// <summary>
+        /// The clip's own time (seconds; unsynched clips only), its weight now and the weight it is fading to.
+        /// </summary>
         public float Time, Weight, Target;
 
         /// <summary>
@@ -41,7 +47,13 @@ public sealed class CharacterAnimation
         public float Length;
     }
 
+    /// <summary>
+    /// The clips in play; the first <see cref="Count"/> are used.
+    /// </summary>
     public readonly Layer[] Layers = new Layer[MaxLayers];
+    /// <summary>
+    /// How many of <see cref="Layers"/> are in play.
+    /// </summary>
     public int Count;
 
     /// <summary>
@@ -53,6 +65,9 @@ public sealed class CharacterAnimation
     /// Per definition whether this body's rig plays it (1 yes, -1 no, 0 not asked), for the appearance <see cref="PlaysFor"/>.
     /// </summary>
     internal sbyte[]? Plays;
+    /// <summary>
+    /// The appearance <see cref="Plays"/> was filled for; another appearance starts it again.
+    /// </summary>
     internal object? PlaysFor;
 
     /// <summary>
@@ -65,6 +80,9 @@ public sealed class CharacterAnimation
     /// The idle chosen, and the seconds it still plays before another is chosen (-1 / 0: none yet).
     /// </summary>
     public int Idle = -1;
+    /// <summary>
+    /// The seconds the chosen <see cref="Idle"/> still plays before another is chosen.
+    /// </summary>
     public float IdleLeft;
 
     /// <summary>
@@ -72,7 +90,13 @@ public sealed class CharacterAnimation
     /// seconds, and whether it is a hit reaction.
     /// </summary>
     public int Action = -1;
+    /// <summary>
+    /// The one-shot clip's time in seconds.
+    /// </summary>
     public float ActionTime;
+    /// <summary>
+    /// Whether the one-shot clip is a hit reaction.
+    /// </summary>
     public bool ActionIsStumble;
 
     /// <summary>
@@ -85,6 +109,9 @@ public sealed class CharacterAnimation
     /// The tick of the last hit a reaction was chosen for (-1: none), and whether the character was down (knocked out or dead) the last tick.
     /// </summary>
     public int SeenHit = -1;
+    /// <summary>
+    /// Whether the character was down (knocked out or dead) the last tick.
+    /// </summary>
     public bool WasDown;
 
     /// <summary>
@@ -102,6 +129,9 @@ public sealed class CharacterAnimation
     /// speed). Derived, not hashed.
     /// </summary>
     public int HeldIndex = -1;
+    /// <summary>
+    /// The factor the held clip's play speed is scaled by (the lock picker's skill speed); 1 for none.
+    /// </summary>
     public float HeldRate = 1;
 
     #endregion
@@ -112,7 +142,13 @@ public sealed class CharacterAnimation
     /// The last <see cref="SpeedWindow"/> speeds, oldest overwritten first (<see cref="SmoothSpeed"/>).
     /// </summary>
     public readonly float[] Speeds = new float[SpeedWindow];
+    /// <summary>
+    /// How many speeds <see cref="SmoothSpeed"/> has taken in all; the next goes to slot count mod window.
+    /// </summary>
     public int SpeedCount;
+    /// <summary>
+    /// The speed window's length and how many samples at each end it drops, at a full window of <see cref="SpeedWindow"/> samples.
+    /// </summary>
     public const int SpeedWindow = 8, SpeedTrim = 3;
 
     /// <summary>
@@ -120,6 +156,10 @@ public sealed class CharacterAnimation
     /// its side speed (units per second, positive to its right; 0 out of the state) and the share of the legs the side-step clip has.
     /// </summary>
     public bool Strafing;
+    /// <summary>
+    /// The seconds before the side-stepping state may flip again, the side speed (units per second, positive to the right) and the side-step clip's
+    /// share of the legs.
+    /// </summary>
     public float StrafeTimer, StrafeSpeed, StrafeShare;
 
     /// <summary>
@@ -127,6 +167,9 @@ public sealed class CharacterAnimation
     /// rate (<see cref="AnimationSystem.FollowFacing"/>). Derived for drawing, not hashed.
     /// </summary>
     public float DrawYaw;
+    /// <summary>
+    /// Whether <see cref="DrawYaw"/> has been set.
+    /// </summary>
     public bool HasDrawYaw;
 
     /// <summary>
@@ -161,6 +204,10 @@ public sealed class CharacterAnimation
 
     #region Hashing
 
+    /// <summary>
+    /// Adds the hashed animation state to <paramref name="h"/>: the layers in play, the phase, idle, one-shot and hit state, the playback factor and
+    /// the speed window (derived fields left out).
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
         h.Add(Count);
@@ -211,8 +258,8 @@ public sealed class CharacterAnimation
 /// cold animation state and, for root motion, their position.
 /// <list type="bullet">
 /// <item><b>Verified</b> (decompilation, docs/animation.md): every movement clip that fits plays at once, weighted by a sigmoid of its speed ramp and
-/// its leg ramp, normalised per body half; a synched clip's phase advances F x v x the weighted <c>play speed</c> cycles per second, an unsynched one F x
-/// <c>play speed</c> x v clip seconds per second; weights move linearly towards their targets; hit reactions are chosen by <c>stumbles</c>,
+/// its leg ramp, normalised per body half; a synched clip's phase advances F x v x the weighted <c>play speed</c> cycles per second, an unsynched one
+/// F x <c>play speed</c> x v clip seconds per second; weights move linearly towards their targets; hit reactions are chosen by <c>stumbles</c>,
 /// <c>big stumble</c> and <c>stumble from</c>; <c>relocates</c> clips, attacks and dodges move the character by their <c>Bip01</c> track; getting up
 /// plays <c>standing up 3</c> to 86 %.</item>
 /// <item><b>Engine choice</b>: the blend rate is the same for every clip; in combat a standing character holds an upper-body guard idle over the
@@ -240,7 +287,13 @@ public sealed class AnimationSystem(
     /// </summary>
     public const float GetUpEnd = 0.86f;
 
+    /// <summary>
+    /// The animation definitions (clips by index) the system picks from.
+    /// </summary>
     public AnimationLibrary Library { get; } = library;
+    /// <summary>
+    /// The clips' lengths, for one-shot ends and the get-up time.
+    /// </summary>
     public AnimationLengths Lengths { get; } = lengths;
 
     /// <summary>
@@ -287,11 +340,19 @@ public sealed class AnimationSystem(
     /// held clip like the lying one (engine choice).
     /// </summary>
     int TreatingClip { get; } = library.IndexOf("medic");
+    /// <summary>
+    /// The sitting clip of a character resting with no chair clip (<c>sitting idle</c>); -1 when the data has none.
+    /// </summary>
     int RestingClip { get; } = library.IndexOf("sitting idle");
 
-    // The chairs' sitting clips by record name (looked up on every worker).
+    /// <summary>
+    /// The chairs' sitting clips by record name (looked up on every worker).
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _sitClips = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// The library index of the clip named <paramref name="name"/>, looked up once per name; -1 when there is none.
+    /// </summary>
     int SitClipOf(string name) => _sitClips.GetOrAdd(name, Library.IndexOf);
 
     /// <summary>
@@ -315,6 +376,9 @@ public sealed class AnimationSystem(
     /// <b>Verified</b>, <c>FUN_140520000</c> plays it every frame a character carries.
     /// </summary>
     int CarryArmClip { get; } = library.IndexOf("carrying left arm only");
+    /// <summary>
+    /// The stealth knock-out clip (<c>knockout</c>) the attacker plays; -1 when the data has none.
+    /// </summary>
     int KnockoutClip { get; } = library.IndexOf(Carrying.CarrySystem.KnockoutClip);
 
     /// <summary>
@@ -326,8 +390,11 @@ public sealed class AnimationSystem(
 
     #region Held clips
 
-    // Building, delivering materials and prospecting play the medic clip (Verified, Task_Build, Task_AddMaterialsToBuilding and Task_Prospecting).
-    // Resting on a chair plays the clip its functionality names ("sitting chair"), else sitting on the floor.
+    /// <summary>
+    /// The held clip of a task (-1: none). Building, delivering materials and prospecting play the medic clip (Verified, Task_Build,
+    /// Task_AddMaterialsToBuilding and Task_Prospecting). Resting on a chair plays the clip its functionality names ("sitting chair"), else sitting
+    /// on the floor.
+    /// </summary>
     int HeldClip(CharacterTask task, CharacterCold cold, long tick) => task switch
     {
         // Standing up from staying low plays the crouch clip backwards
@@ -363,9 +430,15 @@ public sealed class AnimationSystem(
 
     #region Hit reactions
 
-    // The combat system asks this system for its hit reaction clips (it owns the stun, this system the clips).
+    /// <summary>
+    /// Whether the hook is set; set once while the system is made. The combat system asks this system for its hit reaction clips (it owns the stun,
+    /// this system the clips).
+    /// </summary>
     readonly bool _stumbleHook = Hook(combat, library, lengths);
 
+    /// <summary>
+    /// Gives <paramref name="combat"/> the hit reaction chooser and the get-up time of <c>standing up 3</c>; false without a combat system.
+    /// </summary>
     static bool Hook(CombatSystem? combat, AnimationLibrary library, AnimationLengths lengths)
     {
         if (combat is null) return false;
@@ -376,6 +449,9 @@ public sealed class AnimationSystem(
         return true;
     }
 
+    /// <summary>
+    /// The seconds definition <paramref name="index"/> plays until <see cref="GetUpEnd"/> of its clip, at its play speed.
+    /// </summary>
     static float GetUpSeconds(AnimationLibrary library, AnimationLengths lengths, int index)
     {
         var definition = library.Definitions[index];
@@ -387,12 +463,22 @@ public sealed class AnimationSystem(
 
     #region Falls and ranged clips
 
-    // The fall (without a ragdoll) and getting up.
+    /// <summary>
+    /// The fall (without a ragdoll) and getting up.
+    /// </summary>
     readonly int _fall = library.IndexOfAny("Dodge back fall"), _getUp = library.IndexOf("standing up 3");
 
-    // The crossbow clips (RANGED records, played by the combat system's timing).
+    /// <summary>
+    /// The crossbow clips (RANGED records, played by the combat system's timing).
+    /// </summary>
     readonly int _aimClip = library.IndexOf(AnimationLibrary.RangedAimRecord), _defaultReload = library.IndexOf(AnimationLibrary.RangedReloadRecord);
+    /// <summary>
+    /// The reload clips by RANGED <c>reload anim</c> id, looked up once each.
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _reloadClips = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The idle stance clips by ANIMATION record name, looked up once each.
+    /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _stanceClips = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -412,9 +498,15 @@ public sealed class AnimationSystem(
 
     #region Animating
 
-    // Scratch lists of the thread running a partition, kept between ticks (Update clears them on entry).
+    /// <summary>
+    /// Scratch lists of the thread running a partition, kept between ticks (Update clears them on entry).
+    /// </summary>
     [ThreadStatic] static List<(int Index, float Weight)>? s_lowerScratch, s_upperScratch;
 
+    /// <summary>
+    /// The parallel step: each living, awake character stepping this tick gets its speed (signed along the facing in a fight), its layers updated for
+    /// its task, combat view and ragdoll, the root motion applied and its drawn facing followed.
+    /// </summary>
     public void Act(World world, Partition part, EffectBuffer effects)
     {
         var table = world.Characters;
@@ -1185,8 +1277,8 @@ public sealed class AnimationSystem(
 
     /// <summary>
     /// The swimming clips to play (<see cref="AnimationLibrary.SwimMovement"/> while it moves, else <see cref="AnimationLibrary.SwimIdle"/>) added to
-    /// <paramref name="wanted"/>; false, with nothing added, when the data has none that fit. They are unsynched whole-body clips, so there is no walking phase
-    /// to follow (engine choice; which clip the original plays, <c>FUN_1405c7fd0</c> level 3, is <b>Verified</b> only for getting up).
+    /// <paramref name="wanted"/>; false, with nothing added, when the data has none that fit. They are unsynched whole-body clips, so there is no
+    /// walking phase to follow (engine choice; which clip the original plays, <c>FUN_1405c7fd0</c> level 3, is <b>Verified</b> only for getting up).
     /// </summary>
     bool Swim(CharacterAnimation a, in AnimationStance stance, float speed, List<(int Index, float Weight)> wanted)
     {
@@ -1396,6 +1488,9 @@ public sealed class AnimationSystem(
     static bool IsStrafe(AnimationDefinition d) =>
         d.Area == AnimationArea.Lower && d.MoveSpeed == 0 && d.StrafeSpeedMax > 0 && !d.Technique;
 
+    /// <summary>
+    /// <paramref name="time"/> wrapped into 0..<paramref name="length"/>; 0 for a clip without length.
+    /// </summary>
     static float Wrap(float time, float length) => length > 0 ? time - MathF.Floor(time / length) * length : 0;
 
     /// <summary>
@@ -1536,6 +1631,9 @@ public sealed class AnimationSystem(
         return -1;
     }
 
+    /// <summary>
+    /// Whether a hurt part with pain fraction <paramref name="fraction"/> is already in <paramref name="hurt"/>.
+    /// </summary>
     static bool SameFraction(List<(float Fraction, string Record)> hurt, float fraction)
     {
         foreach (var h in hurt)
@@ -1700,6 +1798,9 @@ public sealed class AnimationSystem(
             if (a.Layers[k].Definition == clip) a.Layers[k].Time = 0;
     }
 
+    /// <summary>
+    /// The index in <paramref name="a"/>'s layers of the layer playing <paramref name="definition"/>; -1 when none does.
+    /// </summary>
     static int Find(CharacterAnimation a, int definition)
     {
         for (int k = 0; k < a.Count; k++) if (a.Layers[k].Definition == definition) return k;
@@ -1826,6 +1927,9 @@ public readonly record struct CombatView(
     int StumbleClip = -1,
     int StumbleStart = -1)
 {
+    /// <summary>
+    /// No technique, no hit, no hit reaction.
+    /// </summary>
     public static readonly CombatView None = new(-1, 0, -1, false, false, null);
 }
 

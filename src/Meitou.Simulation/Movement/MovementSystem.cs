@@ -116,7 +116,7 @@ public sealed partial class MovementSystem(PathService paths) : ITickSystem, IDi
     /// <summary>
     /// A move order's walk (row 29: <see cref="CharacterCold.OrderMove"/>, the Hold point follows it) to <see cref="TaskRequest.Point"/>'s floor, or
     /// a follow of <see cref="TaskRequest.Target"/> (<see cref="CharacterCold.FollowOrder"/>; row 45 guards it). An order's follow breaks a circle of
-    /// followers back to the character (<see cref="BreakCircle(CharacterTable, CharacterId)"/>). An engine walk goes to
+    /// followers back to the character (<see cref="BreakCircle(World, CharacterId)"/>). An engine walk goes to
     /// <see cref="TaskRequest.Goal"/> as given (<see cref="GoTo"/>); an engine's idle, wander or follow of the squad's leader (no target) stops the
     /// character on it.
     /// </summary>

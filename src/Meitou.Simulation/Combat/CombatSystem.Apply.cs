@@ -10,6 +10,10 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// The Apply step (serial, in the commit's order): a blow's outcome (blocked, dodged or hit) and, for a hit, the damage, part, armour, medical hit,
+/// stagger and XP of both sides.
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>
@@ -183,7 +187,8 @@ public sealed partial class CombatSystem
         dSlot.HitFrom = a;
         dSlot.HitHeavy = false;
 
-        // From behind (docs/animation.md "Hit reactions"): the attacker is more than 90 degrees off the defender's heading (yaw 0 along +Z, towards +X).
+        // From behind (docs/animation.md "Hit reactions"): the attacker is more than 90 degrees off the defender's heading (yaw 0 along +Z,
+        // towards +X).
         var toAttacker = new Vector2(prev[a].Position.X - prev[d].Position.X, prev[a].Position.Z - prev[d].Position.Z);
         dSlot.HitBehind = toAttacker.X * MathF.Sin(prev[d].Yaw) + toAttacker.Y * MathF.Cos(prev[d].Yaw) < 0;
         var (knockout, death) = HitEvents(world, d, dc, medical, dc.Race!, events);
@@ -364,6 +369,9 @@ public sealed partial class CombatSystem
     /// </summary>
     readonly struct CoverRoll(ulong seed, ulong defenderKey, int attacker, int attackSeq, int blow) : ICoverRoll
     {
+        /// <summary>
+        /// The roll for armour <paramref name="piece"/> covering the blow.
+        /// </summary>
         public float Roll(int piece) =>
             CombatRolls.Float(seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(attacker, attackSeq, blow, piece));
     }
@@ -386,6 +394,9 @@ public sealed partial class CombatSystem
         });
     }
 
+    /// <summary>
+    /// Adds the blow to the combat log while <see cref="CombatOptions.RecordLog"/> is on.
+    /// </summary>
     void Record(int now, int a, int d, int blow, BlowOutcome outcome, int part, in HitDamage damage, bool knockout, bool death)
     {
         if (Settings.RecordLog)
@@ -498,6 +509,9 @@ public sealed partial class CombatSystem
         attacker.LastOutcome = outcome;
     }
 
+    /// <summary>
+    /// Stops the swing at the blow's stop frame (a blocked blow: the rest of the combo is not thrown).
+    /// </summary>
     static void Stop(ref CombatSlot attacker, CombatTechnique tech, int blow)
     {
         // A blocked blow stops the swing at its "stop frame": the rest of the combo is not thrown.
@@ -511,6 +525,10 @@ public sealed partial class CombatSystem
 
     #region Experience
 
+    /// <summary>
+    /// The XP of a blow for both sides: the attacker's weapon skill (or unarmed) and strength, the defender's defence and toughness by the damage
+    /// it took.
+    /// </summary>
     void GainCombatXp(CharacterCold attacker, CharacterCold defender, XpEvent attackerEvent, XpEvent? defenderEvent, float damageTaken = 0)
     {
         var af = attacker.Fighter!;
@@ -528,6 +546,9 @@ public sealed partial class CombatSystem
         }
     }
 
+    /// <summary>
+    /// The strength XP factor of a fighter: 1 - encumbrance unarmed, else its weapon's weight against its strength.
+    /// </summary>
     float StrengthFactor(CharacterCold c, Fighter f) => f.Unarmed
         ? 1 - f.EncumbranceFactor
         : _xp.WeaponWeightStrengthFactor(f.Weapon!.Stats.Weight, c.Stats![StatsEnumerated.Strength],

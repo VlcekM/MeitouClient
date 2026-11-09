@@ -39,28 +39,73 @@ public sealed class ItemSlots
     /// </summary>
     public const float ClaimReach = 2;
 
+    /// <summary>
+    /// One loose-item slot.
+    /// </summary>
     sealed class Slot
     {
+        /// <summary>
+        /// The slot's id (its building key, then <c>/item</c> and its number).
+        /// </summary>
         public required string Id;
+        /// <summary>
+        /// The ITEM_PLACEMENT_GROUP record it draws from.
+        /// </summary>
         public required string GroupId;
+        /// <summary>
+        /// Where its item lies.
+        /// </summary>
         public Vector3 Position;
+        /// <summary>
+        /// The slot's turn, for an item laid without a random yaw.
+        /// </summary>
         public float Yaw;
+        /// <summary>
+        /// The zone it stands in (it fills while that zone is active).
+        /// </summary>
         public ZoneCoordinate Zone;
+        /// <summary>
+        /// The faction owning its item (the building's).
+        /// </summary>
         public int Owner;
         /// <summary>
         /// The ground item (<see cref="GroundItems"/> id) filling it; -1: empty.
         /// </summary>
         public int Item = -1;
+        /// <summary>
+        /// The game hour the next item is due.
+        /// </summary>
         public double DueAt;
+        /// <summary>
+        /// How many items it has made (the rolls' key).
+        /// </summary>
         public int Made;
     }
 
+    /// <summary>
+    /// Every slot, in registration order.
+    /// </summary>
     readonly List<Slot> _all = [];
+    /// <summary>
+    /// The town sites registered.
+    /// </summary>
     readonly HashSet<int> _sites = [];
+    /// <summary>
+    /// The placement groups by record id (null: not one, or empty).
+    /// </summary>
     readonly Dictionary<string, ItemPlacementGroup?> _groups = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The ground items lying in a slot, as of <see cref="_seenRevision"/>.
+    /// </summary>
     readonly HashSet<int> _lying = [];
+    /// <summary>
+    /// The ground items' revision <see cref="_lying"/> was taken at (-1: never).
+    /// </summary>
     long _seenRevision = -1;
 
+    /// <summary>
+    /// How many slots there are.
+    /// </summary>
     public int Count => _all.Count;
     /// <summary>
     /// How many slots hold an item.
@@ -122,6 +167,9 @@ public sealed class ItemSlots
         _all.RemoveAll(s => ids.Contains(s.Id));
     }
 
+    /// <summary>
+    /// Adds the slots of building <paramref name="b"/> of <paramref name="site"/> once (none for an emptied house), owned by the building's owner.
+    /// </summary>
     void AddBuilding(World world, PopulationData data, int site, TownBuilding b)
     {
         if (b.ItemSlots.Count == 0 || world.Fixtures.IsEmptied(b.Key)   // a bought house has none (EmptyBuilding)
@@ -178,6 +226,9 @@ public sealed class ItemSlots
         }
     }
 
+    /// <summary>
+    /// The id of a loaded ground item, of a record the group keeps, lying in <paramref name="slot"/>; null: none.
+    /// </summary>
     static int? Lying(World world, Slot slot, ItemPlacementGroup group)
     {
         foreach (var g in world.GroundItems.All)
@@ -191,6 +242,9 @@ public sealed class ItemSlots
         return null;
     }
 
+    /// <summary>
+    /// The placement group of record <paramref name="id"/>, cached; null when it is not one or has no items.
+    /// </summary>
     ItemPlacementGroup? Group(GameDatabase db, string id)
     {
         if (!_groups.TryGetValue(id, out var group))
@@ -250,6 +304,9 @@ public sealed class ItemSlots
             or FcsRecordType.NestItem
         or FcsRecordType.MapItem or FcsRecordType.Crossbow or FcsRecordType.LimbReplacement;
 
+    /// <summary>
+    /// Puts a new item from the group's pick in slot <paramref name="s"/>, or makes it due again when the pick gives none or a loose item.
+    /// </summary>
     void Fill(World world, PopulationData data, Slot s)
     {
         var group = Group(data.Db, s.GroupId)!;
@@ -295,6 +352,9 @@ public sealed class ItemSlots
         return (item, entry.Type, false);
     }
 
+    /// <summary>
+    /// Adds each slot's item, due hour and count made to the world hash.
+    /// </summary>
     public void Hash(ref StateHasher h)
     {
         h.Add(_all.Count);

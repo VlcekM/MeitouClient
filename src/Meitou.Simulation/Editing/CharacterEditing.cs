@@ -15,8 +15,17 @@ namespace Meitou.Simulation.Editing;
 /// </summary>
 public enum EditKind : byte
 {
+    /// <summary>
+    /// The new game's characters.
+    /// </summary>
     Creation,
+    /// <summary>
+    /// A plastic surgeon's work, paid.
+    /// </summary>
     Surgery,
+    /// <summary>
+    /// A recruit's edit (DA_JOIN_SQUAD_WITH_EDIT): free, race and gender kept.
+    /// </summary>
     Recruit
 }
 

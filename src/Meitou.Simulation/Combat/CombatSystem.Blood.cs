@@ -2,6 +2,9 @@ using System.Numerics;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// The blood splash a hit leaves on the ground (<see cref="Splash"/>).
+/// </summary>
 public sealed partial class CombatSystem
 {
     /// <summary>

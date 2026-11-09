@@ -4,14 +4,18 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The live kept sets of the loaded zones. Each cached mesh is pruned by its own seeds only (so it does not depend on what else was loaded); when the loaded
-/// set changes, every zone's kept set is resolved again: its own, the regions a walker stands on (<see cref="NavMeshService.KeepAt"/>), the regions reaching
-/// its border at ground level toward a side whose neighbour is not loaded (<see cref="SeedPruner.ExtendBorder"/>), and what the loaded neighbours' kept
-/// border edges reach, until nothing grows. The result is the same in any load order (docs/game/pathfinding.md, "Zone borders"; the original's generator
-/// takes the midpoints of already built neighbours' border edges as seeds, order dependent, but ships prebuilt tiles).
+/// The live kept sets of the loaded zones. Each cached mesh is pruned by its own seeds only (so it does not depend on what else was loaded); when
+/// the loaded set changes, every zone's kept set is resolved again: its own, the regions a walker stands on
+/// (<see cref="NavMeshService.KeepAt"/>), the regions reaching its border at ground level toward a side whose neighbour is not loaded
+/// (<see cref="SeedPruner.ExtendBorder"/>), and what the loaded neighbours' kept border edges reach, until nothing grows. The result is the same
+/// in any load order (docs/game/pathfinding.md, "Zone borders"; the original's generator takes the midpoints of already built neighbours' border
+/// edges as seeds, order dependent, but ships prebuilt tiles).
 /// </summary>
 internal static class ZoneKeptClosure
 {
+    /// <summary>
+    /// The four neighbours of a zone: -X, +X, -Z, +Z.
+    /// </summary>
     static readonly (int Dx, int Dz)[] Sides = [(-1, 0), (1, 0), (0, -1), (0, 1)];
 
     /// <summary>
@@ -24,7 +28,8 @@ internal static class ZoneKeptClosure
     }
 
     /// <summary>
-    /// The kept set of every zone in <paramref name="full"/> (meshes with their pruned polygons); <paramref name="standing"/>: points whose region is kept too.
+    /// The kept set of every zone in <paramref name="full"/> (meshes with their pruned polygons); <paramref name="standing"/>: points whose region is
+    /// kept too.
     /// </summary>
     public static Dictionary<ZoneCoordinate, bool[]> Resolve(
         IReadOnlyDictionary<ZoneCoordinate, ZoneNavMesh> full,

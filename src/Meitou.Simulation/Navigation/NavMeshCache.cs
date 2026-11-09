@@ -17,16 +17,31 @@ public sealed class NavMeshCache
     /// </summary>
     public const int BuilderVersion = 54;
 
+    /// <summary>
+    /// The layout version of the cache file; a file with another is not read.
+    /// </summary>
     const int FormatVersion = 6;
+    /// <summary>
+    /// The first four bytes of a cache file.
+    /// </summary>
     static readonly byte[] Magic = "MNAV"u8.ToArray();
 
+    /// <summary>
+    /// A cache in <paramref name="directory"/>; null: <c>%LOCALAPPDATA%\Meitou\navmesh</c>.
+    /// </summary>
     public NavMeshCache(string? directory = null)
     {
         Directory = directory ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "navmesh");
     }
 
+    /// <summary>
+    /// The folder the zone files are written to (made by the first <see cref="Save"/>).
+    /// </summary>
     public string Directory { get; }
 
+    /// <summary>
+    /// The cache file of zone (<paramref name="zoneX"/>, <paramref name="zoneZ"/>): <c>zone.X.Z.nav</c> in <see cref="Directory"/>.
+    /// </summary>
     public string PathOf(int zoneX, int zoneZ) => Path.Combine(Directory, $"zone.{zoneX}.{zoneZ}.nav");
 
     /// <summary>
@@ -215,6 +230,9 @@ public sealed class NavMeshCache
         return heights;
     }
 
+    /// <summary>
+    /// Writes a zone's mesh with the hashes <see cref="TryLoad"/> checks: to a temporary file first, then moved over the zone's file.
+    /// </summary>
     public void Save(ZoneNavMesh m, uint buildingHash, uint settingsHash)
     {
         System.IO.Directory.CreateDirectory(Directory);

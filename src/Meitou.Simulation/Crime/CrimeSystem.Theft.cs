@@ -3,6 +3,9 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Simulation.Crime;
 
+/// <summary>
+/// The crime system's thievery training: the fence's reward.
+/// </summary>
 public sealed partial class CrimeSystem
 {
     /// <summary>

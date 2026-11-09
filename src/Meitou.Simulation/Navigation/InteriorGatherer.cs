@@ -16,6 +16,9 @@ internal sealed record InteriorSite(BuildingPlacement Placement, GameRecord Reco
 /// </summary>
 sealed record InteriorContext(string InstanceId, bool Destroyed, uint Mask, bool Own);
 
+/// <summary>
+/// The interior side of the gatherer: whether a building is a shell with an interior, the interior's hull, mask, shapes, seeds and door painters.
+/// </summary>
 internal sealed partial class ZoneGeometryGatherer
 {
     /// <summary>
@@ -77,7 +80,21 @@ internal sealed partial class ZoneGeometryGatherer
     /// <summary>
     /// What a building's <c>interior</c> list makes of it (docs/game/pathfinding.md, "Generator", building shapes).
     /// </summary>
-    public enum InteriorKind { None, Blank, Real }
+    public enum InteriorKind
+    {
+        /// <summary>
+        /// The building has no <c>interior</c> list.
+        /// </summary>
+        None,
+        /// <summary>
+        /// Its <c>interior</c> list's first part is a blank interior (no <c>phs or mesh</c>, no <c>parts</c>).
+        /// </summary>
+        Blank,
+        /// <summary>
+        /// Its <c>interior</c> list names a real interior.
+        /// </summary>
+        Real
+    }
 
     /// <summary>
     /// None without an <c>interior</c> list; Blank when the list's first part has no <c>phs or mesh</c> and no <c>parts</c> (the "blank interior"
@@ -123,6 +140,9 @@ internal sealed partial class ZoneGeometryGatherer
         return points;
     }
 
+    /// <summary>
+    /// The building's <c>interior mask</c> parts that are BUILDING_PART records with an <c>xml collision</c>, with that path.
+    /// </summary>
     IEnumerable<(GameRecord Part, string Path)> MaskParts(GameRecord building)
     {
         foreach (var r in building.GetReferences("interior mask"))
@@ -309,6 +329,11 @@ internal sealed partial class ZoneGeometryGatherer
         g.Stats.Carvers += poly.Length;
     }
 
+    /// <summary>
+    /// Adds one shape of an interior's collision: group 13 (the hull) is skipped, a door (group 5) of the building's own interior becomes a door
+    /// painter reaching into the hull and an inner door seed; other groups only when <paramref name="ctx"/>'s mask has them, walkable unless group 27
+    /// or neither its own interior nor <see cref="PathMode.Walkable"/>, a floor (group 9) also recorded in <see cref="ZoneGeometry.FloorRanges"/>.
+    /// </summary>
     void AddInteriorShape(ZoneGeometry g, GameRecord owner, int group, PathMode mode, PreparedShape shape, Matrix4x4 node, string instanceId,
             InteriorContext ctx)
     {

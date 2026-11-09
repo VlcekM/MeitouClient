@@ -4,10 +4,16 @@ using Meitou.Data.World;
 
 namespace Meitou.Simulation.Navigation;
 
+/// <summary>
+/// The map features of a gather (<c>features.dat</c>): their collision for the navmesh and for ragdolls.
+/// </summary>
 internal sealed partial class ZoneGeometryGatherer
 {
     #region Map features
 
+    /// <summary>
+    /// The map feature file, opened by the first <see cref="Features"/>; null before.
+    /// </summary>
     MapFeatureFile? _features;
 
     /// <summary>
@@ -60,6 +66,9 @@ internal sealed partial class ZoneGeometryGatherer
             g.MeshSolids[k].Owner = owner;
     }
 
+    /// <summary>
+    /// The map feature file of the install, opened once; an empty file when the install has none.
+    /// </summary>
     MapFeatureFile Features() =>
         _features ??= File.Exists(Path.Combine(_install.DataDirectory, MapFeatureFile.RelativePath))
             ? MapFeatureFile.Open(_install) : new MapFeatureFile();

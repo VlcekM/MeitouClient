@@ -7,9 +7,21 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 public enum LimbState
 {
+    /// <summary>
+    /// The part as it grew.
+    /// </summary>
     Original = 0,
+    /// <summary>
+    /// Cut off: a stump.
+    /// </summary>
     Stump = 1,
+    /// <summary>
+    /// A prosthetic is fitted (<see cref="HealthPart.Replacement"/>).
+    /// </summary>
     Replaced = 2,
+    /// <summary>
+    /// Crushed: destroyed and not cut off; it does not heal (docs/game/character-stats.md).
+    /// </summary>
     Crushed = 3,
 }
 
@@ -80,6 +92,9 @@ public sealed class HealthPart(BodyPartTemplate template, int hitWeight, float b
     /// </summary>
     public bool SelfHealing { get; set; }
 
+    /// <summary>
+    /// The part's limb state; a change bumps <see cref="Version"/>.
+    /// </summary>
     public LimbState Limb { get; set { if (field != value) { field = value; Version++; } } }
 
     /// <summary>
@@ -153,6 +168,9 @@ public sealed class HealthPart(BodyPartTemplate template, int hitWeight, float b
     /// </summary>
     public bool IsDestroyed => Flesh - Stun + Rig < -MaxHp;
 
+    /// <summary>
+    /// Whether the part is vital (its template's <c>vital</c>): a vital part down keeps the character out, one destroyed kills it.
+    /// </summary>
     public bool IsVital => Template.Vital;
 
     /// <summary>

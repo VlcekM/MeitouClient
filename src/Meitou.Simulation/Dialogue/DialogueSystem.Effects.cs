@@ -9,6 +9,9 @@ using Meitou.Simulation.Movement;
 
 namespace Meitou.Simulation.Dialogue;
 
+/// <summary>
+/// The dialogue system's line effects, mod codes and text tokens.
+/// </summary>
 public sealed partial class DialogueSystem
 {
     #region Effects

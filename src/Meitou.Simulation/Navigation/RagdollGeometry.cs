@@ -24,12 +24,34 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     const float Reach = 600;
 
+    /// <summary>
+    /// Gathers the zones' building and feature collision (foliage left out); used under <see cref="_gatherLock"/>.
+    /// </summary>
     readonly ZoneGeometryGatherer _gatherer;
+    /// <summary>
+    /// Each zone's gathered triangles by 32-unit cell, buildings and roofs apart, as the task of a worker's gather; dropped by a run-time building
+    /// change and by <see cref="Evict"/>.
+    /// </summary>
     readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), Task<Dictionary<(int, int), List<Vector3>>>> _zones = new();
+    /// <summary>
+    /// One gather at a time: the gatherer is not thread-safe.
+    /// </summary>
     readonly object _gatherLock = new();
+    /// <summary>
+    /// When each gathered zone was last asked for (a tick of <see cref="_clock"/>), for <see cref="Evict"/>.
+    /// </summary>
     readonly ConcurrentDictionary<(ZoneCoordinate Zone, bool Roofs), long> _used = new();
+    /// <summary>
+    /// Counts the asks; the newest has the highest number.
+    /// </summary>
     long _clock;
+    /// <summary>
+    /// The buildings placed at run time, whose changes drop the zones they touch; null: none.
+    /// </summary>
     readonly NavRuntimeBuildings? _runtime;
+    /// <summary>
+    /// The counter behind <see cref="Generation"/>, bumped by every run-time building change.
+    /// </summary>
     int _generation;
 
     /// <summary>
@@ -54,8 +76,12 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         _ground = new RagdollGround(install, terrainHeight);
     }
 
+    /// <inheritdoc/>
     public int Generation => Volatile.Read(ref _generation);
 
+    /// <summary>
+    /// Drops a changed zone's gathered triangles (both kinds) and bumps <see cref="Generation"/>.
+    /// </summary>
     void Changed(ZoneCoordinate zone)
     {
         _zones.TryRemove((zone, false), out _);
@@ -68,6 +94,7 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     public float GroundHeight(float x, float z, float nearY) => _ground.HeightAt(x, z);
 
+    /// <inheritdoc/>
     public bool Buildings(Vector3 min, Vector3 max, List<Vector3> triangles) => Collect(min, max, triangles, roofs: false);
 
     /// <summary>
@@ -75,6 +102,10 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// </summary>
     public bool Roofs(Vector3 min, Vector3 max, List<Vector3> triangles) => Collect(min, max, triangles, roofs: true);
 
+    /// <summary>
+    /// Adds the gathered triangles of the cells between the corners, from every zone within <see cref="Reach"/> of them, starting a gather for a zone
+    /// not asked for yet; false while one of those zones is still being gathered.
+    /// </summary>
     bool Collect(Vector3 min, Vector3 max, List<Vector3> triangles, bool roofs)
     {
         bool ready = true;
@@ -125,8 +156,14 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         }
     }
 
+    /// <summary>
+    /// The 32-unit cell (<see cref="RagdollSystem.TileSize"/>) of a world X or Z.
+    /// </summary>
     static int Cell(float v) => (int)MathF.Floor(v / RagdollSystem.TileSize);
 
+    /// <summary>
+    /// Gathers one zone's ragdoll or roof triangles and files each under every cell its plan bounds cover.
+    /// </summary>
     Dictionary<(int, int), List<Vector3>> Gather(ZoneCoordinate zone, bool roofs)
     {
         var all = new List<Vector3>();
@@ -162,6 +199,9 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         return cells;
     }
 
+    /// <summary>
+    /// Drops the least recently asked for gathered zones past <see cref="MaxZones"/> (only finished ones).
+    /// </summary>
     void Evict()
     {
         if (_zones.Count <= MaxZones) return;
@@ -173,6 +213,9 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
         }
     }
 
+    /// <summary>
+    /// Unhooks from the run-time buildings and waits for the gathers still running.
+    /// </summary>
     public void Dispose()
     {
         if (_runtime is not null) _runtime.Changed -= Changed;

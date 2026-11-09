@@ -10,8 +10,14 @@ namespace Meitou.Simulation.Navigation;
 /// </summary>
 internal sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices, int[] indices, bool isConvex)
 {
+    /// <summary>
+    /// The shape type the triangles come from (box, capsule, convex hull, triangle mesh).
+    /// </summary>
     public CollisionShapeKind Kind { get; } = kind;
 
+    /// <summary>
+    /// The vertices in Kenshi's Y-up world axes, the shape's pose applied.
+    /// </summary>
     public Vector3[] Vertices { get; } = vertices;
 
     /// <summary>
@@ -30,8 +36,14 @@ internal sealed class PreparedShape(CollisionShapeKind kind, Vector3[] vertices,
 /// </summary>
 internal sealed class PreparedCollision(PreparedShape[] shapes, Meitou.Data.World.DoorFrame door)
 {
+    /// <summary>
+    /// The prepared shapes that gave triangles, in file order.
+    /// </summary>
     public PreparedShape[] Shapes { get; } = shapes;
 
+    /// <summary>
+    /// The frame of the file's first box: what a door leaf slides along.
+    /// </summary>
     public Meitou.Data.World.DoorFrame Door { get; } = door;
 }
 
@@ -40,7 +52,13 @@ internal sealed class PreparedCollision(PreparedShape[] shapes, Meitou.Data.Worl
 /// </summary>
 internal sealed class CollisionCache(GameInstall install)
 {
+    /// <summary>
+    /// The prepared files by record path (case-insensitive); null for a path with no readable file.
+    /// </summary>
     readonly ConcurrentDictionary<string, PreparedCollision?> _files = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Lookups that found no file or an unreadable one; read through <see cref="Missing"/>.
+    /// </summary>
     int _missing;
 
     /// <summary>
@@ -58,6 +76,10 @@ internal sealed class CollisionCache(GameInstall install)
         return _files.GetOrAdd(recordPath, Load);
     }
 
+    /// <summary>
+    /// Resolves <paramref name="recordPath"/> in the install, reads it and triangulates every shape (closed triangle meshes turned outward); null,
+    /// counted in <see cref="Missing"/>, when it is not found or cannot be read.
+    /// </summary>
     PreparedCollision? Load(string recordPath)
     {
         var path = CollisionPaths.Resolve(install, recordPath);
@@ -100,7 +122,21 @@ internal sealed class CollisionCache(GameInstall install)
     /// <summary>
     /// What <see cref="FixClosedWinding"/> found.
     /// </summary>
-    internal enum Winding { Open, Outward, Flipped }
+    internal enum Winding
+    {
+        /// <summary>
+        /// The mesh has an edge without its reverse; kept as stored.
+        /// </summary>
+        Open,
+        /// <summary>
+        /// A closed mesh with outward faces (signed volume not negative); kept.
+        /// </summary>
+        Outward,
+        /// <summary>
+        /// A closed mesh that was inside out; its triangles were flipped.
+        /// </summary>
+        Flipped
+    }
 
     /// <summary>
     /// A closed triangle mesh (every edge has its reverse) with negative signed volume is inside out: flip it so that its faces point outward. An

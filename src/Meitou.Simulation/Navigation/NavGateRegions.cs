@@ -5,13 +5,13 @@ using Meitou.Simulation.Locks;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The gate codes of a <see cref="NavWorld"/> (docs/game/pathfinding.md "Gate codes"; the original's gate-code pass floods its navmesh from the gates,
-/// <c>FUN_1402ed460</c>). From each polygon beside a gate's door polygons a flood spreads over the walkable polygons without entering any gate's door; a flood
-/// that stays within <see cref="OutsideExtent"/> of where it started, never reaches the edge of the loaded world and stays under
-/// <see cref="PolygonBudget"/> is a walled region and gets the next code from 1; any other is the open world, 0, as is every polygon no flood
-/// reached. Gates are visited by instance id, so the same world gives the same codes. Engine choices: the extent, the budget and the loaded world's
-/// edge stand in for the original's face limit ("FloodFill ... LIMIT REACHED"), whose value is <b>Unknown</b>. Immutable once made; safe from any
-/// thread.
+/// The gate codes of a <see cref="NavWorld"/> (docs/game/pathfinding.md "Gate codes"; the original's gate-code pass floods its navmesh from the
+/// gates, <c>FUN_1402ed460</c>). From each polygon beside a gate's door polygons a flood spreads over the walkable polygons without entering any
+/// gate's door; a flood that stays within <see cref="OutsideExtent"/> of where it started, never reaches the edge of the loaded world and stays
+/// under <see cref="PolygonBudget"/> is a walled region and gets the next code from 1; any other is the open world, 0, as is every polygon no
+/// flood reached. Gates are visited by instance id, so the same world gives the same codes. Engine choices: the extent, the budget and the loaded
+/// world's edge stand in for the original's face limit ("FloodFill ... LIMIT REACHED"), whose value is <b>Unknown</b>. Immutable once made; safe
+/// from any thread.
 /// </summary>
 public sealed class NavGateRegions : IGateRegions
 {
@@ -30,11 +30,23 @@ public sealed class NavGateRegions : IGateRegions
     /// </summary>
     public const float FindDistance = 40;
 
+    /// <summary>
+    /// No regions: every point is off the navmesh (-1) and there are no gates.
+    /// </summary>
     public static readonly NavGateRegions Empty = new(NavWorld.Empty, [], []);
 
+    /// <summary>
+    /// The navmesh the codes label; points are looked up on it.
+    /// </summary>
     readonly NavWorld _world;
+    /// <summary>
+    /// The gate code of each labelled polygon by its polygon key; a polygon not in it is the open world (0).
+    /// </summary>
     readonly Dictionary<long, int> _codes;
 
+    /// <summary>
+    /// Wraps a labelling made by <see cref="Label"/>.
+    /// </summary>
     NavGateRegions(NavWorld world, Dictionary<long, int> codes, IReadOnlyList<GateLink> gates)
     {
         this._world = world;
@@ -42,6 +54,7 @@ public sealed class NavGateRegions : IGateRegions
         Gates = gates;
     }
 
+    /// <inheritdoc/>
     public IReadOnlyList<GateLink> Gates { get; }
 
     /// <summary>
@@ -49,6 +62,7 @@ public sealed class NavGateRegions : IGateRegions
     /// </summary>
     public int RegionCount { get; private init; }
 
+    /// <inheritdoc/>
     public int CodeAt(Vector3 at) => _world.TryFindPolygon(at, FindDistance, out var p, out _) ? _codes.GetValueOrDefault(p.Key) : -1;
 
     /// <summary>

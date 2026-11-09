@@ -58,6 +58,9 @@ public readonly record struct AttackQuery
     /// </summary>
     public int Previous { get; init; }
 
+    /// <summary>
+    /// Whether the target plays a stumble clip: the last technique then weighs as any other.
+    /// </summary>
     public bool TargetStaggered { get; init; }
 
     /// <summary>
@@ -65,8 +68,14 @@ public readonly record struct AttackQuery
     /// </summary>
     public bool LeftArm { get; init; }
 
+    /// <summary>
+    /// Whether the right arm works.
+    /// </summary>
     public bool RightArm { get; init; }
 
+    /// <summary>
+    /// Whether a leg is down.
+    /// </summary>
     public bool LegDown { get; init; }
 }
 
@@ -84,9 +93,9 @@ public static class TechniqueChooser
     /// <summary>
     /// The attack technique to start, by weighted pick (<paramref name="roll"/> in [0, 1)); -1 when none. Up to three passes over the attack
     /// techniques (not disabled, not a block or dodge): the weapon's category and skill; then, for a person only, the unarmed techniques at
-    /// <see cref="AttackQuery.UnarmedSkill"/>; then those again accepting hurt limbs. <paramref name="maxReach"/> is the longest reach (<c>attack distance</c> +
-    /// L / 2, at least 1) among the techniques the filters let through, whatever the distance: the original's CharStats +0x150, which sets how close
-    /// the fighter walks in.
+    /// <see cref="AttackQuery.UnarmedSkill"/>; then those again accepting hurt limbs. <paramref name="maxReach"/> is the longest reach (<c>attack
+    /// distance</c> + L / 2, at least 1) among the techniques the filters let through, whatever the distance: the original's CharStats +0x150, which
+    /// sets how close the fighter walks in.
     /// </summary>
     public static int ChooseAttack(IReadOnlyList<CombatTechnique> all, in AttackQuery q, float roll, out float maxReach)
     {
@@ -287,6 +296,10 @@ public static class TechniqueChooser
         return total;
     }
 
+    /// <summary>
+    /// A defence technique's weight for <paramref name="pool"/>: 0 unless it is an enabled block or dodge of the pool, fits the weapon category and
+    /// the posture; for the pool, the facing blocks of the blow's direction, the dodges, or the wrong-direction blocks.
+    /// </summary>
     static float ReactionWeight(CombatTechnique t, int category, bool prone, ReactionPool pool, int blowDirection)
     {
         if (t.Disabled || t.IsStumbleDodge != (pool == ReactionPool.StumbleDodges) || !(t.IsBlock || t.IsDodge)

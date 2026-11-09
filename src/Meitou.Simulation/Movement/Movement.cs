@@ -7,6 +7,9 @@ namespace Meitou.Simulation.Movement;
 /// </summary>
 public enum CharacterTask : byte
 {
+    /// <summary>
+    /// No task: the character stands.
+    /// </summary>
     Idle = 0,
 
     /// <summary>
@@ -25,7 +28,8 @@ public enum CharacterTask : byte
     Follow = 3,
 
     /// <summary>
-    /// Fights the target of an <see cref="Combat.AttackOrder"/> (the combat system owns the character's attacks and reactions; movement leaves it alone).
+    /// Fights the target of an <see cref="Combat.AttackOrder"/> (the combat system owns the character's attacks and reactions; movement leaves
+    /// it alone).
     /// </summary>
     Attack = 4,
 
@@ -42,8 +46,8 @@ public enum CharacterTask : byte
     Rest = 6,
 
     /// <summary>
-    /// Walks to <see cref="CharacterCold.CarryTarget"/> and lifts it onto the left shoulder (<see cref="Carrying.CarrySystem"/> owns it; the original's
-    /// <c>LIFT_PERSON</c>).
+    /// Walks to <see cref="CharacterCold.CarryTarget"/> and lifts it onto the left shoulder (<see cref="Carrying.CarrySystem"/> owns it; the
+    /// original's <c>LIFT_PERSON</c>).
     /// </summary>
     PickUp = 7,
 
@@ -71,7 +75,8 @@ public enum CharacterTask : byte
     Build = 11,
 
     /// <summary>
-    /// Walks to <see cref="CharacterCold.BuildSite"/> and takes it apart (<see cref="Construction.ConstructionSystem"/>; <c>Task_Dismantle</c>, order 96).
+    /// Walks to <see cref="CharacterCold.BuildSite"/> and takes it apart (<see cref="Construction.ConstructionSystem"/>; <c>Task_Dismantle</c>,
+    /// order 96).
     /// </summary>
     Dismantle = 12,
 
@@ -94,15 +99,15 @@ public enum CharacterTask : byte
     Haul = 15,
 
     /// <summary>
-    /// Stands where it is and prospects for one game second (<see cref="CharacterCold.Prospecting"/>, <see cref="Production.ProductionSystem"/>; the original's
-    /// <c>Task_Prospecting</c>, order 150).
+    /// Stands where it is and prospects for one game second (<see cref="CharacterCold.Prospecting"/>, <see cref="Production.ProductionSystem"/>; the
+    /// original's <c>Task_Prospecting</c>, order 150).
     /// </summary>
     Prospect = 16,
 
     /// <summary>
     /// A builder whose site waits for materials it does not carry walks to <see cref="CharacterCold.FetchSite"/> or ground item
-    /// <see cref="CharacterCold.FetchItem"/> and takes <see cref="CharacterCold.FetchRecord"/>, then goes back to <see cref="CharacterCold.BuildSite"/>
-    /// (<see cref="Construction.ConstructionSystem"/>; the original's task 247 "Collecting resource").
+    /// <see cref="CharacterCold.FetchItem"/> and takes <see cref="CharacterCold.FetchRecord"/>, then goes back to
+    /// <see cref="CharacterCold.BuildSite"/> (<see cref="Construction.ConstructionSystem"/>; the original's task 247 "Collecting resource").
     /// </summary>
     FetchMaterials = 17,
 
@@ -119,6 +124,9 @@ public enum CharacterTask : byte
 [Flags]
 public enum MoveFlags : ushort
 {
+    /// <summary>
+    /// No movement flag set.
+    /// </summary>
     None = 0,
 
     /// <summary>
@@ -169,6 +177,9 @@ public enum WalkEnd : byte
 /// </summary>
 public static class SpeedMode
 {
+    /// <summary>
+    /// The four modes: walk (race walk speed), run (capped at <see cref="RunCap"/>), free (no cap) and group (the squad's slowest).
+    /// </summary>
     public const byte Walk = 0, Run = 1, Free = 2, Group = 3;
 
     /// <summary>
@@ -176,8 +187,15 @@ public static class SpeedMode
     /// </summary>
     public const int Count = 4;
 
+    /// <summary>
+    /// The speed cap (units per second) of <see cref="Run"/>.
+    /// </summary>
     public const float RunCap = 55;
 
+    /// <summary>
+    /// The speed cap of <paramref name="mode"/> for a character of <paramref name="walkSpeed"/>: the walk speed, <see cref="RunCap"/>, else 999
+    /// (no cap).
+    /// </summary>
     public static float Cap(byte mode, float walkSpeed) => mode switch { Walk => walkSpeed, Run => RunCap, _ => 999 };
 
     /// <summary>
@@ -203,9 +221,19 @@ public static class SpeedMode
 /// </summary>
 public static class AnimationLayers
 {
+    /// <summary>
+    /// The standing clip.
+    /// </summary>
     public const string Idle = "idle_stand_relax";
+    /// <summary>
+    /// The walking clips of the lower and the upper body.
+    /// </summary>
     public const string WalkLower = "walk lower", WalkUpper = "walk upper";
 
+    /// <summary>
+    /// The layers for movement state <paramref name="animation"/> (0 stands, anything else walks) at clip time <paramref name="time"/>, each at
+    /// full weight.
+    /// </summary>
     public static IReadOnlyList<AnimationLayer> For(ushort animation, float time) => animation == 0
         ? [new AnimationLayer(Idle, time, 1)]
         : [new AnimationLayer(WalkLower, time, 1), new AnimationLayer(WalkUpper, time, 1)];

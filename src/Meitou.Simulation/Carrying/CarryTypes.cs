@@ -46,7 +46,13 @@ public sealed record OpenLootOrder(IReadOnlyList<CharacterId> Looters, Character
 /// </summary>
 public sealed record TakeLootItem(Items.InventoryItemToken Item) : SimCommand
 {
+    /// <summary>
+    /// How many units move; 0: until one fails.
+    /// </summary>
     public int Count { get; init; }
+    /// <summary>
+    /// Whether the looter's open bag is tried first.
+    /// </summary>
     public bool BagFirst { get; init; }
 }
 
@@ -56,7 +62,13 @@ public sealed record TakeLootItem(Items.InventoryItemToken Item) : SimCommand
 /// </summary>
 public sealed record PutLootItem(CharacterId Character, Items.InventoryItemToken Item) : SimCommand
 {
+    /// <summary>
+    /// How many units move; 0: until one fails.
+    /// </summary>
     public int Count { get; init; }
+    /// <summary>
+    /// Whether the loot's open bag is tried first.
+    /// </summary>
     public bool BagFirst { get; init; }
 }
 
@@ -132,6 +144,9 @@ public sealed class CarrySettings
 [Flags]
 public enum LootStart : byte
 {
+    /// <summary>
+    /// No flag set.
+    /// </summary>
     None = 0,
     /// <summary>
     /// +0x80: the looter has no weapon and the victim has one.
@@ -188,7 +203,9 @@ public readonly record struct CarryAttach(System.Numerics.Vector3 Offset, System
 /// </summary>
 public static class CarryPose
 {
-    // The offsets at height 0, 0.5 and 1 (units, the bone's frame).
+    /// <summary>
+    /// The offsets at height 0, 0.5 and 1 (units, the bone's frame).
+    /// </summary>
     static readonly System.Numerics.Vector3 Short = new(-1.4f, 0, 1), Middle = new(-1.9f, -1, 2.6f), Tall = new(-3, -0.4f, 5);
 
     /// <summary>

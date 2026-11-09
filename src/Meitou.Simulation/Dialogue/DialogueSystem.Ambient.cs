@@ -15,6 +15,10 @@ namespace Meitou.Simulation.Dialogue;
 /// </summary>
 public sealed record SpeechBubble(CharacterId Speaker, string Text, bool Large, bool Interrupting = false);
 
+/// <summary>
+/// The dialogue system's ambient conversations: event lines said as bubbles over heads, the sight events (greetings, animals, getting up) and
+/// their cooldowns.
+/// </summary>
 public sealed partial class DialogueSystem
 {
     /// <summary>
@@ -24,27 +28,42 @@ public sealed partial class DialogueSystem
     /// </summary>
     sealed record Bubble(Conversation C, DialogueNode Line, long DueTick, CharacterId Speaker, bool Chained = false);
 
+    /// <summary>
+    /// The speech-bubble conversations under way.
+    /// </summary>
     readonly List<Bubble> _bubbles = [];
-    // The lines on show: the text and the tick it goes (display only: follows from the bubbles, so not hashed).
+    /// <summary>
+    /// The lines on show: the text and the tick it goes (display only: follows from the bubbles, so not hashed).
+    /// </summary>
     readonly SortedDictionary<CharacterId, (string Text, long Until, bool Large, bool Interrupting)> _shown =
         new(Comparer<CharacterId>.Create(CompareIds));
-    // When a squad last reacted to seeing a character (the cooldown of SeeOthers).
+    /// <summary>
+    /// When a squad last reacted to seeing a character (the cooldown of SeeOthers).
+    /// </summary>
     readonly SortedDictionary<(int Squad, CharacterId Target), double> _ambientAt =
         new(Comparer<(int, CharacterId)>.Create((a, b) => a.Item1 != b.Item1 ? a.Item1.CompareTo(b.Item1) : CompareIds(a.Item2, b.Item2)));
-    // The NPC / player-character pairs noticed at the world's first look (a new game or a load) and not lost from notice since: no sight line for
-    // them (engine choice; the original greets a character arriving, not one already beside it at the start, Observed). Hashed.
+    /// <summary>
+    /// The NPC / player-character pairs noticed at the world's first look (a new game or a load) and not lost from notice since: no sight line for
+    /// them (engine choice; the original greets a character arriving, not one already beside it at the start, Observed). Hashed.
+    /// </summary>
     readonly SortedSet<(CharacterId Npc, CharacterId Player)> _quiet = new(Comparer<(CharacterId, CharacterId)>.Create(
         (a, b) => CompareIds(a.Item1, b.Item1) is var c and not 0 ? c : CompareIds(a.Item2, b.Item2)));
+    /// <summary>
+    /// Whether the first look (<see cref="_quiet"/>'s fill) has run.
+    /// </summary>
     bool _looked;
 
     /// <summary>
-    /// The event of a crowd trigger's lines (EV_CROWD_TRIGGERED), and of a contract's end talk (EV_CONTRACT_JOB_ENDED).
+    /// The event of a crowd trigger's lines (EV_CROWD_TRIGGERED).
     /// </summary>
     const int CrowdTriggered = 74;
     /// <summary>
     /// EV_UNLOCK_MY_CAGE_OR_SHACKLES: a freed prisoner's thanks, which also makes its squad remember the liberator (<see cref="Freed"/>).
     /// </summary>
     const int UnlockMyCageOrShackles = 13;
+    /// <summary>
+    /// The event of a contract's end talk (EV_CONTRACT_JOB_ENDED).
+    /// </summary>
     public const int ContractJobEnded = 30;
     /// <summary>
     /// The AI-to-AI talking range (DC 16 TARGET_IN_TALKING_RANGE, 260 units): how near another squad's NPC must be to be greeted (engine choice).
@@ -61,6 +80,9 @@ public sealed partial class DialogueSystem
     /// </summary>
     static bool IsInterrupting(int ev) => IsLarge(ev) || ev is 6 or 13 or 30 or 46 or 48 or 51 or 54;
 
+    /// <summary>
+    /// The lines on show, for the renderer's speech bubbles.
+    /// </summary>
     public IReadOnlyList<SpeechBubble> PublishSpeech() =>
         [.. _shown.Select(s => new SpeechBubble(s.Key, s.Value.Text, s.Value.Large, s.Value.Interrupting))];
 
@@ -149,6 +171,9 @@ public sealed partial class DialogueSystem
         return _open?.Npc == who || _open?.Player == who;
     }
 
+    /// <summary>
+    /// Whether <paramref name="who"/> has a line on show or is the speaker or NPC of a bubble conversation.
+    /// </summary>
     bool BubbleOf(CharacterId who) => _shown.ContainsKey(who) || _bubbles.Any(b => b.Speaker == who || b.C.Npc == who);
 
     /// <summary>
@@ -335,6 +360,10 @@ public sealed partial class DialogueSystem
     /// </summary>
     const int SeeAnimalSquad = 27;
 
+    /// <summary>
+    /// I_SEE_ANIMAL_SQUAD: each looker fires it at the first awake animal it sees that its squad has not reacted to lately, while the scan's line
+    /// count (<paramref name="said"/> so far) is below <see cref="DialogueSettings.AmbientPerScan"/>.
+    /// </summary>
     void SeeAnimals(World world, List<(int Slot, float D2)> near, int said)
     {
         var table = world.Characters;
@@ -373,7 +402,9 @@ public sealed partial class DialogueSystem
         return true;
     }
 
-    // The characters that were down at the last look (the get-up events); hashed.
+    /// <summary>
+    /// The characters that were down at the last look (the get-up events); hashed.
+    /// </summary>
     readonly SortedSet<CharacterId> _down = new(Comparer<CharacterId>.Create(CompareIds));
 
     /// <summary>
@@ -399,7 +430,12 @@ public sealed partial class DialogueSystem
                 _down.Remove(id);
                 continue;
             }
-            if (!medical.Standing) { _down.Add(id); continue; }   // knocked out, staying low or crawling: posture not 0
+            // knocked out, staying low or crawling: posture not 0
+            if (!medical.Standing)
+            {
+                _down.Add(id);
+                continue;
+            }
             if (!_down.Remove(id)) continue;
             bool ordered = c.OrderedUp;
             c.OrderedUp = false;
@@ -415,6 +451,9 @@ public sealed partial class DialogueSystem
         _down.RemoveWhere(id => !table.TryResolveNext(id, out _));
     }
 
+    /// <summary>
+    /// Whether a hostile awake character is within the character's outdoor sight range (the get-up events without a combat system).
+    /// </summary>
     bool EnemyNear(World world, int slot, CharacterCold c)
     {
         var table = world.Characters;
@@ -433,6 +472,9 @@ public sealed partial class DialogueSystem
         return false;
     }
 
+    /// <summary>
+    /// Whether the squad reacted to <paramref name="target"/> within <see cref="DialogueSettings.AmbientRepeatHours"/> game hours.
+    /// </summary>
     bool Recent(World world, int squad, CharacterId target) =>
         _ambientAt.TryGetValue((squad, target), out double at) && world.GameHours - at < Settings.AmbientRepeatHours;
 
@@ -495,10 +537,10 @@ public sealed partial class DialogueSystem
 
     /// <summary>
     /// A line's <c>crowd trigger</c> (<c>FUN_140680560</c>, unless the line is itself of event 74): every member of the saying character's squad
-    /// (<paramref name="speaker"/>, the state the effects run on) that is not down (<see cref="Down"/>), not an animal and not in a bed starts that
-    /// DIALOGUE as event 74 at the target, forced (<see cref="StartBubbles"/>): fighting, held and caged members too, a conversation they were in
-    /// overwritten. Engine readings: the owner and the speaker are left out (they are talking), a player character is left to its player, and each
-    /// member joins with the trigger's val0 percent (the data's values are 100 but for two lines).
+    /// (<paramref name="speaker"/>, the state the effects run on) that is not down (<see cref="CharacterFacts.Down"/>), not an animal and not in a
+    /// bed starts that DIALOGUE as event 74 at the target, forced (<see cref="StartBubbles"/>): fighting, held and caged members too, a conversation
+    /// they were in overwritten. Engine readings: the owner and the speaker are left out (they are talking), a player character is left to its
+    /// player, and each member joins with the trigger's val0 percent (the data's values are 100 but for two lines).
     /// </summary>
     void CrowdTrigger(World world, Conversation c, DialogueNode line, CharacterId speaker)
     {

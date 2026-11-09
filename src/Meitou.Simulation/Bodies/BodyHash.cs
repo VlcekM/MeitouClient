@@ -7,6 +7,9 @@ namespace Meitou.Simulation.Bodies;
 /// </summary>
 static class BodyHash
 {
+    /// <summary>
+    /// Adds the stats (and, while god mode boosts them, the values kept aside) and the medical state to <paramref name="h"/>; a missing one adds -1.
+    /// </summary>
     public static void Add(ref StateHasher h, CharacterStats? stats, MedicalState? medical)
     {
         if (stats is null) h.Add(-1);

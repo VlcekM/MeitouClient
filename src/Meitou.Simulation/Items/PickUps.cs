@@ -102,6 +102,10 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
     bool MayPickUp(CharacterCold c, Items.ItemInstance item) => AnimalsPickUp || !SquadRegistry.IsAnimal(c)
             || Items.FeedSystem.IsMouthPickUp(c, item);
 
+    /// <summary>
+    /// Gives the pick-up order to the nearest of the order's characters (else the selection) that may take the item; for another faction's item
+    /// without ALT, a message and only a walk there.
+    /// </summary>
     internal void PickUpInput(World world, Items.PickUpItemOrder order)
     {
         if (world.GroundItems.Find(order.Item) is not { } item) return;
@@ -160,8 +164,11 @@ public sealed class PickUps : ITaskHandler, IOrderOwner
                         TaskSource.Order) { Point = order.Point, Detail = item });
     }
 
-    // Saved: a walk to a container (kind 1 only walks there; 0 opens it); a pick-up of a ground item names a runtime id and is not saved.
+    /// <summary>
+    /// Saved: a walk to a container (kind 1 only walks there; 0 opens it); a pick-up of a ground item names a runtime id and is not saved.
+    /// </summary>
     int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is null ? 0 : order.Detail == ContainerAccess.ContainerWalk ? 1 : -1;
+    /// <inheritdoc/>
     object? IOrderOwner.LoadDetail(World world, CharacterId self, Meitou.Data.Gameplay.Ai.TaskType row, int kind, CharacterId target) => kind == 1
             ? ContainerAccess.ContainerWalk : null;
 

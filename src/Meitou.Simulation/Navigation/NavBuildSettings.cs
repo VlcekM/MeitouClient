@@ -49,8 +49,14 @@ public sealed record NavBuildSettings
     /// </summary>
     public bool Watershed { get; init; } = true;
 
+    /// <summary>
+    /// Smallest region area in cells that is kept (Recast's minimum region area, passed to the region partition).
+    /// </summary>
     public int MinRegionArea { get; init; } = 4;
 
+    /// <summary>
+    /// Region area in cells below which a region is merged into a neighbour (Recast's merge region area, passed to the region partition).
+    /// </summary>
     public int MergeRegionArea { get; init; } = 40;
 
     /// <summary>
@@ -79,6 +85,9 @@ public sealed record NavBuildSettings
 /// </summary>
 internal sealed class NavBuildTimes
 {
+    /// <summary>
+    /// Wall-clock milliseconds of the build's steps: the tiles, stitching (with polygon heights and door assignment), pruning, and the whole build.
+    /// </summary>
     public double Tiles, Stitch, Prune, Total;
 
     /// <summary>
@@ -86,6 +95,9 @@ internal sealed class NavBuildTimes
     /// </summary>
     public double CpuRaster, CpuCompact, CpuRegions, CpuContours, CpuMesh, CpuDetail;
 
+    /// <summary>
+    /// The build's counts: tiles that gave a mesh, polygons, polygons kept by the pruning, vertices, and interiors built.
+    /// </summary>
     public int TileCount, Polygons, KeptPolygons, Vertices, InteriorCount;
 
     /// <summary>

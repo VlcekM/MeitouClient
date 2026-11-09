@@ -40,7 +40,11 @@ sealed class AnimalPlans(AnimationLibrary library, AnimationLengths lengths)
         var lengths = self.Lengths.For(c.RaceId);
         bool known = c.RaceId is { } race && self.Lengths.HasSpecies(race);
         bool Has(int i) => !known || lengths.Has(self.Library.Definitions[i].Clip);
-        int First(int[] list) { foreach (int i in list) if (Has(i)) return i; return -1; }
+        int First(int[] list)
+        {
+            foreach (int i in list) if (Has(i)) return i;
+            return -1;
+        }
         return new AnimalPlan([.. c.Movement.Where(Has)], [.. c.Idles.Where(x => Has(x.Index))], First(c.Fall), First(c.Lying), lengths);
     }, (this, clips));
 }

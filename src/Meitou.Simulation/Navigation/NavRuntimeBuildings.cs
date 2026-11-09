@@ -4,21 +4,34 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The buildings the player placed (docs/simulation.md "Buildings", host seam): one thread-safe overlay on the level data's placements, shared by every
-/// <see cref="ZoneGeometryGatherer"/>. <see cref="ZoneGeometryGatherer.NearBuildings"/> and so <see cref="ZoneGeometryGatherer.BuildingHash"/> see it, so a
-/// zone's cache key changes with it; an empty overlay changes nothing. Readers get a snapshot, writers replace it whole.
+/// The buildings the player placed (docs/simulation.md "Buildings", host seam): one thread-safe overlay on the level data's placements, shared by
+/// every <see cref="ZoneGeometryGatherer"/>. <see cref="ZoneGeometryGatherer.NearBuildings"/> and so <see cref="ZoneGeometryGatherer.BuildingHash"/>
+/// see it, so a zone's cache key changes with it; an empty overlay changes nothing. Readers get a snapshot, writers replace it whole.
 /// </summary>
 public sealed class NavRuntimeBuildings
 {
     /// <summary>
-    /// How far (units) a building reaches past its zone box in the gatherer (<c>BuildingReach</c>) plus the gather margin: the zones a placement can shape.
+    /// How far (units) a building reaches past its zone box in the gatherer (<c>BuildingReach</c>) plus the gather margin: the zones a placement
+    /// can shape.
     /// </summary>
     public const float Reach = 600 + 72;
 
+    /// <summary>
+    /// Serialises the writers; readers take <see cref="_byZone"/> without it.
+    /// </summary>
     readonly object _gate = new();
+    /// <summary>
+    /// Every placement by its instance key, under <see cref="_gate"/>.
+    /// </summary>
     readonly Dictionary<string, BuildingPlacement> _all = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The placements by the zone they were placed in: a snapshot replaced whole by each change.
+    /// </summary>
     volatile Dictionary<ZoneCoordinate, BuildingPlacement[]> _byZone = [];
 
+    /// <summary>
+    /// Whether no placement is in the overlay.
+    /// </summary>
     public bool IsEmpty => _byZone.Count == 0;
 
     /// <summary>
@@ -90,6 +103,9 @@ public sealed class NavRuntimeBuildings
             return [.. _all.Values];
     }
 
+    /// <summary>
+    /// The placements in <paramref name="zone"/> (by where they were placed) in the snapshot of now; empty for none.
+    /// </summary>
     public IReadOnlyList<BuildingPlacement> In(ZoneCoordinate zone) => _byZone.TryGetValue(zone, out var list) ? list : [];
 
     /// <summary>

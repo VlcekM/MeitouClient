@@ -10,6 +10,10 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Combat;
 
+/// <summary>
+/// The Act step (parallel, per character): the medical tick, the defence against the blows coming at it, its swing and the blows it sends, and the
+/// start of a new attack.
+/// </summary>
 public sealed partial class CombatSystem
 {
     // ------------------------------------------------------------------ act
@@ -288,8 +292,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The weapon in hand follows the arms (docs/game/combat.md "Arms"): losing one puts the weapon away and the fight goes on with what the arms still
-    /// allow.
+    /// The weapon in hand follows the arms (docs/game/combat.md "Arms"): losing one puts the weapon away and the fight goes on with what the arms
+    /// still allow.
     /// </summary>
     void FollowArms(CharacterCold cold, ref CombatSlot s)
     {
@@ -660,6 +664,10 @@ public sealed partial class CombatSystem
 
     #region Attacks
 
+    /// <summary>
+    /// Starts an attack when the fighter may (in reach, engaged, drawn, no Block order, room round it): the technique the chooser picks for the gap
+    /// to where its target will be.
+    /// </summary>
     void StartAttack(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, EffectBuffer effects)
     {
         var table = world.Characters;
@@ -1103,12 +1111,30 @@ public sealed partial class CombatSystem
     /// </summary>
     const float FlockHeight = 20;
 
+    /// <summary>
+    /// The state of <see cref="NearestFriend"/>'s grid query.
+    /// </summary>
     struct FriendScan
     {
+        /// <summary>
+        /// The combat system, for the enemy test.
+        /// </summary>
         public CombatSystem Self;
+        /// <summary>
+        /// The world the bodies are read from.
+        /// </summary>
         public World World;
+        /// <summary>
+        /// The fighter's slot, its faction and its target's slot.
+        /// </summary>
         public int Me, Faction, Target;
+        /// <summary>
+        /// The fighter's position.
+        /// </summary>
         public Vector3 At;
+        /// <summary>
+        /// The centre distance to the nearest body that is not an enemy so far (99: none).
+        /// </summary>
         public float Nearest;
     }
 
@@ -1162,7 +1188,13 @@ public sealed partial class CombatSystem
 
     #region Attacker index
 
+    /// <summary>
+    /// Who is after whom as of the last tick (<see cref="IndexAttackers"/>).
+    /// </summary>
     readonly AttackerIndex _index = new();
+    /// <summary>
+    /// <see cref="FightersAt"/>'s count per target, made by <see cref="IndexAttackers"/>.
+    /// </summary>
     int[] _fightersAt = [];
 
     /// <summary>
@@ -1186,6 +1218,9 @@ public sealed partial class CombatSystem
     /// </summary>
     public int FightersAt(World world, int t) => (uint)t < (uint)world.Characters.HighWater && t < _fightersAt.Length ? _fightersAt[t] : 0;
 
+    /// <summary>
+    /// The melee fighters at <paramref name="t"/>: its attackers within the engage scan's cells that still target it, are not down and do not shoot.
+    /// </summary>
     int CountFightersAt(World world, int t)
     {
         var prev = world.Characters.Previous;
@@ -1250,6 +1285,10 @@ public sealed partial class CombatSystem
         return best;
     }
 
+    /// <summary>
+    /// Whether a blow at <paramref name="v"/> of its swing by <paramref name="other"/> comes before <paramref name="best"/>: further along, or as far
+    /// and from the kept attacker or a lower slot.
+    /// </summary>
     static bool Ahead(float v, int other, in IncomingBlow best, int keep) =>
         v > best.Progress || v == best.Progress && best.Attacker != keep && (other == keep || other < best.Attacker);
 
@@ -1343,6 +1382,10 @@ public sealed partial class CombatSystem
 
     #region Defence
 
+    /// <summary>
+    /// Starts the defence against <paramref name="swing"/>: the reaction roll, the technique for the blow's side (none tried again for a while after
+    /// a failure), its clip at once.
+    /// </summary>
     void StartDefence(World world, int i, ref CombatSlot s, CharacterCold cold, ulong key, int now, float dt, in IncomingBlow swing,
         bool stumbling, bool reconsider)
     {

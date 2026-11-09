@@ -13,14 +13,32 @@ namespace Meitou.Simulation.Crime;
 /// </summary>
 public sealed class Caging
 {
+    /// <summary>
+    /// The player character carrying the body.
+    /// </summary>
     public required CharacterId Carrier { get; init; }
+    /// <summary>
+    /// The body carried.
+    /// </summary>
     public required CharacterId Captive { get; init; }
+    /// <summary>
+    /// The id of the cage it is taken to.
+    /// </summary>
     public required string Cage { get; set; }
+    /// <summary>
+    /// Walks to the cage so far; past <see cref="ArrestSettings.CageWalks"/> the caging gives up.
+    /// </summary>
     public int Tries { get; set; }
 
+    /// <summary>
+    /// Adds the carrier, captive, cage (a stable hash of its id) and walks to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
-        h.Add(Carrier); h.Add(Captive); h.Add(Rng.StableHash(Cage)); h.Add(Tries);
+        h.Add(Carrier);
+        h.Add(Captive);
+        h.Add(Rng.StableHash(Cage));
+        h.Add(Tries);
     }
 }
 
@@ -30,7 +48,13 @@ public sealed class Caging
 /// </summary>
 public sealed class Hunt
 {
+    /// <summary>
+    /// The bounty hunter.
+    /// </summary>
     public required CharacterId Hunter { get; init; }
+    /// <summary>
+    /// The player character hunted.
+    /// </summary>
     public required CharacterId Target { get; init; }
     /// <summary>
     /// Game seconds since the last attack order.
@@ -41,12 +65,21 @@ public sealed class Hunt
     /// </summary>
     public float Rest { get; set; }
 
+    /// <summary>
+    /// Adds the hunter, target, time and rest to the world hash.
+    /// </summary>
     internal void Hash(ref StateHasher h)
     {
-        h.Add(Hunter); h.Add(Target); h.Add(Time); h.Add(Rest);
+        h.Add(Hunter);
+        h.Add(Target);
+        h.Add(Time);
+        h.Add(Rest);
     }
 }
 
+/// <summary>
+/// The arrest system's bail, the player's put-in-cage order with its bounty claim, and the bounty hunters.
+/// </summary>
 public sealed partial class ArrestSystem : IOrderOwner
 {
     /// <summary>
@@ -59,19 +92,36 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// </summary>
     public const int MinNpcBail = 2000;
 
+    /// <summary>
+    /// The running put-in-cage walks, one per carrier.
+    /// </summary>
     readonly List<Caging> _cagings = [];
+    /// <summary>
+    /// The hunts, the resting ones kept until their rest runs out.
+    /// </summary>
     readonly List<Hunt> _hunts = [];
 
+    /// <summary>
+    /// The running put-in-cage walks.
+    /// </summary>
     public IReadOnlyList<Caging> Cagings => _cagings;
+    /// <summary>
+    /// The hunts, running and resting.
+    /// </summary>
     public IReadOnlyList<Hunt> Hunts => _hunts;
 
+    /// <summary>
+    /// Takes the player's bail and put-in-cage orders (the selection's carriers when the order names none).
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
         foreach (var command in commands)
         {
             switch (command)
             {
-                case PayBailOrder bail: PayBail(world, bail.Prisoner); break;
+                case PayBailOrder bail:
+                    PayBail(world, bail.Prisoner);
+                    break;
                 case PutInCageOrder put:
                     foreach (var id in put.Carriers.Count > 0 ? put.Carriers : world.Player.Selection.ToArray())
                         StartCaging(world, id, put.Cage, put.Queued);
@@ -80,7 +130,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         }
     }
 
-    // ------------------------------------------------------------------ bail
+    #region Bail
 
     /// <summary>
     /// The bail of a caged character (economy.md 11.5, <b>Observed</b>): twice its bounty with the jail (the cage owner's faction), at least
@@ -224,9 +274,10 @@ public sealed partial class ArrestSystem : IOrderOwner
     }
 
     /// <summary>
-    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c>: one that could not speak (event 51 returned 0) is given 128 Retreat to
-    /// hometown, then every one 133 Get out of cage (legit). Whether the later give replaces the earlier or queues behind it is <b>Unknown</b>
-    /// (<c>FUN_1405d20d0</c>): Meitou walks a prisoner that spoke out of the cage to its payer (<see cref="Dialogue.CharacterTrading.WalkOutOfCage"/>,
+    /// The end of each freed prisoner's block in <c>FUN_1406ae170</c>: one that could not speak (event 51 returned 0) is given
+    /// 128 Retreat to hometown, then every one 133 Get out of cage (legit). Whether the later give replaces the earlier or
+    /// queues behind it is <b>Unknown</b> (<c>FUN_1405d20d0</c>): Meitou walks a prisoner that spoke out of the cage to its
+    /// payer (<see cref="Dialogue.CharacterTrading.WalkOutOfCage"/>,
     /// 133) and one that did not to its squad's home (128 standing for the pair).
     /// </summary>
     void SendOut(World world, int p, CharacterCold pc, int payer, bool spoke)
@@ -237,8 +288,14 @@ public sealed partial class ArrestSystem : IOrderOwner
             Dialogue.CharacterTrading.WalkOutOfCage(world, p, payer);
     }
 
-    // ------------------------------------------------------------------ putting a captive in a cage, and the claim
+    #endregion
 
+    #region Putting a captive in a cage, and the claim
+
+    /// <summary>
+    /// Queues or gives the put-in-cage order (row 108) to a player character carrying a body; <paramref name="chosen"/> names the cage, null:
+    /// the nearest.
+    /// </summary>
     void StartCaging(World world, CharacterId carrier, string? chosen, bool queued)
     {
         var table = world.Characters;
@@ -278,6 +335,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         return CageFor(world, slot, c, order.Site) is null ? OrderCheck.Blocked($"{c.Name}: no free cage nearby", posted: true) : OrderCheck.Run;
     }
 
+    /// <summary>
+    /// Starts the order: drops the carrier's old caging and walks to the cage with the carried body as target.
+    /// </summary>
     void IOrderOwner.Start(World world, int slot, OrderEntry order)
     {
         var c = world.Characters.Cold(slot)!;
@@ -288,6 +348,9 @@ public sealed partial class ArrestSystem : IOrderOwner
             new TaskRequest(CharacterTask.GoTo, TaskType.PutInCage, TaskSource.Order) { Site = cage.Id, Target = c.Carrying });
     }
 
+    /// <summary>
+    /// Registers the put-in-cage task (row 108) with this system.
+    /// </summary>
     public void RegisterTasks(TaskHandlers tasks) => tasks.Register(TaskType.PutInCage, this);
 
     /// <summary>
@@ -492,7 +555,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         return true;
     }
 
-    // ------------------------------------------------------------------ bounty hunters
+    #endregion
+
+    #region Bounty hunters
 
     /// <summary>
     /// The bounty a hunter of <paramref name="faction"/> sees on <paramref name="c"/>: the unclaimed entry of its faction's booking faction
@@ -574,6 +639,9 @@ public sealed partial class ArrestSystem : IOrderOwner
         return true;
     }
 
+    /// <summary>
+    /// Adds the cagings and hunts to the world hash, each only while there are any.
+    /// </summary>
     void HashBounties(ref StateHasher hasher)
     {
         if (_cagings.Count > 0)
@@ -589,4 +657,6 @@ public sealed partial class ArrestSystem : IOrderOwner
             foreach (var h in _hunts) h.Hash(ref hasher);
         }
     }
+
+    #endregion
 }
