@@ -35,7 +35,7 @@ public sealed partial class DialogueSystem
         return true;
     }
 
-    static int PlayerHeads(World world)
+    internal static int PlayerHeads(World world)
     {
         var table = world.Characters;
         int heads = 0;
@@ -71,7 +71,7 @@ public sealed partial class DialogueSystem
     /// The character at <paramref name="slot"/> leaves its squad and joins the player's active squad (or a new blank squad when it is full) as a
     /// player character.
     /// </summary>
-    bool JoinPlayer(World world, int slot, CharacterCold talker)
+    internal bool JoinPlayer(World world, int slot, CharacterCold talker)
     {
         var table = world.Characters;
         var me = table.IdOf(slot);
@@ -104,7 +104,7 @@ public sealed partial class DialogueSystem
         return true;
     }
 
-    static void Leave(World world, CharacterId me, CharacterCold mc)
+    internal static void Leave(World world, CharacterId me, CharacterCold mc)
     {
         if (world.Squads.Find(mc.SquadId) is not { } old) return;
         old.Members.Remove(me);

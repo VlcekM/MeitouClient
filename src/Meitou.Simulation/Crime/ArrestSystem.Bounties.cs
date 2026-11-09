@@ -185,7 +185,7 @@ public sealed partial class ArrestSystem : IOrderOwner
     /// <summary>
     /// The end of each freed prisoner's block in <c>FUN_1406ae170</c>: one that could not speak (event 51 returned 0) is given 128 Retreat to
     /// hometown, then every one 133 Get out of cage (legit). Whether the later give replaces the earlier or queues behind it is <b>Unknown</b>
-    /// (<c>FUN_1405d20d0</c>): Meitou walks a prisoner that spoke out of the cage to its payer (<see cref="Dialogue.DialogueSystem.WalkOutOfCage"/>,
+    /// (<c>FUN_1405d20d0</c>): Meitou walks a prisoner that spoke out of the cage to its payer (<see cref="Dialogue.CharacterTrading.WalkOutOfCage"/>,
     /// 133) and one that did not to its squad's home (128 standing for the pair).
     /// </summary>
     void SendOut(World world, int p, CharacterCold pc, int payer, bool spoke)
@@ -193,7 +193,7 @@ public sealed partial class ArrestSystem : IOrderOwner
         if (!spoke && world.Squads.Find(pc.SquadId) is { } squad)
             TaskStart.Walk(world, p, squad.HomeCentre, SpeedMode.Walk, TaskType.RetreatHometown, TaskSource.Npc);
         else
-            Dialogue.DialogueSystem.WalkOutOfCage(world, p, payer);
+            Dialogue.CharacterTrading.WalkOutOfCage(world, p, payer);
     }
 
     // ------------------------------------------------------------------ putting a captive in a cage, and the claim

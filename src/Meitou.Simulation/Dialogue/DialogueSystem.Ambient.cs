@@ -77,7 +77,7 @@ public sealed partial class DialogueSystem
     /// talking or caged; what it was saying is dropped without the end step (no counter), as the original overwrites the state (a character in the
     /// open player conversation is still refused: engine choice).
     /// </summary>
-    bool StartBubbles(World world, CharacterId npc, CharacterId whom, DialogueNode root, int ev, bool now = true, bool force = false)
+    internal bool StartBubbles(World world, CharacterId npc, CharacterId whom, DialogueNode root, int ev, bool now = true, bool force = false)
     {
         if (!world.Characters.TryResolveNext(npc, out int n)) return false;
         if (force)
@@ -118,6 +118,29 @@ public sealed partial class DialogueSystem
     /// </summary>
     bool RootLive(World world, Conversation c, DialogueNode node) =>
         SquadOf(world, c.Npc).Any(m => _open is { } o && o != c && o.Npc == m && o.Root == node || _bubbles.Any(b => b.C != c && b.C.Npc == m && b.C.Root == node));
+
+    /// <summary>
+    /// Whether <paramref name="who"/> is the NPC of a bubble conversation or of the open player conversation (a follower keeps following while it
+    /// is).
+    /// </summary>
+    internal bool LeadsTalk(CharacterId who)
+    {
+        foreach (var b in _bubbles)
+            if (b.C.Npc == who) return true;
+
+        return _open?.Npc == who;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="who"/> is either side of a bubble conversation or of the open player conversation.
+    /// </summary>
+    internal bool Talking(CharacterId who)
+    {
+        foreach (var b in _bubbles)
+            if (b.C.Npc == who || b.C.Player == who) return true;
+
+        return _open?.Npc == who || _open?.Player == who;
+    }
 
     bool BubbleOf(CharacterId who) => _shown.ContainsKey(who) || _bubbles.Any(b => b.Speaker == who || b.C.Npc == who);
 

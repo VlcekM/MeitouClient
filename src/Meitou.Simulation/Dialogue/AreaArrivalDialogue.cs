@@ -1,7 +1,7 @@
-using System.Numerics;
 using Meitou.Data.Gameplay.Dialogue;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Factions;
+using Meitou.Simulation.Population;
 
 namespace Meitou.Simulation.Dialogue;
 
@@ -12,8 +12,15 @@ namespace Meitou.Simulation.Dialogue;
 /// </summary>
 public sealed record AreaArrival(string GroupId, int Serial = 0) : SimCommand;
 
-public sealed partial class DialogueSystem
+/// <summary>
+/// The arrival banter tries of <see cref="AreaArrival"/> and the result of the last one for the host; the banter itself is said as the dialogue
+/// system's speech bubbles.
+/// </summary>
+sealed class AreaArrivalDialogue(DialogueSystem system, PopulationData data, DialogueDatabase dialogue)
 {
+    /// <summary>
+    /// The last try's <see cref="AreaArrival.Serial"/> times 2, plus 1 when the host forgets the group.
+    /// </summary>
     int _arrivalResult;
 
     /// <summary>
@@ -23,7 +30,7 @@ public sealed partial class DialogueSystem
     /// every candidate with every dialogue (<c>scoreCustomDialog</c>) and runs the best; here the first dialogue, speaker and partner (squad order)
     /// that have a line win, "on screen" is not tested, and an enemy sensed is one hostile awake within sight range.
     /// </summary>
-    void Arrive(World world, AreaArrival a)
+    public void Arrive(World world, AreaArrival a)
     {
         bool forget = TryArrive(world, a);
         Volatile.Write(ref _arrivalResult, a.Serial * 2 + (forget ? 1 : 0));
@@ -50,9 +57,9 @@ public sealed partial class DialogueSystem
     {
         var table = world.Characters;
         if (world.Squads.Find(world.Player.Squad) is not { Members.Count: >= 2 } squad) return true;
-        if (_data.Db.Find(a.GroupId) is not { } group) return false;
+        if (data.Db.Find(a.GroupId) is not { } group) return false;
         var roots = group.GetReferences("arrival dialog")
-            .Select(r => _dialogue.Node(r.TargetStringId))
+            .Select(r => dialogue.Node(r.TargetStringId))
             .Where(n => n is { IsRoot: true })
             .ToList();
         if (roots.Count == 0) return false;
@@ -63,10 +70,10 @@ public sealed partial class DialogueSystem
 
             // Only a member that is up, free, not an animal and out of melee counts for the enemy test, which aborts the whole arrival; the town
             // filter comes after it (FUN_1407ffe40 :100-121).
-            if (!Awake(table, s) || !c.CarriedBy.IsNone || c.InSomething != Locks.HeldState.None
+            if (!DialogueSystem.Awake(table, s) || !c.CarriedBy.IsNone || c.InSomething != Locks.HeldState.None
                 || SquadRegistry.IsAnimal(c) || c.InCombat) continue;
             if (SensesEnemy(world, s, c)) return false;
-            if (_data.TownAt(table.Next[s].Position) >= 0) continue;
+            if (data.TownAt(table.Next[s].Position) >= 0) continue;
             candidates.Add(id);
         }
 
@@ -78,7 +85,7 @@ public sealed partial class DialogueSystem
                 foreach (var partner in candidates)
                 {
                     if (partner == speaker) continue;
-                    if (MaySpeak(world, root!, speaker) && StartBubbles(world, speaker, partner, root!, 0)) return true;
+                    if (MaySpeak(world, root!, speaker) && system.StartBubbles(world, speaker, partner, root!, 0)) return true;
                 }
             }
         }
@@ -93,8 +100,8 @@ public sealed partial class DialogueSystem
     /// </summary>
     bool MaySpeak(World world, DialogueNode root, CharacterId speaker)
     {
-        if (Cold(world, speaker) is not { } c) return false;
-        return ListsSpeaker(root, c.RecordId);
+        if (DialogueSystem.Cold(world, speaker) is not { } c) return false;
+        return system.ListsSpeaker(root, c.RecordId);
     }
 
     /// <summary>

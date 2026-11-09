@@ -144,7 +144,7 @@ public sealed partial class DialogueSystem
     /// (<c>FUN_1405e89c0</c> false) speaks a root or an interjection only when the list names it, so an empty list fails; any other record passes an
     /// empty list or one that names it. The later lines of a conversation only test a non-empty list.
     /// </summary>
-    bool ListsSpeaker(DialogueNode node, string record) =>
+    internal bool ListsSpeaker(DialogueNode node, string record) =>
         node.IsCharacter.Contains(record) || node.IsCharacter.Count == 0 && !((node.IsRoot || node.Interjection) && _data.Db.Find(record)?.GetBool("dumb") == true);
 
     /// <summary>
@@ -265,7 +265,11 @@ public sealed partial class DialogueSystem
     static IEnumerable<Items.ItemInstance> Listed(Items.Inventory inventory) =>
         inventory.Backpack?.Contents is { } bag ? inventory.Items.Concat(bag.Items) : inventory.Items;
 
-    static CharacterCold? Cold(World world, CharacterId id) => world.Characters.TryResolveNext(id, out int s) ? world.Characters.Cold(s) : null;
+    /// <summary>
+    /// The character's cold state; null when the id no longer resolves.
+    /// </summary>
+    internal static CharacterCold? Cold(World world, CharacterId id) =>
+        world.Characters.TryResolveNext(id, out int s) ? world.Characters.Cold(s) : null;
 
     /// <summary>
     /// The members of <paramref name="id"/>'s squad (itself alone without one).

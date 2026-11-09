@@ -145,6 +145,31 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     readonly PopulationSystem? _population;
 
+    /// <summary>
+    /// The cultures' illegal goods and the smuggling messages posted (DC_HAS_ILLEGAL_ITEM).
+    /// </summary>
+    readonly IllegalGoods _illegalGoods;
+
+    /// <summary>
+    /// The arrival banter tries (<see cref="AreaArrival"/>) and the last one's result.
+    /// </summary>
+    readonly AreaArrivalDialogue _arrival;
+
+    /// <summary>
+    /// The character trading window (DA 41, 42, 48).
+    /// </summary>
+    readonly CharacterTrading _characterTrading;
+
+    /// <summary>
+    /// The speakers following their targets while they talk (DA_FOLLOW_WHILE_TALKING).
+    /// </summary>
+    readonly TalkFollowers _followers;
+
+    /// <summary>
+    /// The town stalkers (DA_THUG_HUNTER).
+    /// </summary>
+    readonly TownStalkers _stalkers;
+
     public DialogueSystem(PopulationData data, DialogueSettings? settings = null, PopulationSystem? population = null)
     {
         this._data = data;
@@ -153,9 +178,19 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         Settings = settings ?? new DialogueSettings();
         _approach = new(Settings.ApproachSeconds);
         _npcApproaches = new(this);
+        _illegalGoods = new(data);
+        _arrival = new(this, data, _dialogue);
+        _characterTrading = new(this, data);
+        _followers = new(this);
+        _stalkers = new(this, data);
     }
 
     public DialogueSettings Settings { get; }
+
+    /// <summary>
+    /// The result of the last arrival try (<see cref="AreaArrivalDialogue.ArrivalResult"/>).
+    /// </summary>
+    public (int Serial, bool Forget) ArrivalResult => _arrival.ArrivalResult;
 
     /// <summary>
     /// The squads' memories of characters (docs/game/dialogue.md "Squad memory"): written by dialogue effects and player conversations, read by the
@@ -163,7 +198,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// </summary>
     public SquadMemory Memory { get; } = new();
 
-    static int CompareIds(CharacterId a, CharacterId b) => a.Slot != b.Slot ? a.Slot.CompareTo(b.Slot) : a.Generation.CompareTo(b.Generation);
+    internal static int CompareIds(CharacterId a, CharacterId b) => a.Slot != b.Slot ? a.Slot.CompareTo(b.Slot) : a.Generation.CompareTo(b.Generation);
 
     /// <summary>
     /// One open player conversation.
@@ -212,13 +247,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
                     CancelApproach(world);
                     break;
                 case ConfirmCharacterTrade confirm:
-                    ConfirmTrade(world, confirm.Selected);
+                    _characterTrading.ConfirmTrade(world, confirm.Selected);
                     break;
                 case CloseCharacterTrade:
-                    _characterTrade = null;
+                    _characterTrading.Close();
                     break;
                 case AreaArrival arrival:
-                    Arrive(world, arrival);
+                    _arrival.Arrive(world, arrival);
                     break;
                 case DialogueEvent e:
                     if (e.Event == UnlockMyCageOrShackles && e.Dialogue is null) Freed(world, e.Npc, e.Target);
@@ -235,13 +270,13 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     public void SlowWorld(World world)
     {
         ExpireSpeech(world);
-        KeepCharacterTrade(world);
+        _characterTrading.KeepCharacterTrade(world);
         Memory.Age(world);
         if (_bubbles.Count > 0) StepBubbles(world);
         if (Settings.AmbientEvents && world.Tick % Settings.AmbientEveryTicks == 0) { SeeOthers(world); SeeGettingUp(world); }
         if (_npcApproaches.Count > 0) _npcApproaches.Step(world);
-        StepFollowers(world);
-        StepStalkers(world);
+        _followers.StepFollowers(world);
+        _stalkers.StepStalkers(world);
         if (!_talker.IsNone && _open is null)
         {
             var table = world.Characters;
@@ -504,7 +539,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         // An arrest the conversation started (DA 29, 30) keeps the guard held.
         if (Arrests?.Arrests.Any(a => a.Guard == c.Npc) != true) Release(world, c.Npc);
         OpenBail(world);
-        OpenCharacterTrade(world);
+        _characterTrading.OpenCharacterTrade(world);
     }
 
     void MarkUsed(World world, Conversation c, DialogueNode line)
@@ -534,7 +569,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     internal void RefreshView(World world)
     {
-        RefreshCharacterTrade(world);
+        _characterTrading.RefreshCharacterTrade(world);
         if (_open is not { } c) { _view = null; return; }
         _view = new ConversationView(c.Npc, c.Player, c.Speaker, NameOf(world, c.Speaker.IsNone ? c.Npc : c.Speaker), NameOf(world, c.Player), c.Text,
             [.. c.Choices.Select(Shown)], [.. c.Log], world.Player.Money);
@@ -552,6 +587,23 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     public ConversationView? PublishConversation() => _view;
     public DialogueRequest? PublishRequest() => _request;
+    public CharacterTradeView? PublishCharacterTrade() => _characterTrading.View;
+
+    /// <summary>
+    /// EV_BOUGHT_ME_FROM_SLAVERY.
+    /// </summary>
+    internal const int BoughtMeFromSlavery = 51;
+
+    /// <summary>
+    /// The end of the animal buying confirm (<c>FUN_1406aac20</c> -> <c>FUN_1406e32f0</c>, <b>Verified</b>): the character editor opens in mode 1 on
+    /// the animals that were bought, after the money is taken, and not at all when none was. The host acts on the request (it names them: the
+    /// editor's animal page, <see cref="Editing.CharacterEditing"/>'s name-only edit).
+    /// </summary>
+    internal void OpenAnimalEditor(CharacterId slaver, List<CharacterId> bought)
+    {
+        if (bought.Count == 0) return;
+        _request = new DialogueRequest(++_requestId, DialogueRequestKind.AnimalEditor, bought[0], slaver) { Characters = bought };
+    }
 
     public void Hash(ref StateHasher hasher)
     {
@@ -562,7 +614,8 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         foreach (var ((who, line), passed) in _permanent) { hasher.Add(who); hasher.Add(Rng.StableHash(line)); hasher.Add(passed); }
         foreach (var ((who, ev), (count, last)) in _counters) { hasher.Add(who); hasher.Add(ev); hasher.Add(count); hasher.Add(last); }
         Memory.Hash(ref hasher);
-        HashActs(ref hasher);
+        _followers.Hash(ref hasher);
+        _stalkers.Hash(ref hasher);
         foreach (var (who, line) in _interrupts) { hasher.Add(who); hasher.Add(Rng.StableHash(line)); }
         foreach (var b in _bubbles) { hasher.Add(b.C.Npc); hasher.Add(Rng.StableHash(b.Line.StringId)); hasher.Add(b.DueTick); }
         foreach (var ((squad, whom), hours) in _ambientAt) { hasher.Add(squad); hasher.Add(whom); hasher.Add(hours); }
