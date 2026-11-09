@@ -85,6 +85,22 @@ sealed class StealthView(PlayerInterface player)
     const float NameTagRangeSquared = 1.2e8f;
 
     /// <summary>
+    /// The name tag panel's share of the screen width in the layout, and the shares of it the <c>Stealth</c> icon (left) and the <c>LightLevel</c>
+    /// icon (right) take; the name's text box (<c>Stretch</c>) is what lies between them.
+    /// </summary>
+    const float NameTagWidth = 0.105729f, StealthIconShare = 0.187192f, LightIconShare = 0.157635f;
+
+    /// <summary>
+    /// The name tag's font (the layout's <c>Kenshi_TextboxStandardText_Large</c> skin).
+    /// </summary>
+    const string NameTagFont = "Kenshi_StandardFont_Large";
+
+    /// <summary>
+    /// The measured width of each name tag caption, by caption, screen height and minimum text pixels, so a tag is not measured every frame.
+    /// </summary>
+    readonly Dictionary<(string Caption, int Height, float Minimum), float> _nameWidths = [];
+
+    /// <summary>
     /// The frames of the <c>LightLevel</c> icon in <c>Kenshi_CharacterNameTags</c> (Verified, kenshi_images.xml).
     /// </summary>
     const int LightLevelFrames = 7;
@@ -112,11 +128,12 @@ sealed class StealthView(PlayerInterface player)
     /// sneaks the <c>Stealth</c> icon on the left in the state's tag colour. The name is white and in square brackets when the character is selected,
     /// grey and bare otherwise (<c>NameTagSelected</c> / <c>NameTagUnselected</c>, the brackets from a screenshot of the original; <b>Observed</b>);
     /// while it sneaks, also the <c>LightLevel</c> icon on the right from its light level. The panel stands on the head like a speech bubble does
-    /// (the original's anchor is not mapped).
+    /// (the original's anchor is not mapped). A name too long for the layout's box widens the panel (<see cref="PanelWidth"/>).
     /// </summary>
     internal void AddNameTags(List<UiControl> controls)
     {
-        float width = player.Width * 0.105729f, height = player.Height * 0.0296296f, scale = player.Height / 1080f;
+        float layoutWidth = player.Width * NameTagWidth, height = player.Height * 0.0296296f, scale = player.Height / 1080f;
+        float icons = layoutWidth * (StealthIconShare + LightIconShare);
         int n = 0;
         foreach (var c in player.Session.CurrentSnapshot.Characters)
         {
@@ -127,17 +144,20 @@ sealed class StealthView(PlayerInterface player)
             if (Vector3.DistanceSquared(player.Eye, feet) >= NameTagRangeSquared) continue;
             if (player.Project(TagAnchor(c, feet)) is not { } head) continue;
 
+            string caption = c.Selected ? $"[{c.Name}]" : c.Name;
+            float width = player.ShowNames ? PanelWidth(caption, layoutWidth, icons) : layoutWidth;
             float x = head.X - width / 2;
             float y = head.Y - 4 * scale - height;
-            if (player.ShowNames) AddNameText(controls, c, n, new UiRect(x + width * 0.187192f, y, width * 0.655172f, height));
+            if (player.ShowNames)
+                AddNameText(controls, c, caption, n, new UiRect(x + layoutWidth * StealthIconShare, y, width - icons, height));
 
             // Without the name the panel is the two icons side by side (FUN_1406e2fd0 sizes it to them), centred over the head.
-            float stealthX = player.ShowNames ? x : head.X - width * (0.187192f + 0.157635f) / 2;
-            float lightX = player.ShowNames ? x + width * 0.842365f : stealthX + width * 0.187192f;
+            float stealthX = player.ShowNames ? x : head.X - icons / 2;
+            float lightX = player.ShowNames ? x + width - layoutWidth * LightIconShare : stealthX + layoutWidth * StealthIconShare;
             if (c.Stealth is { } state)
             {
-                var stealthBox = new UiRect(stealthX, y + height * 0.09375f, width * 0.187192f, height * 0.84375f);
-                var lightBox = new UiRect(lightX, y, width * 0.157635f, height);
+                var stealthBox = new UiRect(stealthX, y + height * 0.09375f, layoutWidth * StealthIconShare, height * 0.84375f);
+                var lightBox = new UiRect(lightX, y, layoutWidth * LightIconShare, height);
                 AddSneakIcons(controls, c, state, n, stealthBox, lightBox);
             }
 
@@ -146,14 +166,30 @@ sealed class StealthView(PlayerInterface player)
     }
 
     /// <summary>
-    /// The name of a player character in its name tag's text box.
+    /// The name tag panel's width for <paramref name="caption"/>: the layout's, or wider by as much as the name and its one-pixel shadow need to
+    /// show whole (the original shows a long name such as "[Drifter-cannibal escapee]" in full, <b>Observed</b>; whether it widens the panel or
+    /// lets the text overflow its box is <b>Unknown</b>). The text box stretches with the panel and the icons keep their size at its edges, by
+    /// the layout's <c>Stretch</c>, <c>Left</c> and <c>Right</c> aligns.
     /// </summary>
-    void AddNameText(List<UiControl> controls, CharacterSnapshot c, int n, UiRect box)
+    float PanelWidth(string caption, float layoutWidth, float icons)
     {
-        string caption = c.Selected ? $"[{c.Name}]" : c.Name;
+        if (player.UiPainter is not { } painter) return layoutWidth;
+
+        var key = (caption, player.Height, player.StandardPixels);
+        if (!_nameWidths.TryGetValue(key, out float text))
+            _nameWidths[key] = text = painter.MeasureText(NameTagFont, caption, player.Height, 0, player.StandardPixels).Width;
+
+        return MathF.Max(layoutWidth, MathF.Ceiling(text) + 1 + icons);
+    }
+
+    /// <summary>
+    /// The name of a player character (<paramref name="caption"/>: in square brackets while selected) in its name tag's text box.
+    /// </summary>
+    void AddNameText(List<UiControl> controls, CharacterSnapshot c, string caption, int n, UiRect box)
+    {
         var style = new Dictionary<string, string>
         {
-            ["FontName"] = "Kenshi_StandardFont_Large",
+            ["FontName"] = NameTagFont,
             ["TextAlign"] = "Center",
             ["TextShadow"] = "true",
             ["TextColour"] = c.Selected ? "1 1 1" : "0.702 0.702 0.702",
