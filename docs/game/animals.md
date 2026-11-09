@@ -139,6 +139,12 @@ is `+0x6fc` (the drawn size only; it is not refreshed above 0.95, unlike the ori
 - A new animal's inventory (`FUN_14062a130`, slot 0x2c0, **Observed**; the grid size **Verified**, :79-107): a 5 x 4 `backpack_attach` section, the main grid `inventory w` x
   `inventory h` (each below 1 becomes 4 and 8 on its own: w=6, h=0 gives 6 x 8; neither set 4 x 8), then every `backpack` list entry is made and added equipped, whatever its values (Pack Bull's
   entry is (0, 0, 0)); a saved inventory replaces this. Pack Beast and Pack Bull carry their CONTAINER this way.
+- The worn backpack's combat terms apply to the animal as to a person (**Observed** for `combat skill bonus`: a Pack Beast wearing the Garru Backpack, -4,
+  shows Attack 19 (-4) where its skill gives 23, and a Garru pup with attack 100 at age 0.18 shows 17 (-4); the other terms, `combat speed mult`, `stealth mult`
+  and `athletics mult`, from the same recalculation, **Inferred**). Meitou: `CharacterAssembly.PackOf` for animals and people alike.
+- An animal with no backpack gets the naked bonus as a person with no armour and no backpack does (**Observed** for dexterity: at age 0.5 an Iron Spider with
+  Dexterity 40 shows 22 (+2) and a Bonedog with 23.3 shows 12 (+1), 1.1 times the aged value, while a Pack Beast wearing its backpack shows the plain value; the
+  1.1 dodge and 1.2 stealth factors of the same refresh **Inferred**). Meitou: `Fighter.Naked`.
 - The main grid is shut while the animal lives (`CharacterAnimal` vtable slot 48 `FUN_1405cc630`, **Observed**): `main` is enabled only when the flag at +0x5bc (taken to be dead) is set,
   or the animal is not of the player's faction (`FUN_1407916d0`) and is down (vfunc 0x30); the animal window (`FUN_14014f570`) leaves a disabled `main` out. When slot 48 runs is
   **Unknown**. Meitou: `InventoryCommands.MainClosed`, drawn disabled; drops, right-click moves and pick-ups skip it; what is in it can still be taken out.

@@ -218,9 +218,10 @@ public sealed class Fighter
 
     /// <summary>
     /// Wearing no armour and no backpack: the gear refresh then puts 1.1 for dodge and dexterity and 1.2 for stealth (<c>FUN_140887030</c>,
-    /// <b>Verified</b> literals). Never for an animal (engine choice: whether the refresh runs for animals is <b>Unknown</b>).
+    /// <b>Verified</b> literals). An animal too: the original shows an Iron Spider's and a Bonedog's Dexterity 10 % higher and a Pack Beast's, which
+    /// wears a backpack, not (<b>Observed</b>; dodge and stealth <b>Inferred</b>, docs/game/animals.md).
     /// </summary>
-    public bool Naked => !IsAnimal && _armour.Length == 0 && !_backpack;
+    public bool Naked => _armour.Length == 0 && !_backpack;
 
     /// <summary>
     /// Product of the pieces' combat speed factors (<see cref="ArmourPiece.CombatSpeed"/>) and the backpack's: scales the speed attack animations

@@ -96,11 +96,7 @@ sealed class CharacterAssembly(PopulationData data)
                 if (crossbow is null && combat.Crossbow(item.Record) is { } x)
                     crossbow = CrossbowInstance.Create(item.Level * 0.01f, x, combat.Constants, data.BodyOptions.GlobalDamageMultiplier,
                         item.UnitWeight, section == "back");
-        var packRecord = inventory.Backpack is { } pack ? data.Db.Find(pack.Record) : null;
-        float? backpackStealth = inventory.Backpack is not null ? packRecord?.GetFloat("stealth mult", 1) ?? 1 : null;
-
-        // CONTAINER +0x238 (FUN_140763810): the raw athletics mult, the seed of the gear's smallest run factor.
-        float backpackAthletics = packRecord?.GetFloat("athletics mult", 1) ?? 1;
+        var pack = PackOf(inventory);
         string fistsId = (raceId is null ? null : data.Db.Find(raceId))?.GetReferences("fists lv1")
             .Select(r => r.TargetStringId).FirstOrDefault() ?? "FISTS";
 
@@ -108,8 +104,7 @@ sealed class CharacterAssembly(PopulationData data)
         var fists = (combat.Weapon(fistsId) ?? combat.Weapon("FISTS")) is { } fistsData
             ? WeaponInstance.Create(1, fistsData, null, null, combat.Constants)
             : null;
-        var fighter = new Fighter(First("hip"), armour, backpackStealth, backpackAthletics,
-            packRecord?.GetInt("combat skill bonus", 0) ?? 0, packRecord?.GetFloat("combat speed mult", 1) ?? 1)
+        var fighter = new Fighter(First("hip"), armour, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed)
         {
             BackWeapon = First("back"),
             Crossbow = crossbow,
@@ -123,9 +118,10 @@ sealed class CharacterAssembly(PopulationData data)
     /// An animal's fighter (docs/game/animals.md): its natural weapon, the ANIMAL_CHARACTER's <c>weapon</c> (a WEAPON of a creature category) made by
     /// its <c>weapon level</c> manufacturer; no armour. The weapon's level is the manufacturer's first model's level, with that model (an <b>engine
     /// choice</b>: the original makes the item without a level argument, and its default was not traced, <b>Unknown</b>). No weapon (or one not in
-    /// the data) gives a fighter without an attack.
+    /// the data) gives a fighter without an attack. A worn backpack counts as on a person (<see cref="PackOf"/>: the Garru Backpack's
+    /// <c>combat skill bonus</c> -4 shows on a Pack Beast's Attack in the original, <b>Observed</b>, docs/game/animals.md).
     /// </summary>
-    Fighter MakeAnimalFighter(AnimalData animal)
+    Fighter MakeAnimalFighter(AnimalData animal, Inventory inventory)
     {
         var combat = data.Combat;
         WeaponInstance? weapon = null;
@@ -136,14 +132,28 @@ sealed class CharacterAssembly(PopulationData data)
             weapon = WeaponInstance.Create((model?.Level ?? 0) * 0.01f, w, maker,
                 model is { } m ? combat.WeaponMaterial(m.ModelStringId) : null, combat.Constants);
         }
-        return new Fighter(weapon) { IsAnimal = true };
+        var pack = PackOf(inventory);
+        return new Fighter(weapon, null, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed) { IsAnimal = true };
+    }
+
+    /// <summary>
+    /// What the worn backpack gives the fighter (<see cref="Fighter"/>'s backpack seeds): its <c>stealth mult</c> (null without a backpack), the raw
+    /// <c>athletics mult</c> (CONTAINER +0x238, <c>FUN_140763810</c>: the seed of the gear's smallest run factor), <c>combat skill bonus</c> and
+    /// <c>combat speed mult</c>.
+    /// </summary>
+    (float? Stealth, float Athletics, int Skill, float Speed) PackOf(Inventory inventory)
+    {
+        var packRecord = inventory.Backpack is { } pack ? data.Db.Find(pack.Record) : null;
+        float? stealth = inventory.Backpack is not null ? packRecord?.GetFloat("stealth mult", 1) ?? 1 : null;
+        return (stealth, packRecord?.GetFloat("athletics mult", 1) ?? 1, packRecord?.GetInt("combat skill bonus", 0) ?? 0,
+            packRecord?.GetFloat("combat speed mult", 1) ?? 1);
     }
 
     /// <summary>
     /// The fighter of a character: an animal's from its ANIMAL_CHARACTER record, anyone else's from its gear, limbs and race.
     /// </summary>
     Fighter FighterOf(GameRecord? record, Inventory inventory, MedicalState? medical, string? raceId) =>
-        AnimalData.From(record) is { } animal ? MakeAnimalFighter(animal) : MakeFighter(inventory, medical, raceId);
+        AnimalData.From(record) is { } animal ? MakeAnimalFighter(animal, inventory) : MakeFighter(inventory, medical, raceId);
 
     /// <summary>
     /// The FACTION record of the character's faction (null: none or not in the data).
