@@ -42,8 +42,9 @@ static class LampShaders
 
     /// <summary>
     /// <c>lampTileVisibility</c>: how much of a lamp reaches a point, from its tile (<c>uLampTiles</c>; column 4 of the lamp's row: z the place, w the side, negative for a sphere, 0 none; column 5: x the
-    /// lamp's radius). The penumbra is the lamp's own: its radius seen past the blockers a fixed spiral of lookups finds. A lookup beside the point is compared with the surface's plane there, not with the
-    /// point's own depth (a slope turned from the lamp would shade itself). Nothing here changes from frame to frame.
+    /// lamp's radius). The penumbra is the lamp's own: its radius seen past the blockers a fixed spiral of lookups finds. A lookup r texels off counts only what stands nearer the lamp than the point by what
+    /// the surface can gain over r texels on its slope: its own near edge is not a blocker, and a real blocker of that penumbra stands far nearer still. The depth of the surface's plane at each lookup was tried and
+    /// dropped: at a graze it swings with the normal, and drew the ripples, then the terrain's facets, into the penumbra (**Observed**, spotlight-cross). Nothing here changes from frame to frame.
     /// </summary>
     public const string TileVisibility = """
         float lampTileAt(ivec2 corner, int side, ivec2 q)
@@ -61,21 +62,7 @@ static class LampShaders
             float l11 = step(receiver, texelFetch(uLampTiles, corner + ivec2(r.x, r.y), 0).r);
             return mix(mix(l00, l10, f.x), mix(l01, l11, f.x), f.y);
         }
-        // How far from the lamp the surface lies along another ray: the plane through the point, a lookup beside it reads the surface beside it.
-        float lampTilePlane(float d, float facing, vec3 n, vec3 ray)
-        {
-            float along = dot(n, ray);
-            return along < -1e-3 ? clamp(d * facing / along, 0.5 * d, 2.0 * d) : d;
-        }
-        // The direction from the lamp of a place in its tile.
-        vec3 lampTileRay(vec2 st, int side, bool sphere, vec3 axis, vec3 x, vec3 y, float span)
-        {
-            vec2 uv = st / float(side);
-            if (sphere) return lampOctDir(uv);
-            vec2 q = (uv * 2.0 - 1.0) * span;
-            return normalize(axis + x * q.x + y * q.y);
-        }
-        float lampTileVisibility(int lamp, vec3 world, vec3 toLamp, float d, vec3 shading)
+        float lampTileVisibility(int lamp, vec3 toLamp, float d, vec3 n)
         {
             vec4 t = texelFetch(uLightData, ivec2(4, lamp), 0);
             int side = int(abs(t.w));
@@ -83,19 +70,9 @@ static class LampShaders
             vec4 m = texelFetch(uLightData, ivec2(5, lamp), 0);
             float reach = texelFetch(uLightData, ivec2(0, lamp), 0).w, radius = m.x;
             vec3 l = toLamp / max(d, 1e-4);
-            // The drawn triangle's plane, not the normal map's: the bumps would bend the plane the lookups compare with and draw the penumbra's steps along the ripples.
-            vec3 n = shading;
-            #ifdef MEITOU_FRAGMENT
-            n = cross(dFdx(world), dFdy(world));
-            float nLength = length(n);
-            n = nLength > 1e-8 ? n / nLength : shading;
-            if (dot(n, shading) < 0.0) n = -n;
-            #endif
             vec2 uv;
-            float texelPerDepth, span = 0.0;
-            vec3 axis = vec3(0.0), x = vec3(0.0), y = vec3(0.0);
-            bool sphere = t.w < 0.0;
-            if (sphere)
+            float texelPerDepth;
+            if (t.w < 0.0)
             {
                 uv = lampOctUv(-l);
                 texelPerDepth = 3.5 / float(side);
@@ -103,16 +80,16 @@ static class LampShaders
             else
             {
                 vec4 s = texelFetch(uLightData, ivec2(2, lamp), 0);
-                axis = s.xyz;
-                span = lampTileTan(s.w);
-                lampBasis(axis, x, y);
+                float span = lampTileTan(s.w);
+                vec3 x, y;
+                lampBasis(s.xyz, x, y);
                 float z = max(dot(-l, s.xyz), 1e-3);
                 uv = vec2(dot(-l, x), dot(-l, y)) / z / span * 0.5 + 0.5;
                 texelPerDepth = 2.0 * span / float(side);
             }
             float texel = texelPerDepth * d;
             float nl = clamp(dot(n, l), 0.03, 1.0);
-            float slope = min(sqrt(1.0 - nl * nl) / nl, 8.0), margin = 1.0 + texel * (1.0 + slope), facing = dot(n, -l);
+            float slope = min(sqrt(1.0 - nl * nl) / nl, 8.0), margin = 1.0 + texel * (1.0 + slope);
             int place = int(t.z), row = place / 128;
             ivec2 corner = ivec2(place - row * 128, row) * LAMP_TILE_UNIT;
             vec2 st = uv * float(side);
@@ -129,7 +106,7 @@ static class LampShaders
                 float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / 8.0) * search;
                 vec2 p = st + vec2(cos(a), sin(a)) * r;
                 float v = lampTileAt(corner, side, ivec2(floor(p)));
-                if (v < 0.9999 && v < (lampTilePlane(d, facing, n, lampTileRay(p, side, sphere, axis, x, y, span)) - margin) / reach) { sum += v; held += 1.0; }
+                if (v < 0.9999 && v < (d - margin - r * texel * slope) / reach) { sum += v; held += 1.0; }
             }
             if (held < 0.5) return 1.0;
             float blocker = sum / held * reach;
@@ -143,8 +120,7 @@ static class LampShaders
                 for (int k = 0; k < 4; k++)
                 {
                     float a = float(k) * 1.57079633 + 0.6, r = 0.75 * spread;
-                    vec2 p = st + vec2(cos(a), sin(a)) * r;
-                    lit += lampTileLit(corner, side, p, (lampTilePlane(d, facing, n, lampTileRay(p, side, sphere, axis, x, y, span)) - margin) / reach);
+                    lit += lampTileLit(corner, side, st + vec2(cos(a), sin(a)) * r, (d - margin - r * texel * slope) / reach);
                 }
                 return lit / 4.0;
             }
@@ -153,8 +129,7 @@ static class LampShaders
             for (int k = 0; k < taps; k++)
             {
                 float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / float(taps)) * spread;
-                vec2 p = st + vec2(cos(a), sin(a)) * r;
-                lit += lampTileLit(corner, side, p, (lampTilePlane(d, facing, n, lampTileRay(p, side, sphere, axis, x, y, span)) - margin) / reach);
+                lit += lampTileLit(corner, side, st + vec2(cos(a), sin(a)) * r, (d - margin - r * texel * slope) / reach);
             }
             return lit / float(taps);
         }

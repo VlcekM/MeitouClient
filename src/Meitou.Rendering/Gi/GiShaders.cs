@@ -202,7 +202,7 @@ static class GiShaders
         {{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
         float giLampSeen(int lamp, vec3 world, vec3 n, vec3 toLamp, float d, int indoor, uint emitter)
         {
-            return texelFetch(uLightData, ivec2(4, lamp), 0).w != 0.0 ? lampTileVisibility(lamp, world, toLamp, d, n) : giLampVisibility(world, n, toLamp, indoor, emitter);
+            return texelFetch(uLightData, ivec2(4, lamp), 0).w != 0.0 ? lampTileVisibility(lamp, toLamp, d, n) : giLampVisibility(world, n, toLamp, indoor, emitter);
         }
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) giLampSeen(lamp, world, n, toLamp, d, indoor, emitter)
         {{LampShaders.Lighting}}

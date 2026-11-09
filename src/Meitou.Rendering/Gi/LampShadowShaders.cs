@@ -48,7 +48,7 @@ static class LampShadowShaders
             }
             if (weight <= 0.0) return;
             // What the still world took is already off the drawn light (the tiles, in lampLight): only what is left can be taken again, and a lamp blocked here needs no slot.
-            float seen = lampTileVisibility(lamp, vec3(0.0), l * d, d, rankPlane);
+            float seen = lampTileVisibility(lamp, l * d, d, rankPlane);
             weight *= seen;
             if (weight <= 0.0) return;
             int at = picked;
