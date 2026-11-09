@@ -1,3 +1,4 @@
+using System.Globalization;
 using Meitou.Content;
 using Meitou.Simulation.Bodies;
 using Meitou.Simulation.Combat;
@@ -71,7 +72,7 @@ sealed record GameplaySettings(
                 foreach (var line in File.ReadLines(file))
                 {
                     if (line.IndexOf('=') is > 0 and var eq
-                        && float.TryParse(line[(eq + 1)..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v)
+                        && float.TryParse(line[(eq + 1)..], NumberStyles.Float, CultureInfo.InvariantCulture, out float v)
                         && float.IsFinite(v))
                     {
                         values[line[..eq].Trim()] = v;

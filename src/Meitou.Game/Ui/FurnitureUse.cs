@@ -44,8 +44,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (player.Build.Services?.Placement.Footprint(b.Record) is { } footprint)
             {
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw);
-                if (player.Picking.BuildingRayT(ray, footprint.Place(b.Position, yaw), footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                var placed = footprint.Place(b.Position, yaw);
+                if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t
+                    && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                {
                     (hit, bestT) = ((b, t), t);
+                }
 
                 continue;
             }
@@ -113,7 +117,12 @@ sealed class FurnitureUse(PlayerInterface player)
 
         var bed = pending.Bed;
         var carriers = Carriers();
-        var verbs = new List<(string Caption, Action Give)> { player.Selected().LastOrDefault() is { } lead && !lead.Carrying.IsNone ? ("Put in Bed", () => PutIn(bed, carriers)) : ("Sleep", () => SleepIn(bed)) };
+        var verbs = new List<(string Caption, Action Give)>
+        {
+            player.Selected().LastOrDefault() is { } lead && !lead.Carrying.IsNone
+                ? ("Put in Bed", () => PutIn(bed, carriers))
+                : ("Sleep", () => SleepIn(bed)),
+        };
 
         // A bed the player built: its site's verbs too (dismantle...), which its quick click no longer reaches.
         if (player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => bed.Id == s.Id + "@bed0") is { } site)
@@ -143,8 +152,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (placement.Footprint(c.Record) is not { } footprint) continue;
 
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, c.Yaw);
-            if (player.Picking.BuildingRayT(ray, footprint.Place(c.Position, yaw), footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+            var placed = footprint.Place(c.Position, yaw);
+            if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t
+                && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+            {
                 (hit, bestT) = ((c, t), t);
+            }
         }
 
         return hit;
@@ -186,7 +199,10 @@ sealed class FurnitureUse(PlayerInterface player)
 
         var carriers = Carriers();
         if (carriers.Length > 0)
-            verbs.Add(("Put in", () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+        {
+            verbs.Add(("Put in",
+                () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+        }
     }
 
     /// <summary>
@@ -196,7 +212,12 @@ sealed class FurnitureUse(PlayerInterface player)
     {
         if (cage.Locked)
         {
-            verbs.Add((player.ContextMenuWindow.PickLockCaption(cage.Position, cage.Level, !occupied), () => player.Say(new PickLockOrder(selection, cage.Occupant) { Cage = occupied ? null : cage.Id, Tick = player.Session.World.Tick })));
+            verbs.Add((player.ContextMenuWindow.PickLockCaption(cage.Position, cage.Level, !occupied),
+                () => player.Say(new PickLockOrder(selection, cage.Occupant)
+                {
+                    Cage = occupied ? null : cage.Id,
+                    Tick = player.Session.World.Tick,
+                })));
             verbs.Add(("Use Tools", () => player.Say(new ForceLockOrder([], cage.Id, LockForce.Tools) { Tick = player.Session.World.Tick })));
             verbs.Add(("Use Strength", () => player.Say(new ForceLockOrder([], cage.Id, LockForce.Strength) { Tick = player.Session.World.Tick })));
             return;
@@ -210,7 +231,10 @@ sealed class FurnitureUse(PlayerInterface player)
 
         var carriers = Carriers();
         if (carriers.Length > 0)
-            verbs.Add(("Put in", () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+        {
+            verbs.Add(("Put in",
+                () => player.Say(new Simulation.Crime.PutInCageOrder(carriers) { Cage = cage.Id, Tick = player.Session.World.Tick })));
+        }
         else verbs.Add(("Get in", () => player.Say(new GetInCageOrder([], cage.Id) { Tick = player.Session.World.Tick })));
     }
 
@@ -274,8 +298,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (placement.Footprint(c.Record) is not { } footprint) continue;
 
             var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, c.Yaw);
-            if (player.Picking.BuildingRayT(ray, footprint.Place(c.Position, yaw), footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+            var placed = footprint.Place(c.Position, yaw);
+            if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, c.Record, c.Position, c.Position.Y, yaw) is { } t
+                && t < bestT && AboveViewedFloor?.Invoke(c.Position) != true && !player.Hidden(ray, t))
+            {
                 (hit, bestT) = ((c, t), t);
+            }
         }
 
         return hit;
@@ -290,7 +318,10 @@ sealed class FurnitureUse(PlayerInterface player)
         if (player.SelectedIds().Count == 0 || PickContainer(p) is not { } container) return false;
 
         string name = player.Build.Services?.ItemName(container.Record) ?? container.Record;
-        if (!player.ContextMenuWindow.ContextPressOn(p, at => player.ContextMenuWindow.Menu(name, at, player.ContextMenuWindow.ContainerVerbs(container)), () => player.ContextMenuWindow.OpenContainer(container.Id, alt)))
+        ContextMenuWindow.ContextMenu? ContainerMenu(Vector2 at) =>
+            player.ContextMenuWindow.Menu(name, at, player.ContextMenuWindow.ContainerVerbs(container));
+
+        if (!player.ContextMenuWindow.ContextPressOn(p, ContainerMenu, () => player.ContextMenuWindow.OpenContainer(container.Id, alt)))
             player.ContextMenuWindow.OpenContainer(container.Id, alt);
 
         return true;
@@ -388,9 +419,14 @@ sealed class FurnitureUse(PlayerInterface player)
             return true;
         }
 
-        void Quick() => player.Say(DoorBroken(pick.Door) ? new Simulation.Construction.BuildOrder([], pick.Door.Id) { Tick = player.Session.World.Tick } : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick });
+        void Quick() => player.Say(DoorBroken(pick.Door)
+            ? new Simulation.Construction.BuildOrder([], pick.Door.Id) { Tick = player.Session.World.Tick }
+            : new DoorOrder([], pick.Door.Id, alt) { Tick = player.Session.World.Tick });
 
-        if (!player.ContextMenuWindow.ContextPressOn(p, at => player.ContextMenuWindow.Menu(Loc.Tr("Door"), at, player.ContextMenuWindow.DoorVerbs(pick)), Quick))
+        ContextMenuWindow.ContextMenu? DoorMenu(Vector2 at) =>
+            player.ContextMenuWindow.Menu(Loc.Tr("Door"), at, player.ContextMenuWindow.DoorVerbs(pick));
+
+        if (!player.ContextMenuWindow.ContextPressOn(p, DoorMenu, Quick))
             Quick();
 
         return true;
@@ -415,8 +451,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (player.Build.Services?.Placement.Footprint(d.Record) is { } footprint)
             {
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, d.Yaw);
-                if (player.Picking.BuildingRayT(ray, footprint.Place(d.Position, yaw), footprint.YMin, footprint.YMax, d.Record, d.Position, d.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(d.Position) != true && !player.Hidden(ray, t))
+                var placed = footprint.Place(d.Position, yaw);
+                if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, d.Record, d.Position, d.Position.Y, yaw) is { } t
+                    && t < bestT && AboveViewedFloor?.Invoke(d.Position) != true && !player.Hidden(ray, t))
+                {
                     (hit, bestT) = ((d, t), t);
+                }
 
                 continue;
             }
@@ -503,8 +543,12 @@ sealed class FurnitureUse(PlayerInterface player)
             if (player.Build.Services?.Placement.Footprint(b.Record) is { } footprint)
             {
                 var yaw = Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.PlacementYaw);
-                if (player.Picking.BuildingRayT(ray, footprint.Place(b.Position, yaw), footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                var placed = footprint.Place(b.Position, yaw);
+                if (player.Picking.BuildingRayT(ray, placed, footprint.YMin, footprint.YMax, b.Record, b.Position, b.Position.Y, yaw) is { } t
+                    && t < bestT && AboveViewedFloor?.Invoke(b.Position) != true && !player.Hidden(ray, t))
+                {
                     (hit, bestT) = ((b, t), t);
+                }
 
                 continue;
             }
@@ -561,7 +605,8 @@ sealed class FurnitureUse(PlayerInterface player)
         if (player.SelectedIds().Count == 0) return;
 
         var seat = pending.Seat;
-        player.ContextMenuWindow.OpenMenu = new(player.Build.Services?.ItemName(seat.Record) ?? seat.Record, pending.At, [("Use", () => SitOn(seat))]);
+        string name = player.Build.Services?.ItemName(seat.Record) ?? seat.Record;
+        player.ContextMenuWindow.OpenMenu = new(name, pending.At, [("Use", () => SitOn(seat))]);
     }
 
     // Mining rocks by hand (docs/simulation.md "Production", natural sites): a right click on a resource rock with characters selected has them
@@ -588,8 +633,11 @@ sealed class FurnitureUse(PlayerInterface player)
     /// </summary>
     internal (ResourceNode Rock, float T)? PickRockAt(Vector2 pixel)
     {
-        if (Rocks?.Invoke() is not { } rocks || player.Ray(pixel) is not { } ray || player.Picking.GroundHit(ray.Origin, ray.Direction) is not { } ground)
+        if (Rocks?.Invoke() is not { } rocks || player.Ray(pixel) is not { } ray
+            || player.Picking.GroundHit(ray.Origin, ray.Direction) is not { } ground)
+        {
             return null;
+        }
 
         float bestT = Vector3.Distance(ray.Origin, ground) + 1;
         ResourceNode? best = null;
@@ -607,8 +655,8 @@ sealed class FurnitureUse(PlayerInterface player)
     /// A rock as a selected building: its site is the natural site, so the machine window shows its output once it has been mined.
     /// </summary>
     internal BuildingSelection.SelectedBuilding RockBuilding(ResourceNode rock) =>
-        new(player.Build.Services?.ItemName(rock.Record) ?? rock.Record, null, null, null, ProductionSystem.NaturalId(rock.Record, rock.Position), ProductionSystem.NaturalId(rock.Record, rock.Position),
-            rock.Position, null, Record: rock.Record);
+        new(player.Build.Services?.ItemName(rock.Record) ?? rock.Record, null, null, null, ProductionSystem.NaturalId(rock.Record, rock.Position),
+            ProductionSystem.NaturalId(rock.Record, rock.Position), rock.Position, null, Record: rock.Record);
 
     void MineRock(IReadOnlyList<CharacterId> selection, ResourceNode rock, bool asJob)
     {

@@ -13,8 +13,8 @@ public enum TooltipTone { Default, Main, Ink, Title, Bad, BadBright, Good, Grey,
 /// <summary>
 /// One tooltip row: a key (left) and an optional value (right), each with the tone of its leading <c>#rrggbb</c> tag.
 /// </summary>
-public readonly record struct TooltipLine(string Key, string Value = "", TooltipTone KeyTone = TooltipTone.Default, TooltipTone ValueTone = TooltipTone.Default,
-    string Suffix = "", TooltipTone SuffixTone = TooltipTone.Default, bool Paragraph = false)
+public readonly record struct TooltipLine(string Key, string Value = "", TooltipTone KeyTone = TooltipTone.Default,
+    TooltipTone ValueTone = TooltipTone.Default, string Suffix = "", TooltipTone SuffixTone = TooltipTone.Default, bool Paragraph = false)
 {
     // A paragraph (Paragraph true) is wrapped at the width the other rows give the tooltip: it does not widen it.
 
@@ -155,28 +155,12 @@ public static class UiTooltips
         UiRect? anchor, Func<string, float, Vector2> measure)
     {
         float scale = screenHeight / 1080f;
-        float widgetWidth = 0.25f * screenWidth;
-        float widgetHeight = 0.2f * screenHeight;
-
-        // A tooltip given a widget of its own (the overview's AI panel) measures its margins from that widget.
-        if (kind == TooltipKind.Static && anchor is { } given) (widgetWidth, widgetHeight) = (given.Width, given.Height);
-
-        // The HUD's fixed one is built on the anchor panel's first child, the parchment box of 97.2 % of the panel's height (FUN_14072d3b0 passes it
-        // to FUN_140921440).
-        if (kind == TooltipKind.Fixed && anchor is { } box) (widgetWidth, widgetHeight) = (box.Width, box.Height * FixedBoxFraction);
-
+        var (widgetWidth, widgetHeight) = WidgetSize(kind, screenWidth, screenHeight, anchor);
         float offset = MathF.Round((kind == TooltipKind.Inventory ? 0.04f : 0.025f) * scale * widgetWidth);
         float margin = MathF.Round(0.1f * widgetHeight);
         float gap = MathF.Round(0.01f * widgetHeight);
         float wrap = Math.Max(1, widgetWidth - 2 * offset);
-        var sizes = new (Vector2 Key, Vector2 Value)[lines.Count];
-        float widest = 0;
-        for (int i = 0; i < lines.Count; i++)
-        {
-            sizes[i] = lines[i].Paragraph ? default
-                : (measure(lines[i].Key, wrap), lines[i].Whole.Length > 0 ? measure(lines[i].Whole, wrap) : default);
-            widest = Math.Max(widest, sizes[i].Key.X + sizes[i].Value.X + 2 * offset);
-        }
+        float widest = Widest(lines, measure, wrap, offset);
 
         float width = kind switch
         {
@@ -186,7 +170,8 @@ public static class UiTooltips
             _ => widest,
         };
 
-        // The text is drawn in the final inner width, which wraps it again: measure the rows once more at that width so the heights match the drawing.
+        // The text is drawn in the final inner width, which wraps it again: measure the rows once more at that width so the heights match the
+        // drawing.
         float inner = Math.Max(1, width - 2 * offset);
         var rows = new List<TooltipRow>(lines.Count);
         float y = margin;
@@ -207,9 +192,54 @@ public static class UiTooltips
             panelHeight = Math.Max(panelHeight + fixedAnchor.Height - widgetHeight, fixedAnchor.Height);
         if (kind == TooltipKind.Static && anchor is { } staticAnchor) panelHeight = staticAnchor.Height;
 
-        // Placement: bottom right corner at the pointer, an axis that would leave the screen taking the pointer itself instead (ToolTip /
-        // ToolTipDynamic); fixed: the anchor's left, its bottom edge (grown upwards); inventory: from the pointer. Kept on the screen (engine
-        // choice).
+        var (x, top) = Place(kind, anchor, pointer, width, panelHeight, screenWidth);
+        x = Math.Clamp(x, 0, Math.Max(0, screenWidth - width));
+        top = Math.Clamp(top, 0, Math.Max(0, screenHeight - panelHeight));
+        var placedRows = rows.Select(r => new TooltipRow(new(x + r.Area.X, top + r.Area.Y, r.Area.Width, r.Area.Height))).ToArray();
+        return new(new(x, top, width, panelHeight), placedRows, offset);
+    }
+
+    /// <summary>
+    /// The widget a tooltip's margins are measured from: 0.25 x 0.2 of the screen, a static tooltip's own widget, the fixed one's parchment box.
+    /// </summary>
+    static (float Width, float Height) WidgetSize(TooltipKind kind, int screenWidth, int screenHeight, UiRect? anchor)
+    {
+        float widgetWidth = 0.25f * screenWidth;
+        float widgetHeight = 0.2f * screenHeight;
+
+        // A tooltip given a widget of its own (the overview's AI panel) measures its margins from that widget.
+        if (kind == TooltipKind.Static && anchor is { } given) (widgetWidth, widgetHeight) = (given.Width, given.Height);
+
+        // The HUD's fixed one is built on the anchor panel's first child, the parchment box of 97.2 % of the panel's height (FUN_14072d3b0 passes it
+        // to FUN_140921440).
+        if (kind == TooltipKind.Fixed && anchor is { } box) (widgetWidth, widgetHeight) = (box.Width, box.Height * FixedBoxFraction);
+
+        return (widgetWidth, widgetHeight);
+    }
+
+    /// <summary>
+    /// The widest row: its key and value texts wrapped to <paramref name="wrap"/>, plus two offsets (a paragraph row counts none).
+    /// </summary>
+    static float Widest(IReadOnlyList<TooltipLine> lines, Func<string, float, Vector2> measure, float wrap, float offset)
+    {
+        var sizes = new (Vector2 Key, Vector2 Value)[lines.Count];
+        float widest = 0;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            sizes[i] = lines[i].Paragraph ? default
+                : (measure(lines[i].Key, wrap), lines[i].Whole.Length > 0 ? measure(lines[i].Whole, wrap) : default);
+            widest = Math.Max(widest, sizes[i].Key.X + sizes[i].Value.X + 2 * offset);
+        }
+
+        return widest;
+    }
+
+    /// <summary>
+    /// Placement: bottom right corner at the pointer, an axis that would leave the screen taking the pointer itself instead (ToolTip /
+    /// ToolTipDynamic); fixed: the anchor's left, its bottom edge (grown upwards); inventory: from the pointer. Kept on the screen (engine choice).
+    /// </summary>
+    static (float X, float Top) Place(TooltipKind kind, UiRect? anchor, Vector2 pointer, float width, float panelHeight, int screenWidth)
+    {
         float x, top;
         switch (kind)
         {
@@ -228,10 +258,7 @@ public static class UiTooltips
                 break;
         }
 
-        x = Math.Clamp(x, 0, Math.Max(0, screenWidth - width));
-        top = Math.Clamp(top, 0, Math.Max(0, screenHeight - panelHeight));
-        var placedRows = rows.Select(r => new TooltipRow(new(x + r.Area.X, top + r.Area.Y, r.Area.Width, r.Area.Height))).ToArray();
-        return new(new(x, top, width, panelHeight), placedRows, offset);
+        return (x, top);
     }
 
     #endregion

@@ -79,7 +79,8 @@ sealed class GroundItemPicks(PlayerInterface player)
     /// Whether the ray passes through the bounding sphere of the shape put at <paramref name="at"/> turned by <paramref name="rotation"/> (a hit on
     /// its triangles is inside it).
     /// </summary>
-    internal bool RayNears((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
+    internal bool RayNears((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at,
+        Quaternion rotation)
     {
         if (!_shapeSpheres.TryGetValue(mesh, out var sphere))
         {
@@ -105,7 +106,8 @@ sealed class GroundItemPicks(PlayerInterface player)
 
         var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
         var toCentre = at + Vector3.Transform(sphere.Centre, q) - ray.Origin;
-        float along = MathF.Max(Vector3.Dot(toCentre, ray.Direction) / ray.Direction.LengthSquared(), 0);   // the ray's nearest point to the centre, not behind its origin
+        // The ray's nearest point to the centre, not behind its origin.
+        float along = MathF.Max(Vector3.Dot(toCentre, ray.Direction) / ray.Direction.LengthSquared(), 0);
         return (toCentre - ray.Direction * along).LengthSquared() <= sphere.Radius * sphere.Radius;
     }
 
@@ -258,8 +260,14 @@ sealed class GroundItemPicks(PlayerInterface player)
             string text = id == hovered ? selected : item;
             controls.Add(new($"itemlabel-{i}", "Widget", rect, "", "", "Kenshi_GenericTextBoxFlatSmallSkin", true,
                 new Dictionary<string, string> { ["Colour"] = back }, Vector4.Zero, Pickable: false));
-            var font = new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "Center", ["TextColour"] = text };
-            controls.Add(new($"itemlabel-text-{i}", "TextBox", rect, near[i].Item.Name, "", "", true, font, Vector4.Zero, Pickable: false, TextScale: 1));
+            var font = new Dictionary<string, string>
+            {
+                ["FontName"] = "Kenshi_StandardFont_Medium",
+                ["TextAlign"] = "Center",
+                ["TextColour"] = text,
+            };
+            controls.Add(new($"itemlabel-text-{i}", "TextBox", rect, near[i].Item.Name, "", "", true, font, Vector4.Zero, Pickable: false,
+                TextScale: 1));
         }
     }
 

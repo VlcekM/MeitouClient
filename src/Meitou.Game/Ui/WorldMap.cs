@@ -241,6 +241,46 @@ sealed class WorldMap(PlayerInterface player)
         MapShown = shown;
     }
 
+    /// <summary>
+    /// One frame's map drawing: the control list, the index of the last control inserted after the map image, the image's bounds, the UI scale,
+    /// the zoom level and the player's characters.
+    /// </summary>
+    ref struct MapFrame
+    {
+        /// <summary>
+        /// The overview's controls the markers are inserted into.
+        /// </summary>
+        public List<UiControl> Controls;
+
+        /// <summary>
+        /// The index of the control last inserted (the map image at first); each marker and label goes right after it.
+        /// </summary>
+        public int At;
+
+        /// <summary>
+        /// The map image's bounds on screen.
+        /// </summary>
+        public UiRect Bounds;
+
+        /// <summary>
+        /// The UI scale (<see cref="UiScale"/>).
+        /// </summary>
+        public float Ui;
+
+        /// <summary>
+        /// The zoom level (<see cref="MapZoomLevel"/>).
+        /// </summary>
+        public int Level;
+
+        /// <summary>
+        /// The player's characters.
+        /// </summary>
+        public List<CharacterSnapshot> Players;
+    }
+
+    /// <summary>
+    /// Fits the map image into the overview's MapImage slot and adds the places, the player's characters, the movement marker and the camera over it.
+    /// </summary>
     internal void AddMapContent(string id, List<UiControl> controls)
     {
         if (id != "overview") return;
@@ -263,116 +303,101 @@ sealed class WorldMap(PlayerInterface player)
         controls[imageIndex] = image with { Bounds = bounds, Clip = _mapViewport, Pickable = true };
         int level = MapZoomLevel;
 
-        Vector2 Screen(Vector3 world)
-        {
-            var n = MapPoint(world);
-            return new(bounds.X + n.X * bounds.Width, bounds.Y + n.Y * bounds.Height);
-        }
-
-        Vector2 GroupSize(string group)
-        {
-            if (_markerSizes.TryGetValue(group, out var known)) return known;
-
-            var props = new Dictionary<string, string> { ["ImageResource"] = "Kenshi_MapMarkers", ["ImageGroup"] = group, ["ImageName"] = group };
-            return _markerSizes[group] = MyGuiImages.Resolve(player.UiResources, props) is { } i ? new(i.Source.Width, i.Source.Height) : new(32);
-        }
-
-        void Marker(string name, string group, UiRect box, Vector4 colour, float angle = 0, string? tooltip = null)
-        {
-            if (box.Intersect(_mapViewport).Width <= 0 || box.Intersect(_mapViewport).Height <= 0) return;
-
-            var props = new Dictionary<string, string>
-            {
-                ["ImageResource"] = "Kenshi_MapMarkers",
-                ["ImageGroup"] = group,
-                ["ImageName"] = group,
-                ["Colour"] = FormattableString.Invariant($"{colour.X} {colour.Y} {colour.Z} {colour.W}")
-            };
-            if (angle != 0) props["ImageAngle"] = angle.ToString(CultureInfo.InvariantCulture);
-
-            // Type 4, a map place (the original's "hand" payload, FUN_140922e60): rows of the data, a tab between a row's label and value.
-            if (tooltip is not null)
-            {
-                props[UiTooltips.Type] = "4";
-                props[UiTooltips.Data] = tooltip;
-            }
-
-            controls.Insert(++imageIndex, new(name, "ImageBox", box, "", "", "", true, props, default, Pickable: tooltip is not null, Clip: _mapViewport));
-        }
-
-        void Label(string name, string text, Vector2 topCentre, Vector4 colour)
-        {
-            float width = 400 * ui, height = 24 * ui;
-            var props = new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "HCenter Top" };
-
-            // MyGUI's text shadow: the text again in black, a pixel down and right, under it.
-            controls.Insert(++imageIndex, new(name + "-shadow", "TextBox", new(topCentre.X - width / 2 + 1, topCentre.Y + 1, width, height), text, "", "", true, props, default,
-                new Vector4(0, 0, 0, colour.W), Pickable: false, TextScale: ui, Clip: _mapViewport));
-            controls.Insert(++imageIndex, new(name, "TextBox", new(topCentre.X - width / 2, topCentre.Y, width, height), text, "", "", true, props, default,
-                colour, Pickable: false, TextScale: ui, Clip: _mapViewport));
-        }
-
         // Towns, camps and nests: discovered ones only; which zoom levels show each kind, its size, label and tooltip (docs/game/ui-screens.md
         // "Map").
         var snapshot = player.Session.CurrentSnapshot;
         var players = snapshot.Characters.Where(c => c.IsPlayer).ToList();
+        var frame = new MapFrame { Controls = controls, At = imageIndex, Bounds = bounds, Ui = ui, Level = level, Players = players };
+        AddPlaces(ref frame, snapshot);
 
-        bool PlayerNear(Vector3 at) =>
-            players.Any(c => Vector2.DistanceSquared(new(c.Position.X, c.Position.Z), new(at.X, at.Z)) <= NestShowRange * NestShowRange);
+        // The player's characters, hidden at the least zoom level.
+        if (level > 0) AddCharacterMarkers(ref frame);
 
-        void Place(string name, TownType type, string townName, string unexploredName, string? factionId, Vector3 position, TownKnowledge known)
+        // The movement marker stands on the ordered point (its bottom centre) for 3 s.
+        if (Stopwatch.GetTimestamp() < _movementMarkerUntil)
         {
-            bool nest = type == TownType.Nest, recent = (known & TownKnowledge.Recent) != 0, explored = (known & TownKnowledge.Explored) != 0;
-            if (nest && !PlayerNear(position)) return;
-
-            int least = nest ? 2 : recent || type == TownType.Town ? 0 : type == TownType.PointOfInterest ? 2 : 1;
-            if (level < least) return;
-
-            var faction = MapFactionOf?.Invoke(factionId);
-            string group = type switch
-            {
-                TownType.Nest => faction?.Wildlife == true ? "Nest" : "Camp",
-                TownType.Outpost or TownType.Military or TownType.Prison => "Outpost",
-                TownType.Town => "Town",
-                TownType.Village => "Village",
-                TownType.Ruins => "Ruin",
-                TownType.SlaveCamp => "Workcamp",
-                _ => "SmallPlace",
-            };
-            float factor = level == 0 ? 0.5f : type == TownType.Town ? (level == 1 ? 0.75f : 1) : 0.85f;
-            var size = GroupSize(group) * ui * factor;
-            var centre = Screen(position);
-            var box = new UiRect(centre.X - size.X / 2, centre.Y - size.Y / 2, size.X, size.Y);
-            var colour = !explored ? NeutralColour : (faction?.Standing ?? MapStanding.Neutral) switch
-            {
-                MapStanding.Player => PlayerColour,
-                MapStanding.Ally => AllyColour,
-                MapStanding.Enemy => EnemyColour,
-                _ => NeutralColour,
-            };
-            string shownName = explored || unexploredName.Length == 0 ? townName : unexploredName;
-
-            // An explored place's tooltip: its name, its faction and the player's relation to it.
-            string? tooltip = explored ? $"{shownName}\nFaction:\t{faction?.Name ?? "-"}\nRelations:\t{(faction is { } f ? MathF.Round(f.Relation).ToString(CultureInfo.InvariantCulture) : "-")}" : null;
-            Marker(name, group, box, colour, tooltip: tooltip);
-
-            if (recent)
-            {
-                var mark = GroupSize("NewDiscovered") * ui * 0.5f;
-                Marker(name + "-new", "NewDiscovered", new(box.X + box.Width - mark.X / 2, box.Y - mark.Y / 2, mark.X, mark.Y), Vector4.One);
-            }
-
-            if (level > 0 && !nest)
-                Label(name + "-label", shownName, new(centre.X, box.Y + box.Height + MathF.Round(3.2f * ui)), colour);
+            var size = GroupSize("Movement") * ui;
+            var at = MapScreen(ref frame, _movementMarker);
+            AddMarker(ref frame, "map-movement", "Movement", new(at.X - size.X / 2, at.Y - size.Y, size.X, size.Y), MovementColour);
         }
 
+        AddCameraMarker(ref frame);
+    }
+
+    /// <summary>
+    /// A world point's place on the map image.
+    /// </summary>
+    static Vector2 MapScreen(ref MapFrame frame, Vector3 world)
+    {
+        var n = MapPoint(world);
+        return new(frame.Bounds.X + n.X * frame.Bounds.Width, frame.Bounds.Y + n.Y * frame.Bounds.Height);
+    }
+
+    /// <summary>
+    /// A marker group's image size in Kenshi_MapMarkers (32 when unknown), cached.
+    /// </summary>
+    Vector2 GroupSize(string group)
+    {
+        if (_markerSizes.TryGetValue(group, out var known)) return known;
+
+        var props = new Dictionary<string, string> { ["ImageResource"] = "Kenshi_MapMarkers", ["ImageGroup"] = group, ["ImageName"] = group };
+        return _markerSizes[group] = MyGuiImages.Resolve(player.UiResources, props) is { } i ? new(i.Source.Width, i.Source.Height) : new(32);
+    }
+
+    /// <summary>
+    /// A map marker of <paramref name="group"/>, tinted and turned, with a place's tooltip; skipped when it lies outside the viewport.
+    /// </summary>
+    void AddMarker(ref MapFrame frame, string name, string group, UiRect box, Vector4 colour, float angle = 0, string? tooltip = null)
+    {
+        if (box.Intersect(_mapViewport).Width <= 0 || box.Intersect(_mapViewport).Height <= 0) return;
+
+        var props = new Dictionary<string, string>
+        {
+            ["ImageResource"] = "Kenshi_MapMarkers",
+            ["ImageGroup"] = group,
+            ["ImageName"] = group,
+            ["Colour"] = FormattableString.Invariant($"{colour.X} {colour.Y} {colour.Z} {colour.W}")
+        };
+        if (angle != 0) props["ImageAngle"] = angle.ToString(CultureInfo.InvariantCulture);
+
+        // Type 4, a map place (the original's "hand" payload, FUN_140922e60): rows of the data, a tab between a row's label and value.
+        if (tooltip is not null)
+        {
+            props[UiTooltips.Type] = "4";
+            props[UiTooltips.Data] = tooltip;
+        }
+
+        frame.Controls.Insert(++frame.At, new(name, "ImageBox", box, "", "", "", true, props, default, Pickable: tooltip is not null,
+            Clip: _mapViewport));
+    }
+
+    /// <summary>
+    /// A place's name under its marker, centred on <paramref name="topCentre"/>, over its shadow.
+    /// </summary>
+    void AddLabel(ref MapFrame frame, string name, string text, Vector2 topCentre, Vector4 colour)
+    {
+        float width = 400 * frame.Ui, height = 24 * frame.Ui;
+        var props = new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["TextAlign"] = "HCenter Top" };
+
+        // MyGUI's text shadow: the text again in black, a pixel down and right, under it.
+        frame.Controls.Insert(++frame.At, new(name + "-shadow", "TextBox", new(topCentre.X - width / 2 + 1, topCentre.Y + 1, width, height), text, "",
+            "", true, props, default, new Vector4(0, 0, 0, colour.W), Pickable: false, TextScale: frame.Ui, Clip: _mapViewport));
+        frame.Controls.Insert(++frame.At, new(name, "TextBox", new(topCentre.X - width / 2, topCentre.Y, width, height), text, "", "", true, props,
+            default, colour, Pickable: false, TextScale: frame.Ui, Clip: _mapViewport));
+    }
+
+    /// <summary>
+    /// The discovered towns, the known camps and nests, and the player's outposts.
+    /// </summary>
+    void AddPlaces(ref MapFrame frame, WorldSnapshot snapshot)
+    {
         if (MapTowns?.Invoke() is { } towns)
         {
             for (int i = 0; i < towns.Count && i < snapshot.Towns.Count; i++)
             {
                 if ((snapshot.Towns[i] & TownKnowledge.Discovered) != 0 && towns[i].Town.Type is not (TownType.NestMarker or TownType.Null))
                 {
-                    Place("map-town-" + i, towns[i].Town.Type, towns[i].Town.Name, towns[i].Town.UnexploredName, towns[i].Town.Faction,
+                    AddPlace(ref frame, "map-town-" + i, towns[i].Town.Type, towns[i].Town.Name, towns[i].Town.UnexploredName, towns[i].Town.Faction,
                         towns[i].Position, snapshot.Towns[i]);
                 }
             }
@@ -381,46 +406,108 @@ sealed class WorldMap(PlayerInterface player)
         foreach (var camp in snapshot.Camps)
         {
             if ((camp.Known & TownKnowledge.Discovered) != 0 && camp.Position is { } at)
-                Place("map-camp-" + camp.Site, TownType.Nest, camp.Name, "", camp.FactionId, at, camp.Known);
+                AddPlace(ref frame, "map-camp-" + camp.Site, TownType.Nest, camp.Name, "", camp.FactionId, at, camp.Known);
         }
 
         // The player's outposts: TOWN player_town_template (type 1), in the same town list, made discovered and explored (FUN_140934e10).
         foreach (var outpost in snapshot.Outposts)
         {
-            Place("map-outpost-" + outpost.Number, TownType.Outpost, outpost.Name, "", MapFactionId?.Invoke(outpost.Owner), outpost.Position,
-                TownKnowledge.Discovered | TownKnowledge.Explored);
+            AddPlace(ref frame, "map-outpost-" + outpost.Number, TownType.Outpost, outpost.Name, "", MapFactionId?.Invoke(outpost.Owner),
+                outpost.Position, TownKnowledge.Discovered | TownKnowledge.Explored);
         }
+    }
 
-        // The player's characters, hidden at the least zoom level.
-        if (level > 0)
+    /// <summary>
+    /// Whether a player character stands within <see cref="NestShowRange"/> of <paramref name="at"/> (a nest shows only then).
+    /// </summary>
+    static bool PlayerNear(List<CharacterSnapshot> players, Vector3 at) =>
+        players.Any(c => Vector2.DistanceSquared(new(c.Position.X, c.Position.Z), new(at.X, at.Z)) <= NestShowRange * NestShowRange);
+
+    /// <summary>
+    /// One place: its marker when the zoom level shows its kind, sized and coloured by the faction's standing, a New Discovered mark and its label.
+    /// </summary>
+    void AddPlace(ref MapFrame frame, string name, TownType type, string townName, string unexploredName, string? factionId, Vector3 position,
+        TownKnowledge known)
+    {
+        bool nest = type == TownType.Nest, recent = (known & TownKnowledge.Recent) != 0, explored = (known & TownKnowledge.Explored) != 0;
+        if (nest && !PlayerNear(frame.Players, position)) return;
+
+        int least = nest ? 2 : recent || type == TownType.Town ? 0 : type == TownType.PointOfInterest ? 2 : 1;
+        if (frame.Level < least) return;
+
+        var faction = MapFactionOf?.Invoke(factionId);
+        string group = type switch
         {
-            var size = GroupSize("Character") * ui;
-
-            foreach (var character in players)
-            {
-                var at = Screen(player.Where(character));
-                Marker("map-character-" + character.Id, "Character", new(at.X - size.X / 2, at.Y - size.Y / 2, size.X, size.Y),
-                    character.Selected ? SelectedColour : PlayerColour);
-            }
-        }
-
-        // The movement marker stands on the ordered point (its bottom centre) for 3 s.
-        if (Stopwatch.GetTimestamp() < _movementMarkerUntil)
+            TownType.Nest => faction?.Wildlife == true ? "Nest" : "Camp",
+            TownType.Outpost or TownType.Military or TownType.Prison => "Outpost",
+            TownType.Town => "Town",
+            TownType.Village => "Village",
+            TownType.Ruins => "Ruin",
+            TownType.SlaveCamp => "Workcamp",
+            _ => "SmallPlace",
+        };
+        float factor = frame.Level == 0 ? 0.5f : type == TownType.Town ? (frame.Level == 1 ? 0.75f : 1) : 0.85f;
+        var size = GroupSize(group) * frame.Ui * factor;
+        var centre = MapScreen(ref frame, position);
+        var box = new UiRect(centre.X - size.X / 2, centre.Y - size.Y / 2, size.X, size.Y);
+        var colour = !explored ? NeutralColour : (faction?.Standing ?? MapStanding.Neutral) switch
         {
-            var size = GroupSize("Movement") * ui;
-            var at = Screen(_movementMarker);
-            Marker("map-movement", "Movement", new(at.X - size.X / 2, at.Y - size.Y, size.X, size.Y), MovementColour);
+            MapStanding.Player => PlayerColour,
+            MapStanding.Ally => AllyColour,
+            MapStanding.Enemy => EnemyColour,
+            _ => NeutralColour,
+        };
+        string shownName = explored || unexploredName.Length == 0 ? townName : unexploredName;
+
+        // An explored place's tooltip: its name, its faction and the player's relation to it.
+        string? tooltip = explored ? PlaceTooltip(shownName, faction) : null;
+        AddMarker(ref frame, name, group, box, colour, tooltip: tooltip);
+
+        if (recent)
+        {
+            var mark = GroupSize("NewDiscovered") * frame.Ui * 0.5f;
+            AddMarker(ref frame, name + "-new", "NewDiscovered", new(box.X + box.Width - mark.X / 2, box.Y - mark.Y / 2, mark.X, mark.Y), Vector4.One);
         }
 
-        // The camera, turned to its view: the angle between the level view direction and -Z, negative towards -X.
+        if (frame.Level > 0 && !nest)
+            AddLabel(ref frame, name + "-label", shownName, new(centre.X, box.Y + box.Height + MathF.Round(3.2f * frame.Ui)), colour);
+    }
+
+    /// <summary>
+    /// An explored place's tooltip rows: its name, Faction and Relations ("-" when unknown).
+    /// </summary>
+    static string PlaceTooltip(string shownName, MapFaction? faction)
+    {
+        string relation = faction is { } f ? MathF.Round(f.Relation).ToString(CultureInfo.InvariantCulture) : "-";
+        return $"{shownName}\nFaction:\t{faction?.Name ?? "-"}\nRelations:\t{relation}";
+    }
+
+    /// <summary>
+    /// The player's characters, the selected ones in their own colour.
+    /// </summary>
+    void AddCharacterMarkers(ref MapFrame frame)
+    {
+        var size = GroupSize("Character") * frame.Ui;
+
+        foreach (var character in frame.Players)
         {
-            var camera = player.Session.Camera.Current;
-            var look = new Vector2(camera.Forward.X, camera.Forward.Z);
-            float angle = look.LengthSquared() > 1e-8f ? MathF.Acos(Math.Clamp(-Vector2.Normalize(look).Y, -1, 1)) * (look.X < 0 ? -1 : 1) : 0;
-            var size = GroupSize("Camera") * ui;
-            var at = Screen(camera.Target);
-            Marker("map-camera", "Camera", new(at.X - size.X / 2, at.Y - size.Y / 2, size.X, size.Y), PlayerColour, angle);
+            var at = MapScreen(ref frame, player.Where(character));
+            AddMarker(ref frame, "map-character-" + character.Id, "Character", new(at.X - size.X / 2, at.Y - size.Y / 2, size.X, size.Y),
+                character.Selected ? SelectedColour : PlayerColour);
         }
+    }
+
+    /// <summary>
+    /// The camera, turned to its view: the angle between the level view direction and -Z, negative towards -X.
+    /// </summary>
+    void AddCameraMarker(ref MapFrame frame)
+    {
+        var camera = player.Session.Camera.Current;
+        var look = new Vector2(camera.Forward.X, camera.Forward.Z);
+        float angle = look.LengthSquared() > 1e-8f ? MathF.Acos(Math.Clamp(-Vector2.Normalize(look).Y, -1, 1)) * (look.X < 0 ? -1 : 1) : 0;
+        var size = GroupSize("Camera") * frame.Ui;
+        var at = MapScreen(ref frame, camera.Target);
+        AddMarker(ref frame, "map-camera", "Camera", new(at.X - size.X / 2, at.Y - size.Y / 2, size.X, size.Y), PlayerColour, angle);
     }
 
     static string? JoinCaptions(string? a, string? b) => a is null ? b : b is null ? a : a + "\n" + b;
@@ -459,7 +546,12 @@ sealed class WorldMap(PlayerInterface player)
             if (trade.Stock.FirstOrDefault(i => i.Index == int.Parse(stockIndex, CultureInfo.InvariantCulture)) is not { } stock)
                 return false;
 
-            player.Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1) { Tick = player.Session.World.Tick, Equip = true, Into = player.InventoryWindows.InventoryOwner()?.Id ?? CharacterId.None });
+            player.Say(new BuyItem(stock.Token, shift ? stock.Quantity : 1)
+            {
+                Tick = player.Session.World.Tick,
+                Equip = true,
+                Into = player.InventoryWindows.InventoryOwner()?.Id ?? CharacterId.None,
+            });
             return true;
         }
 
@@ -534,13 +626,18 @@ sealed class WorldMap(PlayerInterface player)
         if (!player.FaithfulScreens.IsOpen("inventory") || player.InventoryWindows.InventoryOwner() is not { ItemGrid: { } grid } lead)
             return false;
 
-        var machine = player.Production.Machine(player.Production.ShownMachine) is { } shown && player.FaithfulScreens.IsOpen(ProductionWindows.MachineScreen(shown)) ? shown : null;
+        var shown = player.Production.Machine(player.Production.ShownMachine);
+        var machine = shown is not null && player.FaithfulScreens.IsOpen(ProductionWindows.MachineScreen(shown)) ? shown : null;
         bool loot = player.FaithfulScreens.IsOpen("loot") && lead.Id == player.Session.CurrentSnapshot.LootOpener;
 
         if (machine is not null && control.Properties.TryGetValue("MachineItem", out var raw))
         {
             int code = int.Parse(raw, CultureInfo.InvariantCulture);
-            player.Say(new TakeFromMachine(lead.Id, machine.Site, code >= 1000 ? -1 : code - 10, Math.Max(0, code - 1000), Count: count) { Tick = player.Session.World.Tick, BagFirst = player.FaithfulScreens.IsOpen("bag") });
+            player.Say(new TakeFromMachine(lead.Id, machine.Site, code >= 1000 ? -1 : code - 10, Math.Max(0, code - 1000), Count: count)
+            {
+                Tick = player.Session.World.Tick,
+                BagFirst = player.FaithfulScreens.IsOpen("bag"),
+            });
             return true;
         }
 
@@ -553,7 +650,12 @@ sealed class WorldMap(PlayerInterface player)
             if (!loot || player.TradeWindows.LootBody()?.ItemGrid?.Items.FirstOrDefault(i => i.Index == at) is not { } looted)
                 return false;
 
-            player.Say(new TakeLootItem(Token(looted)) { Tick = player.Session.World.Tick, Count = count, BagFirst = player.FaithfulScreens.IsOpen("bag") });
+            player.Say(new TakeLootItem(Token(looted))
+            {
+                Tick = player.Session.World.Tick,
+                Count = count,
+                BagFirst = player.FaithfulScreens.IsOpen("bag"),
+            });
             return true;
         }
 
@@ -565,7 +667,12 @@ sealed class WorldMap(PlayerInterface player)
 
         if (loot)
         {
-            player.Say(new PutLootItem(lead.Id, Token(item)) { Tick = player.Session.World.Tick, Count = count, BagFirst = player.FaithfulScreens.IsOpen("loot-bag") });
+            player.Say(new PutLootItem(lead.Id, Token(item))
+            {
+                Tick = player.Session.World.Tick,
+                Count = count,
+                BagFirst = player.FaithfulScreens.IsOpen("loot-bag"),
+            });
             return true;
         }
 

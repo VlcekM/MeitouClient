@@ -23,8 +23,8 @@ sealed class PointerView(PlayerInterface player)
 
     // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and
     // every RepickTicks ticks while only the world moves (the picks walk every character, item and building near the ray: 0.5 ms).
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) _pointer =
-        (-1, default, false, false, "arrow", null, null);
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
+        (BuildingSelection.SelectedBuilding Building, float T)? Building) _pointer = (-1, default, false, false, "arrow", null, null);
 
     Matrix4x4 _pointerView;
     const long RepickTicks = 3;
@@ -68,7 +68,8 @@ sealed class PointerView(PlayerInterface player)
     /// would act on, in the colour of that order (attack red, treat green, talk gold, carry or loot blue), else any character under the cursor in
     /// white; null over the interface or nobody.
     /// </summary>
-    public (CharacterId Id, Vector4 Colour)? HoverTarget => Point() is { Target: { } id } p && WithinOutlineReach(id) ? (id, PointerColour(p.Name)) : null;
+    public (CharacterId Id, Vector4 Colour)? HoverTarget =>
+        Point() is { Target: { } id } p && WithinOutlineReach(id) ? (id, PointerColour(p.Name)) : null;
 
     bool WithinOutlineReach(CharacterId id)
     {
@@ -97,7 +98,8 @@ sealed class PointerView(PlayerInterface player)
         _ => WhiteOutline,
     };
 
-    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) Point()
+    (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
+        (BuildingSelection.SelectedBuilding Building, float T)? Building) Point()
     {
         if (player.WorldMap.MapDrag is not null) return (-1, player.Mouse, player.CtrlHeld, player.AltHeld, "hand", null, null);   // the map's pan
         if (player.UiVisible && PointerOverUi || player.UiCapturesPointer || player.ContextMenuWindow.ContextMenuOpen || player.ModalOpen
@@ -238,7 +240,8 @@ sealed class PointerView(PlayerInterface player)
     /// selected character sneaks), the pick chance under <c>lockpick</c> (<see cref="PointedLockChance"/>); null for any other pointer.
     /// </summary>
     float? PointerChance(
-        (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) p) =>
+        (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target,
+            (BuildingSelection.SelectedBuilding Building, float T)? Building) p) =>
         p.Name switch
         {
             "knockout" when p.Target is { } id => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id)?.StealthKoChance * 0.01f,

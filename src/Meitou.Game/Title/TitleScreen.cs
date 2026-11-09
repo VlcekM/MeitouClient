@@ -91,6 +91,7 @@ sealed class TitleScreen(GameHost host)
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "kenshi", "save"));
                 if (slots.FirstOrDefault() is { } slot) save = SaveGame.Load(slot.Folder);
             }
+
             if (save?.PlayerFaction is not { } faction || host.PopData?.Appearances is not { } appearances) return null;
             var platoons = save.Platoons.Where(p => p.FactionId == faction.Id && p.File is not null && p.Characters.Count > 0)
                 .OrderBy(p => p.Record.Ints.GetValueOrDefault("squad index", int.MaxValue)).ToArray();
@@ -148,11 +149,13 @@ sealed class TitleScreen(GameHost host)
                 characters.Add(id);
                 return;
             }
+
             if (record.Type == Data.Fcs.FcsRecordType.NewGameStartoff)
             {
                 foreach (var member in Data.Gameplay.NewGameStart.From(record).Squad) Add(member.Id);
                 return;
             }
+
             if (record.Type is Data.Fcs.FcsRecordType.SquadTemplate or Data.Fcs.FcsRecordType.UniqueSquadTemplate)
                 foreach (var start in Data.Gameplay.NewGameStart.LoadAll(db).Where(s => s.Squad.Any(m => m.Id == id)))
                     foreach (var member in start.Squad) Add(member.Id);
@@ -162,6 +165,7 @@ sealed class TitleScreen(GameHost host)
             var members = template.Squad.Concat(template.Squad2).Concat(template.ChooseFrom).Concat(template.Animals).Concat(template.Animals2);
             foreach (var member in members) Add(member.Id);
         }
+
         Add(startOrTemplateId);
         return characters;
     }
@@ -198,6 +202,7 @@ sealed class TitleScreen(GameHost host)
             characters.Draws.BeginDistant();
             host.DistantFor = default;
         }
+
         if (host.ActiveFoliage is { } foliage && foliage.Shift != title.Ruins) foliage.Shift = title.Ruins;
         if (host.ActiveObjects is { } objects && objects.Staged != title.Staged) objects.Staged = title.Staged;
         TitleComposition.Place(host.Camera);
@@ -288,6 +293,7 @@ sealed class TitleScreen(GameHost host)
                 [new(new EffectRecord("Title dust", EffectType.Camera, "kenshi_weather_dust1", true, false, 1,
                     0, 0, Vector3.One, 0, false, 4000, 0, 0, 0, 0), 1, 0, 0)];
         }
+
         if (_titleParticles is not { } dust) return;
         var left = -Vector3.Normalize(Vector3.Cross(host.Camera.Forward, Vector3.UnitY));
         float gust = 0.5f + 0.5f * MathF.Sin((float)(seconds % 120) * MathF.Tau / 24);

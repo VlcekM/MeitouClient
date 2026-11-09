@@ -535,6 +535,7 @@ sealed class SettingsCanvas(SettingsMenu menu)
                     menu.Focus = -1;
                 }, index == menu.ChoiceSelection);
         }
+
         menu.Motion.Opacity(first, MenuMotion.Ease(_choiceProgress));
     }
 

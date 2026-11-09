@@ -70,8 +70,8 @@ sealed class ItemCells(PlayerInterface player)
             [TooltipRuntime.ItemTipKey] = name,
             [property] = index.ToString(CultureInfo.InvariantCulture),
         };
-        controls.Add(new(name, "TextBox", area, caption, "", "", true, properties, System.Numerics.Vector4.Zero, TextColour: System.Numerics.Vector4.One,
-            Pickable: pickable, TextScale: 0.9f * player.InventoryScale, Clip: clip));
+        controls.Add(new(name, "TextBox", area, caption, "", "", true, properties, System.Numerics.Vector4.Zero,
+            TextColour: System.Numerics.Vector4.One, Pickable: pickable, TextScale: 0.9f * player.InventoryScale, Clip: clip));
     }
 
     /// <summary>

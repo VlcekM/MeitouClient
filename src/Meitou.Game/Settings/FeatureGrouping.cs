@@ -3,8 +3,8 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Settings;
 
 /// <summary>
-/// The Graphics tabs as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its own
-/// settings folded under it, closed until opened. Settings in no group stay rows of their own.
+/// The Graphics tabs as features (docs/native-ui.md "Settings"): each feature is one header row (its switch, or a title when it has none) with its
+/// own settings folded under it, closed until opened. Settings in no group stay rows of their own.
 /// </summary>
 sealed class FeatureGrouping(SettingsMenu menu)
 {
@@ -93,7 +93,8 @@ sealed class FeatureGrouping(SettingsMenu menu)
         return i < 0 ? FeatureGroups.Length : i;
     }
 
-    static bool InGroup(FeatureGroup g, string raw) => g.Members.Contains(raw) || g.Id == SkinGroup && raw.StartsWith("race:", StringComparison.Ordinal);
+    static bool InGroup(FeatureGroup g, string raw) =>
+        g.Members.Contains(raw) || g.Id == SkinGroup && raw.StartsWith("race:", StringComparison.Ordinal);
 
     #endregion
 

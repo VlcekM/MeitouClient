@@ -120,8 +120,8 @@ public sealed partial class MyGuiScreenHost
                 case "sort":
                     if (_lastBindings.TryGetValue(id, out var b))
                     {
-                        s.Sorts[parts[2]] = b.Sorts.TryGetValue(parts[2], out var now) && now.Column == int.Parse(parts[3], CultureInfo.InvariantCulture)
-                            ? (now.Column, !now.Ascending) : (int.Parse(parts[3], CultureInfo.InvariantCulture), true);
+                        bool same = b.Sorts.TryGetValue(parts[2], out var now) && now.Column == int.Parse(parts[3], CultureInfo.InvariantCulture);
+                        s.Sorts[parts[2]] = same ? (now.Column, !now.Ascending) : (int.Parse(parts[3], CultureInfo.InvariantCulture), true);
                     }
 
                     _keyFocus = (id, parts[2]);
@@ -153,7 +153,8 @@ public sealed partial class MyGuiScreenHost
     void PressOutside(UiControl? c)
     {
         if (_openCombo is { } popup
-            && (c is null || !(c.Name.StartsWith(popup.Combo + "@List#", StringComparison.Ordinal) || c.Action.StartsWith($"mygui:combo:{popup.Combo}:", StringComparison.Ordinal))))
+            && (c is null || !(c.Name.StartsWith(popup.Combo + "@List#", StringComparison.Ordinal)
+                || c.Action.StartsWith($"mygui:combo:{popup.Combo}:", StringComparison.Ordinal))))
         {
             _openCombo = null;
         }
@@ -177,11 +178,14 @@ public sealed partial class MyGuiScreenHost
     {
         if (Find(id, bar) is not { } root) return;
 
+        static bool IsTemplatePart(UiControl c, string owner, string part) =>
+            c.Properties.GetValueOrDefault("TemplateOwner") == owner && c.Properties.GetValueOrDefault("TemplatePart") == part;
+
         var pr = root.Properties;
         bool vertical = pr.GetValueOrDefault("BarVertical") != "false", repeat = pr.GetValueOrDefault("BarRepeat") != "false";
         float page = Num(root, "BarPage", 1), viewPage = Num(root, "BarViewPage", 1);
-        var place = Controls(id)!.LastOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == bar && c.Properties.GetValueOrDefault("TemplatePart") == "TrackPlace")?.Bounds ?? default;
-        var track = Controls(id)!.LastOrDefault(c => c.Properties.GetValueOrDefault("TemplateOwner") == bar && c.Properties.GetValueOrDefault("TemplatePart") == "Track")?.Bounds ?? default;
+        var place = Controls(id)!.LastOrDefault(c => IsTemplatePart(c, bar, "TrackPlace"))?.Bounds ?? default;
+        var track = Controls(id)!.LastOrDefault(c => IsTemplatePart(c, bar, "Track"))?.Bounds ?? default;
         float thumb = vertical ? track.Height : track.Width;
         float coord = vertical ? p.Y : p.X;
         _keyFocus = null;
@@ -203,7 +207,10 @@ public sealed partial class MyGuiScreenHost
 
         float delta = part switch { "start" => -page, "end" => page, "first" => -viewPage, _ => viewPage };
         StepBar(id, root, delta);
-        _grab = new(id, bar, pressed.Name, place, thumb, vertical, false, repeat ? delta : 0) { Next = Stopwatch.GetTimestamp() + (long)(RepeatDelay * Stopwatch.Frequency) };
+        _grab = new(id, bar, pressed.Name, place, thumb, vertical, false, repeat ? delta : 0)
+        {
+            Next = Stopwatch.GetTimestamp() + (long)(RepeatDelay * Stopwatch.Frequency),
+        };
     }
 
     void DragThumb(Grab g, Vector2 p)
@@ -217,8 +224,14 @@ public sealed partial class MyGuiScreenHost
         SetBar(g.Screen, root, MathF.Round(start * max / travel));
     }
 
-    float BarPosition(string id, UiControl root) =>
-        Math.Clamp(_screens[id].Scroll.TryGetValue(root.Properties.GetValueOrDefault("BarKey") ?? "", out float stored) ? stored : Num(root, "BarPos"), 0, Num(root, "BarMax"));
+    float BarPosition(string id, UiControl root)
+    {
+        float position = _screens[id].Scroll.TryGetValue(root.Properties.GetValueOrDefault("BarKey") ?? "", out float stored)
+            ? stored
+            : Num(root, "BarPos");
+        return Math.Clamp(position, 0, Num(root, "BarMax"));
+    }
+
     void StepBar(string id, UiControl root, float delta) => SetBar(id, root, BarPosition(id, root) + delta);
 
     /// <summary>
@@ -516,10 +529,16 @@ public sealed partial class MyGuiScreenHost
 
     static (Vector2 Min, Vector2 Max) SizeLimits(MyGuiWidget root)
     {
-        static Vector2? Pair(string? v) => v?.Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: 2 } xy
-            && float.TryParse(xy[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float a) && float.TryParse(xy[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float c) ? new(a, c) : null;
+        static Vector2? Pair(string? v)
+        {
+            if (v?.Split(' ', StringSplitOptions.RemoveEmptyEntries) is not { Length: 2 } xy) return null;
+            if (!float.TryParse(xy[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float a)) return null;
 
-        return (Pair(root.Properties.GetValueOrDefault("MinSize")) ?? Vector2.Zero, Pair(root.Properties.GetValueOrDefault("MaxSize")) ?? new(float.MaxValue));
+            return float.TryParse(xy[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float c) ? new(a, c) : null;
+        }
+
+        return (Pair(root.Properties.GetValueOrDefault("MinSize")) ?? Vector2.Zero,
+            Pair(root.Properties.GetValueOrDefault("MaxSize")) ?? new(float.MaxValue));
     }
 
     /// <summary>
@@ -570,10 +589,12 @@ public sealed partial class MyGuiScreenHost
     /// </summary>
     bool BeginWindowAction(string id, Screen s, UiControl c, Vector2 p)
     {
+        static float ParseOrZero(string v) => float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? f : 0;
+
         Vector4 scale;
 
         if (c.Properties.TryGetValue("WindowScale", out var text) && text.Split(' ', StringSplitOptions.RemoveEmptyEntries) is { Length: 4 } n
-            && n.Select(v => float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float f) ? f : 0).ToArray() is [var l, var t, var w, var h])
+            && n.Select(ParseOrZero).ToArray() is [var l, var t, var w, var h])
         {
             scale = new(l, t, w, h);
         }

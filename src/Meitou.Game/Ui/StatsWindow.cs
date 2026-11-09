@@ -27,13 +27,17 @@ sealed class StatsWindow(PlayerInterface player)
     internal static readonly StatsEnumerated[][] StatPanels =
     [
         [StatsEnumerated.Strength, StatsEnumerated.Toughness, StatsEnumerated.Dexterity, StatsEnumerated.Perception],
-        [StatsEnumerated.Katanas, StatsEnumerated.Sabres, StatsEnumerated.Hackers, StatsEnumerated.HeavyWeapons, StatsEnumerated.Blunt, StatsEnumerated.Polearms],
+        [
+            StatsEnumerated.Katanas, StatsEnumerated.Sabres, StatsEnumerated.Hackers, StatsEnumerated.HeavyWeapons, StatsEnumerated.Blunt,
+            StatsEnumerated.Polearms,
+        ],
         [StatsEnumerated.MeleeAttack, StatsEnumerated.MeleeDefence, StatsEnumerated.Dodge, StatsEnumerated.MartialArts,
             StatsEnumerated.Turrets, StatsEnumerated.Crossbows, StatsEnumerated.FriendlyFire],
         [StatsEnumerated.Stealth, StatsEnumerated.Lockpicking, StatsEnumerated.Thieving, StatsEnumerated.Assassination, StatsEnumerated.Athletics,
             StatsEnumerated.Swimming],
         [StatsEnumerated.Medic, StatsEnumerated.Engineering, StatsEnumerated.Robotics, StatsEnumerated.Science,
-            StatsEnumerated.SmithingWeapon, StatsEnumerated.SmithingArmour, StatsEnumerated.SmithingBow, StatsEnumerated.Labouring, StatsEnumerated.Farming,
+            StatsEnumerated.SmithingWeapon, StatsEnumerated.SmithingArmour, StatsEnumerated.SmithingBow, StatsEnumerated.Labouring,
+            StatsEnumerated.Farming,
             StatsEnumerated.Cooking],
     ];
 
@@ -151,7 +155,8 @@ sealed class StatsWindow(PlayerInterface player)
 
         void Line(string name, string text, string colour, int pixels = 14)
         {
-            Text(name, new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, pixels == 18 ? 24 * scale : row), text, colour, pixels, leftClip);
+            Text(name, new(left.Bounds.X + 19 * scale, y, left.Bounds.Width - 27 * scale, pixels == 18 ? 24 * scale : row), text, colour, pixels,
+                leftClip);
             y += row;
         }
 
@@ -180,8 +185,11 @@ sealed class StatsWindow(PlayerInterface player)
         controls.Add(new("stat-next-level-track", "Widget", bar, "", "", "Kenshi_ProgressBarEmptySkin", true,
             new Dictionary<string, string>(), Vector4.Zero, Pickable: false, Clip: rightClip));
         if (progress > 0)
+        {
             controls.Add(new("stat-next-level-fill", "Widget", bar with { Width = bar.Width * progress }, "", "", "Kenshi_ProgressBarFilledSkin", true,
                 new Dictionary<string, string>(), Vector4.Zero, Pickable: false, Clip: rightClip));
+        }
+
         controls.Add(new("stat-next-level-frame", "Widget", bar, "", "", "Kenshi_ProgressBarSkin", true,
             new Dictionary<string, string>(), Vector4.Zero, Pickable: false, Clip: rightClip));
         var barText = new UiRect(bar.X + 10 * scale, bar.Y - 4 * scale, bar.Width - 20 * scale, row);
@@ -195,9 +203,12 @@ sealed class StatsWindow(PlayerInterface player)
         if (help.PhysicalEffect.Length > 0) description += "\n\n" + help.PhysicalEffect;
         float multiplier = lead?.SkillXpMultipliers.ElementAtOrDefault(selected) ?? 0;
         if (multiplier > 0 && Math.Abs(multiplier - 1) > 0.001f)
+        {
             description += "\n\n" + StatHelp.TextAt(451) + " " + ((multiplier - 1) * 100).ToString("+0;-0;0", CultureInfo.InvariantCulture) + "%";
-        Text("stat-description-body", new(bar.X + 10 * scale, bar.Y + 28 * scale, bar.Width - 20 * scale, Math.Max(0, right.Bounds.Height - 36 * scale)),
-            description, statInk, 14, rightClip, wrap: true);
+        }
+
+        var body = new UiRect(bar.X + 10 * scale, bar.Y + 28 * scale, bar.Width - 20 * scale, Math.Max(0, right.Bounds.Height - 36 * scale));
+        Text("stat-description-body", body, description, statInk, 14, rightClip, wrap: true);
     }
 
     internal static string StatLabel(StatsEnumerated stat) => Loc.Tr(StatLabelEnglish(stat));

@@ -107,8 +107,8 @@ sealed class ProspectingPanel(PlayerInterface player)
         float row = 20 * player.Height / 1080f;
         float pixels = player.StandardPixels;
 
-        // The ink of the window's text comes from its templates (the overview lines are Kenshi_TextboxStandardText, AddLines' default, the resource values
-        // Kenshi_GenericTextBoxFlatSmall), which a UI mod recolours with the window's skin; the fixed palette ink is only the fallback.
+        // The ink of the window's text comes from its templates (the overview lines are Kenshi_TextboxStandardText, AddLines' default, the resource
+        // values Kenshi_GenericTextBoxFlatSmall), which a UI mod recolours with the window's skin; the fixed palette ink is only the fallback.
         string labelInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_TextboxStandardText");
         string valueInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxFlatSmall");
         player.AddLines(controls, "OverviewDatapanel1",
