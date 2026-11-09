@@ -28,8 +28,8 @@
     "areas": "Slaver AI, Slave escape, Town guards, Navmesh, Medical treatment, Save loading, Sleep goals, Squads, Prisoner cages, Workplaces"
   },
   "dmlen": {
-    "commits": 3,
-    "areas": "Benchmarks, Crossbow tracers"
+    "commits": 5,
+    "areas": "Benchmarks, Projectiles"
   },
   "lucasskrewer": {
     "commits": 12,
