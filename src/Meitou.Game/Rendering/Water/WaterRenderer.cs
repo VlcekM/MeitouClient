@@ -1116,7 +1116,8 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// </summary>
     sealed class WaterProgram : IDisposable
     {
-        public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap", "uRiverMap"];
+        public static readonly string[] MapNames = ["uColourMap", "uFlowMap", "uNormalMap", "uParamsA", "uParamsB", "uRainMap", "uFoamMap",
+            "uRiverMap"];
         public readonly NativeProg Program;
         public readonly VertexLayout Layout;
         public readonly GpuBufferBinding[] Vertices;
@@ -1196,13 +1197,15 @@ public sealed unsafe class WaterRenderer : IDisposable
         // A valid one-texel array view for the frames before the ocean's first FFT; the shader gates every read on uOcean.w.
         _standInArrayTexture = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, 1, 1, Layers: 1, Kind: TextureKind.Texture2DArray,
             Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "water array stand-in"));
-        _standInArray = gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(gpu.Samplers.Get(ClampLinear), _standInArrayTexture.View()));
+        _standInArray = gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(gpu.Samplers.Get(ClampLinear),
+            _standInArrayTexture.View()));
 
         float[] corners = [-1, -1, -1, 1, 1, -1, 1, 1]; // triangle strip, counter-clockwise from above
         _quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "water quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(_quad, 0, MemoryMarshal.AsBytes(corners.AsSpan()));
         LegacyProgram.Attribute?[] quadAttributes = [QuadAttribute(_quad)];
-        _faithful = new WaterProgram(gpu, _frame, NativeVertex(Vertex), NativeFragment(Fragment), "water", PrimitiveType.TriangleStrip, quadAttributes, _constantsLayout);
+        _faithful = new WaterProgram(gpu, _frame, NativeVertex(Vertex), NativeFragment(Fragment), "water", PrimitiveType.TriangleStrip,
+            quadAttributes, _constantsLayout);
 
         if (meitouWaves)
         {
@@ -1320,7 +1323,8 @@ public sealed unsafe class WaterRenderer : IDisposable
 
     /// <param name="sky">Unused since phase 8 stage 2: the atmosphere comes through the frame globals.</param>
     /// <param name="source">What <see cref="Prepare"/> made (made here when null).</param>
-    public static WaterRenderer Create(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky, List<string> messages, ushort[]? coarseHeights = null,
+    public static WaterRenderer Create(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, SkyRenderer? sky,
+        List<string> messages, ushort[]? coarseHeights = null,
         int gridSegments = DefaultGridSegments, int oceanSize = OceanWaves.DefaultSize, Source? source = null, bool meitouWaves = true, bool shoreField = true)
     {
         _ = sky;
@@ -1329,14 +1333,16 @@ public sealed unsafe class WaterRenderer : IDisposable
         // As the GL textures were made (WorldGl.Texture2D): a found map has mips only where it repeats; the 1 × 1 stand-in for a missing one
         // always had its (single-level) chain and a trilinear filter.
         SampledImage Rgba(RgbaImage? img, bool repeat, byte[] flat, string name) =>
-            img is null ? SampledImage.Rgba8(gpu, 1, 1, flat, repeat, mipmaps: true, name) : SampledImage.Rgba8(gpu, img, repeat, mipmaps: repeat, name);
+            img is null ? SampledImage.Rgba8(gpu, 1, 1, flat, repeat, mipmaps: true, name) : SampledImage.Rgba8(gpu, img, repeat, mipmaps: repeat,
+                name);
         SampledImage riverMap = s.River is { } river
             ? SampledImage.Rgba8(gpu, s.RiverSize, s.RiverSize, river, repeat: false, mipmaps: false, "water river map")
             : SampledImage.Rgba8(gpu, 1, 1, [128, 128, 0, 0], repeat: false, mipmaps: false, "water river map");
         return new WaterRenderer(gpu,
             [Rgba(s.Colour, false, [0, 32, 64, 255], "water colour map"), Rgba(s.Flow, false, [128, 128, 0, 255], "water flow map"),
              Rgba(s.Normal, true, [128, 255, 128, 255], "water normal map"),
-             SampledImage.Rgba32F(gpu, s.A, s.BlendWidth, s.BlendHeight, "water parameters a"), SampledImage.Rgba32F(gpu, s.B, s.BlendWidth, s.BlendHeight, "water parameters b"),
+             SampledImage.Rgba32F(gpu, s.A, s.BlendWidth, s.BlendHeight, "water parameters a"), SampledImage.Rgba32F(gpu, s.B, s.BlendWidth,
+                 s.BlendHeight, "water parameters b"),
              Rgba(s.Rain, true, [0, 0, 0, 0], "water rain ripples"),
              SampledImage.Rgba8(gpu, WaterFoam.Size, WaterFoam.Size, s.Foam, repeat: true, mipmaps: true, "water foam"), riverMap],
             s.Sea.A, s.Sea.B, s.Sea.Colour, gridSegments, oceanSize, meitouWaves, shoreField);
@@ -1567,7 +1573,8 @@ public sealed unsafe class WaterRenderer : IDisposable
     /// no later draw (docs/renderer-native.md 8.6). Faithful draws the game's quad; Meitou the polar grid with <see cref="Animate"/>'s motion.
     /// </summary>
     /// <param name="time">Animation time; the game's unit for it is Unknown (the viewer uses real hours). Meitou uses the game clock instead.</param>
-    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent, ReflectionPass? reflection = null)
+    public void Draw(Matrix4x4 viewProjection, Vector3 eye, WorldLighting light, SkyColours colours, float time, float extent,
+        ReflectionPass? reflection = null)
     {
         var targets = Gpu.CurrentTargets();
         bool meitouWater = Meitou && _meitou is not null;
