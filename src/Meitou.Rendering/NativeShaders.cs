@@ -85,7 +85,6 @@ static partial class NativeShaders
             vec4 atmoCloudWind;
             uint atmoClouds;
             uint atmoCloudsTile;
-            uint lampMovers;
         } frame;
 
         """;
@@ -186,7 +185,7 @@ static partial class NativeShaders
         ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
         ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
         ["uLightGrid"] = "frame.lightGrid", ["uLightCells"] = "textures2D[frame.lightCells]", ["uLightIndex"] = "textures2D[frame.lightIndex]",
-        ["uLightData"] = "textures2D[frame.lightData]", ["uLampTiles"] = "textures2D[frame.lampTiles]", ["uLampMovers"] = "textures2D[frame.lampMovers]",
+        ["uLightData"] = "textures2D[frame.lightData]", ["uLampTiles"] = "textures2D[frame.lampTiles]",
     };
 
     /// <summary>The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.</summary>
@@ -346,7 +345,6 @@ unsafe struct FrameConstants
     [FieldOffset(8672)] public Vector4 AtmoCloudWind;
     [FieldOffset(8688)] public uint AtmoClouds;
     [FieldOffset(8692)] public uint AtmoCloudsTile;
-    [FieldOffset(8696)] public uint LampMovers;
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -368,7 +366,7 @@ unsafe struct FrameConstants
         ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
         ("uGiIrradiance", BindlessKind.Texture2D, 8592), ("uGiDistance", BindlessKind.Texture2D, 8596), ("uGiBase", BindlessKind.Texture2D, 8600),
         ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632), ("uLampTiles", BindlessKind.Texture2D, 8636),
-        ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692), ("uLampMovers", BindlessKind.Texture2D, 8696),
+        ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692),
     ];
 }
 

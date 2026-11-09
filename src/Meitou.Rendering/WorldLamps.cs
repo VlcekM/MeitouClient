@@ -102,7 +102,6 @@ internal sealed class WorldLamps : IDisposable
         noTiles = ctx.CreateTexture(new TextureDesc(InternalFormat.R16, 1, 1, Use: use, Name: "lamp tiles none"));
         using (var batch = ctx.Uploads.Begin()) batch.Write(noTiles, 0, 0, new PixelRect(0, 0, 1, 1), stackalloc byte[2]);
         g.Publish("uLampTiles", () => Sampled(Tiles?.Atlas ?? noTiles));
-        g.Publish("uLampMovers", () => Sampled(Tiles?.Movers ?? noTiles));
     }
 
     SampledTexture Sampled(GpuTexture t) => new(nearest, t.View());
@@ -110,6 +109,8 @@ internal sealed class WorldLamps : IDisposable
     /// <summary>The textures of this frame's slot, for a compute pass that binds them itself (the probe trace).</summary>
     internal (GpuTexture Cells, GpuTexture Index, GpuTexture Data) Current => (cells[slot], index[slot], data[slot]);
     internal GpuSampler NearestSampler => nearest;
+    /// <summary>The lamps' tiles, for a compute pass that binds them itself.</summary>
+    internal GpuTexture TilesTexture => Tiles?.Atlas ?? noTiles;
     /// <summary>This frame's <c>uLightGrid</c> (w 0: no lamps).</summary>
     internal Vector4 Grid => grid;
     internal uint Emitter(string placementId) => emitters.GetValueOrDefault(placementId);
@@ -254,7 +255,7 @@ internal sealed class WorldLamps : IDisposable
             // The lamp's place in the cache: a carried lamp's is traced whole each frame.
             var tile = Tiles is not { } shadows ? default : lamp < lamps.Length ? shadows.Place(l, TileReach) : shadows.PlaceMoving(l);
             dataValues[row + 4] = new Vector4(room is null ? 0 : room.YMin - RoomMargin, room is null ? 0 : room.YMax + RoomMargin, tile.X, tile.Y);
-            dataValues[row + 5] = new Vector4(Gi.LampTiles.SourceRadius(l), tile.Z, tile.W, 0);
+            dataValues[row + 5] = new Vector4(Gi.LampTiles.SourceRadius(l), 0, 0, 0);
             if (room is null) continue;
             for (int e = 0; e < room.Footprint.Length; e++)
             {

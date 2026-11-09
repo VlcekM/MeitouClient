@@ -114,7 +114,7 @@ static class AtmosphereShaders
         uniform sampler2D uGiIrradiance, uGiDistance, uGiBase;
         {{Gi.GiShaders.ProbeSampling}}
         uniform vec4 uLightGrid;      // the lamps (docs/render-lights.md): the grid's corner x, z, its cell size, cells per side (0: no lamps)
-        uniform sampler2D uLightCells, uLightIndex, uLightData, uLampTiles, uLampMovers;
+        uniform sampler2D uLightCells, uLightIndex, uLightData, uLampTiles;
         {{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampTileVisibility(lamp, world, toLamp, d, n)
         {{LampShaders.Lighting}}

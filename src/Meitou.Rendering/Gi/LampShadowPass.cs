@@ -15,7 +15,7 @@ readonly record struct LampShadowView(Vector3 Right, Vector3 Up, Vector3 Back, V
 /// </summary>
 sealed unsafe class LampShadowPass : IDisposable
 {
-    const int Bindings = 11;
+    const int Bindings = 12;
 
     readonly GpuContext ctx;
     readonly GpuProgram program;
@@ -31,7 +31,7 @@ sealed unsafe class LampShadowPass : IDisposable
         [
             (0, DescriptorType.CombinedImageSampler), (1, DescriptorType.CombinedImageSampler), (2, DescriptorType.AccelerationStructureKhr),
             (3, DescriptorType.StorageBuffer), (4, DescriptorType.UniformBuffer), (5, DescriptorType.StorageImage),
-            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (10, DescriptorType.StorageImage),
+            (6, DescriptorType.CombinedImageSampler), (7, DescriptorType.CombinedImageSampler), (8, DescriptorType.CombinedImageSampler), (9, DescriptorType.StorageImage), (10, DescriptorType.StorageImage), (11, DescriptorType.CombinedImageSampler),
         ], GpuSetLayout.Bindless);
         pipeline = ctx.Pipelines.Get(new ComputePipelineDesc(program, "lamp shadow trace"));
         sampler = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge,
@@ -60,7 +60,7 @@ sealed unsafe class LampShadowPass : IDisposable
             Eye = new Vector4(view.Eye, 0),
             Origin = new Vector4(scene.Origin, 0),
             PlanesTan = new Vector4(view.NearPlanes, view.Tan.X, view.Tan.Y),
-            Size = new Vector4(view.Size, 0, 0),
+            Size = new Vector4(view.Size, lamps.Tiles is null ? TracedSunShaders.LampMask : TracedSunShaders.Characters, 0),
         };
         var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
 
@@ -80,12 +80,13 @@ sealed unsafe class LampShadowPass : IDisposable
     void Push(CommandList cmd, GiScene scene, WorldLamps lamps, GpuTexture depth, GpuTexture surface, GpuTexture lost, GpuTexture total, GpuTexture total1, Transient constants)
     {
         var (cells, index, data) = lamps.Current;
-        var images = stackalloc DescriptorImageInfo[5];
+        var images = stackalloc DescriptorImageInfo[6];
         images[0] = Image(depth);
         images[1] = Image(surface);
         images[2] = Image(cells);
         images[3] = Image(index);
         images[4] = Image(data);
+        images[5] = Image(lamps.TilesTexture);
         var storage = new DescriptorImageInfo(default, ctx.Device.ViewAt(lost.View().Index), ImageLayout.General);
         var storageTotal = new DescriptorImageInfo(default, ctx.Device.ViewAt(total.View().Index), ImageLayout.General);
         var storageTotal1 = new DescriptorImageInfo(default, ctx.Device.ViewAt(total1.View().Index), ImageLayout.General);
@@ -111,6 +112,7 @@ sealed unsafe class LampShadowPass : IDisposable
             SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &storage,
         };
         for (int i = 0; i < 3; i++) writes[6 + i] = Sampled((uint)(6 + i), &images[2 + i]);
+        writes[11] = Sampled(11, &images[5]);
         writes[9] = new WriteDescriptorSet
         {
             SType = StructureType.WriteDescriptorSet, DstBinding = 9, DescriptorCount = 1, DescriptorType = DescriptorType.StorageImage, PImageInfo = &storageTotal,

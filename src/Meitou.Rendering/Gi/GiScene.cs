@@ -367,8 +367,8 @@ internal sealed unsafe class GiScene : IDisposable
         CasterVersion++;
     }
 
-    /// <summary>The characters in the scene now: each one's key and the sphere it fits in.</summary>
-    public void CollectMovers(List<(long Key, Vector3 Centre, float Radius)> into) => people?.CollectMovers(into);
+    /// <summary>How many characters the traced scene holds this frame.</summary>
+    public int CharactersShown => people?.Shown ?? 0;
 
     /// <summary>A value that changes when what stands within <paramref name="radius"/> of <paramref name="at"/> does.</summary>
     public ulong CastersAround(Vector3 at, float radius)

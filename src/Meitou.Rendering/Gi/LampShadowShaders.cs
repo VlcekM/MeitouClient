@@ -9,9 +9,9 @@ static class LampShadowShaders
     /// <summary>Most lamps a pixel traces.</summary>
     public const int MinLamps = 2, MaxLamps = 2;
 
-    /// <summary>World units: what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip), and the lamp's radius its penumbra is filtered for (a flame or a bulb in its glass, 20 cm).</summary>
+    /// <summary>World units: what a ray leaves out before the lamp, for its fixture (KenshiNative's near-skip), (the penumbra's radius is the lamp's own, LampTiles.SourceRadius).</summary>
     const string Constants = """
-        const float LAMP_NEAR_SKIP = 15.0, LAMP_SIZE = 2.0;
+        const float LAMP_NEAR_SKIP = 15.0;
         const float LAMP_MIN_BIAS = 0.5;
 
         """;
@@ -25,6 +25,7 @@ static class LampShadowShaders
         uint pickEmitter[LAMP_SLOTS];
         float pickWeight[LAMP_SLOTS];
         vec3 pickLight[LAMP_SLOTS];
+        float pickSeen[LAMP_SLOTS];   // how much of the lamp the still world lets through (its tile; 1 without tiles)
         int picked = 0;
 
         float lampAttenuation(float d, float radius);
@@ -46,6 +47,10 @@ static class LampShadowShaders
                 weight *= s2.x - s.w < 1e-5 ? 1.0 : clamp(pow(clamp((cosAngle - s.w) / (s2.x - s.w), 0.0, 1.0), s2.y), 0.0, 1.0);
             }
             if (weight <= 0.0) return;
+            // What the still world took is already off the drawn light (the tiles, in lampLight): only what is left can be taken again, and a lamp blocked here needs no slot.
+            float seen = lampTileVisibility(lamp, vec3(0.0), l * d, d, rankPlane);
+            weight *= seen;
+            if (weight <= 0.0) return;
             int at = picked;
             if (picked == LAMP_SLOTS)
             {
@@ -59,17 +64,19 @@ static class LampShadowShaders
                 pickEmitter[at] = pickEmitter[at - 1];
                 pickWeight[at] = pickWeight[at - 1];
                 pickLight[at] = pickLight[at - 1];
+                pickSeen[at] = pickSeen[at - 1];
             }
             pickLamp[at] = lamp;
             pickEmitter[at] = uint(s2.w);
             pickWeight[at] = weight;
             pickLight[at] = vec3(0.0);
+            pickSeen[at] = seen;
         }
         // The light of a ranked lamp at this surface.
         float lampNote(int lamp, vec3 light)
         {
             for (int i = 0; i < picked; i++)
-                if (pickLamp[i] == lamp) pickLight[i] = light;
+                if (pickLamp[i] == lamp) pickLight[i] = light * pickSeen[i];
             return 1.0;
         }
         #define LAMP_RANK(lamp, l, d, radius) lampRank(lamp, l, d, radius)
@@ -91,8 +98,8 @@ static class LampShadowShaders
             uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsCullBackFacingTrianglesEXT;
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
             rayQueryEXT shadow;
-            // Everything the scene holds: what the probes see, the small foliage, the grass and the characters (TracedSunShaders.LampMask).
-            rayQueryInitializeEXT(shadow, uScene, flags, {{TracedSunShaders.LampMask}}, from, 0.0, ray / d, tMax);
+            // With the tiles the characters alone, the still world is in the tiles; without them everything the scene holds (TracedSunShaders.LampMask).
+            rayQueryInitializeEXT(shadow, uScene, flags, uint(uRayMask.x), from, 0.0, ray / d, tMax);
             while (rayQueryProceedEXT(shadow))
             {
                 int record = rayQueryGetIntersectionInstanceCustomIndexEXT(shadow, false) + rayQueryGetIntersectionGeometryIndexEXT(shadow, false);
@@ -160,9 +167,9 @@ static class LampShadowShaders
                 float t = lampBlocker(from, target, p.w, pickEmitter[i]);
                 if (t <= 0.0) continue;
                 blocked[i] = 1.0;
-                // A lamp LAMP_SIZE across seen past a blocker at t of the lamp's d: the penumbra's half width at the receiver, weighted by the light that blocker takes.
+                // The lamp's source seen past a blocker at t of the lamp's d: the penumbra's half width at the receiver, weighted by the light that blocker takes.
                 float taken = dot(pickLight[i], vec3(0.2126, 0.7152, 0.0722));
-                spread += taken * LAMP_SIZE * t / max(length(target - from) - t, 1.0);
+                spread += taken * texelFetch(uLightData, ivec2(5, pickLamp[i]), 0).x * t / max(length(target - from) - t, 1.0);
                 takenAll += taken;
             }
             // One radius serves all the lamps of a pixel: a faint lamp's far blocker must not set it for the strong lamp's fine shadows (a character's shadow from a faint lamp, too weak
@@ -206,7 +213,9 @@ static class LampShadowShaders
             vec2 uNearPlanes;
             vec2 uTan;
             vec2 uFullSize;
+            vec2 uRayMask;      // x: the instances the rays see
         };
+        layout(set = 0, binding = 11) uniform sampler2D uLampTiles;
         layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;
         layout(set = 0, binding = 9, rgba16f) uniform writeonly image2D uTotal;
         layout(set = 0, binding = 10, rgba16f) uniform writeonly image2D uTotal1;
@@ -214,7 +223,7 @@ static class LampShadowShaders
         layout(set = 0, binding = 7) uniform sampler2D uLightIndex;
         layout(set = 0, binding = 8) uniform sampler2D uLightData;
         const int LAMP_SLOTS = {{Math.Clamp(lamps, MinLamps, MaxLamps)}};
-        {{Constants}}{{Picks}}{{LampShaders.Defines}}{{LampShaders.Lighting}}{{GiResolveShaders.ReconstructFunctions}}
+        {{Constants}}{{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}{{Picks}}{{LampShaders.Lighting}}{{GiResolveShaders.ReconstructFunctions}}
         {{GiShaders.OctDirection}}
         {{GiShaders.HitBuffers}}
         {{TracedSunShaders.CasterCutout}}
@@ -231,7 +240,7 @@ static class LampShadowShaders
         """;
 
     /// <summary>
-    /// The lamp tiles' fill (LampTiles): one workgroup per 8 texels square of the areas of a frame, one closest-hit ray per texel from the lamp, the distance over the lamp's reach (1: nothing).
+    /// The lamp tiles' fill (LampTiles): one workgroup per 8 texels square of the tiles of a frame, one closest-hit ray per texel from the lamp, the distance over the lamp's reach (1: nothing).
     /// Two rays, one for what stands on the ground and one for the ground (<c>groundExit</c>).
     /// </summary>
     public static readonly string TileFill = $$"""
@@ -248,23 +257,21 @@ static class LampShadowShaders
         layout(set = 0, binding = 1, std430) readonly buffer Geometries { Geometry geometries[]; };
         layout(set = 0, binding = 2, std140) uniform Jobs
         {
-            vec4 uHeader;           // x: the jobs
-            vec4 uJob[350 * 5];     // position (relative to the scene's origin) and reach; axis and cos of the outer half angle; tile x, y, side, sphere; the area of the tile traced (x, y, w, h);
-                                    // emitter, first workgroup, what a ray leaves out at its start, mode (0 still, 1 characters, 2 everything, 3 nothing)
+            vec4 uHeader;       // x: the jobs
+            vec4 uJob[80 * 4];  // position (relative to the scene's origin) and reach; axis and cos of the outer half angle; tile x, y, side, sphere; emitter, first workgroup, workgroups per row, what a ray leaves out at its start
         };
         layout(set = 0, binding = 3, r16) uniform writeonly image2D uAtlas;
-        {{Constants}}
         {{LampShaders.TileMapping}}
         {{GiShaders.HitBuffers}}
         {{TracedSunShaders.CasterCutout}}
 
         // What stands on the ground: the nearest kept surface.
-        float objectHit(vec3 from, vec3 dir, float near, float reach, uint emitter, uint mask)
+        float objectHit(vec3 from, vec3 dir, float near, float reach, uint emitter)
         {
-            uint flags = mask == {{TracedSunShaders.Characters}}u ? 0u : gl_RayFlagsCullBackFacingTrianglesEXT;   // a character's cloth is one-sided: seen from behind it must still block
+            uint flags = gl_RayFlagsCullBackFacingTrianglesEXT;
             if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
             rayQueryEXT q;
-            rayQueryInitializeEXT(q, uScene, flags, mask, from, near, dir, reach);
+            rayQueryInitializeEXT(q, uScene, flags, {{TracedSunShaders.LampTileObjects}}, from, near, dir, reach);
             while (rayQueryProceedEXT(q))
             {
                 int record = rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false);
@@ -285,30 +292,18 @@ static class LampShadowShaders
             return rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT ? reach : rayQueryGetIntersectionTEXT(q, true);
         }
 
-        float firstHit(vec3 from, vec3 dir, float near, float reach, uint emitter, int mode)
-        {
-            if (mode == 3) return 1.0;
-            if (mode == 1) return clamp(objectHit(from, dir, near, reach, 0u, {{TracedSunShaders.Characters}}u) / reach, 0.0, 1.0);
-            uint mask = {{TracedSunShaders.LampTileObjects}}u;
-            if (mode == 2) mask |= {{TracedSunShaders.Characters}}u;
-            return clamp(min(objectHit(from, dir, near, reach, emitter, mask), groundExit(from, dir, near, reach)) / reach, 0.0, 1.0);
-        }
-
         void main()
         {
-            int jobs = int(uHeader.x), job = 0;
+            int low = 0, high = int(uHeader.x) - 1;
             uint group = gl_WorkGroupID.x;
-            int low = 0, high = jobs - 1;
             while (low < high)
             {
                 int mid = (low + high + 1) / 2;
-                if (float(group) >= uJob[mid * 5 + 4].y) low = mid; else high = mid - 1;
+                if (float(group) >= uJob[mid * 4 + 3].y) low = mid; else high = mid - 1;
             }
-            job = low;
-            vec4 p = uJob[job * 5], axis = uJob[job * 5 + 1], tile = uJob[job * 5 + 2], area = uJob[job * 5 + 3], more = uJob[job * 5 + 4];
-            uint inGroup = group - uint(more.y), perRow = uint((int(area.z) + 7) / 8);
-            ivec2 texel = ivec2(area.xy) + ivec2(int(inGroup % perRow), int(inGroup / perRow)) * 8 + ivec2(gl_LocalInvocationID.xy);
-            if (texel.x >= int(area.x + area.z) || texel.y >= int(area.y + area.w)) return;
+            vec4 p = uJob[low * 4], axis = uJob[low * 4 + 1], tile = uJob[low * 4 + 2], more = uJob[low * 4 + 3];
+            uint inGroup = group - uint(more.y), perRow = uint(more.z);
+            ivec2 texel = ivec2(int(inGroup % perRow), int(inGroup / perRow)) * 8 + ivec2(gl_LocalInvocationID.xy);
             vec2 uv = (vec2(texel) + 0.5) / tile.z;
             vec3 dir;
             if (tile.w > 0.5) dir = lampOctDir(uv);
@@ -319,7 +314,8 @@ static class LampShadowShaders
                 vec2 q = (uv * 2.0 - 1.0) * lampTileTan(axis.w);
                 dir = normalize(axis.xyz + x * q.x + y * q.y);
             }
-            imageStore(uAtlas, ivec2(tile.xy) + texel, vec4(firstHit(p.xyz, dir, more.z, p.w, uint(more.x), int(more.w))));
+            float t = min(objectHit(p.xyz, dir, more.w, p.w, uint(more.x)), groundExit(p.xyz, dir, more.w, p.w));
+            imageStore(uAtlas, ivec2(tile.xy) + texel, vec4(clamp(t / p.w, 0.0, 1.0)));
         }
         """;
 
