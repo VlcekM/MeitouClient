@@ -468,9 +468,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A save's never-made wild platoon (<see cref="Saving.SaveLoader.UnmadeWild"/>) made from its template into the same platoon where it
-    /// was saved, round its nest or (homeless) where it stands, as the save's wild platoons with characters. Its record is not written back
-    /// with the characters (Meitou writes no characters of a save's wild platoon it made), so the next load makes it from its template
-    /// again. Null when the template plans no one.
+    /// was saved, round its nest or (homeless) where it stands. Its generated characters are kept for streaming and written into its original
+    /// save record, so neither activation nor a later load rolls its template again. Null when the template plans no one.
     /// </summary>
     Squad? MakeUnmadeWild(World world, Platoon p)
     {
@@ -482,8 +481,10 @@ public sealed partial class PopulationSystem
         squad.HomeRadius = homeRadius;
         squad.Money = p.Money;
 
+        p.Stored = new StoredSquad { Name = squad.Name, Pinned = false };
         p.Size = built.Plan.TotalMembers;
         p.Unmade = false;
+        sp.Source.Record.Bools["never been activated"] = false;
         p.State = PlatoonState.Loaded;
         p.SquadId = squad.Id;
         p.UnloadAtTick = -1;

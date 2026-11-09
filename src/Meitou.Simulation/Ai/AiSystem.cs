@@ -588,10 +588,7 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     {
         return behaviour switch
         {
-            // A goal aimed at the squad's mission follows the contract's target (a bodyguard its employer), wanted only while there is one alive.
-            AiBehaviour.Follow when targeting == TaskTargetType.SquadMission =>
-                board.MissionTarget.IsNone || board.MissionTarget == self || !world.Characters.IsAlive(board.MissionTarget) ? 0 : FollowDesire(type),
-            AiBehaviour.Follow => squad.Leader.IsNone || squad.Leader == self || !world.Characters.IsAlive(squad.Leader) ? 0 : FollowDesire(type),
+            AiBehaviour.Follow => FollowFactor(world, squad, board, self, targeting, type),
             // Sleeping on the ground has row 98's desire (AI slot 30): the registry gives rows 98, 153, 175, 239 and 261 the same desire
             // (FUN_140319a60, Verified).
             AiBehaviour.Sleep when type == TaskType.SleepOnFloor => SleepingDesire(world, board, self.Slot),
@@ -657,6 +654,21 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
     /// <b>Unknown</b>; Meitou reads 1, so a member weighs following its leader at 0.5.
     /// </summary>
     static float FollowDesire(TaskType type) => type is TaskType.FollowSquadleader or TaskType.FollowPlayerOrder ? FollowShare : 1;
+
+    /// <summary>
+    /// Following needs a living target other than self: the contract's mission target, else the slave owner or squad leader, as movement resolves
+    /// it. A slave that leads its own squad can therefore follow its master.
+    /// </summary>
+    static float FollowFactor(World world, Squad squad, Blackboard board, CharacterId self, TaskTargetType targeting, TaskType type)
+    {
+        var cold = world.Characters.Cold(self.Slot)!;
+        var target = targeting == TaskTargetType.SquadMission
+            ? board.MissionTarget
+            : Kidnap.ObedientSlave.OwnerOf(world, cold) ?? squad.Leader;
+        if (target.IsNone || target == self || !world.Characters.IsAlive(target)) return 0;
+
+        return FollowDesire(type);
+    }
 
     /// <summary>
     /// Going home while away (AI slot 56, <c>FUN_1405a3710</c>, Verified): 0.5, but 0.01 for a slave (state 1) that is not with the player

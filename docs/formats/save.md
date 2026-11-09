@@ -407,7 +407,9 @@ platoons with `persistent` true (as the original's dismissed platoon; engine cho
 **Observed** (headless, saves 2, wade, 1, the player moved next to each wild platoon): 41 of 49, 10 of 10, 67 of 67 saved wild characters made (the rest dead in the
 save), each at its saved position (0 units off); a held nest or sector made only its remainder; a Meitou save → load gives the same wild characters at the same places
 (78, 10, 96) and no fresh wild squads. A wild platoon with no file, `never been activated` and a `char count` (`SaveLoader.UnmadeWild`) is a stand-in the same way, made
-from its template into the platoon when it activates, at load wherever it is wanted (`FUN_1404ffad0`, above; `PopulationSystem.ActivatesAtLoad`); Meitou does not write a made one back with its characters, so the next load makes it again.
+from its template into the platoon when it activates, at load wherever it is wanted (`FUN_1404ffad0`, above; `PopulationSystem.ActivatesAtLoad`).
+Meitou keeps the generated characters in `Platoon.Stored` when unloaded and writes them into the original platoon with
+`never been activated` false, retaining its nest or homeless metadata; later loads restore those characters instead of rolling the template.
 **Observed** (a save at Sho-Battai): 12 such `sqt` 2 platoons in the desert round the town, which the original makes at their saved places.
 
 ### Nests (town list)

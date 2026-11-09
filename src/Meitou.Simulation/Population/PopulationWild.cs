@@ -39,7 +39,8 @@ public sealed record WildSite(int Index, WildKind Kind, ZoneCoordinate Zone, int
 /// When its zone activates it gets ceil(P x <c>homeless spawn amount</c>) squads: what the original's area tick reaches for a sector loaded alone (it
 /// spawns while the island's population is below P x the sum of the amounts and the sector's own count below its share; with one sector that stops at
 /// the ceiling), but no more than the island's room (<see cref="IslandRoom"/>: the sum over the loaded sectors less their squads and the save's
-/// homeless squads in them). The counters a and b and the "town nearby" halving are not modelled (engine choice). Template weights are 6.2's homeless branch, <c>max(0, v0 - k x count)</c> with k = (sum of v0) / (P x amount) and the counts of this
+/// homeless squads in them). The counters a and b and the "town nearby" halving are not modelled (engine choice). Template weights are 6.2's
+/// homeless branch, <c>max(0, v0 - k x count)</c> with k = (sum of v0) / (P x amount) and the counts of this
 /// sector's own picks; world-state gated templates are skipped. The spot: a random point of the sector, pushed out of the nearest town to twice its
 /// radius and out of other towns of another faction to their radius, at least <see cref="PopulationSettings.HomelessPlayerDistance"/> from every
 /// player character, walkable; 40 tries (the original's 4 rounds of 10), else that squad is not made. A sector whose nearest town is the player's
@@ -711,10 +712,12 @@ public sealed partial class PopulationSystem
         {
             var sector = _wildSites![i];
             if (sector.Kind != WildKind.Sector) continue;
+
             var state = _wildStates[i];
             target += MathF.Max(0, _settings.PopulationMultiplier * _data.Biomes!.Groups[sector.Group].HomelessSpawnAmount);
             load += state.Planned + state.Squads.Count(id => world.Squads.Find(id) is not null) + (HoldOf(world, i)?.Squads ?? 0);
         }
+
         return (int)MathF.Max(0, MathF.Ceiling(target - load - 1e-4f));
     }
 

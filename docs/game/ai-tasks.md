@@ -765,7 +765,8 @@ by it when the row has an effect, `FUN_14060fd80`);
   state object's getter). **Observed** (KenshiOracle Sho-Battai hold, 2026-11-09): skimmer packs (`animal agressive patrol nocturnal`, whose Squad list
   holds Animal Sleep from its sleep add-on and Follow leader at the same weight) sleep with their sleeping leader, while members follow a patrolling
   one, so `followMe` stays between 0 and 2 there. Meitou: `AiSystem.FollowDesire` (0.5 for 141 and 44, `followMe` read as 1) and
-  `AiSystem.SleepingDesire` for 175.
+  `AiSystem.SleepingDesire` for 175. `AiSystem.FollowFactor` checks the resolved mission target, slave owner or squad leader, as movement does;
+  leading its own squad does not prevent a slave from following its owner.
 
 | Type | Commitment (h) | Crowd |
 |---|---|---|

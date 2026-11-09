@@ -445,9 +445,8 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
     bool LieIn(World world, int s, CharacterCold c, Fixture bed)
     {
         var table = world.Characters;
-        if (world.Machines.Find(bed.Building) is { Data.IsConsumer: true, HasPower: false } || Unpowered(world, bed))
+        if (!HasPower(world, c, bed))
         {
-            if (c.IsPlayer) world.Post(Loc.Tr("This bed needs power to operate."));
             TaskStart.Stand(table, s);
             return false;
         }
@@ -472,6 +471,17 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
         && !data.Sites[bed.Site].Buildings.Any(b => b.Generators > 0 && !world.Fixtures.IsDestroyed(b));
 
     /// <summary>
+    /// Both a sleeper and a carrier must have power before payment or entering the bed; a refused carrier keeps its patient.
+    /// </summary>
+    bool HasPower(World world, CharacterCold user, Fixture bed)
+    {
+        if (world.Machines.Find(bed.Building) is not { Data.IsConsumer: true, HasPower: false } && !Unpowered(world, bed)) return true;
+
+        if (user.IsPlayer) world.Post(Loc.Tr("This bed needs power to operate."));
+        return false;
+    }
+
+    /// <summary>
     /// The carrier at the bed: the rent (the cheaper of the carrier's and the body's, <c>FUN_140358170</c>), then the body is let go and lies in the
     /// bed (<c>FUN_140358670</c>). False: over.
     /// </summary>
@@ -484,6 +494,8 @@ public sealed class BedSystem(PopulationData data, BedSettings? settings = null)
             if (c.IsPlayer) world.Post($"{c.Name}: no free bed nearby");
             return false;
         }
+
+        if (!HasPower(world, c, bed)) return false;
 
         int cost = Cost(world, bed, c.Faction);
         if (cost != 0 && Cost(world, bed, bc.Faction) is var own and >= 0 && own < cost) cost = own;

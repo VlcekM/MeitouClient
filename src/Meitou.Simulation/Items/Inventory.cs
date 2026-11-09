@@ -50,11 +50,12 @@ public sealed class Inventory(int width, int height)
         float w = 0;
         foreach (var i in Items)
             if (!InventoryCommands.IsLimbSection(i.Section) && !(skipDeath && i.Death)) w += i.WeightOf(skipDeath);
+
         return w;
     }
 
     /// <summary>
-    /// <see cref="ContentWeight()"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in
+    /// <see cref="ContentWeight(bool)"/> with the item on the mouse when it was lifted from this inventory: the original keeps counting a held item in
     /// the section it came from (<c>FUN_140749160</c>), times the worn bag's factor when that is the bag's contents.
     /// </summary>
     public float ContentWeight(HeldItem? held, bool skipDeath = false)

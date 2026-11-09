@@ -118,7 +118,7 @@ public sealed partial class PopulationSystem
         if (stored.Members.Count == 0) return null;
 
         if (p.Origin < 0 || p.Origin >= _data.Sites.Count)
-            return SpawnKept(world, stored, p.TemplateId, p.Faction, -1, p.Id, p.Position, p.Position, _settings.HomelessHomeRadius, p.Size);
+            return SpawnStoredWithoutTown(world, p, stored);
 
         var site = _data.Sites[p.Origin];
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
@@ -128,6 +128,18 @@ public sealed partial class PopulationSystem
             Math.Max(radius * 0.8f, 40), p.Size);
         if (squad is not null) squad.Resume = resume;
         return squad;
+    }
+
+    /// <summary>
+    /// Restores a stored platoon with no placed town, preserving a saved wild one's nest home and its full AI rather than a roaming routine.
+    /// </summary>
+    Squad? SpawnStoredWithoutTown(World world, Platoon platoon, StoredSquad stored)
+    {
+        var (centre, radius) = platoon.Saved is { Wild: not null } saved
+            ? WildHome(saved, platoon.Position)
+            : (platoon.Position, _settings.HomelessHomeRadius);
+        return SpawnKept(world, stored, platoon.TemplateId, platoon.Faction, -1, platoon.Id, platoon.Position, centre, radius, platoon.Size,
+            wild: platoon.Wild);
     }
 
     /// <summary>
@@ -166,7 +178,7 @@ public sealed partial class PopulationSystem
     /// <paramref name="position"/> is not where they were stored.
     /// </summary>
     Squad? SpawnKept(World world, StoredSquad stored, string templateId, int faction, int town, int platoonId, Vector2 position, Vector2 homeCentre,
-        float homeRadius, int size)
+        float homeRadius, int size, bool wild = false)
     {
         if (stored.Members.Count == 0) return null;
 
@@ -180,6 +192,7 @@ public sealed partial class PopulationSystem
             Town = town,
             PlatoonId = platoonId,
             Pinned = stored.Pinned && town >= 0,
+            Wild = wild,
             Restored = true,
             Position = new Vector3(position.X, world.Walkability.GroundHeight(position.X, position.Y), position.Y),
             HomeCentre = homeCentre,

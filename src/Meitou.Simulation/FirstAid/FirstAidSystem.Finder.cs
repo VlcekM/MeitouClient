@@ -354,7 +354,7 @@ public sealed partial class FirstAidSystem
 
     /// <summary>
     /// The Medic / Robotics finder (<c>FUN_14099f690</c>; 58 passes <paramref name="robotics"/> false, 57 true) and the Medic button's one look.
-    /// Gates: awake, not carried and not fighting; an NPC medic also waits while its squad fights or it carries someone (engine stand-ins for the goal's desire
+    /// Gates: awake, not carried and not fighting; an NPC also waits while its squad fights or it carries someone (stand-ins for the goal's desire
     /// <c>FUN_140998410</c>: 0.01 with enemies about, 0.1 while carrying someone, else 1). Returns the best patient's slot and score, -1 for none. A
     /// patient whose (medic, patient) pair is already on the sub-target list (<paramref name="taken"/>) is returned at once from pass 1 or 2 with a
     /// score of at least 0.95; passes 1, 2 and 4 skip a patient being eaten.

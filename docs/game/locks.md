@@ -316,8 +316,9 @@ Meitou registers them as outdoor fixtures using their level placement and bed ma
   ones (**Observed**, original game, a skeleton put in one): Black Desert City (Small Generators in its interiors), Burn's Tower (a Small Wind Generator) and Skinhouse HQ
   (Small Generators, Generator II) let it in; the Island Lab (two Battery Banks, no generator) and the Reprogramming Workshop (none) refuse; with every generator's
   `power output` set to 0 by a mod, Black Desert City's refuses too. Making the owner faction `not real` or not, or its `default relation` 0, changed none of
-  these. (Meitou: `BedSystem.LieIn`, a player-built bed whose machine draws power and has none, or a placed bed that draws power in a town with no generator
-  among its standing buildings and their interior and exterior layouts, `BedSystem.Unpowered`, `TownBuilding.Generators`); sound `Character_Bed` / `Get_In`; then enters. Row 258 has no done-list (it runs until replaced), row 98's is
+  these. Meitou: `BedSystem.HasPower`, shared by `LieIn` and `LayIn`, checks player-built machines and placed beds against the town's generators
+  (`Unpowered`, `TownBuilding.Generators`). Refusal happens before payment or dropping a carried patient, so the carrier keeps it.
+  Sound `Character_Bed` / `Get_In`; then enters. Row 258 has no done-list (it runs until replaced), row 98's is
   `isFullyRested`, `isInBed` ([ai-tasks](ai-tasks.md)).
 - **Task_GetOutOfBed** (116, 208, 257; `FUN_140345760`, `FUN_140348480`): `Get_Out` sound; when the bed's clip is `gotobed` it is played backwards and
   the character leaves at 10 %, else at once.

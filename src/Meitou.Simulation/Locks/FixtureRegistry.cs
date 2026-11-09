@@ -515,7 +515,7 @@ public sealed partial class FixtureRegistry
     }
 
     /// <summary>
-    /// Adds a fixture for each bed spot of the building, numbered in spot order.
+    /// Adds each interior bed in spot order, or the standalone building's own bed when it has no interior and is intact.
     /// </summary>
     void AddBeds(GameDatabase db, int site, TownBuilding b, int owner, List<Fixture> list)
     {

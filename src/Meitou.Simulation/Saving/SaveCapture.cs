@@ -1041,9 +1041,9 @@ public static partial class SaveCapture
     /// <summary>
     /// The NPC squads the population made (a town's residents and bar squads, in the world or stored since their town unloaded, and roaming squads
     /// while they are in the world) as new platoons, so a save keeps them where they are: a new PLATOON with its <c>basetown</c>, <c>is resident</c>
-    /// for a town's residents and the AI package running; its characters as new ones (look, kit, body). Wild squads and roaming stand-ins (no
-    /// characters) are not written: the population makes them again; but a campaign's stand-in is (its war state names it), as a PLATOON with no
-    /// file, which the loader makes from its template. Returns the platoons written by world platoon id.
+    /// for a town's residents and the AI package running; its characters as new ones (look, kit, body). A saved never-made platoon, wild or of a
+    /// town, is written into its original record once made. Other wild squads use WriteWildNpcs; roaming stand-ins without characters are skipped,
+    /// except a campaign's (its war state names it). Returns the platoons written by world platoon id.
     /// </summary>
     static Dictionary<int, SavePlatoon> WriteFreshNpcs(
         SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
@@ -1157,6 +1157,13 @@ public static partial class SaveCapture
             town >= 0 && town < _data.Sites.Count && faction >= 0 && faction < _data.Factions.Count && faction != _data.PlayerFaction;
 
         /// <summary>
+        /// A saved wild platoon made from its template has no placed town, but its generated characters belong in its original record.
+        /// </summary>
+        bool MadeWild(Platoon? platoon, int faction) =>
+            platoon is { Wild: true, Stored: not null } && Into(platoon) is not null
+            && faction >= 0 && faction < _data.Factions.Count && faction != _data.PlayerFaction;
+
+        /// <summary>
         /// The squads in the world (not a save's platoon), with their dead; a made never-made platoon wiped out keeps its record unless the original
         /// would drop it.
         /// </summary>
@@ -1165,14 +1172,14 @@ public static partial class SaveCapture
             var table = _world.Characters;
             foreach (var squad in _world.Squads.All)
             {
-                if (!Writable(squad.Town, squad.Faction)) continue;
-
                 Platoon? roamer = null;
                 if (squad.PlatoonId >= 0)
                 {
                     roamer = _world.Platoons.Find(squad.PlatoonId);
                     if (roamer is null || roamer.Saved is not null && roamer.Stored is null) continue;   // a save's platoon (WriteSavedNpcs)
                 }
+
+                if (!Writable(squad.Town, squad.Faction) && !MadeWild(roamer, squad.Faction)) continue;
 
                 // The dead stay in the platoon's list as the original writes it (FUN_1404ff410, docs/game/character-stats.md "Corpses").
                 var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false, Save: null }).ToList();
@@ -1224,7 +1231,8 @@ public static partial class SaveCapture
         {
             foreach (var p in _world.Platoons.All)
             {
-                if (p is not { State: PlatoonState.Unloaded, Stored: { } stored } || !Writable(p.Origin, p.Faction)) continue;
+                if (p is not { State: PlatoonState.Unloaded, Stored: { } stored }) continue;
+                if (!Writable(p.Origin, p.Faction) && !MadeWild(p, p.Faction)) continue;
 
                 // A made never-made one with no one left (the dead are not stored) keeps its record too, but declared dead: the original drops an
                 // unloaded dead platoon.
@@ -1276,7 +1284,6 @@ public static partial class SaveCapture
             int missionTown = -1)
         {
             var faction = _data.Factions[factionIndex];
-            var site = _data.Sites[town];
             var lead = members.FirstOrDefault(m => m.Leader);
             if (lead.Cold is null && members.Count > 0) lead = members[0];
             if (members.Count == 0) lead.Position = at;
@@ -1284,17 +1291,11 @@ public static partial class SaveCapture
             var platoon = PlatoonRecord(faction, templateId, money, members.Count, lead.Position, into);
             var record = platoon.Record;
 
-            // The TOWN the town is now (FUN_1404ffad0 compares it with the town's replacement).
-            if (into is null)
-            {
-                record.Strings["basetown"] = site.Replacement?.Id ?? site.Record.Id;
-                record.Bools[SavedPlatoon.BaseTownKey] = true;
-            }
+            if (into is null) SetTown(record, town, templateId, roaming, homeBuilding, package);
 
             record.Bools["imprisoned"] = imprisoned;
             record.Bools["dead"] = dead;
             record.Bools["intact"] = intact;
-            if (into is null) MarkPools(record, town, site, templateId, roaming, homeBuilding, package);
 
             if (package is not null) record.Strings["currentPackage"] = package;
             if (missionTown >= 0 && missionTown != town && missionTown < _data.Sites.Count)
@@ -1303,17 +1304,29 @@ public static partial class SaveCapture
             ShopSave.Write(record, shop, _world);
             AiSave.Write(record, ai);
             NoteMemory(record, memory);
-            if (into is null)
-            {
-                // Its town and home building by handle, as the original names them (docs/formats/save.md "NPC platoons").
-                if (_townHands.TryGetValue(site.InstanceId, out var townHand)) townHand.Write(record, "hometown");
-                if (homeBuilding is { } home && HomeHandle(_game, home) is { } homeHand) homeHand.Write(record, "homebuilding");
-            }
 
             WriteMapArea(record, _data, lead.Position);
             WriteMembers(platoon, faction, members, lead.Cold);
             SetCharCount(platoon);
+
             return platoon;
+        }
+
+        /// <summary>
+        /// A new town platoon's pool and home handles. Existing records keep their town metadata, including a wild one's nest or lack of a town.
+        /// </summary>
+        void SetTown(FcsRecord record, int town, string templateId, bool roaming, TownBuilding? homeBuilding, string? package)
+        {
+            var site = _data.Sites[town];
+
+            // The TOWN the town is now (FUN_1404ffad0 compares it with the town's replacement).
+            record.Strings["basetown"] = site.Replacement?.Id ?? site.Record.Id;
+            record.Bools[SavedPlatoon.BaseTownKey] = true;
+            MarkPools(record, town, site, templateId, roaming, homeBuilding, package);
+
+            // Its town and home building by handle, as the original names them (docs/formats/save.md "NPC platoons").
+            if (_townHands.TryGetValue(site.InstanceId, out var townHand)) townHand.Write(record, "hometown");
+            if (homeBuilding is { } home && HomeHandle(_game, home) is { } homeHand) homeHand.Write(record, "homebuilding");
         }
 
         /// <summary>

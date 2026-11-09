@@ -696,6 +696,7 @@ public static class SaveLoader
     {
         string template = platoon.SquadTemplate;
         if (platoon.Record.Bools.GetValueOrDefault("is resident")) return false;
+
         // `sqt` 1 is the town's resident pool (residents and bar squads, docs/formats/save.md "PLATOON keys"): the platoon belongs to its town,
         // wherever its package walks it.
         if (platoon.Record.Ints.GetValueOrDefault("sqt", 2) == 1) return false;
@@ -797,6 +798,7 @@ public static class SaveLoader
         loaded.WildPlatoons++;
         if (unmade)
             loaded.Notes.Add($"{platoon.Name}: a wild platoon never made by the game; made from its template where it was saved when it activates.");
+
         return true;
     }
 
