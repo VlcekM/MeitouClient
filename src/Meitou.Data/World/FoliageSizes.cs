@@ -21,10 +21,10 @@ public enum FoliageSizeClass
 }
 
 /// <summary>
-/// Size classes of foliage meshes from their bounds (docs/formats/foliage.md, "Mesh sizes"): a mesh's size is its bounding radius (half
-/// the diagonal of the box around the mesh and its leaves mesh, at least 1) times the largest scale its record allows. The thresholds
-/// follow from the first class ranges (<see cref="ThresholdSmallRange"/> and the others, 800 / 2500 / 5000): the largest small mesh at the end of the small range looks as big as the
-/// largest medium one at the end of the medium range (40 / 800 = 125 / 2500), and the smallest large mesh ends at twice that.
+/// Size classes of foliage meshes from their bounds (docs/formats/foliage.md, "Mesh sizes"): a mesh's size is its bounding radius (half the diagonal
+/// of the box around the mesh and its leaves mesh, at least 1) times the largest scale its record allows. The thresholds follow from the first class
+/// ranges (<see cref="ThresholdSmallRange"/> and the others, 800 / 2500 / 5000): the largest small mesh at the end of the small range looks as big as
+/// the largest medium one at the end of the medium range (40 / 800 = 125 / 2500), and the smallest large mesh ends at twice that.
 /// </summary>
 public static class FoliageSizes
 {
@@ -50,6 +50,9 @@ public static class FoliageSizes
     /// </summary>
     public static float Size(float boundsRadius, FoliageMesh mesh) => boundsRadius * Math.Max(mesh.MinScale, mesh.MaxScale);
 
+    /// <summary>
+    /// The size class of a mesh of <paramref name="size"/> (<see cref="Size"/>).
+    /// </summary>
     public static FoliageSizeClass Classify(float size) => size >= LargeFrom ? FoliageSizeClass.Large
         : size >= MediumFrom ? FoliageSizeClass.Medium
         : FoliageSizeClass.Small;
@@ -60,8 +63,9 @@ public static class FoliageSizes
     public const float GiantFrom = 1000;
 
     /// <summary>
-    /// Whether a mesh file is in the game's own vegetation folders, <c>Assets/Plants</c> (trees, ferns, palms, grass clumps) or <c>foliage/Trees</c>; rocks are in
-    /// <c>Assets/Rocks</c>, ruins and wrecks in <c>Assets/Things</c>, houses and walls in <c>Assets/Buildings</c> (docs/formats/foliage.md, "Mesh sizes").
+    /// Whether a mesh file is in the game's own vegetation folders, <c>Assets/Plants</c> (trees, ferns, palms, grass clumps) or <c>foliage/Trees</c>;
+    /// rocks are in <c>Assets/Rocks</c>, ruins and wrecks in <c>Assets/Things</c>, houses and walls in <c>Assets/Buildings</c>
+    /// (docs/formats/foliage.md, "Mesh sizes").
     /// </summary>
     public static bool IsVegetation(string meshPath)
     {

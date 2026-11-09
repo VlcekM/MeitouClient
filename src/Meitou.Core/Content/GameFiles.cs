@@ -11,11 +11,21 @@ namespace Meitou.Content;
 /// </summary>
 public static class GameFiles
 {
+    /// <summary>
+    /// Whether paths need case folding: everywhere but Windows (macOS too, for the spelling on disk).
+    /// </summary>
     static readonly bool Fold = !OperatingSystem.IsWindows();
 
-    // Folder -> its entries by name ignoring case, and the folder's write time when it was listed: a name that is not in the listing makes it
-    // read again if the folder has changed since (the install is normally read-only while the game runs, so this is rare).
+    /// <summary>
+    /// A folder's entries by name ignoring case, each to its spelling on disk (<c>Entries</c>), and the folder's write time when it
+    /// was listed (<c>Stamp</c>).
+    /// </summary>
     sealed record Listing(DateTime Stamp, Dictionary<string, string> Entries);
+
+    /// <summary>
+    /// Folder -> its <see cref="Listing"/>: a name that is not in the listing makes it read again if the folder has changed since (the install is
+    /// normally read-only while the game runs, so this is rare).
+    /// </summary>
     static readonly ConcurrentDictionary<string, Listing> Listings = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -45,6 +55,9 @@ public static class GameFiles
         return Directory.Exists(resolved) ? resolved : null;
     }
 
+    /// <summary>
+    /// <paramref name="path"/> made full and spelt as on disk, part by part; null when a part does not exist or the path is unreadable.
+    /// </summary>
     static string? Walk(string path)
     {
         try
@@ -63,6 +76,9 @@ public static class GameFiles
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return null; }
     }
 
+    /// <summary>
+    /// The spelling on disk of <paramref name="name"/> in <paramref name="folder"/>, relisting the folder when it changed since it was cached.
+    /// </summary>
     static bool Find(string folder, string name, out string real)
     {
         var listing = Listings.GetOrAdd(folder, List);
@@ -72,6 +88,9 @@ public static class GameFiles
         return listing.Entries.TryGetValue(name, out real!);
     }
 
+    /// <summary>
+    /// Lists <paramref name="folder"/> now; an unreadable folder gives an empty listing.
+    /// </summary>
     static Listing List(string folder)
     {
         var stamp = Directory.GetLastWriteTimeUtc(folder);

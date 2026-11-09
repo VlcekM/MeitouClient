@@ -20,16 +20,46 @@ namespace Meitou.Data.Particles;
 /// </summary>
 public sealed class WeatherGroups : IDisposable
 {
+    /// <summary>
+    /// The longest warm-up a group gets of its own accord (seconds): <see cref="EffectSet.MaxAutoPrewarm"/>.
+    /// </summary>
     public const float MaxAutoPrewarm = EffectSet.MaxAutoPrewarm;
 
+    /// <summary>
+    /// The particle systems the groups are made from.
+    /// </summary>
     readonly ParticleLibrary _library;
+    /// <summary>
+    /// The ground and wind the groups live in.
+    /// </summary>
     readonly EffectWorld _world;
+    /// <summary>
+    /// The groups shown; replaced in place by <see cref="Swap"/>.
+    /// </summary>
     readonly List<EffectGroup> _groups = [];
+    /// <summary>
+    /// The entries of the shown weather that have no group.
+    /// </summary>
     readonly List<WeatherEffectEntry> _skipped = [];
+    /// <summary>
+    /// Whether a weather's groups have been swapped in yet: the first change is made at once, without a dwell.
+    /// </summary>
     bool _applied;
+    /// <summary>
+    /// The weather to change to (null: none) and the one whose warm-up last threw, not tried again until the weather changes.
+    /// </summary>
     WeatherEffectInput? _wanted, _failed;
+    /// <summary>
+    /// When <see cref="_wanted"/> was first wanted, and the seconds it must hold before it is made.
+    /// </summary>
     double _wantedSince, _wantedDwell;
+    /// <summary>
+    /// The set being warmed in the background; null when none is.
+    /// </summary>
     EffectSet? _building;
+    /// <summary>
+    /// The clock of the last <see cref="Advance"/>, for <see cref="SwapLatency"/>.
+    /// </summary>
     double _lastNow;
 
     /// <summary>
@@ -37,8 +67,14 @@ public sealed class WeatherGroups : IDisposable
     /// </summary>
     public double SwapLatency { get; private set; }
 
-    readonly EffectWarmer _warmer = new();   // its thread is made now, not at the first change: starting one in a frame can stall that frame
+    /// <summary>
+    /// The thread that warms background sets, made with the groups and not at the first change: starting one in a frame can stall that frame.
+    /// </summary>
+    readonly EffectWarmer _warmer = new();
 
+    /// <summary>
+    /// Shows no groups until the first weather is wanted and advanced.
+    /// </summary>
     public WeatherGroups(ParticleLibrary library, EffectWorld world) => (this._library, this._world) = (library, world);
 
     /// <summary>
@@ -63,6 +99,9 @@ public sealed class WeatherGroups : IDisposable
     /// The groups shown (the same list object for ever: it is replaced in place by <see cref="Advance"/>).
     /// </summary>
     public IReadOnlyList<EffectGroup> Groups => _groups;
+    /// <summary>
+    /// The entries of the shown weather that have no group.
+    /// </summary>
     public IReadOnlyList<WeatherEffectEntry> Skipped => _skipped;
     /// <summary>
     /// The weather the groups were made for, with the latest strength and wind.
@@ -156,6 +195,9 @@ public sealed class WeatherGroups : IDisposable
         return changed;
     }
 
+    /// <summary>
+    /// Shows the groups of <paramref name="set"/> for <paramref name="weather"/> and notes the change's latency and cost.
+    /// </summary>
     void Swap(EffectSet set, WeatherEffectInput weather)
     {
         long start = Stopwatch.GetTimestamp();
@@ -174,8 +216,14 @@ public sealed class WeatherGroups : IDisposable
     /// last swap took.
     /// </summary>
     public (long Freeze, long Make, long Queue) LastStartTicks { get; private set; }
+    /// <summary>
+    /// Stopwatch ticks the last <see cref="Swap"/> took.
+    /// </summary>
     public long LastSwapTicks { get; private set; }
 
+    /// <summary>
+    /// Cancels a change being warmed and ends the warming thread.
+    /// </summary>
     public void Dispose()
     {
         _building?.Cancel();

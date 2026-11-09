@@ -8,7 +8,13 @@ namespace Meitou.Data.World;
 /// </summary>
 public enum PlacedKind
 {
+    /// <summary>
+    /// A BUILDING_PART of a placed building.
+    /// </summary>
     BuildingPart,
+    /// <summary>
+    /// A placed MAP_FEATURES record.
+    /// </summary>
     MapFeature,
 
     /// <summary>
@@ -116,7 +122,8 @@ public readonly record struct TurnJoint(string PartId, Vector3 Pivot, Vector3 Ax
 /// <param name="Position">World position.</param>
 /// <param name="Direction">World direction a spot light points in (unit length); also set for point lights.</param>
 /// <param name="Power">The light's power: <c>brightness</c> plus the building's roll in ±<c>variance</c>/2.</param>
-/// <param name="Function">The owner's <c>function</c>, read from its BUILDING_FUNCTIONALITY (-1 without one): the BUILDING itself has no such field.</param>
+/// <param name="Function">The owner's <c>function</c>, read from its BUILDING_FUNCTIONALITY (-1 without one): the BUILDING itself has no
+/// such field.</param>
 public sealed record PlacedLight(
     GameRecord Light,
     GameRecord Holder,
@@ -147,7 +154,8 @@ public sealed record PlacedEffect(
 /// <summary>
 /// State of a placed building that changes what is drawn (from its GAMESTATE_BUILDING and its town).
 /// </summary>
-/// <param name="Destroyed">The state's <c>destroyed</c> flag: parts switch to their <c>destroyed mesh</c>, upper floors and stairs without one go.</param>
+/// <param name="Destroyed">The state's <c>destroyed</c> flag: parts switch to their <c>destroyed mesh</c>, upper floors and stairs without
+/// one go.</param>
 /// <param name="TownMaterial">The building's town's material (see <see cref="WorldObjectLayout.TownMaterial"/>), used when the building has none of
 /// its own.</param>
 public sealed record BuildingState(bool Destroyed = false, GameRecord? TownMaterial = null)
@@ -196,6 +204,9 @@ public static class WorldObjectLayout
     public static Matrix4x4 InstanceTransform(Vector3 position, Quaternion rotation, Vector3 scale) =>
         Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(Normalized(rotation)) * Matrix4x4.CreateTranslation(position);
 
+    /// <summary>
+    /// <paramref name="q"/> normalised; identity for a zero quaternion.
+    /// </summary>
     static Quaternion Normalized(Quaternion q) => q.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(q);
 
     /// <summary>
@@ -336,6 +347,9 @@ public static class WorldObjectLayout
         return null;
     }
 
+    /// <summary>
+    /// The state of laying out one building: its inputs, its outputs and the values its parts inherit.
+    /// </summary>
     sealed class Assembly(
         GameDatabase db,
         GameRecord building,
@@ -345,21 +359,54 @@ public static class WorldObjectLayout
         List<PlacedLight>? lights,
         List<PlacedEffect>? effects)
     {
+        /// <summary>
+        /// The database the parts are found in.
+        /// </summary>
         public readonly GameDatabase Db = db;
+        /// <summary>
+        /// The BUILDING being laid out.
+        /// </summary>
         public readonly GameRecord Building = building;
+        /// <summary>
+        /// The placement's id, part of the seed of material collections.
+        /// </summary>
         public readonly string PlacementId = placementId;
 
         /// <summary>
         /// What the output is named by (<see cref="BuildingState.Identity"/>).
         /// </summary>
         public readonly string Identity = state.Identity ?? placementId;
+        /// <summary>
+        /// The placement's state (town material, interior, identity).
+        /// </summary>
         public readonly BuildingState State = state;
+        /// <summary>
+        /// The meshes laid out.
+        /// </summary>
         public readonly List<PlacedMesh> Result = result;
+        /// <summary>
+        /// The lights laid out; null when not wanted.
+        /// </summary>
         public readonly List<PlacedLight>? Lights = lights;
+        /// <summary>
+        /// The effects laid out; null when not wanted.
+        /// </summary>
         public readonly List<PlacedEffect>? Effects = effects;
+        /// <summary>
+        /// The building's scale (its parent's for a door), never 0 or less.
+        /// </summary>
         public float Scale = 1;
+        /// <summary>
+        /// The building's base material: its first <c>material</c> resolved, else its town's.
+        /// </summary>
         public GameRecord? BaseMaterial;
+        /// <summary>
+        /// The building's random source, seeded by its position (and seeded again for the interior).
+        /// </summary>
         public BuildingRandom Random = new(0);
+        /// <summary>
+        /// The building's scene node: its position and rotation, without the scale.
+        /// </summary>
         public Matrix4x4 Node = Matrix4x4.Identity;
 
         /// <summary>
@@ -387,6 +434,10 @@ public static class WorldObjectLayout
     public static Vector3? PositionMarker(GameDatabase db, GameRecord building, Vector3 worldPosition, Quaternion rotation) =>
         AddBuilding(db, building, building.StringId, worldPosition, rotation, new BuildingState(), [], null, null)?.Marker;
 
+    /// <summary>
+    /// Lays out <paramref name="building"/> at <paramref name="position"/>, its interior too when <paramref name="state"/> asks; null for an <c>is
+    /// node</c> building.
+    /// </summary>
     static Assembly? AddBuilding(
         GameDatabase db,
         GameRecord building,

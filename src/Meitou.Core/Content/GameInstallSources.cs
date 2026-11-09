@@ -17,6 +17,9 @@ public static partial class GameInstallSources
     /// </summary>
     public static IEnumerable<string> Launchers() => LauncherList.Value;
 
+    /// <summary>
+    /// <see cref="Launchers()"/>'s folders, gathered once on first use: the registry and Heroic on Windows, the Unix launchers elsewhere.
+    /// </summary>
     static readonly Lazy<string[]> LauncherList = new(() =>
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -50,11 +53,14 @@ public static partial class GameInstallSources
 
     /// <summary>
     /// The XDG base folders (<c>XDG_DATA_HOME</c>, <c>XDG_CONFIG_HOME</c>, <c>XDG_DATA_DIRS</c>): the variable when it holds an absolute path, else
-    /// the specification's default under
-    /// <paramref name="home"/>. <paramref name="env"/> reads an environment variable (null when unset).
+    /// the specification's default under <see cref="From"/>'s <c>home</c>. Its <c>env</c> reads an environment variable (null when unset).
     /// </summary>
     public readonly record struct Xdg(string DataHome, string ConfigHome, IReadOnlyList<string> DataDirs)
     {
+        /// <summary>
+        /// The XDG folders read through <paramref name="env"/>: a variable that is not an absolute path gives the specification's default under
+        /// <paramref name="home"/>, and the Flatpak export folders are added to the data folders.
+        /// </summary>
         public static Xdg From(string home, Func<string, string?> env)
         {
             string Home(string variable, string fallback) => env(variable) is { } v && Path.IsPathRooted(v) ? v : Path.Combine(home, fallback);
@@ -326,9 +332,15 @@ public static partial class GameInstallSources
         }
     }
 
+    /// <summary>
+    /// A Lutris game file's <c>exe:</c> or <c>working_dir:</c> line; group 2 is the path.
+    /// </summary>
     [GeneratedRegex(@"^\s*(exe|working_dir):\s*(\S.*)$", RegexOptions.Multiline)]
     private static partial Regex LutrisExe();
 
+    /// <summary>
+    /// A Lutris game file's Wine <c>prefix:</c> line; group 1 is the path.
+    /// </summary>
     [GeneratedRegex(@"^\s*prefix:\s*(\S.*)$", RegexOptions.Multiline)]
     private static partial Regex LutrisPrefix();
 
@@ -370,12 +382,18 @@ public static partial class GameInstallSources
         foreach (var path in found) yield return path;
     }
 
+    /// <summary>
+    /// The value of the first <c><paramref name="key"/>=</c> line of a <c>.desktop</c> file's text, trimmed; null when it has none.
+    /// </summary>
     static string? DesktopField(string text, string key)
     {
         var m = Regex.Match(text, "^" + key + @"=(.*)$", RegexOptions.Multiline);
         return m.Success ? m.Groups[1].Value.Trim() : null;
     }
 
+    /// <summary>
+    /// A path in a <c>.desktop</c> <c>Exec=</c> line: a quoted or bare token holding a slash or backslash.
+    /// </summary>
     [GeneratedRegex(@"(""[^""]*[/\\][^""]*""|[^\s""]*[/\\][^\s""]*)")]
     private static partial Regex ExecPath();
 

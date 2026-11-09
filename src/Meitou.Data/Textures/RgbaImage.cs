@@ -5,6 +5,10 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public sealed class RgbaImage
 {
+    /// <summary>
+    /// An image of <paramref name="width"/> x <paramref name="height"/> over <paramref name="pixels"/> (width x height x 4 bytes, not copied), or a
+    /// new transparent black one.
+    /// </summary>
     public RgbaImage(int width, int height, byte[]? pixels = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
@@ -16,10 +20,22 @@ public sealed class RgbaImage
         Pixels = pixels ?? new byte[width * height * 4];
     }
 
+    /// <summary>
+    /// Width in pixels.
+    /// </summary>
     public int Width { get; }
+    /// <summary>
+    /// Height in pixels.
+    /// </summary>
     public int Height { get; }
+    /// <summary>
+    /// The pixel bytes, R, G, B, A per pixel, rows top to bottom.
+    /// </summary>
     public byte[] Pixels { get; }
 
+    /// <summary>
+    /// The pixel at column <paramref name="x"/>, row <paramref name="y"/> (0 the top).
+    /// </summary>
     public (byte R, byte G, byte B, byte A) this[int x, int y]
     {
         get

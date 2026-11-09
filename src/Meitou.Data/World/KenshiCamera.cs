@@ -57,6 +57,9 @@ public static class KenshiCamera
     /// Zoom input per second of a held <c>camera_zoom_in</c> / <c>camera_zoom_out</c> key (three times that with Shift).
     /// </summary>
     public const float ZoomKeyRate = 5;
+    /// <summary>
+    /// See <see cref="ZoomKeyRate"/>.
+    /// </summary>
     public const float ZoomKeyShiftFactor = 3;
     /// <summary>
     /// The boom closes on the zoom step's target by <c>min(ZoomFollowRate · frame time, 1)</c> of the remaining distance per frame.
@@ -72,6 +75,9 @@ public static class KenshiCamera
     /// The rotation and tilt keys' input per frame (the mouse's is its movement in pixels times <see cref="DefaultMouseSpeed"/>).
     /// </summary>
     public const float YawKeyInput = 9;
+    /// <summary>
+    /// See <see cref="YawKeyInput"/>.
+    /// </summary>
     public const float TiltKeyInput = 2;
     /// <summary>
     /// Settings <c>mouse speed pan</c> / <c>mouse speed tilt</c> (Camera Rotate Speed X / Y): degrees per second per unit of input.
@@ -85,7 +91,13 @@ public static class KenshiCamera
     /// The yaw and pitch inputs are averaged over the last <see cref="SmoothingFrames"/> frames with weights 1, a, a², ... (newest first).
     /// </summary>
     public const int SmoothingFrames = 20;
+    /// <summary>
+    /// The weight factor a of the yaw input (<see cref="SmoothingFrames"/>).
+    /// </summary>
     public const float YawSmoothing = 0.5f;
+    /// <summary>
+    /// The weight factor a of the pitch input (<see cref="SmoothingFrames"/>).
+    /// </summary>
     public const float PitchSmoothing = 0.7f;
 
     /// <summary>
@@ -93,6 +105,9 @@ public static class KenshiCamera
     /// closed at once).
     /// </summary>
     public const float HeightRate = 10;
+    /// <summary>
+    /// See <see cref="HeightRate"/>.
+    /// </summary>
     public const float HeightSnap = 0.1f;
 
     /// <summary>
@@ -104,7 +119,13 @@ public static class KenshiCamera
     /// The eye is kept above the ground under it by <c>min(ClearanceBoomFraction · boom, ClearanceCap) + ClearanceBase</c>.
     /// </summary>
     public const float ClearanceBoomFraction = 0.2f;
+    /// <summary>
+    /// See <see cref="ClearanceBoomFraction"/>.
+    /// </summary>
     public const float ClearanceCap = 20;
+    /// <summary>
+    /// See <see cref="ClearanceBoomFraction"/>.
+    /// </summary>
     public const float ClearanceBase = 10;
 
     /// <summary>
@@ -124,8 +145,9 @@ public static class KenshiCamera
     public const float MaxHeightAbovePivot = MaxDistance * -MinViewY;
 
     /// <summary>
-    /// Engine choice: a free camera's eye this far above the ground under it is in flight. The world's focus (squads, navmesh) stays where it left the
-    /// ground (docs/formats/camera.md "In the game") and the weather's fog and effects are off. The strategy camera never gets this high (<see cref="MaxHeightAbovePivot"/>).
+    /// Engine choice: a free camera's eye this far above the ground under it is in flight. The world's focus (squads, navmesh) stays where it left
+    /// the ground (docs/formats/camera.md "In the game") and the weather's fog and effects are off. The strategy camera never gets this
+    /// high (<see cref="MaxHeightAbovePivot"/>).
     /// </summary>
     public const float FlightHeight = 3000;
 
@@ -147,8 +169,9 @@ public static class KenshiCamera
         pivot.X >= -SavedPivotLimit && pivot.X <= SavedPivotLimit && pivot.Z >= -SavedPivotLimit && pivot.Z <= SavedPivotLimit;
 
     /// <summary>
-    /// The CAMERA <c>rot</c> and <c>zoom</c> for a view: <c>rot</c> is the pivot's orientation, yaw about Y then pitch about the pivot's X, stored w, x, y, z; <c>zoom</c> is
-    /// the camera's position on the pivot's local Z, minus the boom. <paramref name="yaw"/> 0 looks along -Z, <paramref name="pitch"/> is radians below the horizon.
+    /// The CAMERA <c>rot</c> and <c>zoom</c> for a view: <c>rot</c> is the pivot's orientation, yaw about Y then pitch about the pivot's X, stored w,
+    /// x, y, z; <c>zoom</c> is the camera's position on the pivot's local Z, minus the boom. <paramref name="yaw"/> 0 looks along -Z,
+    /// <paramref name="pitch"/> is radians below the horizon.
     /// </summary>
     public static (System.Numerics.Vector4 Rot, float Zoom) ToSaved(float yaw, float pitch, float distance)
     {

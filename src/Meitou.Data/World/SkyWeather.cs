@@ -22,6 +22,9 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
     /// </summary>
     public static Vector3 Unpack(int rgb) => new(((rgb >> 16) & 255) / 255f, ((rgb >> 8) & 255) / 255f, (rgb & 255) / 255f);
 
+    /// <summary>
+    /// The sky fields of WEATHER record <paramref name="r"/>.
+    /// </summary>
     public static SkyWeather FromRecord(GameRecord r) => new(r.Name,
         Unpack(r.GetInt("sky color mult", 0xFFFFFF)), r.GetBool("fog enabled"), Unpack(r.GetInt("fog color", 0xFFFFFF)),
         r.GetFloat("fog distance min"), r.GetFloat("fog distance max"), r.GetFloat("clouds density"), r.GetFloat("heat haze"));
@@ -38,6 +41,9 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
         return r is null ? null : FromRecord(r);
     }
 
+    /// <summary>
+    /// The names of every WEATHER record.
+    /// </summary>
     public static IEnumerable<string> Names(GameDatabase db) => db.OfType(FcsRecordType.Weather).Select(w => w.Name);
 
     /// <summary>

@@ -12,6 +12,9 @@ namespace Meitou.Content;
 public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnlyList<string> Assemblies, string Entry,
     CodeModVersion? Version, IReadOnlyList<CodeModDependency>? Dependencies)
 {
+    /// <summary>
+    /// Manifests may hold <c>//</c> comments and trailing commas.
+    /// </summary>
     static readonly JsonDocumentOptions JsonOptions = new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
 
     /// <summary>
@@ -83,6 +86,9 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         }
     }
 
+    /// <summary>
+    /// Builds the manifest from the parsed root object, checking each field; throws <see cref="InvalidDataException"/> on the first bad one.
+    /// </summary>
     static CodeModManifest FromJson(JsonElement root)
     {
         if (root.ValueKind != JsonValueKind.Object)
@@ -100,6 +106,9 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         };
     }
 
+    /// <summary>
+    /// The optional <c>version</c> field; null when absent, <see cref="InvalidDataException"/> when it is not a <c>MAJOR.MINOR.PATCH</c> string.
+    /// </summary>
     static CodeModVersion? ReadVersion(JsonElement root)
     {
         if (!root.TryGetProperty("version", out var value)) return null;
@@ -108,6 +117,9 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         return version;
     }
 
+    /// <summary>
+    /// The optional <c>dependencies</c> list; null when absent. Refuses a non-list, the mod naming itself, and an id listed twice.
+    /// </summary>
     static List<CodeModDependency>? ReadDependencies(JsonElement root, string id)
     {
         if (!root.TryGetProperty("dependencies", out var list)) return null;
@@ -124,6 +136,9 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         return dependencies;
     }
 
+    /// <summary>
+    /// The required int32 field <paramref name="name"/>; a JSON string such as <c>"2"</c> is refused.
+    /// </summary>
     static int WholeNumber(JsonElement root, string name)
     {
         if (!root.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Number || !value.TryGetInt32(out int number))
@@ -131,6 +146,9 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         return number;
     }
 
+    /// <summary>
+    /// The required non-empty string field <paramref name="name"/>.
+    /// </summary>
     static string Text(JsonElement root, string name)
     {
         if (!root.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.String || value.GetString() is not { Length: > 0 } text)
@@ -138,6 +156,9 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         return text;
     }
 
+    /// <summary>
+    /// The required, non-empty <c>assemblies</c> list: bare <c>.dll</c> file names in the mod folder (no directory parts).
+    /// </summary>
     static List<string> ReadAssemblies(JsonElement root)
     {
         if (!root.TryGetProperty("assemblies", out var list) || list.ValueKind != JsonValueKind.Array || list.GetArrayLength() == 0)
@@ -153,6 +174,10 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
         return names;
     }
 
+    /// <summary>
+    /// Whether <paramref name="id"/> is a valid mod id: 1..64 ASCII letters, digits, <c>.</c>, <c>_</c> and <c>-</c>, starting with a letter
+    /// or digit.
+    /// </summary>
     public static bool IsValidId(string id) =>
         id.Length is > 0 and <= 64 && char.IsAsciiLetterOrDigit(id[0]) && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-');
 }
@@ -163,6 +188,10 @@ public sealed partial record CodeModManifest(string Id, int ApiVersion, IReadOnl
 /// </summary>
 public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = null, bool Optional = false)
 {
+    /// <summary>
+    /// Reads one list entry: a bare id string, or an object with <c>id</c>, optional <c>version</c> range and <c>optional</c> flag.
+    /// <paramref name="key"/> names the list in error messages.
+    /// </summary>
     internal static CodeModDependency FromJson(JsonElement item, string key = "dependencies")
     {
         if (item.ValueKind == JsonValueKind.String) return new CodeModDependency(CheckedId(item.GetString(), key));
@@ -173,18 +202,24 @@ public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = n
         return new CodeModDependency(id, ReadRange(item, id, key), ReadOptional(item, id, key));
     }
 
+    /// <summary>
+    /// The entry's optional <c>version</c> range string; null when absent.
+    /// </summary>
     static CodeModVersionRange? ReadRange(JsonElement item, string id, string key)
     {
         if (!item.TryGetProperty("version", out var version)) return null;
         if (version.ValueKind != JsonValueKind.String)
             throw new InvalidDataException($"{key}: {id}'s version must be a string such as \">=1.2.0 <2.0.0\"");
-                try
+        try
         {
             return CodeModVersionRange.Parse(version.GetString()!);
         }
         catch (InvalidDataException e) { throw new InvalidDataException($"{key}: {id}: {e.Message}", e); }
     }
 
+    /// <summary>
+    /// The entry's optional <c>optional</c> flag (a JSON boolean); false when absent.
+    /// </summary>
     static bool ReadOptional(JsonElement item, string id, string key) =>
         item.TryGetProperty("optional", out var flag) && flag.ValueKind switch
         {
@@ -193,6 +228,9 @@ public sealed record CodeModDependency(string Id, CodeModVersionRange? Range = n
             _ => throw new InvalidDataException($"{key}: {id}'s optional must be true or false"),
         };
 
+    /// <summary>
+    /// <paramref name="id"/> when it is a valid mod id, else <see cref="InvalidDataException"/> naming the list <paramref name="key"/>.
+    /// </summary>
     static string CheckedId(string? id, string key)
     {
         if (id is null || !CodeModManifest.IsValidId(id))

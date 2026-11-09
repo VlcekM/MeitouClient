@@ -9,8 +9,17 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public sealed class AssetLocator
 {
+    /// <summary>
+    /// The install the files are found in.
+    /// </summary>
     readonly GameInstall _install;
+    /// <summary>
+    /// Every file under data/ by bare name, indexed on first use (the last rule).
+    /// </summary>
     readonly Lazy<OgreScriptResources> _everything;
+    /// <summary>
+    /// The material library of <see cref="Configured"/>, parsed on first use.
+    /// </summary>
     readonly Lazy<OgreMaterialLibrary> _materials;
 
     /// <summary>
@@ -19,6 +28,9 @@ public sealed class AssetLocator
     /// </summary>
     readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Path, string How)> _found = new();
 
+    /// <summary>
+    /// A locator for <paramref name="install"/>; the indexes are made on first use.
+    /// </summary>
     public AssetLocator(GameInstall install)
     {
         this._install = install;
@@ -27,6 +39,9 @@ public sealed class AssetLocator
         _materials = new(() => OgreMaterialLibrary.Load(Configured));
     }
 
+    /// <summary>
+    /// The resource locations the game registers for the install (resources.cfg, the language and the enabled mods).
+    /// </summary>
     public OgreScriptResources Configured { get; }
 
     /// <summary>
@@ -51,6 +66,10 @@ public sealed class AssetLocator
         return path;
     }
 
+    /// <summary>
+    /// Finds <paramref name="name"/> by the rules in order (an absolute path, the configured locations, the path in the install, anywhere under
+    /// data/); <paramref name="how"/> names the rule.
+    /// </summary>
     string? Search(string name, out string how)
     {
         how = "";
@@ -104,6 +123,9 @@ public sealed class AssetLocator
         return null;
     }
 
+    /// <summary>
+    /// Full path of <paramref name="name"/>, or null.
+    /// </summary>
     public string? Find(string name) => Find(name, out _);
 
     /// <summary>
@@ -116,6 +138,9 @@ public sealed class AssetLocator
         return Configured.Contains(bare, group) ? Configured.Find(bare, group) : null;
     }
 
+    /// <summary>
+    /// <paramref name="path"/> relative to the install's folder.
+    /// </summary>
     public string Relative(string path) => Path.GetRelativePath(_install.Root, path);
 
     /// <summary>

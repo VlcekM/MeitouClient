@@ -2,8 +2,10 @@ using System.Text.Json;
 
 namespace Meitou.Content;
 
-// The API 2 manifest keys beside dependencies (docs/modding-dependencies.md "Manifest"): ordering without sharing, declared conflicts and the Meitou
-// versions a mod was built for.
+/// <summary>
+/// The API 2 manifest keys beside dependencies (docs/modding-dependencies.md "Manifest"): ordering without sharing, declared conflicts and the Meitou
+/// versions a mod was built for.
+/// </summary>
 public sealed partial record CodeModManifest
 {
     /// <summary>
@@ -39,6 +41,9 @@ public sealed partial record CodeModManifest
     public bool ConflictsWith(CodeModManifest other) =>
         Incompatible.Any(c => c.Matches(other)) || other.Incompatible.Any(c => c.Matches(this));
 
+    /// <summary>
+    /// The optional <c>loadAfter</c> list of mod ids, duplicates dropped; empty when absent. Refuses a bad id and the mod naming itself.
+    /// </summary>
     static List<string> ReadLoadAfter(JsonElement root, string id)
     {
         if (!root.TryGetProperty("loadAfter", out var list)) return [];
@@ -56,6 +61,9 @@ public sealed partial record CodeModManifest
         return ids;
     }
 
+    /// <summary>
+    /// The optional <c>incompatible</c> list; empty when absent. Refuses the mod naming itself.
+    /// </summary>
     static List<CodeModConflict> ReadIncompatible(JsonElement root, string id)
     {
         if (!root.TryGetProperty("incompatible", out var list)) return [];
@@ -70,6 +78,9 @@ public sealed partial record CodeModManifest
         return conflicts;
     }
 
+    /// <summary>
+    /// The optional <c>gameVersion</c> range; null when absent. A range naming a pre-release is refused.
+    /// </summary>
     static CodeModVersionRange? ReadGameVersion(JsonElement root)
     {
         if (!root.TryGetProperty("gameVersion", out var value)) return null;
@@ -92,6 +103,9 @@ public sealed partial record CodeModManifest
 /// </summary>
 public sealed record CodeModConflict(string Id, CodeModVersionRange? Range = null)
 {
+    /// <summary>
+    /// Reads one <c>incompatible</c> entry, in the same shapes as a dependency; an <c>optional</c> flag is refused.
+    /// </summary>
     internal static CodeModConflict FromJson(JsonElement item)
     {
         var parsed = CodeModDependency.FromJson(item, "incompatible");

@@ -6,6 +6,9 @@ namespace Meitou.Data.World;
 /// </summary>
 public readonly record struct WeatherTime(int Day, double Hours)
 {
+    /// <summary>
+    /// Game minutes per day.
+    /// </summary>
     public const double MinutesPerDay = 1440;
 
     /// <summary>
@@ -45,6 +48,9 @@ public readonly record struct FrameTimes(float Real, float Game, float Settling)
     /// </summary>
     public const float PausedSettleFactor = 0.01f;
 
+    /// <summary>
+    /// The three frame times from the real frame time, the game speed and whether the game is paused.
+    /// </summary>
     public static FrameTimes FromClock(float realDt, float gameSpeed, bool paused) =>
         new(realDt, paused ? 0 : realDt * gameSpeed, realDt * (paused ? PausedSettleFactor : gameSpeed));
 }

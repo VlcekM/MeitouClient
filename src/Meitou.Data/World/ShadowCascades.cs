@@ -82,6 +82,9 @@ public static class KenshiShadows
     /// PCF taps of the CSM receiver, and the factor the radius is scaled by before the taps' hexagonal offsets.
     /// </summary>
     public const int PcfTaps = 12;
+    /// <summary>
+    /// See <see cref="PcfTaps"/>.
+    /// </summary>
     public const float PcfOffsetScale = 0.3f;
     /// <summary>
     /// The receiver's twelve tap offsets ("HEX12", <c>shadowFunctions.hlsl</c>), in units of the scaled radius, in the D3D atlas frame
@@ -159,7 +162,8 @@ public static class KenshiShadows
 /// <summary>
 /// The camera the cascades are fitted to: its eye, view axes and perspective (vertical field of view, width over height).
 /// </summary>
-/// <paramref name="Focus"/>: how far ahead the camera looks at what it is about (the orbit camera's boom; 0: unknown), which the Meitou fit sizes the first cascade by.
+/// <paramref name="Focus"/>: how far ahead the camera looks at what it is about (the orbit camera's boom; 0: unknown), which the Meitou fit sizes the
+/// first cascade by.
 public readonly record struct ShadowView(Vector3 Eye, Vector3 Forward, Vector3 Up, float FieldOfViewY, float Aspect, float Near, float Focus = 0);
 
 /// <summary>
@@ -207,6 +211,9 @@ public sealed class ShadowCascade
     /// View depths this cascade serves (the previous split up to its own).
     /// </summary>
     public float NearDepth { get; init; }
+    /// <summary>
+    /// See <see cref="NearDepth"/>.
+    /// </summary>
     public float FarDepth { get; init; }
     /// <summary>
     /// The view depth up to which the receiver uses this cascade: the game compares the pixel's clip-space z (Direct3D,
@@ -434,5 +441,8 @@ public static class ShadowCascades
     /// </summary>
     public static float SelectDepth(double clipZ, double near, double far) => (float)(near + clipZ * (far - near) / far);
 
+    /// <summary>
+    /// Component <paramref name="i"/> (0 X, 1 Y, 2 Z) of <paramref name="v"/>.
+    /// </summary>
     static double Component(this Vector3 v, int i) => i == 0 ? v.X : i == 1 ? v.Y : v.Z;
 }

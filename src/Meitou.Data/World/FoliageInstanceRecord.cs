@@ -5,9 +5,10 @@ namespace Meitou.Data.World;
 
 /// <summary>
 /// One placed foliage mesh as the cull reads it, in the layout a GPU cull will read it from a storage buffer (std430, 96 bytes;
-/// docs/renderer-native.md 5.2, "InstanceRecord"). Built on the layout worker (<see cref="FoliageGrouping"/>, <see cref="FoliageLayoutCache.TryLoadGrouped"/>);
-/// <see cref="Sphere"/> is filled once the mesh's bounds are known (<c>FoliageCull.FillSpheres</c> in the renderer), with the same call the cull made per frame
-/// before, so it is bit-identical. (In Meitou.Rendering until the layout cache built these records itself.)
+/// docs/renderer-native.md 5.2, "InstanceRecord"). Built on the layout worker (<see cref="FoliageGrouping"/>,
+/// <see cref="FoliageLayoutCache.TryLoadGrouped"/>); <see cref="Sphere"/> is filled once the mesh's bounds are known (<c>FoliageCull.FillSpheres</c>
+/// in the renderer), with the same call the cull made per frame before, so it is bit-identical. (In Meitou.Rendering until the layout cache built
+/// these records itself.)
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct FoliageInstanceRecord
@@ -26,6 +27,9 @@ public struct FoliageInstanceRecord
     /// </summary>
     public Vector4 Ground;
 
+    /// <summary>
+    /// Bytes per record (std430).
+    /// </summary>
     public const int Size = 96;
 
     /// <summary>

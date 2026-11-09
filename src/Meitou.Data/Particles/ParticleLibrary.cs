@@ -7,7 +7,33 @@ namespace Meitou.Data.Particles;
 /// <summary>
 /// How a particle material blends (<c>scene_blend</c>).
 /// </summary>
-public enum ParticleBlend { Add, Alpha, Modulate, ColourBlend, Opaque }
+public enum ParticleBlend
+{
+    /// <summary>
+    /// <c>scene_blend one one</c>: added to the colour behind.
+    /// </summary>
+    Add,
+
+    /// <summary>
+    /// <c>scene_blend src_alpha one_minus_src_alpha</c>: mixed by the particle's alpha; also any blend not named here.
+    /// </summary>
+    Alpha,
+
+    /// <summary>
+    /// <c>scene_blend dest_colour zero</c>: multiplies the colour behind.
+    /// </summary>
+    Modulate,
+
+    /// <summary>
+    /// <c>scene_blend src_colour one_minus_src_colour</c>: mixed by the particle's own colour.
+    /// </summary>
+    ColourBlend,
+
+    /// <summary>
+    /// <c>scene_blend one zero</c> (replace): drawn opaque.
+    /// </summary>
+    Opaque
+}
 
 /// <summary>
 /// What a particle needs of an Ogre <c>.material</c> from <c>data/particles/materials</c> (docs/formats/particle-universe.md): the texture, the
@@ -18,6 +44,11 @@ public enum ParticleBlend { Add, Alpha, Modulate, ColourBlend, Opaque }
 public sealed record ParticleMaterial(
     string Name, string? Texture, ParticleBlend Blend, bool DepthCheck, bool DepthWrite, bool Ambient, Vector4 ColourScale, bool Clamp)
 {
+    /// <summary>
+    /// The particle view of <paramref name="m"/>'s first pass: the blend its <c>scene_blend</c> factors name, the first texture unit with a texture
+    /// and no <c>content_type</c>, the fragment program's <c>colour</c> parameter (else 1), clamped unless the address mode is <c>wrap</c>, and
+    /// ambient when the vertex program's name holds "Ambient". A material with no pass is alpha-blended, untextured, depth-checked and clamped.
+    /// </summary>
     public static ParticleMaterial From(OgreMaterial m)
     {
         var pass = m.Techniques.FirstOrDefault()?.Passes.FirstOrDefault();
@@ -51,11 +82,17 @@ public sealed record ParticleMaterial(
 /// </summary>
 public sealed class ParticleLibrary
 {
+    /// <summary>
+    /// The systems by name, case-insensitive (the last definition of a name).
+    /// </summary>
     public Dictionary<string, PuSystemDef> Systems { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Every system read, in file order, including the ones a later definition replaced (<see cref="Duplicates"/>).
     /// </summary>
     public List<PuSystemDef> AllSystems { get; } = [];
+    /// <summary>
+    /// The particle materials by name, case-insensitive.
+    /// </summary>
     public Dictionary<string, ParticleMaterial> Materials { get; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>
     /// Files that did not read, with the reason (empty for the base game).
@@ -65,10 +102,22 @@ public sealed class ParticleLibrary
     /// Systems that replaced an earlier definition of their name (the last is kept).
     /// </summary>
     public List<string> Duplicates { get; } = [];
+    /// <summary>
+    /// How many scripts were added.
+    /// </summary>
     public int ScriptFiles { get; private set; }
+    /// <summary>
+    /// The folder the library was loaded from (the resources' root, or the particles folder).
+    /// </summary>
     public string? Directory { get; private set; }
 
+    /// <summary>
+    /// The system named <paramref name="name"/>; null when there is none.
+    /// </summary>
     public PuSystemDef? FindSystem(string name) => Systems.GetValueOrDefault(name);
+    /// <summary>
+    /// The material named <paramref name="name"/>; null when there is none.
+    /// </summary>
     public ParticleMaterial? FindMaterial(string name) => Materials.GetValueOrDefault(name);
 
     /// <summary>

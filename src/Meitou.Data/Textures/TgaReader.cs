@@ -6,6 +6,10 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public static class TgaReader
 {
+    /// <summary>
+    /// Reads a whole Targa file; <see cref="FormatException"/> when it is truncated or empty, <see cref="NotSupportedException"/> for another image
+    /// type or depth.
+    /// </summary>
     public static RgbaImage Read(ReadOnlySpan<byte> file)
     {
         if (file.Length < 18) throw new FormatException("TGA header is truncated.");

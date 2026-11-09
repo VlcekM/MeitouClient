@@ -36,6 +36,9 @@ public sealed record OrderConstraint(string Before, string After, string Why)
 /// </summary>
 public sealed record ArrangeResult(IReadOnlyList<string> Order, IReadOnlyList<OrderConstraint> Cycle)
 {
+    /// <summary>
+    /// Whether Arrange found a cycle and so left the order unchanged.
+    /// </summary>
     public bool HasCycle => Cycle.Count > 0;
 }
 
@@ -82,6 +85,9 @@ public static class CodeModDependencies
         return constraints;
     }
 
+    /// <summary>
+    /// The index of the first enabled entry of <paramref name="list"/> that <paramref name="match"/> accepts; -1 when none.
+    /// </summary>
     static int EnabledIndexOf(Func<CodeModEntry, bool> match, IReadOnlyList<CodeModEntry> list)
     {
         for (int i = 0; i < list.Count; i++)
@@ -95,12 +101,27 @@ public static class CodeModDependencies
     /// </summary>
     sealed class DependenciesFirst(int count, List<(int Before, int After, string Why)> constraints)
     {
-        readonly byte[] _state = new byte[count];   // 0 waiting, 1 being placed, 2 placed
+        /// <summary>
+        /// 0 waiting, 1 being placed, 2 placed per position.
+        /// </summary>
+        readonly byte[] _state = new byte[count];
+        /// <summary>
+        /// The constraints from the first mod being placed down to the one being placed now; a cycle is cut from it.
+        /// </summary>
         readonly List<(int Before, int After, string Why)> _path = [];
 
+        /// <summary>
+        /// The positions in placing order, filled by <see cref="Run"/>.
+        /// </summary>
         public List<int> Order { get; } = new(count);
+        /// <summary>
+        /// The constraints along the cycle <see cref="Run"/> stopped at; empty when there was none.
+        /// </summary>
         public List<(int Before, int After, string Why)> Cycle { get; private set; } = [];
 
+        /// <summary>
+        /// Places every position in list order; false when a cycle stops it (<see cref="Cycle"/> then holds it).
+        /// </summary>
         public bool Run()
         {
             for (int i = 0; i < count; i++)
@@ -108,6 +129,9 @@ public static class CodeModDependencies
             return true;
         }
 
+        /// <summary>
+        /// Places <paramref name="mod"/> after its unplaced prerequisites, lowest position first; false when one of them closes a cycle.
+        /// </summary>
         bool Place(int mod)
         {
             if (_state[mod] == 2) return true;

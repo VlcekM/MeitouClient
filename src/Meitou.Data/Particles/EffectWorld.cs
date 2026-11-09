@@ -8,6 +8,9 @@ namespace Meitou.Data.Particles;
 /// </summary>
 public sealed class EffectWorld
 {
+    /// <summary>
+    /// The ground height at (x, z); 100 everywhere by default.
+    /// </summary>
     public Func<float, float, float> GroundHeight { get; set; } = static (_, _) => 100;
     /// <summary>
     /// Null: <see cref="GroundHeight"/> may be called from any thread. Otherwise it is for the render thread only and this, called there, returns a
@@ -38,6 +41,9 @@ public sealed class EffectWorld
     /// its bounds.
     /// </summary>
     public float ActiveRadius { get; set; } = 6912;
+    /// <summary>
+    /// The radius of the disc round the camera effects are placed in when <see cref="Area"/> is null.
+    /// </summary>
     public float FallbackRadius { get; set; } = 8000;
     /// <summary>
     /// The biome's ground colour at a place (for <c>ground colour</c> effects); null: not used.

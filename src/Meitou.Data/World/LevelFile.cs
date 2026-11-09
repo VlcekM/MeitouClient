@@ -40,10 +40,20 @@ public sealed class LevelFile
     /// </summary>
     public List<List<KeyValuePair<string, bool>>>? LegacyFieldTags { get; init; }
 
+    /// <summary>
+    /// Whether the file is in a format before 15 (<see cref="LegacyReader"/>).
+    /// </summary>
     public bool IsLegacy => Format < 15;
 
+    /// <summary>
+    /// Reads the level file at <paramref name="path"/> (<see cref="Content.GameFiles.Resolve"/>d ignoring case).
+    /// </summary>
     public static LevelFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
+    /// <summary>
+    /// Parses a level file: the records in the current layout (formats 15 to 17) or the legacy one (8 to 14), then the trailer; throws for
+    /// another format.
+    /// </summary>
     public static LevelFile Read(byte[] bytes)
     {
         if (bytes.Length < 4)
@@ -61,6 +71,9 @@ public sealed class LevelFile
         return file;
     }
 
+    /// <summary>
+    /// The trailer ints after the records at <paramref name="position"/>, and the ints per entry; (null, 1) when the file ends there.
+    /// </summary>
     static (int[]? Values, int EntryInts) ReadTrailer(byte[] bytes, long position)
     {
         long remaining = bytes.Length - position;
@@ -96,6 +109,9 @@ public sealed class LevelFile
         foreach (var v in Trailer) w.Write(v);
     }
 
+    /// <summary>
+    /// The file as bytes (<see cref="Write"/>).
+    /// </summary>
     public byte[] ToBytes()
     {
         var ms = new MemoryStream();
@@ -110,6 +126,10 @@ public sealed class LevelFile
     /// </summary>
     static class LegacyReader
     {
+        /// <summary>
+        /// Reads a legacy file from the start of <paramref name="stream"/>: the format int (skipped), the next id and the records, with the field
+        /// tags from format 11 on.
+        /// </summary>
         public static LevelFile Read(Stream stream, int format)
         {
             using var r = new BinaryReader(stream, FcsReader.Encoding, leaveOpen: true);
@@ -128,6 +148,9 @@ public sealed class LevelFile
             }
         }
 
+        /// <summary>
+        /// Reads one legacy record; <paramref name="allTags"/>, when given, collects each record's field tags.
+        /// </summary>
         static FcsRecord ReadRecord(BinaryReader r, int format, List<List<KeyValuePair<string, bool>>>? allTags)
         {
             var record = new FcsRecord { ByteSize = r.ReadUInt32(), Type = r.ReadInt32(), Id = r.ReadInt32(), Name = Str(r) };
@@ -184,6 +207,9 @@ public sealed class LevelFile
             return record;
         }
 
+        /// <summary>
+        /// Reads a count, then that many name and value pairs into <paramref name="map"/>.
+        /// </summary>
         static void Map<T>(BinaryReader r, OrderedDictionary<string, T> map, Func<BinaryReader, T> read)
         {
             for (int n = Count(r); n > 0; n--)
@@ -194,6 +220,9 @@ public sealed class LevelFile
             }
         }
 
+        /// <summary>
+        /// Reads a bool byte; throws unless it is 0 or 1.
+        /// </summary>
         static bool Bool(BinaryReader r) => r.ReadByte() switch
         {
             0 => false,
@@ -201,6 +230,9 @@ public sealed class LevelFile
             var b => throw new FcsFormatException($"Bool value {b} is neither 0 nor 1.", r.BaseStream.Position - 1),
         };
 
+        /// <summary>
+        /// Reads a count; throws when it is negative or implausibly large.
+        /// </summary>
         static int Count(BinaryReader r)
         {
             int n = r.ReadInt32();
@@ -209,6 +241,9 @@ public sealed class LevelFile
             return n;
         }
 
+        /// <summary>
+        /// Reads a length-prefixed string.
+        /// </summary>
         static string Str(BinaryReader r)
         {
             int length = Count(r);

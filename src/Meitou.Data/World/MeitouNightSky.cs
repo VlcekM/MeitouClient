@@ -8,7 +8,13 @@ namespace Meitou.Data.World;
 /// </summary>
 public readonly record struct CelestialFrame(Vector3 X, Vector3 Y, Vector3 Z)
 {
+    /// <summary>
+    /// The celestial coordinates of world direction <paramref name="world"/>.
+    /// </summary>
     public Vector3 ToCelestial(Vector3 world) => new(Vector3.Dot(X, world), Vector3.Dot(Y, world), Vector3.Dot(Z, world));
+    /// <summary>
+    /// The world direction of celestial coordinates <paramref name="celestial"/>.
+    /// </summary>
     public Vector3 ToWorld(Vector3 celestial) => X * celestial.X + Y * celestial.Y + Z * celestial.Z;
 }
 
@@ -164,9 +170,9 @@ public static class StarField
     public const float BrightnessGamma = 0.7f;
 
     /// <summary>
-    /// The layers, brightest first. Counts follow the real sky past magnitude 4.5 (about 900 stars brighter than 4.5, 9000 brighter than 6.5); the bright
-    /// layer has a flatter slope and twice as many stars, so a few of the brightest show on any screen (about 100 brighter than magnitude 1 over the whole sphere,
-    /// the real sky has 15). The stars are spread evenly over the sphere.
+    /// The layers, brightest first. Counts follow the real sky past magnitude 4.5 (about 900 stars brighter than 4.5, 9000 brighter than 6.5); the
+    /// bright layer has a flatter slope and twice as many stars, so a few of the brightest show on any screen (about 100 brighter than magnitude 1
+    /// over the whole sphere, the real sky has 15). The stars are spread evenly over the sphere.
     /// </summary>
     public static readonly StarLayer[] Layers =
     [
@@ -293,6 +299,9 @@ public static class StarField
 /// </summary>
 public static class StarColours
 {
+    /// <summary>
+    /// Tints in the table.
+    /// </summary>
     public const int TableSize = 32;
     /// <summary>
     /// How much of the blackbody's saturation is kept (0 white, 1 the full colour).
@@ -322,6 +331,9 @@ public static class StarColours
         return rgb / Luminance(rgb);
     }
 
+    /// <summary>
+    /// Rec. 709 luminance of <paramref name="rgb"/>.
+    /// </summary>
     public static float Luminance(Vector3 rgb) => 0.2126f * rgb.X + 0.7152f * rgb.Y + 0.0722f * rgb.Z;
 
     /// <summary>

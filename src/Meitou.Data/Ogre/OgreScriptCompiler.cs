@@ -5,18 +5,57 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public enum OgreScriptError
 {
+    /// <summary>
+    /// CE_STRINGEXPECTED: an <c>import</c> or <c>set</c> has too few values.
+    /// </summary>
     StringExpected,
+    /// <summary>
+    /// CE_NUMBEREXPECTED: a number was expected; not raised by Meitou's compiler.
+    /// </summary>
     NumberExpected,
+    /// <summary>
+    /// CE_FEWERPARAMETERSEXPECTED: an <c>import</c>, <c>set</c> or variable access has too many values.
+    /// </summary>
     FewerParametersExpected,
+    /// <summary>
+    /// CE_VARIABLEEXPECTED: a <c>set</c> whose first value is not a <c>$variable</c>.
+    /// </summary>
     VariableExpected,
+    /// <summary>
+    /// CE_UNDEFINEDVARIABLE: a <c>$variable</c> no enclosing object or top-level <c>set</c> defines.
+    /// </summary>
     UndefinedVariable,
+    /// <summary>
+    /// CE_OBJECTNAMEEXPECTED: an object needs a name (a material without one).
+    /// </summary>
     ObjectNameExpected,
+    /// <summary>
+    /// CE_OBJECTALLOCATIONERROR: the translator could not make the object; not raised by Meitou.
+    /// </summary>
     ObjectAllocationError,
+    /// <summary>
+    /// CE_INVALIDPARAMETERS: a property's values are invalid; not raised by Meitou.
+    /// </summary>
     InvalidParameters,
+    /// <summary>
+    /// CE_DUPLICATEOVERRIDE: an inherited child object was overridden twice.
+    /// </summary>
     DuplicateOverride,
+    /// <summary>
+    /// CE_UNEXPECTEDTOKEN: a token that does not fit; not raised by Meitou.
+    /// </summary>
     UnexpectedToken,
+    /// <summary>
+    /// CE_OBJECTBASENOTFOUND: a <c>:</c> base object that neither the file nor its imports define.
+    /// </summary>
     ObjectBaseNotFound,
+    /// <summary>
+    /// CE_UNSUPPORTEDBYRENDERSYSTEM: the render system lacks a feature; not raised by Meitou.
+    /// </summary>
     UnsupportedByRenderSystem,
+    /// <summary>
+    /// CE_REFERENCETOANONEXISTINGOBJECT: a reference to an undefined object; not raised by Meitou.
+    /// </summary>
     ReferenceToANonExistingObject,
 
     /// <summary>
@@ -45,6 +84,9 @@ public enum OgreScriptError
     Fatal,
 }
 
+/// <summary>
+/// A compile diagnostic: its code, the file and line it was found at, and an optional detail.
+/// </summary>
 public sealed record OgreScriptDiagnostic(OgreScriptError Code, string File, int Line, string Message = "")
 {
     public override string ToString() => $"{File}({Line}): {Code}{(Message.Length > 0 ? ": " + Message : "")}";
@@ -55,8 +97,17 @@ public sealed record OgreScriptDiagnostic(OgreScriptError Code, string File, int
 /// </summary>
 public sealed class OgreScriptFile
 {
+    /// <summary>
+    /// The compiled file's name.
+    /// </summary>
     public string Name { get; init; } = "";
+    /// <summary>
+    /// The file's top-level nodes after imports, inheritance and variables.
+    /// </summary>
     public List<OgreScriptNode> Nodes { get; init; } = [];
+    /// <summary>
+    /// Everything the compiler reported for the file, in the order found.
+    /// </summary>
     public List<OgreScriptDiagnostic> Diagnostics { get; init; } = [];
 
     /// <summary>
@@ -72,15 +123,20 @@ public sealed class OgreScriptFile
 /// </summary>
 public sealed class OgreScriptCompiler
 {
-    readonly Func<string, string?> _importResolver;
-    readonly List<OgreScriptDiagnostic> _errors = [];
-    readonly Dictionary<string, string> _env = [];
+    #region Compiling
 
-    // Ogre keeps imports in a std::map (sorted by source name, byte order) and requests in a multimap.
-    readonly SortedDictionary<string, List<OgreScriptNode>> _imports = new(StringComparer.Ordinal);
-    readonly SortedDictionary<string, List<string>> _importRequests = new(StringComparer.Ordinal);
-    readonly List<OgreScriptNode> _importTable = [];
-    readonly HashSet<string> _loading = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Returns the text of a script by bare file name; null when there is none.
+    /// </summary>
+    readonly Func<string, string?> _importResolver;
+    /// <summary>
+    /// The diagnostics so far, in the order found.
+    /// </summary>
+    readonly List<OgreScriptDiagnostic> _errors = [];
+    /// <summary>
+    /// The top-level <c>set</c> variables of the file; the first set of a name wins.
+    /// </summary>
+    readonly Dictionary<string, string> _env = [];
 
     /// <param name="importResolver">Returns the text of a script by bare file name, or null if there is none.</param>
     OgreScriptCompiler(Func<string, string?> importResolver) => this._importResolver = importResolver;
@@ -99,10 +155,18 @@ public sealed class OgreScriptCompiler
         return new OgreScriptFile { Name = file, Nodes = ast, Diagnostics = compiler._errors };
     }
 
+    /// <summary>
+    /// Reports a diagnostic.
+    /// </summary>
     void AddError(OgreScriptError code, string file, int line, string message = "") => _errors.Add(new(code, file, line, message));
 
-    // ---------------------------------------------------------------- concrete tree to objects and properties
+    #endregion
 
+    #region Concrete tree to objects and properties
+
+    /// <summary>
+    /// Turns a parsed file's concrete tree into objects, properties, imports and variables, after reporting brace errors.
+    /// </summary>
     List<OgreScriptNode> ConvertToAst(List<OgreConcreteNode> nodes)
     {
         CheckBraces(nodes);
@@ -111,6 +175,9 @@ public sealed class OgreScriptCompiler
         return result;
     }
 
+    /// <summary>
+    /// Reports a <c>}</c> outside every block and a <c>{</c> whose block is not closed, throughout the tree.
+    /// </summary>
     void CheckBraces(List<OgreConcreteNode> nodes)
     {
         foreach (var node in nodes)
@@ -289,8 +356,32 @@ public sealed class OgreScriptCompiler
         return false;
     }
 
-    // ---------------------------------------------------------------- imports
+    #endregion
 
+    #region Imports
+
+    /// <summary>
+    /// Each imported file's processed nodes, by source name. Ogre keeps imports in a std::map (sorted by source name, byte order) and
+    /// requests in a multimap.
+    /// </summary>
+    readonly SortedDictionary<string, List<OgreScriptNode>> _imports = new(StringComparer.Ordinal);
+    /// <summary>
+    /// What each import asked for, by source name: object names, or just <c>*</c> for the whole file.
+    /// </summary>
+    readonly SortedDictionary<string, List<string>> _importRequests = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The objects imports make visible to <c>:</c> inheritance, searched after the file itself.
+    /// </summary>
+    readonly List<OgreScriptNode> _importTable = [];
+    /// <summary>
+    /// The imports being loaded now, so a cyclic import is read once.
+    /// </summary>
+    readonly HashSet<string> _loading = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Loads the imports of <paramref name="nodes"/> (each source once, processed for its own imports and inheritance), removes them, then puts each
+    /// imported file's requested objects at the front of the import table, files in source name order.
+    /// </summary>
     void ProcessImports(List<OgreScriptNode> nodes)
     {
         for (int i = 0; i < nodes.Count;)
@@ -344,6 +435,9 @@ public sealed class OgreScriptCompiler
         }
     }
 
+    /// <summary>
+    /// The nodes of the imported script; null, with an error, when the resolver does not find it.
+    /// </summary>
     List<OgreScriptNode>? LoadImport(OgreScriptImport import)
     {
         var text = _importResolver(import.Source);
@@ -361,8 +455,14 @@ public sealed class OgreScriptCompiler
     static OgreScriptObject? LocateTarget(List<OgreScriptNode> nodes, string name) =>
         nodes.OfType<OgreScriptObject>().LastOrDefault(o => o.Name == name);
 
-    // ---------------------------------------------------------------- inheritance
+    #endregion
 
+    #region Inheritance
+
+    /// <summary>
+    /// Applies the <c>:</c> bases of every object in <paramref name="nodes"/>, depth first; a base is searched in <paramref name="top"/>, then the
+    /// import table.
+    /// </summary>
     void ProcessObjects(List<OgreScriptNode> nodes, List<OgreScriptNode> top)
     {
         for (int n = 0; n < nodes.Count; n++)
@@ -566,8 +666,14 @@ public sealed class OgreScriptCompiler
         return p == pattern.Length;
     }
 
-    // ---------------------------------------------------------------- variables
+    #endregion
 
+    #region Variables
+
+    /// <summary>
+    /// Replaces every <c>$variable</c> in <paramref name="nodes"/> by its value (the nearest enclosing object's, else the file's), parsed as script;
+    /// abstract objects are left alone.
+    /// </summary>
     void ProcessVariables(List<OgreScriptNode> nodes)
     {
         for (int i = 0; i < nodes.Count;)
@@ -616,8 +722,13 @@ public sealed class OgreScriptCompiler
         }
     }
 
+    /// <summary>
+    /// The nodes above <paramref name="node"/>, nearest first.
+    /// </summary>
     static IEnumerable<OgreScriptNode> Ancestors(OgreScriptNode node)
     {
         for (var p = node.Parent; p is not null; p = p.Parent) yield return p;
     }
+
+    #endregion
 }

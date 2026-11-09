@@ -2,10 +2,20 @@ using System.Globalization;
 
 namespace Meitou.Data.Ui;
 
+/// <summary>
+/// An image to draw: a texture and the source rectangle in it, in texture pixels (zero size: the whole texture).
+/// </summary>
 public sealed record MyGuiImage(string Texture, UiRect Source);
 
+/// <summary>
+/// Resolves a widget's image properties to a texture and rectangle.
+/// </summary>
 public static class MyGuiImages
 {
+    /// <summary>
+    /// The image a widget's <paramref name="properties"/> name: <c>ImageTexture</c> (with <c>ImageRect</c>), else the frame of an image set
+    /// (<c>ImageResource</c>, <c>ImageGroup</c>, <c>ImageName</c>, Meitou's <c>ImageFrame</c>); null when they name none that exists.
+    /// </summary>
     public static MyGuiImage? Resolve(MyGuiResources resources, IReadOnlyDictionary<string, string> properties)
     {
         if (properties.TryGetValue("ImageTexture", out string? texture))

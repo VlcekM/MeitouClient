@@ -20,8 +20,14 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
     /// </summary>
     public string Build { get => field ?? ""; init; }
 
+    /// <summary>
+    /// Whether the version has pre-release identifiers, so it sorts below its release.
+    /// </summary>
     public bool IsPrerelease => Prerelease.Length > 0;
 
+    /// <summary>
+    /// Parses a SemVer 2.0.0 version (<c>1.2.3</c>, <c>1.2.3-beta.1</c>, <c>1.2.3+abc</c>); false when <paramref name="text"/> is not one.
+    /// </summary>
     public static bool TryParse(string text, out CodeModVersion version)
     {
         version = default;
@@ -38,6 +44,9 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
         return true;
     }
 
+    /// <summary>
+    /// Parses <c>MAJOR.MINOR.PATCH</c>: three numbers without leading zeros that fit an int.
+    /// </summary>
     static bool TryParseCore(string core, out int major, out int minor, out int patch)
     {
         major = minor = patch = 0;
@@ -66,6 +75,9 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
     /// </summary>
     static bool IsNumber(string part) => part.Length > 0 && part.All(char.IsAsciiDigit) && (part.Length == 1 || part[0] != '0');
 
+    /// <summary>
+    /// SemVer precedence: major, minor, patch, then the pre-release identifiers; build metadata is ignored.
+    /// </summary>
     public int CompareTo(CodeModVersion other)
     {
         int order = Major != other.Major ? Major.CompareTo(other.Major)
@@ -87,6 +99,9 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
         return left.Length.CompareTo(right.Length);
     }
 
+    /// <summary>
+    /// Compares two pre-release identifiers: numbers numerically (by length, then digits), a number below text, text ordinally.
+    /// </summary>
     static int CompareIdentifier(string a, string b)
     {
         bool aNumber = a.All(char.IsAsciiDigit);
@@ -126,14 +141,23 @@ public readonly record struct CodeModVersion(int Major, int Minor, int Patch) : 
 /// </summary>
 public sealed class CodeModVersionRange
 {
+    /// <summary>
+    /// The range's comparators in text order: operator (<c>&gt;=</c>, <c>&gt;</c>, <c>&lt;=</c>, <c>&lt;</c> or <c>=</c>) and version.
+    /// </summary>
     readonly List<(string Op, CodeModVersion Version)> _comparators;
 
+    /// <summary>
+    /// Keeps the parsed range; <see cref="Parse"/> is the way in.
+    /// </summary>
     CodeModVersionRange(string text, List<(string, CodeModVersion)> comparators)
     {
         Text = text;
         this._comparators = comparators;
     }
 
+    /// <summary>
+    /// The range as written in the manifest, trimmed.
+    /// </summary>
     public string Text { get; }
 
     /// <summary>
@@ -155,6 +179,10 @@ public sealed class CodeModVersionRange
         return new CodeModVersionRange(text.Trim(), list);
     }
 
+    /// <summary>
+    /// Whether <paramref name="version"/> meets every comparator; a pre-release must also be opted into by a comparator naming a pre-release of
+    /// its release.
+    /// </summary>
     public bool Contains(CodeModVersion version) =>
         _comparators.All(c => Holds(c.Op, version.CompareTo(c.Version))) && (!version.IsPrerelease || OptsIntoPrerelease(version));
 
@@ -163,8 +191,14 @@ public sealed class CodeModVersionRange
     /// </summary>
     public bool NamesPrerelease => _comparators.Any(c => c.Version.IsPrerelease);
 
+    /// <summary>
+    /// Whether a comparator names a pre-release of the same <c>MAJOR.MINOR.PATCH</c> as <paramref name="version"/>.
+    /// </summary>
     bool OptsIntoPrerelease(CodeModVersion version) => _comparators.Any(c => c.Version.IsPrerelease && c.Version.SameRelease(version));
 
+    /// <summary>
+    /// Whether a comparison result <paramref name="order"/> (version against the comparator's) satisfies operator <paramref name="op"/>.
+    /// </summary>
     static bool Holds(string op, int order) => op switch
     {
         ">=" => order >= 0,

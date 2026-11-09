@@ -10,8 +10,14 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public static class GameResources
 {
+    /// <summary>
+    /// The index per install root and <c>mods.cfg</c> write time, made on first use.
+    /// </summary>
     static readonly ConcurrentDictionary<(string Root, DateTime ModList), Lazy<OgreScriptResources>> Cache = new();
 
+    /// <summary>
+    /// The resource index of <paramref name="install"/> with its current <c>mods.cfg</c>, shared by every caller.
+    /// </summary>
     public static OgreScriptResources For(GameInstall install)
     {
         string modList = ModList.ModsCfgPath(install);

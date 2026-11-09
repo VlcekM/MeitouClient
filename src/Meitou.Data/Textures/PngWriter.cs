@@ -8,12 +8,19 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public static class PngWriter
 {
+    /// <summary>
+    /// Writes <paramref name="rgba"/> (<paramref name="width"/> x <paramref name="height"/>, rows top to bottom) as a PNG file at
+    /// <paramref name="path"/>.
+    /// </summary>
     public static void Write(string path, int width, int height, ReadOnlySpan<byte> rgba)
     {
         using var file = File.Create(path);
         Write(file, width, height, rgba);
     }
 
+    /// <summary>
+    /// Writes <paramref name="rgba"/> as a PNG to <paramref name="file"/>: signature, IHDR (8-bit RGBA), the filtered rows deflated in IDAT, IEND.
+    /// </summary>
     public static void Write(Stream file, int width, int height, ReadOnlySpan<byte> rgba)
     {
         file.Write([0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A]);
@@ -67,12 +74,19 @@ public static class PngWriter
         return sum;
     }
 
+    /// <summary>
+    /// The PNG Paeth predictor of a pixel byte from its left (<paramref name="a"/>), upper (<paramref name="b"/>) and upper-left
+    /// (<paramref name="c"/>) neighbours.
+    /// </summary>
     static int Paeth(int a, int b, int c)
     {
         int p = a + b - c, pa = Math.Abs(p - a), pb = Math.Abs(p - b), pc = Math.Abs(p - c);
         return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
     }
 
+    /// <summary>
+    /// Writes one PNG chunk: big-endian length, type, data and the CRC of type and data.
+    /// </summary>
     static void Chunk(Stream s, string type, byte[] data)
     {
         Span<byte> buf = stackalloc byte[4];
@@ -85,6 +99,9 @@ public static class PngWriter
         s.Write(buf);
     }
 
+    /// <summary>
+    /// The CRC-32 table of the PNG specification (polynomial 0xEDB88320).
+    /// </summary>
     static readonly uint[] CrcTable = Enumerable.Range(0, 256).Select(n =>
     {
         uint c = (uint)n;
@@ -92,6 +109,9 @@ public static class PngWriter
         return c;
     }).ToArray();
 
+    /// <summary>
+    /// Folds <paramref name="data"/> into the running CRC-32 <paramref name="crc"/>.
+    /// </summary>
     static uint Crc(uint crc, byte[] data)
     {
         foreach (var b in data) crc = CrcTable[(crc ^ b) & 0xFF] ^ (crc >> 8);

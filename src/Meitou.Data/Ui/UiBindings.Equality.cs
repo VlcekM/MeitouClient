@@ -1,5 +1,8 @@
 namespace Meitou.Data.Ui;
 
+/// <summary>
+/// The comparison of two bindings, so a host can reuse its last arrangement.
+/// </summary>
 public sealed partial class UiBindings
 {
     /// <summary>
@@ -20,13 +23,22 @@ public sealed partial class UiBindings
         && Same(Properties, other.Properties, (a, b) => a.Count == b.Count && a.All(p => b.TryGetValue(p.Key, out var v) && v == p.Value))
         && Same(Lists, other.Lists, (a, b) => a.Count == b.Count && a.Zip(b).All(p => SameItem(p.First, p.Second)));
 
+    /// <summary>
+    /// Whether two list rows have the same id, caption, cells and sort keys.
+    /// </summary>
     static bool SameItem(UiListItem a, UiListItem b) => a.Id == b.Id && a.Caption == b.Caption
         && (a.Cells == b.Cells || a.Cells is not null && b.Cells is not null && a.Cells.SequenceEqual(b.Cells))
         && (a.SortKeys == b.SortKeys || a.SortKeys is not null && b.SortKeys is not null && a.SortKeys.SequenceEqual(b.SortKeys));
 
+    /// <summary>
+    /// Whether two maps hold the same keys with equal values.
+    /// </summary>
     static bool Same<TKey, TValue>(Dictionary<TKey, TValue> a, Dictionary<TKey, TValue> b) where TKey : notnull =>
         Same(a, b, EqualityComparer<TValue>.Default.Equals);
 
+    /// <summary>
+    /// Whether two maps hold the same keys with values <paramref name="equal"/> says are the same.
+    /// </summary>
     static bool Same<TKey, TValue>(Dictionary<TKey, TValue> a, Dictionary<TKey, TValue> b, Func<TValue, TValue, bool> equal) where TKey : notnull
     {
         if (a.Count != b.Count) return false;

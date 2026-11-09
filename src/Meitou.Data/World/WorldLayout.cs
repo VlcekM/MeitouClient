@@ -93,6 +93,9 @@ public static class WorldLayout
 /// </summary>
 public readonly record struct ZoneCoordinate(int X, int Y)
 {
+    /// <summary>
+    /// Whether the zone lies in the world's zone grid.
+    /// </summary>
     public bool IsInsideGrid => X is >= 0 and < WorldLayout.ZoneCount && Y is >= 0 and < WorldLayout.ZoneCount;
 
     /// <summary>
