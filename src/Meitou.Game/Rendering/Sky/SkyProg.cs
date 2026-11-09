@@ -94,5 +94,62 @@ sealed class SkyProg : IDisposable
         p.Set(PlanetSpin, spin[0], spin[1], spin[2], spin[3]);
     }
 
+    /// <summary>
+    /// The Meitou stars' row: computed (<paramref name="meitou"/>, by night for a sun height <paramref name="sunY"/>) or the game's texture, the
+    /// <paramref name="layers"/> drawn, the twinkle's <paramref name="seconds"/> and the star <paramref name="gain"/>.
+    /// </summary>
+    public void SetStars(bool meitou, float sunY, int layers, float seconds, float gain)
+    {
+        // The Meitou stars: nothing to draw once the sun is high (SkyX's night factor is 0 by day; the game's texture is not drawn then either), so
+        // the pass skips them.
+        bool night = meitou && sunY < 0.3f;
+        P.Set(StarsMeitou, meitou ? (night ? 1 : -1) : 0, layers, seconds, gain);
+    }
+
+    /// <summary>
+    /// The celestial axes of the Meitou stars for the sun's path <paramref name="clock"/> at the game's <paramref name="day"/> and
+    /// <paramref name="hour"/>.
+    /// </summary>
+    public void SetCelestialAxes(SkyClock clock, int day, float hour)
+    {
+        // Staging the title's sun must not turn the stars, which stay continuous into the loading sky.
+        var frame = CelestialSphere.Frame(clock with { SunTurn = 0 }, day, hour);
+        P.Set(CelX, frame.X.X, frame.X.Y, frame.X.Z, 0);
+        P.Set(CelY, frame.Y.X, frame.Y.Y, frame.Y.Z, 0);
+        P.Set(CelZ, frame.Z.X, frame.Z.Y, frame.Z.Z, 0);
+    }
+
+    /// <summary>
+    /// The extra row: the planets' <paramref name="planetFill"/>, the cloud <paramref name="coverage"/> and the starfield's shift after
+    /// <paramref name="starHours"/> game hours.
+    /// </summary>
+    public void SetExtra(float planetFill, float coverage, double starHours) =>
+        P.Set(Extra, planetFill, coverage, Starfield.Shift(starHours), 0);
+
+    /// <summary>
+    /// The cloud pass's light and the wind's texture <paramref name="shift"/> from <paramref name="s"/> and the <paramref name="coverage"/>, and the
+    /// Meitou clouds' (<paramref name="lit"/>; <paramref name="volume"/>: a prepared volume image) key, ambient and parallax round <paramref
+    /// name="eye"/>.
+    /// </summary>
+    public void SetClouds(in SkyRenderer.State s, float coverage, Vector2 shift, bool lit, bool volume, Vector3 eye)
+    {
+        var p = P;
+        // The cloud pass: zenithLight and Darkness, sunColour.rgb and DensityOffset, the wind offset's texture shift.
+        var zenith = s.CloudZenith;
+        p.Set(CloudLight, zenith.X, zenith.Y, zenith.Z, CloudLayer.Darkness(coverage));
+        p.Set(CloudSun, s.CloudSun.X, s.CloudSun.Y, s.CloudSun.Z, CloudLayer.DensityOffset(coverage));
+        p.Set(CloudWind, shift.X, shift.Y, 0, 0);
+        var key = s.CloudKey;
+        var keyDir = s.CloudKeyDirection;
+        var ambient = s.CloudAmbient;
+        // The Meitou clouds are anchored to the world (the eye's parallax, MeitouClouds.Parallax), so the cloud overhead is the one whose shadow
+        // falls here; the game's follow the eye.
+        var (parallaxScale, parallaxOffset) = lit ? MeitouClouds.Parallax(eye.X, eye.Y, eye.Z) : (1f, Vector2.Zero);
+        p.Set(CloudMeitou, lit ? (volume ? 2 : 1) : 0, parallaxScale, parallaxOffset.X, parallaxOffset.Y);
+        p.Set(CloudKey, key.X, key.Y, key.Z, 0);
+        p.Set(CloudKeyDir, keyDir.X, keyDir.Y, keyDir.Z, 0);
+        p.Set(CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
+    }
+
     public void Dispose() => P.Dispose();
 }

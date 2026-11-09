@@ -588,8 +588,8 @@ static partial class WorldFrame
         // The fog volume pass runs over this view's sky exactly when volumes are in view (RunFogVolumes below), so the march may leave out what they
         // hide. With the placed fog block hiding the sky in every direction of the view, neither the sky nor its clouds can show: the clear colour
         // stands in.
-        bool skyHidden = gpu.Sky.SkyFogSkip && gpu.FogVolumes is { SkyHidden: true };
-        if (skyHidden) gpu.Sky.SkipMainSky();
+        bool skyHidden = gpu.Sky.Clouds.SkyFogSkip && gpu.FogVolumes is { SkyHidden: true };
+        if (skyHidden) gpu.Sky.Clouds.SkipMainSky();
         else gpu.Sky.PrepareClouds(skyProjection, f.RenderWidth, f.RenderHeight, gpu.Sky.Eye, fogVolumes: gpu.FogVolumes is { UsedData: > 0 });
 
         RecordInteriorMask(ref f);
@@ -980,7 +980,7 @@ static partial class WorldFrame
 
         post.MarkParticles();
         post.Particles = gpu.Particles;
-        post.SetCloudMotion(gpu.Sky.CloudMotion);
+        post.SetCloudMotion(gpu.Sky.Clouds.CloudMotion);
         post.End();
 
         // The scene's projection, asked only by an overlay that draws.

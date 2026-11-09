@@ -168,7 +168,7 @@ internal sealed class FogVolumes
     }
     /// <summary>
     /// True when the cull's block hides the sky in every direction of the view (<see cref="HidesSky"/>): the main view's sky and cloud passes are
-    /// then left out (<see cref="SkyRenderer.SkyFogSkip"/>), since the volume pass covers each of their pixels with the block's fog colour.
+    /// then left out (<see cref="SkyClouds.SkyFogSkip"/>), since the volume pass covers each of their pixels with the block's fog colour.
     /// </summary>
     public bool SkyHidden { get; private set; }
 

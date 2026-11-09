@@ -1030,10 +1030,10 @@ sealed class GameLoop(GameHost host)
         KeepEyeAboveGround();
         var size = FramebufferSizeNow();
         // Until the warm-up's frames run smoothly the water reflection draws everything and the sky its cloud volume, so their pipelines are made
-        // under the cover (ReflectionPass.Warm, SkyRenderer.Warm).
+        // under the cover (ReflectionPass.Warm, SkyClouds.Warm).
         bool warmPasses = host.Warming && host.SmoothSeconds == 0;
         if (host.Gpu.Reflection is { } reflection) reflection.Warm = warmPasses;
-        host.Gpu.Sky.Warm = warmPasses;
+        host.Gpu.Sky.Clouds.Warm = warmPasses;
         host.UpdateView(size.X, size.Y);
         var pointer = PreparePointer(takeFile);
         host.PlayBench.BenchLap(5);
