@@ -128,7 +128,8 @@ static class HudTips
             Dust = (int)(med.DustInEffect * 10);
             Defensive = (cold.Orders & CharacterOrders.Block) != 0;
 
-            // An animal's age (slot 0x398) scales its fighting numbers (the stats multiplier, already in Stored); a person's is 1.
+            // An animal's age (slot 0x398) scales its fighting numbers, Strength, Dexterity and Toughness (the stats multiplier, already in Stored),
+            // but not its Dodge (Observed, docs/game/ui-screens.md "Stats lines"); a person's is 1.
             Animal = cold.Animal;
             Age = Animal is null ? 1 : stats.Scale;
             Weapon = Fighter?.Weapon?.Stats;
@@ -149,7 +150,7 @@ static class HudTips
         /// A stat's line: the stored value plus the gear bonus, times the stat multiplier and <paramref name="factor"/>.
         /// </summary>
         public HudStatLine Line(string label, StatsEnumerated stat, float factor = 1) =>
-            new(label, (Stats[stat] + CombatSystem.GearBonus(Cold, stat)) * Med.StatMultiplier(stat) * factor, Stats[stat]);
+            new(label, (Stored(stat) + CombatSystem.GearBonus(Cold, stat)) * Med.StatMultiplier(stat) * factor, Stored(stat));
 
         /// <summary>
         /// The equipment bonus indoors: a positive bonus is dropped under an indoors penalty, then the modifier is added.
@@ -361,7 +362,7 @@ static class HudTips
                 (Loc.Tr("Wound degeneration speed:"), Loc.Tr("{1,num=fix,p=2}x", MedicalState.DegenerationMult(constants, tough)))]);
         }
         if (p.Hc is { } r) toughnessTip.Add((Loc.Tr("Damage resistance:"), Loc.Tr("{1,num}%", (int)(r.Resistance * 100))));
-        lines.Add(new HudStatLine("Toughness:", stats.Toughness, stats.Toughness) { Tip = toughnessTip });
+        lines.Add(new HudStatLine("Toughness:", tough, tough) { Tip = toughnessTip });
     }
 
     /// <summary>
@@ -372,7 +373,7 @@ static class HudTips
         // FUN_140885190: the dodge skill less the encumbrance and leg terms plus the gear's, +20 in defensive mode with fists (CharStats +0x1f0,
         // the current weapon type, is 5).
         var fighter = p.Fighter;
-        float dodge = p.Stored(StatsEnumerated.Dodge);
+        float dodge = p.Stats[StatsEnumerated.Dodge];
         float encumbrance = -(1 - Math.Clamp(p.E, 0.4f, 1)) * dodge;
         float legs = -(1 - Math.Clamp(Speed.LegFactor(p.Med), 0.5f, 1)) * dodge;
         float gear = dodge * (fighter?.DodgeMult ?? 1) - dodge;
