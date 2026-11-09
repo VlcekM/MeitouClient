@@ -94,7 +94,7 @@ public class OrdersTests
             Assert.Equal((byte)CharacterTask.GoTo, n.Task);
 
             float speed = new Vector2(n.Velocity.X, n.Velocity.Z).Length();
-            if (cold.StaggeredUntil > world.Tick) if (speed == 0) stood = true;
+            if (cold.StaggeredUntil > world.Tick) { if (speed == 0) stood = true; }
             else if (stood && speed > 1) walkedOn = true;
         }
 
