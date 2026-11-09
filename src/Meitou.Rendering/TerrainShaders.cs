@@ -429,9 +429,22 @@ static partial class TerrainShaders
         }
 
         // The marks' height at xz in world units (the repeat sampler wraps it): the coarse image, with the fine one over it where it has recorded a mark, fading out at its window's edge.
+        // The coarse image through the same cubic B-spline as the fine one: read bilinearly its 0.25-unit texels show as stairs along a mark's outline.
+        float trailCoarseAt(vec2 uv)
+        {
+            vec2 size = vec2(textureSize(uTrails, 0));
+            vec2 p = uv * size - 0.5, i = floor(p), f = p - i;
+            vec2 w0 = (1.0 - f) * (1.0 - f) * (1.0 - f) / 6.0, w1 = (4.0 - 6.0 * f * f + 3.0 * f * f * f) / 6.0;
+            vec2 w3 = f * f * f / 6.0, w2 = 1.0 - w0 - w1 - w3;
+            vec2 g0 = w0 + w1, g1 = w2 + w3;
+            vec2 h0 = (i - 1.0 + w1 / g0 + 0.5) / size, h1 = (i + 1.0 + w3 / g1 + 0.5) / size;
+            return g0.y * (g0.x * textureLod(uTrails, vec2(h0.x, h0.y), 0.0).r + g1.x * textureLod(uTrails, vec2(h1.x, h0.y), 0.0).r)
+                 + g1.y * (g0.x * textureLod(uTrails, vec2(h0.x, h1.y), 0.0).r + g1.x * textureLod(uTrails, vec2(h1.x, h1.y), 0.0).r);
+        }
+
         float trailHeightAt(vec2 xz)
         {
-            float h = textureLod(uTrails, xz * uTrailWindow.w, 0.0).r;
+            float h = trailCoarseAt(xz * uTrailWindow.w);
             if (uTrailFineWindow.z > 0.0)
             {
                 vec2 d = abs(xz - uTrailFineWindow.xy);

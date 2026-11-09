@@ -179,17 +179,19 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             return smoothstep(1.0, 0.92, d) * mix(1.0, 0.72, d);
         }
 
-        // The same over a small disc of the tile (its texels are coarser than the image's), so the outline is a slope and not a staircase.
+        // The same over a disc of 0.4 world units: a mesh's outline is a cliff a texel wide, which the terrain's relief cannot show without stairs; sand slumps to a slope anyway.
         float imprintPress(vec2 uv)
         {
-            float r = 1.6 * vTile.z / (vTile.z * float(textureSize(textures2D[nonuniformEXT(uint(vTile.w + 0.5))], 0).x));
-            float sum = imprintAt(uv) * 2.0;
-            for (int k = 0; k < 8; k++)
-            {
-                float a = float(k) * 0.7853982;
-                sum += imprintAt(uv + vec2(cos(a), sin(a)) * r);
-            }
-            return sum / 10.0;
+            float r = (K < 2.0 ? 0.9 : 0.4) / (2.0 * vHalf.x * 0.25 / K);   // the coarse image (K 1, a texel of 0.25) needs the wider disc: an outline under three of its texels turns to stairs
+            float sum = imprintAt(uv) * 2.0, total = 2.0;
+            for (int ring = 1; ring <= 2; ring++)
+                for (int k = 0; k < 8; k++)
+                {
+                    float a = (float(k) + 0.5 * float(ring)) * 0.7853982, w = ring == 1 ? 1.0 : 0.6;
+                    sum += imprintAt(uv + vec2(cos(a), sin(a)) * r * float(ring) * 0.5) * w;
+                    total += w;
+                }
+            return sum / total;
         }
 
         // A planted foot, paw or hoof: the shape of the body itself where it meets the ground (its lowest parts deepest), edge and depth carrying the image's noise, and the ground pushed aside
@@ -203,10 +205,17 @@ public sealed unsafe class TerrainTrailRenderer : IDisposable
             for (int k = 0; k < 8; k++)
             {
                 float a = float(k) * 0.7853982;
-                near = max(near, imprintAt(uv + vec2(cos(a), sin(a)) * 0.035));
+                near = max(near, imprintAt(uv + vec2(cos(a), sin(a)) * 0.07));
             }
             float rim = max(near - press, 0.0) * 0.3 * (0.75 + 0.5 * m);
-            fragColour = vec4((rim - press * (0.88 + 0.12 * n)) * strength, 1.0, 0.0, clamp(max(press * 4.0, near * 1.5), 0.0, 1.0));
+            // Written whole out to a margin round the shape: where the fine image has only part of a mark, the coarse one (four times coarser) shows through as a row of beads along its outline.
+            float around = near;
+            for (int k = 0; k < 8; k++)
+            {
+                float a = float(k) * 0.7853982;
+                around = max(around, imprintAt(uv + vec2(cos(a), sin(a)) * 0.13));
+            }
+            fragColour = vec4((rim - press * (0.88 + 0.12 * n)) * strength, 1.0, 0.0, smoothstep(0.0, 0.05, around));
         }
 
         void main()

@@ -39,6 +39,8 @@ sealed partial class GameHost
 
     /// <summary>An imprint's tile: how far it reaches past the contact's size (the mesh goes beyond its capsule), its least half side, and how far under the ground its band starts.</summary>
     const float ImprintMargin = 2, ImprintLeast = 3, ImprintBelow = 0.4f;
+    /// <summary>A print's depth against a full mark's 12 cm: about 4 cm, what a foot sinks in sand; its walls are then gentle enough for the relief march to show without stairs.</summary>
+    const float ImprintDepth = 0.35f;
 
     /// <summary>
     /// A part must be off the ground (swinging, sliding or hovering) this long (seconds) before it may print again: the animation's contact phase makes a foot bob a little, which is no new step.
@@ -184,7 +186,7 @@ sealed partial class GameHost
     {
         if (!upright) return new TrailStamp(patch.At, patch.Along, patch.Length, patch.Width, depth, TrailKind.Press);
         float floor = MathF.Min(patch.Bottom, gpu.Terrain.HeightAt(patch.At.X, patch.At.Y)) - ImprintBelow;
-        return new TrailStamp(patch.At, Vector2.UnitY, patch.Length, patch.Width, depth, TrailKind.Imprint)
+        return new TrailStamp(patch.At, Vector2.UnitY, patch.Length, patch.Width, depth * ImprintDepth, TrailKind.Imprint)
         {
             Body = key, Half = MathF.Max(MathF.Max(patch.Length, patch.Width) / 2 + ImprintMargin, ImprintLeast), Floor = floor,
         };
