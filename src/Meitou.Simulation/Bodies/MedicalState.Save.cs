@@ -9,13 +9,18 @@ public sealed partial class MedicalState
 
     const string DecapitatedKey = "meitou decapitated";
 
-    /// <summary>Writes the MEDICAL_STATE fields (docs/formats/save.md): the bools <c>coma dead unconcious incapacitated</c>, the floats <c>blood bleeding hung fed KO</c> and per part <c>k</c> <c>flesh hit bandage rig stun wear hitmult</c> and the string <c>sid</c>. Wounds are not part of these keys; the limbs (<see cref="LimbBits"/>) are written by the save code with their items.</summary>
+    /// <summary>
+    /// Writes the MEDICAL_STATE fields (docs/formats/save.md): the bools <c>coma dead unconcious incapacitated</c>, the floats <c>blood bleeding hung
+    /// fed KO</c> and per part <c>k</c> <c>flesh hit bandage rig stun wear hitmult</c> and the string <c>sid</c>. Wounds are not part of these keys;
+    /// the limbs (<see cref="LimbBits"/>) are written by the save code with their items.
+    /// </summary>
     public void WriteSave(IDictionary<string, float> floats, IDictionary<string, bool> bools, IDictionary<string, string> strings)
     {
         bools["coma"] = Coma;
         bools["dead"] = Dead;
         bools["unconcious"] = Unconscious;
         bools["incapacitated"] = Incapacitated;
+
         // Meitou-only (docs/formats/save.md "Limbs"): the original reads its keys by name, so it ignores this one.
         if (Decapitated) bools[DecapitatedKey] = true;
         floats["blood"] = Blood;
@@ -41,8 +46,8 @@ public sealed partial class MedicalState
     /// The int <c>limbs</c> (<c>FUN_1400cfb50</c>, docs/formats/save.md "Limbs"): the <see cref="LimbState"/> of limb slot k in bits 2k..2k+1.
     /// </summary>
     /// <summary>
-    /// The blood each of the first 8 parts shows on the body (<c>FUN_140530b30</c>, docs/game/blood-decals.md): 1 - clamp((flesh - stun + bandage) / (base x multiplier x scale - wear), 0, 1),
-    /// byte k = part k scaled to 0..255 (a part with no maximum shows none).
+    /// The blood each of the first 8 parts shows on the body (<c>FUN_140530b30</c>, docs/game/blood-decals.md): 1 - clamp((flesh - stun + bandage) /
+    /// (base x multiplier x scale - wear), 0, 1), byte k = part k scaled to 0..255 (a part with no maximum shows none).
     /// </summary>
     public static ulong BloodAmounts(MedicalState state)
     {
@@ -69,7 +74,9 @@ public sealed partial class MedicalState
         }
     }
 
-    /// <summary>The part of limb slot 0 to 3 (0 left arm, 1 right arm, 2 left leg, 3 right leg); null when the anatomy has none.</summary>
+    /// <summary>
+    /// The part of limb slot 0 to 3 (0 left arm, 1 right arm, 2 left leg, 3 right leg); null when the anatomy has none.
+    /// </summary>
     public HealthPart? LimbPart(int slot)
     {
         foreach (var p in _parts)
@@ -78,8 +85,9 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// Applies a saved <c>limbs</c> value (<c>FUN_1400d0190</c>): a stump stays a stump; a replaced slot gets the prosthetic <paramref name="fitted"/> gives for it, or becomes a
-    /// stump without one; crushed is kept as the state. The parts' saved flesh, wear and stun are not touched (the load fits the item without taking its damage).
+    /// Applies a saved <c>limbs</c> value (<c>FUN_1400d0190</c>): a stump stays a stump; a replaced slot gets the prosthetic <paramref
+    /// name="fitted"/> gives for it, or becomes a stump without one; crushed is kept as the state. The parts' saved flesh, wear and stun are not
+    /// touched (the load fits the item without taking its damage).
     /// </summary>
     public void ApplySavedLimbs(int bits, Func<int, (LimbReplacement Limb, Items.ItemInstance? Item)?> fitted)
     {
@@ -88,8 +96,12 @@ public sealed partial class MedicalState
             if (LimbPart(slot) is not { } p) continue;
             switch ((LimbState)((bits >> (2 * slot)) & 3))
             {
-                case LimbState.Stump: p.Limb = LimbState.Stump; break;
-                case LimbState.Crushed: p.Limb = LimbState.Crushed; break;
+                case LimbState.Stump:
+                    p.Limb = LimbState.Stump;
+                    break;
+                case LimbState.Crushed:
+                    p.Limb = LimbState.Crushed;
+                    break;
                 case LimbState.Replaced:
                     if (fitted(slot) is { } f)
                     {
@@ -106,9 +118,10 @@ public sealed partial class MedicalState
     }
 
     /// <summary>
-    /// Reads what <see cref="WriteSave"/> wrote. <paramref name="resolve"/> finds a LOCATIONAL_DAMAGE template by string id; the base HP of each part comes from the race's anatomy
-    /// (100 when the race does not list the part). The parts come back in the original's part order (<see cref="BodyPartTemplate.MedicalOrder"/>; a vanilla save already
-    /// has it, an older Meitou save may not), ties in the saved order. The limbs are applied after (<see cref="ApplySavedLimbs"/>).
+    /// Reads what <see cref="WriteSave"/> wrote. <paramref name="resolve"/> finds a LOCATIONAL_DAMAGE template by string id; the base HP of each part
+    /// comes from the race's anatomy (100 when the race does not list the part). The parts come back in the original's part order (<see
+    /// cref="BodyPartTemplate.MedicalOrder"/>; a vanilla save already has it, an older Meitou save may not), ties in the saved order. The limbs are
+    /// applied after (<see cref="ApplySavedLimbs"/>).
     /// </summary>
     public static MedicalState ReadSave(RaceData race, IReadOnlyDictionary<string, float> floats, IReadOnlyDictionary<string, bool> bools,
         IReadOnlyDictionary<string, string> strings, Func<string, BodyPartTemplate?> resolve)
@@ -118,7 +131,11 @@ public sealed partial class MedicalState
         {
             if (resolve(sid) is not { } template) continue;
             float baseHp = 100;
-            foreach (var a in race.Anatomy) if (a.Part.StringId == sid) { baseHp = a.BaseHp; break; }
+            foreach (var a in race.Anatomy) if (a.Part.StringId == sid)
+            {
+                baseHp = a.BaseHp;
+                break;
+            }
             float F(string name, float fallback = 0) => floats.TryGetValue(name + k, out float v) ? v : fallback;
             parts.Add(new HealthPart(template, (int)F("hit"), baseHp)
             {

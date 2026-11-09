@@ -2,36 +2,49 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Simulation.Bodies;
 
-/// <summary>Which effects <see cref="StatMultiplier.Compute"/> applies (the flags of <c>FUN_1406457e0</c>).</summary>
+/// <summary>
+/// Which effects <see cref="StatMultiplier.Compute"/> applies (the flags of <c>FUN_1406457e0</c>).
+/// </summary>
 [Flags]
 public enum StatUse
 {
     None = 0,
     Hunger = 1,
     Limbs = 2,
-    /// <summary>The light factor: working, looking and shooting in the dark (the rows' floor p0, from the character's light level).</summary>
+    /// <summary>
+    /// The light factor: working, looking and shooting in the dark (the rows' floor p0, from the character's light level).
+    /// </summary>
     Light = 4,
-    /// <summary>The fitted limbs' multipliers and the 0.66 for a disabled arm.</summary>
+    /// <summary>
+    /// The fitted limbs' multipliers and the 0.66 for a disabled arm.
+    /// </summary>
     DamageState = 8,
-    /// <summary>The dust factor on perception and friendly fire (<c>FUN_1406439f0</c>, <see cref="MedicalState.DustStatFactor"/>).</summary>
+    /// <summary>
+    /// The dust factor on perception and friendly fire (<c>FUN_1406439f0</c>, <see cref="MedicalState.DustStatFactor"/>).
+    /// </summary>
     Stun = 16,
-    /// <summary>The worn gear's bonus factor of the stat's row (<see cref="StatFactors"/>).</summary>
+    /// <summary>
+    /// The worn gear's bonus factor of the stat's row (<see cref="StatFactors"/>).
+    /// </summary>
     LimbItems = 32,
     All = Hunger | Limbs | Light | DamageState | Stun | LimbItems,
 }
 
 /// <summary>
-/// The extra factors some rows multiply in (docs/game/character-stats.md "Gear factors"): the <c>CharStats</c> values the worn-gear refresh <c>FUN_140887030</c> writes, the products
-/// over the worn armour of <c>asassination mult</c> (+0x40, assassination), <c>dexterity mult</c> (+0x44, dexterity; 1.1 with no armour and no backpack), <c>damage output mult</c>
-/// (+0x48, the five melee weapon skills) and <c>ranged skill mult</c> (+0x50, crossbows and friendly fire); and the dust factor of <c>FUN_1406439f0</c>, lerp(dust, 1, 0.5)
-/// (<see cref="MedicalState.DustStatFactor"/>, the default; docs/formats/weather.md "Effects on characters"). All 1 means none.
+/// The extra factors some rows multiply in (docs/game/character-stats.md "Gear factors"): the <c>CharStats</c> values the worn-gear refresh
+/// <c>FUN_140887030</c> writes, the products over the worn armour of <c>asassination mult</c> (+0x40, assassination), <c>dexterity mult</c> (+0x44,
+/// dexterity; 1.1 with no armour and no backpack), <c>damage output mult</c> (+0x48, the five melee weapon skills) and <c>ranged skill mult</c>
+/// (+0x50, crossbows and friendly fire); and the dust factor of <c>FUN_1406439f0</c>, lerp(dust, 1, 0.5) (<see cref="MedicalState.DustStatFactor"/>,
+/// the default; docs/formats/weather.md "Effects on characters"). All 1 means none.
 /// </summary>
 public readonly record struct StatFactors(float Assassin, float Dexterity, float Weapons, float Ranged, float Stun)
 {
     public static StatFactors None { get; } = new(1, 1, 1, 1, 1);
 }
 
-/// <summary>The aggregates of the body parts that the stat multiplier reads (<c>FUN_140644e60</c>).</summary>
+/// <summary>
+/// The aggregates of the body parts that the stat multiplier reads (<c>FUN_140644e60</c>).
+/// </summary>
 /// <param name="Arm">A: the health fraction of the best arm (1 for an owner exempt from limb effects).</param>
 /// <param name="Head">Hd: the head's health fraction (1 when the race has no head part, an engine choice).</param>
 /// <param name="Torso">T: the lowest health fraction among the torso parts.</param>
@@ -42,10 +55,11 @@ public readonly record struct BodyAggregates(float Arm, float Head, float Torso,
 }
 
 /// <summary>
-/// The multiplier in [0, 1] by which a stat is scaled whenever the game uses the skill (docs/game/character-stats.md "Effective stats: injuries and hunger",
-/// <c>FUN_1406457e0</c>). For every row: H = lerp(h0, 1, clamp(hunger - 1, 0, 1)); L = lerp(l0, 1, limb); m = H x L; with light m x= lerp(p0, 1, clamp(2.5 P, 0, 1)), P the
-/// character's light level (Character <c>+0xd8</c>, docs/game/perception.md "Sight"), so a light of 0.4 or more costs nothing; result = lerp(f0, 1, m) clamped, times the limb-item factor with <see cref="StatUse.DamageState"/> and the row's bonus factor with <see cref="StatUse.LimbItems"/>.
-/// The rows are the doc's table, <b>Observed</b> (hand-decoded from a switch with fall-through cases).
+/// The multiplier in [0, 1] by which a stat is scaled whenever the game uses the skill (docs/game/character-stats.md "Effective stats: injuries and
+/// hunger", <c>FUN_1406457e0</c>). For every row: H = lerp(h0, 1, clamp(hunger - 1, 0, 1)); L = lerp(l0, 1, limb); m = H x L; with light m x=
+/// lerp(p0, 1, clamp(2.5 P, 0, 1)), P the character's light level (Character <c>+0xd8</c>, docs/game/perception.md "Sight"), so a light of 0.4 or
+/// more costs nothing; result = lerp(f0, 1, m) clamped, times the limb-item factor with <see cref="StatUse.DamageState"/> and the row's bonus factor
+/// with <see cref="StatUse.LimbItems"/>. The rows are the doc's table, <b>Observed</b> (hand-decoded from a switch with fall-through cases).
 /// </summary>
 public static class StatMultiplier
 {
@@ -53,17 +67,22 @@ public static class StatMultiplier
 
     enum Bonus { None, Assassin, Dexterity, Weapons, Ranged, RangedStun, StunOnly }
 
-    /// <summary>A row of the table. <paramref name="LightFloor"/> p0 is 1 for rows without a light term.</summary>
-    readonly record struct Row(Limb Limb, float H0, float L0, float F0, float LightFloor, Bonus Bonus, bool BothArmsPenalty = false, bool OneUnlessBothArmsDisabled = false, bool Scaled = true);
+    /// <summary>
+    /// A row of the table. <paramref name="LightFloor"/> p0 is 1 for rows without a light term.
+    /// </summary>
+    readonly record struct Row(Limb Limb, float H0, float L0, float F0, float LightFloor, Bonus Bonus,
+        bool BothArmsPenalty = false, bool OneUnlessBothArmsDisabled = false, bool Scaled = true);
 
     static Row? RowOf(StatsEnumerated stat) => stat switch
     {
         StatsEnumerated.Strength => new Row(Limb.ArmTorso, 0, 0.75f, 0.1f, 1, Bonus.None),
         StatsEnumerated.MeleeAttack or StatsEnumerated.MartialArts => new Row(Limb.ArmTorso, 0.75f, 0, 0.7f, 1, Bonus.None),
         StatsEnumerated.Labouring or StatsEnumerated.Engineering or StatsEnumerated.SmithingWeapon or StatsEnumerated.SmithingArmour
-            or StatsEnumerated.Farming or StatsEnumerated.SmithingBow => new Row(Limb.ArmTorso, 0.5f, 0, 0.25f, 0.25f, Bonus.None, BothArmsPenalty: true),
+            or StatsEnumerated.Farming or StatsEnumerated.SmithingBow =>
+                new Row(Limb.ArmTorso, 0.5f, 0, 0.25f, 0.25f, Bonus.None, BothArmsPenalty: true),
         StatsEnumerated.Science or StatsEnumerated.Robotics or StatsEnumerated.Cooking => new Row(Limb.Head, 0.6f, 0.4f, 0.25f, 0.25f, Bonus.None),
-        StatsEnumerated.Medic or StatsEnumerated.Turrets or StatsEnumerated.HiveMedic or StatsEnumerated.Vet => new Row(Limb.Head, 0.6f, 0.4f, 0.25f, 1, Bonus.None),
+        StatsEnumerated.Medic or StatsEnumerated.Turrets or StatsEnumerated.HiveMedic or StatsEnumerated.Vet =>
+            new Row(Limb.Head, 0.6f, 0.4f, 0.25f, 1, Bonus.None),
         StatsEnumerated.Thieving or StatsEnumerated.Lockpicking => new Row(Limb.Arm, 0.75f, 0.4f, 0.25f, 1, Bonus.None, BothArmsPenalty: true),
         StatsEnumerated.Athletics => new Row(Limb.One, 0.7f, 1, 0.5f, 1, Bonus.None),
         StatsEnumerated.Dexterity => new Row(Limb.ArmTorso, 0.7f, 0, 0.4f, 1, Bonus.Dexterity),
@@ -79,10 +98,11 @@ public static class StatMultiplier
     };
 
     /// <summary>
-    /// The multiplier of <paramref name="stat"/> for a character's body. <paramref name="light"/> is the character's light level P: 0.4 or more means no penalty, 0 (dark) the
-    /// full one. Stats without a row (toughness...) are 1.
+    /// The multiplier of <paramref name="stat"/> for a character's body. <paramref name="light"/> is the character's light level P: 0.4 or more means
+    /// no penalty, 0 (dark) the full one. Stats without a row (toughness...) are 1.
     /// </summary>
-    public static float Compute(MedicalState medical, StatsEnumerated stat, StatUse use, in StatFactors factors, in BodyAggregates agg, float light = 1)
+    public static float Compute(MedicalState medical, StatsEnumerated stat, StatUse use, in StatFactors factors, in BodyAggregates agg,
+        float light = 1)
     {
         if (RowOf(stat) is not { } row) return 1;
         float result = 1;
@@ -118,15 +138,17 @@ public static class StatMultiplier
         return result;
     }
 
-    /// <summary>The stats the 0.66 for a disabled arm applies to (<b>Observed</b>): 1, 2, 6, 9, 10, 11, 18, 19, 22, 23, 30, 35, 37; not stealth and athletics.</summary>
+    /// <summary>
+    /// The stats the 0.66 for a disabled arm applies to (<b>Observed</b>): 1, 2, 6, 9, 10, 11, 18, 19, 22, 23, 30, 35, 37; not stealth and athletics.
+    /// </summary>
     public static bool ArmPenaltyApplies(StatsEnumerated stat) => stat is
         StatsEnumerated.Strength or StatsEnumerated.MeleeAttack or StatsEnumerated.Robotics or StatsEnumerated.Medic or StatsEnumerated.Thieving
-        or StatsEnumerated.Turrets or StatsEnumerated.Dexterity or StatsEnumerated.MeleeDefence or StatsEnumerated.Assassination or StatsEnumerated.Swimming
-        or StatsEnumerated.MartialArts or StatsEnumerated.Crossbows or StatsEnumerated.Lockpicking;
+        or StatsEnumerated.Turrets or StatsEnumerated.Dexterity or StatsEnumerated.MeleeDefence or StatsEnumerated.Assassination
+        or StatsEnumerated.Swimming or StatsEnumerated.MartialArts or StatsEnumerated.Crossbows or StatsEnumerated.Lockpicking;
 
     /// <summary>
-    /// The product of the fitted limbs' multipliers for a stat (<c>FUN_140644b90</c>): both arms' entries, and for stealth, athletics and swimming the legs' too; then x0.66 if
-    /// either arm is disabled, for the arm-related stats only.
+    /// The product of the fitted limbs' multipliers for a stat (<c>FUN_140644b90</c>): both arms' entries, and for stealth, athletics and swimming
+    /// the legs' too; then x0.66 if either arm is disabled, for the arm-related stats only.
     /// </summary>
     public static float LimbItemFactor(MedicalState medical, StatsEnumerated stat, in BodyAggregates agg)
     {

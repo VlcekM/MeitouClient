@@ -4,26 +4,42 @@ using Meitou.Simulation.Player;
 
 namespace Meitou.Simulation.Ai;
 
-/// <summary>The steps of the original's chooser (<c>AITaskSytem::chooseGoal</c> <c>FUN_140510ef0</c>, docs/game/ai-tasks.md "Precedence"), in the order they are tried.</summary>
+/// <summary>
+/// The steps of the original's chooser (<c>AITaskSytem::chooseGoal</c> <c>FUN_140510ef0</c>, docs/game/ai-tasks.md "Precedence"), in the order they
+/// are tried.
+/// </summary>
 public enum DecisionStep : byte
 {
-    /// <summary>1: the front of the order queue (<c>checkOrders</c> <c>FUN_140510920</c>).</summary>
+    /// <summary>
+    /// 1: the front of the order queue (<c>checkOrders</c> <c>FUN_140510920</c>).
+    /// </summary>
     Orders = 1,
-    /// <summary>2: a committing current goal of priority above 2 keeps its plan.</summary>
+    /// <summary>
+    /// 2: a committing current goal of priority above 2 keeps its plan.
+    /// </summary>
     Commitment = 2,
-    /// <summary>3: the urgent job pass (187 Obedient Slave, kind-2 jobs while enemies are sensed).</summary>
+    /// <summary>
+    /// 3: the urgent job pass (187 Obedient Slave, kind-2 jobs while enemies are sensed).
+    /// </summary>
     UrgentJobs = 3,
-    /// <summary>4: the priority-3 goals, one pick by desire x weight.</summary>
+    /// <summary>
+    /// 4: the priority-3 goals, one pick by desire x weight.
+    /// </summary>
     Goals = 4,
-    /// <summary>5: every job in list order, then the implicit jobs.</summary>
+    /// <summary>
+    /// 5: every job in list order, then the implicit jobs.
+    /// </summary>
     Jobs = 5,
-    /// <summary>6: the priority-2 goals, then the priority-1 goals (14 Idleness), then the default task (<c>+0x190</c>).</summary>
+    /// <summary>
+    /// 6: the priority-2 goals, then the priority-1 goals (14 Idleness), then the default task (<c>+0x190</c>).
+    /// </summary>
     Fallback = 6,
 }
 
 /// <summary>
-/// A source's answer for one character (<see cref="IDecisionSource.CanRun"/>, a pure read): it can run (<see cref="Can"/>; the original's desire x finder above 0), it runs the character's
-/// task already (<see cref="Running"/>: the plan goes on, nothing is started), or why not (<see cref="Why"/>: an order's failure text, "no attacker in range"; null: none to show).
+/// A source's answer for one character (<see cref="IDecisionSource.CanRun"/>, a pure read): it can run (<see cref="Can"/>; the original's desire x
+/// finder above 0), it runs the character's task already (<see cref="Running"/>: the plan goes on, nothing is started), or why not (<see
+/// cref="Why"/>: an order's failure text, "no attacker in range"; null: none to show).
 /// </summary>
 public readonly record struct DecisionCheck(bool Can, bool Running = false, string? Why = null)
 {
@@ -33,69 +49,100 @@ public readonly record struct DecisionCheck(bool Can, bool Running = false, stri
 }
 
 /// <summary>
-/// One source of the decision step (<see cref="DecisionSystem"/>): an order queue, a goal, a job. <see cref="CanRun"/> and <see cref="Desire"/> are pure reads of the world (serial phases), so the
-/// same answer serves the step, the UI and a command gate; <see cref="Start"/> starts it through <see cref="TaskStart"/> (or a deferred fight). Sources are registered in an open list
-/// (<see cref="DecisionSystem.Register"/>), sorted by the original's <see cref="Step"/> and, within it, its <see cref="Key"/>.
+/// One source of the decision step (<see cref="DecisionSystem"/>): an order queue, a goal, a job. <see cref="CanRun"/> and <see cref="Desire"/> are
+/// pure reads of the world (serial phases), so the same answer serves the step, the UI and a command gate; <see cref="Start"/> starts it through <see
+/// cref="TaskStart"/> (or a deferred fight). Sources are registered in an open list (<see cref="DecisionSystem.Register"/>), sorted by the original's
+/// <see cref="Step"/> and, within it, its <see cref="Key"/>.
 /// </summary>
 public interface IDecisionSource
 {
-    /// <summary>A short name for the trace ("32 Self preservation").</summary>
+    /// <summary>
+    /// A short name for the trace ("32 Self preservation").
+    /// </summary>
     string Name { get; }
     DecisionStep Step { get; }
-    /// <summary>The original's order within the step (the goal list's order, a job's list position); lower first, equal ones in registration order.</summary>
+
+    /// <summary>
+    /// The original's order within the step (the goal list's order, a job's list position); lower first, equal ones in registration order.
+    /// </summary>
     int Key { get; }
-    /// <summary>The goal's weight (step 4 scores desire x weight; the current goal x1.25).</summary>
+
+    /// <summary>
+    /// The goal's weight (step 4 scores desire x weight; the current goal x1.25).
+    /// </summary>
     float Weight => 1;
     DecisionCheck CanRun(World world, int slot);
-    /// <summary>How much it is wanted (above 0), asked only after <see cref="CanRun"/> said it can run.</summary>
+
+    /// <summary>
+    /// How much it is wanted (above 0), asked only after <see cref="CanRun"/> said it can run.
+    /// </summary>
     float Desire(World world, int slot) => 1;
-    /// <summary>Starts it (serial phases only).</summary>
+
+    /// <summary>
+    /// Starts it (serial phases only).
+    /// </summary>
     void Start(World world, int slot);
-    /// <summary>It could not run and the step went on (an order shows its failure text once).</summary>
+
+    /// <summary>
+    /// It could not run and the step went on (an order shows its failure text once).
+    /// </summary>
     void Passed(World world, int slot, in DecisionCheck check) { }
 }
 
-/// <summary>A system that contributes decision sources registers them when the world is made (<see cref="World.Decisions"/>).</summary>
+/// <summary>
+/// A system that contributes decision sources registers them when the world is made (<see cref="World.Decisions"/>).
+/// </summary>
 public interface IDecisionOwner
 {
     void RegisterSources(DecisionSystem decisions);
 }
 
 /// <summary>
-/// The contributor of the jobs of one or more types (<see cref="DecisionSystem.RegisterJob"/>). The decision step's job sources (steps 3 and 5) walk the character's list in order (the original's
-/// keys N+8, N+7, ...) and ask the contributor of each job's type; the jobs switch, the repertoire and the walk's order are theirs, everything else the contributor's.
+/// The contributor of the jobs of one or more types (<see cref="DecisionSystem.RegisterJob"/>). The decision step's job sources (steps 3 and 5) walk
+/// the character's list in order (the original's keys N+8, N+7, ...) and ask the contributor of each job's type; the jobs switch, the repertoire and
+/// the walk's order are theirs, everything else the contributor's.
 /// </summary>
 public interface IJobSource
 {
     /// <summary>
-    /// Whether job <paramref name="k"/> of the character's list can run now (a pure read: the original's desire x finder above 0); <see cref="DecisionCheck.Runs"/> when the character's task
-    /// is that job's already.
+    /// Whether job <paramref name="k"/> of the character's list can run now (a pure read: the original's desire x finder above 0); <see
+    /// cref="DecisionCheck.Runs"/> when the character's task is that job's already.
     /// </summary>
     DecisionCheck CanRun(World world, int slot, int k);
-    /// <summary>Starts job <paramref name="k"/> (serial phases only), after <see cref="CanRun"/> said it can.</summary>
-    void Start(World world, int slot, int k);
-    /// <summary>Step 3: whether job <paramref name="k"/> is urgent now (the kind-2 jobs while enemies are sensed, Obedient Slave 187 while its gate holds; <c>FUN_14050e5b0</c>). Default: never.</summary>
-    bool Urgent(World world, int slot, int k) => false;
+
     /// <summary>
-    /// The character's task is job <paramref name="k"/>'s, which can no longer run, and no other job of the list can: the task ends (the original's idleness takes over at that choice).
-    /// Default: nothing (the act-out ends by itself).
+    /// Starts job <paramref name="k"/> (serial phases only), after <see cref="CanRun"/> said it can.
+    /// </summary>
+    void Start(World world, int slot, int k);
+
+    /// <summary>
+    /// Step 3: whether job <paramref name="k"/> is urgent now (the kind-2 jobs while enemies are sensed, Obedient Slave 187 while its gate holds;
+    /// <c>FUN_14050e5b0</c>). Default: never.
+    /// </summary>
+    bool Urgent(World world, int slot, int k) => false;
+
+    /// <summary>
+    /// The character's task is job <paramref name="k"/>'s, which can no longer run, and no other job of the list can: the task ends (the original's
+    /// idleness takes over at that choice). Default: nothing (the act-out ends by itself).
     /// </summary>
     void Stop(World world, int slot, int k) { }
 }
 
 /// <summary>
-/// The last decision of a character, filled only while <see cref="DecisionSystem.Tracing"/> is on: the tick, the source that won (or what the step yielded to) and, per source asked,
-/// its answer. Display only: not saved, not hashed.
+/// The last decision of a character, filled only while <see cref="DecisionSystem.Tracing"/> is on: the tick, the source that won (or what the step
+/// yielded to) and, per source asked, its answer. Display only: not saved, not hashed.
 /// </summary>
 public sealed record DecisionTrace(long Tick, string Winner, IReadOnlyList<string> Lines);
 
 /// <summary>
-/// The single decision step for the player's characters (docs/simulation.md "Decision step"; the original's chooser <c>FUN_140510ef0</c>). Serial, in slot order. A character is decided
-/// when its replan bit is set (<see cref="Request(World, int)"/>: a task ended, an order added or cleared, a stagger outside a fight, the melee alert with the fight off, the jobs changed,
-/// a load), when its front order's task ended, and (<b>engine</b>) every <see cref="Production.ProductionSystem.JobCheckTicks"/> while it is idle or on a job's task. The sources are asked
-/// in the original's order and the first that can run starts (step 4: the best score); a source already running ends the step. Steps 3 and 5 walk the character's job list through the systems'
-/// job contributors (<see cref="RegisterJob"/>); step 6 ends in 14 Idleness, which always answers. NPCs keep <see cref="Ai.AiSystem"/>.
-/// Run in the slow world after retaliation, aggro and flight (<see cref="World.RunTick"/>), and for orders only between ticks (<see cref="World.ApplyPausedInterfaceCommands"/>).
+/// The single decision step for the player's characters (docs/simulation.md "Decision step"; the original's chooser <c>FUN_140510ef0</c>). Serial, in
+/// slot order. A character is decided when its replan bit is set (<see cref="Request(World, int)"/>: a task ended, an order added or cleared, a
+/// stagger outside a fight, the melee alert with the fight off, the jobs changed, a load), when its front order's task ended, and (<b>engine</b>)
+/// every <see cref="Production.ProductionSystem.JobCheckTicks"/> while it is idle or on a job's task. The sources are asked in the original's order
+/// and the first that can run starts (step 4: the best score); a source already running ends the step. Steps 3 and 5 walk the character's job list
+/// through the systems' job contributors (<see cref="RegisterJob"/>); step 6 ends in 14 Idleness, which always answers. NPCs keep <see
+/// cref="Ai.AiSystem"/>. Run in the slow world after retaliation, aggro and flight (<see cref="World.RunTick"/>), and for orders only between ticks
+/// (<see cref="World.ApplyPausedInterfaceCommands"/>).
 /// </summary>
 public sealed class DecisionSystem
 {
@@ -112,22 +159,40 @@ public sealed class DecisionSystem
         Register(new Idleness());
     }
 
-    /// <summary>The characters the step decides: the player's (<see cref="CharacterCold.IsPlayer"/>); the others are the AI's and the engine's (docs/simulation.md "Decision step").</summary>
+    /// <summary>
+    /// The characters the step decides: the player's (<see cref="CharacterCold.IsPlayer"/>); the others are the AI's and the engine's
+    /// (docs/simulation.md "Decision step").
+    /// </summary>
     public static bool Decides(CharacterCold cold) => cold.IsPlayer;
 
-    /// <summary>Registers (or replaces) the contributor of the jobs of <paramref name="type"/> (an open list: a job type without one is kept in the list but never run).</summary>
+    /// <summary>
+    /// Registers (or replaces) the contributor of the jobs of <paramref name="type"/> (an open list: a job type without one is kept in the list but
+    /// never run).
+    /// </summary>
     public void RegisterJob(TaskType type, IJobSource source) => _jobs[type] = source ?? throw new ArgumentNullException(nameof(source));
 
-    /// <summary>The contributor of the jobs of <paramref name="type"/>; null when none is registered.</summary>
+    /// <summary>
+    /// The contributor of the jobs of <paramref name="type"/>; null when none is registered.
+    /// </summary>
     public IJobSource? JobSourceOf(TaskType type) => _jobs.GetValueOrDefault(type);
 
-    /// <summary>The sources in the order they are asked.</summary>
+    /// <summary>
+    /// The sources in the order they are asked.
+    /// </summary>
     public IReadOnlyList<IDecisionSource> Sources => _sources;
 
-    /// <summary>Record each decision in <see cref="CharacterCold.Decision"/> (a debug toggle; off by default, never hashed).</summary>
-    public bool Tracing { get; set; }
+    /// <summary>
+    /// Record each decision in <see cref="CharacterCold.Decision"/> (a debug toggle; off by default, never hashed).
+    /// </summary>
+    public bool Tracing
+    {
+        get;
+        set;
+    }
 
-    /// <summary>Adds a source after those of a lower step or key and after equal ones (an open list: a mod may add its own).</summary>
+    /// <summary>
+    /// Adds a source after those of a lower step or key and after equal ones (an open list: a mod may add its own).
+    /// </summary>
     public void Register(IDecisionSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -135,7 +200,10 @@ public sealed class DecisionSystem
         _sources.Insert(at + 1, source);
     }
 
-    /// <summary>Asks for the character to be decided again (a replan trigger): any phase, its own slot or a serial one. Only the player's characters keep the bit.</summary>
+    /// <summary>
+    /// Asks for the character to be decided again (a replan trigger): any phase, its own slot or a serial one. Only the player's characters keep the
+    /// bit.
+    /// </summary>
     public static void Request(CharacterCold cold)
     {
         if (Decides(cold)) cold.Replan = true;
@@ -147,8 +215,8 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// The engine started a task for the character this tick outside the step (a follow row's fight, a bodyguard's own defence within 40): the step leaves it alone this tick.
-    /// Serial phases only.
+    /// The engine started a task for the character this tick outside the step (a follow row's fight, a bodyguard's own defence within 40): the step
+    /// leaves it alone this tick. Serial phases only.
     /// </summary>
     public void Claim(World world, int slot)
     {
@@ -159,9 +227,10 @@ public sealed class DecisionSystem
     bool Claimed(World world, int slot) => slot < _claimed.Length && _claimed[slot] == world.Tick + 1;
 
     /// <summary>
-    /// The <b>engine</b> re-ask (design D4: no periodic replan was found in the original, but Meitou's idleness and job tasks do not end where the original's plans do): a character not fighting
-    /// whose task is a job's or 14 Idleness's, or that no start runs (idle, a standing task), is decided every <see cref="Production.ProductionSystem.JobCheckTicks"/>; so is one on an order whose row needs no
-    /// melee threat (146, <see cref="PlayerOrders.NeedsNoThreat"/>), which a threat must take off its turret.
+    /// The <b>engine</b> re-ask (design D4: no periodic replan was found in the original, but Meitou's idleness and job tasks do not end where the
+    /// original's plans do): a character not fighting whose task is a job's or 14 Idleness's, or that no start runs (idle, a standing task), is
+    /// decided every <see cref="Production.ProductionSystem.JobCheckTicks"/>; so is one on an order whose row needs no melee threat (146, <see
+    /// cref="PlayerOrders.NeedsNoThreat"/>), which a threat must take off its turret.
     /// </summary>
     public static bool ReAsked(World world, int slot, CharacterCold cold) =>
         GoalsComeFirst(world.Characters, slot, cold)
@@ -169,8 +238,9 @@ public sealed class DecisionSystem
             && cold.OrderQueue.Front is { Started: true } front && PlayerOrders.NeedsNoThreat(front.Row);
 
     /// <summary>
-    /// Whether the character's task is one the step's priority-3 goals (step 4) come before, so a goal that can run takes it over: not a fight, and no start runs it (idling, a standing task),
-    /// or it is a job's (list or implicit; steps 3 and 5) or 14 Idleness's (step 6). Not an order's, a goal's or the engine's. A pure read.
+    /// Whether the character's task is one the step's priority-3 goals (step 4) come before, so a goal that can run takes it over: not a fight, and
+    /// no start runs it (idling, a standing task), or it is a job's (list or implicit; steps 3 and 5) or 14 Idleness's (step 6). Not an order's, a
+    /// goal's or the engine's. A pure read.
     /// </summary>
     public static bool GoalsComeFirst(CharacterTable table, int slot, CharacterCold cold)
     {
@@ -180,13 +250,18 @@ public sealed class DecisionSystem
         return run.Source == TaskSource.Job || run.Row == TaskType.Idle;
     }
 
-    /// <summary>Decides every player character that is due, in slot order (serial). <paramref name="paused"/>: between ticks, orders only; the bit stays for the next tick's full step.</summary>
+    /// <summary>
+    /// Decides every player character that is due, in slot order (serial). <paramref name="paused"/>: between ticks, orders only; the bit stays for
+    /// the next tick's full step.
+    /// </summary>
     internal void Run(World world, bool paused)
     {
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || !world.Steps(i) || table.Cold(i) is not { } cold || !Decides(cold)) continue;   // a far character decides at its step (the far cadence)
+            // a far character decides at its step (the far cadence)
+            if (!table.Next[i].Alive || !world.Steps(i) || table.Cold(i) is not { } cold || !Decides(cold))
+                continue;
             if (cold.SavedOrders is not null) Saving.OrderSave.Restore(world, i, cold);
             bool front = cold.OrderQueue.Front is { } f && (!f.Tried || f.Started && !PlayerOrders.Runs(world, i, f));
             bool due = !paused && (world.Tick + i) % Production.ProductionSystem.JobCheckTicks == 0 && ReAsked(world, i, cold);
@@ -200,7 +275,9 @@ public sealed class DecisionSystem
         }
     }
 
-    /// <summary>Decides one character now (serial phases): the order queue's own pops first (<see cref="PlayerOrders.Prepare"/>), then the sources in order.</summary>
+    /// <summary>
+    /// Decides one character now (serial phases): the order queue's own pops first (<see cref="PlayerOrders.Prepare"/>), then the sources in order.
+    /// </summary>
     public void Decide(World world, int slot, bool paused = false)
     {
         var cold = world.Characters.Cold(slot)!;
@@ -240,7 +317,10 @@ public sealed class DecisionSystem
         return false;
     }
 
-    /// <summary>Step 4: the score is desire x weight, x1.25 for the goal running now; the best wins and a tie goes to the later-listed (<c>FUN_14050df10</c>'s raised keys).</summary>
+    /// <summary>
+    /// Step 4: the score is desire x weight, x1.25 for the goal running now; the best wins and a tie goes to the later-listed (<c>FUN_14050df10</c>'s
+    /// raised keys).
+    /// </summary>
     bool PickGoal(World world, int slot, int from, int end, ref string winner)
     {
         int best = -1;
@@ -272,10 +352,11 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Steps 3 and 5: the character's job list in order (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Perma-jobs"): the jobs switch gates every job but 16, 31, 45, 57, 58 and 250
-    /// (<c>FUN_14050c1c0</c>) in both passes; a job whose type has no contributor or whose row the repertoire does not register is skipped; the first job that can run wins (one that runs
-    /// the character's task already ends the step), so a higher job takes over a lower one at the next decision. Step 3 asks only the jobs that are urgent now. The implicit jobs are step 5's
-    /// next source (<see cref="Production.ProductionSystem"/>).
+    /// Steps 3 and 5: the character's job list in order (<c>FUN_14050e5b0</c>, docs/game/ai-tasks.md "Perma-jobs"): the jobs switch gates every job
+    /// but 16, 31, 45, 57, 58 and 250 (<c>FUN_14050c1c0</c>) in both passes; a job whose type has no contributor or whose row the repertoire does not
+    /// register is skipped; the first job that can run wins (one that runs the character's task already ends the step), so a higher job takes over a
+    /// lower one at the next decision. Step 3 asks only the jobs that are urgent now. The implicit jobs are step 5's next source (<see
+    /// cref="Production.ProductionSystem"/>).
     /// </summary>
     sealed class JobSource(DecisionSystem owner, bool urgent) : IDecisionSource
     {
@@ -298,7 +379,12 @@ public sealed class DecisionSystem
                 if (!on && !Production.PermaJobs.IgnoresSwitch(type)) check = DecisionCheck.No("jobs switch off");
                 else if (!TaskStart.Eligible(world, cold, type)) check = DecisionCheck.No("not in its repertoire");
                 else check = source.CanRun(world, slot, k);
-                if (owner.Tracing) owner._lines.Add($"{(int)Step} {Name} [{k}] {(int)type}: {(check.Can ? check.Running ? "runs" : "starts" : check.Why ?? "cannot run")}");
+                if (owner.Tracing)
+                {
+                    string verdict = check.Can ? check.Running ? "runs" : "starts" : check.Why ?? "cannot run";
+                    owner._lines.Add($"{(int)Step} {Name} [{k}] {(int)type}: {verdict}");
+                }
+
                 if (!check.Can) continue;
                 _picked = k;
                 return check;
@@ -309,22 +395,33 @@ public sealed class DecisionSystem
         public void Start(World world, int slot)
         {
             var cold = world.Characters.Cold(slot)!;
-            if ((uint)_picked < (uint)cold.Jobs.Count && owner._jobs.GetValueOrDefault(cold.Jobs[_picked].Type) is { } source) source.Start(world, slot, _picked);
+            if ((uint)_picked < (uint)cold.Jobs.Count
+                && owner._jobs.GetValueOrDefault(cold.Jobs[_picked].Type) is { } source)
+                source.Start(world, slot, _picked);
         }
 
-        /// <summary>Step 5 found nothing: the list job the character's task runs, which could not run on, ends (<see cref="IJobSource.Stop"/>; not a fight, which is its row's step).</summary>
+        /// <summary>
+        /// Step 5 found nothing: the list job the character's task runs, which could not run on, ends (<see cref="IJobSource.Stop"/>; not a fight,
+        /// which is its row's step).
+        /// </summary>
         public void Passed(World world, int slot, in DecisionCheck check)
         {
             if (urgent) return;
             var table = world.Characters;
             var cold = table.Cold(slot)!;
             var task = (CharacterTask)table.Next[slot].Task;
-            if (task == CharacterTask.Attack || cold.InCombat || cold.Running is not { Source: TaskSource.Job, Implicit: false, Job: >= 0 } run || !run.Runs(task) || run.Job >= cold.Jobs.Count) return;
+            if (task == CharacterTask.Attack || cold.InCombat
+                || cold.Running is not { Source: TaskSource.Job, Implicit: false, Job: >= 0 } run
+                || !run.Runs(task) || run.Job >= cold.Jobs.Count)
+                return;
             owner._jobs.GetValueOrDefault(cold.Jobs[run.Job].Type)?.Stop(world, slot, run.Job);
         }
     }
 
-    /// <summary>Source 1: the front of the order queue (<see cref="PlayerOrders"/>). One that cannot run shows its failure text once and stays queued; the step goes on.</summary>
+    /// <summary>
+    /// Source 1: the front of the order queue (<see cref="PlayerOrders"/>). One that cannot run shows its failure text once and stays queued; the
+    /// step goes on.
+    /// </summary>
     sealed class OrderSource : IDecisionSource
     {
         public string Name => "Orders";
@@ -345,16 +442,20 @@ public sealed class DecisionSystem
     }
 
     /// <summary>
-    /// Step 6's priority-1 goal 14 Idleness (<c>Character::setupAI</c> gives it to everyone, weight 0.1): a player character stands idle, which is its routine (player characters neither wander
-    /// nor follow a leader by themselves). It runs over idling, a fight (its goal's or row's), and any task a plan still runs (an order's, a goal's, the engine's: those end by their own rules;
-    /// a stale job's ended at step 5); a wander or follow no plan runs is given up for it. The default task (<c>+0x190</c>, tried after the priority-1 goals) is never reached: it is
-    /// 14 Idleness too unless the manoeuvre mode is STAY_CLOSE or HOLD_GROUND, which Meitou does not model (docs/game/ai-tasks.md "Precedence").
+    /// Step 6's priority-1 goal 14 Idleness (<c>Character::setupAI</c> gives it to everyone, weight 0.1): a player character stands idle, which is
+    /// its routine (player characters neither wander nor follow a leader by themselves). It runs over idling, a fight (its goal's or row's), and any
+    /// task a plan still runs (an order's, a goal's, the engine's: those end by their own rules; a stale job's ended at step 5); a wander or follow
+    /// no plan runs is given up for it. The default task (<c>+0x190</c>, tried after the priority-1 goals) is never reached: it is 14 Idleness too
+    /// unless the manoeuvre mode is STAY_CLOSE or HOLD_GROUND, which Meitou does not model (docs/game/ai-tasks.md "Precedence").
     /// </summary>
     sealed class Idleness : IDecisionSource
     {
         public string Name => "14 Idleness";
         public DecisionStep Step => DecisionStep.Fallback;
-        /// <summary>The priority-1 goals come after the priority-2 ones (keys 1000 + type).</summary>
+
+        /// <summary>
+        /// The priority-1 goals come after the priority-2 ones (keys 1000 + type).
+        /// </summary>
         public int Key => 2000 + (int)TaskType.Idle;
 
         public DecisionCheck CanRun(World world, int slot)
