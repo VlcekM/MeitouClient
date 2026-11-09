@@ -79,7 +79,7 @@ owned by the app user), `PUBLIC_URL` (the links' base, default the Cloudovna add
 - **Discord**: `/works system [build platform modded note]` and `/broken system what [build platform modded]`, system autocompleted
   from the rows; answers are visible to the reporter only. Setup: a Discord application, its Interactions Endpoint URL set to
   `<service>/discord`, the env above, then `POST /discord/register` once.
-- **Launcher**: "Report to the roadmap" under the launcher version (`launcher/Meitou.Launcher/Report.cs`, hidden while `ReportsUrl`
+- **Launcher**: "Report to the roadmap" under the launcher version (`launcher/Meitou.Launcher/ReportForm.cs`, hidden while `ReportsUrl`
   is empty): system, verdict, installed version, note, and optionally the end of that version's `log.txt`. Platform from the OS;
   a Windows build with the `HKCU\Software\Wine` key is `proton`. log.txt already appends runs up to 10 MiB (`GameLog`), so the bad
   run is still in it later.

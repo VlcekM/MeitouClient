@@ -12,7 +12,7 @@ namespace Meitou.Game.Rendering.Frame;
 static class WorldStats
 {
     /// <summary>
-    /// A frame's triangles in the main colour view, averaged over the panel's second as the bench counts them (<c>WorldApp.MeasureCounts</c>):
+    /// A frame's triangles in the main colour view, averaged over the panel's second as the bench counts them (<c>BenchSession.MeasureCounts</c>):
     /// the objects' include the water reflection's, the foliage's are null until its GPU cull's tally has been read back
     /// (<see cref="FoliageGpuCull.CountTriangles"/>), and grass blades are counted apart.
     /// </summary>

@@ -269,9 +269,9 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MTL_CAPTURE_ENABLED` | Metal framework (not project code) | Enables Metal GPU capture; the game's Ctrl+/ key uses it (per the usage text). |
 | `MEITOU_PASS_STATS` | `tools/Meitou.ModelViewer/PassMeter.cs`, `src/Meitou.Game/Rendering/Gpu/FrameLoop.cs` | `1`: per-pass GPU cost breakdown. |
 | `MEITOU_PASS_STATS_SKIP` | `tools/Meitou.ModelViewer/PassMeter.cs` | Frames skipped before the breakdown (default 60). |
-| `MEITOU_BENCH_ORBIT` | `tools/Meitou.ModelViewer/WorldApp.Benchmark.cs` | Pixels per frame the benchmark camera orbits (0.005 rad per pixel). |
-| `MEITOU_BENCH_SKIP` | `WorldApp.Benchmark.cs` (default 1), `src/Meitou.Game/Rendering/Profiling/SpikeLog.cs` (default 0) | Frames left out of benchmark percentiles and spike logs. |
-| `MEITOU_FLY_TURN` | `WorldApp.Benchmark.cs` | Radians the fly benchmark turns each frame instead of flying. |
+| `MEITOU_BENCH_ORBIT` | `tools/Meitou.ModelViewer/FlyBenchmarkSession.cs` | Pixels per frame the benchmark camera orbits (0.005 rad per pixel). |
+| `MEITOU_BENCH_SKIP` | `FlyBenchmarkSession.cs` (default 1), `src/Meitou.Game/Rendering/Profiling/SpikeLog.cs` (default 0) | Frames left out of benchmark percentiles and spike logs. |
+| `MEITOU_FLY_TURN` | `FlyBenchmarkSession.cs` | Radians the fly benchmark turns each frame instead of flying. |
 | `MEITOU_STREAM_LOG` | `tools/Meitou.ModelViewer/WorldApp.cs` | `1`: print frames slower than 15 ms with streamer timings. |
 | `MEITOU_VRAM_KILL` | `tools/Meitou.ModelViewer/VramWatch.cs` | Benchmark exits (code 9) when video memory passes this fraction of the budget (default 0.95; 0 off). |
 | `MEITOU_LOD_DEBUG` | `src/Meitou.Game/Rendering/Objects/WorldObjectRenderer.cs` | `1`: colour surfaces by LOD level; `2`: wireframe coloured by level. |
@@ -330,11 +330,11 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_METAL_NO_STATE_CACHE` | `src/Meitou.Game/Rendering/Metal/MetalCommandList.cs` | `1`: reissue every encoder state (A/B). |
 | `MEITOU_METAL_PRIVATE_STATIC` | `src/Meitou.Game/Rendering/Terrain/TerrainRenderer.cs`, `TerrainTextures.cs` | `1`: private storage for static terrain data (A/B). |
 
-Names starting `MEITOU_` are also recorded in the benchmark JSON (`WorldApp.Bench.cs`).
+Names starting `MEITOU_` are also recorded in the benchmark JSON (`BenchSession.cs`).
 
 ## Unclear
 
-- `MEITOU_BENCH_SKIP` defaults differ: 1 in `WorldApp.Benchmark.cs:93`, 0 in `SpikeLog.cs:19`.
+- `MEITOU_BENCH_SKIP` defaults differ: 1 in `FlyBenchmarkSession.Report`, 0 in `SpikeLog.cs:19`.
 - `MEITOU_METAL_GI_FALLBACK` (`MetalProbeGi.cs:469`), `MEITOU_METAL_PRIVATE_STATIC` (`TerrainRenderer.cs:63`), and the two `*_STAMPS` variables are described from the names and read sites only; their effects were not traced.
 - `MEITOU_FRAGMENT` (`src/Meitou.Game/Rendering/Gpu/Shaders/GlslProgramCompiler.cs:167`) is a shader macro, not an environment variable, so it is excluded.
 - `MTL_CAPTURE_ENABLED` appears only in the game's usage text (`GameOptions.cs:120`); no project code reads it.
