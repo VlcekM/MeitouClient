@@ -771,8 +771,9 @@ witness that regards the culprit as friendly takes 20 off on every sweep (`Crime
 looting. Carried bodies follow the carrier and affect load. A lift or loot walks to a floor point within 20 of the body's height (`CarrySystem.Approach`: the floor under it, else
 the nearest floor point within 12 round it, asked at the body's height and then lower) and reaches it within 14 on that floor; a body on a counter or table, over the hole its furniture
 cuts in the floor, is reached from the floor beside it, not from the storey above (engine choice). The player's Pick Up also lifts an awake own character that carries no one (`CarrySystem.CanBeLifted(World, …)`);
-lifted by a friendly carrier it leaves its fight and task and rides (`CharacterCold.CarriedAwake`) until put down, neither fighting nor treating (engine choices; a body
-lifted down is still set down when it comes round). Loot can raise witnessed theft and
+lifted by a friendly carrier it leaves its fight and task and rides (`CharacterCold.CarriedAwake`) until put down. A body carried awake (lifted so, or come round on an enemy's
+shoulder) neither fights nor treats anyone, itself included (engine choices; `FirstAidSystem.FindPatient` / `FindSplint` skip a carried medic); a body lifted down is still set
+down when it comes round. Loot can raise witnessed theft and
 stolen ownership marks. [carry-loot.md](game/carry-loot.md). Loot window (engine choice):
 `OpenLootOrder` walks the looter over (one ordered mid-fight leaves the fight, as with `LootOrder`; one already in reach opens at once, paused too), then `PlayerState.OpenLoot` publishes the body's whole inventory
 (`WorldSnapshot.OpenLoot`, the body's `ItemGrid`: grids, bag and worn gear); items are held across with the mouse ([held item](#items-and-eating)),
