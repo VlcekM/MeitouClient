@@ -28,6 +28,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
     /// <summary>The slab's base height (the cloud height setting); the top follows at <see cref="VolumetricClouds.Thickness"/> above it.</summary>
     public float Bottom { get; set; } = VolumetricClouds.Bottom;
 
+    /// <summary>Texels (half-size) round a texel's centre whose rays must all be hidden for the fog early-out to leave it out.</summary>
+    public const float FogSkipReach = 1.5f;
+
     sealed class ViewHistory : IDisposable
     {
         public GpuTexture? Current, Distance, A, B;
@@ -38,7 +41,10 @@ public sealed class VolumetricCloudRenderer : IDisposable
         public long Frame = -10;
         public void Dispose()
         {
-            Current?.Dispose(); Distance?.Dispose(); A?.Dispose(); B?.Dispose();
+            Current?.Dispose();
+            Distance?.Dispose();
+            A?.Dispose();
+            B?.Dispose();
             Current = Distance = A = B = null;
             Frame = -10;
         }
@@ -47,8 +53,11 @@ public sealed class VolumetricCloudRenderer : IDisposable
     public VolumetricCloudRenderer(IGpuContext gpu)
     {
         this._gpu = gpu;
-        _mainTimer = new(gpu); _mirrorTimer = new(gpu); _shadowTimer = new(gpu);
-        _noise = SampledImage.Rgba8(gpu, VolumetricClouds.AtlasSize, VolumetricClouds.AtlasSize, VolumetricClouds.CreateAtlas(), false, false, "cloud noise atlas");
+        _mainTimer = new(gpu);
+        _mirrorTimer = new(gpu);
+        _shadowTimer = new(gpu);
+        _noise = SampledImage.Rgba8(gpu, VolumetricClouds.AtlasSize, VolumetricClouds.AtlasSize, VolumetricClouds.CreateAtlas(), false, false,
+                "cloud noise atlas");
         _march = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.March, "cloud march");
         _resolve = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Resolve, "cloud history");
         _shadow = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, VolumetricCloudShaders.Shadow, "cloud shadow map");
@@ -86,7 +95,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
         cmd.BeginRendering(targets.Rendering);
         state.Record(cmd, targets);
         cmd.BindPipeline(segment.Get(state, targets.Formats, null));
-        p.Flush(cmd); cmd.Draw(3); cmd.EndRendering();
+        p.Flush(cmd);
+        cmd.Draw(3);
+        cmd.EndRendering();
         cmd.Order();
         _gpu.EndNative(cmd);
     }
@@ -97,18 +108,15 @@ public sealed class VolumetricCloudRenderer : IDisposable
     public void InvalidateMain() { _main.Frame = -10; MainMotion = null; }
 
     /// <summary>
-    /// The main view's clouds for the upscalers' motion vectors (<see cref="PostProcess"/>'s cloud motion pass, docs/render-clouds.md "Temporal, fog and
-    /// shadows"): the resolved image (opacity in alpha), the opacity-weighted distance along each ray, the wind's shift since the last frame in world units
-    /// and the frame they were made in; null when the main view's history restarted.
+    /// The main view's clouds for the upscalers' motion vectors (<see cref="PostProcess"/>'s cloud motion pass, docs/render-clouds.md "Temporal, fog
+    /// and shadows"): the resolved image (opacity in alpha), the opacity-weighted distance along each ray, the wind's shift since the last frame in
+    /// world units and the frame they were made in; null when the main view's history restarted.
     /// </summary>
     public CloudMotion? MainMotion { get; private set; }
 
-    /// <summary>Texels (half-size) round a texel's centre whose rays must all be hidden for the fog early-out to leave it out.</summary>
-    public const float FogSkipReach = 1.5f;
-
     /// <summary>
-    /// Before opening the scene host. The reflection has its own size, eye and history. <paramref name="fogSkip"/>: texels whose sky the placed
-    /// fog volumes hide completely are not marched (the main view only, and only when the fog volume pass runs over this frame's sky).
+    /// Before opening the scene host. The reflection has its own size, eye and history. <paramref name="fogSkip"/>: texels whose sky the placed fog
+    /// volumes hide completely are not marched (the main view only, and only when the fog volume pass runs over this frame's sky).
     /// </summary>
     public SampledTexture Render(Matrix4x4 viewProjection, Vector3 eye, int width, int height, float coverage, Vector2 wind,
         Vector3 key, Vector3 light, Vector3 ambient, bool reflection, bool fogSkip = false)
@@ -122,40 +130,35 @@ public sealed class VolumetricCloudRenderer : IDisposable
         if (timer.Poll(_samples) is { } ms) { if (reflection) ReflectionGpuMs = ms; else MainGpuMs = ms; }
         timer.Begin();
         int w = Math.Max(1, (width + 1) / 2), ht = Math.Max(1, (height + 1) / 2);
-        if (h.Current is null || h.Current.Desc.Width != w || h.Current.Desc.Height != ht)
-        {
-            h.Dispose();
-            h.Current = Make(w, ht, InternalFormat.Rgba16F, "cloud current");
-            h.Distance = Make(w, ht, InternalFormat.R32F, "cloud distance");
-            h.A = Make(w, ht, InternalFormat.Rgba16F, "cloud history a");
-            h.B = Make(w, ht, InternalFormat.Rgba16F, "cloud history b");
-        }
+        EnsureHistory(h, w, ht);
         Common(_march, coverage, wind, eye);
         _march.Set(_march.Uniform("uInverse"), in inverse);
-        _march.Set(_march.Uniform("uKey"), key); _march.Set(_march.Uniform("uLight"), light); _march.Set(_march.Uniform("uAmbient"), ambient);
+        _march.Set(_march.Uniform("uKey"), key);
+        _march.Set(_march.Uniform("uLight"), light);
+        _march.Set(_march.Uniform("uAmbient"), ambient);
         _march.ApplyGlobals();
         _march.Set(_march.Uniform("uSteps"), _gpu.IsIntegrated ? 64 : 96);
         // The reach round a texel's centre: the bilinear lookup of the full-size sky reads a texel from up to one texel away, and the fog pass's
         // ray is the unjittered pixel centre (half a full-size pixel, a quarter texel, off); 1.5 texels with room to spare.
         _march.Set(_march.Uniform("uFogSkip"), fogSkip ? 1 : 0, FogSkipReach * 2f / w, FogSkipReach * 2f / ht, 0);
-        Draw(_march, _marchSegment, h.Current, h.Distance);
+        Draw(_march, _marchSegment, h.Current!, h.Distance);
 
         Vector2 windDelta = wind - h.Wind;
         windDelta -= new Vector2(MathF.Round(windDelta.X), MathF.Round(windDelta.Y));
         var rayA = Vector4.Transform(new Vector4(0, 0, 0, 1), inverse);
         var rayB = Vector4.Transform(new Vector4(0, 0, 1, 1), inverse);
         var forward = Vector3.Normalize(new Vector3(rayB.X, rayB.Y, rayB.Z) / rayB.W - new Vector3(rayA.X, rayA.Y, rayA.Z) / rayA.W);
-        bool valid = _gpu.Frame.Number - h.Frame <= 2 && Vector3.DistanceSquared(eye, h.Eye) < 4000000
-            && MathF.Abs(coverage - h.Coverage) < 0.03f && Bottom == h.Bottom && Vector3.DistanceSquared(key, h.Key) < 0.0025f
-            && Vector3.Dot(light, h.Light) > 0.999f && Vector3.Dot(forward, h.Forward) > 0.9f
-            && Vector3.DistanceSquared(ambient, h.Ambient) < 0.0025f && windDelta.LengthSquared() < 0.0001f;
-        _resolve.Bind(_resolve.Sampler("uCurrent"), Sample(h.Current));
+        bool valid = ReprojectionValid(h, eye, coverage, key, light, ambient, forward, windDelta);
+        _resolve.Bind(_resolve.Sampler("uCurrent"), Sample(h.Current!));
         // Bind the current image on the first frame: never read an uninitialised history attachment.
-        _resolve.Bind(_resolve.Sampler("uHistory"), Sample(valid ? h.A! : h.Current));
+        _resolve.Bind(_resolve.Sampler("uHistory"), Sample(valid ? h.A! : h.Current!));
         _resolve.Bind(_resolve.Sampler("uDistance"), Sample(h.Distance!));
-        _resolve.Set(_resolve.Uniform("uInverse"), in inverse); _resolve.Set(_resolve.Uniform("uPrevious"), in h.Previous);
-        _resolve.Set(_resolve.Uniform("uEye"), eye); _resolve.Set(_resolve.Uniform("uPreviousEye"), h.Eye);
-        _resolve.Set(_resolve.Uniform("uWindDelta"), windDelta.X * VolumetricClouds.PatternPeriod, windDelta.Y * VolumetricClouds.PatternPeriod);
+        _resolve.Set(_resolve.Uniform("uInverse"), in inverse);
+        _resolve.Set(_resolve.Uniform("uPrevious"), in h.Previous);
+        _resolve.Set(_resolve.Uniform("uEye"), eye);
+        _resolve.Set(_resolve.Uniform("uPreviousEye"), h.Eye);
+        _resolve.Set(_resolve.Uniform("uWindDelta"), windDelta.X * VolumetricClouds.PatternPeriod,
+            windDelta.Y * VolumetricClouds.PatternPeriod);
         _resolve.Set(_resolve.Uniform("uHistoryWeight"), valid ? 0.85f : 0);
         Draw(_resolve, _resolveSegment, h.B!);
         (h.A, h.B) = (h.B, h.A);
@@ -165,6 +168,27 @@ public sealed class VolumetricCloudRenderer : IDisposable
             (viewProjection, eye, key, light, ambient, forward, wind, coverage, Bottom, _gpu.Frame.Number);
         timer.End();
         return Sample(h.A!);
+    }
+
+    /// <summary>Remakes the history's images at <paramref name="w"/> × <paramref name="ht"/> when their size changed (the history is lost).</summary>
+    void EnsureHistory(ViewHistory h, int w, int ht)
+    {
+        if (h.Current is not null && h.Current.Desc.Width == w && h.Current.Desc.Height == ht) return;
+        h.Dispose();
+        h.Current = Make(w, ht, InternalFormat.Rgba16F, "cloud current");
+        h.Distance = Make(w, ht, InternalFormat.R32F, "cloud distance");
+        h.A = Make(w, ht, InternalFormat.Rgba16F, "cloud history a");
+        h.B = Make(w, ht, InternalFormat.Rgba16F, "cloud history b");
+    }
+
+    /// <summary>Whether the history may be reprojected this frame: recent, from a close eye and the same settings and view.</summary>
+    bool ReprojectionValid(ViewHistory h, Vector3 eye, float coverage, Vector3 key, Vector3 light, Vector3 ambient, Vector3 forward,
+        Vector2 windDelta)
+    {
+        return _gpu.Frame.Number - h.Frame <= 2 && Vector3.DistanceSquared(eye, h.Eye) < 4000000
+            && MathF.Abs(coverage - h.Coverage) < 0.03f && Bottom == h.Bottom && Vector3.DistanceSquared(key, h.Key) < 0.0025f
+            && Vector3.Dot(light, h.Light) > 0.999f && Vector3.Dot(forward, h.Forward) > 0.9f
+            && Vector3.DistanceSquared(ambient, h.Ambient) < 0.0025f && windDelta.LengthSquared() < 0.0001f;
     }
 
     public void RenderShadow(Vector3 eye, float coverage, Vector2 wind, Vector3 sun)
@@ -186,8 +210,14 @@ public sealed class VolumetricCloudRenderer : IDisposable
 
     public void Dispose()
     {
-        _main.Dispose(); _mirror.Dispose(); _shadowMap?.Dispose(); _shadowMap = null; _noise.Dispose();
-        _march.Dispose(); _resolve.Dispose(); _shadow.Dispose();
+        _main.Dispose();
+        _mirror.Dispose();
+        _shadowMap?.Dispose();
+        _shadowMap = null;
+        _noise.Dispose();
+        _march.Dispose();
+        _resolve.Dispose();
+        _shadow.Dispose();
     }
 }
 

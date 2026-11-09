@@ -6,9 +6,9 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Rendering.Shadows;
 
 /// <summary>
-/// GLSL of the sun shadows (docs/formats/shadows.md): the receiver term <c>kenshiShadow</c> that the lighting multiplies the sun by, the
-/// depth-only fragment stages the renderers' caster draws use, and the debug views. The cascade data come from <see cref="ShadowPass"/>
-/// through two uniform blocks (the receiver's and the caster's), bound once per program by <see cref="Bind"/>.
+/// GLSL of the sun shadows (docs/formats/shadows.md): the receiver term <c>kenshiShadow</c> that the lighting multiplies the sun by, the depth-only
+/// fragment stages the renderers' caster draws use, and the debug views. The cascade data come from <see cref="ShadowPass"/> through two uniform
+/// blocks (the receiver's and the caster's), bound once per program by <see cref="Bind"/>.
 /// </summary>
 static class ShadowShaders
 {
@@ -21,10 +21,10 @@ static class ShadowShaders
     static string Taps() => string.Join(", ", KenshiShadows.PcfOffsets.Select(o => $"vec2({F(o.X)}, {F(o.Y)})"));
 
     /// <summary>
-    /// The receiver: <c>float kenshiShadow(vec3 world, vec3 n)</c> is 1 where the sun reaches the point and 0 where a caster hides it; the
-    /// lighting calls it, and it calls <c>kenshiShadowFaithful</c>, the game's CSM (shadowFunctions.hlsl <c>computeShadowMultiplier</c>):
-    /// the cascade by the game's clip-z test, nothing beyond the last split, the twelve HEX12 taps shifted and turned by the game's noise
-    /// texture, projected onto the surface's plane, each a point-sampled compare. Include it before use.
+    /// The receiver: <c>float kenshiShadow(vec3 world, vec3 n)</c> is 1 where the sun reaches the point and 0 where a caster hides it; the lighting
+    /// calls it, and it calls <c>kenshiShadowFaithful</c>, the game's CSM (shadowFunctions.hlsl <c>computeShadowMultiplier</c>): the cascade by the
+    /// game's clip-z test, nothing beyond the last split, the twelve HEX12 taps shifted and turned by the game's noise texture, projected onto the
+    /// surface's plane, each a point-sampled compare. Include it before use.
     /// </summary>
     public static readonly string Functions = $$"""
 
@@ -138,8 +138,8 @@ static class ShadowShaders
         """;
 
     /// <summary>
-    /// What every caster's fragment stage ends with: the game's caster bias on the 0..1 depth the cascade matrices produce, flattened
-    /// onto 0 when the caster lies between the box and the sun. Both backends map clip depth 0..1 straight to the window depth, so
+    /// What every caster's fragment stage ends with: the game's caster bias on the 0..1 depth the cascade matrices produce, flattened onto 0 when the
+    /// caster lies between the box and the sun. Both backends map clip depth 0..1 straight to the window depth, so
     /// <c>gl_FragCoord.z</c> is the matrix's depth. The shadow maps keep the conventional order (cleared to 1, compared with less).
     /// </summary>
     const string CasterDepth = $$"""
@@ -163,8 +163,8 @@ static class ShadowShaders
         """;
 
     /// <summary>
-    /// Depth-only fragment stage for the mesh shaders' vertex stage (<see cref="Shaders.MeshVertex"/> and its instanced forms): the same
-    /// cut-out uniforms as the mesh fragment shader, so the renderers' material setters drive it unchanged.
+    /// Depth-only fragment stage for the mesh shaders' vertex stage (<see cref="Shaders.MeshVertex"/> and its instanced forms): the same cut-out
+    /// uniforms as the mesh fragment shader, so the renderers' material setters drive it unchanged.
     /// </summary>
     public static readonly string MeshDepthFragment = "#version 330 core\n" + CasterDepth + """
         in vec2 vUv;
@@ -203,9 +203,8 @@ static class ShadowShaders
         """;
 
     /// <summary>
-    /// Debug view of the receiver: the scene's depth (<see cref="DepthConvention"/>) back to world positions, then the shadow term.
-    /// Mode 2: the term in white and black, tinted by the cascade; mode 3: written as a multiplier over the finished picture (a preview
-    /// of the lighting change).
+    /// Debug view of the receiver: the scene's depth (<see cref="DepthConvention"/>) back to world positions, then the shadow term. Mode 2: the term
+    /// in white and black, tinted by the cascade; mode 3: written as a multiplier over the finished picture (a preview of the lighting change).
     /// </summary>
     public static readonly string DebugFragment = "#version 330 core\n" + Functions + DepthConvention.Glsl + """
         in vec2 vUv;

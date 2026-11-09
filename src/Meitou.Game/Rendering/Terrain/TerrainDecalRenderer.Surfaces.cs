@@ -9,11 +9,12 @@ using Meitou.Game.Rendering.Post;
 namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
-/// The <c>bloodsurfaces</c> switch (docs/game/blood-decals.md "Blood on surfaces"): the blood marks also land on walls, buildings, floors and other static objects. Each mark is
-/// kept with its 3D place (<see cref="AddSurface"/>, <see cref="BleedSurface"/>) and drawn after the opaque scene, before the characters, as a screen-space decal: a sphere
-/// round the mark, every scene pixel in it rebuilt from the depth with a normal from the depth's slope, and the decal's texture projected along that normal. The result
-/// multiplies the scene colour (so light, shadow and haze stay the surface's own). The terrain keeps the blood the cells give it: <see cref="CaptureTerrainDepth"/> keeps the depth
-/// the terrain alone wrote, and a pixel whose depth is still that one is terrain.
+/// The <c>bloodsurfaces</c> switch (docs/game/blood-decals.md "Blood on surfaces"): the blood marks also land on walls, buildings, floors and other
+/// static objects. Each mark is kept with its 3D place (<see cref="AddSurface"/>, <see cref="BleedSurface"/>) and drawn after the opaque scene,
+/// before the characters, as a screen-space decal: a sphere round the mark, every scene pixel in it rebuilt from the depth with a normal from the
+/// depth's slope, and the decal's texture projected along that normal. The result multiplies the scene colour (so light, shadow and haze stay the
+/// surface's own). The terrain keeps the blood the cells give it: <see cref="CaptureTerrainDepth"/> keeps the depth the terrain alone wrote, and a
+/// pixel whose depth is still that one is terrain.
 /// </summary>
 public sealed unsafe partial class TerrainDecalRenderer
 {
@@ -23,7 +24,9 @@ public sealed unsafe partial class TerrainDecalRenderer
     /// <summary>How high above the feet a splash is centred (a blow lands at the body, not the soles).</summary>
     const float SplashLift = 0.9f;
 
-    /// <summary>Marks above the terrain by more than this stand on a floor of a building: a splash is centred on that floor, not on the ground.</summary>
+    /// <summary>
+    /// Marks above the terrain by more than this stand on a floor of a building: a splash is centred on that floor, not on the ground.
+    /// </summary>
     const float FloorHeight = 3;
 
     const string SurfaceVertex = """
@@ -190,16 +193,22 @@ public sealed unsafe partial class TerrainDecalRenderer
         public uint Colour;
         public bool Floor;
         public Vector2 At;
-        /// <summary>The bleeder whose growing pool it is (<see cref="BleedSurface"/>), else null, and the surface clock it last bled into it at.</summary>
+        /// <summary>
+        /// The bleeder whose growing pool it is (<see cref="BleedSurface"/>), else null, and the surface clock it last bled into it at.
+        /// </summary>
         public long? Who;
         public float Bled;
     }
 
     readonly List<SurfaceDecal> _surfaces = [];
     readonly Dictionary<long, SurfaceDecal> _surfacePools = [];
-    /// <summary>A pool bled into this recently (seconds of game time) is not given up for a new decal (engine choice: a bleeder marks every tick).</summary>
+    /// <summary>
+    /// A pool bled into this recently (seconds of game time) is not given up for a new decal (engine choice: a bleeder marks every tick).
+    /// </summary>
     const float StillBleeding = 1;
-    /// <summary>The surface clock at which every decal was found a pool still bleeding (no room for a new pool until the clock moves), or −1.</summary>
+    /// <summary>
+    /// The surface clock at which every decal was found a pool still bleeding (no room for a new pool until the clock moves), or −1.
+    /// </summary>
     float _fullOfBleeding = -1;
     readonly List<(float Distance, SurfaceDecal Decal)> _surfaceNear = [];
     float _surfaceClock;
@@ -208,11 +217,16 @@ public sealed unsafe partial class TerrainDecalRenderer
     GpuTexture? _surfaceDepth, _terrainDepth;
     uint _surfaceDepthIndex = uint.MaxValue, _terrainDepthIndex = uint.MaxValue;
     SurfaceInstance[] _surfaceInstances = new SurfaceInstance[64];
+    long _staticDepthFrame = -1;
+    GpuTexture? _staticDepth;
+    uint _staticDepthIndex = uint.MaxValue;
+    long _terrainDepthFrame = -1;
 
     bool _surfacesOn;
 
     /// <summary>
-    /// The <c>bloodsurfaces</c> switch: marks are kept and drawn on the other surfaces as well as the terrain; off (Faithful), none are, and the ones kept are dropped.
+    /// The <c>bloodsurfaces</c> switch: marks are kept and drawn on the other surfaces as well as the terrain; off (Faithful), none are, and the ones
+    /// kept are dropped.
     /// </summary>
     public bool Surfaces
     {
@@ -225,15 +239,17 @@ public sealed unsafe partial class TerrainDecalRenderer
         }
     }
 
-    /// <summary>The terrain's height at (X, Z) (the host gives <c>TerrainRenderer.HeightAt</c>): a splash on the ground is centred above it.</summary>
+    /// <summary>
+    /// The terrain's height at (X, Z) (the host gives <c>TerrainRenderer.HeightAt</c>): a splash on the ground is centred above it.
+    /// </summary>
     public Func<float, float, float>? GroundHeight { get; set; }
 
     /// <summary>The decals kept for the surfaces now.</summary>
     public int SurfaceCount => _surfaces.Count;
 
     /// <summary>
-    /// Whether any decal kept for the surfaces is within <see cref="TerrainDecalRenderer.Range"/> of <paramref name="eye"/>: the frame copies the depth and splits its passes for them only then
-    /// (<see cref="RecordSurfaces"/> culls the rest per decal).
+    /// Whether any decal kept for the surfaces is within <see cref="TerrainDecalRenderer.Range"/> of <paramref name="eye"/>: the frame copies the
+    /// depth and splits its passes for them only then (<see cref="RecordSurfaces"/> culls the rest per decal).
     /// </summary>
     public bool SurfacesNear(Vector3 eye)
     {
@@ -255,13 +271,17 @@ public sealed unsafe partial class TerrainDecalRenderer
         _surfacePools.Clear();
     }
 
-    /// <summary>The decals kept for the surfaces as a save holds them (<see cref="SaveSurfaceDecals"/>), oldest first, each with its life left.</summary>
+    /// <summary>
+    /// The decals kept for the surfaces as a save holds them (<see cref="SaveSurfaceDecals"/>), oldest first, each with its life left.
+    /// </summary>
     public IEnumerable<SurfaceBloodDecal> SavedSurfaces =>
-        _surfaces.Select(d => new SurfaceBloodDecal(d.Type, (byte)d.Variant, d.Centre, d.Angle, d.Size, d.Expires - _surfaceClock, d.Colour, d.Floor));
+        _surfaces.Select(d => new SurfaceBloodDecal(d.Type, (byte)d.Variant, d.Centre, d.Angle, d.Size, d.Expires - _surfaceClock,
+            d.Colour, d.Floor));
 
     /// <summary>
-    /// Puts back the decals a save held (after <see cref="ClearSurfaces"/>, a new world): each with its life left, the newest kept when over <see cref="MaxSurfaces"/>.
-    /// None while the switch is off; one whose texture is not loaded is skipped. A pool no longer grows (the bleeding character is not kept).
+    /// Puts back the decals a save held (after <see cref="ClearSurfaces"/>, a new world): each with its life left, the newest kept when over <see
+    /// cref="MaxSurfaces"/>. None while the switch is off; one whose texture is not loaded is skipped. A pool no longer grows (the bleeding character
+    /// is not kept).
     /// </summary>
     public void LoadSurfaces(IReadOnlyList<SurfaceBloodDecal> saved)
     {
@@ -269,7 +289,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         for (int i = Math.Max(0, saved.Count - MaxSurfaces); i < saved.Count; i++)
         {
             var s = saved[i];
-            if ((int)s.Type >= _sprites.Length || s.Variant >= _sprites[(int)s.Type].Length || s.Life <= 0 || s.Size <= 0) continue;
+            if ((int)s.Type >= _sprites.Length || s.Variant >= _sprites[(int)s.Type].Length || s.Life <= 0 || s.Size <= 0)
+                continue;
             Keep(new SurfaceDecal
             {
                 Type = s.Type,
@@ -291,11 +312,13 @@ public sealed unsafe partial class TerrainDecalRenderer
         if (dt <= 0 || _surfaces.Count == 0) return;
         _surfaceClock += dt;
         if (_surfaces.RemoveAll(d => d.Expires <= _surfaceClock) > 0)
-            foreach (var key in _surfacePools.Where(p => p.Value.Expires <= _surfaceClock).Select(p => p.Key).ToList()) _surfacePools.Remove(key);
+            foreach (var key in _surfacePools.Where(p => p.Value.Expires <= _surfaceClock).Select(p => p.Key).ToList())
+                _surfacePools.Remove(key);
     }
 
     /// <summary>
-    /// A drip, smear or splash at <paramref name="at"/> (the mark's place, its Y the character's feet) turned to <paramref name="direction"/> (X/Z), of the game's
+    /// A drip, smear or splash at <paramref name="at"/> (the mark's place, its Y the character's feet) turned to <paramref name="direction"/> (X/Z),
+    /// of the game's
     /// <paramref name="size"/>. A splash lands on any surface round a point at the body's height, the others only on floors at the mark's height.
     /// </summary>
     public void AddSurface(TerrainDecalType type, Vector3 at, Vector2 direction, float size, uint abgr, Random random)
@@ -307,7 +330,8 @@ public sealed unsafe partial class TerrainDecalRenderer
     }
 
     /// <summary>
-    /// A bleeding character that stands still, as <see cref="TerrainDecalStore.Bleed"/> (the same growth rule, kept apart so a pool on an upper floor grows too):
+    /// A bleeding character that stands still, as <see cref="TerrainDecalStore.Bleed"/> (the same growth rule, kept apart so a pool on an upper floor
+    /// grows too):
     /// <paramref name="bleeding"/> × <paramref name="dt"/> × 0.2 grows the pool at its feet, within √10 units of where it started, else a new pool.
     /// </summary>
     public void BleedSurface(long who, Vector3 at, float bleeding, float dt, uint abgr, Random random)
@@ -322,7 +346,8 @@ public sealed unsafe partial class TerrainDecalRenderer
             pool.Bled = _surfaceClock;
             return;
         }
-        // At the cap with every decal a pool still bleeding (more bleeders than decals): this one bleeds on the terrain only, rather than each new pool pushing out another
+        // At the cap with every decal a pool still bleeding (more bleeders than decals): this one bleeds on the terrain only, rather than each new
+        // pool pushing out another
         // bleeder's, which made one again the next tick (thousands a frame, none growing).
         if (_surfaces.Count >= MaxSurfaces && !MakeRoom()) return;
         pool = Make(TerrainDecalType.Pool, at, random.Next(variants), random.NextSingle() * MathF.Tau, grow, abgr);
@@ -331,9 +356,12 @@ public sealed unsafe partial class TerrainDecalRenderer
         _surfacePools[who] = pool;
     }
 
-    bool Bleeding(SurfaceDecal d) => d.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == d && _surfaceClock - d.Bled <= StillBleeding;
+    bool Bleeding(SurfaceDecal d) => d.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == d &&
+            _surfaceClock - d.Bled <= StillBleeding;
 
-    /// <summary>Removes the oldest decal that is not a pool still bleeding; false when there is none (remembered until the surface clock moves).</summary>
+    /// <summary>
+    /// Removes the oldest decal that is not a pool still bleeding; false when there is none (remembered until the surface clock moves).
+    /// </summary>
     bool MakeRoom()
     {
         if (_fullOfBleeding == _surfaceClock) return false;
@@ -341,7 +369,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         {
             var d = _surfaces[i];
             if (Bleeding(d)) continue;
-            if (d.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == d) _surfacePools.Remove(who);
+            if (d.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == d)
+                _surfacePools.Remove(who);
             _surfaces.RemoveAt(i);
             return true;
         }
@@ -353,7 +382,8 @@ public sealed unsafe partial class TerrainDecalRenderer
     {
         float ground = GroundHeight?.Invoke(at.X, at.Z) ?? at.Y;
         bool floor = type != TerrainDecalType.Splash;
-        // A splash on the ground is centred above the ground at its place (the mark carries the victim's height, which a slope or a flight of up to 20 units may leave behind).
+        // A splash on the ground is centred above the ground at its place (the mark carries the victim's height, which a slope or a flight of up to
+        // 20 units may leave behind).
         float y = floor ? at.Y : (at.Y - ground > FloorHeight ? at.Y : ground) + SplashLift;
         return new SurfaceDecal
         {
@@ -375,7 +405,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         {
             var oldest = _surfaces[0];
             // Its bleeder's pool by the key it keeps: a scan of the pools per new decal took most of a frame with thousands bleeding at the cap.
-            if (oldest.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == oldest) _surfacePools.Remove(who);
+            if (oldest.Who is long who && _surfacePools.TryGetValue(who, out var pool) && pool == oldest)
+                _surfacePools.Remove(who);
             _surfaces.RemoveAt(0);
         }
         _surfaces.Add(decal);
@@ -391,21 +422,24 @@ public sealed unsafe partial class TerrainDecalRenderer
     }
 
     /// <summary>
-    /// Keeps the depth buffer as the terrain alone left it: between the terrain's draw and the objects' (the host is closed), so <see cref="RecordSurfaces"/> can tell terrain
-    /// pixels, which the cells already carry blood on, from the rest.
+    /// Keeps the depth buffer as the terrain alone left it: between the terrain's draw and the objects' (the host is closed), so <see
+    /// cref="RecordSurfaces"/> can tell terrain pixels, which the cells already carry blood on, from the rest.
     /// </summary>
-    internal void CaptureTerrainDepth(GpuTexture sceneDepth) => Capture(sceneDepth, ref _terrainDepth, ref _terrainDepthIndex, "blood terrain depth", true);
+    internal void CaptureTerrainDepth(GpuTexture sceneDepth) => Capture(sceneDepth, ref _terrainDepth, ref _terrainDepthIndex,
+            "blood terrain depth", true);
 
     /// <summary>
-    /// Keeps the depth buffer as the static objects left it, before the foliage and everything else that sways or moves is drawn: a pixel nearer than this
-    /// is not static, and takes no blood.
+    /// Keeps the depth buffer as the static objects left it, before the foliage and everything else that sways or moves is drawn: a pixel nearer than
+    /// this is not static, and takes no blood.
     /// </summary>
-    internal void CaptureStaticDepth(GpuTexture sceneDepth) => Capture(sceneDepth, ref _staticDepth, ref _staticDepthIndex, "blood static depth", false);
+    internal void CaptureStaticDepth(GpuTexture sceneDepth) => Capture(sceneDepth, ref _staticDepth, ref _staticDepthIndex, "blood static depth",
+            false);
 
     void Capture(GpuTexture sceneDepth, ref GpuTexture? target, ref uint index, string name, bool first)
     {
         if (!_surfacesOn || _surfaces.Count == 0) return;
-        if (target is null || target.Desc.Width != sceneDepth.Desc.Width || target.Desc.Height != sceneDepth.Desc.Height || target.Desc.Format != sceneDepth.Desc.Format)
+        if (target is null || target.Desc.Width != sceneDepth.Desc.Width || target.Desc.Height != sceneDepth.Desc.Height
+            || target.Desc.Format != sceneDepth.Desc.Format)
         {
             if (index != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, index);
             target?.Dispose();
@@ -418,29 +452,42 @@ public sealed unsafe partial class TerrainDecalRenderer
         cmd.Blit(sceneDepth, target, TextureMinFilter.Nearest);
         cmd.Order();
         _gpu.EndNative(cmd);
-        if (first) _terrainDepthFrame = _gpu.Frame.Number; else _staticDepthFrame = _gpu.Frame.Number;
+        if (first) _terrainDepthFrame = _gpu.Frame.Number;
+        else _staticDepthFrame = _gpu.Frame.Number;
     }
 
-    long _staticDepthFrame = -1;
-    GpuTexture? _staticDepth;
-    uint _staticDepthIndex = uint.MaxValue;
-
-    long _terrainDepthFrame = -1;
-
-    GpuSampler NearestSampler() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+    GpuSampler NearestSampler() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
+        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
 
     /// <summary>
-    /// Draws the decals near <paramref name="eye"/> over <paramref name="colour"/> from <paramref name="depth"/> (the scene's, planes <paramref name="near"/> and
+    /// Draws the decals near <paramref name="eye"/> over <paramref name="colour"/> from <paramref name="depth"/> (the scene's, planes <paramref
+    /// name="near"/> and
     /// <paramref name="far"/>). <paramref name="rotation"/> is the view without its translation. Between the scene's passes: the host is closed, and
     /// <see cref="CaptureTerrainDepth"/> ran this frame.
     /// </summary>
-    internal void RecordSurfaces(GpuTexture colour, GpuTexture depth, float near, float far, Matrix4x4 rotation, float tanX, float tanY, Vector3 eye, Vector2 jitterNdc)
+    internal void RecordSurfaces(GpuTexture colour, GpuTexture depth, float near, float far, Matrix4x4 rotation, float tanX, float tanY,
+            Vector3 eye, Vector2 jitterNdc)
     {
-        if (!_surfacesOn || _surfaces.Count == 0 || _terrainDepth is null || _terrainDepthFrame != _gpu.Frame.Number || _staticDepthFrame != _gpu.Frame.Number) return;
+        if (!_surfacesOn || _surfaces.Count == 0 || _terrainDepth is null
+            || _terrainDepthFrame != _gpu.Frame.Number || _staticDepthFrame != _gpu.Frame.Number)
+            return;
         RegisterSprites();
         var back = ViewWindow.Back(rotation, tanX, tanY);
         (tanX, tanY) = (ViewWindow.Tan(tanX, tanY).X, ViewWindow.Tan(tanX, tanY).Y);
+        CollectSurfaceNear(eye, back);
+        if (_surfaceNear.Count == 0) return;
+        int n = FillSurfaceInstances(eye);
+        if (n == 0) return;
+
+        var program = _surfaceProgram ??= _frame.Program(SurfaceVertex, SurfaceFragment, "blood surfaces");
+        BindSurfaceDepth(depth);
+        DrawSurfaces(colour, program, n, near, far, rotation, tanX, tanY, back, jitterNdc);
+    }
+
+    /// <summary>The decals within the range of the eye and in front of it (<paramref name="back"/> is the view's back), at most <see cref="MaxSurfaceDraws"/>
+    /// of them, the nearest, into <see cref="_surfaceNear"/>.</summary>
+    void CollectSurfaceNear(Vector3 eye, Vector3 back)
+    {
         _surfaceNear.Clear();
         float range = MathF.Max(Range, 0);
         foreach (var d in _surfaces)
@@ -458,7 +505,13 @@ public sealed unsafe partial class TerrainDecalRenderer
             _surfaceNear.Sort((a, b) => a.Distance.CompareTo(b.Distance));
             _surfaceNear.RemoveRange(MaxSurfaceDraws, _surfaceNear.Count - MaxSurfaceDraws);
         }
-        if (_surfaceInstances.Length < _surfaceNear.Count) _surfaceInstances = new SurfaceInstance[Math.Max(_surfaceNear.Count, _surfaceInstances.Length * 2)];
+    }
+
+    /// <summary>Writes the instance row of each near decal that has a sprite and width into <see cref="_surfaceInstances"/>; returns how many.</summary>
+    int FillSurfaceInstances(Vector3 eye)
+    {
+        if (_surfaceInstances.Length < _surfaceNear.Count)
+            _surfaceInstances = new SurfaceInstance[Math.Max(_surfaceNear.Count, _surfaceInstances.Length * 2)];
         int n = 0;
         foreach (var (_, d) in _surfaceNear)
         {
@@ -471,20 +524,27 @@ public sealed unsafe partial class TerrainDecalRenderer
             {
                 Centre = new Vector4(d.Centre - eye, MathF.Sqrt(hw * hw + hh * hh)),   // the sphere round the decal's square
                 Shape = new Vector4(hw, hh, d.Angle, d.Floor ? 0 : 1),
-                Colour = new Vector4((abgr & 0xFF) / 255f, (abgr >> 8 & 0xFF) / 255f, (abgr >> 16 & 0xFF) / 255f, MathF.Min((abgr >> 24) / 255f, life)),
+                Colour = new Vector4((abgr & 0xFF) / 255f, (abgr >> 8 & 0xFF) / 255f, (abgr >> 16 & 0xFF) / 255f,
+                        MathF.Min((abgr >> 24) / 255f, life)),
                 Sprite = index,
             };
         }
-        if (n == 0) return;
+        return n;
+    }
 
-        var program = _surfaceProgram ??= _frame.Program(SurfaceVertex, SurfaceFragment, "blood surfaces");
-        if (_surfaceDepth != depth)
-        {
-            if (_surfaceDepthIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, _surfaceDepthIndex);
-            _surfaceDepthIndex = _gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(NearestSampler(), depth.View()));
-            _surfaceDepth = depth;
-        }
+    /// <summary>Registers the scene's depth as the bindless texture the surfaces read, again when the depth texture changed.</summary>
+    void BindSurfaceDepth(GpuTexture depth)
+    {
+        if (_surfaceDepth == depth) return;
+        if (_surfaceDepthIndex != uint.MaxValue) _gpu.Bindless.Free(BindlessKind.Texture2D, _surfaceDepthIndex);
+        _surfaceDepthIndex = _gpu.Bindless.Register(BindlessKind.Texture2D, new SampledTexture(NearestSampler(), depth.View()));
+        _surfaceDepth = depth;
+    }
 
+    /// <summary>Draws the first <paramref name="n"/> instance rows over <paramref name="colour"/> in one native pass.</summary>
+    void DrawSurfaces(GpuTexture colour, GpuProgram program, int n, float near, float far, Matrix4x4 rotation, float tanX, float tanY,
+            Vector3 back, Vector2 jitterNdc)
+    {
         var cmd = _gpu.BeginNative("blood surfaces");
         cmd.Order();
         var t = PassTargets.Of(colour, null);
@@ -493,7 +553,8 @@ public sealed unsafe partial class TerrainDecalRenderer
         MemoryMarshal.AsBytes(_surfaceInstances.AsSpan(0, n)).CopyTo(new Span<byte>(rows.Pointer, n * SurfaceInstance.Size));
         var state = DrawState.For(t.Formats, _gpu.DepthClamp, blend: Multiply, mask: DrawState.Rgb);
         state.Record(cmd, t);
-        cmd.BindPipeline(_surfacePipeline ??= _gpu.Pipelines.Get(state.Pipeline(program, SurfaceRows, PrimitiveType.TriangleStrip, t.Formats, "blood surfaces")));
+        cmd.BindPipeline(_surfacePipeline ??=
+            _gpu.Pipelines.Get(state.Pipeline(program, SurfaceRows, PrimitiveType.TriangleStrip, t.Formats, "blood surfaces")));
         _frame.Bind(cmd, program, default);
         var push = new SurfacePush
         {
@@ -509,7 +570,13 @@ public sealed unsafe partial class TerrainDecalRenderer
             Jitter = jitterNdc,
         };
         cmd.PushConstants(program, GpuStage.Vertex | GpuStage.Fragment, in push);
-        Span<GpuBufferBinding> buffers = [new(rows.Handle, rows.Offset), new(rows.Handle, rows.Offset + 16), new(rows.Handle, rows.Offset + 32), new(rows.Handle, rows.Offset + 48)];
+        Span<GpuBufferBinding> buffers =
+        [
+            new(rows.Handle, rows.Offset),
+            new(rows.Handle, rows.Offset + 16),
+            new(rows.Handle, rows.Offset + 32),
+            new(rows.Handle, rows.Offset + 48),
+        ];
         cmd.BindVertexBuffers(0, buffers);
         cmd.Draw(4, (uint)n);
         cmd.EndRendering();

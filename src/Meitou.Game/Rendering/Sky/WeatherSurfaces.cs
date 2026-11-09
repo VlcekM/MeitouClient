@@ -37,18 +37,23 @@ internal sealed class WeatherSurfaces : IDisposable
     public WeatherSurfaces(IGpuContext gpu, AssetLocator assets)
     {
         if (assets.Find(NoiseFile) is { } path)
-            _noise = SampledImage.Rgba8(gpu, TextureLoader.LoadFile(path, allMips: false).Levels[0], repeat: true, mipmaps: true, "weather dust noise");
+            _noise = SampledImage.Rgba8(gpu, TextureLoader.LoadFile(path, allMips: false).Levels[0], repeat: true, mipmaps: true,
+                    "weather dust noise");
         var g = gpu.Globals;
         g.PublishUniform("uWeatherWet", () => new Vector4(Wetness, RainAmount(Rain), GameTime, 0));
         g.PublishUniform("uWeatherDust", () => new Vector4(Dust, 1));   // w 1: triplanar map features get dust too (always on)
         g.Publish("uWeatherDustNoise", () => _noise is { } n ? n.Sampled() : default);
     }
 
-    /// <summary>Test overrides (<c>--wetness</c>, <c>--rain</c>, <c>--dust</c>; a NaN dust component keeps the weather's): they win over the weather state.</summary>
+    /// <summary>
+    /// Test overrides (<c>--wetness</c>, <c>--rain</c>, <c>--dust</c>; a NaN dust component keeps the weather's): they win over the weather state.
+    /// </summary>
     public float? WetnessOverride, RainOverride;
     public Vector3? DustOverride;
 
-    /// <summary>Takes the frame's weather at the camera (the scheduler's ramps, or a forced record snapped to its targets), then the overrides.</summary>
+    /// <summary>
+    /// Takes the frame's weather at the camera (the scheduler's ramps, or a forced record snapped to its targets), then the overrides.
+    /// </summary>
     public void Apply(Data.World.WeatherState state)
     {
         Wetness = WetnessOverride ?? state.Wetness;

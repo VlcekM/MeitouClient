@@ -6,11 +6,10 @@ using Meitou.Game.Rendering.Sky;
 namespace Meitou.Game.Rendering.Terrain;
 
 /// <summary>
-/// GLSL for the world view's terrain (OpenGL 3.3 core). The layer model follows the facts in
-/// docs/formats/terrain.md ("How the terrain is textured"): per biome six layers (base, slope, cliff, grass,
-/// dirt, road) chosen by slope and the overlay map, tinted by the colour map, up to four biomes per pixel
-/// weighted by the blend map. Far away (beyond the game's material distance) and outside the loaded region the
-/// terrain takes the biomes' blended ground colour, like the game's distant terrain.
+/// GLSL for the world view's terrain (OpenGL 3.3 core). The layer model follows the facts in docs/formats/terrain.md ("How the terrain is textured"):
+/// per biome six layers (base, slope, cliff, grass, dirt, road) chosen by slope and the overlay map, tinted by the colour map, up to four biomes per
+/// pixel weighted by the blend map. Far away (beyond the game's material distance) and outside the loaded region the terrain takes the biomes'
+/// blended ground colour, like the game's distant terrain.
 /// </summary>
 static partial class TerrainShaders
 {
@@ -21,9 +20,8 @@ static partial class TerrainShaders
     public const int HeightCoarseUnit = 7, HeightFineUnit = 8, GroundUnit = 9, WorldColourUnit = 10;
 
     /// <summary>
-    /// Terrain height anywhere in the world: a coarse whole-world grid, replaced by the loaded region's finer grid
-    /// inside the region (blended over a band at its edge so the height stays continuous). Shared by the terrain and
-    /// water shaders.
+    /// Terrain height anywhere in the world: a coarse whole-world grid, replaced by the loaded region's finer grid inside the region (blended over a
+    /// band at its edge so the height stays continuous). Shared by the terrain and water shaders.
     /// </summary>
     public const string HeightFunctions = """
         uniform sampler2D uHeightCoarse;   // whole world, R16: raw / 65535
@@ -69,8 +67,8 @@ static partial class TerrainShaders
         """;
 
     /// <summary>
-    /// CDLOD patch: a grid of <c>cells</c>² quads placed over one quadtree node; vertices slide onto the next
-    /// coarser grid with distance (TerrainQuadtree), heights come from <see cref="HeightFunctions"/>.
+    /// CDLOD patch: a grid of <c>cells</c>² quads placed over one quadtree node; vertices slide onto the next coarser grid with distance
+    /// (TerrainQuadtree), heights come from <see cref="HeightFunctions"/>.
     /// </summary>
     public const string PatchVertex = "#version 330 core\n" + HeightFunctions + """
 
@@ -96,7 +94,10 @@ static partial class TerrainShaders
         }
         """;
 
-    /// <summary>A layer's relief depth and height (GroundRelief, docs/render-terrain.md "Ground relief"), shared by the displacement's stages and the fragment.</summary>
+    /// <summary>
+    /// A layer's relief depth and height (GroundRelief, docs/render-terrain.md "Ground relief"), shared by the displacement's stages and the
+    /// fragment.
+    /// </summary>
     const string ReliefDepth = """
 
         uniform sampler2D uRelief;     // per layer slot: 1 / (side × its height's steepness), 0 flat (TerrainTextures.LoadHeight)
@@ -154,11 +155,11 @@ static partial class TerrainShaders
         """;
 
     /// <summary>
-    /// The ground displacement (GroundRelief, docs/render-terrain.md "Ground relief"): how far the ground is moved at a point, from the biome
-    /// layers the material shows there. Only a layer with a height (its depth factor is not 0) moves it, by its height about the middle (half up, half
-    /// down: what stands on the ground sits level with the bumps) times its depth factor and how much of the pixel it shows: the base layer, and with
-    /// <c>uOverlayRelief</c> the grass, slope, dirt and road layers at that share (not the cliff), weighted by the biome blend. <c>reliefMove(p, false, ...)</c>
-    /// is that coverage alone (the control stage's test).
+    /// The ground displacement (GroundRelief, docs/render-terrain.md "Ground relief"): how far the ground is moved at a point, from the biome layers
+    /// the material shows there. Only a layer with a height (its depth factor is not 0) moves it, by its height about the middle (half up, half down:
+    /// what stands on the ground sits level with the bumps) times its depth factor and how much of the pixel it shows: the base layer, and with
+    /// <c>uOverlayRelief</c> the grass, slope, dirt and road layers at that share (not the cliff), weighted by the biome blend. <c>reliefMove(p,
+    /// false, ...)</c> is that coverage alone (the control stage's test).
     /// </summary>
     const string ReliefFunctions = ReliefDepth + """
 
@@ -278,7 +279,9 @@ static partial class TerrainShaders
         }
         """;
 
-    /// <summary><see cref="PatchVertex"/> for the tessellated patches: the same morphed grid point, to the control stage (no clip position).</summary>
+    /// <summary>
+    /// <see cref="PatchVertex"/> for the tessellated patches: the same morphed grid point, to the control stage (no clip position).
+    /// </summary>
     public const string PatchVertexTess = "#version 330 core\n" + HeightFunctions + ReliefFunctions + """
 
         layout(location = 0) in vec2 aGrid;
@@ -358,8 +361,8 @@ static partial class TerrainShaders
 
     /// <summary>
     /// The evaluation stage: the point on the flat triangle (the base surface is interpolated, not sampled again, so an unraised split edge is the
-    /// plain patch's edge), moved by the ground's height, fading out from 60% of <c>uDisplaceEnd</c> to it. Its outputs are the patch
-    /// vertex stage's, so the terrain's fragment stage is unchanged.
+    /// plain patch's edge), moved by the ground's height, fading out from 60% of <c>uDisplaceEnd</c> to it. Its outputs are the patch vertex stage's,
+    /// so the terrain's fragment stage is unchanged.
     /// </summary>
     public const string PatchEvaluation = "#version 330 core\n" + HeightFunctions + ReliefFunctions + """
 
@@ -394,11 +397,11 @@ static partial class TerrainShaders
         """;
 
     /// <summary>
-    /// Plain meshes drawn with the terrain material (TERRAIN-mode map features, the game's <c>Feature_Terrain_DX11</c>;
-    /// docs/formats/foliage.md, "TERRAIN-mode meshes"). The cliff projection weights are made per vertex from the mesh
-    /// normal, and a surface facing up (normal.y above 0.9) takes the (z, height) projection alone, as the game's feature
-    /// vertex program does. Instanced: the placement's rows at <see cref="MeshInstanceLocation"/>, row 0's w the feature's biome row
-    /// (read by <see cref="MeshFragment"/>; the w row of a placement only reaches the position's unused w).
+    /// Plain meshes drawn with the terrain material (TERRAIN-mode map features, the game's <c>Feature_Terrain_DX11</c>; docs/formats/foliage.md,
+    /// "TERRAIN-mode meshes"). The cliff projection weights are made per vertex from the mesh normal, and a surface facing up (normal.y above 0.9)
+    /// takes the (z, height) projection alone, as the game's feature vertex program does. Instanced: the placement's rows at <see
+    /// cref="MeshInstanceLocation"/>, row 0's w the feature's biome row (read by <see cref="MeshFragment"/>; the w row of a placement only reaches
+    /// the position's unused w).
     /// </summary>
     public const string MeshVertex = """
         #version 330 core
@@ -455,9 +458,9 @@ static partial class TerrainShaders
         """;
 
     /// <summary>
-    /// <see cref="MeshVertex"/> for the tessellated TERRAIN-mode meshes (RockSmoothing, docs/render-terrain.md "Rocks"), to the control stage (no clip
-    /// position): also the geometry normal the triangles curve to, the tangent slot's xyz where its w is RockSmoothing.Tag (zero otherwise: not curved).
-    /// The colour and the shadow programs share it, so the casters curve as the surface does.
+    /// <see cref="MeshVertex"/> for the tessellated TERRAIN-mode meshes (RockSmoothing, docs/render-terrain.md "Rocks"), to the control stage (no
+    /// clip position): also the geometry normal the triangles curve to, the tangent slot's xyz where its w is RockSmoothing.Tag (zero otherwise: not
+    /// curved). The colour and the shadow programs share it, so the casters curve as the surface does.
     /// </summary>
     public const string MeshVertexTess = """
         #version 330 core
@@ -493,9 +496,9 @@ static partial class TerrainShaders
         """;
 
     /// <summary>
-    /// The meshes' control stage: each edge split by how far its Phong curve leaves the straight edge (a quarter of the ends' normals' components along it,
-    /// times <c>uRockRound</c>) against what a pixel or so spans at its midpoint, from the edge alone, so the two triangles sharing it split it alike.
-    /// Not split where an end has no geometry normal or the edge lies flat.
+    /// The meshes' control stage: each edge split by how far its Phong curve leaves the straight edge (a quarter of the ends' normals' components
+    /// along it, times <c>uRockRound</c>) against what a pixel or so spans at its midpoint, from the edge alone, so the two triangles sharing it
+    /// split it alike. Not split where an end has no geometry normal or the edge lies flat.
     /// </summary>
     public const string MeshControl = """
         #version 330 core
@@ -547,7 +550,9 @@ static partial class TerrainShaders
         }
         """;
 
-    /// <summary>The Phong curve (Boubekeur and Alexa): the point on the flat triangle, pulled toward its projections on the corners' tangent planes.</summary>
+    /// <summary>
+    /// The Phong curve (Boubekeur and Alexa): the point on the flat triangle, pulled toward its projections on the corners' tangent planes.
+    /// </summary>
     const string MeshCurve = """
 
         layout(triangles, fractional_odd_spacing, ccw) in;
@@ -568,7 +573,9 @@ static partial class TerrainShaders
         }
         """;
 
-    /// <summary>The meshes' evaluation stage: the curved point, and <see cref="MeshVertex"/>'s outputs interpolated as the rasteriser would.</summary>
+    /// <summary>
+    /// The meshes' evaluation stage: the curved point, and <see cref="MeshVertex"/>'s outputs interpolated as the rasteriser would.
+    /// </summary>
     public const string MeshEvaluation = "#version 330 core\n" + MeshCurve + """
 
         layout(location = 1) in vec3 teNormal[32];
@@ -1385,20 +1392,27 @@ static partial class TerrainShaders
     /// <summary><see cref="Fragment"/> for the instanced <see cref="MeshVertex"/>: the feature's biome per instance instead of the uniform.</summary>
     public static readonly string MeshFragment = PerInstanceBiome(Fragment, fade: true);
 
-    /// <summary><see cref="MeshFragment"/> without the cross-fade's <c>discard</c>, for the placements that are not mid-fade (no discard anywhere in the program, so the depth test runs before it; <see cref="EarlyDepth"/>).</summary>
+    /// <summary>
+    /// <see cref="MeshFragment"/> without the cross-fade's <c>discard</c>, for the placements that are not mid-fade (no discard anywhere in the
+    /// program, so the depth test runs before it; <see cref="EarlyDepth"/>).
+    /// </summary>
     public static readonly string MeshFragmentSolid = PerInstanceBiome(Fragment, fade: false);
 
     static string PerInstanceBiome(string fragment, bool fade)
     {
         const string uniform = "uniform int uFeatureBiome;";
-        if (!fragment.Contains(uniform)) throw new InvalidOperationException("TerrainShaders.Fragment no longer declares uFeatureBiome.");
+        if (!fragment.Contains(uniform))
+            throw new InvalidOperationException("TerrainShaders.Fragment no longer declares uFeatureBiome.");
         string f = fragment.Replace(uniform, "flat in int vFeatureBiome;\n#define uFeatureBiome vFeatureBiome\nflat in float vFade;\n");
-        // A rock crossfading with its impostor (docs/impostors.md section 13): the cull's dither threshold in the placement's row 1 w, as the foliage meshes dither
+        // A rock crossfading with its impostor (docs/impostors.md section 13): the cull's dither threshold in the placement's row 1 w, as the foliage
+        // meshes dither
         // (a threshold in (0, 1) keeps that share of the pixels; 0, what every other placement has, keeps all).
         const string wireframe = "if (uWireframe) { fragColour = vec4(0.1, 0.1, 0.1, 1.0); return; }";
         int at = f.IndexOf(wireframe, StringComparison.Ordinal);
-        if (at < 0) throw new InvalidOperationException("TerrainShaders.Fragment no longer starts with the wireframe line.");
-        return !fade ? f : f.Insert(at, "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
+        if (at < 0)
+            throw new InvalidOperationException("TerrainShaders.Fragment no longer starts with the wireframe line.");
+        return !fade ? f : f.Insert(at,
+                "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
@@ -1407,9 +1421,9 @@ static partial class TerrainShaders
     public const int ConstantsSet = 2;
 
     /// <summary>
-    /// The terrain's own per-segment values (set 2, binding 0, a dynamic uniform buffer in the frame's constants; <see cref="TerrainConstants"/>
-    /// is the C# side): what <c>TerrainRenderer.Apply</c> and <c>BindHeights</c> set as loose uniforms, and the bindless indices of the
-    /// terrain's textures. Too big for the 128-byte push range, and the same for every draw of a segment.
+    /// The terrain's own per-segment values (set 2, binding 0, a dynamic uniform buffer in the frame's constants; <see cref="TerrainConstants"/> is
+    /// the C# side): what <c>TerrainRenderer.Apply</c> and <c>BindHeights</c> set as loose uniforms, and the bindless indices of the terrain's
+    /// textures. Too big for the 128-byte push range, and the same for every draw of a segment.
     /// </summary>
     public const string ConstantsBlock = """
         layout(std140, set = 2, binding = 0) uniform TerrainConstants
@@ -1501,8 +1515,8 @@ static partial class TerrainShaders
         """;
 
     /// <summary>The terrain's uniforms: <see cref="ConstantsBlock"/> members, the textures by bindless index (the array each one's format
-    /// selects: the layer arrays in <c>textures2DArray</c>, the integer blend cells in <c>utextures2D</c>), the patch's node in the push block.
-    /// The camera, light and fog are <see cref="ViewConstants"/> (<see cref="NativeShaders.ViewMap"/>).</summary>
+    /// selects: the layer arrays in <c>textures2DArray</c>, the integer blend cells in <c>utextures2D</c>), the patch's node in the push block. The
+    /// camera, light and fog are <see cref="ViewConstants"/> (<see cref="NativeShaders.ViewMap"/>).</summary>
     static readonly Dictionary<string, string> NativeMap = new()
     {
         ["uHeightCoarse"] = "textures2D[terrain.heightCoarse]",
@@ -1597,17 +1611,19 @@ static partial class TerrainShaders
         const string preludeEnd = "#define gl_VertexID gl_VertexIndex\n";
         string text = NativeShaders.Port(legacy, NativeShaders.Map(NativeMap), pushMembers);
         int at = text.IndexOf(preludeEnd, StringComparison.Ordinal);
-        if (at < 0) throw new InvalidOperationException("TerrainShaders.Native: the native prelude no longer ends with the gl_VertexID define.");
+        if (at < 0)
+            throw new InvalidOperationException("TerrainShaders.Native: the native prelude no longer ends with the gl_VertexID define.");
         text = text.Insert(at + preludeEnd.Length, ConstantsBlock);
         if (text.Contains(DerivativeControl, StringComparison.Ordinal))
-            text = text.Replace(DerivativeControl, "", StringComparison.Ordinal).Replace("#version 450\n", "#version 450\n" + DerivativeControl, StringComparison.Ordinal);
+            text = text.Replace(DerivativeControl, "", StringComparison.Ordinal).Replace("#version 450\n", "#version 450\n" + DerivativeControl,
+                    StringComparison.Ordinal);
         return text;
     }
 
     /// <summary>
-    /// A native terrain text with the normal-map switch or the relief quality fixed. Null leaves the runtime uniform in place; a value
-    /// emits a <c>#define</c> before <see cref="VariantDefaults"/> so the preprocessor takes the literal path. The uniforms stay in the
-    /// constants block for the ABI.
+    /// A native terrain text with the normal-map switch or the relief quality fixed. Null leaves the runtime uniform in place; a value emits a
+    /// <c>#define</c> before <see cref="VariantDefaults"/> so the preprocessor takes the literal path. The uniforms stay in the constants block for
+    /// the ABI.
     /// </summary>
     static string Variant(string native, bool? normalMaps = null, int? reliefQuality = null)
     {
@@ -1615,12 +1631,14 @@ static partial class TerrainShaders
             + (reliefQuality is { } quality ? $"#define {ReliefQualityName} {quality}\n" : "");
         if (defines.Length == 0) return native;
         int line = native.IndexOf('\n');
-        if (line < 0) throw new InvalidOperationException("TerrainShaders.Variant: the native text has no version line.");
+        if (line < 0)
+            throw new InvalidOperationException("TerrainShaders.Variant: the native text has no version line.");
         return native.Insert(line + 1, defines);
     }
 
-    /// <summary>The rock bake's extra push members (after <see cref="PushMembers"/>; std430 offsets 32, 48, 64, 80; <see cref="TerrainBakePush"/> is the C# side):
-    /// the frame's direction (towards the viewer; w the distance the material is shaded at), its image axes and the output pass.</summary>
+    /// <summary>The rock bake's extra push members (after <see cref="PushMembers"/>; std430 offsets 32, 48, 64, 80; <see cref="TerrainBakePush"/> is
+    /// the C# side): the frame's direction (towards the viewer; w the distance the material is shaded at), its image axes and the output
+    /// pass.</summary>
     public const string RockBakePushMembers = PushMembers + """
 
             vec4 bakeDir;
@@ -1630,11 +1648,12 @@ static partial class TerrainShaders
         """;
 
     /// <summary>
-    /// <see cref="MeshFragment"/> for the impostor bake of a TERRAIN-mode rock (docs/impostors.md section 13): the same layer model with the biome of the
-    /// instance's row 0 w, three changes in a copy (the shader the terrain draws with is untouched): the distance the material fades by is the bake's
-    /// (<c>bakeDir.w</c>, the rock's transition distance) instead of the eye's, the material is always fully applied (no window or far fade: those
-    /// are applied per pixel at draw time by the impostor), and an output switch before the lighting writes the albedo (pass 0), the shading normal in
-    /// the frame's basis (pass 1) or the gloss (pass 2), as <see cref="Impostors.ImpostorShaders.BakeFragmentNative"/> does for the mesh shader.
+    /// <see cref="MeshFragment"/> for the impostor bake of a TERRAIN-mode rock (docs/impostors.md section 13): the same layer model with the biome of
+    /// the instance's row 0 w, three changes in a copy (the shader the terrain draws with is untouched): the distance the material fades by is the
+    /// bake's (<c>bakeDir.w</c>, the rock's transition distance) instead of the eye's, the material is always fully applied (no window or far fade:
+    /// those are applied per pixel at draw time by the impostor), and an output switch before the lighting writes the albedo (pass 0), the shading
+    /// normal in the frame's basis (pass 1) or the gloss (pass 2), as <see cref="Impostors.ImpostorShaders.BakeFragmentNative"/> does for the mesh
+    /// shader.
     /// </summary>
     public static string RockBakeFragmentNative()
     {
@@ -1662,11 +1681,15 @@ static partial class TerrainShaders
         return Native(f, RockBakePushMembers);
     }
 
-    /// <summary>The vertex stage of the rock bake: <see cref="MeshVertex"/> with the bake's push block (both stages declare the same members).</summary>
+    /// <summary>
+    /// The vertex stage of the rock bake: <see cref="MeshVertex"/> with the bake's push block (both stages declare the same members).
+    /// </summary>
     public static string RockBakeVertexNative() => Native(MeshVertex, RockBakePushMembers);
 
     public static string PatchVertexNative() => Native(PatchVertex);
-    /// <summary>The ground displacement's stages (GroundRelief): <see cref="PatchVertexTess"/>, <see cref="PatchControl"/>, <see cref="PatchEvaluation"/>.</summary>
+    /// <summary>
+    /// The ground displacement's stages (GroundRelief): <see cref="PatchVertexTess"/>, <see cref="PatchControl"/>, <see cref="PatchEvaluation"/>.
+    /// </summary>
     public static string PatchVertexTessNative() => Native(PatchVertexTess);
     public static string PatchControlNative() => Native(PatchControl);
     public static string PatchEvaluationNative() => Native(PatchEvaluation);
@@ -1686,9 +1709,10 @@ static partial class TerrainShaders
     /// normal, the texel as the footprint, at distance 0, without the march), writing before the blood, the wetness and the lighting: the albedo and
     /// gloss to the colour target, the shading normal and absorbance to the extra one.
     /// </summary>
-    /// <summary>The bake's outputs (<see cref="MaterialBakeFragmentNative"/>), before the blood: the layers' albedo and gloss; their tangent-space normal's
-    /// x and y (z follows), the rain absorbance and the relief as one height field over <c>BakeSpan</c> (0.5 the surface): the ground's (pixelRelief's
-    /// gather, depth and height) and the cliff's (its projections' heights along the normal, as a height), mixed by the cliff's share.</summary>
+    /// <summary>The bake's outputs (<see cref="MaterialBakeFragmentNative"/>), before the blood: the layers' albedo and gloss; their tangent-space
+    /// normal's x and y (z follows), the rain absorbance and the relief as one height field over <c>BakeSpan</c> (0.5 the surface): the ground's
+    /// (pixelRelief's gather, depth and height) and the cliff's (its projections' heights along the normal, as a height), mixed by the cliff's
+    /// share.</summary>
     const string BakeOutput = """
         fragColour = albedo;
         float bakeHeight = 0.5;
@@ -1768,25 +1792,34 @@ static partial class TerrainShaders
     }
 
     /// <summary>
-    /// <paramref name="fragment"/> with the ground parallax's march (march false: left out, by defining NO_MARCH). Off it never runs (uParallax 0), but its registers were the
-    /// shader's: about 220 a thread, which held the terrain colour pass to a tenth of the warps; without it the pass took 2.4 ms instead of 3.4
-    /// (docs/render-terrain.md "Cost"). TerrainRenderer keeps a set of each and draws with the one the setting asks for.
+    /// <paramref name="fragment"/> with the ground parallax's march (march false: left out, by defining NO_MARCH). Off it never runs (uParallax 0),
+    /// but its registers were the shader's: about 220 a thread, which held the terrain colour pass to a tenth of the warps; without it the pass took
+    /// 2.4 ms instead of 3.4 (docs/render-terrain.md "Cost"). TerrainRenderer keeps a set of each and draws with the one the setting asks for.
     /// </summary>
     static string Marched(string fragment, bool march) => march ? fragment : fragment.Insert(fragment.IndexOf('\n') + 1, "#define NO_MARCH\n");
-    /// <summary>The terrain colour pass's depth-only twin: the same vertex stage (so the depths are the same), a fragment stage that writes nothing (<see cref="TerrainLateColour"/>).</summary>
+    /// <summary>
+    /// The terrain colour pass's depth-only twin: the same vertex stage (so the depths are the same), a fragment stage that writes nothing (<see
+    /// cref="TerrainLateColour"/>).
+    /// </summary>
     public static string PrepassFragmentNative(bool interiorCut = false)
     {
         const string empty = "#version 330 core\nvoid main()\n{\n}\n";
         return Native(interiorCut ? InteriorMaskRenderer.WithCut(empty) : empty);
     }
     public static string MeshVertexNative() => Native(MeshVertex);
-    /// <summary>The TERRAIN-mode meshes' colour program, with the interior cut (on per draw: <see cref="TerrainConstants.InteriorCut"/>; the cross-fade already discards).</summary>
+    /// <summary>
+    /// The TERRAIN-mode meshes' colour program, with the interior cut (on per draw: <see cref="TerrainConstants.InteriorCut"/>; the cross-fade
+    /// already discards).
+    /// </summary>
     public static string MeshFragmentNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
         Gi.GiResolveShaders.WithAlbedo(Variant(Native(InteriorMaskRenderer.WithCut(Marched(MeshFragment, march))), normalMaps, reliefQuality));
     public static string MeshFragmentSolidNative(bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
         Gi.GiResolveShaders.WithAlbedo(Variant(Native(Marched(MeshFragmentSolid, march)), normalMaps, reliefQuality));
     public static string MeshInstancedDepthVertexNative() => Native(MeshInstancedDepthVertex);
-    /// <summary>The rocks' smoothing (RockSmoothing): <see cref="MeshVertexTess"/>, <see cref="MeshControl"/>, <see cref="MeshEvaluation"/> and its casters' twin.</summary>
+    /// <summary>
+    /// The rocks' smoothing (RockSmoothing): <see cref="MeshVertexTess"/>, <see cref="MeshControl"/>, <see cref="MeshEvaluation"/> and its casters'
+    /// twin.
+    /// </summary>
     public static string MeshVertexTessNative() => Native(MeshVertexTess);
     public static string MeshControlNative() => Native(MeshControl);
     public static string MeshEvaluationNative() => Native(MeshEvaluation);
@@ -1879,7 +1912,10 @@ struct TerrainConstants
     [System.Runtime.InteropServices.FieldOffset(944)] public float BakeReach;
 }
 
-/// <summary>The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel, the side (0: not valid).</summary>
+/// <summary>
+/// The material cache's levels for <see cref="TerrainConstants.BakeOrigin"/> (std140 <c>vec4[4]</c>): x, z of the first texel's corner, the texel,
+/// the side (0: not valid).
+/// </summary>
 [System.Runtime.CompilerServices.InlineArray(4)]
 struct BakeOrigins
 {
@@ -1901,7 +1937,10 @@ struct TerrainPush
     [System.Runtime.InteropServices.FieldOffset(16)] public System.Numerics.Vector2 Morph;
 }
 
-/// <summary>The C# side of <see cref="TerrainShaders.RockBakePushMembers"/> (std430 push constants, 84 bytes; the node and morph at 0 and 16 are unused): a bake draw's frame.</summary>
+/// <summary>
+/// The C# side of <see cref="TerrainShaders.RockBakePushMembers"/> (std430 push constants, 84 bytes; the node and morph at 0 and 16 are unused): a
+/// bake draw's frame.
+/// </summary>
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 96)]
 struct TerrainBakePush
 {

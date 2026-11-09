@@ -6,10 +6,10 @@ using Meitou.Game.Rendering.Shadows;
 namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
-/// GLSL of the world view's sky, light and haze in the game's own terms (docs/formats/sky.md, docs/formats/lighting.md): SkyX's
-/// scattering integral evaluated per pixel with the game's options (<c>atmoSky</c>), the deferred lighting pass's sun, image-based
-/// ambient and specular light (<c>kenshiLight</c>), and the haze every world shader ends with (<c>atmoApply</c>). Colours are the game's
-/// HDR values; the post-processing applies the game's exposure. A program reads its uniforms and textures from the frame globals <see cref="SkyRenderer"/> publishes.
+/// GLSL of the world view's sky, light and haze in the game's own terms (docs/formats/sky.md, docs/formats/lighting.md): SkyX's scattering integral
+/// evaluated per pixel with the game's options (<c>atmoSky</c>), the deferred lighting pass's sun, image-based ambient and specular light
+/// (<c>kenshiLight</c>), and the haze every world shader ends with (<c>atmoApply</c>). Colours are the game's HDR values; the post-processing applies
+/// the game's exposure. A program reads its uniforms and textures from the frame globals <see cref="SkyRenderer"/> publishes.
 /// </summary>
 static class AtmosphereShaders
 {

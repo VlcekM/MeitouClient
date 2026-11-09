@@ -25,11 +25,11 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// Screen-space ambient occlusion at half resolution, from depth alone (normals from depth differences). Alchemy-style:
-    /// each of 12 spiral taps adds the cosine of the sample direction against the normal over its distance, ignoring
-    /// samples further than twice the radius. Writes R = occlusion factor (1 = open), G = view depth for the blur.  The occlusion is scaled by how much of the
-    /// surface is still visible through the air in front of it (haze, weather fog, fog volumes: the world position is rebuilt from depth and the
-    /// frame globals' own <c>atmoApply</c> evaluated), <c>ao = 1 - (1 - ao) * visibility</c>, and by the water in front of it (<c>uWaterY</c>).
+    /// Screen-space ambient occlusion at half resolution, from depth alone (normals from depth differences). Alchemy-style: each of 12 spiral taps
+    /// adds the cosine of the sample direction against the normal over its distance, ignoring samples further than twice the radius. Writes R =
+    /// occlusion factor (1 = open), G = view depth for the blur. The occlusion is scaled by how much of the surface is still visible through the air
+    /// in front of it (haze, weather fog, fog volumes: the world position is rebuilt from depth and the frame globals' own <c>atmoApply</c>
+    /// evaluated), <c>ao = 1 - (1 - ao) * visibility</c>, and by the water in front of it (<c>uWaterY</c>).
     /// </summary>
     public static readonly string Ssao = "#version 330 core\n" + Noise + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
 
@@ -129,13 +129,14 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The placed fog volumes (docs/formats/fogfeatures.md), one pass over the whole scene instead of a term in every world shader. The pixel's
-    /// world offset is rebuilt from the scene depth as SSAO does (none: the sky, at the far clip D), pulled in to
-    /// the water plane where that lies in front (the water writes no depth; its own surface is what the game's G-buffer reads, and the water
-    /// shader used to fog it there). The shader accumulates every volume, farthest first, into (colour, transmittance), which the hardware blends
-    /// as <c>scene * transmittance + colour</c> (blend one, source alpha; alpha of the scene untouched).
+    /// The placed fog volumes (docs/formats/fogfeatures.md), one pass over the whole scene instead of a term in every world shader. The pixel's world
+    /// offset is rebuilt from the scene depth as SSAO does (none: the sky, at the far clip D), pulled in to the water plane where that lies in front
+    /// (the water writes no depth; its own surface is what the game's G-buffer reads, and the water shader used to fog it there). The shader
+    /// accumulates every volume, farthest first, into (colour, transmittance), which the hardware blends as <c>scene * transmittance + colour</c>
+    /// (blend one, source alpha; alpha of the scene untouched).
     /// </summary>
-    public static readonly string FogVolumes = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow + FogVolumeShaders.Functions + """
+    public static readonly string FogVolumes = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
+        + FogVolumeShaders.Functions + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -168,9 +169,9 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The pixel's ray and distance as the fog volumes and light shafts passes rebuild them, for the passes of <see cref="PostProcess"/>'s merged scene
-    /// layers: the scene depth, else the sky (1e9); pulled in to the water plane where that lies in front (sky false
-    /// then). The camera comes from the light shafts' uniforms (<see cref="LightShaftShaders.Common"/>, set whether the shafts run or not).
+    /// The pixel's ray and distance as the fog volumes and light shafts passes rebuild them, for the passes of <see cref="PostProcess"/>'s merged
+    /// scene layers: the scene depth, else the sky (1e9); pulled in to the water plane where that lies in front (sky false then). The camera comes
+    /// from the light shafts' uniforms (<see cref="LightShaftShaders.Common"/>, set whether the shafts run or not).
     /// </summary>
     const string SceneDistance = """
 
@@ -207,13 +208,14 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The scene layers at half the render size (<c>fog-half</c> for the fog volumes, <c>shafts-half</c> for the light shafts' apply; docs/render-post.md
-    /// "Merged scene layers"): each texel is the full-size pixel at twice its coordinates (not an average: the upsample in <see cref="SceneLayers"/> compares
-    /// against that pixel's distance). It holds the layers asked for in the order the merged pass applies them, the shafts' then the fog volumes', as one
-    /// (colour, factor) the scene is blended by, <c>scene * a + rgb</c>; without blending. A fog-only texel is the fog's (colour, transmittance).
+    /// The scene layers at half the render size (<c>fog-half</c> for the fog volumes, <c>shafts-half</c> for the light shafts' apply;
+    /// docs/render-post.md "Merged scene layers"): each texel is the full-size pixel at twice its coordinates (not an average: the upsample in <see
+    /// cref="SceneLayers"/> compares against that pixel's distance). It holds the layers asked for in the order the merged pass applies them, the
+    /// shafts' then the fog volumes', as one (colour, factor) the scene is blended by, <c>scene * a + rgb</c>; without blending. A fog-only texel is
+    /// the fog's (colour, transmittance).
     /// </summary>
-    public static readonly string LayersHalf = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow + FogVolumeShaders.Functions
-        + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance + """
+    public static readonly string LayersHalf = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
+        + FogVolumeShaders.Functions + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance + """
 
         out vec4 fragColour;
         uniform vec4 uLayers;   // x 1: the light shafts; y 1: the fog volumes
@@ -239,9 +241,9 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The depth-aware upsample of <see cref="LayersHalf"/> (needs <see cref="SceneDistance"/> before it): of the four nearest half-size texels, weighted
-    /// bilinearly and by how close the distance of the pixel each stands for is to this pixel's (relative difference r, weight e^(−20 r)). False where no
-    /// texel is within 10 % (a thin edge no texel lies on: twigs against the far fog).
+    /// The depth-aware upsample of <see cref="LayersHalf"/> (needs <see cref="SceneDistance"/> before it): of the four nearest half-size texels,
+    /// weighted bilinearly and by how close the distance of the pixel each stands for is to this pixel's (relative difference r, weight e^(−20 r)).
+    /// False where no texel is within 10 % (a thin edge no texel lies on: twigs against the far fog).
     /// </summary>
     const string HalfUpsample = """
 
@@ -277,15 +279,16 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The merged scene layers (<c>layer-merge</c>, docs/render-post.md "Merged scene layers"): the light shafts' apply, the fog volumes and the SSAO's
-    /// factor in one pass over the scene colour instead of three. Each is a (colour, factor) the scene is blended by as <c>scene * a + rgb</c>; in their
-    /// old order (shafts, fog, occlusion) they compose to <c>((scene * a1 + c1) * a2 + c2) * ao</c> = <c>scene * (a1 a2 ao) + (c1 a2 + c2) ao</c>, one
-    /// blend of the same state (the occlusion is grey). The shafts' and the fog are computed here, or upsampled from <see cref="LayersHalf"/> (uHalf: which
-    /// of them that texture holds, <see cref="HalfUpsample"/>); where the upsample finds no texel, computed here at full size. With uHalf 0 (and the
+    /// The merged scene layers (<c>layer-merge</c>, docs/render-post.md "Merged scene layers"): the light shafts' apply, the fog volumes and the
+    /// SSAO's factor in one pass over the scene colour instead of three. Each is a (colour, factor) the scene is blended by as <c>scene * a +
+    /// rgb</c>; in their old order (shafts, fog, occlusion) they compose to <c>((scene * a1 + c1) * a2 + c2) * ao</c> = <c>scene * (a1 a2 ao) + (c1
+    /// a2 + c2) ao</c>, one blend of the same state (the occlusion is grey). The shafts' and the fog are computed here, or upsampled from <see
+    /// cref="LayersHalf"/> (uHalf: which of them that texture holds, <see cref="HalfUpsample"/>); where the upsample finds no texel, computed here at
+    /// full size. With uHalf 0 (and the
     /// <c>layers-lean</c> split, <see cref="SceneLayersLean"/>) it is the pass for the pixels the lean one left out.
     /// </summary>
-    public static readonly string SceneLayers = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow + FogVolumeShaders.Functions
-        + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance + HalfUpsample + """
+    public static readonly string SceneLayers = "#version 330 core\n" + AtmosphereShaders.Functions + LightShaftShaders.FogVolumeShadow
+        + FogVolumeShaders.Functions + LightShaftShaders.Alpha + LightShaftShaders.Air + LightShaftShaders.ApplyFunctions + SceneDistance + HalfUpsample + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -320,13 +323,15 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The lean half of the merged scene layers (<c>layers-lean</c>, docs/render-post.md "Merged scene layers"), for when <see cref="LayersHalf"/> holds
-    /// every pending layer: the upsample (<see cref="HalfUpsample"/>) and the occlusion, nothing else. Where no texel fits (a few hundredths of a percent
-    /// of the pixels) it leaves the scene as it is and writes depth 1 into the mask depth buffer, depth 0 elsewhere; <see cref="SceneLayers"/> then
-    /// draws those pixels alone (its full-screen triangle, at depth 0.5 in GL clip space, passes "less" only against the 1), computing everything at full size. The full pass carries the shafts' and the fog volumes' code,
-    /// which in one shader with the upsample more than doubled the time of the pass (registers: 0.08 against 0.17 ms with the fallback code removed).
+    /// The lean half of the merged scene layers (<c>layers-lean</c>, docs/render-post.md "Merged scene layers"), for when <see cref="LayersHalf"/>
+    /// holds every pending layer: the upsample (<see cref="HalfUpsample"/>) and the occlusion, nothing else. Where no texel fits (a few hundredths of
+    /// a percent of the pixels) it leaves the scene as it is and writes depth 1 into the mask depth buffer, depth 0 elsewhere; <see
+    /// cref="SceneLayers"/> then draws those pixels alone (its full-screen triangle, at depth 0.5 in GL clip space, passes "less" only against the
+    /// 1), computing everything at full size. The full pass carries the shafts' and the fog volumes' code, which in one shader with the upsample more
+    /// than doubled the time of the pass (registers: 0.08 against 0.17 ms with the fallback code removed).
     /// </summary>
-    public static readonly string SceneLayersLean = "#version 330 core\n" + LightShaftShaders.CommonUniforms + AtmosphereShaders.WaterHorizonFunctions + SceneDistance + HalfUpsample + """
+    public static readonly string SceneLayersLean = "#version 330 core\n" + LightShaftShaders.CommonUniforms
+        + AtmosphereShaders.WaterHorizonFunctions + SceneDistance + HalfUpsample + """
 
         in vec2 vUv;
         out vec4 fragColour;
@@ -354,8 +359,9 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// Fog shading rate, first pass (<c>fog-vrs</c>, docs/render-post.md "Fog shading rate"): at a quarter of the render size, the distance to the nearest surface of each 4 x 4 block of pixels (red) and to the farthest (green: 1e9 where the block shows sky),
-    /// rebuilt from the scene depth as the fog pass does (no surface: the sky at 1e9; where the water plane lies in front, the water's).
+    /// Fog shading rate, first pass (<c>fog-vrs</c>, docs/render-post.md "Fog shading rate"): at a quarter of the render size, the distance to the
+    /// nearest surface of each 4 x 4 block of pixels (red) and to the farthest (green: 1e9 where the block shows sky), rebuilt from the scene depth
+    /// as the fog pass does (no surface: the sky at 1e9; where the water plane lies in front, the water's).
     /// </summary>
     public static readonly string FogRateDistance = "#version 330 core\n" + """
 
@@ -398,10 +404,12 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// Fog shading rate, second pass: one texel per shading rate tile, the code of the fragment size for the next frame's scene passes. The nearest distance over the tile and a margin of
-    /// <c>FogShadingRate.MarginTexels</c> blocks round it (the camera moves between this frame's depth and the frame it is used in) goes through the placed fog volumes
-    /// (<c>fogVolumesAccumulate</c>, along the tile centre's ray) and the Kenshi haze and weather fog the world shaders apply; where what is left of the surface
-    /// (1 - haze) * transmittance is under <c>uThreshold</c> the rate is 2 x 2 and 4 x 4 (the codes of <c>FogShadingRate.Encode</c>).
+    /// Fog shading rate, second pass: one texel per shading rate tile, the code of the fragment size for the next frame's scene passes. The nearest
+    /// distance over the tile and a margin of
+    /// <c>FogShadingRate.MarginTexels</c> blocks round it (the camera moves between this frame's depth and the frame it is used in) goes through the
+    /// placed fog volumes (<c>fogVolumesAccumulate</c>, along the tile centre's ray) and the Kenshi haze and weather fog the world shaders apply;
+    /// where what is left of the surface (1 - haze) * transmittance is under <c>uThreshold</c> the rate is 2 x 2 and 4 x 4 (the codes of
+    /// <c>FogShadingRate.Encode</c>).
     /// </summary>
     public static readonly string FogRate = "#version 330 core\n" + AtmosphereShaders.Functions + FogVolumeShaders.Functions + """
 
@@ -462,11 +470,12 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The low-resolution particles' depth (Meitou): each texel is the nearest or the farthest of the <c>uDiv</c> x <c>uDiv</c> block of the scene's depth it
-    /// covers, written as the depth of a depth-only rendering, so the hardware test of the particle draws still rejects the sprite area hidden behind the scene
-    /// (early-Z). <c>uLayer</c> 1: the nearest, 2: the farthest (the particles are drawn once against each, <see cref="ParticleUpsample"/>). Where the two lie
-    /// within 4 % of each other the farthest is written as the near plane's depth, so the second draw rejects every fragment there (the upsample
-    /// then takes the first draw's, whose depth matches): it shades only along depth edges, where the two differ.
+    /// The low-resolution particles' depth (Meitou): each texel is the nearest or the farthest of the <c>uDiv</c> x <c>uDiv</c> block of the scene's
+    /// depth it covers, written as the depth of a depth-only rendering, so the hardware test of the particle draws still rejects the sprite area
+    /// hidden behind the scene (early-Z). <c>uLayer</c> 1: the nearest, 2: the farthest (the particles are drawn once against each, <see
+    /// cref="ParticleUpsample"/>). Where the two lie within 4 % of each other the farthest is written as the near plane's depth, so the second draw
+    /// rejects every fragment there (the upsample then takes the first draw's, whose depth matches): it shades only along depth edges, where the two
+    /// differ.
     /// </summary>
     public const string ParticleDepth = """
         #version 330 core
@@ -497,7 +506,9 @@ static class PostProcessShaders
         }
         """;
 
-    /// <summary>The scene's depth copied into a colour target at the render size, for the full-size particles' soft fade (the Meitou <c>fog</c> switch).</summary>
+    /// <summary>
+    /// The scene's depth copied into a colour target at the render size, for the full-size particles' soft fade (the Meitou <c>fog</c> switch).
+    /// </summary>
     public const string ParticleSoftDepth = """
         #version 330 core
         in vec2 vUv;
@@ -508,12 +519,12 @@ static class PostProcessShaders
 
     /// <summary>
     /// The depth-aware upsample of the low-resolution particles, drawn twice: <c>uAccum</c> tested against each block's nearest depth
-    /// (<c>uLowDepth</c>), <c>uAccumFar</c> against its farthest (<c>uLowDepthFar</c>; <see cref="ParticleDepth"/> layers 1 and 2). Each of the four nearest
-    /// texels offers both, each weighted bilinearly (plus a floor) and divided by the square of how far its depth is from this pixel's (relative, linear), so
-    /// a pixel takes the sprites tested against its own surface from every texel round it: on a ridge the near draw's, on the land behind it the far draw's
-    /// (which holds what lies between the ridge and the land). One draw against a checkerboard of the two depths had those texels only every other one
-    /// along an edge, and the dust behind a ridge followed it in steps of two texels. With <c>footprint</c> (blended over a vendor upscaler's unjittered
-    /// output) the pixel's depth is the nearest of the 2 x 2 render texels round it.
+    /// (<c>uLowDepth</c>), <c>uAccumFar</c> against its farthest (<c>uLowDepthFar</c>; <see cref="ParticleDepth"/> layers 1 and 2). Each of the four
+    /// nearest texels offers both, each weighted bilinearly (plus a floor) and divided by the square of how far its depth is from this pixel's
+    /// (relative, linear), so a pixel takes the sprites tested against its own surface from every texel round it: on a ridge the near draw's, on the
+    /// land behind it the far draw's (which holds what lies between the ridge and the land). One draw against a checkerboard of the two depths had
+    /// those texels only every other one along an edge, and the dust behind a ridge followed it in steps of two texels. With <c>footprint</c>
+    /// (blended over a vendor upscaler's unjittered output) the pixel's depth is the nearest of the 2 x 2 render texels round it.
     /// </summary>
     const string ParticleUpsample = """
         uniform sampler2D uAccum, uLowDepth, uAccumFar, uLowDepthFar, uDepth;
@@ -563,11 +574,12 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The low-resolution particles over the vendor upscaler's output (<c>PostProcess.CompositeLateParticlesFiltered</c>): both sizes (uHas: their divisors,
-    /// 0 for none; each as <see cref="ParticleUpsample"/>, the quarter size over the half), at the surfaces of the four render pixels round the display
-    /// pixel (the jitter undone: render pixel i shows the unjittered picture at i + 0.5 - jitter), weighted bilinearly; then the temporal filter: last
-    /// frame's (uHistory, reprojected by the closest of the four's motion) kept within the four values and blended in. Off an outline the four agree, so
-    /// drifting dust does not trail; on one they follow the jitter, which averages out into the upscaler's smooth edge instead of a staircase.
+    /// The low-resolution particles over the vendor upscaler's output (<c>PostProcess.CompositeLateParticlesFiltered</c>): both sizes (uHas: their
+    /// divisors, 0 for none; each as <see cref="ParticleUpsample"/>, the quarter size over the half), at the surfaces of the four render pixels round
+    /// the display pixel (the jitter undone: render pixel i shows the unjittered picture at i + 0.5 - jitter), weighted bilinearly; then the temporal
+    /// filter: last frame's (uHistory, reprojected by the closest of the four's motion) kept within the four values and blended in. Off an outline
+    /// the four agree, so drifting dust does not trail; on one they follow the jitter, which averages out into the upscaler's smooth edge instead of
+    /// a staircase.
     /// </summary>
     public const string ParticleLate = """
         #version 330 core
@@ -727,7 +739,9 @@ static class PostProcessShaders
         }
         """;
 
-    /// <summary>The filtered layer of <see cref="ParticleLate"/> blended over the upscaler's output (premultiplied "over", red, green and blue).</summary>
+    /// <summary>
+    /// The filtered layer of <see cref="ParticleLate"/> blended over the upscaler's output (premultiplied "over", red, green and blue).
+    /// </summary>
     public const string ParticleLateApply = """
         #version 330 core
         in vec2 vUv;
@@ -737,8 +751,8 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The low-resolution particles' accumulations (rgb = colour added, a = opacity; <see cref="ParticleRenderer"/>) over the scene, as <c>scene * (1 - a) + rgb</c>
-    /// (blend one, one minus source alpha; red, green and blue only), upsampled by depth (<see cref="ParticleUpsample"/>).
+    /// The low-resolution particles' accumulations (rgb = colour added, a = opacity; <see cref="ParticleRenderer"/>) over the scene, as <c>scene * (1
+    /// - a) + rgb</c> (blend one, one minus source alpha; red, green and blue only), upsampled by depth (<see cref="ParticleUpsample"/>).
     /// </summary>
     public const string ParticleComposite = """
         #version 330 core
@@ -751,8 +765,9 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The low-resolution particles' coverage for the upscalers' reactive mask: the accumulations' opacity or brightest channel (no gain: rain and fire, which
-    /// have <see cref="ParticleRenderer"/>'s, are always full size), upsampled by depth as the composite is so it does not mark a near edge reactive.
+    /// The low-resolution particles' coverage for the upscalers' reactive mask: the accumulations' opacity or brightest channel (no gain: rain and
+    /// fire, which have <see cref="ParticleRenderer"/>'s, are always full size), upsampled by depth as the composite is so it does not mark a near
+    /// edge reactive.
     /// </summary>
     public const string ParticleCoverage = """
         #version 330 core
@@ -769,8 +784,9 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The characters' mask at the occlusion's half size (<see cref="Ssao"/>'s <c>uMask</c>): the scene colour's alpha, which only the characters write, read once
-    /// per pixel into R8. The occlusion's twelve taps read the scene colour itself before, at scattered places: 0.2 ms of L2 traffic at 2560 x 1440 (docs/render-post.md).
+    /// The characters' mask at the occlusion's half size (<see cref="Ssao"/>'s <c>uMask</c>): the scene colour's alpha, which only the characters
+    /// write, read once per pixel into R8. The occlusion's twelve taps read the scene colour itself before, at scattered places: 0.2 ms of L2 traffic
+    /// at 2560 x 1440 (docs/render-post.md).
     /// </summary>
     public const string SsaoMask = """
         #version 330 core
@@ -820,8 +836,8 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// Kenshi's luminance measure (docs/formats/post-processing.md): Rec. 601 luminance, floored at 0.0001, averaged linearly. One texel of the
-    /// small luminance target is the mean of a 4 × 4 grid of bilinear taps over its share of the scene; its mipmaps average the rest.
+    /// Kenshi's luminance measure (docs/formats/post-processing.md): Rec. 601 luminance, floored at 0.0001, averaged linearly. One texel of the small
+    /// luminance target is the mean of a 4 × 4 grid of bilinear taps over its share of the scene; its mipmaps average the rest.
     /// </summary>
     public const string Luminance = """
         #version 330 core
@@ -843,7 +859,8 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// Kenshi's adaptation: <c>adapted = last + (mean − last) (1 − exp(−dt · rate))</c>, clamped to <c>[MIN_LUMINANCE, MAX_LUMINANCE]</c>; a 1 × 1 target.
+    /// Kenshi's adaptation: <c>adapted = last + (mean − last) (1 − exp(−dt · rate))</c>, clamped to <c>[MIN_LUMINANCE, MAX_LUMINANCE]</c>; a 1 × 1
+    /// target.
     /// </summary>
     public const string Adapt = """
         #version 330 core
@@ -863,9 +880,9 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// Meitou bloom (docs/render-post.md "Bloom"), the scene to half size: a 4 × 4 box of texels, each decoded from the scene's gamma to linear before
-    /// it is averaged (a bilinear tap would average encoded values and lose over half the light of a lone bright texel), so every texel lands in four
-    /// destination pixels at 1/16. The firefly ceiling F compresses a texel's colour so its luminance L tends to F: c (1 + (L/F)^4)^-1/4.
+    /// Meitou bloom (docs/render-post.md "Bloom"), the scene to half size: a 4 × 4 box of texels, each decoded from the scene's gamma to linear
+    /// before it is averaged (a bilinear tap would average encoded values and lose over half the light of a lone bright texel), so every texel lands
+    /// in four destination pixels at 1/16. The firefly ceiling F compresses a texel's colour so its luminance L tends to F: c (1 + (L/F)^4)^-1/4.
     /// </summary>
     public const string BloomPrefilter = """
         #version 330 core
@@ -1051,11 +1068,10 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// FXAA on the final LDR picture, with the game's settings (docs/formats/post-processing.md "FXAA"): Lottes' FXAA 3.11 quality
-    /// algorithm, green as luma, sub-pixel amount 0.75, edge threshold 0.166, minimum 0.0833, the end-of-edge search in the steps of
-    /// quality preset 12 (1, 1.5, 2, 4, 12 pixels). Finds the local contrast, the edge's direction and which side it runs along,
-    /// searches both ways for the edge's ends, and moves the lookup across the edge by how far the pixel is from the nearer end,
-    /// or by the sub-pixel blend for lone pixels, whichever is larger.
+    /// FXAA on the final LDR picture, with the game's settings (docs/formats/post-processing.md "FXAA"): Lottes' FXAA 3.11 quality algorithm, green
+    /// as luma, sub-pixel amount 0.75, edge threshold 0.166, minimum 0.0833, the end-of-edge search in the steps of quality preset 12 (1, 1.5, 2, 4,
+    /// 12 pixels). Finds the local contrast, the edge's direction and which side it runs along, searches both ways for the edge's ends, and moves the
+    /// lookup across the edge by how far the pixel is from the nearer end, or by the sub-pixel blend for lone pixels, whichever is larger.
     /// </summary>
     public const string Fxaa = """
         #version 330 core
@@ -1162,11 +1178,11 @@ static class PostProcessShaders
 
     /// <summary>
     /// SMAA pass 2: blending weights, orthogonal patterns (as SMAA's low and medium presets: no diagonal or corner patterns). For each edge of a
-    /// pixel the run of that edge is searched both ways (up to 16 pixels) until it ends or a crossing edge breaks it; the crossing edges at the
-    /// two ends give the shape (L, U or Z), revectorized as SMAA's area texture is (lines through the ends' half-pixel steps, U shapes
-    /// smoothed when short), with the areas computed exactly here instead of from the lookup textures. The area under the line on the pixel's
-    /// own side is how much it takes of its neighbour, the area on the other side how much the neighbour takes of it: R / G for the top edge
-    /// (this pixel, the one above), B / A for the left edge (this pixel, the one to the left).
+    /// pixel the run of that edge is searched both ways (up to 16 pixels) until it ends or a crossing edge breaks it; the crossing edges at the two
+    /// ends give the shape (L, U or Z), revectorized as SMAA's area texture is (lines through the ends' half-pixel steps, U shapes smoothed when
+    /// short), with the areas computed exactly here instead of from the lookup textures. The area under the line on the pixel's own side is how much
+    /// it takes of its neighbour, the area on the other side how much the neighbour takes of it: R / G for the top edge (this pixel, the one above),
+    /// B / A for the left edge (this pixel, the one to the left).
     /// </summary>
     public const string SmaaWeights = """
         #version 330 core
@@ -1294,12 +1310,12 @@ static class PostProcessShaders
         """;
 
     /// <summary>
-    /// The game's heat haze on the final LDR picture (docs/formats/post-processing.md "Heat haze"), written from the facts there: a
-    /// flow map (at 3.341 × the screen) gives a scroll direction; three layers of a normal map (at 7.341 × the screen, offset by
-    /// (0.1, 0.3) and (0.4, 0.7)) scroll along it over phases <c>fract(gameTime · 100 + 0, 0.33, 0.66)</c>, each weighted by a
-    /// triangle that is 0 at the ends of its cycle; their summed red and green make a direction only (normalised), moved by
-    /// 0.002 · heatHaze · saturate(6 · distance / farClip) in screen units. The picture is the mean of the taps at 1 and 0.7 of
-    /// that offset. GpuTexture lookups run in the game's screen coordinates (v from the top), the offset is turned back into ours.
+    /// The game's heat haze on the final LDR picture (docs/formats/post-processing.md "Heat haze"), written from the facts there: a flow map (at
+    /// 3.341 × the screen) gives a scroll direction; three layers of a normal map (at 7.341 × the screen, offset by (0.1, 0.3) and (0.4, 0.7)) scroll
+    /// along it over phases <c>fract(gameTime · 100 + 0, 0.33, 0.66)</c>, each weighted by a triangle that is 0 at the ends of its cycle; their
+    /// summed red and green make a direction only (normalised), moved by 0.002 · heatHaze · saturate(6 · distance / farClip) in screen units. The
+    /// picture is the mean of the taps at 1 and 0.7 of that offset. GpuTexture lookups run in the game's screen coordinates (v from the top), the
+    /// offset is turned back into ours.
     /// </summary>
     public const string HeatHaze = """
         #version 330 core

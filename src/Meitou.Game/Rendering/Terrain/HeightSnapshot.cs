@@ -46,12 +46,16 @@ internal readonly struct HeightSnapshot
         int i = Math.Clamp((int)fx, 0, Math.Max(cols - 2, 0)), j = Math.Clamp((int)fz, 0, Math.Max(rows - 2, 0));
         int i1 = Math.Min(i + 1, cols - 1), j1 = Math.Min(j + 1, rows - 1);
         float tx = fx - i, tz = fz - j;
-        float v = raw[j * cols + i] * (1 - tx) * (1 - tz) + raw[j * cols + i1] * tx * (1 - tz) + raw[j1 * cols + i] * (1 - tx) * tz + raw[j1 * cols + i1] * tx * tz;
+        float v = raw[j * cols + i] * (1 - tx) * (1 - tz) + raw[j * cols + i1] * tx * (1 - tz) + raw[j1 * cols + i] * (1 - tx) * tz +
+                raw[j1 * cols + i1] * tx * tz;
         return v * (WorldLayout.MaxHeight / ushort.MaxValue);
     }
 }
 
-/// <summary>A terrain height source for a worker thread: <see cref="Refresh"/> (render thread, while no worker reads it) takes a <see cref="HeightSnapshot"/>, <see cref="HeightAt"/> reads it.</summary>
+/// <summary>
+/// A terrain height source for a worker thread: <see cref="Refresh"/> (render thread, while no worker reads it) takes a <see cref="HeightSnapshot"/>,
+/// <see cref="HeightAt"/> reads it.
+/// </summary>
 public sealed class TerrainHeights
 {
     HeightSnapshot _snapshot;

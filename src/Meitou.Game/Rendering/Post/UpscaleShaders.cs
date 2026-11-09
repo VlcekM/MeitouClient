@@ -3,15 +3,18 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game.Rendering.Post;
 
-/// <summary>GLSL for temporal upscaling (written from the public techniques: Karis 2014, Salvi 2016, Jimenez 2016), run with <see cref="PostProcessShaders.Vertex"/>.</summary>
+/// <summary>
+/// GLSL for temporal upscaling (written from the public techniques: Karis 2014, Salvi 2016, Jimenez 2016), run with <see
+/// cref="PostProcessShaders.Vertex"/>.
+/// </summary>
 static class UpscaleShaders
 {
     /// <summary>
-    /// Camera motion from depth: each render pixel's surface, taken from the scene depth (<see cref="DepthConvention"/>), is carried back
-    /// into the previous frame by one matrix (this frame's jittered clip space to the previous frame's unjittered one, built relative to
-    /// the eye on the CPU). Writes RG = motion in UV (previous UV = UV − motion, jitter removed),
-    /// B = the depth of one D3D-style projection with fixed planes (PostProcess.UpscaleNear .. UpscaleFar), for the upscalers and TAA's
-    /// closest-sample pick. A = reactivity: how much the upscalers should trust this frame over the history, set on water (moving, see-through, no motion vectors).
+    /// Camera motion from depth: each render pixel's surface, taken from the scene depth (<see cref="DepthConvention"/>), is carried back into the
+    /// previous frame by one matrix (this frame's jittered clip space to the previous frame's unjittered one, built relative to the eye on the CPU).
+    /// Writes RG = motion in UV (previous UV = UV − motion, jitter removed), B = the depth of one D3D-style projection with fixed planes
+    /// (PostProcess.UpscaleNear .. UpscaleFar), for the upscalers and TAA's closest-sample pick. A = reactivity: how much the upscalers should trust
+    /// this frame over the history, set on water (moving, see-through, no motion vectors).
     /// <c>uMode</c> 1 writes the depth alone (R32F for FSR / DLSS), 2 the reactivity alone (R8 for FSR).
     /// </summary>
     public const string Velocity = """
@@ -55,11 +58,12 @@ static class UpscaleShaders
         """;
 
     /// <summary>
-    /// The volumetric clouds' motion over the sky's (docs/render-clouds.md "Temporal, fog and shadows"): the velocity pass gives every sky pixel the motion of the
-    /// far plane (the camera's turn alone), but a cloud is a few kilometres away and drifts with the wind, so the upscalers dragged its history (streaks). Here a
-    /// sky pixel under a cloud takes the motion of the cloud's opacity-weighted point along its ray: its parallax through the scene's reprojection, plus the
-    /// wind's shift on screen. Blended over the velocity target by the cloud's opacity (red and green only; source alpha, one minus source alpha); round the
-    /// sun by the pixel's own opacity only, so the sky there keeps the sun's motion (the velocity pass's term).
+    /// The volumetric clouds' motion over the sky's (docs/render-clouds.md "Temporal, fog and shadows"): the velocity pass gives every sky pixel the
+    /// motion of the far plane (the camera's turn alone), but a cloud is a few kilometres away and drifts with the wind, so the upscalers dragged its
+    /// history (streaks). Here a sky pixel under a cloud takes the motion of the cloud's opacity-weighted point along its ray: its parallax through
+    /// the scene's reprojection, plus the wind's shift on screen. Blended over the velocity target by the cloud's opacity (red and green only; source
+    /// alpha, one minus source alpha); round the sun by the pixel's own opacity only, so the sky there keeps the sun's motion (the velocity pass's
+    /// term).
     /// </summary>
     public const string CloudMotion = """
         #version 330 core
@@ -115,11 +119,11 @@ static class UpscaleShaders
         """;
 
     /// <summary>
-    /// Temporal anti-aliasing and upscaling into the display-size history. The current frame at each display pixel is a Gaussian
-    /// (Blackman-Harris fit) of the 3 × 3 jittered render samples around it; the history is fetched where the pixel was last frame
-    /// (motion of the nearest sample in the neighbourhood, Catmull-Rom), clipped to the neighbourhood's colour spread in YCoCg
-    /// (variance clipping), and the two blended in a tone-mapped space (c / (1 + max c)) so bright HDR samples don't dominate.
-    /// The current frame's share grows with how close its nearest sample lies; off-screen history or a reset takes the current frame.
+    /// Temporal anti-aliasing and upscaling into the display-size history. The current frame at each display pixel is a Gaussian (Blackman-Harris
+    /// fit) of the 3 × 3 jittered render samples around it; the history is fetched where the pixel was last frame (motion of the nearest sample in
+    /// the neighbourhood, Catmull-Rom), clipped to the neighbourhood's colour spread in YCoCg (variance clipping), and the two blended in a
+    /// tone-mapped space (c / (1 + max c)) so bright HDR samples don't dominate. The current frame's share grows with how close its nearest sample
+    /// lies; off-screen history or a reset takes the current frame.
     /// </summary>
     public const string Taa = """
         #version 330 core

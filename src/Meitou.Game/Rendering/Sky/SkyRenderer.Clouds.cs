@@ -15,8 +15,9 @@ public sealed unsafe partial class SkyRenderer
     bool VolumeEnabled => LitClouds && Physical && _state.Valid && (CloudDensity > 0 || Warm);
 
     /// <summary>
-    /// The host's loading warm-up: the volume and its shadow map are drawn whatever the weather and the hour (a clear sky draws them empty), so that their pipelines are made under
-    /// the loading cover and not when the first clouds come (seconds with a cold driver cache; docs/bench.md "Play benchmark").
+    /// The host's loading warm-up: the volume and its shadow map are drawn whatever the weather and the hour (a clear sky draws them empty), so that
+    /// their pipelines are made under the loading cover and not when the first clouds come (seconds with a cold driver cache; docs/bench.md "Play
+    /// benchmark").
     /// </summary>
     public bool Warm { get; set; }
     bool VolumeShadows => VolumeEnabled && CloudShadows && _volumeShadowsReady && _volume is not null;
@@ -40,16 +41,18 @@ public sealed unsafe partial class SkyRenderer
     public bool CloudFogSkip { get; set; } = true;
 
     /// <summary>
-    /// The sky's fog-volume early-out (Meitou, docs/render-clouds.md "Fog early-out"; <c>--ab sky-fog-skip</c>):
-    /// the frame loop leaves the main view's sky pass and cloud march out when the placed fog block hides the sky in every direction of the view
-    /// (<see cref="FogVolumes.SkyHidden"/>); the scene's clear colour stands in, and the volume pass covers it.
+    /// The sky's fog-volume early-out (Meitou, docs/render-clouds.md "Fog early-out"; <c>--ab sky-fog-skip</c>): the frame loop leaves the main
+    /// view's sky pass and cloud march out when the placed fog block hides the sky in every direction of the view (<see
+    /// cref="FogVolumes.SkyHidden"/>); the scene's clear colour stands in, and the volume pass covers it.
     /// </summary>
     public bool SkyFogSkip { get; set; } = true;
 
     /// <summary>Whether the main view's sky pass was left out in the last frame (<see cref="SkyFogSkip"/>; for the stats line).</summary>
     public bool SkySkipped { get; private set; }
 
-    /// <summary>The main view's sky and clouds left out this frame (<see cref="SkyFogSkip"/>): no march, the history starts again when the sky shows.</summary>
+    /// <summary>
+    /// The main view's sky and clouds left out this frame (<see cref="SkyFogSkip"/>): no march, the history starts again when the sky shows.
+    /// </summary>
     public void SkipMainSky()
     {
         SkySkipped = true;
@@ -57,13 +60,16 @@ public sealed unsafe partial class SkyRenderer
         _volume?.InvalidateMain();
     }
 
-    /// <summary>Whether the last <see cref="PrepareClouds"/> left the march out because the weather fog covers the sky (for the stats line).</summary>
+    /// <summary>
+    /// Whether the last <see cref="PrepareClouds"/> left the march out because the weather fog covers the sky (for the stats line).
+    /// </summary>
     public bool CloudsFogged { get; private set; }
 
     /// <summary>
-    /// True when the sky pass's weather fog (the game's fog over pixels with no geometry: the ease-in-out curve of the far clip over the fog distance,
-    /// times the weather's weight) is at least <see cref="FogComplete"/>, as in <see cref="FogCullDistanceOf"/>: the sky then shows the fog colour to
-    /// 0.0002 whatever is drawn under it, clouds included. The sky shader applies that term after the clouds in either view, so it holds for both.
+    /// True when the sky pass's weather fog (the game's fog over pixels with no geometry: the ease-in-out curve of the far clip over the fog
+    /// distance, times the weather's weight) is at least <see cref="FogComplete"/>, as in <see cref="FogCullDistanceOf"/>: the sky then shows the fog
+    /// colour to 0.0002 whatever is drawn under it, clouds included. The sky shader applies that term after the clouds in either view, so it holds
+    /// for both.
     /// </summary>
     public static bool WeatherFogHidesSky(in AtmosphereUniforms u)
     {
@@ -81,7 +87,8 @@ public sealed unsafe partial class SkyRenderer
     {
         _volumeImage = default;
         if (!reflection) CloudsFogged = SkySkipped = false;
-        // Made with the first frame that could show it (under the loading cover), not when the weather first brings clouds: its noise atlas and three programs
+        // Made with the first frame that could show it (under the loading cover), not when the weather first brings clouds: its noise atlas and three
+        // programs
         // held that frame ~30 ms (docs/bench.md "Play benchmark").
         if (LitClouds && Physical && _state.Valid) _volume ??= new VolumetricCloudRenderer(Gpu);
         if (!VolumeEnabled) { _volume?.Invalidate(); return; }

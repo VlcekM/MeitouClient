@@ -7,10 +7,10 @@ using Meitou.Game.Rendering.Post;
 namespace Meitou.Game.Rendering.Sky;
 
 /// <summary>
-/// The sun's own motion in the temporal upscalers' motion vectors, shared by the Vulkan chain (<see cref="PostProcess"/>)
-/// and the seam's Metal chain (<see cref="PostTaa"/>). The sky's motion is the camera's alone, so while the clock runs and
-/// the camera stands still the upscalers read the sun disc and its glow as unmoving and blend last frame's sun into this
-/// frame's. The sky pixels round the sun also get the sun's motion across the screen since the last frame.
+/// The sun's own motion in the temporal upscalers' motion vectors, shared by the Vulkan chain (<see cref="PostProcess"/>) and the seam's Metal chain
+/// (<see cref="PostTaa"/>). The sky's motion is the camera's alone, so while the clock runs and the camera stands still the upscalers read the sun
+/// disc and its glow as unmoving and blend last frame's sun into this frame's. The sky pixels round the sun also get the sun's motion across the
+/// screen since the last frame.
 /// </summary>
 sealed class SunMotionTracker
 {
@@ -26,8 +26,8 @@ sealed class SunMotionTracker
     public void Reset() => _previousValid = false;
 
     /// <summary>
-    /// This frame's sun uniforms: xyz the direction to the sun, w cos <see cref="InnerAngle"/>; and xy the motion to add
-    /// (the motion target's units), z cos <see cref="OuterAngle"/>, w 1 when on.
+    /// This frame's sun uniforms: xyz the direction to the sun, w cos <see cref="InnerAngle"/>; and xy the motion to add (the motion target's units),
+    /// z cos <see cref="OuterAngle"/>, w 1 when on.
     /// <paramref name="enabled"/> is the user's sun-motion switch; <paramref name="framePreviousValid"/> says whether the
     /// previous frame can be read at all (a temporal history exists).
     /// </summary>

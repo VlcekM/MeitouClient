@@ -11,8 +11,8 @@ namespace Meitou.Game.Rendering.Post;
 public readonly record struct MotionTargets(SampledTexture Depth, Vector2 Planes, Vector2 JitterNdc, float FocalPixels = 0);
 
 /// <summary>
-/// The frame's post chain as the shared world draw sees it. <see cref="PostProcess"/> is the Vulkan implementation; a backend
-/// whose post chain is a smaller seam slice (Metal's <c>PostComposite</c> + <c>PostTaa</c>) implements the same surface, so
+/// The frame's post chain as the shared world draw sees it. <see cref="PostProcess"/> is the Vulkan implementation; a backend whose post chain is a
+/// smaller seam slice (Metal's <c>PostComposite</c> + <c>PostTaa</c>) implements the same surface, so
 /// <see cref="WorldFrame.Draw"/> owns the frame instead of each host keeping a copy of its flow.
 /// </summary>
 interface IWorldPostChain
@@ -28,10 +28,13 @@ interface IWorldPostChain
 
     /// <summary>The scene colour and depth targets the host pass draws into.</summary>
     PassTargets SceneTargets { get; }
+
     /// <summary>The scene targets for the full-size particle pass. GI's albedo target is not needed after its resolve; backends
     /// that made the scene pipeline without that extra attachment return the pair without it.</summary>
     PassTargets SceneTargetsForParticles { get; }
+
     GpuTexture SceneColour { get; }
+
     GpuTexture SceneDepth { get; }
 
     /// <summary>The scene render size after the upscaler's render scale, and the jitter the scene projection uses this frame.</summary>
@@ -108,21 +111,30 @@ interface IWorldPostChain
 
     /// <summary>The low-resolution particle pass's targets, prepared by <see cref="BeginParticlesLow"/>.</summary>
     PassTargets ParticleTargets(int divisor);
+
     /// <summary>The second draw of the same particles, tested against each block's farthest depth (null: a chain with one draw).</summary>
     PassTargets? ParticleTargetsFar(int divisor) => null;
     /// <summary>The second draw's depth for its soft fade, or null.</summary>
     ParticleRenderer.SoftDepth? SoftParticleDepthFar(int divisor) => null;
+
     void BeginParticlesLow(int divisor);
+
     void CompositeParticlesLow(int divisor);
-    /// <summary>Whether the low-resolution particles are blended after the upscaler (their draws then unjittered); a chain without it blends them into the scene.</summary>
+    /// <summary>
+    /// Whether the low-resolution particles are blended after the upscaler (their draws then unjittered); a chain without it blends them into the
+    /// scene.
+    /// </summary>
     bool ParticlesAfterUpscale => false;
     /// <summary>This frame's volumetric clouds for the motion vectors (null: none; a chain without the pass keeps the sky's motion).</summary>
     void SetCloudMotion(CloudMotion? clouds) { }
     /// <summary>The Meitou fog's soft fade: the scene's depth copied for the full-size particles (nothing where the chain has no copy).</summary>
     void PrepareSoftParticleDepth() { }
-    /// <summary>The scene's depth for one particle size's soft fade, or null (Faithful, or a chain without it: the sprites stay hard-edged).</summary>
+    /// <summary>
+    /// The scene's depth for one particle size's soft fade, or null (Faithful, or a chain without it: the sprites stay hard-edged).
+    /// </summary>
     ParticleRenderer.SoftDepth? SoftParticleDepth(int divisor) => null;
     void MarkParticleDraws();
+
     void MarkParticles();
 
     /// <summary>Runs the chain's remaining passes into <see cref="Target"/>.</summary>

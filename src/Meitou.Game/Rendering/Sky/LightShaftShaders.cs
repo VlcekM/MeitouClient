@@ -77,10 +77,11 @@ static class LightShaftShaders
         """;
 
     /// <summary>
-    /// The first pass, into the atlas (RGBA16F): per cell, (alpha gained over the slice × the share of its samples the sun reaches, alpha gained, that share). The
-    /// samples are stratified over the slice's depth and jittered within the cell, anew each frame (the temporal upscaler averages them). The shadow
-    /// term of a point in the air: one compare in the first cascade that holds it (no filter, no surface to offset from), with the Meitou receiver's
-    /// fade at the shadow range, its terrain term (mountains out to the horizon) and its landmark map; the Faithful receiver's cascades end at the last split.
+    /// The first pass, into the atlas (RGBA16F): per cell, (alpha gained over the slice × the share of its samples the sun reaches, alpha gained,
+    /// that share). The samples are stratified over the slice's depth and jittered within the cell, anew each frame (the temporal upscaler averages
+    /// them). The shadow term of a point in the air: one compare in the first cascade that holds it (no filter, no surface to offset from), with the
+    /// Meitou receiver's fade at the shadow range, its terrain term (mountains out to the horizon) and its landmark map; the Faithful receiver's
+    /// cascades end at the last split.
     /// </summary>
     public static readonly string Inject = "#version 330 core\n" + AtmosphereShaders.Functions + Common + Alpha + $$"""
 
@@ -138,11 +139,11 @@ static class LightShaftShaders
         """;
 
     /// <summary>
-    /// The sun's share averaged over frames (docs/render-shafts.md "Temporal"): with a temporal upscaler the injection's samples move every frame, and
-    /// TAA, which clamps its history to the picture's neighbourhood, showed their noise as a shimmer in motion. Each cell's centre is taken back into
-    /// last frame's grid (its camera and slices), the filtered share read there (bilinear in the slice, linear between slices), clamped to this frame's
-    /// 3 x 3 neighbourhood in the slice (no trails where shadows move) and blended with this frame's (<c>uShaftBlend</c> of it; 1: no history). Out:
-    /// the injection's layout, the share replaced.
+    /// The sun's share averaged over frames (docs/render-shafts.md "Temporal"): with a temporal upscaler the injection's samples move every frame,
+    /// and TAA, which clamps its history to the picture's neighbourhood, showed their noise as a shimmer in motion. Each cell's centre is taken back
+    /// into last frame's grid (its camera and slices), the filtered share read there (bilinear in the slice, linear between slices), clamped to this
+    /// frame's 3 x 3 neighbourhood in the slice (no trails where shadows move) and blended with this frame's (<c>uShaftBlend</c> of it; 1: no
+    /// history). Out: the injection's layout, the share replaced.
     /// </summary>
     public static readonly string Resolve = "#version 330 core\n" + Common + """
 
@@ -234,13 +235,13 @@ static class LightShaftShaders
         """;
 
     /// <summary>
-    /// The air layer (the <c>shafts</c> switch's second half, <c>--shafts-air</c>; docs/render-shafts.md "Air layer"), into a third atlas (RGBA16F): per cell,
-    /// the light the layer scatters towards the eye from the eye to the far end of its slice (rgb) and the layer's transmittance over that path (a).
-    /// Each nearer slice adds <c>T · S · (1 − e^(−σΔ))</c> with <c>T</c> the transmittance so far, σ the density at the slice's middle and Δ its length,
-    /// and <c>S</c> the in-scattered radiance: the sun (<c>π² · sunLight</c>, the irradiance a white Lambert surface lit by <c>kenshiLight</c> would get)
-    /// times the share of the slice the sun reaches (the first pass's third channel) times a Henyey-Greenstein phase (bright towards the sun), plus the
-    /// sky's ambient radiance from above (isotropic). What the game's haze covers at that distance is left out (times <c>1 − alpha</c>): the layer sits
-    /// in front of the haze, not over it.
+    /// The air layer (the <c>shafts</c> switch's second half, <c>--shafts-air</c>; docs/render-shafts.md "Air layer"), into a third atlas (RGBA16F):
+    /// per cell, the light the layer scatters towards the eye from the eye to the far end of its slice (rgb) and the layer's transmittance over that
+    /// path (a). Each nearer slice adds <c>T · S · (1 − e^(−σΔ))</c> with <c>T</c> the transmittance so far, σ the density at the slice's middle and
+    /// Δ its length, and <c>S</c> the in-scattered radiance: the sun (<c>π² · sunLight</c>, the irradiance a white Lambert surface lit by
+    /// <c>kenshiLight</c> would get) times the share of the slice the sun reaches (the first pass's third channel) times a Henyey-Greenstein phase
+    /// (bright towards the sun), plus the sky's ambient radiance from above (isotropic). What the game's haze covers at that distance is left out
+    /// (times <c>1 − alpha</c>): the layer sits in front of the haze, not over it.
     /// </summary>
     public static readonly string Scatter = "#version 330 core\n" + AtmosphereShaders.Functions + Common + Alpha + Air + """
 
@@ -282,11 +283,12 @@ static class LightShaftShaders
 
 
     /// <summary>
-    /// The integrate pass and the scatter pass as one compute kernel (the <c>shafts-scan</c> switch; docs/render-shafts.md "Scan kernel"). One thread per cell column walks the
-    /// slices front to back once: the running sums of the first pass's two channels give the sun's share of the haze (the light atlas, R32F), and the same walk carries the air
-    /// layer's scattered light and transmittance (the scatter atlas, RGBA16F). The fragment passes made the same sums by looping from the eye to each slice in every cell
-    /// (slices squared reads, and for the air layer the same again with three exp() per step); this reads each cell once. The arithmetic is theirs, term for term (the
-    /// atmosphere's values come in a uniform block of the same names, so <see cref="Alpha"/> and the other functions are the fragment passes' text).
+    /// The integrate pass and the scatter pass as one compute kernel (the <c>shafts-scan</c> switch; docs/render-shafts.md "Scan kernel"). One thread
+    /// per cell column walks the slices front to back once: the running sums of the first pass's two channels give the sun's share of the haze (the
+    /// light atlas, R32F), and the same walk carries the air layer's scattered light and transmittance (the scatter atlas, RGBA16F). The fragment
+    /// passes made the same sums by looping from the eye to each slice in every cell (slices squared reads, and for the air layer the same again with
+    /// three exp() per step); this reads each cell once. The arithmetic is theirs, term for term (the atmosphere's values come in a uniform block of
+    /// the same names, so <see cref="Alpha"/> and the other functions are the fragment passes' text).
     /// </summary>
     public static readonly string Scan = $$"""
         #version 450
@@ -373,8 +375,8 @@ static class LightShaftShaders
         """;
     /// <summary>
     /// The placed fog volumes' shadow (included by <see cref="PostProcessShaders.FogVolumes"/> before <see cref="FogVolumeShaders.Functions"/>, which
-    /// calls it under <c>FOG_VOLUME_SHADOW</c>): the share of a volume's path from <c>near</c> to <c>far</c> the sun reaches, the first pass's third channel
-    /// in every slice along it, and the colour scale that makes of it (<c>1 − darkening × (1 − share)</c>). 1 while the shafts are off.
+    /// calls it under <c>FOG_VOLUME_SHADOW</c>): the share of a volume's path from <c>near</c> to <c>far</c> the sun reaches, the first pass's third
+    /// channel in every slice along it, and the colour scale that makes of it (<c>1 − darkening × (1 − share)</c>). 1 while the shafts are off.
     /// </summary>
     public static readonly string FogVolumeShadow = "\n#define FOG_VOLUME_SHADOW\n" + Common + """
 
@@ -427,9 +429,9 @@ static class LightShaftShaders
         """;
 
     /// <summary>
-    /// The apply pass over the scene colour, blended as <c>scene * alpha + colour</c> (the fog volumes' state). The pixel's distance is rebuilt as the
-    /// fog volumes pass rebuilds it (the scene depth, the water plane where it lies in front); the sun's share there
-    /// is read from the second atlas (bilinear across the cells, linear between the slices' far ends). A surface loses
+    /// The apply pass over the scene colour, blended as <c>scene * alpha + colour</c> (the fog volumes' state). The pixel's distance is rebuilt as
+    /// the fog volumes pass rebuilds it (the scene depth, the water plane where it lies in front); the sun's share there is read from the second
+    /// atlas (bilinear across the cells, linear between the slices' far ends). A surface loses
     /// <c>darkening × (1 − share)</c> of its haze colour (a negative colour); the sky, which no haze covers, is scaled by
     /// <c>1 − darkening × (1 − share) × sky weight × alpha at the grid's end</c>.
     /// </summary>
@@ -470,9 +472,10 @@ static class LightShaftShaders
         """;
 
     /// <summary>
-    /// The apply pass's work for one pixel, given its ray and distance (<c>shaftLayer</c>: the colour to add and the factor the scene is kept by), shared by
-    /// <see cref="Apply"/> and the merged scene layers pass (<see cref="PostProcessShaders.SceneLayers"/>). Needs <see cref="Common"/>, <see cref="Alpha"/>
-    /// and <see cref="Air"/> before it.
+    /// The apply pass's work for one pixel, given its ray and distance (<c>shaftLayer</c>: the colour to add and the factor the scene is kept by),
+    /// shared by
+    /// <see cref="Apply"/> and the merged scene layers pass (<see cref="PostProcessShaders.SceneLayers"/>). Needs <see cref="Common"/>, <see
+    /// cref="Alpha"/> and <see cref="Air"/> before it.
     /// </summary>
     internal const string ApplyFunctions = """
 

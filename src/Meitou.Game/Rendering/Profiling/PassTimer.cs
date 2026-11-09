@@ -3,8 +3,8 @@ using Meitou.Game.Rendering.Gpu;
 namespace Meitou.Game.Rendering.Profiling;
 
 /// <summary>
-/// GPU time of a pass from two native timestamps (the frame's <see cref="QueryArena"/>), written where the frame's commands are going
-/// (<see cref="GpuContext.Interleave"/>: an open host pass is not ended). Results arrive when the frame's slot comes round; nothing waits.
+/// GPU time of a pass from two native timestamps (the frame's <see cref="QueryArena"/>), written where the frame's commands are going (<see
+/// cref="GpuContext.Interleave"/>: an open host pass is not ended). Results arrive when the frame's slot comes round; nothing waits.
 /// </summary>
 sealed class PassTimer(IGpuContext gpu)
 {
@@ -53,9 +53,9 @@ sealed class PassTimer(IGpuContext gpu)
 }
 
 /// <summary>
-/// A uniform block the CPU rewrites now and then, read by native segments through the frame globals: each read in a frame after a write gets
-/// the data as it is now in a slice of the frame's constants, so a segment prepared earlier keeps what it was given (as VkGl renamed a GL
-/// buffer written after a draw had read it). It starts as zeros (shadows off, as the zero-filled GL buffers on the binding points were).
+/// A uniform block the CPU rewrites now and then, read by native segments through the frame globals: each read in a frame after a write gets the data
+/// as it is now in a slice of the frame's constants, so a segment prepared earlier keeps what it was given (as VkGl renamed a GL buffer written after
+/// a draw had read it). It starts as zeros (shadows off, as the zero-filled GL buffers on the binding points were).
 /// </summary>
 sealed class FrameBlock(IGpuContext gpu, int bytes)
 {
@@ -66,7 +66,11 @@ sealed class FrameBlock(IGpuContext gpu, int bytes)
     GpuBufferBinding _binding;
 
     /// <summary>Replaces the whole block.</summary>
-    public void Set(ReadOnlySpan<float> values) { values.CopyTo(_data); _version++; }
+    public void Set(ReadOnlySpan<float> values)
+    {
+        values.CopyTo(_data);
+        _version++;
+    }
 
     public GpuBufferBinding Binding()
     {
