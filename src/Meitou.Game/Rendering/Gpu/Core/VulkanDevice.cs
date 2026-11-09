@@ -29,22 +29,67 @@ public readonly record struct TextureEntry(Image Image, ImageAllocation? Allocat
 /// </summary>
 public sealed unsafe class VulkanDevice : IDisposable
 {
+    /// <summary>
+    /// The Khronos validation layer's name, enabled when the options ask for validation and the loader has it.
+    /// </summary>
     const string ValidationLayer = "VK_LAYER_KHRONOS_validation";
 
+    /// <summary>
+    /// What the device was created with.
+    /// </summary>
     readonly VulkanDeviceOptions _options;
+    /// <summary>
+    /// The transient pools of the open one-shot command buffers, by command buffer handle (<see cref="BeginImmediate"/>, <see cref="EndImmediate"/>).
+    /// </summary>
     readonly ConcurrentDictionary<ulong, CommandPool> _immediatePools = new();
+    /// <summary>
+    /// Guards <see cref="_validationLog"/> (the debug callback runs on the driver's threads).
+    /// </summary>
     readonly object _logGate = new();
+    /// <summary>
+    /// The last 50 validation messages, oldest first (<see cref="ValidationLog"/>).
+    /// </summary>
     readonly List<string> _validationLog = new();
+    /// <summary>
+    /// The handle to this device the debug callback receives as its user data.
+    /// </summary>
     GCHandle _selfHandle;
+    /// <summary>
+    /// The debug callback delegate, kept alive as long as the messenger.
+    /// </summary>
     DebugUtilsMessengerCallbackFunctionEXT? _callbackDelegate;
+    /// <summary>
+    /// VK_EXT_debug_utils functions; null when the instance does not have the extension.
+    /// </summary>
     ExtDebugUtils? _debugUtils;
+    /// <summary>
+    /// The validation message callback's messenger.
+    /// </summary>
     DebugUtilsMessengerEXT _messenger;
+    /// <summary>
+    /// The KHR_surface functions; null when headless.
+    /// </summary>
     KhrSurface? _khrSurface;
+    /// <summary>
+    /// Where the pipeline cache is loaded from and saved to; null for no file.
+    /// </summary>
     string? _pipelineCachePath;
+    /// <summary>
+    /// Validation errors counted by the debug callback.
+    /// </summary>
     int _validationErrors;
+    /// <summary>
+    /// Validation warnings counted by the debug callback (performance messages not counted).
+    /// </summary>
     int _validationWarnings;
+    /// <summary>
+    /// Set by the first <see cref="Dispose"/>; a second does nothing.
+    /// </summary>
     bool _disposed;
 
+    /// <summary>
+    /// Stores the options and loads the Vulkan API; the instance and device are made by <see cref="Initialize"/>.
+    /// </summary>
     VulkanDevice(VulkanDeviceOptions options)
     {
         this._options = options;
@@ -53,17 +98,41 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     #region Public state
 
+    /// <summary>
+    /// The Vulkan API entry points.
+    /// </summary>
     public Vk Vk { get; }
+    /// <summary>
+    /// The Vulkan instance.
+    /// </summary>
     public Instance Instance { get; private set; }
+    /// <summary>
+    /// The physical device picked by <see cref="PickAndCreateDevice"/> (the best-scoring Vulkan 1.3 device).
+    /// </summary>
     public PhysicalDevice PhysicalDevice { get; private set; }
+    /// <summary>
+    /// The logical device.
+    /// </summary>
     public Device Device { get; private set; }
+    /// <summary>
+    /// The physical device's properties (limits, type, API version).
+    /// </summary>
     public PhysicalDeviceProperties Properties { get; private set; }
+    /// <summary>
+    /// The physical device's name.
+    /// </summary>
     public string DeviceName { get; private set; } = "";
+    /// <summary>
+    /// The physical device's Vulkan API version.
+    /// </summary>
     public uint ApiVersion => Properties.ApiVersion;
     /// <summary>
     /// The surface from <see cref="VulkanDeviceOptions.CreateSurface"/> (default when headless); destroyed on dispose.
     /// </summary>
     public SurfaceKHR Surface { get; private set; }
+    /// <summary>
+    /// Whether there is a surface (false when headless).
+    /// </summary>
     public bool HasSurface => Surface.Handle != 0;
 
     /// <summary>
@@ -82,7 +151,13 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public KhrSurface? SurfaceExtension => _khrSurface;
 
+    /// <summary>
+    /// The graphics and compute queue (index 0 of <see cref="GraphicsFamily"/>); the frames are submitted to it.
+    /// </summary>
     public Queue GraphicsQueue { get; private set; }
+    /// <summary>
+    /// The queue family of <see cref="GraphicsQueue"/>: the first with graphics and compute that can present to the surface.
+    /// </summary>
     public uint GraphicsFamily { get; private set; }
     /// <summary>
     /// Further queues of the graphics family (index 1.. of the family), as many as <see cref="VulkanDeviceOptions.ExtraGraphicsQueues"/> asked for
@@ -90,29 +165,55 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// device.
     /// </summary>
     public Queue[] ExtraQueues { get; private set; } = [];
+    /// <summary>
+    /// The transfer queue: a dedicated transfer family's when the device has one (<see cref="HasDedicatedTransfer"/>).
+    /// </summary>
     public Queue TransferQueue { get; private set; }
+    /// <summary>
+    /// The queue family of <see cref="TransferQueue"/>.
+    /// </summary>
     public uint TransferFamily { get; private set; }
+    /// <summary>
+    /// Whether <see cref="TransferQueue"/> is on a family of its own rather than the graphics family.
+    /// </summary>
     public bool HasDedicatedTransfer { get; private set; }
     /// <summary>
     /// Held around every queue submission this device makes; take it when submitting yourself.
     /// </summary>
     public object QueueLock { get; } = new();
 
+    /// <summary>
+    /// The device memory allocator.
+    /// </summary>
     public GpuAllocator Allocator { get; private set; } = null!;
+    /// <summary>
+    /// The pipeline cache, loaded from and saved to <see cref="VulkanDeviceOptions.PipelineCachePath"/>.
+    /// </summary>
     public PipelineCache PipelineCache { get; private set; }
+    /// <summary>
+    /// The frame ring: frames in flight, their fences and deferred deletes.
+    /// </summary>
     public FrameRing Frames { get; private set; } = null!;
 
-    // The handle tables below: added to from any thread (the allocator's callers, the recording jobs' views) under this lock; read without it
-    // (an index never moves). Slots are not reused: the renderers' caches compare views and buffers by index, so a reused slot would pass for
-    // the old resource. A released one is cleared once no frame in flight can read it, so what it held goes to the GC.
+    /// <summary>
+    /// Guards the handle tables below. They are added to from any thread (the allocator's callers, the recording jobs' views) under this lock and
+    /// read without it (an index never moves). Slots are not reused: the renderers' caches compare views and buffers by index, so a reused slot would
+    /// pass for the old resource. A released one is cleared once no frame in flight can read it, so what it held goes to the GC.
+    /// </summary>
     readonly object _tableGate = new();
 
     /// <summary>
     /// The samplers the renderers hold by index (index 0 is the null sampler).
     /// </summary>
     readonly List<Sampler> _samplerTable = [default];
+    /// <summary>
+    /// The sampler at an index. Any thread.
+    /// </summary>
     public Sampler SamplerAt(int index) => _samplerTable[index];
 
+    /// <summary>
+    /// Adds a sampler to the table and returns its index. Any thread.
+    /// </summary>
     public int AddSampler(Sampler sampler)
     {
         lock (_tableGate)
@@ -126,8 +227,14 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The views the renderers hold by index (index 0 is the null view).
     /// </summary>
     readonly List<ImageView> _viewTable = [default];
+    /// <summary>
+    /// The view at an index. Any thread.
+    /// </summary>
     public ImageView ViewAt(int index) => _viewTable[index];
 
+    /// <summary>
+    /// Adds a view to the table and returns its index. Any thread.
+    /// </summary>
     public int AddView(ImageView view)
     {
         lock (_tableGate)
@@ -141,8 +248,14 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The sets the renderers bind by index (index 0 is the null set): the persistent ones (per-draw sets are bound by their own handle).
     /// </summary>
     readonly List<DescriptorSet> _setTable = [default];
+    /// <summary>
+    /// The set at an index. Any thread.
+    /// </summary>
     public DescriptorSet SetAt(int index) => _setTable[index];
 
+    /// <summary>
+    /// Adds a set to the table and returns its index. Any thread.
+    /// </summary>
     public int AddSet(DescriptorSet set)
     {
         lock (_tableGate)
@@ -156,9 +269,18 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The textures the renderers hold by index (index 0 is the null texture).
     /// </summary>
     readonly List<TextureEntry> _textureTable = [default];
+    /// <summary>
+    /// The textures already passed to <see cref="ReleaseTexture"/> whose deferred release has not run yet (a second release is ignored).
+    /// </summary>
     readonly HashSet<int> _releasedTextures = [];
+    /// <summary>
+    /// The texture at an index. Any thread.
+    /// </summary>
     public TextureEntry TextureAt(int index) => _textureTable[index];
 
+    /// <summary>
+    /// Adds a texture to the table and returns its index. Any thread.
+    /// </summary>
     public int AddTexture(Image image, ImageAllocation? allocation, bool owned, TextureDesc desc)
     {
         lock (_tableGate)
@@ -215,7 +337,13 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     readonly ConcurrentDictionary<(int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle), int> _viewCache =
         [];
+    /// <summary>
+    /// The cache key of each view in <see cref="_viewCache"/>, by view index (a texture's release removes them from the cache).
+    /// </summary>
     readonly Dictionary<int, (int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle)> _viewKeys = [];
+    /// <summary>
+    /// The views cut on each texture, by texture index.
+    /// </summary>
     readonly Dictionary<int, List<int>> _textureViews = [];
 
     /// <summary>
@@ -257,9 +385,18 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// The buffers the renderers hold by index (index 0 is the null buffer; a freed one is cleared, <see cref="RemoveBuffer"/>).
     /// </summary>
     readonly List<BufferEntry> _bufferTable = [default];
+    /// <summary>
+    /// The buffer at an index. Any thread.
+    /// </summary>
     public Silk.NET.Vulkan.Buffer BufferAt(int index) => _bufferTable[index].Buffer;
+    /// <summary>
+    /// The buffer and its allocation at an index. Any thread.
+    /// </summary>
     public BufferEntry BufferEntryAt(int index) => _bufferTable[index];
 
+    /// <summary>
+    /// Adds a buffer to the table and returns its index. Any thread.
+    /// </summary>
     public int AddBuffer(BufferEntry buffer)
     {
         lock (_tableGate)
@@ -293,6 +430,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         return Vk.GetBufferDeviceAddress(Device, in info);
     }
 
+    /// <summary>
+    /// The Vulkan view type of a view.
+    /// </summary>
     static ImageViewType VkViewType(GpuViewType t) => t switch
     {
         GpuViewType.Texture2DArray => ImageViewType.Type2DArray,
@@ -300,6 +440,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         _ => ImageViewType.Type2D,
     };
 
+    /// <summary>
+    /// The Vulkan component mapping of a view's swizzle.
+    /// </summary>
     static ComponentMapping VkSwizzle(GpuSwizzle s) => new()
     {
         R = VkSwizzleComponent(s.R),
@@ -308,6 +451,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         A = VkSwizzleComponent(s.A),
     };
 
+    /// <summary>
+    /// The Vulkan swizzle of one component.
+    /// </summary>
     static ComponentSwizzle VkSwizzleComponent(GpuSwizzleComponent c) => c switch
     {
         GpuSwizzleComponent.Identity => ComponentSwizzle.Identity,
@@ -334,8 +480,14 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public ImageView NativeView(GpuTexture texture, int level = 0, int layer = 0) =>
         ViewAt(View(texture, level, 1, layer, 1, GpuViewType.Texture2D, default).Index);
+    /// <summary>
+    /// The frames in flight the device was created with.
+    /// </summary>
     public int FramesInFlight => _options.FramesInFlight;
 
+    /// <summary>
+    /// The validation layer and VK_EXT_debug_utils are both on.
+    /// </summary>
     public bool ValidationEnabled { get; private set; }
     /// <summary>
     /// Synchronisation validation was asked for and the layer took the setting.
@@ -345,7 +497,13 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// VK_EXT_debug_utils (labels and names), null when the instance does not have it.
     /// </summary>
     public ExtDebugUtils? DebugUtils => _debugUtils;
+    /// <summary>
+    /// Validation errors so far.
+    /// </summary>
     public int ValidationErrors => Volatile.Read(ref _validationErrors);
+    /// <summary>
+    /// Validation warnings so far (performance messages not counted).
+    /// </summary>
     public int ValidationWarnings => Volatile.Read(ref _validationWarnings);
     /// <summary>
     /// The last ~50 validation messages (errors and warnings), oldest first.
@@ -362,18 +520,45 @@ public sealed unsafe class VulkanDevice : IDisposable
     }
 
     // Features and extensions (true = enabled on the device).
+    /// <summary>
+    /// Dynamic rendering (core in Vulkan 1.3; a device without it is not picked).
+    /// </summary>
     public bool HasDynamicRendering { get; private set; }
+    /// <summary>
+    /// Synchronization2 (core in Vulkan 1.3; a device without it is not picked).
+    /// </summary>
     public bool HasSynchronization2 { get; private set; }
+    /// <summary>
+    /// Timeline semaphores (core in Vulkan 1.2; a device without them is not picked).
+    /// </summary>
     public bool HasTimelineSemaphore { get; private set; }
     /// <summary>
     /// Core in Vulkan 1.3: always available.
     /// </summary>
     public bool HasExtendedDynamicState { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state2 is on with its core features.
+    /// </summary>
     public bool HasExtendedDynamicState2 { get; private set; }
+    /// <summary>
+    /// <see cref="HasExtendedDynamicState2"/> with dynamic logic op.
+    /// </summary>
     public bool HasExtendedDynamicState2LogicOp { get; private set; }
+    /// <summary>
+    /// <see cref="HasExtendedDynamicState2"/> with dynamic patch control points.
+    /// </summary>
     public bool HasExtendedDynamicState2PatchControlPoints { get; private set; }
+    /// <summary>
+    /// Line and point polygon modes (the core <c>fillModeNonSolid</c> feature).
+    /// </summary>
     public bool FillModeNonSolid { get; private set; }
+    /// <summary>
+    /// Depth clamp (the core <c>depthClamp</c> feature).
+    /// </summary>
     public bool DepthClamp { get; private set; }
+    /// <summary>
+    /// Anisotropic filtering (the core <c>samplerAnisotropy</c> feature).
+    /// </summary>
     public bool SamplerAnisotropy { get; private set; }
     /// <summary>
     /// Tessellation shaders are on (the core feature; the ground displacement uses them, GroundRelief).
@@ -423,21 +608,57 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// Draws whose shader writes the fragment depth stay at one invocation per pixel on this device (the property is false).
     /// </summary>
     public bool ShadingRateForcedByDepthWrite { get; private set; }
+    /// <summary>
+    /// BC texture compression (the core <c>textureCompressionBC</c> feature).
+    /// </summary>
     public bool TextureCompressionBc { get; private set; }
+    /// <summary>
+    /// Per-attachment blend state (the core <c>independentBlend</c> feature).
+    /// </summary>
     public bool IndependentBlend { get; private set; }
+    /// <summary>
+    /// Cube map arrays (the core <c>imageCubeArray</c> feature).
+    /// </summary>
     public bool ImageCubeArray { get; private set; }
+    /// <summary>
+    /// VK_KHR_push_descriptor is on.
+    /// </summary>
     public bool HasPushDescriptor { get; private set; }
+    /// <summary>
+    /// The most descriptors one push may write (the device's limit; at most 16 on macOS, where MoltenVK binds pushed sets through MSL attributes).
+    /// </summary>
     public uint MaxPushDescriptors { get; private set; }
     /// <summary>
     /// Extension present and all of the five sub-features below supported.
     /// </summary>
     public bool HasExtendedDynamicState3 { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic colour blend enable.
+    /// </summary>
     public bool Eds3ColorBlendEnable { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic colour write mask.
+    /// </summary>
     public bool Eds3ColorWriteMask { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic alpha-to-coverage.
+    /// </summary>
     public bool Eds3AlphaToCoverageEnable { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic polygon mode.
+    /// </summary>
     public bool Eds3PolygonMode { get; private set; }
+    /// <summary>
+    /// VK_EXT_extended_dynamic_state3 with dynamic depth clamp enable.
+    /// </summary>
     public bool Eds3DepthClampEnable { get; private set; }
+    /// <summary>
+    /// VK_EXT_vertex_input_dynamic_state is on.
+    /// </summary>
     public bool HasVertexInputDynamicState { get; private set; }
+    /// <summary>
+    /// VK_KHR_swapchain is on (the device was made with a surface).
+    /// </summary>
     public bool HasSwapchain { get; private set; }
     // What the native renderer API needs (docs/renderer-native.md 1, owner decision 1): enabled when present; GpuFeatures refuses to
     // start without the required ones.
@@ -446,11 +667,26 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// after bind, update unused while pending, non-uniform sampled-image indexing).
     /// </summary>
     public bool HasBindless { get; private set; }
+    /// <summary>
+    /// Multi-draw indirect (the core <c>multiDrawIndirect</c> feature).
+    /// </summary>
     public bool MultiDrawIndirect { get; private set; }
+    /// <summary>
+    /// Indirect draws with a first instance other than 0 (the core <c>drawIndirectFirstInstance</c> feature).
+    /// </summary>
     public bool DrawIndirectFirstInstance { get; private set; }
+    /// <summary>
+    /// Indirect draws with a GPU-written count (Vulkan 1.2 <c>drawIndirectCount</c>).
+    /// </summary>
     public bool DrawIndirectCount { get; private set; }
+    /// <summary>
+    /// <c>gl_DrawID</c> / base vertex and instance in shaders (Vulkan 1.1 <c>shaderDrawParameters</c>).
+    /// </summary>
     public bool ShaderDrawParameters { get; private set; }
 
+    /// <summary>
+    /// The physical device's limits.
+    /// </summary>
     public PhysicalDeviceLimits Limits => Properties.Limits;
 
     /// <summary>
@@ -615,6 +851,10 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// Creates the instance, the surface (when the options make one), the device, the allocator, the pipeline cache and the frame ring; the allocator
+    /// may reclaim memory by retiring submitted frames, but only on the thread that created the device.
+    /// </summary>
     void Initialize()
     {
         CreateInstance();
@@ -640,6 +880,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         _options.DeviceCreated?.Invoke(this);
     }
 
+    /// <summary>
+    /// Whether the loader lists the validation layer.
+    /// </summary>
     bool LayerAvailable()
     {
         uint n = 0;
@@ -878,6 +1121,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         VulkanException.Check(_debugUtils!.CreateDebugUtilsMessenger(Instance, in mi, null, out _messenger), "vkCreateDebugUtilsMessengerEXT");
     }
 
+    /// <summary>
+    /// The validation message callback: counts errors (also written to stderr) and warnings and keeps the last 50 messages.
+    /// </summary>
     static uint DebugCallback(DebugUtilsMessageSeverityFlagsEXT severity, DebugUtilsMessageTypeFlagsEXT type,
         DebugUtilsMessengerCallbackDataEXT* data, void* user)
     {
@@ -915,8 +1161,14 @@ public sealed unsafe class VulkanDevice : IDisposable
         return 0;
     }
 
+    /// <summary>
+    /// A NUL-terminated ANSI string from a Vulkan name array.
+    /// </summary>
     static string Name(byte* p) => Marshal.PtrToStringAnsi((nint)p) ?? "";
 
+    /// <summary>
+    /// Picks the best-scoring physical device (<see cref="ScoreDevice"/>; throws when none is usable) and creates the logical device on it.
+    /// </summary>
     void PickAndCreateDevice()
     {
         uint n = 0;
@@ -960,6 +1212,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         CreateLogicalDevice();
     }
 
+    /// <summary>
+    /// The extensions a physical device offers.
+    /// </summary>
     HashSet<string> DeviceExtensions(PhysicalDevice d)
     {
         uint n = 0;
@@ -1036,6 +1291,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         return score;
     }
 
+    /// <summary>
+    /// The queue families of a physical device.
+    /// </summary>
     QueueFamilyProperties[] QueueFamilies(PhysicalDevice d)
     {
         uint n = 0;
@@ -1050,6 +1308,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         return fams;
     }
 
+    /// <summary>
+    /// The first queue family with graphics and compute that can present to the surface (any when headless); -1 when there is none.
+    /// </summary>
     int FindGraphicsFamily(PhysicalDevice d)
     {
         var fams = QueueFamilies(d);
@@ -1079,6 +1340,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         return -1;
     }
 
+    /// <summary>
+    /// Whether <see cref="VulkanDeviceOptions.Features12"/> asks for a Vulkan 1.2 feature by name.
+    /// </summary>
     bool Wants12(string feature) => _options.Features12?.Contains(feature) == true;
 
     /// <summary>
@@ -1538,6 +1802,9 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     #region Fragment shading rate
 
+    /// <summary>
+    /// Whether a format supports being a fragment shading rate attachment and a colour attachment with optimal tiling.
+    /// </summary>
     bool ShadingRateAttachmentFormatOk(PhysicalDevice pd, Format format)
     {
         Vk.GetPhysicalDeviceFormatProperties(pd, format, out var props);
@@ -1596,6 +1863,9 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     #region Pipeline cache
 
+    /// <summary>
+    /// Creates the pipeline cache from the saved file when it can be read and the device takes it; else an empty one (throws when even that fails).
+    /// </summary>
     void CreatePipelineCache()
     {
         _pipelineCachePath = _options.PipelineCachePath;
@@ -1631,6 +1901,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// Creates the pipeline cache from initial data (null for empty); false when the device refuses it.
+    /// </summary>
     bool TryCreateCache(byte[]? data)
     {
         fixed (byte* p = data)
@@ -1653,6 +1926,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes the pipeline cache to its file (through a per-process temporary file, then a move); a cache that cannot be saved is skipped.
+    /// </summary>
     void SavePipelineCache()
     {
         if (_pipelineCachePath == null || PipelineCache.Handle == 0)
@@ -1743,6 +2019,9 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public delegate* unmanaged<Device, Result> WaitIdleFunction { get; set; }
 
+    /// <summary>
+    /// Waits for the device to go idle, under <see cref="QueueLock"/> (through <see cref="WaitIdleFunction"/> when set).
+    /// </summary>
     public void WaitIdle()
     {
         lock (QueueLock)
@@ -1820,6 +2099,10 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     #region Teardown
 
+    /// <summary>
+    /// Waits for the device to go idle, then destroys what it made: immediate pools, the frame ring, the pipeline cache (saved first), the allocator,
+    /// the device, the surface, the messenger and the instance.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)

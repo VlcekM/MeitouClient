@@ -16,41 +16,129 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalCommandList : IGpuCommandList
 {
+    /// <summary>
+    /// The backend whose handles the list resolves.
+    /// </summary>
     readonly MetalContext _ctx;
+    /// <summary>
+    /// The list's label (the frame's or the upload batch's).
+    /// </summary>
     readonly string _name;
+    /// <summary>
+    /// The command buffer the encoders record into.
+    /// </summary>
     MTLCommandBuffer _command;
+    /// <summary>
+    /// The open render encoder; default outside a rendering.
+    /// </summary>
     MTLRenderCommandEncoder _render;
+    /// <summary>
+    /// The open compute encoder; default when none is open.
+    /// </summary>
     MTLComputeCommandEncoder _compute;
+    /// <summary>
+    /// The open blit encoder; default when none is open.
+    /// </summary>
     MTLBlitCommandEncoder _blit;
+    /// <summary>
+    /// The program of the last compute pipeline bound.
+    /// </summary>
     GpuProgram _computeProgram;
+    /// <summary>
+    /// The last compute pipeline bound; default after the compute encoder ends.
+    /// </summary>
     GpuComputePipeline _lastCompute;
+    /// <summary>
+    /// Whether this list opened <see cref="_blit"/> (and ends it); false for an upload batch's shared blit.
+    /// </summary>
     bool _ownsBlit;
+    /// <summary>
+    /// Whether the open rendering has a depth attachment (no depth state is set without one).
+    /// </summary>
     bool _depthAttachment;
+    /// <summary>
+    /// The last graphics pipeline bound (a rebind of the same description is skipped).
+    /// </summary>
     GpuPipeline _lastPipeline;
+    /// <summary>
+    /// The topology of the bound pipeline, which the draws use.
+    /// </summary>
     PrimitiveType _topology;
+    /// <summary>
+    /// The open rendering's description (its attachments, for <see cref="MetalContext.ClearAttachments"/>).
+    /// </summary>
     RenderingDesc _renderDesc;
+    /// <summary>
+    /// The last viewport set.
+    /// </summary>
     PixelViewport _viewport;
+    /// <summary>
+    /// The last scissor set.
+    /// </summary>
     PixelRect _scissor;
+    /// <summary>
+    /// Whether a viewport and a scissor have been set in this rendering.
+    /// </summary>
     bool _hasViewport, _hasScissor;
+    /// <summary>
+    /// Whether the depth state is known in this rendering, and its last test and write flags.
+    /// </summary>
     bool _depthStateKnown, _depthTest, _depthWrite;
+    /// <summary>
+    /// The last depth compare op set.
+    /// </summary>
     DepthFunction _depthOp;
+    /// <summary>
+    /// Counts <see cref="Invalidate"/> calls (<see cref="Epoch"/>).
+    /// </summary>
     long _epoch;
 
-    // The redundancy filters are on by default (validated in the 2026-10-24 Metal run); MEITOU_METAL_NO_STATE_CACHE=1
-    // reissues every state for an A/B. They are independent of the experimental GPU cull.
+    /// <summary>
+    /// The redundancy filters, on by default (validated in the 2026-10-24 Metal run); <c>MEITOU_METAL_NO_STATE_CACHE=1</c> reissues every state for
+    /// an A/B. They are independent of the experimental GPU cull.
+    /// </summary>
     static readonly bool CacheEncoderState = Environment.GetEnvironmentVariable("MEITOU_METAL_NO_STATE_CACHE") != "1";
 
-    // Metal keeps these bound for the encoder's lifetime. Skip a bind that would write the same buffer and offset
-    // again; Xcode's API insights otherwise report dozens of redundant binds in a busy scene encoder.
+    /// <summary>
+    /// The vertex buffers bound per slot. Metal keeps these bound for the encoder's lifetime: a bind that would write the same buffer and offset
+    /// again is skipped; Xcode's API insights otherwise report dozens of redundant binds in a busy scene encoder.
+    /// </summary>
     readonly MTLBuffer[] _vertexBufferState = new MTLBuffer[64];
+    /// <summary>
+    /// The vertex buffer offsets bound per slot.
+    /// </summary>
     readonly ulong[] _vertexOffsetState = new ulong[64];
+    /// <summary>
+    /// The fragment buffers bound per slot.
+    /// </summary>
     readonly MTLBuffer[] _fragmentBufferState = new MTLBuffer[64];
+    /// <summary>
+    /// The fragment buffer offsets bound per slot.
+    /// </summary>
     readonly ulong[] _fragmentOffsetState = new ulong[64];
+    /// <summary>
+    /// The vertex textures bound per slot.
+    /// </summary>
     readonly MTLTexture[] _vertexTextureState = new MTLTexture[64];
+    /// <summary>
+    /// The vertex samplers bound per slot.
+    /// </summary>
     readonly MTLSamplerState[] _vertexSamplerState = new MTLSamplerState[64];
+    /// <summary>
+    /// The LOD bias of each vertex sampler slot's binding.
+    /// </summary>
     readonly float[] _vertexSamplerBias = new float[64];
+    /// <summary>
+    /// The fragment textures bound per slot.
+    /// </summary>
     readonly MTLTexture[] _fragmentTextureState = new MTLTexture[64];
+    /// <summary>
+    /// The fragment samplers bound per slot.
+    /// </summary>
     readonly MTLSamplerState[] _fragmentSamplerState = new MTLSamplerState[64];
+    /// <summary>
+    /// The LOD bias of each fragment sampler slot's binding.
+    /// </summary>
     readonly float[] _fragmentSamplerBias = new float[64];
 
     /// <summary>
@@ -69,8 +157,11 @@ public sealed class MetalCommandList : IGpuCommandList
         }
     }
 
+    /// <inheritdoc/>
     public GpuStats Stats => _ctx.Frame.Stats;
+    /// <inheritdoc/>
     public long Epoch => _epoch;
+    /// <inheritdoc/>
     public object? BoundProgram { get; set; }
 
     /// <summary>
@@ -95,6 +186,7 @@ public sealed class MetalCommandList : IGpuCommandList
         _ => MTLLoadAction.Load,
     };
 
+    /// <inheritdoc/>
     public void BeginRendering(in RenderingDesc d, bool secondaries = false)
     {
         if (secondaries) throw new NotSupportedException("the Metal backend records no secondary command lists yet");
@@ -161,6 +253,7 @@ public sealed class MetalCommandList : IGpuCommandList
         if (_name.Length > 0) _render.PushDebugGroup((NSString)_name);
     }
 
+    /// <inheritdoc/>
     public void EndRendering()
     {
         if (_render.NativePtr == IntPtr.Zero)
@@ -213,6 +306,7 @@ public sealed class MetalCommandList : IGpuCommandList
 
     #region State
 
+    /// <inheritdoc/>
     public void BindPipeline(GpuPipeline pipeline)
     {
         if (pipeline.Desc == _lastPipeline.Desc) return;
@@ -239,6 +333,7 @@ public sealed class MetalCommandList : IGpuCommandList
         Stats.PipelinesBound++;
     }
 
+    /// <inheritdoc/>
     public void SetViewport(in PixelViewport v)
     {
         bool same = CacheEncoderState && _hasViewport && _viewport == v;
@@ -253,6 +348,7 @@ public sealed class MetalCommandList : IGpuCommandList
         }
     }
 
+    /// <inheritdoc/>
     public void SetScissor(in PixelRect r)
     {
         bool same = CacheEncoderState && _hasScissor && _scissor == r;
@@ -262,6 +358,7 @@ public sealed class MetalCommandList : IGpuCommandList
             _render.SetScissorRect(new MTLScissorRect { x = (ulong)r.X, y = (ulong)r.Y, width = r.Width, height = r.Height });
     }
 
+    /// <inheritdoc/>
     public void SetRaster(CullMode cull, FrontFaceDirection front)
     {
         _render.SetCullMode(MetalConventions.Cull(cull));
@@ -273,6 +370,7 @@ public sealed class MetalCommandList : IGpuCommandList
     /// </summary>
     public void SetFrontFace(FrontFaceDirection front) => _render.SetFrontFacingWinding(MetalConventions.Winding(front));
 
+    /// <inheritdoc/>
     public void SetDepth(bool test, bool write, DepthFunction op)
     {
         // With no depth attachment the state would be read nowhere; Metal's validation objects to setting it.
@@ -284,11 +382,33 @@ public sealed class MetalCommandList : IGpuCommandList
         (_depthStateKnown, _depthTest, _depthWrite, _depthOp) = (true, test, write, op);
     }
 
+    /// <inheritdoc/>
     public void SetDepthBias(bool enable, float constant, float slope) => _render.SetDepthBias(enable ? constant : 0, enable ? slope : 0, 0);
 
     #endregion
 
     #region Resources
+
+    /// <summary>
+    /// The index buffer bound for the next indexed draw.
+    /// </summary>
+    MTLBuffer _indexBuffer;
+    /// <summary>
+    /// The offset of the indices in <see cref="_indexBuffer"/>, in bytes.
+    /// </summary>
+    ulong _indexOffset;
+    /// <summary>
+    /// The index type of <see cref="_indexBuffer"/>.
+    /// </summary>
+    MTLIndexType _indexType;
+    /// <summary>
+    /// The push constant block of each program and stage, as written so far.
+    /// </summary>
+    readonly Dictionary<(int Program, GpuStage Stage), byte[]> _pushBlocks = [];
+    /// <summary>
+    /// The bytes last sent for each program and stage (an unchanged block is not sent again).
+    /// </summary>
+    readonly Dictionary<(int Program, GpuStage Stage), byte[]> _pushSent = [];
 
     /// <summary>
     /// Binds the vertex buffers of the locations from <paramref name="first"/>: the pipeline's slots, Vulkan's own numbers (the MSL's indices below
@@ -311,6 +431,9 @@ public sealed class MetalCommandList : IGpuCommandList
         }
     }
 
+    /// <summary>
+    /// Binds a vertex buffer slot, or only its offset when the buffer is already bound there; skipped when both are the same.
+    /// </summary>
     void BindVertexBuffer(uint index, MTLBuffer buffer, ulong offset)
     {
         if (index >= (uint)_vertexBufferState.Length)
@@ -331,6 +454,9 @@ public sealed class MetalCommandList : IGpuCommandList
         _vertexOffsetState[index] = offset;
     }
 
+    /// <summary>
+    /// Binds a fragment buffer slot, or only its offset when the buffer is already bound there; skipped when both are the same.
+    /// </summary>
     void BindFragmentBuffer(uint index, MTLBuffer buffer, ulong offset)
     {
         if (index >= (uint)_fragmentBufferState.Length)
@@ -359,10 +485,7 @@ public sealed class MetalCommandList : IGpuCommandList
         _indexType = MetalConventions.IndexType(type);
     }
 
-    MTLBuffer _indexBuffer;
-    ulong _indexOffset;
-    MTLIndexType _indexType;
-
+    /// <inheritdoc/>
     public void BindProgramResources(GpuProgram program, uint set, ReadOnlySpan<GpuBinding> bindings)
     {
         if (set != 0)
@@ -400,6 +523,9 @@ public sealed class MetalCommandList : IGpuCommandList
         Stats.DescriptorPushes++;
     }
 
+    /// <summary>
+    /// Binds one slot of a program's resources onto its stage's table at the slot's flattened index.
+    /// </summary>
     void BindSlot(bool isVertex, uint set, in GpuSlot slot, in GpuBinding binding)
     {
         // Metal's one binding table per stage: the slot's flattened index (MetalShaders.Flatten, the MSL's own numbers).
@@ -453,6 +579,7 @@ public sealed class MetalCommandList : IGpuCommandList
         }
     }
 
+    /// <inheritdoc/>
     public void BindSets(GpuProgram program, uint first, ReadOnlySpan<GpuSet> sets, ReadOnlySpan<uint> dynamicOffsets,
         GpuBindPoint point = GpuBindPoint.Graphics)
     {
@@ -610,6 +737,9 @@ public sealed class MetalCommandList : IGpuCommandList
         else _render.UseResource(buffer, usage);
     }
 
+    /// <summary>
+    /// Declares a texture the argument buffer names as used by the open compute or render encoder.
+    /// </summary>
     void UseResource(MTLTexture texture, MTLResourceUsage usage, bool computePass)
     {
         if (computePass) _compute.UseResource(texture, usage);
@@ -686,9 +816,10 @@ public sealed class MetalCommandList : IGpuCommandList
             PushStage(GpuStage.Fragment, program, source, raw, (int)offset, padded, compute: false);
     }
 
-    readonly Dictionary<(int Program, GpuStage Stage), byte[]> _pushBlocks = [];
-    readonly Dictionary<(int Program, GpuStage Stage), byte[]> _pushSent = [];
-
+    /// <summary>
+    /// Writes a push into the stage's block and sends the whole block with setBytes at <see cref="MslTranslator.PushConstantBinding"/> when it
+    /// changed.
+    /// </summary>
     unsafe void PushStage(GpuStage stage, GpuProgram program, byte* source, int raw, int offset, int padded, bool compute)
     {
         var key = (program.Index, stage);
@@ -724,6 +855,7 @@ public sealed class MetalCommandList : IGpuCommandList
 
     #region Draws
 
+    /// <inheritdoc/>
     public void Draw(uint vertices, uint instances = 1, uint firstVertex = 0, uint firstInstance = 0)
     {
         // The grass draws a blade range by firstInstance; baseInstance is Metal's own (per-instance attributes fetch from it).
@@ -958,6 +1090,7 @@ public sealed class MetalCommandList : IGpuCommandList
 
     #region Labels
 
+    /// <inheritdoc/>
     public void BeginLabel(string name)
     {
         if (_render.NativePtr != IntPtr.Zero) _render.PushDebugGroup((NSString)name);
@@ -965,6 +1098,7 @@ public sealed class MetalCommandList : IGpuCommandList
         else _command.PushDebugGroup((NSString)name);
     }
 
+    /// <inheritdoc/>
     public void EndLabel()
     {
         if (_render.NativePtr != IntPtr.Zero) _render.PopDebugGroup();
@@ -992,6 +1126,9 @@ public sealed class MetalCommandList : IGpuCommandList
         return _blit;
     }
 
+    /// <summary>
+    /// Ends the blit encoder when this list owns it, and forgets it.
+    /// </summary>
     internal void EndBlit()
     {
         if (_blit.NativePtr == IntPtr.Zero) return;

@@ -9,7 +9,13 @@ namespace Meitou.Game.Rendering.Gpu;
 /// </summary>
 public readonly record struct UniformHandle(int Index)
 {
+    /// <summary>
+    /// Whether the program uses the uniform.
+    /// </summary>
     public bool IsValid => Index >= 0;
+    /// <summary>
+    /// The handle of an inactive uniform (GL's location −1).
+    /// </summary>
     public static readonly UniformHandle None = new(-1);
 }
 
@@ -18,6 +24,9 @@ public readonly record struct UniformHandle(int Index)
 /// </summary>
 public readonly record struct SamplerSlot(int Index)
 {
+    /// <summary>
+    /// Whether the program has a sampler of that name.
+    /// </summary>
     public bool IsValid => Index >= 0;
 }
 
@@ -26,6 +35,9 @@ public readonly record struct SamplerSlot(int Index)
 /// </summary>
 public readonly record struct BlockSlot(int Index)
 {
+    /// <summary>
+    /// Whether the program has a block of that name.
+    /// </summary>
     public bool IsValid => Index >= 0;
 }
 
@@ -46,31 +58,89 @@ public sealed unsafe class LegacyProgram : IDisposable
 {
     #region State
 
+    /// <summary>
+    /// The backend the program's sets and pipelines are made on.
+    /// </summary>
     readonly IGpuContext _ctx;
-    readonly ulong _uniformAlign;              // the default blocks' slice alignment (the device limit, at least 16)
+    /// <summary>
+    /// The default blocks' slice alignment (the device limit, at least 16).
+    /// </summary>
+    readonly ulong _uniformAlign;
+    /// <summary>
+    /// The loose uniforms resolved so far, by handle index: the GL name and where it is in each stage's default block (null when that stage lacks
+    /// it).
+    /// </summary>
     readonly List<(string Name, UniformLookup? Vertex, UniformLookup? Fragment)> _uniforms = [];
+    /// <summary>
+    /// The handle index of each GL name asked for (-1 for an inactive one).
+    /// </summary>
     readonly Dictionary<string, int> _uniformIndex = [];
 
-    // Set 0, in VkGl's order: every non-default uniform block of the vertex stage, then of the fragment stage; then every sampler of both.
+    /// <summary>
+    /// Set 0's uniform blocks, in VkGl's order: every non-default uniform block of the vertex stage, then of the fragment stage; the samplers follow
+    /// them.
+    /// </summary>
     readonly (uint Binding, int Size, string Name)[] _blocks;
+    /// <summary>
+    /// Set 0's samplers after the blocks: the vertex stage's, then the fragment stage's.
+    /// </summary>
     readonly (uint Binding, SamplerInfo Info, string Name)[] _samplers;
+    /// <summary>
+    /// The distinct block and sampler names (a name used in both stages is one slot).
+    /// </summary>
     readonly string[] _blockNames, _samplerNames;
-    readonly GpuBufferBinding[] _blockValues;     // per block name
-    readonly SampledTexture[] _samplerValues;  // per sampler name
-    readonly int[] _blockIndex, _samplerIndex;  // each set-0 entry's name index
+    /// <summary>
+    /// The buffer bound to each block name.
+    /// </summary>
+    readonly GpuBufferBinding[] _blockValues;
+    /// <summary>
+    /// The texture bound to each sampler name.
+    /// </summary>
+    readonly SampledTexture[] _samplerValues;
+    /// <summary>
+    /// Each set-0 block's and sampler's name index.
+    /// </summary>
+    readonly int[] _blockIndex, _samplerIndex;
+    /// <summary>
+    /// The set-0 descriptor values last pushed (three words per entry): an unchanged set is not pushed again.
+    /// </summary>
     readonly ulong[] _lastPush;
+    /// <summary>
+    /// The command list epoch set 0 was last pushed in (a new one forces a push).
+    /// </summary>
     long _lastPushEpoch = -1;
-    bool _bindingsDirty = true;                // a Bind since the last Flush
-    int _pushedGlobals = -1;                   // the globals version set 0 was last evaluated with
+    /// <summary>
+    /// A Bind since the last Flush.
+    /// </summary>
+    bool _bindingsDirty = true;
+    /// <summary>
+    /// The globals version set 0 was last evaluated with.
+    /// </summary>
+    int _pushedGlobals = -1;
+    /// <summary>
+    /// The vertex and fragment default blocks changed since they were last copied to a slice.
+    /// </summary>
     bool _vertexDirty = true, _fragmentDirty = true;
+    /// <summary>
+    /// The frame the default blocks' slices were taken in (a new frame copies both again).
+    /// </summary>
     long _sliceFrame = -1;
+    /// <summary>
+    /// The default blocks' slices of this frame's constants (<see cref="IGpuFrame.WriteConstants"/>).
+    /// </summary>
     Transient _vertexSlice, _fragmentSlice;
+    /// <summary>
+    /// The set-1 descriptor sets by the vertex and fragment slices' buffer handles.
+    /// </summary>
     readonly Dictionary<(ulong, ulong), GpuSet> _dynamicSets = [];
 
     #endregion
 
     #region Construction
 
+    /// <summary>
+    /// Reflects the compiled program: its default blocks, set-0 blocks and samplers, and vertex inputs.
+    /// </summary>
     LegacyProgram(IGpuContext ctx, GpuProgram program)
     {
         this._ctx = ctx;
@@ -102,23 +172,47 @@ public sealed unsafe class LegacyProgram : IDisposable
     public static LegacyProgram Create(IGpuContext ctx, string vertexGlsl, string fragmentGlsl, string name) =>
         new(ctx, ctx.Shaders.Legacy(vertexGlsl, fragmentGlsl, name));
 
+    /// <summary>
+    /// The compiled program.
+    /// </summary>
     public GpuProgram Program { get; }
+    /// <summary>
+    /// The program's name.
+    /// </summary>
     public string Name => Program.Name;
+    /// <summary>
+    /// The vertex stage's default uniform block; null when it has none.
+    /// </summary>
     public UniformBlockInfo? VertexBlock { get; }
+    /// <summary>
+    /// The fragment stage's default uniform block; null when it has none.
+    /// </summary>
     public UniformBlockInfo? FragmentBlock { get; }
 
     /// <summary>
     /// The CPU copies of the default blocks (persistent, as a GL program's uniform state).
     /// </summary>
     public byte[] VertexDefault { get; }
+    /// <summary>
+    /// The CPU copy of the fragment default block.
+    /// </summary>
     public byte[] FragmentDefault { get; }
 
     /// <summary>
     /// The vertex input locations the program reads (a matrix input takes several), and their scalar kinds.
     /// </summary>
     public int[] InputLocations { get; }
+    /// <summary>
+    /// The scalar kind of each of <see cref="InputLocations"/>.
+    /// </summary>
     public ScalarKind[] InputKinds { get; }
+    /// <summary>
+    /// The distinct sampler names of both stages.
+    /// </summary>
     public IReadOnlyList<string> SamplerNames => _samplerNames;
+    /// <summary>
+    /// The distinct uniform block names of both stages.
+    /// </summary>
     public IReadOnlyList<string> BlockNames => _blockNames;
 
     #endregion
@@ -144,33 +238,66 @@ public sealed unsafe class LegacyProgram : IDisposable
         return new UniformHandle(i);
     }
 
+    /// <summary>
+    /// The lookup when it is in the default block (a loose uniform); null otherwise.
+    /// </summary>
     static UniformLookup? Loose(UniformLookup? l) => l is { } u && u.Block.IsDefault ? u : null;
 
+    /// <summary>
+    /// A sampler by GL name; invalid when the program has none of that name.
+    /// </summary>
     public SamplerSlot Sampler(string glName) => new(Array.IndexOf(_samplerNames, glName));
+    /// <summary>
+    /// A uniform block by GL name; invalid when the program has none of that name.
+    /// </summary>
     public BlockSlot Block(string glName) => new(Array.IndexOf(_blockNames, glName));
 
     #endregion
 
     #region Per draw
 
+    /// <summary>
+    /// <c>glUniform1f</c>.
+    /// </summary>
     public void Set(UniformHandle u, float v) => Write(u, (byte*)&v, 1, 1, 1, false);
+    /// <summary>
+    /// <c>glUniform1i</c> (a sampler unit or an int/bool uniform).
+    /// </summary>
     public void Set(UniformHandle u, int v) => Write(u, (byte*)&v, 1, 1, 1, true);
+    /// <summary>
+    /// <c>glUniform2fv</c>.
+    /// </summary>
     public void Set(UniformHandle u, Vector2 v) => Write(u, (byte*)&v, 2, 1, 1, false);
+    /// <summary>
+    /// <c>glUniform3fv</c>.
+    /// </summary>
     public void Set(UniformHandle u, Vector3 v) => Write(u, (byte*)&v, 3, 1, 1, false);
+    /// <summary>
+    /// <c>glUniform4fv</c>.
+    /// </summary>
     public void Set(UniformHandle u, Vector4 v) => Write(u, (byte*)&v, 4, 1, 1, false);
 
+    /// <summary>
+    /// <c>glUniform2f</c>.
+    /// </summary>
     public void Set(UniformHandle u, float x, float y)
     {
         var v = new Vector2(x, y);
         Write(u, (byte*)&v, 2, 1, 1, false);
     }
 
+    /// <summary>
+    /// <c>glUniform3f</c>.
+    /// </summary>
     public void Set(UniformHandle u, float x, float y, float z)
     {
         var v = new Vector3(x, y, z);
         Write(u, (byte*)&v, 3, 1, 1, false);
     }
 
+    /// <summary>
+    /// <c>glUniform4f</c>.
+    /// </summary>
     public void Set(UniformHandle u, float x, float y, float z, float w)
     {
         var v = new Vector4(x, y, z, w);
@@ -193,6 +320,9 @@ public sealed unsafe class LegacyProgram : IDisposable
         fixed (float* p = values) Write(u, (byte*)p, rows, columns, values.Length / (rows * columns), false);
     }
 
+    /// <summary>
+    /// Scatters GL values into the default block of each stage that has the uniform and marks that block changed; an invalid handle does nothing.
+    /// </summary>
     void Write(UniformHandle u, byte* src, int rows, int columns, int count, bool isInt)
     {
         if (!u.IsValid) return;
@@ -220,6 +350,9 @@ public sealed unsafe class LegacyProgram : IDisposable
         _bindingsDirty = true;
     }
 
+    /// <summary>
+    /// The buffer a uniform block reads.
+    /// </summary>
     public void Bind(BlockSlot b, in GpuBufferBinding buffer)
     {
         if (!b.IsValid) return;
@@ -236,9 +369,21 @@ public sealed unsafe class LegacyProgram : IDisposable
 
     #region Frame globals (docs/renderer-native.md 4.3)
 
+    /// <summary>
+    /// The <see cref="FrameGlobals.Version"/> the global lookups below were resolved at.
+    /// </summary>
     int _globalsVersion = -1;
+    /// <summary>
+    /// The published texture of each sampler name (null where none is published).
+    /// </summary>
     Func<SampledTexture>?[] _globalTextures = [];
+    /// <summary>
+    /// The published buffer of each block name (null where none is published).
+    /// </summary>
     Func<GpuBufferBinding>?[] _globalBlocks = [];
+    /// <summary>
+    /// The published uniforms this program uses, with their handles.
+    /// </summary>
     (UniformHandle Handle, FrameGlobals.Uniform Value)[] _globalUniforms = [];
 
     /// <summary>
@@ -375,10 +520,19 @@ public sealed unsafe class LegacyProgram : IDisposable
 
     #region Dynamic sets
 
-    // The chunks of the last two frames (one 8 MB chunk per frame slot, the usual case): no dictionary.
+    /// <summary>
+    /// The keys of the last two dynamic sets asked for (the chunks of the last two frames: one 8 MB chunk per frame slot, the usual case), looked up
+    /// without the dictionary.
+    /// </summary>
     readonly (ulong, ulong)[] _recentKeys = new (ulong, ulong)[2];
+    /// <summary>
+    /// The sets of <see cref="_recentKeys"/>.
+    /// </summary>
     readonly GpuSet[] _recentSets = new GpuSet[2];
 
+    /// <summary>
+    /// The set-1 descriptor set over this frame's default-block slices: one of the last two, else from <see cref="_dynamicSets"/>, else a new one.
+    /// </summary>
     GpuSet DynamicSet()
     {
         var key = (VertexBlock is null ? 0 : (ulong)_vertexSlice.Handle.Index, FragmentBlock is null ? 0 : (ulong)_fragmentSlice.Handle.Index);
@@ -390,6 +544,9 @@ public sealed unsafe class LegacyProgram : IDisposable
         return set;
     }
 
+    /// <summary>
+    /// A set-1 descriptor set binding the vertex slice at 0 and the fragment slice at 1, cached in <see cref="_dynamicSets"/>.
+    /// </summary>
     GpuSet CreateDynamicSet((ulong, ulong) key)
     {
         Span<GpuBinding> bindings = stackalloc GpuBinding[2];
@@ -407,7 +564,9 @@ public sealed unsafe class LegacyProgram : IDisposable
 
     #region Vertex input
 
-    // The vertex layout last returned: a run of draws reuses the same object.
+    /// <summary>
+    /// The vertex layout last returned: a run of draws reuses the same object.
+    /// </summary>
     VertexLayout? _lastLayout;
 
     /// <summary>
@@ -483,6 +642,9 @@ public sealed unsafe class LegacyProgram : IDisposable
 
     #endregion
 
+    /// <summary>
+    /// Forgets the program's pipelines and releases its shaders.
+    /// </summary>
     public void Dispose()
     {
         _ctx.Pipelines.Forget(Program);

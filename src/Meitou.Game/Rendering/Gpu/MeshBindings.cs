@@ -14,8 +14,14 @@ public readonly record struct MeshAttribute(uint Location, int Size, int Offset,
 /// </summary>
 public sealed class MeshBindings(LegacyProgram.Attribute?[] attributes, GpuBufferBinding elements)
 {
+    /// <summary>
+    /// The vertex attributes, indexed by location.
+    /// </summary>
     public LegacyProgram.Attribute?[] Attributes { get; } = attributes;
 
+    /// <summary>
+    /// The index buffer.
+    /// </summary>
     public GpuBufferBinding Elements { get; } = elements;
 
     /// <summary>

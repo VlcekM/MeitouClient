@@ -21,6 +21,9 @@ public enum ShaderModel
     /// Explicit sets, push constants, bindless (step O and new code).
     /// </summary>
     Native,
+    /// <summary>
+    /// A compute program: set 0 from the reflection (pushed when it fits) and a push-constant range.
+    /// </summary>
     Compute,
 }
 
@@ -136,13 +139,22 @@ internal sealed unsafe class VulkanProgram : IDisposable
 {
     #region State
 
+    /// <summary>
+    /// The device the modules and layouts are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The set layouts made for this program alone, destroyed with it (shared ones are the library's).
+    /// </summary>
     readonly DescriptorSetLayout[] _ownedSetLayouts;
 
     #endregion
 
     #region Construction
 
+    /// <summary>
+    /// Wraps the layouts and makes a shader module for each stage the program has.
+    /// </summary>
     internal VulkanProgram(VulkanDevice device, ProgramInfo info, DescriptorSetLayout[] setLayouts, DescriptorSetLayout[] ownedSetLayouts,
         PipelineLayout layout, bool pushDescriptors, ShaderStageFlags pushConstantStages)
     {
@@ -166,15 +178,45 @@ internal sealed unsafe class VulkanProgram : IDisposable
 
 
 
+    /// <summary>
+    /// The engine's compile result.
+    /// </summary>
     public ProgramInfo Info { get; }
+    /// <summary>
+    /// <see cref="ProgramInfo.Index"/>.
+    /// </summary>
     public int Index => Info.Index;
+    /// <summary>
+    /// <see cref="ProgramInfo.Name"/>.
+    /// </summary>
     public string Name => Info.Name;
+    /// <summary>
+    /// <see cref="ProgramInfo.Model"/>.
+    /// </summary>
     public ShaderModel Model => Info.Model;
+    /// <summary>
+    /// <see cref="ProgramInfo.VertexCode"/>.
+    /// </summary>
     public byte[]? VertexCode => Info.VertexCode;
+    /// <summary>
+    /// <see cref="ProgramInfo.FragmentCode"/>.
+    /// </summary>
     public byte[]? FragmentCode => Info.FragmentCode;
+    /// <summary>
+    /// <see cref="ProgramInfo.ComputeCode"/>.
+    /// </summary>
     public byte[]? ComputeCode => Info.ComputeCode;
+    /// <summary>
+    /// The vertex stage's module (0 without the stage).
+    /// </summary>
     public ShaderModule VertexModule { get; }
+    /// <summary>
+    /// The fragment stage's module (0 without the stage).
+    /// </summary>
     public ShaderModule FragmentModule { get; }
+    /// <summary>
+    /// The compute stage's module (0 for a graphics program).
+    /// </summary>
     public ShaderModule ComputeModule { get; }
     #endregion
 
@@ -185,29 +227,56 @@ internal sealed unsafe class VulkanProgram : IDisposable
     /// draw patch lists of three control points.
     /// </summary>
     public ShaderModule TessControlModule { get; }
+    /// <summary>
+    /// The tessellation evaluation stage's module (0 without tessellation).
+    /// </summary>
     public ShaderModule TessEvaluationModule { get; }
+    /// <summary>
+    /// Whether the program has tessellation stages.
+    /// </summary>
     public bool Tessellated => TessEvaluationModule.Handle != 0;
 
     /// <summary>
     /// The legacy compile result (reflection of both stages, default blocks), null for other models.
     /// </summary>
     public CompiledProgram? Compiled => Info.Compiled;
+    /// <summary>
+    /// <see cref="ProgramInfo.VertexReflection"/>.
+    /// </summary>
     public ShaderReflection? VertexReflection => Info.VertexReflection;
+    /// <summary>
+    /// <see cref="ProgramInfo.FragmentReflection"/>.
+    /// </summary>
     public ShaderReflection? FragmentReflection => Info.FragmentReflection;
+    /// <summary>
+    /// <see cref="ProgramInfo.ComputeReflection"/>.
+    /// </summary>
     public ShaderReflection? ComputeReflection => Info.ComputeReflection;
+    /// <summary>
+    /// The Vulkan set layouts, one per set.
+    /// </summary>
     public DescriptorSetLayout[] SetLayouts { get; }
 
     /// <summary>
     /// The program's sets in the engine's words (the layout the backend made).
     /// </summary>
     public GpuSetLayout[] NeutralSets => Info.NeutralSets;
+    /// <summary>
+    /// The pipeline layout.
+    /// </summary>
     public PipelineLayout Layout { get; }
 
     /// <summary>
     /// Set 0 is a push-descriptor set.
     /// </summary>
     public bool PushDescriptors { get; }
+    /// <summary>
+    /// <see cref="ProgramInfo.PushConstantBytes"/>.
+    /// </summary>
     public uint PushConstantBytes => Info.PushConstantBytes;
+    /// <summary>
+    /// The stages the push-constant range covers.
+    /// </summary>
     public ShaderStageFlags PushConstantStages { get; }
 
     /// <summary>
@@ -237,6 +306,9 @@ internal sealed unsafe class VulkanProgram : IDisposable
         }
     }
 
+    /// <summary>
+    /// Destroys the modules, the pipeline layout and the program's own set layouts once the frames in flight are done.
+    /// </summary>
     public void Dispose()
     {
         var (vk, dev) = (_device.Vk, _device.Device);
@@ -265,7 +337,13 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
 {
     #region State
 
+    /// <summary>
+    /// The device the programs are made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The programs by handle index.
+    /// </summary>
     readonly List<VulkanProgram> _programs = [];
 
     /// <summary>
@@ -277,6 +355,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
 
     #region Programs
 
+    /// <summary>
+    /// A library on the device, compiling with reversed scene depth (<c>DepthReversed</c>).
+    /// </summary>
     public ShaderLibrary(VulkanDevice device)
     {
         this._device = device;
@@ -642,6 +723,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         set == 0 && program.Model is ShaderModel.Legacy or ShaderModel.Compute ? program.PushDescriptors
             : set < program.NeutralSets.Length && !program.NeutralSets[set].IsBindless && CanPush(program.NeutralSets[set]);
 
+    /// <summary>
+    /// The Vulkan descriptor type of a slot (a uniform buffer offset at bind is a dynamic one).
+    /// </summary>
     static DescriptorType VkDescriptorType(GpuSlot slot) => slot.Kind switch
     {
         GpuSlotKind.UniformBuffer => slot.OffsetAtBind ? DescriptorType.UniformBufferDynamic : DescriptorType.UniformBuffer,
@@ -650,6 +734,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         _ => DescriptorType.StorageImage,
     };
 
+    /// <summary>
+    /// The Vulkan shader stage flags of engine stages.
+    /// </summary>
     static ShaderStageFlags VkStageFlags(GpuStage stages)
     {
         var f = ShaderStageFlags.None;
@@ -680,6 +767,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
 
     #region Layouts
 
+    /// <summary>
+    /// A descriptor set layout of the bindings with the creation flags.
+    /// </summary>
     internal DescriptorSetLayout CreateSetLayout(DescriptorSetLayoutBinding[] bindings, DescriptorSetLayoutCreateFlags flags)
     {
         fixed (DescriptorSetLayoutBinding* pb = bindings)
@@ -696,6 +786,9 @@ public sealed unsafe class ShaderLibrary : IGpuShaders
         }
     }
 
+    /// <summary>
+    /// A pipeline layout of the sets and one push-constant range (none when <paramref name="pushBytes"/> is 0).
+    /// </summary>
     PipelineLayout CreateLayout(DescriptorSetLayout[] sets, uint pushBytes, ShaderStageFlags pushStages)
     {
         var range = new PushConstantRange(pushStages, 0, pushBytes);

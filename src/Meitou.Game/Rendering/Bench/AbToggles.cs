@@ -9,10 +9,19 @@ namespace Meitou.Game.Rendering.Bench;
 /// </summary>
 public static class AbToggles
 {
+    /// <summary>
+    /// One switch: its name, how to read it, how to set it (true is side A) and what A and B mean.
+    /// </summary>
     public sealed record Toggle(string Name, Func<bool> Get, Action<bool> Set, string Note);
 
+    /// <summary>
+    /// The registered switches, by name (case-insensitive).
+    /// </summary>
     static readonly Dictionary<string, Toggle> Toggles = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Every registered switch.
+    /// </summary>
     public static IEnumerable<Toggle> All => Toggles.Values;
 
     /// <summary>
@@ -34,9 +43,18 @@ public static class AbToggles
         }
     }
 
+    /// <summary>
+    /// The switch registered under <paramref name="name"/> (case-insensitive), if any.
+    /// </summary>
     public static bool TryGet(string name, out Toggle toggle) => Toggles.TryGetValue(name, out toggle!);
 
+    /// <summary>
+    /// The registered names, sorted and comma-separated.
+    /// </summary>
     public static string Names => string.Join(", ", Toggles.Keys.Order(StringComparer.OrdinalIgnoreCase));
 
+    /// <summary>
+    /// Removes every switch.
+    /// </summary>
     public static void Clear() => Toggles.Clear();
 }

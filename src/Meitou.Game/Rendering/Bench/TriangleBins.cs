@@ -167,9 +167,15 @@ public static partial class TriangleBins
     public static bool EarlyTests(string fragment, int category) =>
         category is 1 or 2 || !fragment.Contains("discard", StringComparison.Ordinal) && !fragment.Contains("gl_FragDepth", StringComparison.Ordinal);
 
+    /// <summary>
+    /// The <c>#version 450</c> line.
+    /// </summary>
     [GeneratedRegex(@"#version\s+450[^\n]*\n")]
     private static partial Regex VersionLine();
 
+    /// <summary>
+    /// The <c>main</c> function's declaration.
+    /// </summary>
     [GeneratedRegex(@"\bvoid\s+main\s*\(\s*(void\s*)?\)")]
     private static partial Regex MainFunction();
 }
@@ -188,7 +194,13 @@ public sealed class SizeHistogram
     /// </summary>
     public double[] Pixels { get; set; } = new double[TriangleBins.Coarse.Length];
 
+    /// <summary>
+    /// The estimated triangles per frame, over every bin.
+    /// </summary>
     public double TotalTriangles => Triangles.Sum();
+    /// <summary>
+    /// The samples shaded per frame, over every bin.
+    /// </summary>
     public double TotalPixels => Pixels.Sum();
 
     /// <summary>
@@ -202,6 +214,9 @@ public sealed class SizeHistogram
     public SizeHistogram Scaled(double factor) => new() { Triangles = [.. Triangles.Select(t => t * factor)],
         Pixels = [.. Pixels.Select(p => p * factor)] };
 
+    /// <summary>
+    /// Adds <paramref name="other"/>'s triangles and samples bin by bin.
+    /// </summary>
     public void Add(SizeHistogram other)
     {
         for (int i = 0; i < Triangles.Length; i++)
@@ -243,6 +258,9 @@ public sealed class PassStat
     /// </summary>
     public double FragmentsPerTriangle => ClipOut > 0 ? FragmentInvocations / ClipOut : 0;
 
+    /// <summary>
+    /// Adds <paramref name="other"/>'s counts times <paramref name="weight"/>.
+    /// </summary>
     public void Add(PassStat other, double weight = 1)
     {
         Primitives += other.Primitives * weight;

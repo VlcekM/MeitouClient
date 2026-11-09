@@ -49,7 +49,7 @@ public static class MetalConventions
     };
 
     /// <summary>
-    /// The engine's sRGB rule: the sRGB format is its linear twin's, as GlConventions names Vulkan's.
+    /// Whether the format is a depth (or depth-stencil) format.
     /// </summary>
     public static bool IsDepthFormat(InternalFormat f) =>
         f is InternalFormat.DepthComponent24 or InternalFormat.DepthComponent32F or InternalFormat.Depth24Stencil8 or InternalFormat.Depth32FStencil8;
@@ -91,13 +91,22 @@ public static class MetalConventions
             ? 4
             : 1;
 
+    /// <summary>
+    /// The Metal min/mag filter of a GL minification filter (nearest or linear, whatever its mip mode).
+    /// </summary>
     public static MTLSamplerMinMagFilter Filter(TextureMinFilter f) =>
         f is TextureMinFilter.Nearest or TextureMinFilter.NearestMipmapNearest or TextureMinFilter.NearestMipmapLinear
             ? MTLSamplerMinMagFilter.Nearest : MTLSamplerMinMagFilter.Linear;
 
+    /// <summary>
+    /// The Metal min/mag filter of a GL magnification filter.
+    /// </summary>
     public static MTLSamplerMinMagFilter Filter(TextureMagFilter f) =>
         f == TextureMagFilter.Nearest ? MTLSamplerMinMagFilter.Nearest : MTLSamplerMinMagFilter.Linear;
 
+    /// <summary>
+    /// The Metal mip filter of a GL minification filter (not mipmapped for the filters without mips).
+    /// </summary>
     public static MTLSamplerMipFilter MipFilter(TextureMinFilter f) => f switch
     {
         TextureMinFilter.NearestMipmapNearest or TextureMinFilter.LinearMipmapNearest => MTLSamplerMipFilter.Nearest,
@@ -105,6 +114,9 @@ public static class MetalConventions
         _ => MTLSamplerMipFilter.NotMipmapped,
     };
 
+    /// <summary>
+    /// The Metal address mode of a GL wrap mode.
+    /// </summary>
     public static MTLSamplerAddressMode AddressMode(TextureWrapMode w) => w switch
     {
         TextureWrapMode.Repeat => MTLSamplerAddressMode.Repeat,
@@ -114,6 +126,9 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"no Metal address mode for {w}"),
     };
 
+    /// <summary>
+    /// The Metal compare function of a GL depth function.
+    /// </summary>
     public static MTLCompareFunction Compare(DepthFunction op) => op switch
     {
         DepthFunction.Never => MTLCompareFunction.Never,
@@ -127,6 +142,9 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"no Metal compare for {op}"),
     };
 
+    /// <summary>
+    /// The Metal blend factor of a GL one.
+    /// </summary>
     public static MTLBlendFactor BlendFactor(BlendingFactor f) => f switch
     {
         BlendingFactor.Zero => MTLBlendFactor.Zero,
@@ -142,6 +160,9 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"no Metal blend factor for {f}"),
     };
 
+    /// <summary>
+    /// The Metal blend operation of a GL one.
+    /// </summary>
     public static MTLBlendOperation BlendOp(BlendOperation op) => op switch
     {
         BlendOperation.Add => MTLBlendOperation.Add,
@@ -152,6 +173,9 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"no Metal blend operation for {op}"),
     };
 
+    /// <summary>
+    /// The Metal primitive of a GL one (points, lines, line strip, triangles, triangle strip).
+    /// </summary>
     public static MTLPrimitiveType Primitive(PrimitiveType t) => t switch
     {
         PrimitiveType.Points => MTLPrimitiveType.Point,
@@ -162,6 +186,9 @@ public static class MetalConventions
         _ => throw new NotSupportedException($"no Metal primitive for {t}"),
     };
 
+    /// <summary>
+    /// The Metal index type of an index kind.
+    /// </summary>
     public static MTLIndexType IndexType(IndexKind k) => k switch
     {
         IndexKind.U16 => MTLIndexType.UInt16,
@@ -174,6 +201,9 @@ public static class MetalConventions
     /// </summary>
     public static ulong IndexBytes(MTLIndexType type) => type == MTLIndexType.UInt32 ? 4ul : 2ul;
 
+    /// <summary>
+    /// The Metal cull mode of a GL one; throws for front-and-back.
+    /// </summary>
     public static MTLCullMode Cull(CullMode c) => c switch
     {
         CullMode.None => MTLCullMode.None,

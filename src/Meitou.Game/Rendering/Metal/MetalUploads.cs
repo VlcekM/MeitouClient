@@ -14,21 +14,54 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalUploads : IGpuUploads
 {
+    /// <summary>
+    /// The context the batches record and stage through.
+    /// </summary>
     readonly MetalContext _ctx;
 
+    /// <summary>
+    /// The uploads of the context's device.
+    /// </summary>
     public MetalUploads(MetalContext ctx) => this._ctx = ctx;
 
+    /// <summary>
+    /// A new batch with its own command buffer; its copies run when it is disposed.
+    /// </summary>
     public IGpuUploadBatch Begin() => new MetalUploadBatch(_ctx);
 
+    /// <summary>
+    /// One upload batch: its copies are recorded into its own command buffer through a blit encoder, staged in a growing shared buffer.
+    /// </summary>
     internal sealed unsafe class MetalUploadBatch : IGpuUploadBatch
     {
+        /// <summary>
+        /// The context the textures, buffers and staging come from.
+        /// </summary>
         readonly MetalContext _ctx;
+        /// <summary>
+        /// The batch's own command buffer, committed when the batch is disposed.
+        /// </summary>
         readonly MTLCommandBuffer _command;
+        /// <summary>
+        /// The list over <see cref="_command"/> the blits are recorded through.
+        /// </summary>
         readonly MetalCommandList _list;
+        /// <summary>
+        /// What the batch wrote, for the retired staging buffers' labels.
+        /// </summary>
         readonly List<string> _written = [];
+        /// <summary>
+        /// The current staging buffer (null until the first write).
+        /// </summary>
         MTLBuffer _staging;
+        /// <summary>
+        /// The current staging buffer's size, and how many of its bytes are used.
+        /// </summary>
         ulong _stagingSize, _stagingUsed;
 
+        /// <summary>
+        /// A batch with a new command buffer from the context's queue.
+        /// </summary>
         public MetalUploadBatch(MetalContext ctx)
         {
             this._ctx = ctx;
@@ -36,10 +69,20 @@ public sealed class MetalUploads : IGpuUploads
             _list = new MetalCommandList(ctx, "uploads", _command);
         }
 
+        /// <summary>
+        /// The batch's command list (over its own command buffer).
+        /// </summary>
         public IGpuCommandList Commands => _list;
 
+        /// <summary>
+        /// Makes a texture through the context.
+        /// </summary>
         public GpuTexture Create(TextureDesc desc) => _ctx.CreateTexture(desc);
 
+        /// <summary>
+        /// Copies <paramref name="data"/> into a level and layer region of the texture through staging, repacking it into padded full-width rows when
+        /// needed; a region outside the texture is skipped with a warning.
+        /// </summary>
         public void Write(GpuTexture target, int level, int layer, in PixelRect region, ReadOnlySpan<byte> data)
         {
             var desc = target.Desc;
@@ -108,6 +151,10 @@ public sealed class MetalUploads : IGpuUploads
             _ctx.CountUpload(data.Length);
         }
 
+        /// <summary>
+        /// Copies <paramref name="data"/> into the buffer at <paramref name="offset"/> through staging; a write past the buffer's end is skipped with
+        /// a warning.
+        /// </summary>
         public void Write(DeviceBuffer target, ulong offset, ReadOnlySpan<byte> data)
         {
             _written.Add($"{target.Name} buffer +{offset} ({data.Length} B)");
@@ -149,6 +196,9 @@ public sealed class MetalUploads : IGpuUploads
             return _staging;
         }
 
+        /// <summary>
+        /// Ends the blit encoder and commits the command buffer, then retires the staging buffer until the command completes.
+        /// </summary>
         public void Dispose()
         {
             _list.EndBlit();

@@ -20,6 +20,9 @@ public static class BenchStats
     /// </summary>
     public const double MinMeaningful = 0.005;
 
+    /// <summary>
+    /// Builds the statistics of the values that are not NaN; null when there are none.
+    /// </summary>
     public static MetricStats? Summarize(IEnumerable<double> values)
     {
         var v = values.Where(x => !double.IsNaN(x)).Order().ToArray();
@@ -34,6 +37,9 @@ public static class BenchStats
     /// </summary>
     public static double Percentile(double[] sorted, double q) => sorted[Math.Min((int)(sorted.Length * q), sorted.Length - 1)];
 
+    /// <summary>
+    /// The median of sorted values (the mean of the middle two for an even count).
+    /// </summary>
     public static double Median(double[] sorted) =>
         sorted.Length % 2 == 1 ? sorted[sorted.Length / 2] : (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]) / 2;
 

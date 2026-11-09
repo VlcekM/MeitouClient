@@ -15,14 +15,35 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed class MetalFxUpscaler : IUpscaler
 {
+    /// <summary>
+    /// The context whose device, textures and frame command buffer the scaler uses.
+    /// </summary>
     readonly MetalContext _ctx;
+    /// <summary>
+    /// The temporal scaler; null until the first dispatch, replaced when a size changes.
+    /// </summary>
     MTLFXTemporalScaler _scaler;
+    /// <summary>
+    /// The render and display sizes the scaler was made for (0 before it is made).
+    /// </summary>
     int _inputWidth, _inputHeight, _outputWidth, _outputHeight;
+    /// <summary>
+    /// Set when the scaler could not be made or encoded: every later dispatch returns false (TAA takes over).
+    /// </summary>
     bool _failed;
 
+    /// <summary>
+    /// An upscaler over the context; the scaler itself is made on the first dispatch.
+    /// </summary>
     MetalFxUpscaler(MetalContext ctx) => this._ctx = ctx;
 
+    /// <summary>
+    /// MetalFX.
+    /// </summary>
     public UpscalerKind Kind => UpscalerKind.MetalFx;
+    /// <summary>
+    /// "metalfx", with the render and display sizes once the scaler is made.
+    /// </summary>
     public string Name => _inputWidth == 0 ? "metalfx" : $"metalfx {_inputWidth}x{_inputHeight} -> {_outputWidth}x{_outputHeight}";
 
     /// <summary>
@@ -35,6 +56,10 @@ public sealed class MetalFxUpscaler : IUpscaler
         return new MetalFxUpscaler(ctx);
     }
 
+    /// <summary>
+    /// Encodes MetalFX from the frame's colour, depth and motion (and reactive mask) into the output; false when it cannot (the caller falls back to
+    /// TAA).
+    /// </summary>
     public bool Dispatch(UpscaleInputs i)
     {
         if (_failed) return false;
@@ -74,6 +99,10 @@ public sealed class MetalFxUpscaler : IUpscaler
         return true;
     }
 
+    /// <summary>
+    /// Makes the scaler for the sizes when it has none or another size (the old one deleted after the frame ring); false when the scale is below 0.40
+    /// or MetalFX fails.
+    /// </summary>
     bool EnsureScaler(int width, int height, int displayWidth, int displayHeight)
     {
         // 0.40 (2.5x) is the lowest stable tier on this device; 0.33 (3x) crashed before the first frame.
@@ -137,6 +166,9 @@ public sealed class MetalFxUpscaler : IUpscaler
         return true;
     }
 
+    /// <summary>
+    /// Releases the scaler.
+    /// </summary>
     public void Dispose()
     {
         if (_scaler.NativePtr != IntPtr.Zero) _scaler.Dispose();
@@ -150,9 +182,18 @@ public sealed class MetalFxUpscaler : IUpscaler
 /// </summary>
 static class MetalFxRuntime
 {
+    /// <summary>
+    /// The loaded MetalFX framework handle; 0 when it is not loaded.
+    /// </summary>
     static nint s_framework;
+    /// <summary>
+    /// Whether the load was tried already.
+    /// </summary>
     static bool s_looked;
 
+    /// <summary>
+    /// Whether the MetalFX framework loads (macOS 13 or later) and has its temporal scaler descriptor class; tried once.
+    /// </summary>
     public static bool Available
     {
         get

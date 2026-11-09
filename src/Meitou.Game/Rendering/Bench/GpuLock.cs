@@ -9,6 +9,9 @@ namespace Meitou.Game.Rendering.Bench;
 /// </summary>
 public sealed class GpuLock : IDisposable
 {
+    /// <summary>
+    /// The open lock file while the lock is held; null once released.
+    /// </summary>
     FileStream? _stream;
 
     /// <summary>
@@ -16,6 +19,9 @@ public sealed class GpuLock : IDisposable
     /// </summary>
     internal static string? PathOverride;
 
+    /// <summary>
+    /// The lock file: <see cref="PathOverride"/>, or <c>meitou-gpu.lock</c> in the temp directory.
+    /// </summary>
     public static string FilePath => PathOverride ?? Path.Combine(Path.GetTempPath(), "meitou-gpu.lock");
 
     /// <summary>
@@ -63,6 +69,9 @@ public sealed class GpuLock : IDisposable
         }
     }
 
+    /// <summary>
+    /// The PID the lock file holds, or null when it cannot be read.
+    /// </summary>
     static int? Holder()
     {
         try
@@ -80,6 +89,9 @@ public sealed class GpuLock : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether a process with <paramref name="pid"/> is running.
+    /// </summary>
     static bool Alive(int pid)
     {
         try
@@ -97,6 +109,9 @@ public sealed class GpuLock : IDisposable
         }
     }
 
+    /// <summary>
+    /// Releases the lock: closes the file and deletes it when it can.
+    /// </summary>
     public void Dispose()
     {
         if (_stream is null) return;

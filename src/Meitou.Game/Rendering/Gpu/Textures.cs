@@ -1,9 +1,59 @@
 namespace Meitou.Game.Rendering.Gpu;
 
+/// <summary>
+/// What a texture is used for (the backend's image usage).
+/// </summary>
 [Flags]
-public enum TextureUse { Sampled = 1, Storage = 2, ColourTarget = 4, DepthTarget = 8, TransferSrc = 16, TransferDst = 32, ShadingRate = 64 }
+public enum TextureUse
+{
+    /// <summary>
+    /// Sampled by shaders.
+    /// </summary>
+    Sampled = 1,
+    /// <summary>
+    /// Read and written as a storage image.
+    /// </summary>
+    Storage = 2,
+    /// <summary>
+    /// Rendered into as a colour attachment.
+    /// </summary>
+    ColourTarget = 4,
+    /// <summary>
+    /// Rendered into as a depth attachment.
+    /// </summary>
+    DepthTarget = 8,
+    /// <summary>
+    /// Copied from.
+    /// </summary>
+    TransferSrc = 16,
+    /// <summary>
+    /// Copied into (uploads).
+    /// </summary>
+    TransferDst = 32,
+    /// <summary>
+    /// Read as a fragment shading rate attachment.
+    /// </summary>
+    ShadingRate = 64
+}
 
-public enum TextureKind { Texture2D, Texture2DArray, Cube }
+/// <summary>
+/// The shape of a texture.
+/// </summary>
+public enum TextureKind
+{
+    /// <summary>
+    /// One or more 2D layers (a view of several is a 2D array).
+    /// </summary>
+    Texture2D,
+    /// <summary>
+    /// A 2D array.
+    /// </summary>
+    Texture2DArray,
+    /// <summary>
+    /// A cube map: six layers per cube.
+    /// </summary>
+    Cube
+}
 
 /// <summary>
 /// What a <see cref="GpuTexture"/> is made from (docs/renderer-native.md 2.4). <c>Streamed</c>: it comes and goes as the view moves (a world
@@ -13,6 +63,9 @@ public sealed record TextureDesc(InternalFormat Format, int Width, int Height, i
     TextureKind Kind = TextureKind.Texture2D, TextureUse Use = TextureUse.Sampled | TextureUse.TransferDst, string Name = "",
     bool Private = false, bool Streamed = false)
 {
+    /// <summary>
+    /// Whether the format is a depth (or depth-stencil) format.
+    /// </summary>
     public bool IsDepth => GlConventions.IsDepthFormat(Format);
 }
 
@@ -21,9 +74,14 @@ public sealed record TextureDesc(InternalFormat Format, int Width, int Height, i
 /// </summary>
 public readonly record struct SampledTexture(GpuSampler Sampler, GpuView View)
 {
+    /// <summary>
+    /// No view: nothing is bound.
+    /// </summary>
     public bool IsNull => View.IsNull;
 
-    // By handle: the view's index and the sampler's are the identity (a view belongs to one texture).
+    /// <summary>
+    /// Equality by handle: the view's index and the sampler's are the identity (a view belongs to one texture).
+    /// </summary>
     public bool Equals(SampledTexture other) => Sampler == other.Sampler && View == other.View;
 
     public override int GetHashCode() => HashCode.Combine(Sampler, View);
@@ -35,8 +93,14 @@ public readonly record struct SampledTexture(GpuSampler Sampler, GpuView View)
 /// </summary>
 public sealed class GpuTexture : IDisposable
 {
+    /// <summary>
+    /// The backend the texture's views and release go through.
+    /// </summary>
     readonly IGpuContext _ctx;
 
+    /// <summary>
+    /// A handle the backend made for its texture at <paramref name="index"/>.
+    /// </summary>
     internal GpuTexture(IGpuContext ctx, TextureDesc desc, int index)
     {
         this._ctx = ctx;
@@ -44,6 +108,9 @@ public sealed class GpuTexture : IDisposable
         Index = index;
     }
 
+    /// <summary>
+    /// What the texture was made from.
+    /// </summary>
     public TextureDesc Desc { get; }
 
     /// <summary>
@@ -73,5 +140,8 @@ public sealed class GpuTexture : IDisposable
     /// </summary>
     public GpuView Attachment(int level = 0, int layer = 0) => _ctx.View(this, level, 1, layer, 1, GpuViewType.Texture2D, default);
 
+    /// <summary>
+    /// Releases the texture through the backend.
+    /// </summary>
     public void Dispose() => _ctx.ReleaseTexture(this);
 }

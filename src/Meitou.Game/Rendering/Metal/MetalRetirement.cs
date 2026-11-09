@@ -6,14 +6,26 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 internal sealed class DeferredReleaseQueue
 {
+    /// <summary>
+    /// The pending actions and the frame each was queued in.
+    /// </summary>
     readonly List<(long Frame, Action Release)> _items = [];
+    /// <summary>
+    /// Guards <see cref="_items"/>.
+    /// </summary>
     readonly object _gate = new();
 
+    /// <summary>
+    /// How many actions are pending.
+    /// </summary>
     public int Count
     {
         get { lock (_gate) return _items.Count; }
     }
 
+    /// <summary>
+    /// Queues <paramref name="release"/> as named by <paramref name="frame"/>.
+    /// </summary>
     public void Add(long frame, Action release)
     {
         ArgumentNullException.ThrowIfNull(release);

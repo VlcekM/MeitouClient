@@ -58,4 +58,18 @@ public sealed class ShaderCompileException(string message, string stage, string 
 /// <summary>
 /// Where a <see cref="CompiledProgram"/> came from.
 /// </summary>
-public enum ProgramSource { Compiled, Memory, Disk }
+public enum ProgramSource
+{
+    /// <summary>
+    /// Compiled now.
+    /// </summary>
+    Compiled,
+    /// <summary>
+    /// From the in-memory cache.
+    /// </summary>
+    Memory,
+    /// <summary>
+    /// From the on-disk cache.
+    /// </summary>
+    Disk
+}

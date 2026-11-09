@@ -38,10 +38,19 @@ public abstract class RecordJob
 /// </summary>
 public sealed class JobPool<T> where T : RecordJob, new()
 {
+    /// <summary>
+    /// The jobs returned and not rented again.
+    /// </summary>
     readonly Stack<T> _free = new();
 
+    /// <summary>
+    /// A returned job, else a new one.
+    /// </summary>
     public T Rent() => _free.Count > 0 ? _free.Pop() : new T();
 
+    /// <summary>
+    /// Takes a job back for reuse.
+    /// </summary>
     public void Return(T job) => _free.Push(job);
 }
 
@@ -78,27 +87,81 @@ public static class Recording
 /// </summary>
 public sealed class ParallelPass
 {
+    /// <summary>
+    /// One secondary of the pass, in execution order: a job to record (or an inline list already recorded), its label, list, stage and CPU time.
+    /// </summary>
     struct Entry
     {
+        /// <summary>
+        /// The prepared job; null for an inline segment, and after its release.
+        /// </summary>
         public RecordJob? Job;
+        /// <summary>
+        /// The segment's debug label.
+        /// </summary>
         public string Label;
+        /// <summary>
+        /// The secondary the segment is recorded into.
+        /// </summary>
         public CommandList? List;
+        /// <summary>
+        /// The <see cref="StageClock"/> stage its CPU time counts towards.
+        /// </summary>
         public int Stage;
+        /// <summary>
+        /// The job's recording time, in stopwatch ticks.
+        /// </summary>
         public long Ticks;
     }
 
+    /// <summary>
+    /// The context whose frame the secondaries come from.
+    /// </summary>
     readonly GpuContext _ctx;
+    /// <summary>
+    /// Records job <c>k</c> on a job thread (made once, so the threaded loop allocates no closure).
+    /// </summary>
     readonly Action<int> _recordOne;
+    /// <summary>
+    /// The pass's segments in execution order (grown by doubling).
+    /// </summary>
     Entry[] _entries = new Entry[64];
+    /// <summary>
+    /// The segments added since <see cref="Begin"/>.
+    /// </summary>
     int _count;
+    /// <summary>
+    /// The indices into <see cref="_entries"/> of the segments that are jobs.
+    /// </summary>
     int[] _jobs = new int[64];
+    /// <summary>
+    /// The jobs added since <see cref="Begin"/>.
+    /// </summary>
     int _jobCount;
+    /// <summary>
+    /// The jobs' summed <see cref="RecordJob.Size"/> (decides whether to thread).
+    /// </summary>
     int _work;
+    /// <summary>
+    /// The secondaries' handles, in execution order, for the host's execute (grown as needed).
+    /// </summary>
     CommandBuffer[] _handles = new CommandBuffer[64];
+    /// <summary>
+    /// The host's primary list the secondaries execute on; null outside the pass.
+    /// </summary>
     CommandList? _primary;
+    /// <summary>
+    /// The host rendering's attachment formats (what the secondaries inherit).
+    /// </summary>
     AttachmentFormats _formats;
+    /// <summary>
+    /// The inline segment open now; null when none is.
+    /// </summary>
     CommandList? _inline;
 
+    /// <summary>
+    /// A pass for the context's frame.
+    /// </summary>
     internal ParallelPass(GpuContext ctx)
     {
         this._ctx = ctx;
@@ -165,6 +228,9 @@ public sealed class ParallelPass
         return _inline = list;
     }
 
+    /// <summary>
+    /// Ends the inline segment: its label and recording end, and it takes its place in the order.
+    /// </summary>
     public void EndInline(CommandList list)
     {
         if (!ReferenceEquals(list, _inline)) throw new InvalidOperationException("EndInline without a matching BeginInline");
@@ -194,6 +260,9 @@ public sealed class ParallelPass
         _primary = null;
     }
 
+    /// <summary>
+    /// Records every job: on the job threads when <paramref name="threaded"/>, else here in order.
+    /// </summary>
     void RecordAll(bool threaded)
     {
         if (threaded)
@@ -205,6 +274,10 @@ public sealed class ParallelPass
         for (int k = 0; k < _jobCount; k++) RecordEntry(_jobs[k], threaded: false);
     }
 
+    /// <summary>
+    /// Collects the secondaries' handles in order, adds their counters to <see cref="Totals"/> and the frame's, counts the jobs' CPU time and
+    /// releases the jobs.
+    /// </summary>
     void CollectHandles()
     {
         if (_handles.Length < _count) _handles = new CommandBuffer[Math.Max(_count, _handles.Length * 2)];
@@ -229,6 +302,9 @@ public sealed class ParallelPass
         Add(frameStats, Totals);
     }
 
+    /// <summary>
+    /// Records one job into a new secondary (with <see cref="RenderJobs.InJob"/> set) and times it.
+    /// </summary>
     void RecordEntry(int i, bool threaded)
     {
         ref var e = ref _entries[i];
@@ -251,12 +327,18 @@ public sealed class ParallelPass
         e.Ticks = Stopwatch.GetTimestamp() - t0;
     }
 
+    /// <summary>
+    /// The next segment slot (the array doubles when full).
+    /// </summary>
     ref Entry Next()
     {
         if (_count == _entries.Length) Array.Resize(ref _entries, _entries.Length * 2);
         return ref _entries[_count++];
     }
 
+    /// <summary>
+    /// Adds one list's counters to another's.
+    /// </summary>
     static void Add(GpuStats to, GpuStats from)
     {
         to.Draws += from.Draws;

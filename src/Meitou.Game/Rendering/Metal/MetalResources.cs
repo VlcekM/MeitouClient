@@ -10,7 +10,13 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 internal sealed class MetalTexture
 {
+    /// <summary>
+    /// The Metal texture.
+    /// </summary>
     public required MTLTexture Image { get; init; }
+    /// <summary>
+    /// What the texture was made from.
+    /// </summary>
     public required TextureDesc Desc { get; init; }
     /// <summary>
     /// The views cut on this texture (freed with it).
@@ -21,6 +27,9 @@ internal sealed class MetalTexture
     /// </summary>
     public readonly Dictionary<MetalViewKey, MetalTextureView> ViewCache = [];
 
+    /// <summary>
+    /// Releases the Metal texture.
+    /// </summary>
     public void Release() => Image.Dispose();
 }
 
@@ -29,7 +38,13 @@ internal sealed class MetalTexture
 /// </summary>
 internal sealed class MetalTextureView
 {
+    /// <summary>
+    /// The view's Metal texture (the parent's own image for the identity view).
+    /// </summary>
     public required MTLTexture Image { get; init; }
+    /// <summary>
+    /// The texture the view is of.
+    /// </summary>
     public required MetalTexture Of { get; init; }
     /// <summary>
     /// Its index in the context's view table (the <c>GpuView</c> handle).
@@ -41,13 +56,28 @@ internal sealed class MetalTextureView
     public bool OwnsImage { get; init; } = true;
 }
 
+/// <summary>
+/// What a cut view is cached by: its level and layer range, type and swizzle.
+/// </summary>
 internal readonly record struct MetalViewKey(int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, GpuSwizzle Swizzle);
 
+/// <summary>
+/// A buffer: the Metal buffer behind a <c>DeviceBuffer</c> handle.
+/// </summary>
 internal sealed class MetalBuffer
 {
+    /// <summary>
+    /// The Metal buffer.
+    /// </summary>
     public required MTLBuffer Buffer { get; init; }
+    /// <summary>
+    /// The buffer's debug name.
+    /// </summary>
     public required string Name { get; init; }
 
+    /// <summary>
+    /// Releases the Metal buffer.
+    /// </summary>
     public void Release() => Buffer.Dispose();
 }
 
@@ -58,6 +88,12 @@ internal sealed class MetalBuffer
 /// </summary>
 internal sealed class MetalSet
 {
+    /// <summary>
+    /// The layout the set was made for.
+    /// </summary>
     public required GpuSetLayout Layout { get; init; }
+    /// <summary>
+    /// The bindings the set was made from, read back at <c>BindSets</c>.
+    /// </summary>
     public required GpuBinding[] Bindings { get; init; }
 }

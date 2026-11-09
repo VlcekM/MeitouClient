@@ -31,9 +31,18 @@ public sealed partial class GlslProgramCompiler
     /// </summary>
     public const int NativeCacheVersion = 5;   // 5: clip depth remap removed, MEITOU_DEPTH_REVERSED
 
+    /// <summary>
+    /// The compiled legacy programs by cache key (when the options use the memory cache).
+    /// </summary>
     readonly ConcurrentDictionary<string, CompiledProgram> _memory = new();
+    /// <summary>
+    /// The compiled native stages' SPIR-V by cache key (when the options use the memory cache).
+    /// </summary>
     readonly ConcurrentDictionary<string, byte[]> _nativeMemory = new();
 
+    /// <summary>
+    /// A compiler with <paramref name="defaults"/> (or the default options) for calls given none.
+    /// </summary>
     public GlslProgramCompiler(ShaderCompileOptions? defaults = null) => DefaultOptions = defaults ?? new ShaderCompileOptions();
 
     /// <summary>
@@ -41,6 +50,10 @@ public sealed partial class GlslProgramCompiler
     /// </summary>
     public ShaderCompileOptions DefaultOptions { get; }
 
+    /// <summary>
+    /// The program's two stages as SPIR-V: from the memory cache, the disk cache or compiled now (locations injected, the depth define added,
+    /// bindings shifted).
+    /// </summary>
     public CompiledProgram Compile(string vertexGlsl, string fragmentGlsl, ShaderCompileOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(vertexGlsl);
@@ -156,9 +169,15 @@ public sealed partial class GlslProgramCompiler
         }
     }
 
+    /// <summary>
+    /// The first <c>#version</c> line.
+    /// </summary>
     [GeneratedRegex(@"^[ \t]*#[ \t]*version[^\r\n]*", RegexOptions.Multiline)]
     private static partial Regex VersionRegex();
 
+    /// <summary>
+    /// The shaderc API from the library this assembly ships, or the default lookup when it is not found there.
+    /// </summary>
     static Shaderc LoadApi()
     {
         // With the assembly given, .NET resolves the name through deps.json (runtimes/<rid>/native) or beside the assembly; PATH is not searched.
@@ -181,6 +200,9 @@ public sealed partial class GlslProgramCompiler
         return program;
     }
 
+    /// <summary>
+    /// One native stage's SPIR-V: from the memory cache, the disk cache or compiled now (strict rules, no binding shift).
+    /// </summary>
     byte[] CompileNativeStage(string glsl, ShaderKind kind, string stage, ShaderCompileOptions? options)
     {
         ArgumentNullException.ThrowIfNull(glsl);
@@ -206,6 +228,10 @@ public sealed partial class GlslProgramCompiler
         return spirv;
     }
 
+    /// <summary>
+    /// Compiles one stage with shaderc for Vulkan 1.3 (relaxed rules, auto-bound uniforms and a forced GLSL 450 core profile when
+    /// <paramref name="legacy"/>), unoptimised so names survive.
+    /// </summary>
     static unsafe byte[] CompileStage(string source, ShaderKind kind, string stage, uint bindingBase, bool legacy = true)
     {
         var api = Api.Value;
@@ -236,6 +262,10 @@ public sealed partial class GlslProgramCompiler
         }
     }
 
+    /// <summary>
+    /// Compiles the source into SPIR-V and shifts its bindings by <paramref name="bindingBase"/>; throws a <see cref="ShaderCompileException"/> with
+    /// shaderc's log and the numbered source lines on failure.
+    /// </summary>
     static unsafe byte[] CompileToSpirv(Shaderc api, Compiler* compiler, CompileOptions* opts, string source, ShaderKind kind, string stage,
         uint bindingBase)
     {
@@ -264,6 +294,9 @@ public sealed partial class GlslProgramCompiler
         }
     }
 
+    /// <summary>
+    /// A UTF-8 C string as a string ("" for null).
+    /// </summary>
     static unsafe string Marshal(byte* text) => System.Runtime.InteropServices.Marshal.PtrToStringUTF8((nint)text) ?? "";
 
     /// <summary>
@@ -286,6 +319,9 @@ public sealed partial class GlslProgramCompiler
         return sb.ToString();
     }
 
+    /// <summary>
+    /// The line number in a shaderc error or warning (<c>:N: error</c>).
+    /// </summary>
     [GeneratedRegex(@":(\d+): (?:error|warning)")]
     private static partial Regex ErrorLineRegex();
 }

@@ -7,9 +7,18 @@ namespace Meitou.Game.Rendering.Gpu.Core;
 /// </summary>
 public sealed unsafe class TimelineSemaphore : IDisposable
 {
+    /// <summary>
+    /// The device the semaphore is made on.
+    /// </summary>
     readonly VulkanDevice _device;
+    /// <summary>
+    /// The semaphore; null once disposed.
+    /// </summary>
     Silk.NET.Vulkan.Semaphore _semaphore;
 
+    /// <summary>
+    /// A timeline semaphore starting at <paramref name="initialValue"/>, with a debug name when one is given.
+    /// </summary>
     public TimelineSemaphore(VulkanDevice device, ulong initialValue = 0, string? name = null)
     {
         this._device = device;
@@ -26,6 +35,9 @@ public sealed unsafe class TimelineSemaphore : IDisposable
             device.SetName(ObjectType.Semaphore, _semaphore.Handle, name);
     }
 
+    /// <summary>
+    /// The Vulkan semaphore.
+    /// </summary>
     public Silk.NET.Vulkan.Semaphore Handle => _semaphore;
 
     /// <summary>
@@ -64,6 +76,9 @@ public sealed unsafe class TimelineSemaphore : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Destroys the semaphore (once).
+    /// </summary>
     public void Dispose()
     {
         if (_semaphore.Handle != 0)

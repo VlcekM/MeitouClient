@@ -131,6 +131,9 @@ public static class GlConventions
 
     #region Blending and depth
 
+    /// <summary>
+    /// The Vulkan blend factor of a GL one; throws for a factor the renderers never use.
+    /// </summary>
     public static BlendFactor BlendFactor(BlendingFactor f) => f switch
     {
         BlendingFactor.Zero => Silk.NET.Vulkan.BlendFactor.Zero,
@@ -146,6 +149,9 @@ public static class GlConventions
         _ => throw new NotSupportedException($"blend factor {f}"),
     };
 
+    /// <summary>
+    /// The Vulkan compare op of a GL depth function; anything not listed (<c>ALWAYS</c>) maps to Always.
+    /// </summary>
     public static CompareOp CompareOp(DepthFunction f) => f switch
     {
         DepthFunction.Never => Silk.NET.Vulkan.CompareOp.Never,
@@ -162,6 +168,9 @@ public static class GlConventions
 
     #region Samplers
 
+    /// <summary>
+    /// The Vulkan address mode of a GL wrap mode; anything not listed (<c>REPEAT</c>) maps to Repeat.
+    /// </summary>
     public static SamplerAddressMode AddressMode(TextureWrapMode m) => m switch
     {
         TextureWrapMode.ClampToEdge => SamplerAddressMode.ClampToEdge,
@@ -193,6 +202,9 @@ public static class GlConventions
     /// </summary>
     public static FrontFace VkFrontFace(FrontFaceDirection f) => f == FrontFaceDirection.Ccw ? FrontFace.Clockwise : FrontFace.CounterClockwise;
 
+    /// <summary>
+    /// The Vulkan topology of a GL primitive mode; throws for a mode the renderers never draw.
+    /// </summary>
     public static PrimitiveTopology Topology(PrimitiveType mode) => mode switch
     {
         PrimitiveType.TriangleStrip => PrimitiveTopology.TriangleStrip,
@@ -380,52 +392,175 @@ public static unsafe class GlUniforms
 
 // The OpenGL vocabulary the conventions above (and the renderers' texture and vertex descriptions) are stated in: the names and numeric
 // values of the OpenGL specification's tokens, only the members the code uses. Kept from the GL layer removed in phase 8 stage 3.
+/// <summary>
+/// GL's blend factor (<c>glBlendFunc</c>), with the OpenGL specification's token values.
+/// </summary>
 public enum BlendingFactor : int
 {
+    /// <summary>
+    /// <c>GL_ZERO</c>: factor 0.
+    /// </summary>
     Zero = 0x0,
+    /// <summary>
+    /// <c>GL_ONE</c>: factor 1.
+    /// </summary>
     One = 0x1,
+    /// <summary>
+    /// <c>GL_SRC_COLOR</c>: the source (fragment) colour.
+    /// </summary>
     SrcColor = 0x300,
+    /// <summary>
+    /// <c>GL_ONE_MINUS_SRC_COLOR</c>: one minus the source colour.
+    /// </summary>
     OneMinusSrcColor = 0x301,
+    /// <summary>
+    /// <c>GL_SRC_ALPHA</c>: the source alpha.
+    /// </summary>
     SrcAlpha = 0x302,
+    /// <summary>
+    /// <c>GL_ONE_MINUS_SRC_ALPHA</c>: one minus the source alpha.
+    /// </summary>
     OneMinusSrcAlpha = 0x303,
+    /// <summary>
+    /// <c>GL_DST_ALPHA</c>: the destination (render target) alpha.
+    /// </summary>
     DstAlpha = 0x304,
+    /// <summary>
+    /// <c>GL_ONE_MINUS_DST_ALPHA</c>: one minus the destination alpha.
+    /// </summary>
     OneMinusDstAlpha = 0x305,
+    /// <summary>
+    /// <c>GL_DST_COLOR</c>: the destination colour.
+    /// </summary>
     DstColor = 0x306,
+    /// <summary>
+    /// <c>GL_ONE_MINUS_DST_COLOR</c>: one minus the destination colour.
+    /// </summary>
     OneMinusDstColor = 0x307,
 }
 
+/// <summary>
+/// GL's depth compare function (<c>glDepthFunc</c>), with the OpenGL specification's token values.
+/// </summary>
 public enum DepthFunction : int
 {
+    /// <summary>
+    /// <c>GL_NEVER</c>: the test never passes.
+    /// </summary>
     Never = 0x200,
+    /// <summary>
+    /// <c>GL_LESS</c>: passes when the incoming depth is less than the stored one.
+    /// </summary>
     Less = 0x201,
+    /// <summary>
+    /// <c>GL_EQUAL</c>: passes when the depths are equal.
+    /// </summary>
     Equal = 0x202,
+    /// <summary>
+    /// <c>GL_LEQUAL</c>: passes when the incoming depth is less than or equal to the stored one.
+    /// </summary>
     Lequal = 0x203,
+    /// <summary>
+    /// <c>GL_GREATER</c>: passes when the incoming depth is greater than the stored one.
+    /// </summary>
     Greater = 0x204,
+    /// <summary>
+    /// <c>GL_NOTEQUAL</c>: passes when the depths differ.
+    /// </summary>
     Notequal = 0x205,
+    /// <summary>
+    /// <c>GL_GEQUAL</c>: passes when the incoming depth is greater than or equal to the stored one.
+    /// </summary>
     Gequal = 0x206,
+    /// <summary>
+    /// <c>GL_ALWAYS</c>: the test always passes.
+    /// </summary>
     Always = 0x207,
 }
 
+/// <summary>
+/// GL's front face winding (<c>glFrontFace</c>), with the OpenGL specification's token values; see <see cref="GlConventions.VkFrontFace"/>.
+/// </summary>
 public enum FrontFaceDirection : int
 {
+    /// <summary>
+    /// <c>GL_CW</c>: clockwise triangles face front.
+    /// </summary>
     Cw = 0x900,
+    /// <summary>
+    /// <c>GL_CCW</c>: counter-clockwise triangles face front (GL's default).
+    /// </summary>
     Ccw = 0x901,
 }
 
 /// <summary>
 /// GL's cull face: the faces a draw discards (the cull is off with <see cref="None"/>).
 /// </summary>
-public enum CullMode { None, Front, Back, FrontAndBack }
+public enum CullMode
+{
+    /// <summary>
+    /// No faces are culled.
+    /// </summary>
+    None,
+    /// <summary>
+    /// Front faces are culled.
+    /// </summary>
+    Front,
+    /// <summary>
+    /// Back faces are culled.
+    /// </summary>
+    Back,
+    /// <summary>
+    /// Both front and back faces are culled.
+    /// </summary>
+    FrontAndBack
+}
 
 /// <summary>
 /// GL's polygon mode: how a polygon's interior is filled.
 /// </summary>
-public enum PolygonKind { Point, Line, Fill }
+public enum PolygonKind
+{
+    /// <summary>
+    /// Only the vertices are rasterized, as points.
+    /// </summary>
+    Point,
+    /// <summary>
+    /// Only the edges are rasterized, as lines.
+    /// </summary>
+    Line,
+    /// <summary>
+    /// The interior is filled.
+    /// </summary>
+    Fill
+}
 
 /// <summary>
 /// GL's blend equation, for colour and for alpha separately.
 /// </summary>
-public enum BlendOperation { Add, Subtract, ReverseSubtract, Min, Max }
+public enum BlendOperation
+{
+    /// <summary>
+    /// Source times its factor plus destination times its factor.
+    /// </summary>
+    Add,
+    /// <summary>
+    /// Source term minus destination term.
+    /// </summary>
+    Subtract,
+    /// <summary>
+    /// Destination term minus source term.
+    /// </summary>
+    ReverseSubtract,
+    /// <summary>
+    /// The smaller of source and destination (factors ignored).
+    /// </summary>
+    Min,
+    /// <summary>
+    /// The larger of source and destination (factors ignored).
+    /// </summary>
+    Max
+}
 
 /// <summary>
 /// GL's colour mask (glColorMask): the channels a draw writes.
@@ -433,12 +568,33 @@ public enum BlendOperation { Add, Subtract, ReverseSubtract, Min, Max }
 [Flags]
 public enum ColorMask
 {
+    /// <summary>
+    /// No channel is written.
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// The red channel.
+    /// </summary>
     R = 1,
+    /// <summary>
+    /// The green channel.
+    /// </summary>
     G = 2,
+    /// <summary>
+    /// The blue channel.
+    /// </summary>
     B = 4,
+    /// <summary>
+    /// The alpha channel.
+    /// </summary>
     A = 8,
+    /// <summary>
+    /// Red, green and blue (alpha untouched).
+    /// </summary>
     Rgb = R | G | B,
+    /// <summary>
+    /// All four channels.
+    /// </summary>
     All = R | G | B | A,
 }
 
@@ -452,111 +608,411 @@ public readonly record struct PixelRect(int X, int Y, uint Width, uint Height);
 /// </summary>
 public readonly record struct PixelViewport(float X, float Y, float Width, float Height, float MinDepth = 0, float MaxDepth = 1);
 
+/// <summary>
+/// OpenGL tokens the conventions compare against (formats, component types, swizzle channels), with the OpenGL specification's values. Several names
+/// share a value (<c>NoError</c> and <c>Zero</c> are both 0).
+/// </summary>
 public enum GlEnum : int
 {
+    /// <summary>
+    /// <c>GL_NO_ERROR</c>.
+    /// </summary>
     NoError = 0x0,
+    /// <summary>
+    /// <c>GL_ZERO</c>: a swizzle reading constant 0.
+    /// </summary>
     Zero = 0x0,
+    /// <summary>
+    /// <c>GL_ONE</c>: a swizzle reading constant 1.
+    /// </summary>
     One = 0x1,
+    /// <summary>
+    /// <c>GL_BYTE</c>: signed 8-bit components (1 byte in <see cref="GlConventions.VertexBytes"/>).
+    /// </summary>
     Byte = 0x1400,
+    /// <summary>
+    /// <c>GL_UNSIGNED_BYTE</c>: unsigned 8-bit components.
+    /// </summary>
     UnsignedByte = 0x1401,
+    /// <summary>
+    /// <c>GL_SHORT</c>: signed 16-bit components.
+    /// </summary>
     Short = 0x1402,
+    /// <summary>
+    /// <c>GL_UNSIGNED_SHORT</c>: unsigned 16-bit components.
+    /// </summary>
     UnsignedShort = 0x1403,
+    /// <summary>
+    /// <c>GL_INT</c>: signed 32-bit components.
+    /// </summary>
     Int = 0x1404,
+    /// <summary>
+    /// <c>GL_UNSIGNED_INT</c>: unsigned 32-bit components.
+    /// </summary>
     UnsignedInt = 0x1405,
+    /// <summary>
+    /// <c>GL_FLOAT</c>: 32-bit float components.
+    /// </summary>
     Float = 0x1406,
+    /// <summary>
+    /// <c>GL_HALF_FLOAT</c>: 16-bit float components.
+    /// </summary>
     HalfFloat = 0x140B,
+    /// <summary>
+    /// <c>GL_DEPTH_COMPONENT</c>: unsized depth format (stored as 32-bit float depth, see <see cref="GlConventions.VkFormat"/>).
+    /// </summary>
     DepthComponent = 0x1902,
+    /// <summary>
+    /// <c>GL_RED</c>: the red channel as a swizzle source.
+    /// </summary>
     Red = 0x1903,
+    /// <summary>
+    /// <c>GL_GREEN</c>: the green channel as a swizzle source.
+    /// </summary>
     Green = 0x1904,
+    /// <summary>
+    /// <c>GL_BLUE</c>: the blue channel as a swizzle source.
+    /// </summary>
     Blue = 0x1905,
+    /// <summary>
+    /// <c>GL_ALPHA</c>: the alpha channel as a swizzle source.
+    /// </summary>
     Alpha = 0x1906,
+    /// <summary>
+    /// <c>GL_RGB</c>: unsized RGB format (stored as RGBA8).
+    /// </summary>
     Rgb = 0x1907,
+    /// <summary>
+    /// <c>GL_RGBA</c>: unsized RGBA format (stored as RGBA8).
+    /// </summary>
     Rgba = 0x1908,
+    /// <summary>
+    /// <c>GL_RGB8</c>: 8-bit RGB (stored as RGBA8).
+    /// </summary>
     Rgb8 = 0x8051,
+    /// <summary>
+    /// <c>GL_RGBA8</c>: 8-bit normalized RGBA.
+    /// </summary>
     Rgba8 = 0x8058,
+    /// <summary>
+    /// <c>GL_SAMPLES</c>.
+    /// </summary>
     Samples = 0x80A9,
+    /// <summary>
+    /// <c>GL_DEPTH_COMPONENT24</c>: 24-bit depth (stored as 32-bit float depth).
+    /// </summary>
     DepthComponent24 = 0x81A6,
+    /// <summary>
+    /// <c>GL_R8</c>: 8-bit normalized red.
+    /// </summary>
     R8 = 0x8229,
+    /// <summary>
+    /// <c>GL_R16</c>: 16-bit normalized red.
+    /// </summary>
     R16 = 0x822A,
+    /// <summary>
+    /// <c>GL_RG8</c>: 8-bit normalized red-green.
+    /// </summary>
     Rg8 = 0x822B,
+    /// <summary>
+    /// <c>GL_R16F</c>: 16-bit float red.
+    /// </summary>
     R16F = 0x822D,
+    /// <summary>
+    /// <c>GL_R32F</c>: 32-bit float red.
+    /// </summary>
     R32F = 0x822E,
+    /// <summary>
+    /// <c>GL_RG16F</c>: 16-bit float red-green.
+    /// </summary>
     Rg16F = 0x822F,
+    /// <summary>
+    /// <c>GL_RG32F</c>: 32-bit float red-green.
+    /// </summary>
     Rg32F = 0x8230,
+    /// <summary>
+    /// <c>GL_RGBA32F</c>: 32-bit float RGBA.
+    /// </summary>
     Rgba32F = 0x8814,
+    /// <summary>
+    /// <c>GL_RGBA16F</c>: 16-bit float RGBA.
+    /// </summary>
     Rgba16F = 0x881A,
+    /// <summary>
+    /// <c>GL_COMPARE_REF_TO_TEXTURE</c>: a depth-compare (shadow) sampler mode.
+    /// </summary>
     CompareRefToTexture = 0x884E,
+    /// <summary>
+    /// <c>GL_DEPTH24_STENCIL8</c>: 24-bit depth with 8-bit stencil.
+    /// </summary>
     Depth24Stencil8 = 0x88F0,
+    /// <summary>
+    /// <c>GL_R11F_G11F_B10F</c>: packed unsigned float RGB.
+    /// </summary>
     R11FG11FB10F = 0x8C3A,
+    /// <summary>
+    /// <c>GL_DEPTH_COMPONENT32F</c>: 32-bit float depth.
+    /// </summary>
     DepthComponent32F = 0x8CAC,
+    /// <summary>
+    /// <c>GL_FRAMEBUFFER_COMPLETE</c>.
+    /// </summary>
     FramebufferComplete = 0x8CD5,
+    /// <summary>
+    /// <c>GL_MAX_SAMPLES</c>.
+    /// </summary>
     MaxSamples = 0x8D57,
+    /// <summary>
+    /// <c>GL_RGBA8UI</c>: 8-bit unsigned integer RGBA.
+    /// </summary>
     Rgba8Ui = 0x8D7C,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RED_RGTC1</c>: BC4 one-channel compression.
+    /// </summary>
     CompressedRedRgtc1 = 0x8DBB,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RG_RGTC2</c>: BC5 two-channel compression.
+    /// </summary>
     CompressedRgRgtc2 = 0x8DBD,
+    /// <summary>
+    /// <c>GL_SRGB8_ALPHA8</c>: 8-bit sRGB RGBA.
+    /// </summary>
     Srgb8Alpha8 = 0x8C43,
+    /// <summary>
+    /// <c>GL_RGBA16</c>: 16-bit normalized RGBA.
+    /// </summary>
     Rgba16 = 0x805A,
+    /// <summary>
+    /// <c>GL_R8UI</c>: 8-bit unsigned integer red.
+    /// </summary>
     R8Ui = 0x8232,
+    /// <summary>
+    /// <c>GL_RG16</c>: 16-bit normalized red-green.
+    /// </summary>
     Rg16 = 0x822C,
+    /// <summary>
+    /// <c>GL_R16UI</c>: 16-bit unsigned integer red.
+    /// </summary>
     R16Ui = 0x8234,
+    /// <summary>
+    /// <c>GL_R16I</c>: 16-bit signed integer red.
+    /// </summary>
     R16I = 0x8239,
+    /// <summary>
+    /// <c>GL_R32I</c>: 32-bit signed integer red.
+    /// </summary>
     R32I = 0x8235,
+    /// <summary>
+    /// <c>GL_R32UI</c>: 32-bit unsigned integer red.
+    /// </summary>
     R32Ui = 0x8236,
+    /// <summary>
+    /// <c>GL_RGBA16UI</c>: 16-bit unsigned integer RGBA.
+    /// </summary>
     Rgba16Ui = 0x8D76,
+    /// <summary>
+    /// <c>GL_RGBA32UI</c>: 32-bit unsigned integer RGBA.
+    /// </summary>
     Rgba32Ui = 0x8D70,
+    /// <summary>
+    /// <c>GL_RGBA32I</c>: 32-bit signed integer RGBA.
+    /// </summary>
     Rgba32I = 0x8D82,
+    /// <summary>
+    /// <c>GL_RGB32F</c>: 32-bit float RGB.
+    /// </summary>
     Rgb32F = 0x8815,
 }
 
+/// <summary>
+/// GL's sized internal formats the renderers state their textures, attachments and vertex attributes in, with the OpenGL specification's token
+/// values; <see cref="GlConventions.VkFormat"/> maps them to Vulkan.
+/// </summary>
 public enum InternalFormat : int
 {
+    /// <summary>
+    /// No format: an attachment that is not there (<see cref="GlConventions.VkFormatOrUndefined"/>).
+    /// </summary>
     None = 0,
+    /// <summary>
+    /// <c>GL_RGBA8</c>: 8-bit normalized RGBA.
+    /// </summary>
     Rgba8 = 0x8058,
+    /// <summary>
+    /// <c>GL_RGBA16</c>: 16-bit normalized RGBA.
+    /// </summary>
     Rgba16 = 0x805A,
+    /// <summary>
+    /// <c>GL_RGBA16_SNORM</c>: 16-bit signed normalized RGBA.
+    /// </summary>
     Rgba16Snorm = 0x8F9B,
+    /// <summary>
+    /// <c>GL_DEPTH_COMPONENT24</c>: 24-bit depth (stored as 32-bit float depth).
+    /// </summary>
     DepthComponent24 = 0x81A6,
+    /// <summary>
+    /// <c>GL_R8</c>: 8-bit normalized red.
+    /// </summary>
     R8 = 0x8229,
+    /// <summary>
+    /// <c>GL_R16</c>: 16-bit normalized red.
+    /// </summary>
     R16 = 0x822A,
+    /// <summary>
+    /// <c>GL_R16F</c>: 16-bit float red.
+    /// </summary>
     R16F = 0x822D,
+    /// <summary>
+    /// <c>GL_R32F</c>: 32-bit float red.
+    /// </summary>
     R32F = 0x822E,
+    /// <summary>
+    /// <c>GL_RG16F</c>: 16-bit float red-green.
+    /// </summary>
     Rg16F = 0x822F,
+    /// <summary>
+    /// <c>GL_RG32F</c>: 32-bit float red-green.
+    /// </summary>
     Rg32F = 0x8230,
+    /// <summary>
+    /// <c>GL_R8UI</c>: 8-bit unsigned integer red.
+    /// </summary>
     R8Ui = 0x8232,
+    /// <summary>
+    /// <c>GL_RG16</c>: 16-bit normalized red-green.
+    /// </summary>
     Rg16 = 0x822C,
+    /// <summary>
+    /// <c>GL_R16UI</c>: 16-bit unsigned integer red.
+    /// </summary>
     R16Ui = 0x8234,
+    /// <summary>
+    /// <c>GL_R16I</c>: 16-bit signed integer red.
+    /// </summary>
     R16I = 0x8239,
+    /// <summary>
+    /// <c>GL_R32I</c>: 32-bit signed integer red.
+    /// </summary>
     R32I = 0x8235,
+    /// <summary>
+    /// <c>GL_R32UI</c>: 32-bit unsigned integer red.
+    /// </summary>
     R32Ui = 0x8236,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RGB_S3TC_DXT1_EXT</c>: BC1 without alpha.
+    /// </summary>
     CompressedRgbS3TcDxt1Ext = 0x83F0,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RGBA_S3TC_DXT1_EXT</c>: BC1 with 1-bit alpha.
+    /// </summary>
     CompressedRgbaS3TcDxt1Ext = 0x83F1,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RGBA_S3TC_DXT3_EXT</c>: BC2.
+    /// </summary>
     CompressedRgbaS3TcDxt3Ext = 0x83F2,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RGBA_S3TC_DXT5_EXT</c>: BC3.
+    /// </summary>
     CompressedRgbaS3TcDxt5Ext = 0x83F3,
+    /// <summary>
+    /// <c>GL_RGBA32F</c>: 32-bit float RGBA.
+    /// </summary>
     Rgba32F = 0x8814,
+    /// <summary>
+    /// <c>GL_RGB32F</c>: 32-bit float RGB.
+    /// </summary>
     Rgb32F = 0x8815,
+    /// <summary>
+    /// <c>GL_RGBA16F</c>: 16-bit float RGBA.
+    /// </summary>
     Rgba16F = 0x881A,
+    /// <summary>
+    /// <c>GL_R11F_G11F_B10F</c>: packed unsigned float RGB.
+    /// </summary>
     R11FG11FB10F = 0x8C3A,
+    /// <summary>
+    /// <c>GL_SRGB8_ALPHA8</c>: 8-bit sRGB RGBA.
+    /// </summary>
     Srgb8Alpha8 = 0x8C43,
+    /// <summary>
+    /// <c>GL_DEPTH_COMPONENT32F</c>: 32-bit float depth.
+    /// </summary>
     DepthComponent32F = 0x8CAC,
+    /// <summary>
+    /// <c>GL_DEPTH24_STENCIL8</c>: 24-bit depth with 8-bit stencil.
+    /// </summary>
     Depth24Stencil8 = 0x88F0,
+    /// <summary>
+    /// <c>GL_RGBA8UI</c>: 8-bit unsigned integer RGBA.
+    /// </summary>
     Rgba8Ui = 0x8D7C,
+    /// <summary>
+    /// <c>GL_RGBA16UI</c>: 16-bit unsigned integer RGBA.
+    /// </summary>
     Rgba16Ui = 0x8D76,
+    /// <summary>
+    /// <c>GL_RGBA32UI</c>: 32-bit unsigned integer RGBA.
+    /// </summary>
     Rgba32Ui = 0x8D70,
+    /// <summary>
+    /// <c>GL_RGBA32I</c>: 32-bit signed integer RGBA.
+    /// </summary>
     Rgba32I = 0x8D82,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RED_RGTC1</c>: BC4 one-channel compression.
+    /// </summary>
     CompressedRedRgtc1 = 0x8DBB,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RG_RGTC2</c>: BC5 two-channel compression.
+    /// </summary>
     CompressedRgRgtc2 = 0x8DBD,
+    /// <summary>
+    /// <c>GL_COMPRESSED_RGBA_BPTC_UNORM</c>: BC7.
+    /// </summary>
     CompressedRgbaBptcUnorm = 0x8E8C,
+    /// <summary>
+    /// <c>GL_DEPTH_COMPONENT16</c>: 16-bit depth.
+    /// </summary>
     Depth16 = 0x81A5,
+    /// <summary>
+    /// <c>GL_DEPTH32F_STENCIL8</c>: 32-bit float depth with 8-bit stencil.
+    /// </summary>
     Depth32FStencil8 = 0x8CAD,
 }
 
+/// <summary>
+/// GL's primitive mode (<c>glDrawArrays</c> mode), with the OpenGL specification's token values; <see cref="GlConventions.Topology"/> maps it to
+/// Vulkan.
+/// </summary>
 public enum PrimitiveType : int
 {
+    /// <summary>
+    /// <c>GL_POINTS</c>: one point per vertex.
+    /// </summary>
     Points = 0x0,
+    /// <summary>
+    /// <c>GL_LINES</c>: a line per vertex pair.
+    /// </summary>
     Lines = 0x1,
+    /// <summary>
+    /// <c>GL_LINE_STRIP</c>: connected lines.
+    /// </summary>
     LineStrip = 0x3,
+    /// <summary>
+    /// <c>GL_TRIANGLES</c>: a triangle per three vertices.
+    /// </summary>
     Triangles = 0x4,
+    /// <summary>
+    /// <c>GL_TRIANGLE_STRIP</c>: each vertex after the second makes a triangle with the previous two.
+    /// </summary>
     TriangleStrip = 0x5,
+    /// <summary>
+    /// <c>GL_TRIANGLE_FAN</c>: triangles sharing the first vertex.
+    /// </summary>
     TriangleFan = 0x6,
+    /// <summary>
+    /// <c>GL_PATCHES</c>: tessellation patches.
+    /// </summary>
     PatchList = 0xE,
 }
 
@@ -565,8 +1021,17 @@ public enum PrimitiveType : int
 /// </summary>
 public enum LoadOp : int
 {
+    /// <summary>
+    /// Keep the previous contents.
+    /// </summary>
     Load = 0,
+    /// <summary>
+    /// Clear to the pass's clear value.
+    /// </summary>
     Clear = 1,
+    /// <summary>
+    /// The previous contents are not needed (undefined).
+    /// </summary>
     DontCare = 2,
 }
 
@@ -586,39 +1051,108 @@ public readonly record struct ClearColour(float R, float G, float B, float A)
 /// </summary>
 public enum IndexKind : int
 {
+    /// <summary>
+    /// 16-bit unsigned indices.
+    /// </summary>
     U16 = 0,
+    /// <summary>
+    /// 32-bit unsigned indices.
+    /// </summary>
     U32 = 1,
 }
 
+/// <summary>
+/// GL's magnification filter, with the OpenGL specification's token values.
+/// </summary>
 public enum TextureMagFilter : int
 {
+    /// <summary>
+    /// <c>GL_NEAREST</c>: the nearest texel.
+    /// </summary>
     Nearest = 0x2600,
+    /// <summary>
+    /// <c>GL_LINEAR</c>: bilinear between the four nearest texels.
+    /// </summary>
     Linear = 0x2601,
 }
 
+/// <summary>
+/// GL's minification filter (texel filter and mip selection), with the OpenGL specification's token values.
+/// </summary>
 public enum TextureMinFilter : int
 {
+    /// <summary>
+    /// <c>GL_NEAREST</c>: the nearest texel of the base level, no mips.
+    /// </summary>
     Nearest = 0x2600,
+    /// <summary>
+    /// <c>GL_LINEAR</c>: bilinear on the base level, no mips.
+    /// </summary>
     Linear = 0x2601,
+    /// <summary>
+    /// <c>GL_NEAREST_MIPMAP_NEAREST</c>: nearest texel of the nearest mip.
+    /// </summary>
     NearestMipmapNearest = 0x2700,
+    /// <summary>
+    /// <c>GL_LINEAR_MIPMAP_NEAREST</c>: bilinear in the nearest mip.
+    /// </summary>
     LinearMipmapNearest = 0x2701,
+    /// <summary>
+    /// <c>GL_NEAREST_MIPMAP_LINEAR</c>: nearest texel, blended between two mips.
+    /// </summary>
     NearestMipmapLinear = 0x2702,
+    /// <summary>
+    /// <c>GL_LINEAR_MIPMAP_LINEAR</c>: bilinear, blended between two mips (trilinear).
+    /// </summary>
     LinearMipmapLinear = 0x2703,
 }
 
+/// <summary>
+/// GL's texture target, with the OpenGL specification's token values; <see cref="GlConventions.TargetSlot"/> maps it to a slot.
+/// </summary>
 public enum TextureTarget : int
 {
+    /// <summary>
+    /// <c>GL_TEXTURE_2D</c>.
+    /// </summary>
     Texture2D = 0xDE1,
+    /// <summary>
+    /// <c>GL_TEXTURE_CUBE_MAP</c>.
+    /// </summary>
     TextureCubeMap = 0x8513,
+    /// <summary>
+    /// <c>GL_TEXTURE_CUBE_MAP_POSITIVE_X</c>: the first cube face (faces follow in +X, -X, +Y, -Y, +Z, -Z order).
+    /// </summary>
     TextureCubeMapPositiveX = 0x8515,
+    /// <summary>
+    /// <c>GL_TEXTURE_CUBE_MAP_NEGATIVE_Z</c>: the last cube face.
+    /// </summary>
     TextureCubeMapNegativeZ = 0x851A,
+    /// <summary>
+    /// <c>GL_TEXTURE_2D_ARRAY</c>.
+    /// </summary>
     Texture2DArray = 0x8C1A,
 }
 
+/// <summary>
+/// GL's texture wrap mode, with the OpenGL specification's token values; <see cref="GlConventions.AddressMode"/> maps it to Vulkan.
+/// </summary>
 public enum TextureWrapMode : int
 {
+    /// <summary>
+    /// <c>GL_REPEAT</c>: the texture tiles.
+    /// </summary>
     Repeat = 0x2901,
+    /// <summary>
+    /// <c>GL_CLAMP_TO_BORDER</c>: outside reads the border colour.
+    /// </summary>
     ClampToBorder = 0x812D,
+    /// <summary>
+    /// <c>GL_CLAMP_TO_EDGE</c>: outside reads the edge texel.
+    /// </summary>
     ClampToEdge = 0x812F,
+    /// <summary>
+    /// <c>GL_MIRRORED_REPEAT</c>: the texture tiles, every other tile mirrored.
+    /// </summary>
     MirroredRepeat = 0x8370,
 }
