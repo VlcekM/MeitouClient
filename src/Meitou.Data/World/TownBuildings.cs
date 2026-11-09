@@ -247,6 +247,10 @@ public sealed record TownBuilding(string InstanceId, string BuildingId, string N
     /// </summary>
     public int Function { get; init; } = -1;
     /// <summary>
+    /// How many generators it is and its interior and exterior layouts hold, ruined or not: while it stands, they power its town's beds.
+    /// </summary>
+    public int Generators { get; init; }
+    /// <summary>
     /// A table placed on its own in the town (not inside a building): one squad's outdoor table to hang around at.
     /// </summary>
     public bool IsOutdoorTable => Function is TownBuildings.TableFunction or TownBuildings.CorpseDisposalFunction or TownBuildings.RefineryFunction
@@ -412,7 +416,30 @@ public static class TownBuildings
             InteriorLayout = interior,
             Resolved = placed,
             Naming = naming ?? b.Naming,
+            Generators = GeneratorCount(layouts, placed, state),
         };
+    }
+
+    /// <summary>
+    /// A generator has positive power output and no power capacity; a building with capacity is a battery.
+    /// </summary>
+    public static bool IsGenerator(GameRecord building) => building.GetInt("power capacity") <= 0 && building.GetInt("power output") > 0;
+
+    /// <summary>
+    /// The generators a placed building is and its interior and exterior layouts hold, whether it stands or not.
+    /// </summary>
+    internal static int GeneratorCount(BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord? state)
+    {
+        var record = resolved.Record;
+        var placement = resolved.Placement;
+        int count = IsGenerator(record) ? 1 : 0;
+        if (state is null) return count;
+
+        foreach (bool exterior in (bool[])[false, true])
+            if (layouts.Find(record, placement.LayoutName(state, exterior), exterior) is { } layout)
+                count += layouts.Items(layout, placement).Count(item => IsGenerator(item.Building));
+
+        return count;
     }
 
     /// <summary>

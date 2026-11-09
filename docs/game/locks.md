@@ -307,7 +307,12 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   checks rent (`FUN_140357ad0`: a negative cost is passed on to the payment only when the bed has a parent building, slot 59) and power; with the flag clear
   the update (slot 2 `FUN_140351770`, gated by +0xa1 == 0) tests power once instead, so power is always tested (**Verified**). Power (`FUN_140299370`, the sound emitter's powered test, buildings-production.md):
   true for a building with no power figure (`power output` + research bonus 0) or without a grid, else the grid must supply it. Refused: the task ends and the character is told "This bed needs power to operate."
-  (Meitou: `BedSystem.LieIn`, a bed the player built whose machine draws power and has none; no base-game bed has a negative `power output` (**Verified**, probe of every BUILDING with a bed functionality), some mods do); sound `Character_Bed` / `Get_In`; then enters. Row 258 has no done-list (it runs until replaced), row 98's is
+  The base Skeleton Repair Bed has `power output` -10, the other base beds 0 (**Verified**, probe of every BUILDING with a bed functionality). A town's placed
+  ones (**Observed**, original game, a skeleton put in one): Black Desert City (Small Generators in its interiors), Burn's Tower (a Small Wind Generator) and Skinhouse HQ
+  (Small Generators, Generator II) let it in; the Island Lab (two Battery Banks, no generator) and the Reprogramming Workshop (none) refuse; with every generator's
+  `power output` set to 0 by a mod, Black Desert City's refuses too. Making the owner faction `not real` or not, or its `default relation` 0, changed none of
+  these. (Meitou: `BedSystem.LieIn`, a player-built bed whose machine draws power and has none, or a placed bed that draws power in a town with no generator
+  among its standing buildings and their interior and exterior layouts, `BedSystem.Unpowered`, `TownBuilding.Generators`); sound `Character_Bed` / `Get_In`; then enters. Row 258 has no done-list (it runs until replaced), row 98's is
   `isFullyRested`, `isInBed` ([ai-tasks](ai-tasks.md)).
 - **Task_GetOutOfBed** (116, 208, 257; `FUN_140345760`, `FUN_140348480`): `Get_Out` sound; when the bed's clip is `gotobed` it is played backwards and
   the character leaves at 10 %, else at once.

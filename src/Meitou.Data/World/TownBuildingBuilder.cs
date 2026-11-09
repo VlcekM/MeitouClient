@@ -157,6 +157,7 @@ public sealed class TownBuildingBuilder
             Tables = c.Tables,
             Furniture = c.Furniture,
             Function = functionality?.GetInt("function") ?? -1,
+            Generators = _contents && _layouts is not null ? GeneratorCount(_layouts, resolved, state) : 0,
         };
     }
 
