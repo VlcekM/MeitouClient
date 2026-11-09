@@ -320,8 +320,8 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Data panel
 
     /// <summary>
-    /// The data panel's lines (<see cref="InventorySummaryLines"/>), an animal's as a person's: the player's own animals show the Disguise and slave rows
-    /// too (<b>Observed</b>, original: a Garru, a Pack Beast, an Iron Spider and a Bonedog of the player's squad).
+    /// The data panel's lines (<see cref="InventorySummaryLines"/>): the player's own animals show the Disguise and slave rows too
+    /// (<b>Observed</b>, original: a Garru, a Pack Beast, an Iron Spider and a Bonedog of the player's squad).
     /// </summary>
     internal void AddInventorySummary(List<UiControl> controls, CharacterSnapshot lead)
     {

@@ -132,6 +132,7 @@ sealed class CharacterAssembly(PopulationData data)
             weapon = WeaponInstance.Create((model?.Level ?? 0) * 0.01f, w, maker,
                 model is { } m ? combat.WeaponMaterial(m.ModelStringId) : null, combat.Constants);
         }
+
         var pack = PackOf(inventory);
         return new Fighter(weapon, null, pack.Stealth, pack.Athletics, pack.Skill, pack.Speed) { IsAnimal = true };
     }
@@ -145,6 +146,7 @@ sealed class CharacterAssembly(PopulationData data)
     {
         var packRecord = inventory.Backpack is { } pack ? data.Db.Find(pack.Record) : null;
         float? stealth = inventory.Backpack is not null ? packRecord?.GetFloat("stealth mult", 1) ?? 1 : null;
+
         return (stealth, packRecord?.GetFloat("athletics mult", 1) ?? 1, packRecord?.GetInt("combat skill bonus", 0) ?? 0,
             packRecord?.GetFloat("combat speed mult", 1) ?? 1);
     }
