@@ -178,6 +178,25 @@ public sealed class WwiseVorbis
         w.Write(5, 8);
         w.WriteBytes("vorbis"u8);
 
+        CopyCodebooks(ref r, w, library);
+
+        w.Write(0, 6); // one time-domain transform
+        w.Write(0, 16); // of type 0
+
+        CopyFloors(ref r, w);
+        CopyResidues(ref r, w);
+        CopyMappings(ref r, w);
+        CopyModes(ref r, w, out modeLong, out modeBits);
+        w.Write(true); // framing
+        if (r.Remaining >= 8) throw new InvalidDataException($"Setup packet has {r.Remaining} bits left over");
+        return w.ToArray();
+    }
+
+    /// <summary>
+    /// The codebooks: each a 10-bit index into <paramref name="library"/>, expanded to the standard layout.
+    /// </summary>
+    static void CopyCodebooks(ref VorbisBitReader r, VorbisBitWriter w, WwiseCodebookLibrary library)
+    {
         int codebooks = (int)r.Read(8) + 1;
         w.Write((uint)codebooks - 1, 8);
         for (int i = 0; i < codebooks; i++)
@@ -185,10 +204,13 @@ public sealed class WwiseVorbis
             var book = new VorbisBitReader(library.Packed((int)r.Read(10)));
             Codebook(ref book, w);
         }
+    }
 
-        w.Write(0, 6); // one time-domain transform
-        w.Write(0, 16); // of type 0
-
+    /// <summary>
+    /// The floors, each given back its type field (always floor 1).
+    /// </summary>
+    static void CopyFloors(ref VorbisBitReader r, VorbisBitWriter w)
+    {
         int floors = (int)r.Read(6) + 1;
         w.Write((uint)floors - 1, 6);
         for (int i = 0; i < floors; i++)
@@ -220,7 +242,13 @@ public sealed class WwiseVorbis
             foreach (var c in classes)
                 for (int k = 0; k < dimensions[c]; k++) w.Copy(ref r, rangeBits);
         }
+    }
 
+    /// <summary>
+    /// The residues: Wwise's 2-bit type widened to the standard 16 bits, the rest copied.
+    /// </summary>
+    static void CopyResidues(ref VorbisBitReader r, VorbisBitWriter w)
+    {
         int residues = (int)r.Read(6) + 1;
         w.Write((uint)residues - 1, 6);
         for (int i = 0; i < residues; i++)
@@ -253,7 +281,13 @@ public sealed class WwiseVorbis
                 for (int k = 0; k < 8; k++)
                     if ((c & (1u << k)) != 0) w.Copy(ref r, 8);
         }
+    }
 
+    /// <summary>
+    /// The mappings, each given back its type field (mapping 0); the coupling steps and the channel muxes depend on <see cref="Channels"/>.
+    /// </summary>
+    void CopyMappings(ref VorbisBitReader r, VorbisBitWriter w)
+    {
         int mappings = (int)r.Read(6) + 1;
         w.Write((uint)mappings - 1, 6);
         int channelBits = VorbisBitWriter.Log((uint)Channels - 1);
@@ -283,7 +317,14 @@ public sealed class WwiseVorbis
                 for (int c = 0; c < Channels; c++) w.Copy(ref r, 4);
             for (int k = 0; k < submaps; k++) w.Copy(ref r, 24); // time (unused), floor, residue
         }
+    }
 
+    /// <summary>
+    /// The modes, each given back its window and transform types; <paramref name="modeLong"/> gets each mode's block flag and
+    /// <paramref name="modeBits"/> the bits an audio packet's mode number takes.
+    /// </summary>
+    static void CopyModes(ref VorbisBitReader r, VorbisBitWriter w, out bool[] modeLong, out int modeBits)
+    {
         int modes = (int)r.Read(6) + 1;
         w.Write((uint)modes - 1, 6);
         modeLong = new bool[modes];
@@ -296,9 +337,6 @@ public sealed class WwiseVorbis
             w.Copy(ref r, 8); // mapping
         }
         modeBits = VorbisBitWriter.Log((uint)modes - 1);
-        w.Write(true); // framing
-        if (r.Remaining >= 8) throw new InvalidDataException($"Setup packet has {r.Remaining} bits left over");
-        return w.ToArray();
     }
 
     /// <summary>
@@ -412,12 +450,45 @@ public sealed class WwiseVorbis
     /// </summary>
     sealed class OggWriter(int serial)
     {
+        /// <summary>
+        /// The CRC-32 table of the Ogg checksum (polynomial 0x04C11DB7, no reflection).
+        /// </summary>
+        static readonly uint[] Table = MakeTable();
+
+        /// <summary>
+        /// The pages written so far.
+        /// </summary>
         readonly MemoryStream _output = new();
+
+        /// <summary>
+        /// The open page's lacing values.
+        /// </summary>
         readonly List<byte> _segments = [];
+
+        /// <summary>
+        /// The open page's body bytes.
+        /// </summary>
         readonly MemoryStream _body = new();
+
+        /// <summary>
+        /// The granule position of the last packet added.
+        /// </summary>
         long _granule = -1;
+
+        /// <summary>
+        /// The next page's sequence number.
+        /// </summary>
         int _sequence;
+
+        /// <summary>
+        /// The open page is the stream's first; the last packet added ends the stream.
+        /// </summary>
         bool _first = true, _ended;
+
+        /// <summary>
+        /// The open page continues a packet the previous page did not finish.
+        /// </summary>
+        bool _continuation;
 
         public void Packet(byte[] packet, long packetGranule, bool last)
         {
@@ -438,8 +509,6 @@ public sealed class WwiseVorbis
         }
 
         public void Flush() => Flush(continued: false);
-
-        bool _continuation;
 
         void Flush(bool continued)
         {
@@ -464,8 +533,6 @@ public sealed class WwiseVorbis
         }
 
         public byte[] ToArray() => _output.ToArray();
-
-        static readonly uint[] Table = MakeTable();
 
         static uint[] MakeTable()
         {

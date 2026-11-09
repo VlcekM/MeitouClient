@@ -402,7 +402,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
     /// The races this session offers: at creation the playable ones, limited to the start's <c>force race</c>; a surgeon offers none (race stays).
     /// </summary>
     internal IReadOnlyList<EditorRaceGroup> EditorRaces(GameDatabase db) =>
-        Editor?.Kind == EditKind.Creation ? CharacterDraft.PlayableRaces(db, [.. player.Session.World.Player.CreationRaces]) : [];
+        Editor?.Kind == EditKind.Creation ? PlayableRaces.Of(db, [.. player.Session.World.Player.CreationRaces]) : [];
 
     /// <summary>
     /// CONFIRM. Like the original (<c>FUN_1405e9f40</c>), a squad with characters never shown asks first ("There are other characters whose
@@ -517,7 +517,7 @@ sealed class CharacterEditorPanel(PlayerInterface player)
         b.Properties[tabButton] = new Dictionary<string, string> { ["Checked"] = "true" };
         b.Properties["ClothesButton"] = new Dictionary<string, string> { ["Checked"] = s.Clothes ? "true" : "false",
             ["StateSelected"] = s.Clothes ? "true" : "false" };
-        var everyRace = CharacterDraft.PlayableRaces(data.Db);
+        var everyRace = PlayableRaces.Of(data.Db);
         int shown = IndexOf(everyRace, draft.Race);
         b.Text["RaceText"] = shown >= 0 ? everyRace[shown].Group.Name : draft.Race.Name;
         b.Text["SubRaceText"] = draft.Race.Name;
