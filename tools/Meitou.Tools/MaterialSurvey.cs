@@ -30,10 +30,7 @@ static class MaterialSurvey
     }
 
     static void PrintScripts(
-        OgreMaterialLibrary all,
-        OgreMaterialLibrary configured,
-        OgreScriptResources dataIndex,
-        OgreScriptResources resources)
+        OgreMaterialLibrary all, OgreMaterialLibrary configured, OgreScriptResources dataIndex, OgreScriptResources resources)
     {
         int failed = all.Diagnostics.Count(d => d.Code == OgreScriptError.Fatal);
         Console.WriteLine($"All scripts under data/: {all.Files.Count} files compiled (.program + .material), {failed} failed");
@@ -46,11 +43,7 @@ static class MaterialSurvey
         Console.WriteLine($"  script files outside the configured folders: {string.Join(", ", outside)}");
     }
 
-    static void PrintPropertyUsage(
-        List<OgreTechnique> techniques,
-        List<OgrePass> passes,
-        List<OgreTextureUnit> units,
-        OgreMaterialLibrary all)
+    static void PrintPropertyUsage(List<OgreTechnique> techniques, List<OgrePass> passes, List<OgreTextureUnit> units, OgreMaterialLibrary all)
     {
         Console.WriteLine("  property usage (material / technique / pass / texture_unit / program ref):");
         var usage = new Dictionary<string, int>();
@@ -92,11 +85,7 @@ static class MaterialSurvey
     }
 
     static void PrintAudits(
-        GameInstall install,
-        OgreMaterialLibrary all,
-        OgreMaterialLibrary configured,
-        OgreScriptResources dataIndex,
-        OgreScriptResources resources)
+        GameInstall install, OgreMaterialLibrary all, OgreMaterialLibrary configured, OgreScriptResources dataIndex, OgreScriptResources resources)
     {
         var audit = OgreMaterialAudit.Run(install, all, dataIndex);
         Console.WriteLine($"Meshes: {audit.MeshFiles} read ({audit.MeshFailures.Count} failed), {audit.SubMeshes} submeshes, {audit.SubMeshesWithTextureAliases} with texture aliases");

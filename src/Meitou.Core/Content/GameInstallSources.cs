@@ -209,9 +209,8 @@ public static partial class GameInstallSources
         void Flush(string? section, Dictionary<string, string> values)
         {
             if (section is null) return;
-            bool gog = section.Contains(@"GOG.com\Games\",
-                    StringComparison.OrdinalIgnoreCase),
-                    uninstall = section.Contains(@"CurrentVersion\Uninstall\", StringComparison.OrdinalIgnoreCase);
+            bool gog = section.Contains(@"GOG.com\Games\", StringComparison.OrdinalIgnoreCase);
+            bool uninstall = section.Contains(@"CurrentVersion\Uninstall\", StringComparison.OrdinalIgnoreCase);
             string? name = gog ? values.GetValueOrDefault("gamename") : uninstall ? values.GetValueOrDefault("displayname") : null;
             if (name is null || !name.Contains("Kenshi", StringComparison.OrdinalIgnoreCase)) return;
             foreach (var key in new[] { "path", "installlocation", "inno setup: app path" })

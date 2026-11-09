@@ -295,8 +295,8 @@ public static class CharacterShape
     /// 3 × max(dexterity, unarmed) − cooking − science) × 0.01 / 5, mapped so 0.2 → 0 and 0.99 (women) / 0.9 (men) → 1,
     /// clamped to 0–1. The dexterity multiplier of the game (an unidentified stat field) is taken as 1.
     /// </summary>
-    public static float MuscleDefinitionFromStats(bool female, float swimming, float athletics, float dexterity, float unarmed, float cooking,
-            float science)
+    public static float MuscleDefinitionFromStats(
+        bool female, float swimming, float athletics, float dexterity, float unarmed, float cooking, float science)
     {
         float x = (swimming + athletics + 3 * Math.Max(dexterity, unarmed) - (cooking + science)) * 0.01f / 5;
         return Math.Clamp((x - 0.2f) / ((female ? 0.99f : 0.9f) - 0.2f), 0, 1);
@@ -308,10 +308,10 @@ public static class CharacterShape
     /// </summary>
     public static BodyBuild BuildFromStats<T>(bool female, T stats, Func<T, StatsEnumerated, float> stat, float hunger)
     {
-        float muscle = MuscleFromStats(stat(stats, StatsEnumerated.Strength), stat(stats, StatsEnumerated.SmithingWeapon), stat(stats,
-                StatsEnumerated.SmithingArmour));
-        float definition = MuscleDefinitionFromStats(female, stat(stats, StatsEnumerated.Swimming), stat(stats, StatsEnumerated.Athletics),
-                stat(stats, StatsEnumerated.Dexterity),
+        float muscle = MuscleFromStats(
+            stat(stats, StatsEnumerated.Strength), stat(stats, StatsEnumerated.SmithingWeapon), stat(stats, StatsEnumerated.SmithingArmour));
+        float definition = MuscleDefinitionFromStats(female,
+            stat(stats, StatsEnumerated.Swimming), stat(stats, StatsEnumerated.Athletics), stat(stats, StatsEnumerated.Dexterity),
             stat(stats, StatsEnumerated.MartialArts), stat(stats, StatsEnumerated.Cooking), stat(stats, StatsEnumerated.Science));
         float starvation = StarvationFromNutrition(hunger);
         return new(muscle, definition, starvation, muscle, starvation);
@@ -399,9 +399,8 @@ public static class CharacterShape
 
     /// <summary>
     /// How far the worn items lift the body off the ground (docs/animation.md, "Feet lift"): with prosthetics in both leg slots (52, 53), the lower
-    /// of their
-    /// <c>offset</c>s, else the worn boots' <c>boot height</c> (0 without). Game: <c>FUN_140538630</c> stores it at the character's +0x2cc, and
-    /// <c>FUN_1405f16a0</c> places the body mesh's node that much higher.
+    /// of their <c>offset</c>s, else the worn boots' <c>boot height</c> (0 without). Game: <c>FUN_140538630</c> stores it at the character's
+    /// +0x2cc, and <c>FUN_1405f16a0</c> places the body mesh's node that much higher.
     /// </summary>
     public static float FeetLiftOf(IEnumerable<CharacterPart> parts)
     {
@@ -491,9 +490,9 @@ public static class CharacterShape
                     applied.Add($"missing={string.Join(",", missing)}");
                     continue;
             }
+            string bareKey = key.Replace(" ", "").Replace("-", "").Replace("_", "");
             string? slider = Sliders.FirstOrDefault(s => string.Equals(s, key, StringComparison.OrdinalIgnoreCase))
-                ?? Sliders.FirstOrDefault(s => string.Equals(s.Replace(" ", "").Replace("-", ""), key.Replace(" ", "").Replace("-", "").Replace("_",
-                        ""), StringComparison.OrdinalIgnoreCase));
+                ?? Sliders.FirstOrDefault(s => string.Equals(s.Replace(" ", "").Replace("-", ""), bareKey, StringComparison.OrdinalIgnoreCase));
             if (slider is null)
                 throw new FormatException(
                     $"--shape: unknown slider '{key}' (known: {string.Join(", ", Sliders)}, muscle, starve, legratio, missing, hidestump)");

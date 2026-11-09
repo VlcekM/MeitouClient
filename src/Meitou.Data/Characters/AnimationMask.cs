@@ -12,6 +12,11 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
 {
     static readonly string[] LeftArm = ["Bip01 L Clavicle", "Bip01 L UpperArm", "Bip01 L Forearm", "Bip01 L Hand"];
     static readonly string[] RightArm = ["Bip01 R Clavicle", "Bip01 R UpperArm", "Bip01 R Forearm", "Bip01 R Hand"];
+    static readonly string[] BelowWaist =
+    [
+        "Bip01", "Bip01 Pelvis", "Bip01 R Thigh", "Bip01 L Thigh", "Bip01 R Calf", "Bip01 L Calf",
+        "Bip01 R Foot", "Bip01 L Foot", "Bip01 R Toe0", "Bip01 L Toe0",
+    ];
     static readonly string[] BodyHead = ["Bip01 Spine", "Bip01 Spine1", "Bip01 Spine2", "Bip01 Neck", "Bip01 Head"];
     static readonly string[] Tail = ["Bip01 Tail", "Bip01 Tail1", "Bip01 Tail2", "Bip01 Tail3", "Bip01 Tail4"];
     static readonly string[] HandsAndProps = ["Bip01 L Hand", "Bip01 R Hand", "Bip01 Prop1", "Bip01 Prop2"];
@@ -29,19 +34,17 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
     public static bool MovesCharacter(GameRecord record) => record.Type == FcsRecordType.CombatTechnique
         ? !(record.GetBool("is block") && !record.GetBool("is dodge"))
         : record.GetBool("relocates");
-    static readonly string[] BelowWaist =
-    [
-        "Bip01", "Bip01 Pelvis", "Bip01 R Thigh", "Bip01 L Thigh", "Bip01 R Calf", "Bip01 L Calf",
-        "Bip01 R Foot", "Bip01 L Foot", "Bip01 R Toe0", "Bip01 L Toe0",
-    ];
 
     /// <summary>
     /// No record: nothing deleted, except the hand and prop tracks of the three posture libraries.
     /// </summary>
-    public static AnimationMask Plain(string animation) => new(animation, null, "all",
-        animation is "postures" or "shoulder set" or "neck set" ? new HashSet<string>(HandsAndProps,
-                StringComparer.Ordinal) : new HashSet<string>(StringComparer.Ordinal),
-        new HashSet<string>(StringComparer.Ordinal));
+    public static AnimationMask Plain(string animation)
+    {
+        var deleted = animation is "postures" or "shoulder set" or "neck set"
+            ? new HashSet<string>(HandsAndProps, StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
+        return new(animation, null, "all", deleted, new HashSet<string>(StringComparer.Ordinal));
+    }
 
     /// <summary>
     /// The mask an ANIMATION (or ANIMAL_ANIMATION, which is not preprocessed: no deletions) record gives its animation.

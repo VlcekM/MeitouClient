@@ -131,18 +131,20 @@ static class ImpostorApp
     static (ImpostorAtlas Atlas, bool Hit) Obtain(Frames frames, ImpostorBaker baker, ImpostorCache cache, ImpostorSource source,
             ImpostorMeshes meshes, ImpostorClass size, Options o)
     {
-        if (!o.Rebake && cache.TryLoad(source) is { } cached && cached.FramePixels == size.FramePixels && cached.Grid == size.Grid) return (cached,
-                true);
+        if (!o.Rebake && cache.TryLoad(source) is { } cached && cached.FramePixels == size.FramePixels && cached.Grid == size.Grid)
+            return (cached, true);
+
         frames.Open();
         var atlas = baker.Bake(source, meshes, size, frames.Next);
         cache.Save(source, atlas);
         return (atlas, false);
     }
 
-    // One source per distinct (mesh, material, scale); the records that are not impostor material are counted.
+    /// <summary>
+    /// One source per distinct (mesh, material, scale); the records that are not impostor material are counted.
+    /// </summary>
     static (List<(FoliageMesh Mesh, ImpostorSource Source)> Sources, int Ineligible, int Missing) CollectSources(
-        FoliageCatalog catalog,
-        AssetLocator assets)
+        FoliageCatalog catalog, AssetLocator assets)
     {
         var seen = new HashSet<string>();
         var sources = new List<(FoliageMesh Mesh, ImpostorSource Source)>();
@@ -190,6 +192,7 @@ static class ImpostorApp
                 missing++;
                 continue;
             }
+
             float worldRadius = meshes.Radius * mesh.MaxScale;
             if (ImpostorClass.For(worldRadius, meshes.Triangles) is not { } size)
             {
@@ -208,7 +211,8 @@ static class ImpostorApp
             byClass[size.Name] = (sum.Count + 1, sum.Bytes + atlas.Bytes);
             var t = baker.LastTimes;
             string steps = hit
-                ? "" : string.Create(CultureInfo.InvariantCulture, $" (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})");
+                ? ""
+                : string.Create(CultureInfo.InvariantCulture, $" (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})");
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
                 $"{(hit ? "cached" : "baked "),-7} {size.Name,-6} r {worldRadius,6:0} {atlas.AtlasPixels,5}² {atlas.Bytes / 1048576.0,6:0.0} MB GPU {file / 1048576.0,6:0.0} MB file {ms,7:0} ms{steps}  {source.Name}"));
         }
@@ -256,7 +260,7 @@ static class ImpostorApp
             _ => ImpostorClass.For(worldRadius, meshes.Triangles) ?? ImpostorClass.Medium,
         };
         string files = Path.GetFileName(source.MeshPath) + (source.LeavesPath is null ? "" : " + " + Path.GetFileName(source.LeavesPath));
-        string shape = $"{size.Name} ({size.Grid}x{size.Grid} frames of {size.FramePixels})";
+        string shape = string.Create(CultureInfo.InvariantCulture, $"{size.Name} ({size.Grid}x{size.Grid} frames of {size.FramePixels})");
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"mesh      {mesh.Name} ({files}): radius {meshes.Radius:0.0}, scale {mesh.MinScale:0.##}..{mesh.MaxScale:0.##}, class {shape}"));
         frames.Open();
@@ -266,7 +270,8 @@ static class ImpostorApp
         var t = baker.LastTimes;
         string how = hit
             ? "from the cache"
-            : $"baked in {watch.ElapsedMilliseconds} ms (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})";
+            : string.Create(CultureInfo.InvariantCulture,
+                $"baked in {watch.ElapsedMilliseconds} ms (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})");
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"atlas     {how}: " +
             $"{atlas.AtlasPixels}² x 2 maps, {atlas.Levels} levels, {atlas.Bytes / 1048576.0:0.0} MB"));

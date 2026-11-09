@@ -228,8 +228,8 @@ public static class WorldObjectLayout
         if (part.GetPath("phs or mesh") is not { } mesh || !mesh.Contains(".mesh", StringComparison.Ordinal)) return null;
 
         var refs = part.GetReferences("material");
-        bool hasOwn = refs.Count > 0 && db.Find(refs[0].TargetStringId) is { Type: FcsRecordType.MaterialSpec };
-        var material = hasOwn ? ResolveCollection(db, db.Find(refs[0].TargetStringId), EditorPlatform) : null;
+        var own = refs.Count > 0 && db.Find(refs[0].TargetStringId) is { Type: FcsRecordType.MaterialSpec } spec ? spec : null;
+        var material = own is null ? null : ResolveCollection(db, own, EditorPlatform);
         return new PlacedMesh(mesh, transform, part, part, "meitou:editor-platform", PlacedKind.BuildingPart) { Material = material };
     }
 
