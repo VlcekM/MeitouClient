@@ -199,8 +199,11 @@ public sealed record BiomeTerrain
         static string? Tex(GameRecord r, string field) => r.GetPath(field) is { Length: > 0 } p ? p : null;
         // Defaults are the fcs.def ones.
         Vector2[] defaultTiling = [new(50, 50), new(70, 70), new(40, 10), new(40, 40), new(40, 40), new(40, 40)];
-        Vector4 Slope(string what, float d1, float d2, float dGrass) => new Vector4(
-            r.GetFloat($"slope {what} 1", d1), r.GetFloat($"slope {what} 2", d2), r.GetFloat($"slope {what} 3", 0), r.GetFloat($"slope {what} grass", dGrass)) * SlopeScale;
+        Vector4 Slope(string what, float d1, float d2, float dGrass) =>
+            new Vector4(r.GetFloat($"slope {what} 1", d1), r.GetFloat($"slope {what} 2", d2), r.GetFloat($"slope {what} 3", 0),
+                r.GetFloat($"slope {what} grass", dGrass)) * SlopeScale;
+        Vector2 TilingOf(string s, int i) =>
+            new Vector2(r.GetFloat($"tiling X {s}", defaultTiling[i].X), r.GetFloat($"tiling Y {s}", defaultTiling[i].Y));
         uint ground = (uint)r.GetInt("ground colour", 0xC0A040) & 0xFFFFFF;
         float brightness = r.GetFloat("brightness fix", 1);
         return new BiomeTerrain
@@ -210,17 +213,19 @@ public sealed record BiomeTerrain
             Index = (uint)r.GetInt("index") & 0xFFFFFF,
             Diffuse = [.. TextureFields.Select(f => Tex(r, f))],
             Normal = [.. TextureFields.Select(f => Tex(r, f + " normal"))],
-            Tiling = [.. TilingSuffix.Select((s, i) => new Vector2(r.GetFloat($"tiling X {s}", defaultTiling[i].X), r.GetFloat($"tiling Y {s}", defaultTiling[i].Y)))],
+            Tiling = [.. TilingSuffix.Select(TilingOf)],
             SlopeMin = Slope("min", 0, 0, 0),
             SlopeMax = Slope("max", 90, 90, 20),
             SlopeBlend = Slope("fade", 5, 5, 5),
-            OverlayMult = new Vector4(r.GetFloat("overlay mult vertical", 1), r.GetFloat("overlay mult grass", 1), r.GetFloat("overlay mult dirt", 1), r.GetFloat("overlay mult road", 1)),
+            OverlayMult = new Vector4(r.GetFloat("overlay mult vertical", 1), r.GetFloat("overlay mult grass", 1), r.GetFloat("overlay mult dirt", 1),
+                r.GetFloat("overlay mult road", 1)),
             GroundColour = new Vector3((ground >> 16) & 0xFF, (ground >> 8) & 0xFF, ground & 0xFF) / 255f,
             FadeDistance = r.GetFloat("fade distance", 4000),
             BrightnessFix = brightness == 0 ? 1 : brightness, // the game replaces 0 with 1
             DistortWavelength = r.GetFloat("distort wavelength", 1000),
             DistortAmplitude = r.GetFloat("distort amplitude", 0),
-            Absorbance = [r.GetFloat("absorbance 0", 0.55f), r.GetFloat("absorbance 1", 0.2f), r.GetFloat("absorbance 2", 0.5f), r.GetFloat("absorbance grass", 0.44f), r.GetFloat("absorbance dirt", 0.3f), r.GetFloat("absorbance road", 0.25f)],
+            Absorbance = [r.GetFloat("absorbance 0", 0.55f), r.GetFloat("absorbance 1", 0.2f), r.GetFloat("absorbance 2", 0.5f),
+                r.GetFloat("absorbance grass", 0.44f), r.GetFloat("absorbance dirt", 0.3f), r.GetFloat("absorbance road", 0.25f)],
         };
     }
 

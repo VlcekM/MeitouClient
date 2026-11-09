@@ -25,7 +25,8 @@ public static class CookedMeshReader
         p += 4 + 4 + 4; // convex edge threshold, height field axis, height field extent
         int vertexCount = I32(data, ref p);
         int triangleCount = I32(data, ref p);
-        if (vertexCount < 0 || triangleCount < 0 || vertexCount > 1 << 20 || triangleCount > 1 << 20) throw new InvalidDataException("Implausible mesh counts");
+        if (vertexCount < 0 || triangleCount < 0 || vertexCount > 1 << 20 || triangleCount > 1 << 20)
+            throw new InvalidDataException("Implausible mesh counts");
         var vertices = Vertices(data, ref p, vertexCount);
         int width = (flags & IndicesAre8Bit) != 0 ? 1 : (flags & IndicesAre16Bit) != 0 ? 2 : 4;
         if (p + (long)triangleCount * 3 * width > data.Length) throw new InvalidDataException("Cooked triangle mesh is truncated");

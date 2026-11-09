@@ -39,8 +39,8 @@ sealed class TownBuildingContents
     /// bar flags, the interior's beds, nodes, seats, furniture, tables, fixtures and item slots. Its interior holds objects only from a named layout the data has (none
     /// named, or one the data lacks, loads nothing); a ruin holds none, as destroying it clears them (docs/game/buildings-production.md "Ruined by residents").
     /// </summary>
-    public static TownBuildingContents Lay(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord state, Dictionary<string, bool> beds,
-        Dictionary<string, GameRecord?> functions)
+    public static TownBuildingContents Lay(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord state,
+        Dictionary<string, bool> beds, Dictionary<string, GameRecord?> functions)
     {
         var c = new TownBuildingContents();
         var record = resolved.Record;
@@ -61,7 +61,8 @@ sealed class TownBuildingContents
     /// </summary>
     public void AddAlone(GameDatabase db, ResolvedBuilding resolved, GameRecord? functionality)
     {
-        if (functionality is not null && FurnitureOf(db, resolved.Record, functionality, resolved.Position, YawOf(resolved.Placement.Rotation)) is { } alone)
+        if (functionality is not null
+            && FurnitureOf(db, resolved.Record, functionality, resolved.Position, YawOf(resolved.Placement.Rotation)) is { } alone)
             Furniture.Add(alone);
     }
 
@@ -80,8 +81,8 @@ sealed class TownBuildingContents
     /// The interior layout's objects in layout order: beds and nodes, chairs, other furniture, tables and fixtures; returns the chairs' spot indices and
     /// functionality flags (null: none).
     /// </summary>
-    List<(int Spot, int Flags)>? LayItems(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior, Dictionary<string, bool> beds,
-        Dictionary<string, GameRecord?> functions)
+    List<(int Spot, int Flags)>? LayItems(GameDatabase db, BuildingLayouts layouts, ResolvedBuilding resolved, GameRecord interior,
+        Dictionary<string, bool> beds, Dictionary<string, GameRecord?> functions)
     {
         var b = resolved.Placement;
         var spots = Spots;
@@ -189,7 +190,11 @@ sealed class TownBuildingContents
         return new HomeSpot(k, at, yaw)
         {
             Record = building.StringId,
-            SitClip = k is HomeSpotKind.Training or HomeSpotKind.Workstation ? null : function.GetReferences("animation").Select(r => db.Find(r.TargetStringId)?.Name).FirstOrDefault(n => n is not null),
+            SitClip = k is HomeSpotKind.Training or HomeSpotKind.Workstation
+                ? null
+                : function.GetReferences("animation")
+                    .Select(r => db.Find(r.TargetStringId)?.Name)
+                    .FirstOrDefault(n => n is not null),
             HungerRate = function.GetFloat("hunger rate", 1),
         };
     }

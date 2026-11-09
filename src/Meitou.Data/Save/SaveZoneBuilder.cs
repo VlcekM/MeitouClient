@@ -93,7 +93,8 @@ public static partial class SaveZoneBuilder
         {
             string p = $"internalbuildings-{k}";
             if (!zoneHandles.Contains((level.GetInt(p + "I"), level.GetInt(p + "S")))) continue;
-            new Hand(level.GetInt(p + "TYPE"), level.GetInt(p + "C"), level.GetInt(p + "CS"), level.GetInt(p + "I"), level.GetInt(p + "S")).Write(r, $"internalbuildings-{kept++}");
+            var hand = new Hand(level.GetInt(p + "TYPE"), level.GetInt(p + "C"), level.GetInt(p + "CS"), level.GetInt(p + "I"), level.GetInt(p + "S"));
+            hand.Write(r, $"internalbuildings-{kept++}");
         }
         foreach (var (k, v) in level.Vector3S) r.Vector3S[k] = v;
         foreach (var (k, v) in level.Vector4S) r.Vector4S[k] = v;

@@ -29,7 +29,9 @@ public static class ResidentRuins
             int ruined = 0;
             foreach (var placement in levels.Towns())
             {
-                if (!buildings.TryGetValue(placement.InstanceId, out var list) || db.Find(placement.TownId) is not { Type: Fcs.FcsRecordType.Town } record) continue;
+                if (!buildings.TryGetValue(placement.InstanceId, out var list)
+                    || db.Find(placement.TownId) is not { Type: Fcs.FcsRecordType.Town } record)
+                    continue;
                 var town = TownData.From(record);
                 var faction = town.Faction is { } id && db.Find(id) is { Type: Fcs.FcsRecordType.Faction } f ? FactionData.From(f) : null;
                 foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, list, player))
@@ -87,7 +89,8 @@ public static class ResidentRuins
     public static IEnumerable<(string Key, string Layout)> Names(SquadTemplate t) =>
         [(InteriorKey, t.LayoutInterior), (ExteriorKey, t.LayoutExterior)];
 
-    public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name", NameKey = "name", SquadTemplateKey = "squad template";
+    public const string InteriorKey = "interior layout name", ExteriorKey = "exterior layout name";
+    public const string NameKey = "name", SquadTemplateKey = "squad template";
 
     /// <summary>
     /// The templates housing <paramref name="town"/>'s residents afresh in <paramref name="buildings"/> puts in its homes (a town override, which names them as
@@ -105,8 +108,8 @@ public static class ResidentRuins
     /// The keys of the homes <paramref name="town"/>'s residents ruin when they are housed in <paramref name="buildings"/> afresh (a town override): homes of a ruined
     /// template that can be destroyed. <paramref name="playerOwned"/>: the buildings the player owns now, which house nobody (<see cref="ResidentHomes.Assign"/>).
     /// </summary>
-    public static HashSet<string> RuinedHomes(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings, string? playerFactionId,
-        IReadOnlySet<string>? playerOwned = null)
+    public static HashSet<string> RuinedHomes(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings,
+        string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (b, t) in ResidentHomes.Assign(db, town, faction, buildings, playerFactionId, playerOwned))
@@ -141,5 +144,6 @@ public readonly record struct BuildingNaming(string Name, string SquadTemplate)
     /// <summary>
     /// What <paramref name="state"/>, a GAMESTATE_BUILDING, names.
     /// </summary>
-    public static BuildingNaming Of(GameRecord? state) => new(state?.GetString(ResidentRuins.NameKey) ?? "", state?.GetString(ResidentRuins.SquadTemplateKey) ?? "");
+    public static BuildingNaming Of(GameRecord? state) =>
+        new(state?.GetString(ResidentRuins.NameKey) ?? "", state?.GetString(ResidentRuins.SquadTemplateKey) ?? "");
 }

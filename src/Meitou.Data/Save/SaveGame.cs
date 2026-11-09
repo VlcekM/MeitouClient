@@ -30,7 +30,7 @@ public sealed partial class SaveGame
     public List<SaveFaction> Factions { get; } = [];
     public List<SaveTown> Towns { get; } = [];
     public List<SavePlatoon> Platoons { get; } = [];
-    public SortedDictionary<ZoneCoordinate, SaveZone> Zones { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
+    public SortedDictionary<ZoneCoordinate, SaveZone> Zones { get; } = new(Comparer<ZoneCoordinate>.Create(CompareZones));
 
     /// <summary>
     /// The two INSTANCE_COLLECTIONs of <c>quick.save</c>: the player's faction, then every other faction (each instance targets a GAMESTATE_FACTION).
@@ -64,7 +64,12 @@ public sealed partial class SaveGame
     /// The level editor's edits of the session (Meitou's own, in <see cref="SaveFolder.LevelEditsDirectory"/>): per zone the bytes of a zone file in the form of the editor's saved mod
     /// (placed buildings with their state, cleared ones as entries with no target). A save without the folder (every older save, the original's) has none.
     /// </summary>
-    public SortedDictionary<ZoneCoordinate, byte[]> LevelEdits { get; } = new(Comparer<ZoneCoordinate>.Create((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y)));
+    public SortedDictionary<ZoneCoordinate, byte[]> LevelEdits { get; } = new(Comparer<ZoneCoordinate>.Create(CompareZones));
+
+    /// <summary>
+    /// The order of <see cref="Zones"/> and <see cref="LevelEdits"/>: by X, then by Y.
+    /// </summary>
+    static int CompareZones(ZoneCoordinate a, ZoneCoordinate b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y);
 
     /// <summary>
     /// The bytes of <c>meitou-mods/environment.json</c> (the code mods the save was made with, <c>CodeModEnvironment</c>); null when it has none.
@@ -133,20 +138,38 @@ public sealed partial class SaveGame
         {
             switch (r.RecordType)
             {
-                case FcsRecordType.Camera: Camera = new SaveCamera(r); break;
+                case FcsRecordType.Camera:
+                    Camera = new SaveCamera(r);
+                    break;
                 case FcsRecordType.GamestateFaction:
                     var faction = new SaveFaction(r, null);
                     faction.War = wars.GetValueOrDefault(faction.Id);
                     Factions.Add(faction);
                     break;
-                case FcsRecordType.GamestateTown: Towns.Add(new SaveTown(r)); break;
-                case FcsRecordType.Platoon: Platoons.Add(new SavePlatoon(r, files.GetValueOrDefault(r))); break;
-                case FcsRecordType.InstanceCollection: FactionCollections.Add(r); break;
-                case FcsRecordType.GamestateTownInstanceList: TownInstanceList = r; break;
-                case FcsRecordType.Biomes: Biomes = r; break;
-                case FcsRecordType.Research: Research = r; break;
-                case FcsRecordType.TerrainDecals: Decals = r; break;
-                case FcsRecordType.SavedState: if (r.StringId.EndsWith("5-redirect", StringComparison.Ordinal) || r.Name == "5-redirect") Redirect = r; break;
+                case FcsRecordType.GamestateTown:
+                    Towns.Add(new SaveTown(r));
+                    break;
+                case FcsRecordType.Platoon:
+                    Platoons.Add(new SavePlatoon(r, files.GetValueOrDefault(r)));
+                    break;
+                case FcsRecordType.InstanceCollection:
+                    FactionCollections.Add(r);
+                    break;
+                case FcsRecordType.GamestateTownInstanceList:
+                    TownInstanceList = r;
+                    break;
+                case FcsRecordType.Biomes:
+                    Biomes = r;
+                    break;
+                case FcsRecordType.Research:
+                    Research = r;
+                    break;
+                case FcsRecordType.TerrainDecals:
+                    Decals = r;
+                    break;
+                case FcsRecordType.SavedState:
+                    if (r.StringId.EndsWith("5-redirect", StringComparison.Ordinal) || r.Name == "5-redirect") Redirect = r;
+                    break;
             }
         }
         if (Camera is null) throw new FcsFormatException("quick.save has no CAMERA record.", 0);
@@ -367,7 +390,8 @@ public sealed partial class SaveGame
     /// <summary>
     /// The number in the front of a record's string id (<c>12-quick.save-INGAME</c> is 12), or -1 when it has none.
     /// </summary>
-    public static int NumberOf(FcsRecord r) => NumberPrefix().Match(r.StringId) is { Success: true } m && int.TryParse(m.Groups[1].Value, out int v) ? v : -1;
+    public static int NumberOf(FcsRecord r) =>
+        NumberPrefix().Match(r.StringId) is { Success: true } m && int.TryParse(m.Groups[1].Value, out int v) ? v : -1;
 
     #endregion
 }

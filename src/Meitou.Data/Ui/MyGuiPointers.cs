@@ -22,13 +22,17 @@ public static class MyGuiPointers
     /// </summary>
     public static MyGuiPointer? Resolve(MyGuiResources resources, string name)
     {
-        if (name.Length == 0 || !resources.Resources.TryGetValue(name, out var resource) || MyGuiReader.Attribute(resource, "type") != "ResourceImageSetPointer") return null;
-        string? Property(string key) => resource.Elements("Property").FirstOrDefault(p => (string?)p.Attribute("key") == key)?.Attribute("value")?.Value;
+        if (name.Length == 0 || !resources.Resources.TryGetValue(name, out var resource)
+            || MyGuiReader.Attribute(resource, "type") != "ResourceImageSetPointer")
+            return null;
+        string? Property(string key) =>
+            resource.Elements("Property").FirstOrDefault(p => (string?)p.Attribute("key") == key)?.Attribute("value")?.Value;
         var point = Pair(Property("Point"));
         var size = Pair(Property("Size"));
         if (point is null || size is null || Property("Resource") is not { Length: > 0 } imageSet) return null;
         // The image sets of the pointers keep their one frame under group and index "Pointer".
-        var image = MyGuiImages.Resolve(resources, new Dictionary<string, string> { ["ImageResource"] = imageSet, ["ImageGroup"] = "Pointer", ["ImageName"] = "Pointer" });
+        var image = MyGuiImages.Resolve(resources,
+            new Dictionary<string, string> { ["ImageResource"] = imageSet, ["ImageGroup"] = "Pointer", ["ImageName"] = "Pointer" });
         return image is null ? null : new(name, point.Value.X, point.Value.Y, size.Value.X, size.Value.Y, image);
     }
 

@@ -167,8 +167,8 @@ public readonly record struct ShadowView(Vector3 Eye, Vector3 Forward, Vector3 U
 /// </summary>
 /// <param name="CameraNear">The game camera's near clip: the cascades' boxes start there, and with <paramref name="CameraFar"/> it turns the
 /// game's clip-z cascade test into view depths (<see cref="ShadowCascade.SelectDepth"/>).</param>
-public sealed record ShadowSettings(int MapSize = KenshiShadows.LazyMapSize, float Range = KenshiShadows.DefaultRange, int Cascades = KenshiShadows.CascadeCount,
-    float CameraNear = KenshiShadows.CameraNear, float CameraFar = KenshiShadows.CameraFar)
+public sealed record ShadowSettings(int MapSize = KenshiShadows.LazyMapSize, float Range = KenshiShadows.DefaultRange,
+    int Cascades = KenshiShadows.CascadeCount, float CameraNear = KenshiShadows.CameraNear, float CameraFar = KenshiShadows.CameraFar)
 {
     /// <summary>
     /// The most cascades the renderer holds (the receivers' uniform arrays are this long). The game's CSM has <see cref="KenshiShadows.CascadeCount"/>

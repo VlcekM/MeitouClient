@@ -56,7 +56,8 @@ public sealed class TownBuildingBuilder
     /// </summary>
     readonly Dictionary<(string, bool), IReadOnlySet<string>> _names = [];
 
-    public TownBuildingBuilder(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight, bool contents = true)
+    public TownBuildingBuilder(GameDatabase db, WorldLevelData levels, BuildingLayouts? layouts, Func<double, double, float> terrainHeight,
+        bool contents = true)
     {
         (this._db, this._levels, this._layouts, this._terrainHeight, this._contents) = (db, levels, layouts, terrainHeight, contents);
         foreach (var t in levels.Towns())
@@ -144,7 +145,9 @@ public sealed class TownBuildingBuilder
             LevelNaming = _levels.LevelNames.TryGetValue(b.Key, out var named) ? named : BuildingNaming.Of(state),
             InteriorLayouts = LayoutNames(_layouts, record, exterior: false, _names),
             ExteriorLayouts = LayoutNames(_layouts, record, exterior: true, _names),
-            HandleSlot = state is not null && state.Ints.ContainsKey("handleI") && state.GetInt("handleTYPE") == (int)FcsRecordType.Building ? state.GetInt("handleI") : -1,
+            HandleSlot = state is not null && state.Ints.ContainsKey("handleI") && state.GetInt("handleTYPE") == (int)FcsRecordType.Building
+                ? state.GetInt("handleI")
+                : -1,
             HandleSerial = state?.GetInt("handleS") ?? 0,
             Tables = c.Tables,
             Furniture = c.Furniture,
@@ -189,7 +192,8 @@ public sealed class TownBuildingBuilder
     /// <summary>
     /// The layout names a building record can take (case ignored), cached by record and side; empty without layouts.
     /// </summary>
-    static IReadOnlySet<string> LayoutNames(BuildingLayouts? layouts, GameRecord record, bool exterior, Dictionary<(string, bool), IReadOnlySet<string>> cache)
+    static IReadOnlySet<string> LayoutNames(BuildingLayouts? layouts, GameRecord record, bool exterior,
+        Dictionary<(string, bool), IReadOnlySet<string>> cache)
     {
         if (layouts is null) return new HashSet<string>();
         if (!cache.TryGetValue((record.StringId, exterior), out var set))

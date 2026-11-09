@@ -159,7 +159,7 @@ leaves it shown is **Unknown** in code, inferred from those common houses.
 
 ## Turrets
 
-A turret's turning parts (BUILDING_PART `rotation function` ROTATION_TARGET) are joints: the layout (`WorldObjectLayout.AddPart`) gives each part that is or hangs from one
+A turret's turning parts (BUILDING_PART `rotation function` ROTATION_TARGET) are joints: the layout (`WorldObjectLayout.PartJoints`) gives each part that is or hangs from one
 `PlacedMesh.Joints` (the joints above it and its own, outermost first; `TurnJoint` = part record, pivot = its node's place, axis = its node's Y for a yaw part or X for the
 gun's pitch, both as placed). The host (`GameHost.UpdateTurretPoses`) gives the renderer `JointPoses.Turrets` (placement id = turret key → `TurretPose`: the
 simulation's `TurretRig` angles from `MannedTurret.Angles`, interpolated between the last two snapshots by the simulation's alpha, kept after the gunner leaves).

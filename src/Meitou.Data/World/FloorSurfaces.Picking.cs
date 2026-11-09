@@ -109,7 +109,9 @@ public sealed partial class FloorSurfaces
                         var p = s.Corners[i + k];
                         var end = s.Corners[i + (k + 1) % 3];
                         var delta = new Vector2(end.X - p.X, end.Z - p.Z);
-                        float along = delta.LengthSquared() < 1e-9f ? 0 : Math.Clamp(Vector2.Dot(q - new Vector2(p.X, p.Z), delta) / delta.LengthSquared(), 0, 1);
+                        float along = delta.LengthSquared() < 1e-9f
+                            ? 0
+                            : Math.Clamp(Vector2.Dot(q - new Vector2(p.X, p.Z), delta) / delta.LengthSquared(), 0, 1);
                         var candidate = Vector3.Lerp(p, end, along);
                         float distance = Vector2.DistanceSquared(q, new(candidate.X, candidate.Z));
                         if (distance > nearest) continue;

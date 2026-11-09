@@ -490,65 +490,111 @@ public static class WorldObjectLayout
             a.Marker = Vector3.Transform(marker, a.Node);
         }
 
-        // Rotating parts (no collision file, a rotation function on the part or its holder; RotatingEnt's constructor) roll a speed variation
-        // (unless ROTATION_WIND_SPEED) and a start angle about their axis. The viewer leaves turret parts (ROTATION_TARGET) unrotated.
         string collision = DestroyedCollision(part, a.State.Destroyed, blankCollision);
-        RotorSpec? rotor = null;
-        var rotorAxis = Vector3.Zero;
-        if (collision.Length == 0 && (part.GetInt("rotation function") > 0 || holder.GetInt("rotation function") > 0))
-        {
-            int function = part.GetInt("rotation function");
-            if (function == 0) function = 6;
-
-            float speedMin = float.DegreesToRadians(part.GetFloat("rotation speed min"));
-            float speedMax = float.DegreesToRadians(part.GetFloat("rotation speed max"));
-            float windMin = part.GetFloat("wind speed rotation min");
-            float windMax = part.GetFloat("wind speed rotation max");
-            if (function == RotorSpec.WindSpeed) (speedMax, windMax) = (MathF.Max(speedMin, speedMax), MathF.Max(windMin, windMax));
-            else speedMax = a.Random.NextFloat(speedMax * 0.95f, speedMax * 1.05f);
-            if (entity)
-            {
-                float angle = a.Random.NextFloat(0, MathF.Tau);
-                rotorAxis = part.GetInt("rotation axis", 2) switch
-                {
-                    0 => Vector3.UnitX,
-                    1 => Vector3.UnitY,
-                    2 => Vector3.UnitZ,
-                    _ => Vector3.Zero,
-                };
-                if (function != 5 && rotorAxis != Vector3.Zero) local *= Matrix4x4.CreateFromAxisAngle(rotorAxis, angle);
-                if (function is >= RotorSpec.Constant and <= RotorSpec.WindDirection && rotorAxis != Vector3.Zero)
-                {
-                    var spinAxis = Vector3.Normalize(new Vector3(parentNode.M11, parentNode.M12, parentNode.M13));
-                    var windAxis = Vector3.Normalize(new Vector3(parentNode.M31, parentNode.M32, parentNode.M33));
-                    rotor = new RotorSpec(function, speedMin, speedMax, windMin, windMax, angle, spinAxis, windAxis);
-                }
-            }
-        }
+        var rotor = RollRotor(a, holder, part, parentNode, entity, collision, ref local, out var rotorAxis);
 
         local *= Matrix4x4.CreateTranslation(offset);
         var node = local * parentNode;
         if (!entity)
         {
-            // A part of an upper floor with no destroyed mesh keeps its mesh as collision only (FUN_14055f6e0 mode 2: render skipped, collision
-            // made); children hang from the building.
-            a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
-            {
-                Material = PartMaterial(a, part),
-                Floor = Math.Clamp(part.GetInt("building floor"), 0, 3),
-                Interior = a.Interior,
-                DoorIndex = a.DoorIndex,
-                RenderHidden = true,
-            });
+            AddCollisionOnlyPart(a, part, mesh, node);
             return null;
         }
+
+        below = PartJoints(part, node, joints, rotor, rotorAxis);
+        a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
+        {
+            Material = PartMaterial(a, part),
+            Floor = Math.Clamp(part.GetInt("building floor"), 0, 3),
+            Interior = a.Interior,
+            DoorIndex = a.DoorIndex,
+            Joints = below,
+            BlankXmlCollision = blankCollision,
+        });
+        return node;
+    }
+
+    /// <summary>
+    /// Rotating parts (no collision file, a rotation function on the part or its holder; RotatingEnt's constructor) roll a speed variation
+    /// (unless ROTATION_WIND_SPEED) and a start angle about their axis, turned into <paramref name="local"/>. Returns the rotor of a part that
+    /// turns by itself, with its axis in <paramref name="rotorAxis"/>; null otherwise. The viewer leaves turret parts (ROTATION_TARGET) unrotated.
+    /// </summary>
+    static RotorSpec? RollRotor(
+        Assembly a,
+        GameRecord holder,
+        GameRecord part,
+        Matrix4x4 parentNode,
+        bool entity,
+        string collision,
+        ref Matrix4x4 local,
+        out Vector3 rotorAxis)
+    {
+        RotorSpec? rotor = null;
+        rotorAxis = Vector3.Zero;
+        bool rotates = collision.Length == 0 && (part.GetInt("rotation function") > 0 || holder.GetInt("rotation function") > 0);
+        if (!rotates) return rotor;
+
+        int function = part.GetInt("rotation function");
+        if (function == 0) function = 6;
+
+        float speedMin = float.DegreesToRadians(part.GetFloat("rotation speed min"));
+        float speedMax = float.DegreesToRadians(part.GetFloat("rotation speed max"));
+        float windMin = part.GetFloat("wind speed rotation min");
+        float windMax = part.GetFloat("wind speed rotation max");
+        if (function == RotorSpec.WindSpeed) (speedMax, windMax) = (MathF.Max(speedMin, speedMax), MathF.Max(windMin, windMax));
+        else speedMax = a.Random.NextFloat(speedMax * 0.95f, speedMax * 1.05f);
+        if (!entity) return rotor;
+
+        float angle = a.Random.NextFloat(0, MathF.Tau);
+        rotorAxis = part.GetInt("rotation axis", 2) switch
+        {
+            0 => Vector3.UnitX,
+            1 => Vector3.UnitY,
+            2 => Vector3.UnitZ,
+            _ => Vector3.Zero,
+        };
+        if (function != 5 && rotorAxis != Vector3.Zero) local *= Matrix4x4.CreateFromAxisAngle(rotorAxis, angle);
+        if (function is >= RotorSpec.Constant and <= RotorSpec.WindDirection && rotorAxis != Vector3.Zero)
+        {
+            var spinAxis = Vector3.Normalize(new Vector3(parentNode.M11, parentNode.M12, parentNode.M13));
+            var windAxis = Vector3.Normalize(new Vector3(parentNode.M31, parentNode.M32, parentNode.M33));
+            rotor = new RotorSpec(function, speedMin, speedMax, windMin, windMax, angle, spinAxis, windAxis);
+        }
+        return rotor;
+    }
+
+    /// <summary>
+    /// A part of an upper floor with no destroyed mesh keeps its mesh as collision only (FUN_14055f6e0 mode 2: render skipped, collision made);
+    /// children hang from the building.
+    /// </summary>
+    static void AddCollisionOnlyPart(Assembly a, GameRecord part, string mesh, Matrix4x4 node)
+    {
+        a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
+        {
+            Material = PartMaterial(a, part),
+            Floor = Math.Clamp(part.GetInt("building floor"), 0, 3),
+            Interior = a.Interior,
+            DoorIndex = a.DoorIndex,
+            RenderHidden = true,
+        });
+    }
+
+    /// <summary>
+    /// The joints above the part's children: <paramref name="joints"/>, and the part itself when it turns (by itself, or to the target).
+    /// </summary>
+    static IReadOnlyList<TurnJoint>? PartJoints(GameRecord part, Matrix4x4 node, IReadOnlyList<TurnJoint>? joints, RotorSpec? rotor, Vector3 rotorAxis)
+    {
+        var below = joints;
 
         // A part that turns by itself is a joint too: it and everything hanging from it turn about its node's axis.
         if (rotor is not null)
         {
             var axis = Vector3.TransformNormal(rotorAxis, node);
             if (axis.LengthSquared() > 1e-12f)
-                below = [.. joints ?? [], new TurnJoint(part.StringId, node.Translation, Vector3.Normalize(axis), rotorAxis == Vector3.UnitY, rotor)];
+            {
+                var turnJoint = new TurnJoint(part.StringId, node.Translation, Vector3.Normalize(axis), rotorAxis == Vector3.UnitY, rotor);
+                below = [.. joints ?? [], turnJoint];
+            }
         }
 
         // A part that turns to the target (ROTATION_TARGET) is a joint: it and everything hanging from it turn about its node (see TurnJoint).
@@ -562,17 +608,7 @@ public static class WorldObjectLayout
                 below = [.. joints ?? [], turnJoint];
             }
         }
-
-        a.Result.Add(new PlacedMesh(mesh, node, part, a.Building, a.Identity, PlacedKind.BuildingPart)
-        {
-            Material = PartMaterial(a, part),
-            Floor = Math.Clamp(part.GetInt("building floor"), 0, 3),
-            Interior = a.Interior,
-            DoorIndex = a.DoorIndex,
-            Joints = below,
-            BlankXmlCollision = blankCollision,
-        });
-        return node;
+        return below;
     }
 
     /// <summary>

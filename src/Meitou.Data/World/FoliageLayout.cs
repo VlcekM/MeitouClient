@@ -5,7 +5,8 @@ namespace Meitou.Data.World;
 /// <summary>
 /// One placed foliage mesh: where, how big and turned, from which layer (docs/formats/foliage.md, "Placing").
 /// </summary>
-public readonly record struct FoliageInstance(FoliageMesh Mesh, FoliageLayer Layer, Vector3 Position, float Scale, float YawDegrees, Quaternion Orientation)
+public readonly record struct FoliageInstance(FoliageMesh Mesh, FoliageLayer Layer, Vector3 Position, float Scale, float YawDegrees,
+    Quaternion Orientation)
 {
     public Matrix4x4 Transform => TransformOf(Scale, Orientation, Position);
 
@@ -363,7 +364,8 @@ public static class FoliageLayout
                 fade = Math.Clamp(fade, 0, 1);
                 float dirt = o.Get(2, i, j) > 70 ? 0 : 255;
                 float n = FoliageNoise.Coverage(x, z, scale, grass.ZeroCutoff, grass.BrightnessBoost, grass.Cap);
-                if (grass.Blackout) n *= FoliageNoise.Coverage(x + 50007f, z + 50007f, blackoutScale, grass.BlackoutZeroCutoff, grass.BrightnessBoost, grass.Cap);
+                if (grass.Blackout)
+                    n *= FoliageNoise.Coverage(x + 50007f, z + 50007f, blackoutScale, grass.BlackoutZeroCutoff, grass.BrightnessBoost, grass.Cap);
                 if (o.Get(3, i, j) > 10) continue;
                 byte v = (byte)(long)(n * dirt * fade);
                 if (o.Get(0, i, j) < v) o.Set(0, i, j, v);

@@ -271,7 +271,8 @@ public sealed class TerrainQuadtree
         Select(LevelCount - 1, -WorldLayout.HalfWorldSize, -WorldLayout.HalfWorldSize, eye, bounds, visible, result);
     }
 
-    bool Select(int level, double x0, double z0, Vector3 eye, TerrainHeightBounds bounds, Func<Vector3, Vector3, bool>? visible, List<TerrainNode> result)
+    bool Select(int level, double x0, double z0, Vector3 eye, TerrainHeightBounds bounds, Func<Vector3, Vector3, bool>? visible,
+        List<TerrainNode> result)
     {
         double size = NodeSize(level);
         var (lo, hi) = bounds.Range(x0, z0, size);
@@ -304,8 +305,9 @@ public sealed class TerrainQuadtree
     /// <summary>
     /// How far a vertex of <paramref name="level"/> at <paramref name="distance"/> from the eye has slid onto the coarser grid (0..1).
     /// </summary>
-    public float Morph(int level, float distance) =>
-        MorphStart[level] == float.MaxValue ? 0 : Math.Clamp((distance - MorphStart[level]) / Math.Max(MorphEnd[level] - MorphStart[level], 1e-3f), 0, 1);
+    public float Morph(int level, float distance) => MorphStart[level] == float.MaxValue
+        ? 0
+        : Math.Clamp((distance - MorphStart[level]) / Math.Max(MorphEnd[level] - MorphStart[level], 1e-3f), 0, 1);
 
     /// <summary>
     /// A grid coordinate (0..<see cref="GridCells"/>) after morphing by <paramref name="k"/>: odd coordinates move

@@ -41,8 +41,8 @@ public static class SaveDecals
         var q = instance.Rotation;
         uint kind = Bits(q.Y);
         if ((kind & 0xFF) > (uint)TerrainDecalType.Smear) return null;
-        return new TerrainDecal(Bits(q.X), (TerrainDecalType)(kind & 0xFF), (byte)(kind >> 8), (short)x, (short)(x >> 16), (short)y, (short)(y >> 16), (short)z,
-            Bits(q.W), q.Z);
+        return new TerrainDecal(Bits(q.X), (TerrainDecalType)(kind & 0xFF), (byte)(kind >> 8), (short)x, (short)(x >> 16), (short)y, (short)(y >> 16),
+            (short)z, Bits(q.W), q.Z);
     }
 
     public static FcsInstance Pack(in TerrainDecal d, int id) => new()

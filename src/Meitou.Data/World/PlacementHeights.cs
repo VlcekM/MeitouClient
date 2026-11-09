@@ -9,7 +9,8 @@ namespace Meitou.Data.World;
 /// building's height plus that. The height above is a nonzero <c>player furniture Y offset</c>, else the instance Y. The level state's <c>world Y pos</c>
 /// plays no part. A child whose parent is not in the zone is left out.
 /// </summary>
-sealed class PlacementHeights(ZoneCoordinate zone, GameDatabase db, GameRecord list, Func<double, double, float> ground, Dictionary<string, float> heights)
+sealed class PlacementHeights(ZoneCoordinate zone, GameDatabase db, GameRecord list, Func<double, double, float> ground,
+    Dictionary<string, float> heights)
 {
     readonly List<(string Key, GameInstance Instance, GameRecord? State)> _placed = [];
     readonly Dictionary<(int C, int I), int> _byHandle = [];
@@ -29,7 +30,8 @@ sealed class PlacementHeights(ZoneCoordinate zone, GameDatabase db, GameRecord l
         {
             if (instance.IsCleared || instance.Position == Vector3.Zero) continue;
             var state = instance.States.Select(db.Find).FirstOrDefault(s => s?.Type == FcsRecordType.GamestateBuilding);
-            if (state is not null && state.Ints.TryGetValue("handleI", out int handle)) _byHandle.TryAdd((state.GetInt("handleC"), handle), _placed.Count);
+            if (state is not null && state.Ints.TryGetValue("handleI", out int handle))
+                _byHandle.TryAdd((state.GetInt("handleC"), handle), _placed.Count);
             _placed.Add((BuildingKey.Of(zone, id), instance, state));
         }
     }

@@ -31,7 +31,10 @@ public static partial class SaveGroundItems
         var byId = new Dictionary<string, FcsRecord>(StringComparer.Ordinal);
         foreach (var r in zone.File.Records) byId.TryAdd(r.StringId, r);
         foreach (var i in list.Instances)
-            if (byId.TryGetValue(i.Target, out var r) && r.RecordType == FcsRecordType.Item) found.Add(new SaveGroundItem(i, r, SaveInventory.ItemOf(r)));
+        {
+            if (byId.TryGetValue(i.Target, out var r) && r.RecordType == FcsRecordType.Item)
+                found.Add(new SaveGroundItem(i, r, SaveInventory.ItemOf(r)));
+        }
         return found;
     }
 
@@ -40,7 +43,8 @@ public static partial class SaveGroundItems
     /// record id and its unmodelled keys) and <paramref name="kept"/> (entries written back as read). A new item's record gets id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> with <c>n</c>
     /// above every such id of the file and of the read items, and the list's entries are numbered from 1. An empty list is not written (the original deletes it).
     /// </summary>
-    public static void Write(SaveZone zone, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items, IReadOnlyList<SaveGroundItem> kept)
+    public static void Write(SaveZone zone, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items,
+        IReadOnlyList<SaveGroundItem> kept)
     {
         var file = zone.File;
         if (zone.ItemList is { } old)
@@ -58,7 +62,10 @@ public static partial class SaveGroundItems
         {
             if (!taken.Add(k.Record.StringId)) continue;
             file.Records.Add(k.Record);
-            list.Instances.Add(new FcsInstance { Id = Entry(++entry), Target = k.Record.StringId, Position = k.Instance.Position, Rotation = k.Instance.Rotation });
+            list.Instances.Add(new FcsInstance
+            {
+                Id = Entry(++entry), Target = k.Record.StringId, Position = k.Instance.Position, Rotation = k.Instance.Rotation
+            });
         }
         foreach (var (position, rotation, item) in items)
         {
@@ -96,7 +103,8 @@ public static partial class SaveGroundItems
     /// The highest <c>n</c> of the <paramref name="suffix"/> ids already in use: the file's records and instances, the kept entries and the read items being written back (whose
     /// records were just removed, so a new item numbered from the file alone would take a read item's id and load as that item).
     /// </summary>
-    static int LastNumber(SaveFile file, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items, IReadOnlyList<SaveGroundItem> kept, string suffix)
+    static int LastNumber(SaveFile file, IReadOnlyList<(Vector3 Position, Quaternion Rotation, SaveItem Item)> items,
+        IReadOnlyList<SaveGroundItem> kept, string suffix)
     {
         var ids = file.Records.Select(r => r.StringId)
             .Concat(file.Records.SelectMany(r => r.Instances).Select(i => i.Id))
@@ -107,8 +115,13 @@ public static partial class SaveGroundItems
 
     static string Entry(int k) => k.ToString(CultureInfo.InvariantCulture);
 
-    static int Number(string id, string suffix) =>
-        id.EndsWith(suffix, StringComparison.Ordinal) && int.TryParse(id.AsSpan(0, id.Length - suffix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : 0;
+    static int Number(string id, string suffix)
+    {
+        if (!id.EndsWith(suffix, StringComparison.Ordinal)) return 0;
 
-    static int NextNumber(SaveFile file) => file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => r.Id)) + 1;
+        return int.TryParse(id.AsSpan(0, id.Length - suffix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : 0;
+    }
+
+    static int NextNumber(SaveFile file) =>
+        file.Records.Count == 0 ? Math.Max(file.Data.NextId, 0) + 1 : Math.Max(file.Data.NextId, file.Records.Max(r => r.Id)) + 1;
 }

@@ -113,7 +113,8 @@ public static class NightAtmosphere
     public static Vector3 Transmission(float altitudeDegrees)
     {
         float x = AirMass(altitudeDegrees) - 1;
-        return new Vector3(MathF.Exp(-ExtinctionPerAirMass.X * x), MathF.Exp(-ExtinctionPerAirMass.Y * x), MathF.Exp(-ExtinctionPerAirMass.Z * x)) * Horizon(altitudeDegrees);
+        return new Vector3(MathF.Exp(-ExtinctionPerAirMass.X * x), MathF.Exp(-ExtinctionPerAirMass.Y * x), MathF.Exp(-ExtinctionPerAirMass.Z * x))
+            * Horizon(altitudeDegrees);
     }
 
     /// <summary>
@@ -136,7 +137,8 @@ public static class NightAtmosphere
 /// One density layer of the procedural starfield: <see cref="Cells"/> cells a side on each cube face, <see cref="Count"/> stars over the sphere
 /// between the magnitudes.
 /// </summary>
-public readonly record struct StarLayer(int Cells, float Count, float BrightestMagnitude, float FaintestMagnitude, float Slope = StarField.MagnitudeSlope, float ReachPixels = 2.2f);
+public readonly record struct StarLayer(int Cells, float Count, float BrightestMagnitude, float FaintestMagnitude,
+    float Slope = StarField.MagnitudeSlope, float ReachPixels = 2.2f);
 
 /// <summary>
 /// A star the cell of a layer holds (see <see cref="StarField.Candidate"/>): where on its cube face, how bright, which colour.
@@ -325,7 +327,8 @@ public static class StarColours
     /// <summary>
     /// The colour index distribution of the naked-eye sky, as a mixture: blue (B), white (A and F), yellow and orange (G and K giants), red (M).
     /// </summary>
-    static readonly (float Weight, float Mean, float Spread)[] ColourIndexMix = [(0.12f, -0.10f, 0.10f), (0.60f, 0.32f, 0.25f), (0.20f, 0.80f, 0.20f), (0.08f, 1.40f, 0.20f)];
+    static readonly (float Weight, float Mean, float Spread)[] ColourIndexMix =
+        [(0.12f, -0.10f, 0.10f), (0.60f, 0.32f, 0.25f), (0.20f, 0.80f, 0.20f), (0.08f, 1.40f, 0.20f)];
 
     /// <summary>
     /// The tint of the star at the fraction <paramref name="u"/> of the colour index distribution: its blackbody, desaturated by
