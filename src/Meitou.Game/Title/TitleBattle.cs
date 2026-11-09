@@ -9,10 +9,13 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Game.Title;
 
-/// <summary>A presentation-only road skirmish. Its world has no population streaming, needs, crimes or save connection.</summary>
+/// <summary>
+/// A presentation-only road skirmish. Its world has no population streaming, needs, crimes or save connection.
+/// </summary>
 sealed class TitleBattle : IDisposable
 {
     const float DisplayScale = 2.5f;
+
     readonly World _world;
     readonly IReadOnlyList<Vector3> _centres;
     double _remainder;
@@ -28,35 +31,41 @@ sealed class TitleBattle : IDisposable
         using var population = new PopulationSystem(data, new PopulationSettings { Background = false });
         try
         {
-            for (int i = 0; i < centres.Count; i++)
-            {
-                var at = new Vector2(centres[i].X, centres[i].Z);
-                var a = population.SpawnSandbox(_world, paladin, at - new Vector2(0, 16), false, 0, i + 1, holyNation);
-                var b = population.SpawnSandbox(_world, bandit, at + new Vector2(0, 16), false, MathF.PI, i + 1, bandits);
-                _world.Commands.Enqueue(new AttackOrder([a], b) { Tick = i * 7 });
-                _world.Commands.Enqueue(new AttackOrder([b], a) { Tick = i * 7 });
-            }
+            SpawnPairs(population, paladin, bandit, holyNation, bandits);
+
             // Open on a fight already in progress, rather than six people drawing their weapons together.
             for (int i = 0; i < 90; i++) _world.RunTick();
         }
-        catch { _world.Dispose(); throw; }
+        catch
+        {
+            _world.Dispose();
+            throw;
+        }
     }
 
     public static TitleBattle? Create(PopulationData data, Func<float, float, float> ground, IReadOnlyList<Vector3> centres,
         AnimationLengths lengths, AnimationLibrary library)
     {
         string? Record(string name) => data.Db.OfType(FcsRecordType.Character).FirstOrDefault(r => r.BaseName == name)?.StringId;
-        int Faction(string name) => data.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.f.Name == name, (null!, -1)).i;
-        if (Record("Paladin") is not { } paladin || Record("Dust Bandit") is not { } bandit ||
-            Faction("The Holy Nation") is not (>= 0 and var holyNation) || Faction("Dust Bandits") is not (>= 0 and var bandits) || data.PlayerFaction < 0)
+        int Faction(string name) => data.Factions
+            .Select((f, i) => (f, i))
+            .FirstOrDefault(p => p.f.Name == name, (null!, -1))
+            .i;
+
+        if (Record("Paladin") is not { } paladin || Record("Dust Bandit") is not { } bandit
+            || Faction("The Holy Nation") is not (>= 0 and var holyNation) || Faction("Dust Bandits") is not (>= 0 and var bandits)
+            || data.PlayerFaction < 0)
         {
             Console.Error.WriteLine("title     road fight unavailable: missing Paladin, Dust Bandit or faction records");
             return null;
         }
+
         return new(data, ground, centres, lengths, library, paladin, bandit, holyNation, bandits);
     }
 
-    /// <summary>Real time, independent of the paused gameplay clock; bounded catch-up after a stalled frame.</summary>
+    /// <summary>
+    /// Real time, independent of the paused gameplay clock; bounded catch-up after a stalled frame.
+    /// </summary>
     public void Advance(double seconds)
     {
         _remainder += Math.Clamp(seconds, 0, 0.25);
@@ -76,8 +85,10 @@ sealed class TitleBattle : IDisposable
         {
             var c = current[i];
             if (c.Appearance is null) continue;
+
             var before = previous.Count > i ? previous[i] : c;
             var position = Vector3.Lerp(before.Position, c.Position, alpha);
+
             // Keep each pair centred on the road; enlarge its spacing with its bodies so their swings still line up.
             int pair = i / 2 * 2;
             var middle = (current[pair].Position + current[pair + 1].Position) / 2;
@@ -92,9 +103,30 @@ sealed class TitleBattle : IDisposable
             }).ToArray();
             list.Add(new CharacterInstance(long.MinValue + 2 + i, c.Appearance, position,
                 Simulation.Session.Interp.LerpAngle(before.Yaw, c.Yaw, alpha), poses)
-            { WeaponDrawn = c.WeaponDrawn, RangedDrawn = c.RangedDrawn, Shots = c.CrossbowShots, Scale = c.Scale * DisplayScale, FullRateAnimation = true });
+            {
+                WeaponDrawn = c.WeaponDrawn,
+                RangedDrawn = c.RangedDrawn,
+                Shots = c.CrossbowShots,
+                Scale = c.Scale * DisplayScale,
+                FullRateAnimation = true,
+            });
         }
     }
 
     public void Dispose() => _world.Dispose();
+
+    /// <summary>
+    /// Spawns a paladin and a bandit facing each other at every centre, and queues their attacks on each other.
+    /// </summary>
+    void SpawnPairs(PopulationSystem population, string paladin, string bandit, int holyNation, int bandits)
+    {
+        for (int i = 0; i < _centres.Count; i++)
+        {
+            var at = new Vector2(_centres[i].X, _centres[i].Z);
+            var a = population.SpawnSandbox(_world, paladin, at - new Vector2(0, 16), false, 0, i + 1, holyNation);
+            var b = population.SpawnSandbox(_world, bandit, at + new Vector2(0, 16), false, MathF.PI, i + 1, bandits);
+            _world.Commands.Enqueue(new AttackOrder([a], b) { Tick = i * 7 });
+            _world.Commands.Enqueue(new AttackOrder([b], a) { Tick = i * 7 });
+        }
+    }
 }

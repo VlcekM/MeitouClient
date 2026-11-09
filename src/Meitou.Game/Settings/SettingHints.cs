@@ -3,11 +3,16 @@ using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Settings;
 
-/// <summary>The one-line hints under the settings rows: per slider, per switch and per bindable action.</summary>
+/// <summary>
+/// The one-line hints under the settings rows: per slider, per switch and per bindable action.
+/// </summary>
 static class SettingHints
 {
     internal static string SliderHint(Slider slider) => SliderHint(slider.Label);
 
+    /// <summary>
+    /// The hint of a slider's label, by the label as the menu shows it.
+    /// </summary>
     internal static string SliderHint(string label) => SettingsMenu.Label(label) switch
     {
         "VSync" => "Match the display refresh rate to prevent tearing.",

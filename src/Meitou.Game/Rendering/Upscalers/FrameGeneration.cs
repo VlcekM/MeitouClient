@@ -8,8 +8,10 @@ using static Meitou.Game.Rendering.Upscalers.FfxApi;
 
 namespace Meitou.Game.Rendering.Upscalers;
 
-/// <summary>One frame's inputs to frame generation: the post chain's depth and motion (bottom-up, as for the upscalers: see <see cref="UpscaleInputs"/>) and the camera
-/// (<see cref="ViewToClip"/> and <see cref="ClipToPreviousClip"/> as in <see cref="UpscaleInputs"/>).</summary>
+/// <summary>
+/// One frame's inputs to frame generation: the post chain's depth and motion (bottom-up, as for the upscalers: see <see cref="UpscaleInputs"/>) and
+/// the camera (<see cref="ViewToClip"/> and <see cref="ClipToPreviousClip"/> as in <see cref="UpscaleInputs"/>).
+/// </summary>
 public sealed record FrameGenInputs
 {
     public required GpuTexture Depth, Motion;
@@ -22,25 +24,37 @@ public sealed record FrameGenInputs
 }
 
 /// <summary>
-/// Frame generation as the game loop and the post chain drive it, whichever vendor's: <see cref="BeginFrame"/>, <see cref="Prepare"/> from the post chain
-/// (depth and motion), <see cref="Finish"/> before the present. AMD's (<see cref="FrameGeneration"/>) shows the world alone and lays the interface over every
-/// frame itself; NVIDIA's (<see cref="DlssFrameGeneration"/>) shows the finished picture and is told which part is interface.
+/// Frame generation as the game loop and the post chain drive it, whichever vendor's: <see cref="BeginFrame"/>, <see cref="Prepare"/> from the post
+/// chain (depth and motion), <see cref="Finish"/> before the present. AMD's (<see cref="FrameGeneration"/>) shows the world alone and lays the
+/// interface over every frame itself; NVIDIA's (<see cref="DlssFrameGeneration"/>) shows the finished picture and is told which part is interface.
 /// </summary>
 public interface IFrameGenerator : IDisposable
 {
-    /// <summary>Frame generation is wanted for this frame (<see cref="BeginFrame"/>).</summary>
+    /// <summary>
+    /// Frame generation is wanted for this frame (<see cref="BeginFrame"/>).
+    /// </summary>
     bool Wanted { get; }
-    /// <summary>This frame goes out with frame generation on (<see cref="Finish"/>).</summary>
+    /// <summary>
+    /// This frame goes out with frame generation on (<see cref="Finish"/>).
+    /// </summary>
     bool Enabled { get; }
-    /// <summary>With <see cref="Enabled"/>: the window is shown the world alone (the backbuffer), not the picture with the interface.</summary>
+    /// <summary>
+    /// With <see cref="Enabled"/>: the window is shown the world alone (the backbuffer), not the picture with the interface.
+    /// </summary>
     bool PresentsWorldAlone { get; }
-    /// <summary>Starts a frame of <paramref name="displayW"/> × <paramref name="displayH"/>; <paramref name="wanted"/> is false under the loading screen and for
-    /// screenshots and recorded frames.</summary>
+    /// <summary>
+    /// Starts a frame of <paramref name="displayW"/> × <paramref name="displayH"/>; <paramref name="wanted"/> is false under the loading screen and
+    /// for screenshots and recorded frames.
+    /// </summary>
     void BeginFrame(bool wanted, int displayW, int displayH);
-    /// <summary>Takes this frame's depth and motion; call after the post chain made them, outside a native segment.</summary>
+    /// <summary>
+    /// Takes this frame's depth and motion; call after the post chain made them, outside a native segment.
+    /// </summary>
     bool Prepare(FrameGenInputs inputs);
-    /// <summary>Before the present: <paramref name="world"/> is the bottom-up backbuffer (the world alone), <paramref name="ui"/> the bottom-up premultiplied
-    /// interface layer. True when frame generation runs on this frame's present.</summary>
+    /// <summary>
+    /// Before the present: <paramref name="world"/> is the bottom-up backbuffer (the world alone), <paramref name="ui"/> the bottom-up premultiplied
+    /// interface layer. True when frame generation runs on this frame's present.
+    /// </summary>
     bool Finish(GpuTexture world, GpuTexture? ui);
 }
 
@@ -51,10 +65,11 @@ public interface IFrameGenerator : IDisposable
 /// (depth and motion), <see cref="Finish"/> before the present (the interface picture, the configuration). The interpolation itself runs inside the
 /// layer's present, through the dispatch callback registered in the configuration.
 /// <para>
-/// Conventions (docs/render-post.md, "Frame generation"): the picture handed to the present is the world alone, top-down (the
-/// backbuffer flipped by the present blit); the interface is a separate premultiplied RGBA8 picture, top-down, laid over every presented frame by the layer.
-/// Depth and motion are bottom-up in the post chain, so each is copied flipped into a target of its own (a blit, only while frame generation is on) and the
-/// motion's y scale changes sign: x -renderWidth, y +renderHeight (the upscalers' scale is -renderWidth, -renderHeight in the bottom-up layout), the jitter's y is negated.
+/// Conventions (docs/render-post.md, "Frame generation"): the picture handed to the present is the world alone, top-down (the backbuffer flipped by
+/// the present blit); the interface is a separate premultiplied RGBA8 picture, top-down, laid over every presented frame by the layer. Depth and
+/// motion are bottom-up in the post chain, so each is copied flipped into a target of its own (a blit, only while frame generation is on) and the
+/// motion's y scale changes sign: x -renderWidth, y +renderHeight (the upscalers' scale is -renderWidth, -renderHeight in the bottom-up layout), the
+/// jitter's y is negated.
 /// </para>
 /// </summary>
 public sealed unsafe class FrameGeneration : IFrameGenerator
@@ -63,8 +78,19 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     const uint EnableDebugChecking = 1 << 6;
 
     [StructLayout(LayoutKind.Sequential)]
-    struct CreateDesc { public Header Header; public uint Flags; public Dimensions DisplaySize, MaxRenderSize; public uint BackBufferFormat; }
-    [StructLayout(LayoutKind.Sequential)] struct BackendVkDesc { public Header Header; public nint Device, PhysicalDevice, DeviceProcAddr; }
+    struct CreateDesc
+    {
+        public Header Header;
+        public uint Flags;
+        public Dimensions DisplaySize, MaxRenderSize;
+        public uint BackBufferFormat;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    struct BackendVkDesc
+    {
+        public Header Header;
+        public nint Device, PhysicalDevice, DeviceProcAddr;
+    }
     [StructLayout(LayoutKind.Sequential)]
     struct ConfigureDesc
     {
@@ -91,8 +117,18 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         public float CameraNear, CameraFar, CameraFovAngleVertical, ViewSpaceToMetersFactor;
         public Resource Depth, MotionVectors;
     }
-    [StructLayout(LayoutKind.Sequential)] struct Float3 { public float X, Y, Z; }
-    [StructLayout(LayoutKind.Sequential)] struct CameraInfoDesc { public Header Header; public Float3 Position, Up, Right, Forward; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct Float3
+    {
+        public float X, Y, Z;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct CameraInfoDesc
+    {
+        public Header Header;
+        public Float3 Position, Up, Right, Forward;
+    }
 
     readonly GpuContext _ctx;
     readonly VulkanDevice _device;
@@ -112,15 +148,25 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     bool _resetNext = true, _idAssigned, _failed, _layerGone, _uiRegistered, _loggedActive, _loggedUnprepared;
     int _displayWidth, _displayHeight;
 
-    /// <summary>Frame generation is wanted for this frame (<see cref="BeginFrame"/>).</summary>
+    /// <summary>
+    /// Frame generation is wanted for this frame (<see cref="BeginFrame"/>).
+    /// </summary>
     public bool Wanted { get; private set; }
-    /// <summary>The world is shown alone; the layer lays the registered interface over it.</summary>
+    /// <summary>
+    /// The world is shown alone; the layer lays the registered interface over it.
+    /// </summary>
     public bool PresentsWorldAlone => true;
-    /// <summary>The post chain gave depth and motion this frame (<see cref="Prepare"/>), so the frame can be interpolated.</summary>
+    /// <summary>
+    /// The post chain gave depth and motion this frame (<see cref="Prepare"/>), so the frame can be interpolated.
+    /// </summary>
     public bool Prepared { get; private set; }
-    /// <summary>This frame goes out with frame generation on (<see cref="Finish"/>): wanted and prepared.</summary>
+    /// <summary>
+    /// This frame goes out with frame generation on (<see cref="Finish"/>): wanted and prepared.
+    /// </summary>
     public bool Enabled { get; private set; }
-    /// <summary>The number of the last frame handed over (it steps by 1 per rendered frame, by 2 where the logic must restart).</summary>
+    /// <summary>
+    /// The number of the last frame handed over (it steps by 1 per rendered frame, by 2 where the logic must restart).
+    /// </summary>
     public ulong FrameId => _frameId;
 
     FrameGeneration(GpuContext ctx, FfxSwapchain layer, nint library)
@@ -139,33 +185,54 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         layer.Disposing += OnLayerDisposing;
     }
 
-    /// <summary>The layer goes away first (a failed swapchain remake falls back to the plain swapchain): the context goes before it, and none is made again.
-    /// Not configured off first: after a failed remake the swapchain it was configured with may already be destroyed, and no present comes in between.</summary>
+    /// <summary>
+    /// The layer goes away first (a failed swapchain remake falls back to the plain swapchain): the context goes before it, and none is made again.
+    /// Not configured off first: after a failed remake the swapchain it was configured with may already be destroyed, and no present comes in
+    /// between.
+    /// </summary>
     void OnLayerDisposing()
     {
         _layerGone = true;
         DestroyContext(configureOff: false);
     }
 
-    /// <summary>The frame-generation context for <paramref name="layer"/>'s swapchain, or null with the reason (library not loading).</summary>
+    /// <summary>
+    /// The frame-generation context for <paramref name="layer"/>'s swapchain, or null with the reason (library not loading).
+    /// </summary>
     public static FrameGeneration? TryCreate(GpuContext ctx, FfxSwapchain layer, out string? reason)
     {
         if (!FfxSwapchain.LibraryLoads(out var library, out reason)) return null;
         if (!NativeLibrary.TryGetExport(library, "ffxConfigure", out _) || !NativeLibrary.TryGetExport(library, "ffxDispatch", out _))
-        { reason = "the FFX library lacks ffxConfigure / ffxDispatch"; return null; }
+        {
+            reason = "the FFX library lacks ffxConfigure / ffxDispatch";
+            return null;
+        }
+
         return new FrameGeneration(ctx, layer, library);
     }
 
-    /// <summary>Called by the FFX layer at the present of each rendered frame: runs the interpolation, as the SDK's samples do (ffxDispatch on this context).</summary>
+    /// <summary>
+    /// Called by the FFX layer at the present of each rendered frame: runs the interpolation, as the SDK's samples do (ffxDispatch on this context).
+    /// </summary>
     [UnmanagedCallersOnly]
     static uint OnGenerate(void* desc, void* user)
     {
-        try { return s_dispatchFunction((nint*)user, desc); }
-        catch (Exception) { return 1; }   // nothing may escape into the library
+        try
+        {
+            return s_dispatchFunction((nint*)user, desc);
+        }
+        catch (Exception)
+        {
+            return 1;   // nothing may escape into the library
+        }
     }
 
     [UnmanagedCallersOnly]
-    static void OnMessage(uint type, char* message) => Console.WriteLine($"frame generation  {(type == 0 ? "error" : "warning")}: {FsrUpscaler.WideString(message)}");
+    static void OnMessage(uint type, char* message)
+    {
+        string level = type == 0 ? "error" : "warning";
+        Console.WriteLine($"frame generation  {level}: {FsrUpscaler.WideString(message)}");
+    }
 
     bool EnsureContext(int displayW, int displayH)
     {
@@ -190,7 +257,12 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         };
         nint created = 0;
         uint rc = _createContext(&created, _createDesc, null);
-        if (rc != 0) { Console.WriteLine($"frame generation  ffxCreateContext failed ({rc})"); return false; }
+        if (rc != 0)
+        {
+            Console.WriteLine($"frame generation  ffxCreateContext failed ({rc})");
+            return false;
+        }
+
         *_contextSlot = created;
         _contextSize = size;
         _resetNext = true;
@@ -209,7 +281,10 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         *_contextSlot = 0;
     }
 
-    /// <summary>Starts a frame of <paramref name="displayW"/> × <paramref name="displayH"/>; <paramref name="wanted"/> is false under the loading screen and for screenshots and recorded frames.</summary>
+    /// <summary>
+    /// Starts a frame of <paramref name="displayW"/> × <paramref name="displayH"/>; <paramref name="wanted"/> is false under the loading screen and
+    /// for screenshots and recorded frames.
+    /// </summary>
     public void BeginFrame(bool wanted, int displayW, int displayH)
     {
         (_displayWidth, _displayHeight) = (displayW, displayH);
@@ -231,7 +306,9 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         return _frameId;
     }
 
-    /// <summary>Copies <paramref name="src"/> into <paramref name="dst"/> upside down (both in GENERAL): bottom-up to top-down.</summary>
+    /// <summary>
+    /// Copies <paramref name="src"/> into <paramref name="dst"/> upside down (both in GENERAL): bottom-up to top-down.
+    /// </summary>
     internal static void Flip(Vk vk, CommandBuffer cb, Image src, Image dst, int w, int h)
     {
         var blit = new ImageBlit
@@ -249,7 +326,9 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
 
     GpuTexture Target(ref GpuTexture? slot, InternalFormat format, int w, int h, string name) => Target(_ctx, ref slot, format, w, h, name);
 
-    /// <summary>A copy target of the size and format asked, made again when they change.</summary>
+    /// <summary>
+    /// A copy target of the size and format asked, made again when they change.
+    /// </summary>
     internal static GpuTexture Target(GpuContext ctx, ref GpuTexture? slot, InternalFormat format, int w, int h, string name)
     {
         if (slot is null || slot.Desc.Width != w || slot.Desc.Height != h || slot.Desc.Format != format)
@@ -261,8 +340,8 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     }
 
     /// <summary>
-    /// Copies depth and motion flipped into targets of their own and records the Prepare dispatch (depth, motion, jitter, camera, frame time) in the frame.
-    /// Call after the post chain made them, outside a native segment. False (frame generation off for this frame) when the dispatch fails.
+    /// Copies depth and motion flipped into targets of their own and records the Prepare dispatch (depth, motion, jitter, camera, frame time) in the
+    /// frame. Call after the post chain made them, outside a native segment. False (frame generation off for this frame) when the dispatch fails.
     /// </summary>
     public bool Prepare(FrameGenInputs i)
     {
@@ -290,7 +369,8 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
             RenderSize = new Dimensions { Width = (uint)i.RenderWidth, Height = (uint)i.RenderHeight },
             // The jitter is not in the motion (no jitter cancellation flag), so it only matters as a hint; its y follows the flipped rows.
             JitterOffset = new Coords { X = i.JitterPixels.X, Y = -i.JitterPixels.Y },
-            // Ours: UV from previous to current, y up. FFX: render pixels from current towards previous, y down (the rows were flipped): x as for the upscalers, y the other sign.
+            // Ours: UV from previous to current, y up. FFX: render pixels from current towards previous, y down (the rows were flipped):
+            // x as for the upscalers, y the other sign.
             MotionVectorScale = new Coords { X = -i.RenderWidth, Y = i.RenderHeight },
             FrameTimeDelta = i.DeltaSeconds * 1000,
             CameraNear = i.Near,
@@ -304,7 +384,13 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
         desc.CommandList = cmd.Handle.Handle;
         uint rc = s_dispatchFunction(_contextSlot, &desc);
         _ctx.EndNative(cmd);
-        if (rc != 0) { Console.WriteLine($"frame generation  prepare dispatch failed ({rc}); off for the rest of the run"); _failed = true; return false; }
+        if (rc != 0)
+        {
+            Console.WriteLine($"frame generation  prepare dispatch failed ({rc}); off for the rest of the run");
+            _failed = true;
+            return false;
+        }
+
         Prepared = true;
         return true;
     }
@@ -327,14 +413,26 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
     }
 
     /// <summary>
-    /// Before the present: hands the interface picture (<paramref name="ui"/>, the bottom-up premultiplied RGBA8 layer; flipped here) to the layer and
-    /// configures the context for this frame. Frame generation runs on this frame's present only when it was wanted and prepared. True when it does.
+    /// Before the present: hands the interface picture (<paramref name="ui"/>, the bottom-up premultiplied RGBA8 layer; flipped here) to the layer
+    /// and configures the context for this frame. Frame generation runs on this frame's present only when it was wanted and prepared. True when it
+    /// does.
     /// </summary>
     public bool Finish(GpuTexture world, GpuTexture? ui)
     {
         Enabled = Wanted && Prepared && ui is not null;
-        if (Wanted && !Prepared && !_loggedUnprepared) { _loggedUnprepared = true; Console.WriteLine("frame generation  the post chain gave no depth and motion this frame (anti-aliasing / upscaling not temporal?): no frame is generated while that holds"); }
-        if (Enabled && !_loggedActive) { _loggedActive = true; Console.WriteLine($"frame generation  active (frame {_frameId + 1})"); }
+        if (Wanted && !Prepared && !_loggedUnprepared)
+        {
+            _loggedUnprepared = true;
+            Console.WriteLine("frame generation  the post chain gave no depth and motion this frame (anti-aliasing / upscaling not temporal?): "
+                + "no frame is generated while that holds");
+        }
+
+        if (Enabled && !_loggedActive)
+        {
+            _loggedActive = true;
+            Console.WriteLine($"frame generation  active (frame {_frameId + 1})");
+        }
+
         ulong id = NextId(false);
         Resource? registered = null;
         if (Enabled)
@@ -346,10 +444,22 @@ public sealed unsafe class FrameGeneration : IFrameGenerator
             registered = Input(_ctx, flipped);
         }
         else _resetNext = true;   // the next frame after frames without it starts afresh
-        if (!ConfigureFrame(Enabled, id)) { Console.WriteLine("frame generation  configure failed; off for the rest of the run"); _failed = true; Enabled = false; }
+        if (!ConfigureFrame(Enabled, id))
+        {
+            Console.WriteLine("frame generation  configure failed; off for the rest of the run");
+            _failed = true;
+            Enabled = false;
+        }
+
         if ((registered is not null || _uiRegistered) && !_layerGone)
         {
-            if (!_layer.RegisterUi(Enabled ? registered : null)) { Console.WriteLine("frame generation  registering the interface picture failed; off for the rest of the run"); _failed = true; Enabled = false; }
+            if (!_layer.RegisterUi(Enabled ? registered : null))
+            {
+                Console.WriteLine("frame generation  registering the interface picture failed; off for the rest of the run");
+                _failed = true;
+                Enabled = false;
+            }
+
             _uiRegistered = Enabled;
         }
         return Enabled;

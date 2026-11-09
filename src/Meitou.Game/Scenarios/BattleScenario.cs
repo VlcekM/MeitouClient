@@ -8,28 +8,44 @@ using Meitou.Simulation.Population;
 namespace Meitou.Game.Scenarios;
 
 /// <summary>
-/// The battle (<c>--battle n unit m unit</c>, docs/simulation.md "Battle"): two groups of NPCs, each of one CHARACTER or ANIMAL_CHARACTER record, in two blocks facing
-/// each other on the map (the plateau, the duel's mesa or x,z) or the sandbox's floor. No towns and no aggro: the host gives every standing fighter without a target the nearest
-/// standing enemy. Backspace starts the same fight again (a new world made the same way). Nothing here runs in the normal game.
+/// The battle (<c>--battle n unit m unit</c>, docs/simulation.md "Battle"): two groups of NPCs, each of one CHARACTER or ANIMAL_CHARACTER record, in
+/// two blocks facing each other on the map (the plateau, the duel's mesa or x,z) or the sandbox's floor. No towns and no aggro: the host gives every
+/// standing fighter without a target the nearest standing enemy. Backspace starts the same fight again (a new world made the same way). Nothing here
+/// runs in the normal game.
 /// </summary>
 sealed class BattleScenario(GameHost host)
 {
-    /// <summary>The two fronts start this far apart along Z, each block in ranks of up to <see cref="BattleRankWidth"/> fighters <see cref="BattleSpacing"/> apart (more for bigger races).</summary>
+    /// <summary>
+    /// The two fronts start this far apart along Z, each block in ranks of up to <see cref="BattleRankWidth"/> fighters <see cref="BattleSpacing"/>
+    /// apart (more for bigger races).
+    /// </summary>
     const float BattleGap = 40, BattleSpacing = 6;
     const int BattleRankWidth = 25;
-    /// <summary>No orders before this tick: the blocks stand a moment before they charge.</summary>
+    /// <summary>
+    /// No orders before this tick: the blocks stand a moment before they charge.
+    /// </summary>
     const int BattleOrderTick = 30;
 
-    /// <summary>The default spot (the owner's pick, 2026-10-23): a plateau about 1380 high, from camera code 01C69590C7EAFBAB44A4CE5146EAC4B2BFD203D43E755F7D44.</summary>
+    /// <summary>
+    /// The default spot (the owner's pick, 2026-10-23): a plateau about 1380 high, from camera code
+    /// 01C69590C7EAFBAB44A4CE5146EAC4B2BFD203D43E755F7D44.
+    /// </summary>
     public static readonly Vector2 BattleSpot = new(-74028, 13428);
-    /// <summary>The battle's starting hour (without <c>--time</c>).</summary>
+    /// <summary>
+    /// The battle's starting hour (without <c>--time</c>).
+    /// </summary>
     public const float BattleHour = 15;
 
-    /// <summary><c>--battle-map fog</c>: a spot in the Fog Islands picked in the game view, about 460 units from the plateau first used (-71170, -40200: about 880 high, level to 13 units over 800 x 800, in its fog volumes, 10k from any building).</summary>
+    /// <summary>
+    /// <c>--battle-map fog</c>: a spot in the Fog Islands picked in the game view, about 460 units from the plateau first used (-71170, -40200: about 880
+    /// high, level to 13 units over 800 x 800, in its fog volumes, 10k from any building).
+    /// </summary>
     public static readonly Vector2 FogBattleSpot = new(-71560, -39953);
 
     internal bool IsBattle => host.GameOptions.Battle is not null;
-    /// <summary>The floor is the sandbox's: the animation sandbox's, or the battle's with <c>--battle-map sandbox</c>.</summary>
+    /// <summary>
+    /// The floor is the sandbox's: the animation sandbox's, or the battle's with <c>--battle-map sandbox</c>.
+    /// </summary>
     internal bool IsFlat => host.Sandbox.IsSandbox || IsBattle && host.GameOptions.BattleFlat;
 
     Vector3 _battleSpot;
@@ -38,35 +54,67 @@ sealed class BattleScenario(GameHost host)
     long _battleOrderedAt = -1;
     internal bool BattleRestartRequested, BattleOver;
 
-    /// <summary>Finds the two records and their factions and fills the session's world; returns where the camera starts.</summary>
+    /// <summary>
+    /// How often a fighter left out of a crowded target looks for another (engine choice: a second).
+    /// </summary>
+    const int BattleRetargetTicks = 30;
+
+    // The counter's numbers per side (standing, alive), counted again when the world ticks.
+    readonly (int Standing, int Alive)[] _battleCounts = new (int, int)[2];
+    long _battleCountedAt = -1;
+    World? _battleCountedIn;
+
+
+    /// <summary>
+    /// Finds the two records and their factions and fills the session's world; returns where the camera starts.
+    /// </summary>
     internal Vector3 BattleStart()
     {
         var db = host.Scene.Database!;
         foreach (var (count, unit) in host.GameOptions.Battle!)
         {
-            var record = SandboxScenario.FindCharacter(db, unit) ?? throw new ArgumentException($"--battle: no CHARACTER or ANIMAL_CHARACTER named '{unit}'");
+            var record = SandboxScenario.FindCharacter(db, unit)
+                ?? throw new ArgumentException($"--battle: no CHARACTER or ANIMAL_CHARACTER named '{unit}'");
             // The record's own faction for its looks (an animal has none: the first faction hostile to the player's).
             string? factionId = record.GetReferences("faction").Select(r => r.TargetStringId).FirstOrDefault();
             int faction = host.PopData!.Factions.Select((f, i) => (f, i)).FirstOrDefault(p => p.f.Id == factionId, (null!, -1)).Item2;
             _battleSides.Add((record.StringId, record.Name, count, faction >= 0 ? faction : null));
         }
+
         BattleFactions();
         var spot = host.GameOptions.BattleFlat ? Vector2.Zero : host.GameOptions.BattleAt is { } at ? new Vector2(at.X, at.Z) : BattleSpot;
         _battleSpot = new Vector3(spot.X, host.Session.World.Walkability.GroundHeight(spot.X, spot.Y), spot.Y);
         BattleSetup(host.Session.World, host.Population!);
         host.Session.Ticked += _ => BattleTick();
-        var wet = _battleFighters.SelectMany(f => f).Count(id => !host.SimWalkability!.IsWalkable(host.Session.World.Characters.Previous[id.Slot].Position.X, host.Session.World.Characters.Previous[id.Slot].Position.Z));
-        if (wet > 0) Console.Error.WriteLine($"battle    {wet} fighter(s) start under water: pick another spot with --battle-map x,z");
-        Console.WriteLine($"battle    {BattleSide(0)} vs {BattleSide(1)} at {spot.X:0}, {spot.Y:0}{(host.GameOptions.BattleFlat ? " (sandbox floor)" : "")}; Backspace restarts");
+        CountWetStarts();
+        string floor = host.GameOptions.BattleFlat ? " (sandbox floor)" : "";
+        Console.WriteLine($"battle    {BattleSide(0)} vs {BattleSide(1)} at {spot.X:0}, {spot.Y:0}{floor}; Backspace restarts");
         return _battleSpot;
+    }
+
+    /// <summary>
+    /// Reports the fighters that start under water (they would drown on the plateau's spot): the spot to pick instead is named.
+    /// </summary>
+    void CountWetStarts()
+    {
+        var world = host.Session.World;
+        int wet = _battleFighters.SelectMany(f => f).Count(id => !IsWalkableAt(world, id));
+        if (wet > 0) Console.Error.WriteLine($"battle    {wet} fighter(s) start under water: pick another spot with --battle-map x,z");
+    }
+
+    bool IsWalkableAt(World world, CharacterId id)
+    {
+        var position = world.Characters.Previous[id.Slot].Position;
+        return host.SimWalkability!.IsWalkable(position.X, position.Z);
     }
 
     string BattleSide(int side) => $"{_battleSides[side].Count} x {_battleSides[side].Name}";
 
     /// <summary>
-    /// Gives a side whose record names no faction (CHARACTER records rarely do: the game takes a squad's) one hostile to the other side, as two groups that fight each other
-    /// are in the game: the first faction, not the player's, that is an enemy of the other side's (<see cref="AggroSystem.IsEnemy"/>), or of the player's when neither side names one.
-    /// Both sides used to fall back to the same faction, so each side's senses tagged nobody an enemy and a bowman counted every enemy but its target and its attackers a friend.
+    /// Gives a side whose record names no faction (CHARACTER records rarely do: the game takes a squad's) one hostile to the other side, as two
+    /// groups that fight each other are in the game: the first faction, not the player's, that is an enemy of the other side's (<see
+    /// cref="AggroSystem.IsEnemy"/>), or of the player's when neither side names one. Both sides used to fall back to the same faction, so each
+    /// side's senses tagged nobody an enemy and a bowman counted every enemy but its target and its attackers a friend.
     /// </summary>
     void BattleFactions()
     {
@@ -78,14 +126,18 @@ sealed class BattleScenario(GameHost host)
             int foe = _battleSides[1 - side].Faction ?? player;
             for (int f = 0; f < relations.Count; f++)
             {
-                if (f == player || f == foe || !AggroSystem.IsEnemy(relations, f, foe) || !AggroSystem.IsEnemy(relations, foe, f)) continue;
+                bool enemies = AggroSystem.IsEnemy(relations, f, foe) && AggroSystem.IsEnemy(relations, foe, f);
+                if (f == player || f == foe || !enemies) continue;
                 _battleSides[side] = _battleSides[side] with { Faction = f };
                 break;
             }
         }
     }
 
-    /// <summary>Fills a new world with the two blocks, a squad each (its first fighter leads): side 0 south (−Z) facing +Z, side 1 north facing −Z, each centred on the spot's X.</summary>
+    /// <summary>
+    /// Fills a new world with the two blocks, a squad each (its first fighter leads): side 0 south (−Z) facing +Z, side 1 north facing −Z, each
+    /// centred on the spot's X.
+    /// </summary>
     void BattleSetup(World world, PopulationSystem population)
     {
         for (int side = 0; side < 2; side++)
@@ -96,11 +148,16 @@ sealed class BattleScenario(GameHost host)
             float sign = side == 0 ? -1 : 1;
             // Bigger bodies stand further apart: BattleSpacing is a human's (footprint 4), scaled by the race's footprint, never closer; the front rank at least that far off the middle.
             var db = host.Scene.Database!;
-            var race = db.Find(record)?.GetReferences("race").FirstOrDefault(r => r.Values.Value0 > 0) is { TargetStringId: { } raceId } ? db.Find(raceId) : null;
+            var race = db.Find(record)?.GetReferences("race").FirstOrDefault(r => r.Values.Value0 > 0) is { TargetStringId: { } raceId }
+                ? db.Find(raceId)
+                : null;
             float footprint = race?.GetFloat("pathfind footprint radius", CombatTuning.DefaultFootprint) ?? CombatTuning.DefaultFootprint;
-            float spacing = Math.Max(BattleSpacing, BattleSpacing * footprint / CombatTuning.DefaultFootprint), front = Math.Max(BattleGap / 2, spacing);
-            // --battle-width: rows of that many; else --battle's rows: that many rows of count / rows, the back row also taking the rest; otherwise rows of BattleRankWidth.
-            int rows = host.GameOptions.BattleWidth[side] is null && host.GameOptions.BattleRows is { } r ? Math.Min(r, count) : 0, width = host.GameOptions.BattleWidth[side] ?? (rows > 0 ? count / rows : BattleRankWidth);
+            float spacing = Math.Max(BattleSpacing, BattleSpacing * footprint / CombatTuning.DefaultFootprint);
+            float front = Math.Max(BattleGap / 2, spacing);
+            // --battle-width: rows of that many; else --battle's rows: that many rows of count / rows, the back row also taking the rest;
+            // otherwise rows of BattleRankWidth.
+            int rows = host.GameOptions.BattleWidth[side] is null && host.GameOptions.BattleRows is { } r ? Math.Min(r, count) : 0;
+            int width = host.GameOptions.BattleWidth[side] ?? (rows > 0 ? count / rows : BattleRankWidth);
             var offsets = new Vector2[count];
             for (int i = 0; i < count; i++)
             {
@@ -116,8 +173,8 @@ sealed class BattleScenario(GameHost host)
     }
 
     /// <summary>
-    /// Each control tick, once per world tick: a standing fighter without a target is ordered at the nearest standing enemy (one who wakes up joins in again).
-    /// The first tick a side has nobody standing the battle is over and the orders stop.
+    /// Each control tick, once per world tick: a standing fighter without a target is ordered at the nearest standing enemy (one who wakes up joins
+    /// in again). The first tick a side has nobody standing the battle is over and the orders stop.
     /// </summary>
     void BattleTick()
     {
@@ -150,12 +207,10 @@ sealed class BattleScenario(GameHost host)
         if (world.Tick % BattleRetargetTicks == 0) BattleRetarget(world, combat, standing);
     }
 
-    /// <summary>How often a fighter left out of a crowded target looks for another (engine choice: a second).</summary>
-    const int BattleRetargetTicks = 30;
-
     /// <summary>
-    /// A fighter its target left out (more than <see cref="CombatSystem.MaxEngaged"/> fighters after it, so it circles) turns on the nearest standing enemy with room
-    /// for it, if any: otherwise every fighter keeps the enemy nearest at its order and the crowd round a few targets circles them in rings while others stand free.
+    /// A fighter its target left out (more than <see cref="CombatSystem.MaxEngaged"/> fighters after it, so it circles) turns on the nearest standing
+    /// enemy with room for it, if any: otherwise every fighter keeps the enemy nearest at its order and the crowd round a few targets circles them in
+    /// rings while others stand free.
     /// </summary>
     void BattleRetarget(World world, CombatSystem combat, List<CharacterId>[] standing)
     {
@@ -177,7 +232,11 @@ sealed class BattleScenario(GameHost host)
                 {
                     if (e.Slot == st.TargetSlot || at.GetValueOrDefault(e.Slot) >= CombatSystem.MaxEngaged) continue;
                     float distance = Vector2.DistanceSquared(here, Ground(e));
-                    if (distance < bestDistance) { bestDistance = distance; best = e; }
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        best = e;
+                    }
                 }
                 if (best is not { } foe) continue;
                 at[st.TargetSlot]--;
@@ -186,14 +245,9 @@ sealed class BattleScenario(GameHost host)
             }
     }
 
-    // The counter's numbers per side (standing, alive), counted again when the world ticks.
-    readonly (int Standing, int Alive)[] _battleCounts = new (int, int)[2];
-    long _battleCountedAt = -1;
-    World? _battleCountedIn;
-
     /// <summary>
-    /// The live counter at the top middle: each side's fighters still standing (the battle's own test: not incapacitated) and still alive (down but not dead count),
-    /// of how many it started with. Interface pass only (after the world draw's tick has joined).
+    /// The live counter at the top middle: each side's fighters still standing (the battle's own test: not incapacitated) and still alive (down but
+    /// not dead count), of how many it started with. Interface pass only (after the world draw's tick has joined).
     /// </summary>
     internal void DrawBattleCounter(DebugOverlay o, int width, int height)
     {
@@ -214,7 +268,8 @@ sealed class BattleScenario(GameHost host)
                 _battleCounts[side] = (standing, alive);
             }
         }
-        string Line(int side) => $"{_battleSides[side].Name}: {_battleCounts[side].Standing} standing, {_battleCounts[side].Alive} alive of {_battleSides[side].Count}";
+        string Line(int side) =>
+            $"{_battleSides[side].Name}: {_battleCounts[side].Standing} standing, {_battleCounts[side].Alive} alive of {_battleSides[side].Count}";
         string a = Line(0), b = Line(1);
         var colourA = new Vector4(0.55f, 0.8f, 1f, 1);
         var colourB = new Vector4(1f, 0.6f, 0.5f, 1);
@@ -226,7 +281,9 @@ sealed class BattleScenario(GameHost host)
         o.Flush(width, height);
     }
 
-    /// <summary>Once per frame, between ticks: Backspace starts the battle again in a new world made the same way.</summary>
+    /// <summary>
+    /// Once per frame, between ticks: Backspace starts the battle again in a new world made the same way.
+    /// </summary>
     internal void BattleFrame()
     {
         if (!IsBattle || !BattleRestartRequested) return;

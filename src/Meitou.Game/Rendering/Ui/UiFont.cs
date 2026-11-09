@@ -6,7 +6,9 @@ using static FreeTypeSharp.FT;
 
 namespace Meitou.Game.Rendering.Ui;
 
-/// <summary>How a <see cref="UiFont"/> is made (docs/formats/mygui.md "Fonts").</summary>
+/// <summary>
+/// How a <see cref="UiFont"/> is made (docs/formats/mygui.md "Fonts").
+/// </summary>
 /// <param name="Path">The font file.</param>
 /// <param name="Size64">The FreeType character size in 26.6 points at <paramref name="Dpi"/>; pixels at 72 dpi for sizes given in pixels.</param>
 /// <param name="Faithful">
@@ -24,7 +26,9 @@ internal sealed record UiFontOptions(string Path, long Size64, uint Dpi, bool Fa
 /// </summary>
 internal sealed unsafe class UiFont : IDisposable
 {
-    /// <summary>One glyph: layout in output pixels (offsets from the pen and the baseline, quad size), and its rectangle in the atlas in texels.</summary>
+    /// <summary>
+    /// One glyph: layout in output pixels (offsets from the pen and the baseline, quad size), and its rectangle in the atlas in texels.
+    /// </summary>
     internal readonly record struct Glyph(float Advance, float OffsetX, float OffsetY, float Width, float Height, ushort X, ushort Y, ushort PixelWidth, ushort PixelHeight);
 
     const int MaxSide = 2048;
@@ -50,15 +54,23 @@ internal sealed unsafe class UiFont : IDisposable
     float _tab = -1;
     bool _disposed;
 
-    /// <summary>The atlas side in texels.</summary>
+    /// <summary>
+    /// The atlas side in texels.
+    /// </summary>
     public int Side { get; private set; }
     public int Generation { get; private set; }
 
-    /// <summary>Counts every font's <see cref="Generation"/> changes and atlas releases (render thread): recorded glyph quads are stale once it moves.</summary>
+    /// <summary>
+    /// Counts every font's <see cref="Generation"/> changes and atlas releases (render thread): recorded glyph quads are stale once it moves.
+    /// </summary>
     public static int Changes { get; private set; }
-    /// <summary>Glyphs are placed on whole pixels (Faithful, and Meitou fonts the original draws with <c>Antialias</c> false).</summary>
+    /// <summary>
+    /// Glyphs are placed on whole pixels (Faithful, and Meitou fonts the original draws with <c>Antialias</c> false).
+    /// </summary>
     public bool Snapped { get; }
-    /// <summary>The line's height and the distance from its top to the baseline, in pixels.</summary>
+    /// <summary>
+    /// The line's height and the distance from its top to the baseline, in pixels.
+    /// </summary>
     public float LineHeight { get; }
     public float Baseline { get; }
     public float CharWidth { get; }
@@ -120,18 +132,40 @@ internal sealed unsafe class UiFont : IDisposable
         Side = ppem * _oversample <= 48 ? 512 : ppem * _oversample <= 96 ? 1024 : MaxSide;
         _pixels = new byte[Side * Side];
         (_cursorX, _cursorY) = (_pad, _pad);
-        // Like MyGUI, which builds every glyph of its ranges at load: the usual ones now (not while a frame draws them), the rest on demand.
-        if (_ranges is not null) { if (_ranges.Count <= 1024) foreach (int cp in _ranges.CodePoints()) Lookup(cp); }
-        else { for (int cp = 32; cp < 127; cp++) Lookup(cp); for (int cp = 0xA0; cp < 0x100; cp++) Lookup(cp); }
+        PrimeGlyphs();
         CharWidth = Lookup('M').Advance;
+    }
+
+    /// <summary>
+    /// Like MyGUI, which builds every glyph of its ranges at load: the usual ones now (not while a frame draws them), the rest on demand.
+    /// </summary>
+    void PrimeGlyphs()
+    {
+        if (_ranges is not null)
+        {
+            if (_ranges.Count <= 1024)
+            {
+                foreach (int cp in _ranges.CodePoints()) Lookup(cp);
+            }
+
+            return;
+        }
+
+        for (int cp = 32; cp < 127; cp++) Lookup(cp);
+        for (int cp = 0xA0; cp < 0x100; cp++) Lookup(cp);
     }
 
     static void Check(FT_Error error, string call)
     {
-        if (error != FT_Error.FT_Err_Ok) throw new InvalidOperationException($"{call} failed ({error}).");
+        if (error != FT_Error.FT_Err_Ok)
+        {
+            throw new InvalidOperationException($"{call} failed ({error}).");
+        }
     }
 
-    /// <summary>A bitmap-only font: the smallest strike at least as large as <paramref name="ppem"/>, else the largest.</summary>
+    /// <summary>
+    /// A bitmap-only font: the smallest strike at least as large as <paramref name="ppem"/>, else the largest.
+    /// </summary>
     void SelectStrike(float ppem)
     {
         var f = _face.Face;
@@ -142,13 +176,24 @@ internal sealed unsafe class UiFont : IDisposable
         for (int i = 0; i < f->num_fixed_sizes; i++)
         {
             float strike = f->available_sizes[i].y_ppem / 64f;
-            if (strike >= ppem && strike < bestSize) { best = i; bestSize = strike; }
-            if (strike > largest) { largest = strike; largestIndex = i; }
+            if (strike >= ppem && strike < bestSize)
+            {
+                best = i;
+                bestSize = strike;
+            }
+
+            if (strike > largest)
+            {
+                largest = strike;
+                largestIndex = i;
+            }
         }
         Check(FT_Select_Size(f, bestSize == float.MaxValue ? largestIndex : best), "FT_Select_Size");
     }
 
-    /// <summary>The glyph drawn for <paramref name="codePoint"/>, rasterising it if it is new (CPU only; <see cref="Prepare"/> uploads).</summary>
+    /// <summary>
+    /// The glyph drawn for <paramref name="codePoint"/>, rasterising it if it is new (CPU only; <see cref="Prepare"/> uploads).
+    /// </summary>
     public Glyph Lookup(int codePoint)
     {
         if (_glyphs.TryGetValue(codePoint, out var known)) return known;
@@ -157,14 +202,18 @@ internal sealed unsafe class UiFont : IDisposable
         return made;
     }
 
-    /// <summary>Makes the glyphs of <paramref name="text"/> exist and uploads what changed, so drawing it takes only <see cref="Lookup"/>.</summary>
+    /// <summary>
+    /// Makes the glyphs of <paramref name="text"/> exist and uploads what changed, so drawing it takes only <see cref="Lookup"/>.
+    /// </summary>
     public void Ensure(string text)
     {
         foreach (var rune in text.EnumerateRunes()) Lookup(rune.Value);
         Prepare();
     }
 
-    /// <summary>The kerning between two code points in output pixels (none in Faithful mode: MyGUI 3.2 does not kern).</summary>
+    /// <summary>
+    /// The kerning between two code points in output pixels (none in Faithful mode: MyGUI 3.2 does not kern).
+    /// </summary>
     public float Kern(int left, int right) => _faithful ? 0 : _face.KerningUnits(left, right) * _kerningScale;
 
     Glyph Make(int codePoint)
@@ -212,20 +261,7 @@ internal sealed unsafe class UiFont : IDisposable
         lock (FreeTypeFace.Gate)
         {
             Check(FT_Activate_Size(_size), "FT_Activate_Size");
-            var error = FT_Load_Glyph(_face.Face, index, _loadFlags | FT_LOAD.FT_LOAD_RENDER);
-            // Some fonts' bytecode is rejected by this FreeType (ume-pgs5.ttf: Invalid_Opcode at every size): the auto-hinter, then no hinting,
-            // for the glyph, and for the font from the third failure on (a font whose hinting fails once is not tried at every glyph).
-            if (error != FT_Error.FT_Err_Ok && (_loadFlags & (FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_FORCE_AUTOHINT)) == 0)
-            {
-                if (++_hintingFailures >= 3) _loadFlags = FT_LOAD.FT_LOAD_FORCE_AUTOHINT;
-                error = FT_Load_Glyph(_face.Face, index, FT_LOAD.FT_LOAD_FORCE_AUTOHINT | FT_LOAD.FT_LOAD_RENDER);
-            }
-            if (error != FT_Error.FT_Err_Ok && (_loadFlags & FT_LOAD.FT_LOAD_NO_HINTING) == 0)
-            {
-                if (++_hintingFailures >= 3) _loadFlags = FT_LOAD.FT_LOAD_NO_HINTING;
-                error = FT_Load_Glyph(_face.Face, index, FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_RENDER);
-            }
-            if (error != FT_Error.FT_Err_Ok) return default;
+            if (LoadGlyph(index) != FT_Error.FT_Err_Ok) return default;
             var slot = _face.Face->glyph;
             // MyGUI advances by the hinted advance; Meitou by the unhinted one (light hinting leaves it alone), both in output pixels.
             advance = _faithful ? slot->advance.x / 64f
@@ -234,25 +270,11 @@ internal sealed unsafe class UiFont : IDisposable
             width = (int)bitmap.width;
             height = (int)bitmap.rows;
             if (width <= 0 || height <= 0 || bitmap.buffer == null || bitmap.pitch <= 0 || width > MaxSide - 2 * _pad || height > MaxSide - 2 * _pad)
-                return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
-            if (_scratch.Length < width * height) _scratch = new byte[width * height];
-            switch (bitmap.pixel_mode)
             {
-                case FT_Pixel_Mode_.FT_PIXEL_MODE_GRAY:
-                    for (int row = 0; row < height; row++)
-                        new ReadOnlySpan<byte>(bitmap.buffer + (long)row * bitmap.pitch, width).CopyTo(_scratch.AsSpan(row * width, width));
-                    break;
-                case FT_Pixel_Mode_.FT_PIXEL_MODE_MONO:
-                    // An embedded bitmap strike: one bit per texel, most significant first.
-                    for (int row = 0; row < height; row++)
-                    {
-                        byte* source = bitmap.buffer + (long)row * bitmap.pitch;
-                        for (int x = 0; x < width; x++) _scratch[row * width + x] = (source[x >> 3] >> (7 - (x & 7)) & 1) != 0 ? (byte)255 : (byte)0;
-                    }
-                    break;
-                default:
-                    return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
+                return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
             }
+
+            if (!CopyBitmap(bitmap, width, height)) return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
             // MyGUI places the bitmap at the metrics' bearing (floor(ascent - horiBearingY) from the line top, less OffsetHeight); for
             // hinted glyphs that is bitmap_left / bitmap_top, which are used here.
             offsetX = slot->bitmap_left / (float)_oversample;
@@ -264,7 +286,65 @@ internal sealed unsafe class UiFont : IDisposable
         return new Glyph(advance, offsetX, offsetY, width / (float)_oversample, height / (float)_oversample, (ushort)x0, (ushort)y0, (ushort)width, (ushort)height);
     }
 
-    /// <summary>A free rectangle of <paramref name="width"/> x <paramref name="height"/> texels (with the spacing around it): growing the atlas, then starting it over, when it is full.</summary>
+    /// <summary>
+    /// Loads a glyph with the hinting it is asked for. A font whose bytecode this FreeType rejects (ume-pgs5.ttf: Invalid_Opcode at every size) is
+    /// tried with the auto-hinter, then with no hinting, for the glyph; and for the font from the third failure on (a font whose hinting fails once is
+    /// not tried at every glyph). Called with the FreeType lock held.
+    /// </summary>
+    FT_Error LoadGlyph(uint index)
+    {
+        var error = FT_Load_Glyph(_face.Face, index, _loadFlags | FT_LOAD.FT_LOAD_RENDER);
+        if (error != FT_Error.FT_Err_Ok && (_loadFlags & (FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_FORCE_AUTOHINT)) == 0)
+        {
+            if (++_hintingFailures >= 3) _loadFlags = FT_LOAD.FT_LOAD_FORCE_AUTOHINT;
+            error = FT_Load_Glyph(_face.Face, index, FT_LOAD.FT_LOAD_FORCE_AUTOHINT | FT_LOAD.FT_LOAD_RENDER);
+        }
+
+        if (error != FT_Error.FT_Err_Ok && (_loadFlags & FT_LOAD.FT_LOAD_NO_HINTING) == 0)
+        {
+            if (++_hintingFailures >= 3) _loadFlags = FT_LOAD.FT_LOAD_NO_HINTING;
+            error = FT_Load_Glyph(_face.Face, index, FT_LOAD.FT_LOAD_NO_HINTING | FT_LOAD.FT_LOAD_RENDER);
+        }
+
+        return error;
+    }
+
+    /// <summary>
+    /// Copies the rendered bitmap of the current glyph into the scratch buffer as 8-bit coverage; false for a pixel mode this does not take.
+    /// </summary>
+    bool CopyBitmap(FT_Bitmap_ bitmap, int width, int height)
+    {
+        if (_scratch.Length < width * height) _scratch = new byte[width * height];
+        switch (bitmap.pixel_mode)
+        {
+            case FT_Pixel_Mode_.FT_PIXEL_MODE_GRAY:
+                for (int row = 0; row < height; row++)
+                {
+                    new ReadOnlySpan<byte>(bitmap.buffer + (long)row * bitmap.pitch, width).CopyTo(_scratch.AsSpan(row * width, width));
+                }
+
+                return true;
+            case FT_Pixel_Mode_.FT_PIXEL_MODE_MONO:
+                // An embedded bitmap strike: one bit per texel, most significant first.
+                for (int row = 0; row < height; row++)
+                {
+                    byte* source = bitmap.buffer + (long)row * bitmap.pitch;
+                    for (int x = 0; x < width; x++)
+                    {
+                        _scratch[row * width + x] = (source[x >> 3] >> (7 - (x & 7)) & 1) != 0 ? (byte)255 : (byte)0;
+                    }
+                }
+
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// A free rectangle of <paramref name="width"/> x <paramref name="height"/> texels (with the spacing around it): growing the atlas, then starting
+    /// it over, when it is full.
+    /// </summary>
     bool Pack(int width, int height, out int x, out int y)
     {
         bool restarted = false;
@@ -278,19 +358,38 @@ internal sealed unsafe class UiFont : IDisposable
                 _rowHeight = Math.Max(_rowHeight, height);
                 return true;
             }
-            if (Side < MaxSide) Grow();
-            else if (!restarted) { Restart(); restarted = true; }
-            else { (x, y) = (0, 0); return false; }
+
+            if (Side < MaxSide)
+            {
+                Grow();
+            }
+            else if (!restarted)
+            {
+                Restart();
+                restarted = true;
+            }
+            else
+            {
+                (x, y) = (0, 0);
+                return false;
+            }
         }
     }
 
     void MarkDirty(int x0, int y0, int x1, int y1)
     {
-        if (!_dirty) (_dirtyX0, _dirtyY0, _dirtyX1, _dirtyY1, _dirty) = (x0, y0, x1, y1, true);
-        else (_dirtyX0, _dirtyY0, _dirtyX1, _dirtyY1) = (Math.Min(_dirtyX0, x0), Math.Min(_dirtyY0, y0), Math.Max(_dirtyX1, x1), Math.Max(_dirtyY1, y1));
+        if (!_dirty)
+        {
+            (_dirtyX0, _dirtyY0, _dirtyX1, _dirtyY1, _dirty) = (x0, y0, x1, y1, true);
+            return;
+        }
+
+        (_dirtyX0, _dirtyY0, _dirtyX1, _dirtyY1) = (Math.Min(_dirtyX0, x0), Math.Min(_dirtyY0, y0), Math.Max(_dirtyX1, x1), Math.Max(_dirtyY1, y1));
     }
 
-    /// <summary>The atlas twice as large: glyph rectangles keep their place, texture coordinates change (and the GPU texture is made anew).</summary>
+    /// <summary>
+    /// The atlas twice as large: glyph rectangles keep their place, texture coordinates change (and the GPU texture is made anew).
+    /// </summary>
     void Grow()
     {
         Retire();
@@ -303,7 +402,9 @@ internal sealed unsafe class UiFont : IDisposable
         Changes++;
     }
 
-    /// <summary>Forgets every glyph and empties the atlas (it is full at its largest size).</summary>
+    /// <summary>
+    /// Forgets every glyph and empties the atlas (it is full at its largest size).
+    /// </summary>
     void Restart()
     {
         Retire();
@@ -322,20 +423,29 @@ internal sealed unsafe class UiFont : IDisposable
     /// </summary>
     void Retire()
     {
-        if (_texture is null) { _dirty = false; return; }
+        if (_texture is null)
+        {
+            _dirty = false;
+            return;
+        }
+
         UploadDirty();
         _texture.Dispose();
         _texture = null;
     }
 
-    /// <summary>Uploads the glyphs rasterised since the last call, creating the GPU texture first when there is none.</summary>
+    /// <summary>
+    /// Uploads the glyphs rasterised since the last call, creating the GPU texture first when there is none.
+    /// </summary>
     public void Prepare()
     {
         if (_texture is null) Create();
         else if (_dirty) UploadDirty();
     }
 
-    /// <summary>The atlas as a draw samples it (uploads first).</summary>
+    /// <summary>
+    /// The atlas as a draw samples it (uploads first).
+    /// </summary>
     public SampledTexture Sampled
     {
         get
@@ -358,7 +468,12 @@ internal sealed unsafe class UiFont : IDisposable
 
     void UploadDirty()
     {
-        if (!_dirty || _texture is null) { _dirty = false; return; }
+        if (!_dirty || _texture is null)
+        {
+            _dirty = false;
+            return;
+        }
+
         int width = _dirtyX1 - _dirtyX0, height = _dirtyY1 - _dirtyY0;
         if (_uploadScratch.Length < width * height) _uploadScratch = new byte[width * height];
         for (int row = 0; row < height; row++) System.Buffer.BlockCopy(_pixels, (_dirtyY0 + row) * Side + _dirtyX0, _uploadScratch, row * width, width);
