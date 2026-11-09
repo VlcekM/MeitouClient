@@ -151,7 +151,7 @@ static class BuildingLodShaders
             }
             """);
         // An EMISSIVE material glows only while its building's lights are on (the instance's spare component carries 2 when they are off, WorldObjectRenderer.Emit).
-        f = Literal(f, "if (uEmissive) colour += albedo * nm.a;", "if (uEmissive && vInterior < 1.5) colour += albedo * nm.a;");
+        f = Literal(f, "if (uEmissive) colour += albedo * (1.0 - nm.a) * 3.2;", "if (uEmissive && vInterior < 1.5) colour += albedo * (1.0 - nm.a) * 3.2;");
         // The placement ghost (docs/render-objects.md "Placement ghost") draws with a non-zero flat colour (which an ordinary draw leaves at 0): it tints the lit picture.
         f = Literal(f, "fragColour = vec4(colour, 1.0);\n", """
             if (dot(uFlatColour, uFlatColour) > 0.0) colour = mix(colour, colour * uFlatColour * 1.6 + uFlatColour * 0.12, 0.7);

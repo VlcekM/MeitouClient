@@ -175,7 +175,7 @@ static class Shaders
             if (uFogDistance > 0.0 && uAtmoParams.x > 0.5) colour = kenshiLight(albedo, n, v, glossLit, vWorld);
             // The character editor's stage (WorldObjectRenderer.DrawStageProp, a fog distance of -2): its platform, lit as the characters on it.
             if (uFogDistance < -1.5) colour = stageLight(albedo, n, v, normalize(uLightDir), glossLit, uFogDistance < -2.5);
-            if (uEmissive) colour += albedo * nm.a;
+            if (uEmissive) colour += albedo * (1.0 - nm.a) * 3.2;
             if (uFogDistance > 0.0) colour = atmoApply(colour, uEye, vWorld);   // aerial perspective (AtmosphereShaders)
             fragColour = vec4(colour, 1.0);
         }
