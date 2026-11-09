@@ -142,6 +142,8 @@ public sealed record CharacterOptions
 /// </summary>
 public sealed class CharacterAppearance
 {
+    #region Look
+
     public GameRecord? Character { get; private init; }
     /// <summary>
     /// The ANIMAL_CHARACTER this animal was built from (<see cref="BuildAnimal"/>); null for people.
@@ -213,6 +215,33 @@ public sealed class CharacterAppearance
     /// </summary>
     public Dictionary<string, float> PoseWeights { get; } = new(StringComparer.Ordinal);
     public List<string> Notes { get; } = [];
+
+    /// <summary>
+    /// The limbs whose natural body vertices are hidden, bit k for limb slot k (docs/characters.md "Hidden body parts": the original's
+    /// <c>hiddenMask</c> bits 12 to 15, set for every limb that is not in its natural state and for every worn LIMB_REPLACEMENT,
+    /// <c>uses_hide_parts</c>).
+    /// </summary>
+    public int HiddenLimbs { get; private set; }
+
+    /// <summary>
+    /// The head was cut off (<see cref="Loadout.Decapitated"/>): the body's head vertices are hidden and its hat, hair and beard left out.
+    /// </summary>
+    public bool Headless { get; private set; }
+
+    /// <summary>
+    /// A cut-off head (<see cref="SeveredHead"/>): only the body's head vertices are drawn, with the hair, beard and hat.
+    /// </summary>
+    public bool HeadOnly { get; private set; }
+
+    /// <summary>
+    /// The part-map regions the worn ARMOUR hides: the OR of their <c>hide parts</c> (bit per part-map colour, docs/characters.md "Hidden body
+    /// parts").
+    /// </summary>
+    public int HiddenParts { get; private set; }
+
+    #endregion
+
+    #region Building a person
 
     /// <summary>
     /// Finds a record by string id, else by exact name (case-insensitive; the shown name or the data files' English one) among
@@ -598,6 +627,15 @@ public sealed class CharacterAppearance
     }
 
     /// <summary>
+    /// The record's path field, or null when it is empty.
+    /// </summary>
+    static string? FilePath(GameRecord record, string field) => record.GetPath(field) is { Length: > 0 } p ? p : null;
+
+    #endregion
+
+    #region Building an animal
+
+    /// <summary>
     /// An animal's look (docs/game/animals.md "Appearance", <b>Verified</b> against the records): the ANIMAL_CHARACTER names no mesh or texture; its
     /// race does, as a person's: <c>male mesh</c> (every animal race names the same file for both genders, so the male one is used), <c>body texture
     /// male</c>, <c>nm male</c>, and the fur as its <c>hairs</c> ATTACHMENT (a mesh on the body's skeleton, coloured by the race's <c>hair
@@ -629,83 +667,32 @@ public sealed class CharacterAppearance
         return result;
     }
 
-    /// <summary>
-    /// The limbs whose natural body vertices are hidden, bit k for limb slot k (docs/characters.md "Hidden body parts": the original's
-    /// <c>hiddenMask</c> bits 12 to 15, set for every limb that is not in its natural state and for every worn LIMB_REPLACEMENT,
-    /// <c>uses_hide_parts</c>).
-    /// </summary>
-    public int HiddenLimbs { get; private set; }
+    #endregion
+
+    #region Parts
 
     /// <summary>
-    /// The head was cut off (<see cref="Loadout.Decapitated"/>): the body's head vertices are hidden and its hat, hair and beard left out.
+    /// The attachment points: <c>hands</c> and the race's <c>attachment points</c> file; a file that does not read is a note.
     /// </summary>
-    public bool Headless { get; private set; }
-
-    /// <summary>
-    /// A cut-off head (<see cref="SeveredHead"/>): only the body's head vertices are drawn, with the hair, beard and hat.
-    /// </summary>
-    public bool HeadOnly { get; private set; }
-
-    /// <summary>
-    /// The head of this look as it falls when cut off (Meitou decapitation): the body (drawn head only, <see cref="HeadOnly"/>) with its hair, beard
-    /// and hat.
-    /// </summary>
-    public CharacterAppearance SeveredHead()
+    void LoadAttachmentPoints(string installRoot, GameRecord race)
     {
-        var copy = new CharacterAppearance
+        AttachmentPoints["hands"] = new AttachmentPoint("hands", "Bip01 Prop2", Vector3.Zero, Quaternion.Identity);
+        if (race.GetPath("attachment points") is not { Length: > 0 } file) return;
+        var path = CharacterGenerator.Resolve(installRoot, file);
+        try
         {
-            Character = Character,
-            Animal = Animal,
-            Race = Race,
-            Female = Female,
-            Body = Body,
-            BodyFile = BodyFile,
-            Loadout = Loadout,
-            Faction = Faction,
-            BodyMesh = BodyMesh,
-            BodyTexture = BodyTexture,
-            BodyNormal = BodyNormal,
-            BodyNormalStrong = BodyNormalStrong,
-            BodyNormalSkinny = BodyNormalSkinny,
-            BodyMask = BodyMask,
-            PartMap = PartMap,
-            Head = Head,
-            Hair = Hair,
-            Shape = Shape,
-            Beard = Beard,
-            SkinToneParameter = SkinToneParameter,
-            HairColour = HairColour,
-            HeadOnly = true,
-        };
-        copy.Parts.AddRange(Parts.Where(p => p.Record == Hair || p.Record == Beard || p.Slot == AttachSlot.Hat));
-        copy.BodyLayers.AddRange(BodyLayers);
-        foreach (var (name, weight) in PoseWeights) copy.PoseWeights[name] = weight;
-        return copy;
-    }
-
-    /// <summary>
-    /// The part-map regions the worn ARMOUR hides: the OR of their <c>hide parts</c> (bit per part-map colour, docs/characters.md "Hidden body
-    /// parts").
-    /// </summary>
-    public int HiddenParts { get; private set; }
-
-    /// <summary>
-    /// The non-natural limbs of <paramref name="limbs"/> (<c>FUN_1400d0190</c>, <c>uses_limb_replacement</c>): a stump shows the race's <c>limb
-    /// replacement</c> entry whose
-    /// <c>slot</c> is 50 + k, a replaced limb its prosthetic (a stump's without one); a crushed limb gets no mesh (the original attaches none for
-    /// state 3) but stays hidden.
-    /// </summary>
-    void AddLimbs(GameDatabase db, GameRecord race, bool female, IReadOnlyList<LoadoutLimb?> limbs, Func<GameRecord, GameRecord?, GameRecord?> dye)
-    {
-        for (int k = 0; k < limbs.Count; k++)
+            var phs = PhysicsAttachmentFile.ReadFile(path);
+            foreach (var actor in phs.Actors)
+                if (actor.Bone is not null)
+                    foreach (var point in actor.Points)
+                    {
+                        var (position, rotation) = actor.Offset(point);
+                        AttachmentPoints[actor.Name] = new AttachmentPoint(actor.Name, actor.Bone, position, rotation);
+                    }
+        }
+        catch (Exception e) when (e is IOException or FormatException or NotSupportedException or UnauthorizedAccessException)
         {
-            if (limbs[k] is not { State: > 0 } limb) continue;
-            HiddenLimbs |= 1 << k;
-            if (limb.State == 3) continue;
-            var record = limb.State == 2 ? limb.Prosthetic : null;
-            record ??= race.GetReferences("limb replacement").Select(r => db.Find(r.TargetStringId))
-                .FirstOrDefault(r => r is { Type: FcsRecordType.LimbReplacement } && r.GetInt("slot") == 50 + k);
-            if (record is not null) AddLimb(record, female, dye(record, limb.State == 2 ? limb.Colour : null));
+            Notes.Add($"attachment points {file}: {e.Message}");
         }
     }
 
@@ -731,6 +718,26 @@ public sealed class CharacterAppearance
     }
 
     /// <summary>
+    /// The non-natural limbs of <paramref name="limbs"/> (<c>FUN_1400d0190</c>, <c>uses_limb_replacement</c>): a stump shows the race's <c>limb
+    /// replacement</c> entry whose
+    /// <c>slot</c> is 50 + k, a replaced limb its prosthetic (a stump's without one); a crushed limb gets no mesh (the original attaches none for
+    /// state 3) but stays hidden.
+    /// </summary>
+    void AddLimbs(GameDatabase db, GameRecord race, bool female, IReadOnlyList<LoadoutLimb?> limbs, Func<GameRecord, GameRecord?, GameRecord?> dye)
+    {
+        for (int k = 0; k < limbs.Count; k++)
+        {
+            if (limbs[k] is not { State: > 0 } limb) continue;
+            HiddenLimbs |= 1 << k;
+            if (limb.State == 3) continue;
+            var record = limb.State == 2 ? limb.Prosthetic : null;
+            record ??= race.GetReferences("limb replacement").Select(r => db.Find(r.TargetStringId))
+                .FirstOrDefault(r => r is { Type: FcsRecordType.LimbReplacement } && r.GetInt("slot") == 50 + k);
+            if (record is not null) AddLimb(record, female, dye(record, limb.State == 2 ? limb.Colour : null));
+        }
+    }
+
+    /// <summary>
     /// A LIMB_REPLACEMENT mesh on the body's skeleton (<c>mesh</c> / <c>mesh female</c>), dyed with <paramref name="colour"/> when its material has a
     /// <c>color map</c> (docs/characters.md "Clothing colours"); hides its slot's natural limb.
     /// </summary>
@@ -742,6 +749,10 @@ public sealed class CharacterAppearance
             Parts.Add(new CharacterPart { Record = limb, Mesh = mesh, Field = field, Mode = AttachMode.SharedSkeleton, Colour = colour });
     }
 
+    /// <summary>
+    /// A worn item (ATTACHMENT, ARMOUR) on the body's skeleton by gender, its overlap mesh when an <c>overlap items</c> item is worn too, and
+    /// an ARMOUR's vest texture as a body layer.
+    /// </summary>
     void AddWorn(GameRecord item, bool female, List<GameRecord> worn, GameRecord? material = null, GameRecord? colour = null)
     {
         AttachSlot? slot = item.Type == FcsRecordType.Attachment ? (AttachSlot)item.GetInt("attach slot", (int)AttachSlot.Hair)
@@ -771,6 +782,10 @@ public sealed class CharacterAppearance
                 Colour = colour });
     }
 
+    /// <summary>
+    /// A weapon's meshes in the attachment point <paramref name="slot"/> (the second back slot when one is taken): the bare blade and the
+    /// sheath drawn, else the sheathed mesh.
+    /// </summary>
     /// <param name="both">Both sets: the sheathed mesh tagged <see cref="WeaponShown.Sheathed"/>, the drawn ones <see cref="WeaponShown.Drawn"/> (a
     /// renderer that follows the fight); with <paramref name="back"/> <see cref="WeaponShown.BackSheathed"/> and
     /// <see cref="WeaponShown.BackDrawn"/>.</param>
@@ -843,6 +858,47 @@ public sealed class CharacterAppearance
         }
     }
 
+    #endregion
+
+    #region Derived looks
+
+    /// <summary>
+    /// The head of this look as it falls when cut off (Meitou decapitation): the body (drawn head only, <see cref="HeadOnly"/>) with its hair, beard
+    /// and hat.
+    /// </summary>
+    public CharacterAppearance SeveredHead()
+    {
+        var copy = new CharacterAppearance
+        {
+            Character = Character,
+            Animal = Animal,
+            Race = Race,
+            Female = Female,
+            Body = Body,
+            BodyFile = BodyFile,
+            Loadout = Loadout,
+            Faction = Faction,
+            BodyMesh = BodyMesh,
+            BodyTexture = BodyTexture,
+            BodyNormal = BodyNormal,
+            BodyNormalStrong = BodyNormalStrong,
+            BodyNormalSkinny = BodyNormalSkinny,
+            BodyMask = BodyMask,
+            PartMap = PartMap,
+            Head = Head,
+            Hair = Hair,
+            Shape = Shape,
+            Beard = Beard,
+            SkinToneParameter = SkinToneParameter,
+            HairColour = HairColour,
+            HeadOnly = true,
+        };
+        copy.Parts.AddRange(Parts.Where(p => p.Record == Hair || p.Record == Beard || p.Slot == AttachSlot.Hat));
+        copy.BodyLayers.AddRange(BodyLayers);
+        foreach (var (name, weight) in PoseWeights) copy.PoseWeights[name] = weight;
+        return copy;
+    }
+
     /// <summary>
     /// This look with <paramref name="item"/>'s <c>mesh</c> in the <c>hands</c> point, as the original attaches an operator's <c>special tool</c>
     /// (docs/game/buildings-production.md "Production"); this look itself when the item has no mesh.
@@ -887,27 +943,9 @@ public sealed class CharacterAppearance
         return copy;
     }
 
-    void LoadAttachmentPoints(string installRoot, GameRecord race)
-    {
-        AttachmentPoints["hands"] = new AttachmentPoint("hands", "Bip01 Prop2", Vector3.Zero, Quaternion.Identity);
-        if (race.GetPath("attachment points") is not { Length: > 0 } file) return;
-        var path = CharacterGenerator.Resolve(installRoot, file);
-        try
-        {
-            var phs = PhysicsAttachmentFile.ReadFile(path);
-            foreach (var actor in phs.Actors)
-                if (actor.Bone is not null)
-                    foreach (var point in actor.Points)
-                    {
-                        var (position, rotation) = actor.Offset(point);
-                        AttachmentPoints[actor.Name] = new AttachmentPoint(actor.Name, actor.Bone, position, rotation);
-                    }
-        }
-        catch (Exception e) when (e is IOException or FormatException or NotSupportedException or UnauthorizedAccessException)
-        {
-            Notes.Add($"attachment points {file}: {e.Message}");
-        }
-    }
+    #endregion
+
+    #region Random choices
 
     /// <summary>
     /// Clothing per ARMOUR slot: entries are (quantity, chance); a negative quantity is a "no item" option. Without a
@@ -932,6 +970,9 @@ public sealed class CharacterAppearance
         }
     }
 
+    /// <summary>
+    /// The race's <c>hairs</c> ATTACHMENT of <paramref name="slot"/> with a mesh: the likeliest without a random, else a weighted roll.
+    /// </summary>
     static GameRecord? PickHair(GameDatabase db, GameRecord race, AttachSlot slot, Random? random)
     {
         var options = race.GetReferences("hairs").Select(r => (Item: db.Find(r.TargetStringId), Weight: r.Values.Value0))
@@ -942,6 +983,9 @@ public sealed class CharacterAppearance
         return random is null ? options.MaxBy(o => o.Weight).Item : Weighted(options, o => o.Weight, random).Item;
     }
 
+    /// <summary>
+    /// A record of <paramref name="refs"/>: the first without a random, else a roll weighted by <paramref name="weight"/>.
+    /// </summary>
     static GameRecord? Pick(GameDatabase db, IReadOnlyList<GameReference> refs, Random? random, Func<GameReference, int> weight)
     {
         var options = refs.Select(r => (Ref: r, Item: db.Find(r.TargetStringId))).Where(o => o.Item is not null).ToList();
@@ -949,6 +993,9 @@ public sealed class CharacterAppearance
         return random is null ? options[0].Item : Weighted(options, o => weight(o.Ref), random).Item;
     }
 
+    /// <summary>
+    /// A roll among <paramref name="options"/> by <paramref name="weight"/> (negative weights count 0; all 0: a uniform roll).
+    /// </summary>
     static T Weighted<T>(List<T> options, Func<T, int> weight, Random random)
     {
         int total = options.Sum(o => Math.Max(weight(o), 0));
@@ -962,21 +1009,9 @@ public sealed class CharacterAppearance
         return options[^1];
     }
 
-    /// <summary>
-    /// Hair colour: body file sliders <c>Hair Colour</c>, <c>Hair Saturation</c>, <c>Hair Brightness</c> (each × 0.01) as
-    /// hue, saturation, brightness (Ogre's ColourValue::setHSB). Without a body file: the race's likeliest
-    /// <c>hair colors</c> COLOR_DATA <c>color 1</c> (viewer choice; the game's randomiser was not traced).
-    /// </summary>
-    static Vector3 HairColourOf(GameDatabase db, GameRecord race, AppearanceFile? body, Random? random)
-    {
-        if (body is not null && body.Floats.ContainsKey("Hair Colour"))
-            return FromHsb(body.Get("Hair Colour") * 0.01f, body.Get("Hair Saturation") * 0.01f, body.Get("Hair Brightness") * 0.01f);
-        var colours = race.GetReferences("hair colors").Select(r => (Item: db.Find(r.TargetStringId),
-                Weight: r.Values.Value0)).Where(c => c.Item is not null).ToList();
-        if (colours.Count == 0) return new Vector3(0.3f, 0.22f, 0.15f);
-        var chosen = random is null ? colours.MaxBy(c => c.Weight).Item! : Weighted(colours, c => c.Weight, random).Item!;
-        return Rgb(chosen.GetInt("color 1"));
-    }
+    #endregion
+
+    #region Colours
 
     /// <summary>
     /// An FCS colour int (0xRRGGBB, alpha ignored) as RGB 0–1.
@@ -1008,5 +1043,21 @@ public sealed class CharacterAppearance
         };
     }
 
-    static string? FilePath(GameRecord record, string field) => record.GetPath(field) is { Length: > 0 } p ? p : null;
+    /// <summary>
+    /// Hair colour: body file sliders <c>Hair Colour</c>, <c>Hair Saturation</c>, <c>Hair Brightness</c> (each × 0.01) as
+    /// hue, saturation, brightness (Ogre's ColourValue::setHSB). Without a body file: the race's likeliest
+    /// <c>hair colors</c> COLOR_DATA <c>color 1</c> (viewer choice; the game's randomiser was not traced).
+    /// </summary>
+    static Vector3 HairColourOf(GameDatabase db, GameRecord race, AppearanceFile? body, Random? random)
+    {
+        if (body is not null && body.Floats.ContainsKey("Hair Colour"))
+            return FromHsb(body.Get("Hair Colour") * 0.01f, body.Get("Hair Saturation") * 0.01f, body.Get("Hair Brightness") * 0.01f);
+        var colours = race.GetReferences("hair colors").Select(r => (Item: db.Find(r.TargetStringId),
+                Weight: r.Values.Value0)).Where(c => c.Item is not null).ToList();
+        if (colours.Count == 0) return new Vector3(0.3f, 0.22f, 0.15f);
+        var chosen = random is null ? colours.MaxBy(c => c.Weight).Item! : Weighted(colours, c => c.Weight, random).Item!;
+        return Rgb(chosen.GetInt("color 1"));
+    }
+
+    #endregion
 }
