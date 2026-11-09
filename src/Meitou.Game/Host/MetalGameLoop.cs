@@ -666,7 +666,7 @@ sealed class MetalGameLoop(GameHost host, Data.Gameplay.NewGameStart? start)
     void StartPlayerSquad()
     {
         // The saved key bindings feed the same settings dialog and camera/order input as Vulkan.
-        foreach (var problem in host.Session.Bindings.Apply(host.Config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
+        GameHost.UseSavedBindings(host.Session.Bindings, host.Install, host.Config);
         // The game's new-game shortcut: the player's squad in the simulation, which the world draw list then shows.
         if (start is not null && host.Population is not null)
         {

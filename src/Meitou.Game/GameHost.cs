@@ -731,13 +731,13 @@ sealed partial class GameHost(
     }
 
     /// <summary>
-    /// Applies the config's bindings, then moves those of older saved configs off the keys the game has since given to other actions.
+    /// Takes the install's controls.cfg and the config's bindings, then moves those of older saved configs off the keys the game has since given
+    /// to other actions.
     /// </summary>
     void MigrateBindings()
     {
         var bindings = Session.Bindings;
-        foreach (var problem in bindings.Apply(Config.Bindings))
-            Console.Error.WriteLine($"config    binding skipped: {problem}");
+        UseSavedBindings(bindings, Install, Config);
 
         // Right is the command button by default; older saved configs bound it to orbit (kept when Command has moved off it).
         if (bindings.Get(InputAction.Command).Contains(Binding.Of(EngineButton.Right)))
@@ -765,6 +765,16 @@ sealed partial class GameHost(
         // Tab is the game's change_squad, not the settings (they open from the Esc menu); older saved configs bound Tab to them.
         if (BoundOnlyTo(InputAction.ToggleSettings, Binding.Of(EngineKey.Tab)))
             bindings.Set(InputAction.ToggleSettings);
+    }
+
+    /// <summary>
+    /// The install's controls.cfg as the defaults, then the config's changes over them; skipped lines are reported on the console.
+    /// </summary>
+    internal static void UseSavedBindings(InputBindings bindings, GameInstall install, UserConfig config)
+    {
+        bindings.UseGameControls(GameControls.Read(install.Root, out var problems));
+        foreach (var problem in problems) Console.Error.WriteLine($"controls.cfg binding skipped: {problem}");
+        foreach (var problem in bindings.ApplySaved(config.Bindings)) Console.Error.WriteLine($"config    binding skipped: {problem}");
     }
 
     /// <summary>

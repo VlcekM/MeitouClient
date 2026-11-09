@@ -10,9 +10,19 @@ tick; host picking/UI issue commands, not direct simulation mutation. [Simulatio
 modifiers share bits. Low-byte0 mouse=(buttonIndex+1)*4096 (Mouse1/2/3=0x1000/2000/3000).
 Name formatter prefixes Ctrl+Alt+Shift, unnamed Key_n, mouse Mouse_n. Key names are a256-entry
 exe table;111 null. Preserve scancode semantics rather than substituting ASCII key codes.
-Controls.cfg first line version1, repeated action=KeyName entries allow multiple bindings.
+Controls.cfg (install root) first line version1, repeated action=KeyName entries allow multiple bindings.
 Missing/empty file writes defaults; version<1 treats changed camera/floor/build bindings specially
 (exact application partly Observed). Default-unbound and UI-unrebindable actions remain in tables.
+**Verified** (`FUN_140362430`, `FUN_1403622f0`): an action's first line clears its default bindings, each line then adds one, so an
+action the file does not name keeps its defaults. Key names (exe table, **Verified** against the strings and the install's file):
+letters, digits and punctuation are the character, `F1`..`F15`, `NUM0`..`NUM9` `NUM+` `NUM-` `NUM*` `NUM/` `NUM.`, `Left Control` `Right Control`
+`Left Shift` `Right shift` `Left Alt` `Right Alt`, `Return` (main Enter), `Enter` (keypad, by its place in the table: **Observed**), `GRAVE`, `SYSRQ`, `PgUp` `PgDn`, `Mouse1..3`.
+
+Meitou (`GameControls`, `InputBindings.UseGameControls`) reads the file at boot, never writes it, as the defaults of the actions it
+names (the same rule; the version line, modifier names and the build/editor/developer actions are skipped; `camera_tilt+` is `PitchDown`,
+steeper). Medic, Rescue and Highlight get Meitou's H, J and Right Alt back while no other action has them. Its config keeps only the
+bindings that differ from those defaults; entries equal to the engine's own defaults (configs that saved every action) are ignored.
+Restore defaults returns to controls.cfg.
 
 ## Dispatch and selection
 
@@ -110,6 +120,8 @@ Mouse buttons (Meitou only, **Observed**; `GameHost.PlayerButton`): `Select` (de
 The interface and world logic keep seeing "left" and "right": a physical button bound to Select arrives as left, to Command as right; any other of left,
 right, middle (e.g. Orbit's) arrives as middle (map pan, no click reaches the world under the HUD). An unbound Select / Command falls back to left / right.
 The settings page itself always takes the physical buttons. Binding a mouse button already used swaps: the other action gets the rebound action's old button.
+Binding a key already used takes it from the other actions, as the original's map holds one action per key; Delete or Backspace in the
+prompt unbinds. The page scrolls with the wheel, Page Up / Down, or by dragging (or clicking) its scroll bar.
 
 ### 6. Event dispatch
 

@@ -38,11 +38,11 @@ public enum InputAction
     /// </summary>
     RotateRight,
     /// <summary>
-    /// Tilts the camera steeper (default Period, the game's <c>camera_tilt+</c>).
+    /// Tilts the view upward, the camera coming down (default Period, the game's <c>camera_tilt-</c>, docs/formats/camera.md).
     /// </summary>
     PitchUp,
     /// <summary>
-    /// Tilts the camera shallower (default Comma, the game's <c>camera_tilt-</c>).
+    /// Tilts the view downward, the camera rising (default Comma, the game's <c>camera_tilt+</c>).
     /// </summary>
     PitchDown,
     /// <summary>
@@ -369,7 +369,8 @@ public sealed class ActionState
 /// Maps actions to keys and mouse buttons: each action has any number of bindings and counts as held while any is down. The defaults are an engine
 /// choice except the time controls and <c>;</c> for the free camera, which are the game's (docs/game/ui-input.md: pause Space, speed_1..3 F2..F4) and
 /// the camera keys (arrows and WASD move, Q / E rotate, , and . tilt), and the game view's hotkeys (the windows, squad keys and the orders on the
-/// numpad), which are the game's too. A config file can override them through <see cref="Apply"/> with strings such as <c>"W,Up"</c> or
+/// numpad), which are the game's too. The install's <c>controls.cfg</c> replaces the defaults of the actions it names
+/// (<see cref="UseGameControls"/>), and a config file overrides them through <see cref="Apply"/> with strings such as <c>"W,Up"</c> or
 /// <c>"Mouse:Middle"</c>.
 /// </summary>
 public sealed class InputBindings
@@ -378,6 +379,15 @@ public sealed class InputBindings
     /// Each action's bindings.
     /// </summary>
     readonly Dictionary<InputAction, Binding[]> _map = [];
+    /// <summary>
+    /// The install's <c>controls.cfg</c> bindings (<see cref="GameControls"/>), laid over the engine's defaults; empty until set.
+    /// </summary>
+    IReadOnlyDictionary<InputAction, Binding[]> _game = new Dictionary<InputAction, Binding[]>();
+    /// <summary>
+    /// The second keys Meitou gives the game's actions besides the game's own, kept when <c>controls.cfg</c> names the action and the key is free.
+    /// </summary>
+    static readonly (InputAction Action, Binding Alias)[] MeitouAliases =
+        [(InputAction.Medic, Key.H), (InputAction.Rescue, Key.J), (InputAction.Highlight, Key.RightAlt)];
 
     /// <summary>
     /// Starts with the default bindings.
@@ -395,9 +405,39 @@ public sealed class InputBindings
     public void Set(InputAction action, params Binding[] bindings) => _map[action] = bindings;
 
     /// <summary>
-    /// The default bindings (the game's keys where it has them, docs/game/ui-input.md, Meitou's otherwise).
+    /// Takes the install's <c>controls.cfg</c> bindings as the defaults of the actions they name, and resets to the defaults.
+    /// </summary>
+    public void UseGameControls(IReadOnlyDictionary<InputAction, Binding[]> game)
+    {
+        _game = game;
+        ResetToDefaults();
+    }
+
+    /// <summary>
+    /// The default bindings: the engine's (<see cref="SetEngineDefaults"/>), then the install's <c>controls.cfg</c> over them.
     /// </summary>
     public void ResetToDefaults()
+    {
+        SetEngineDefaults();
+        OverlayGameControls();
+    }
+
+    /// <summary>
+    /// Each action <c>controls.cfg</c> names takes its bindings there, as in the original (its loader clears an action's defaults at the
+    /// action's first line, docs/game/ui-input.md), plus Meitou's alias of the action while no other action has that key.
+    /// </summary>
+    void OverlayGameControls()
+    {
+        foreach (var (action, bindings) in _game) _map[action] = bindings;
+
+        foreach (var (action, alias) in MeitouAliases)
+            if (_game.ContainsKey(action) && !_map.Values.Any(b => b.Contains(alias))) _map[action] = [.. _map[action], alias];
+    }
+
+    /// <summary>
+    /// The engine's defaults (the game's keys where it has them, docs/game/ui-input.md, Meitou's otherwise).
+    /// </summary>
+    void SetEngineDefaults()
     {
         _map.Clear();
         // The game's camera keys (controls.cfg): the arrows move too; Q / E rotate; , and . tilt (camera_tilt+ steeper, camera_tilt- shallower).
@@ -501,9 +541,36 @@ public sealed class InputBindings
     }
 
     /// <summary>
-    /// The bindings as strings in the form <see cref="Apply"/> reads (to write a config file).
+    /// Applies a saved config's bindings (<see cref="Apply"/>), but those equal to the engine's defaults: configs written before
+    /// <see cref="ToDictionary"/> kept only changes hold every action, and those must not hide <c>controls.cfg</c>.
     /// </summary>
-    public Dictionary<string, string> ToDictionary() =>
+    public IReadOnlyList<string> ApplySaved(IReadOnlyDictionary<string, string> saved)
+    {
+        var engine = new InputBindings().ToStrings();
+        var changed = saved
+            .Where(p => !engine.TryGetValue(p.Key.Trim(), out var value) || !string.Equals(value, p.Value.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(p => p.Key, p => p.Value);
+        return Apply(changed);
+    }
+
+    /// <summary>
+    /// The bindings that differ from the defaults, as strings in the form <see cref="Apply"/> reads (to write a config file); an unbound action
+    /// is an empty string.
+    /// </summary>
+    public Dictionary<string, string> ToDictionary()
+    {
+        var defaults = new InputBindings();
+        defaults.UseGameControls(_game);
+        var defaultStrings = defaults.ToStrings();
+        return ToStrings()
+            .Where(p => !defaultStrings.TryGetValue(p.Key, out var value) || value != p.Value)
+            .ToDictionary(p => p.Key, p => p.Value);
+    }
+
+    /// <summary>
+    /// Every action's bindings as strings in the form <see cref="Apply"/> reads.
+    /// </summary>
+    Dictionary<string, string> ToStrings() =>
         _map.ToDictionary(p => p.Key.ToString(), p => string.Join(",", p.Value.Select(b => b.ToString())));
 
     /// <summary>

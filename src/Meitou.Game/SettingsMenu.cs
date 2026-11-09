@@ -104,6 +104,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     Hit? _dragging;
     /// <summary>
+    /// While the scroll bar's thumb is dragged, the grab point's distance below the thumb's top, pixels; null when it is not.
+    /// </summary>
+    float? _thumbGrab;
+    /// <summary>
     /// The action waiting for a key or button to bind; null when none.
     /// </summary>
     internal InputAction? Rebinding;
@@ -262,6 +266,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
             MenuOpen = value;
             _dragging = null;
+            _thumbGrab = null;
             Rebinding = null;
             ActiveChoice = null;
             ResetPending = false;
@@ -804,6 +809,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             if (!CommitNumber()) return true;
         }
 
+        if (GrabScrollBar(at)) return true;
+
         var hit = Hits.LastOrDefault(h => h.Bounds.Contains(at.X, at.Y));
 
         if (hit is null)
@@ -832,19 +839,51 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Pointer = at;
         if (!Visible) return false;
         if (_dragging is { Slider: { } slider, Track: { } track }) slider.SetFraction((at.X - track.X) / track.Width);
+        else if (_thumbGrab is not null) DragScrollBar(at);
 
         return true;
     }
 
     /// <summary>
-    /// The button's release ends a slider's drag; true when one was dragged.
+    /// The button's release ends a slider's or the scroll bar's drag; true when one was dragged.
     /// </summary>
     public bool MouseUp()
     {
-        bool had = _dragging is not null;
+        bool had = _dragging is not null || _thumbGrab is not null;
         _dragging = null;
+        _thumbGrab = null;
         PointerDown = false;
         return had;
+    }
+
+    /// <summary>
+    /// A press on the page's scroll bar starts dragging its thumb (one beside the thumb first moves it there, centred on the pointer); false when
+    /// the press is elsewhere, the page does not scroll or a drop-down or dialog is open.
+    /// </summary>
+    bool GrabScrollBar(Vector2 at)
+    {
+        if (MaxScroll <= 0 || ActiveChoice is not null || ResetPending || PendingAction is not null || PresetNaming.Open) return false;
+
+        var track = ScrollTrack();
+        var zone = new UiRect(track.X - 8 * Scale, track.Y, track.Width + 16 * Scale, track.Height);
+        if (!zone.Contains(at.X, at.Y)) return false;
+
+        var thumb = ScrollThumb();
+        _thumbGrab = at.Y >= thumb.Y && at.Y < thumb.Y + thumb.Height ? at.Y - thumb.Y : thumb.Height / 2;
+        DragScrollBar(at);
+        return true;
+    }
+
+    /// <summary>
+    /// Scrolls the page so the dragged thumb's grab point is under the pointer.
+    /// </summary>
+    void DragScrollBar(Vector2 at)
+    {
+        var track = ScrollTrack();
+        float room = track.Height - ScrollThumb().Height;
+        if (room <= 0 || _thumbGrab is not { } grab) return;
+
+        ScrollOffset = ScrollTarget = Math.Clamp((at.Y - grab - track.Y) / room * MaxScroll, 0, MaxScroll);
     }
 
     /// <summary>
@@ -1017,6 +1056,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         NumberBounds = at;
         ScrollTarget = ScrollOffset;
         _dragging = null;
+        _thumbGrab = null;
         Notice = "";
     }
 
@@ -1053,7 +1093,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// Binds <paramref name="action"/> to <paramref name="binding"/>; a reserved key is refused with a notice.
+    /// Binds <paramref name="action"/> to <paramref name="binding"/>, taking it from the actions that have it; a reserved key is refused with a
+    /// notice.
     /// </summary>
     void SetBinding(InputAction action, Binding binding)
     {
@@ -1079,15 +1120,14 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             return;
         }
 
-        if (conflicts.Length > 0)
-        {
-            Notice = $"{binding} is assigned to {ActionLabel(conflicts[0])}. Choose another key, or Esc to cancel.";
-            return;
-        }
+        // A key taken from other actions leaves them: the original's binding map holds one action per key (docs/game/ui-input.md, Action table).
+        foreach (var other in conflicts) Bindings.Set(other, [.. Bindings.Get(other).Where(b => b != binding)]);
 
         Bindings.Set(action, binding);
         Rebinding = null;
-        Notice = $"{ActionLabel(action)} bound to {binding}.";
+        Notice = conflicts.Length == 0
+            ? $"{ActionLabel(action)} bound to {binding}."
+            : $"{ActionLabel(action)} bound to {binding}, taken from {string.Join(", ", conflicts.Select(ActionLabel))}.";
     }
 
     /// <summary>
@@ -1286,11 +1326,25 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         if (MaxScroll > 0)
         {
-            float track = Viewport.Height, thumb = Math.Max(24 * Scale, track * track / (track + MaxScroll));
-            Canvas.Rect(new(Viewport.X + Viewport.Width + 12 * Scale, Viewport.Y, 3 * Scale, track), SettingsCanvas.MainInk with { W = 0.1f });
-            Canvas.Rect(new(Viewport.X + Viewport.Width + 12 * Scale, Viewport.Y + (track - thumb) * ScrollOffset / MaxScroll, 3 * Scale, thumb),
-                SettingsCanvas.Brass with { W = 0.75f });
+            Canvas.Rect(ScrollTrack(), SettingsCanvas.MainInk with { W = 0.1f });
+            Canvas.Rect(ScrollThumb(), SettingsCanvas.Brass with { W = 0.75f });
         }
+    }
+
+    /// <summary>
+    /// The page's scroll bar, right of the scrolled area, pixels.
+    /// </summary>
+    UiRect ScrollTrack() => new(Viewport.X + Viewport.Width + 12 * Scale, Viewport.Y, 3 * Scale, Viewport.Height);
+
+    /// <summary>
+    /// The scroll bar's thumb: as tall as the shown share of the page (24 at least), placed by the scroll.
+    /// </summary>
+    UiRect ScrollThumb()
+    {
+        var track = ScrollTrack();
+        float thumb = Math.Max(24 * Scale, track.Height * track.Height / (track.Height + MaxScroll));
+        float y = MaxScroll > 0 ? track.Y + (track.Height - thumb) * ScrollOffset / MaxScroll : track.Y;
+        return track with { Y = y, Height = thumb };
     }
 
     /// <summary>
