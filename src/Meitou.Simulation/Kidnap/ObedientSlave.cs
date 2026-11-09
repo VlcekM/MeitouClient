@@ -10,25 +10,30 @@ using Meitou.Simulation.Production;
 namespace Meitou.Simulation.Kidnap;
 
 /// <summary>
-/// Job 187 Obedient Slave of a player character (docs/game/ai-tasks.md "Obedient Slave"; Meitou: docs/simulation.md "Captives"). The job is a perma-job the slave state setter
-/// adds when a character becomes a slave (state 1; <c>FUN_1405a4940</c> -> <c>FUN_14032e0d0</c>, <b>Verified</b>) after destroying its orders and perma-jobs, and removes when it stops being
-/// one. While it is a slave and not sneaking (<c>FUN_14050e5b0</c>), the job is urgent (step 3 of the decision step): the owner squad's <c>Slave AI Goals</c> are its candidates, so it
-/// follows its master, works the town it is in, or stands, instead of acting on its own goals. Only a player character's list holds the job (the AI's slaves run the same list directly,
+/// Job 187 Obedient Slave of a player character (docs/game/ai-tasks.md "Obedient Slave"; Meitou: docs/simulation.md "Captives"). The job is a
+/// perma-job the slave state setter adds when a character becomes a slave (state 1; <c>FUN_1405a4940</c> -> <c>FUN_14032e0d0</c>, <b>Verified</b>)
+/// after destroying its orders and perma-jobs, and removes when it stops being one. While it is a slave and not sneaking (<c>FUN_14050e5b0</c>), the
+/// job is urgent (step 3 of the decision step): the owner squad's <c>Slave AI Goals</c> are its candidates, so it follows its master, works the town
+/// it is in, or stands, instead of acting on its own goals. Only a player character's list holds the job (the AI's slaves run the same list directly,
 /// <see cref="Ai.AiSystem"/>).
 /// </summary>
 public static class ObedientSlave
 {
-    /// <summary>The job is in the character's list.</summary>
+    /// <summary>
+    /// The job is in the character's list.
+    /// </summary>
     public static bool HasJob(CharacterCold cold) => cold.Jobs.Exists(j => j.Type == TaskType.SlaveObedience);
 
     /// <summary>
-    /// The branch's gate in <c>FUN_14050e5b0</c> (<b>Verified</b>): the character is in slave state 1 and not sneaking (<c>Character::isStealthMode</c>, <c>FUN_1405c9750</c>, the Sneak order).
+    /// The branch's gate in <c>FUN_14050e5b0</c> (<b>Verified</b>): the character is in slave state 1 and not sneaking
+    /// (<c>Character::isStealthMode</c>, <c>FUN_1405c9750</c>, the Sneak order).
     /// </summary>
     public static bool Obeys(CharacterCold cold) => cold.SlaveState == 1 && (cold.Orders & CharacterOrders.Sneak) == 0;
 
     /// <summary>
-    /// The slave state changed to <paramref name="state"/> (<c>FUN_1405a4940</c>, only when it differs): becoming a slave destroys the orders and the perma-jobs and adds the job toward the owner;
-    /// leaving slavery removes the job only, or, with none in the list, destroys the orders and the perma-jobs (<c>FUN_14032e0d0</c>, <b>Verified</b>). A player character's list only.
+    /// The slave state changed to <paramref name="state"/> (<c>FUN_1405a4940</c>, only when it differs): becoming a slave destroys the orders and the
+    /// perma-jobs and adds the job toward the owner; leaving slavery removes the job only, or, with none in the list, destroys the orders and the
+    /// perma-jobs (<c>FUN_14032e0d0</c>, <b>Verified</b>). A player character's list only.
     /// </summary>
     internal static void StateChanged(World world, CharacterCold cold, byte state)
     {
@@ -49,18 +54,22 @@ public static class ObedientSlave
     }
 
     /// <summary>
-    /// The owner's orders object reset that processing (<c>FUN_14035aa20</c>), chaining (<c>FUN_14032e590</c>) and the state setter share: the one-shot orders and the perma-jobs are destroyed and
-    /// the job is added toward the owner (a character the master squad's leader stands in for). A player character's only.
+    /// The owner's orders object reset that processing (<c>FUN_14035aa20</c>), chaining (<c>FUN_14032e590</c>) and the state setter share: the
+    /// one-shot orders and the perma-jobs are destroyed and the job is added toward the owner (a character the master squad's leader stands in for).
+    /// A player character's only.
     /// </summary>
     internal static void Reset(World world, CharacterCold cold)
     {
         if (!cold.IsPlayer) return;
         Destroy(world, cold);
         var owner = OwnerOf(world, cold);
-        PermaJobs.Add(cold, TaskType.SlaveObedience, owner is { } o ? PermaJob.OfCharacter(TaskType.SlaveObedience, o) : PermaJob.Untargeted(TaskType.SlaveObedience));
+        PermaJobs.Add(cold, TaskType.SlaveObedience, owner is { } o ? PermaJob.OfCharacter(TaskType.SlaveObedience, o)
+                : PermaJob.Untargeted(TaskType.SlaveObedience));
     }
 
-    /// <summary>Destroys the character's perma-jobs and order queue (<c>FUN_140507280</c>, <c>FUN_140507530</c>).</summary>
+    /// <summary>
+    /// Destroys the character's perma-jobs and order queue (<c>FUN_140507280</c>, <c>FUN_140507530</c>).
+    /// </summary>
     static void Destroy(World world, CharacterCold cold)
     {
         int slot = SlotOf(world, cold);
@@ -68,7 +77,8 @@ public static class ObedientSlave
             if (slot >= 0) ProductionSystem.RemoveJob(world, slot, i);
             else cold.Jobs.RemoveAt(i);
         cold.OrderQueue.Clear();
-        if (slot >= 0 && cold.OrderMove && world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo) TaskStart.Stand(world.Characters, slot);
+        if (slot >= 0 && cold.OrderMove && world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo)
+            TaskStart.Stand(world.Characters, slot);
     }
 
     static int SlotOf(World world, CharacterCold cold)
@@ -80,8 +90,8 @@ public static class ObedientSlave
     }
 
     /// <summary>
-    /// The character the owner handle names (<b>Meitou</b>: the leader of the master squad the slave was sold, arrested or processed into; the original's handle names a character or a
-    /// squad); null when the master is not known.
+    /// The character the owner handle names (<b>Meitou</b>: the leader of the master squad the slave was sold, arrested or processed into; the
+    /// original's handle names a character or a squad); null when the master is not known.
     /// </summary>
     internal static CharacterId? OwnerOf(World world, CharacterCold cold)
     {
@@ -90,14 +100,21 @@ public static class ObedientSlave
         return !master.Leader.IsNone && table.IsAlive(master.Leader) ? master.Leader : null;
     }
 
-    /// <summary>The master squad of the slave's job <paramref name="k"/>: the squad it obeys, else the squad of the owner character the job names (found again from its saved handle after a load).</summary>
+    /// <summary>
+    /// The master squad of the slave's job <paramref name="k"/>: the squad it obeys, else the squad of the owner character the job names (found again
+    /// from its saved handle after a load).
+    /// </summary>
     internal static Squad? MasterOf(World world, int slot, CharacterCold cold, int k)
     {
         if (cold.SlaveMaster >= 0 && world.Squads.Find(cold.SlaveMaster) is { } known) return known;
-        return Owner(world, slot, cold, k) is { } owner && world.Characters.Cold(owner.Slot) is { SquadId: >= 0 and var squad } ? world.Squads.Find(squad) : null;
+        return Owner(world, slot, cold, k) is { } owner && world.Characters.Cold(owner.Slot) is { SquadId: >= 0 and var squad }
+                ? world.Squads.Find(squad) : null;
     }
 
-    /// <summary>The owner character of job <paramref name="k"/>: its character, found again from the saved handle after a load (as <c>ProductionSystem</c>'s follow jobs); alive and not the slave itself.</summary>
+    /// <summary>
+    /// The owner character of job <paramref name="k"/>: its character, found again from the saved handle after a load (as <c>ProductionSystem</c>'s
+    /// follow jobs); alive and not the slave itself.
+    /// </summary>
     internal static CharacterId? Owner(World world, int slot, CharacterCold cold, int k)
     {
         var table = world.Characters;
@@ -114,17 +131,22 @@ public static class ObedientSlave
 }
 
 /// <summary>
-/// The Obedient Slave job as the decision step's contributor and the act-out of its work (rows 189 and 190). Step 3 asks it while the slave state is 1 and the character is not sneaking; it picks
-/// among the owner squad's Slave role list in their hours by desire x weight (x1.25 for the goal running, a tie to the later-listed, <c>FUN_14050df10</c>) and starts the best that Meitou
-/// acts out: 171 Following master (the owner, else the master squad's leader: Task_FollowLeader follows the slave owner, docs/game/pathfinding.md), 189 / 190 Worker (a random workplace of the town the
-/// squad's leader stands in, <see cref="AiSystem.WorkAt"/>; the same standing at the building at its work clip as the AI's), 14 Idleness. The other goals of the lists (172 Getting in my
-/// cage, the combat goals) are not acted out for a player character.
+/// The Obedient Slave job as the decision step's contributor and the act-out of its work (rows 189 and 190). Step 3 asks it while the slave state is
+/// 1 and the character is not sneaking; it picks among the owner squad's Slave role list in their hours by desire x weight (x1.25 for the goal
+/// running, a tie to the later-listed, <c>FUN_14050df10</c>) and starts the best that Meitou acts out: 171 Following master (the owner, else the
+/// master squad's leader: Task_FollowLeader follows the slave owner, docs/game/pathfinding.md), 189 / 190 Worker (a random workplace of the town the
+/// squad's leader stands in, <see cref="AiSystem.WorkAt"/>; the same standing at the building at its work clip as the AI's), 14 Idleness. The other
+/// goals of the lists (172 Getting in my cage, the combat goals) are not acted out for a player character.
 /// </summary>
 sealed class ObedientJobs : IJobSource, ITaskHandler
 {
-    /// <summary>The x1.25 of the goal running now (docs/game/ai-tasks.md "Desire and commitment").</summary>
+    /// <summary>
+    /// The x1.25 of the goal running now (docs/game/ai-tasks.md "Desire and commitment").
+    /// </summary>
     const float Continuity = 1.25f;
-    /// <summary>A walk that ends short of the building this many times gives it up for another pick.</summary>
+    /// <summary>
+    /// A walk that ends short of the building this many times gives it up for another pick.
+    /// </summary>
     const int MaxFails = 3;
 
     sealed class WorkSpot
@@ -132,7 +154,9 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         public required TownBuilding Building;
         public required string Clip;
         public string? Functionality;
-        /// <summary>How near it must come to the building (<see cref="AiSystem.WorkRangeOf"/>).</summary>
+        /// <summary>
+        /// How near it must come to the building (<see cref="AiSystem.WorkRangeOf"/>).
+        /// </summary>
         public float Range = AiSystem.WorkReach;
         public int Epoch;
         public int Fails;
@@ -149,7 +173,8 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     {
         var cold = world.Characters.Cold(slot)!;
         if (!ObedientSlave.Obeys(cold)) return DecisionCheck.No(cold.SlaveState == 1 ? "sneaking" : "not a slave");
-        if (Choose(world, slot, cold, k) is not { } pick) return DecisionCheck.No("no goal of its master's Slave list runs");
+        if (Choose(world, slot, cold, k) is not { } pick)
+            return DecisionCheck.No("no goal of its master's Slave list runs");
         return Continues(world, slot, cold, k, pick.Type) ? DecisionCheck.Runs : DecisionCheck.Run;
     }
 
@@ -161,7 +186,8 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         switch (pick.Type)
         {
             case TaskType.FollowSlavemaster when FollowTarget(world, slot, cold, k) is { } target:
-                MovementSystem.Follow(world, new FollowOrder([table.IdOf(slot)], target) { Tick = world.Tick }, TaskSource.Job, k, TaskType.FollowSlavemaster);
+                MovementSystem.Follow(world, new FollowOrder([table.IdOf(slot)], target) { Tick = world.Tick }, TaskSource.Job, k,
+                        TaskType.FollowSlavemaster);
                 break;
             case TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend:
                 StartWork(world, slot, cold, k, pick.Type);
@@ -172,19 +198,23 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         }
     }
 
-    /// <summary>The slave's task is this job's and no goal of the list runs now (sneaking, or the list is gone): the task ends and the step decides the character on its own goals.</summary>
+    /// <summary>
+    /// The slave's task is this job's and no goal of the list runs now (sneaking, or the list is gone): the task ends and the step decides the
+    /// character on its own goals.
+    /// </summary>
     public void Stop(World world, int slot, int k)
     {
         var cold = world.Characters.Cold(slot)!;
-        if (cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == TaskType.FollowSlavemaster) cold.FollowOrder = CharacterId.None;
+        if (cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == TaskType.FollowSlavemaster)
+            cold.FollowOrder = CharacterId.None;
         TaskStart.End(world, slot, TaskEnd.Stopped);
     }
 
     // ------------------------------------------------------------------ the pick
 
     /// <summary>
-    /// The best goal of the master's Slave list now (the scorer of <c>FUN_14050df10</c>: only the priorities 1 to 3 are loaded, <c>FUN_14026b790</c> mask 0xe), among those Meitou acts out; null when
-    /// the slave cannot act (down, carried, carrying) or none runs.
+    /// The best goal of the master's Slave list now (the scorer of <c>FUN_14050df10</c>: only the priorities 1 to 3 are loaded, <c>FUN_14026b790</c>
+    /// mask 0xe), among those Meitou acts out; null when the slave cannot act (down, carried, carrying) or none runs.
     /// </summary>
     Choice? Choose(World world, int slot, CharacterCold cold, int k)
     {
@@ -197,52 +227,66 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         {
             var goal = list[i];
             var type = goal.Task.Type;
-            if (goal.Task.Priority is < TaskPriority.Fluff or > TaskPriority.Urgent || !goal.InWindow(hour) || !TaskStart.Eligible(world, cold, type)) continue;
+            if (goal.Task.Priority is < TaskPriority.Fluff or > TaskPriority.Urgent || !goal.InWindow(hour) || !TaskStart.Eligible(world, cold, type))
+                continue;
             float desire = Desire(world, slot, cold, k, type);
             if (!(desire > 0)) continue;
             float score = desire * goal.Weight;
-            if (cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == type) score *= Continuity;
+            if (cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == type)
+                score *= Continuity;
             if (!(score > 0)) continue;
+
             // The original keys candidates by score and raises a taken key by 0.0001: of equal scores the later-listed ranks first.
             if (best is null || score >= best.Value.Score) best = new Choice(type, score);
         }
         return best;
     }
 
-    /// <summary>How much the goal is wanted: 1 when its finder finds a target, 0 when it finds none or Meitou does not act it out.</summary>
+    /// <summary>
+    /// How much the goal is wanted: 1 when its finder finds a target, 0 when it finds none or Meitou does not act it out.
+    /// </summary>
     float Desire(World world, int slot, CharacterCold cold, int k, TaskType type) => type switch
     {
         TaskType.FollowSlavemaster => FollowTarget(world, slot, cold, k) is null ? 0 : 1,
-        TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend => world.SystemOf<AiSystem>() is { } ai && ai.HasWorkplaces(TownPoint(world, slot, cold)) ? 1 : 0,
+        TaskType.AutoLabouringMines or TaskType.AutoLabouringMinesPretend => world.SystemOf<AiSystem>() is { } ai
+                && ai.HasWorkplaces(TownPoint(world, slot, cold)) ? 1 : 0,
         TaskType.Idle => 1,
         _ => 0,
     };
 
-    /// <summary>Whom 171 follows: the owner, else the master squad's leader.</summary>
+    /// <summary>
+    /// Whom 171 follows: the owner, else the master squad's leader.
+    /// </summary>
     static CharacterId? FollowTarget(World world, int slot, CharacterCold cold, int k)
     {
         if (ObedientSlave.Owner(world, slot, cold, k) is { } owner) return owner;
         var table = world.Characters;
-        return ObedientSlave.MasterOf(world, slot, cold, k) is { } master && !master.Leader.IsNone && master.Leader.Slot != slot && table.IsAlive(master.Leader) ? master.Leader : null;
+        return ObedientSlave.MasterOf(world, slot, cold, k) is { } master && !master.Leader.IsNone && master.Leader.Slot != slot
+                && table.IsAlive(master.Leader) ? master.Leader : null;
     }
 
     /// <summary>
-    /// The point whose town the worker finders ask (<c>FUN_1408cac60</c> reads the platoon blackboard's current town, <c>+0x88</c>, which the AI's rule writes from the squad leader,
-    /// docs/game/ai.md): where the slave's own squad's leader stands, else the slave.
+    /// The point whose town the worker finders ask (<c>FUN_1408cac60</c> reads the platoon blackboard's current town, <c>+0x88</c>, which the AI's
+    /// rule writes from the squad leader, docs/game/ai.md): where the slave's own squad's leader stands, else the slave.
     /// </summary>
     static Vector3 TownPoint(World world, int slot, CharacterCold cold)
     {
         var table = world.Characters;
-        if (world.Squads.Find(cold.SquadId) is { } squad && !squad.Leader.IsNone && table.TryResolveNext(squad.Leader, out int leader)) return table.Next[leader].Position;
+        if (world.Squads.Find(cold.SquadId) is { } squad && !squad.Leader.IsNone && table.TryResolveNext(squad.Leader, out int leader))
+            return table.Next[leader].Position;
         return table.Next[slot].Position;
     }
 
     // ------------------------------------------------------------------ acting out
 
-    /// <summary>Whether the character's task is already this goal's act-out (the plan goes on): a follow of the target, a walk to the workplace or standing at it, standing idle on 14.</summary>
+    /// <summary>
+    /// Whether the character's task is already this goal's act-out (the plan goes on): a follow of the target, a walk to the workplace or standing at
+    /// it, standing idle on 14.
+    /// </summary>
     bool Continues(World world, int slot, CharacterCold cold, int k, TaskType type)
     {
-        if (cold.Running is not { Source: TaskSource.Job, Implicit: false } run || run.Job != k || run.Row != type) return false;
+        if (cold.Running is not { Source: TaskSource.Job, Implicit: false } run || run.Job != k || run.Row != type)
+            return false;
         var task = (CharacterTask)world.Characters.Next[slot].Task;
         switch (type)
         {
@@ -251,9 +295,11 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
             case TaskType.Idle:
                 return run.Runs(task);
             default:
-                // A walk held off by the building short of it is over once it stands within twice the reach (AiSystem.AtWork): StartWork then sets it working.
+                // A walk held off by the building short of it is over once it stands within twice the reach (AiSystem.AtWork): StartWork then sets it
+                // working.
                 return _works.TryGetValue(world.Characters.IdOf(slot), out var spot) && run.Runs(task)
-                    && (task == CharacterTask.GoTo ? !AiSystem.AtWork(in world.Characters.Next[slot], spot.Building.Position, spot.Range) : cold.ActionClip == spot.Clip);
+                    && (task == CharacterTask.GoTo ? !AiSystem.AtWork(in world.Characters.Next[slot], spot.Building.Position, spot.Range)
+                            : cold.ActionClip == spot.Clip);
         }
     }
 
@@ -263,18 +309,21 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         var id = table.IdOf(slot);
         if (world.SystemOf<AiSystem>() is not { } ai) return;
         var at = TownPoint(world, slot, cold);
-        bool again = _works.TryGetValue(id, out var spot) && cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == type;
+        bool again = _works.TryGetValue(id, out var spot) && cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k
+                && run.Row == type;
         if (again && AiSystem.AtWork(in table.Next[slot], spot!.Building.Position, spot.Range))
         {
             Work(world, slot, k, type);
             return;
         }
+
         // The walk ended short of the building: it is asked again, a few times.
         if (again && table.Next[slot].Task == (byte)CharacterTask.Idle && cold.Running!.Task == CharacterTask.GoTo && ++spot!.Fails < MaxFails)
         {
             Walk(world, slot, k, type, spot.Building);
             return;
         }
+
         // A new pick: another roll each time it starts working anew.
         int epoch = spot is null ? 0 : spot.Epoch + 1;
         if (ai.WorkAt(world, id, at, epoch) is not { } found) return;
@@ -285,12 +334,17 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     }
 
     static void Walk(World world, int slot, int k, TaskType type, TownBuilding building) =>
-        TaskStart.Start(world, slot, new TaskRequest(CharacterTask.GoTo, type, TaskSource.Job) { Job = k, Goal = new Vector2(building.Position.X, building.Position.Z), Mode = SpeedMode.Walk });
+        TaskStart.Start(world, slot,
+                new TaskRequest(CharacterTask.GoTo, type, TaskSource.Job) { Job = k, Goal = new Vector2(building.Position.X, building.Position.Z),
+                        Mode = SpeedMode.Walk });
 
     static void Work(World world, int slot, int k, TaskType type) =>
         TaskStart.Start(world, slot, new TaskRequest(CharacterTask.Idle, type, TaskSource.Job) { Job = k });
 
-    /// <summary>The walk to the workplace (rows 189 and 190 start as <see cref="CharacterTask.GoTo"/>) and the standing at it (<see cref="CharacterTask.Idle"/>, facing the building at its work clip).</summary>
+    /// <summary>
+    /// The walk to the workplace (rows 189 and 190 start as <see cref="CharacterTask.GoTo"/>) and the standing at it
+    /// (<see cref="CharacterTask.Idle"/>, facing the building at its work clip).
+    /// </summary>
     void ITaskHandler.Start(World world, int slot, in TaskRequest request)
     {
         var table = world.Characters;
@@ -310,7 +364,9 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         cold.ActionWork = AiSystem.StandingWork(spot.Functionality, spot.Clip);
     }
 
-    /// <summary>Another task takes the worker: the work clip goes.</summary>
+    /// <summary>
+    /// Another task takes the worker: the work clip goes.
+    /// </summary>
     void ITaskHandler.End(World world, int slot, CharacterTask task, TaskEnd reason)
     {
         var cold = world.Characters.Cold(slot)!;

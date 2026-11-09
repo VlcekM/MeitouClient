@@ -7,14 +7,16 @@ namespace Meitou.Simulation.Kidnap;
 
 /// <summary>
 /// The captive goals the AI weighs (<see cref="AiBehaviour.Captive"/>, docs/simulation.md "Captives"). The sweep starts the job of a member that
-/// stands free, unscored. Any other member awake (resting on a seat the AI gave it, in a job, on another system's duty) is not taken: its sweep
-/// turn, and the end of its job, keep the captive goals whose job would start, each with the original's desire (<see cref="AiMind.CaptiveOffers"/>).
-/// Its think weighs them against its other goals, as the original's chooser does (docs/game/ai-tasks.md "Precedence"); one that wins gets the
-/// character up, and the serial step after the think starts its job (<see cref="SendGoalJobs"/>).
+/// stands free, unscored. Any other member awake (resting on a seat the AI gave it, in a job, on another system's duty) is not taken: its sweep turn,
+/// and the end of its job, keep the captive goals whose job would start, each with the original's desire (<see cref="AiMind.CaptiveOffers"/>). Its
+/// think weighs them against its other goals, as the original's chooser does (docs/game/ai-tasks.md "Precedence"); one that wins gets the character
+/// up, and the serial step after the think starts its job (<see cref="SendGoalJobs"/>).
 /// </summary>
 public sealed partial class CaptiveSystem
 {
-    /// <summary>The goal types <see cref="TryStart"/> starts a job for: the AI's captive goals.</summary>
+    /// <summary>
+    /// The goal types <see cref="TryStart"/> starts a job for: the AI's captive goals.
+    /// </summary>
     internal static readonly TaskType[] GoalTypes =
     [
         // The prisoner's fate, the eaters and the worshippers.
@@ -53,7 +55,8 @@ public sealed partial class CaptiveSystem
         var roles = RolesOf(world, squad, board, slot, cold);
         for (int g = 0; g < roles.Count; g++)
             if (roles[g].InWindow(hour)) Offer(world, squad, board, slot, cold, roles[g].Task.Type);
-        for (int g = 0; g < mind.RaceGoals.Count; g++) Offer(world, squad, board, slot, cold, mind.RaceGoals[g].Task.Type);
+        for (int g = 0; g < mind.RaceGoals.Count; g++)
+            Offer(world, squad, board, slot, cold, mind.RaceGoals[g].Task.Type);
     }
 
     void Offer(World world, Squad squad, Blackboard board, int slot, CharacterCold cold, TaskType type)
@@ -70,8 +73,8 @@ public sealed partial class CaptiveSystem
     readonly List<CharacterId> _ended = [];
 
     /// <summary>
-    /// Keeps the offers of each worker whose job just ended, on the state after the job, so its next think weighs its captive goals at once
-    /// rather than at its next sweep turn.
+    /// Keeps the offers of each worker whose job just ended, on the state after the job, so its next think weighs its captive goals at once rather
+    /// than at its next sweep turn.
     /// </summary>
     void OfferAfterJobs(World world)
     {
