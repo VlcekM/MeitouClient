@@ -177,8 +177,10 @@ sealed partial class VideoAudio : IDisposable
     void ConvertToPcm(float[] samples, short[] pcm, int frames)
     {
         for (int f = 0; f < frames; f++)
+        {
             for (int c = 0; c < _outChannels; c++)
                 pcm[f * _outChannels + c] = (short)Math.Clamp(samples[f * _channels + c] * 32767f, -32768f, 32767f);
+        }
     }
 
     /// <summary>

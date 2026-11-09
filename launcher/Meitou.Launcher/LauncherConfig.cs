@@ -99,7 +99,9 @@ public sealed class LauncherConfig
             if (File.Exists(FilePath))
                 return JsonSerializer.Deserialize(File.ReadAllText(FilePath), LauncherJson.Default.LauncherConfig) ?? new();
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+        }
         return new();
     }
 

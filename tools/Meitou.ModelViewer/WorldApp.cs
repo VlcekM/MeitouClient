@@ -28,7 +28,10 @@ static partial class WorldApp
     {
         WorldOptions? options;
         args = TerrainSandboxArgs(args);
-        try { options = WorldOptions.Parse(args); }
+        try
+        {
+            options = WorldOptions.Parse(args);
+        }
         catch (Exception e) when (e is ArgumentException or FormatException or IndexOutOfRangeException)
         {
             Console.Error.WriteLine(e.Message);
@@ -41,7 +44,11 @@ static partial class WorldApp
         }
         if (options.BenchCompare is { } compare)
         {
-            try { BenchResult.Compare(compare.A, compare.B, Console.Out); return 0; }
+            try
+            {
+                BenchResult.Compare(compare.A, compare.B, Console.Out);
+                return 0;
+            }
             catch (Exception e) when (e is IOException or System.Text.Json.JsonException or InvalidDataException)
             {
                 Console.Error.WriteLine($"--bench-compare: {e.Message}");
@@ -100,8 +107,15 @@ static partial class WorldApp
         s_streamline = display.Streamline;
         s_ngx = display.Ngx;
         using var watch = VramWatch.Start(display.Context.Device);
-        try { return Screenshot(display, install, scene, assets, o); }
-        finally { s_streamline = null; s_ngx = null; }
+        try
+        {
+            return Screenshot(display, install, scene, assets, o);
+        }
+        finally
+        {
+            s_streamline = null;
+            s_ngx = null;
+        }
     }
 
     /// <summary>
@@ -113,7 +127,8 @@ static partial class WorldApp
     {
         var context = display.Context;
         using var gpu = CreateGpu(context, install, scene, assets, o, interactive: false);
-        if (gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, s_streamline, s_ngx);
+        if (gpu.Post is { } vendorPost)
+            vendorPost.UpscalerFactory = VendorUpscalers.Factory(display.Context, s_streamline, s_ngx);
         var (camera, render) = Setup(scene, o);
         Console.WriteLine($"camera    {CameraCode.Encode(camera)} ({CameraCode.Describe(camera)}; --camera-code puts a viewer here)");
         SettleForPicture(gpu, camera, o);
@@ -126,11 +141,13 @@ static partial class WorldApp
         gpu.Post!.Target = target;
         gpu.Post.InstantAdaptation = true;   // a still picture: the exposure settles at once
         Console.WriteLine($"post      {o.Post.Describe()}");
-        if (o.BenchFrames > 0 || o.Ab is not null) return new BenchSession(display, gpu, scene, camera, render, o, w, h).Run();
+        if (o.BenchFrames > 0 || o.Ab is not null)
+            return new BenchSession(display, gpu, scene, camera, render, o, w, h).Run();
         if (o.FlyBenchmark > 0)
         {
             int flown = new FlyBenchmarkSession(display, gpu, scene, camera, render, o, w, h).Run();
-            if (o.Screenshot is null) return flown;   // with --screenshot the picture is taken afterwards, back at the start (a check that unloaded data comes back right)
+            // With --screenshot the picture is taken afterwards, back at the start (a check that unloaded data comes back right).
+            if (o.Screenshot is null) return flown;
         }
         if (o.FlyToX is { } flyX && o.FlyToZ is { } flyZ) FlyTo(gpu, scene, camera, render, o, w, h, context, flyX, flyZ);
 
@@ -142,7 +159,8 @@ static partial class WorldApp
         {
             orbitFrames++;
             camera.Yaw += o.OrbitStep;
-            if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
+            if (o.SwayStep > 0 && gpu.Foliage is { } swaying)
+                swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
         }
         DetailedStats = true;   // per-cascade and per-step times in the statistics below
         // A temporal upscaler converges over its jitter sequence first (a still camera: the history only sharpens).
@@ -159,7 +177,8 @@ static partial class WorldApp
             EndFrame(context);
         }
         context.Finish();
-        Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: {gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
+        Console.WriteLine($"drawn in {drawWatch.ElapsedMilliseconds} ms: "
+            + $"{gpu.Terrain.DrawnChunks} chunks, {gpu.Terrain.DrawnTriangles:N0} terrain triangles" +
             (gpu.Objects is { } ob ? $", {ob.DrawnInstances} objects ({ob.DrawnTriangles:N0} triangles)" : ""));
         // Steady-state frame time (the first frame includes shader and texture warm-up).
         drawWatch.Restart();
@@ -241,13 +260,19 @@ static partial class WorldApp
             context.Finish();
             times.Add(frameWatch.Elapsed.TotalMilliseconds);
             if (frameWatch.Elapsed.TotalMilliseconds > 15 && Environment.GetEnvironmentVariable("MEITOU_STREAM_LOG") == "1")
-                Console.WriteLine($"slow frame {i}: {frameWatch.Elapsed.TotalMilliseconds:0.0} ms, streamer update {gpu.Streamer?.LastUpdateMs:0.0} ms [{gpu.Streamer?.LastSteps}], gen2 GCs {GC.CollectionCount(2)}, gen0 {GC.CollectionCount(0)}");
+            {
+                Console.WriteLine($"slow frame {i}: {frameWatch.Elapsed.TotalMilliseconds:0.0} ms, "
+                    + $"streamer update {gpu.Streamer?.LastUpdateMs:0.0} ms [{gpu.Streamer?.LastSteps}], gen2 GCs {GC.CollectionCount(2)}, "
+                    + $"gen0 {GC.CollectionCount(0)}");
+            }
             int sleep = 16 - (int)frameWatch.ElapsedMilliseconds;
             if (sleep > 0) Thread.Sleep(sleep);
         }
         double first = times[0], worstAfterFirst = times.Count > 1 ? times.Skip(1).Max() : 0;
         times.Sort();
-        Console.WriteLine($"flight    {frames} frames over {length:0} units: median {times[times.Count / 2]:0.0} ms, 99th {times[(int)(times.Count * 0.99)]:0.0} ms, worst {times[^1]:0.0} ms (first frame {first:0.0} ms, worst after it {worstAfterFirst:0.0} ms), " +
+        Console.WriteLine($"flight    {frames} frames over {length:0} units: median {times[times.Count / 2]:0.0} ms, "
+            + $"99th {times[(int)(times.Count * 0.99)]:0.0} ms, worst {times[^1]:0.0} ms (first frame {first:0.0} ms, "
+            + $"worst after it {worstAfterFirst:0.0} ms), " +
             $"{times.Count(x => x > 10)} frames over 10 ms; streaming {(gpu.Streamer?.Idle == true ? "idle" : $"{gpu.Streamer?.Pending} pending")}");
         gpu.Objects?.Settle(camera.Eye);
         gpu.Foliage?.Settle(camera.Eye);
@@ -259,18 +284,34 @@ static partial class WorldApp
     /// </summary>
     static void PrintFrameCosts(WorldGpu gpu, WorldCamera camera)
     {
-        if (gpu.Objects is { } objectStats) Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, {objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");
-        if (gpu.Foliage is { } foliageStats) { foliageStats.PollTimers(wait: true); Console.WriteLine($"foliage   update {foliageStats.LastUpdateMs:0.00} ms, draw cpu {foliageStats.LastDrawCpuMs:0.00} ms, gpu {foliageStats.GpuMs:0.00} ms, {foliageStats.DrawCalls} draw calls, {foliageStats.DrawnInstances} meshes, {foliageStats.DrawnBlades:N0} grass blades;{foliageStats.MainDetail}"); }
+        if (gpu.Objects is { } objectStats)
+        {
+            Console.WriteLine($"objects   draw cpu {objectStats.LastDrawCpuMs:0.00} ms, {objectStats.DrawCalls} draw calls, "
+                + $"{objectStats.DrawnInstances} instances, {objectStats.DrawnTriangles:N0} triangles");
+        }
+        if (gpu.Foliage is { } foliageStats)
+        {
+            foliageStats.PollTimers(wait: true);
+            Console.WriteLine($"foliage   update {foliageStats.LastUpdateMs:0.00} ms, draw cpu {foliageStats.LastDrawCpuMs:0.00} ms, "
+                + $"gpu {foliageStats.GpuMs:0.00} ms, {foliageStats.DrawCalls} draw calls, {foliageStats.DrawnInstances} meshes, "
+                + $"{foliageStats.DrawnBlades:N0} grass blades;{foliageStats.MainDetail}");
+        }
         if (gpu.Reflection is { Valid: true } reflection)
         {
             reflection.Poll(wait: true);
-            Console.WriteLine($"reflect   {reflection.Width}x{reflection.Height}: cpu {reflection.CpuMs:0.00} ms, gpu {reflection.GpuMs:0.00} ms, {reflection.DrawnChunks} chunks, {reflection.DrawnTriangles:N0} terrain triangles; {reflection.SceneStats}");
+            Console.WriteLine($"reflect   {reflection.Width}x{reflection.Height}: cpu {reflection.CpuMs:0.00} ms, "
+                + $"gpu {reflection.GpuMs:0.00} ms, {reflection.DrawnChunks} chunks, {reflection.DrawnTriangles:N0} terrain triangles; "
+                + $"{reflection.SceneStats}");
         }
         if (gpu.Shadow is { } shadowStats)
         {
             shadowStats.Poll(wait: true);
             Console.WriteLine(shadowStats.Cascades is { } cs
-                ? $"shadows   last frame cpu {shadowStats.CpuMs:0.00} ms, gpu {shadowStats.GpuMs:0.00} ms; {shadowStats.DescribeStats()}; {shadowStats.CasterStats}; cascades to {string.Join(", ", cs.Select(c => c.FarDepth.ToString("0", CultureInfo.InvariantCulture)))} (sizes {string.Join(", ", cs.Select(c => c.Size.X.ToString("0", CultureInfo.InvariantCulture)))}, texels {string.Join(", ", cs.Select(c => c.Texel.ToString("0.00", CultureInfo.InvariantCulture)))})"
+                ? $"shadows   last frame cpu {shadowStats.CpuMs:0.00} ms, gpu {shadowStats.GpuMs:0.00} ms; {shadowStats.DescribeStats()}; "
+                + $"{shadowStats.CasterStats}; "
+                + $"cascades to {string.Join(", ", cs.Select(c => c.FarDepth.ToString("0", CultureInfo.InvariantCulture)))} (sizes "
+                + $"{string.Join(", ", cs.Select(c => c.Size.X.ToString("0", CultureInfo.InvariantCulture)))}, "
+                + $"texels {string.Join(", ", cs.Select(c => c.Texel.ToString("0.00", CultureInfo.InvariantCulture)))})"
                 : "shadows   off this frame (sun below the horizon)");
         }
 
@@ -279,15 +320,42 @@ static partial class WorldApp
         gpu.Post!.Flush();
         Console.WriteLine($"post cost gpu ms/frame: {gpu.Post.DescribeCosts()}");
         if (gpu.Post.AutoExposure is { } band && gpu.Post.ReadExposure() is var (adapted, mean) && float.IsFinite(adapted))
-            Console.WriteLine($"exposure  mean luminance {mean:0.000}, band {band.Min:0.###}..{band.Max:0.###}, adapted {adapted:0.000}: x{KenshiLighting.ExposureKey / adapted:0.000}");
-        if (gpu.Particles is { } particles) Console.WriteLine($"particles {particles.ParticleCount} alive in {particles.Groups.Count} groups and {particles.PlacerGroups.Count} placer groups, {particles.ActiveUnits} units simulated, {particles.DrawnUnits} drawn ({particles.DrawnParticles} particles) in the last frame; simulation {particles.SimulationMilliseconds:0.00} ms, main thread waited {particles.WaitMilliseconds:0.00} ms; mean per frame: simulation {particles.MeanMilliseconds.Simulation:0.00} ms, wait {particles.MeanMilliseconds.Wait:0.00} ms; main thread per frame: update {particles.MeanMainThreadMilliseconds.Update:0.00} ms, draw {particles.MeanMainThreadMilliseconds.Draw:0.00} ms (with the wait)");
-        Console.WriteLine($"haze      eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
-        if (gpu.FogVolumes is { } fogVolumes) Console.WriteLine($"fog vols  {fogVolumes.Active.Count} in view ({fogVolumes.EffectVolumesDrawn} of {fogVolumes.EffectVolumes} weather effect volumes), {fogVolumes.UsedData} of {FogVolumeShaders.MaxData} vec4s{(fogVolumes.Dropped > 0 ? $", {fogVolumes.Dropped} left out" : "")}, farthest first: {(fogVolumes.Active.Count == 0 ? "none" : string.Join("; ", fogVolumes.Active))}");
-        if (gpu.FogVolumes is { } fogCulled) Console.WriteLine($"fog cull  {(fogCulled.DescribeCull() ?? "off for this view")}");
+        {
+            Console.WriteLine($"exposure  mean luminance {mean:0.000}, band {band.Min:0.###}..{band.Max:0.###}, "
+                + $"adapted {adapted:0.000}: x{KenshiLighting.ExposureKey / adapted:0.000}");
+        }
+        if (gpu.Particles is { } particles)
+        {
+            Console.WriteLine($"particles {particles.ParticleCount} alive in {particles.Groups.Count} groups and "
+                + $"{particles.PlacerGroups.Count} placer groups, {particles.ActiveUnits} units simulated, "
+                + $"{particles.DrawnUnits} drawn ({particles.DrawnParticles} particles) in the last frame; "
+                + $"simulation {particles.SimulationMilliseconds:0.00} ms, main thread waited {particles.WaitMilliseconds:0.00} ms; "
+                + $"mean per frame: simulation {particles.MeanMilliseconds.Simulation:0.00} ms, "
+                + $"wait {particles.MeanMilliseconds.Wait:0.00} ms; main thread per frame: "
+                + $"update {particles.MeanMainThreadMilliseconds.Update:0.00} ms, draw {particles.MeanMainThreadMilliseconds.Draw:0.00} ms "
+                + "(with the wait)");
+        }
+        Console.WriteLine($"haze      eye {camera.Eye.X:0}, {camera.Eye.Y:0}, {camera.Eye.Z:0}, {gpu.Sky.EyeClearance:0} above the ground "
+            + $"within {KenshiCamera.MaxDistance:0}: altitude weight {gpu.Sky.AltitudeWeight:0.###}, strength {gpu.Sky.HazeStrength:0.##}");
+        if (gpu.FogVolumes is { } fogVolumes)
+        {
+            Console.WriteLine($"fog vols  {fogVolumes.Active.Count} in view ({fogVolumes.EffectVolumesDrawn} of {fogVolumes.EffectVolumes} "
+                + $"weather effect volumes), {fogVolumes.UsedData} of {FogVolumeShaders.MaxData} "
+                + $"vec4s{(fogVolumes.Dropped > 0 ? $", {fogVolumes.Dropped} left out" : "")}, farthest first: "
+                + $"{(fogVolumes.Active.Count == 0 ? "none" : string.Join("; ", fogVolumes.Active))}");
+        }
+        if (gpu.FogVolumes is { } fogCulled)
+            Console.WriteLine($"fog cull  {(fogCulled.DescribeCull() ?? "off for this view")}");
         if (gpu.Gi is { } gi) Console.WriteLine($"gi         {gi.Describe()}");
         if (gpu.Probes is { } probeInfo) Console.WriteLine($"gi probes  {probeInfo.Describe()}");
-        if (gpu.Post is { } occlusionPost
-            && gpu.Foliage is { } occlusionFoliage) Console.WriteLine($"occlusion  {(occlusionPost.OcclusionCull ? $"depth pyramid {occlusionPost.Hiz?.Describe ?? "none"}: {occlusionFoliage.OccludedInstances} foliage instances left out of the main view" : "off")}");
+        if (gpu.Post is { } occlusionPost && gpu.Foliage is { } occlusionFoliage)
+        {
+            string occlusion = occlusionPost.OcclusionCull
+                ? $"depth pyramid {occlusionPost.Hiz?.Describe ?? "none"}: "
+                    + $"{occlusionFoliage.OccludedInstances} foliage instances left out of the main view"
+                : "off";
+            Console.WriteLine($"occlusion  {occlusion}");
+        }
         if (gpu.Post is { } shaftsPost) Console.WriteLine($"shafts     {shaftsPost.ShaftsDescribe}");
     }
 

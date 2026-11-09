@@ -22,7 +22,10 @@ internal static class KenshiLanguageSettings
             string text = encoding.GetString(bytes, preambleLength, bytes.Length - preambleLength);
             return FindLanguage(text, out int valueStart, out int contentEnd) ? text[valueStart..contentEnd].Trim() : null;
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

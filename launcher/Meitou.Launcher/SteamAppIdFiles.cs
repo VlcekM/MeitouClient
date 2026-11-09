@@ -78,7 +78,10 @@ static class SteamAppIdFiles
             {
                 if (File.Exists(file) && File.ReadAllText(file).Trim() != KenshiAppId) conflict = true;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { conflict = true; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                conflict = true;
+            }
         }
         return conflict;
     }

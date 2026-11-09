@@ -215,14 +215,19 @@ sealed class InteractiveSession
     void CreateRenderers()
     {
         _gpu = CreateGpu(_display.Context, _install, _scene, _assets, _o, interactive: true);
-        if (_gpu.Post is { } vendorPost) vendorPost.UpscalerFactory = VendorUpscalers.Factory(_display.Context, _streamline, _ngx);
+        if (_gpu.Post is { } vendorPost)
+            vendorPost.UpscalerFactory = VendorUpscalers.Factory(_display.Context, _streamline, _ngx);
         _overlay = DebugOverlay.TryCreate(_display.Context, _assets.Find);
-        if (_overlay is null) Console.WriteLine("keys      no monospace system font or game font found:the F10 key list and F11 statistics are unavailable");
+        if (_overlay is null)
+            Console.WriteLine("keys      no monospace system font or game font found:the F10 key list and F11 statistics are unavailable");
         if (_overlay is not null) _overlay.Visible = _o.ShowKeys;
         (_camera, _render) = Setup(_scene, _o);
-        if (_overlay is not null) _panel = CreateSettingsPanel(_overlay, _gpu, _render, () => _hour, v => _hour = v, () => _display.VSync,
-                v => _display.VSync = v, _switches,
-            () => _o.TimeSpeed, v => _o.TimeSpeed = v, () => BorderlessFullScreen.IsOn(_window), _ => BorderlessFullScreen.Toggle(_window));
+        if (_overlay is not null)
+        {
+            _panel = CreateSettingsPanel(_overlay, _gpu, _render, () => _hour, v => _hour = v, () => _display.VSync, v => _display.VSync = v,
+                _switches, () => _o.TimeSpeed, v => _o.TimeSpeed = v, () => BorderlessFullScreen.IsOn(_window),
+                _ => BorderlessFullScreen.Toggle(_window));
+        }
         _profiler = new FrameProfiler(_display.Context, () => _display.Context.GpuFrameMs);
         _meter = PassMeter.TryCreate(_display);   // MEITOU_PASS_STATS=1: the frame cost breakdown, printed when the window closes
         if (!_o.NoAudio)
@@ -230,7 +235,9 @@ sealed class InteractiveSession
             _audio = AudioSystem.TryCreate(_install, AudioSystem.AmbientVolumeSetting(_install), out var audioError);
             if (_audio is not null) _audio.Player.Gain = MathF.Pow(10, _o.AudioGainDb / 20);
             Console.WriteLine(_audio is not null
-                ? $"audio     {_audio.DeviceName}, ambience and music from the Wwise banks{(_o.AudioGainDb != 0 ? $", gain {_o.AudioGainDb:+0.#;-0.#} dB" : "")} (--no-audio turns it off)" : $"audio     off: {audioError}");
+                ? $"audio     {_audio.DeviceName}, "
+                + $"ambience and music from the Wwise banks{(_o.AudioGainDb != 0 ? $", gain {_o.AudioGainDb:+0.#;-0.#} dB" : "")} "
+                + "(--no-audio turns it off)" : $"audio     off: {audioError}");
         }
     }
 
@@ -394,37 +401,63 @@ sealed class InteractiveSession
             case Key.Escape: _window.Close(); break;
             case Key.F1 when ctrl: Console.WriteLine(_meitou.Sweep()); break;
             case Key.F1: Console.WriteLine(_meitou.Toggle()); break;
-            case Key.Minus: _o.Post.Exposure = MathF.Max(_o.Post.Exposure / 1.1f, 0.05f); PostStatus(); break;
-            case Key.Equal: _o.Post.Exposure = MathF.Min(_o.Post.Exposure * 1.1f, 20f); PostStatus(); break;
+            case Key.Minus:
+                _o.Post.Exposure = MathF.Max(_o.Post.Exposure / 1.1f, 0.05f);
+                PostStatus();
+                break;
+            case Key.Equal:
+                _o.Post.Exposure = MathF.Min(_o.Post.Exposure * 1.1f, 20f);
+                PostStatus();
+                break;
             case Key.T: _render.Textures = !_render.Textures; break;
             case Key.N: _render.NormalMaps = !_render.NormalMaps; break;
-            case Key.K: GroundRelief.ParallaxActive = !GroundRelief.ParallaxActive; Console.WriteLine(GroundRelief.ParallaxActive
-                    ? "ground parallax on" : "ground parallax off"); break;
+            case Key.K:
+                GroundRelief.ParallaxActive = !GroundRelief.ParallaxActive;
+                Console.WriteLine(GroundRelief.ParallaxActive ? "ground parallax on" : "ground parallax off");
+                break;
             case Key.O: _render.Objects = !_render.Objects; break;
-            case Key.F when _gpu?.Foliage is { } foliage: foliage.Enabled = !foliage.Enabled; Console.WriteLine(foliage.Enabled ? "foliage   on"
-                    : "foliage   off"); break;
+            case Key.F when _gpu?.Foliage is { } foliage:
+                foliage.Enabled = !foliage.Enabled;
+                Console.WriteLine(foliage.Enabled ? "foliage   on" : "foliage   off");
+                break;
             case Key.X: _render.Wireframe = (_render.Wireframe + 1) % 3; break;
             case Key.V: _render.Debug = (_render.Debug + 1) % 4; break;
             case Key.G: _render.Water = !_render.Water; break;
             case Key.R: _render.Reflections = !_render.Reflections; break;
-            case Key.Comma: if (_hour < 1) _day = Math.Max(_day - 1, 0); _hour = (_hour
-                    + 23) % 24; Console.WriteLine($"time {TimeText(_hour)}, day {_day}"); break;
-            case Key.Period: if (_hour + 1 >= 24) _day++; _hour = (_hour + 1) % 24; Console.WriteLine($"time {TimeText(_hour)}, day {_day}"); break;
+            case Key.Comma:
+                if (_hour < 1) _day = Math.Max(_day - 1, 0);
+                _hour = (_hour + 23) % 24;
+                Console.WriteLine($"time {TimeText(_hour)}, day {_day}");
+                break;
+            case Key.Period:
+                if (_hour + 1 >= 24) _day++;
+                _hour = (_hour + 1) % 24;
+                Console.WriteLine($"time {TimeText(_hour)}, day {_day}");
+                break;
             // The weather schedule only moves forward (it catches up through a jump hour by hour); going back changes the clock, not the weather
             // already rolled.
-            case Key.LeftBracket: _day = Math.Max(_day - 1, 0); Console.WriteLine($"time {TimeText(_hour)}, day {_day}"); break;
-            case Key.RightBracket: _day++; Console.WriteLine($"time {TimeText(_hour)}, day {_day}"); break;
+            case Key.LeftBracket:
+                _day = Math.Max(_day - 1, 0);
+                Console.WriteLine($"time {TimeText(_hour)}, day {_day}");
+                break;
+            case Key.RightBracket:
+                _day++;
+                Console.WriteLine($"time {TimeText(_hour)}, day {_day}");
+                break;
             case Key.BackSlash when _gpu?.Weather is { } weather: CycleWeather(weather.World); break;
             case Key.H: PrintCamera(); break;
             case Key.P: _screenshotRequested = true; break;
             case Key.Tab when _panel is not null: _panel.Visible = !_panel.Visible; break;
             case Key.F9: _fpsVisible = !_fpsVisible; break;
             case Key.F10 when _overlay is not null: _overlay.Visible = !_overlay.Visible; break;
-            case Key.F11 when _overlay is not null: _statsVisible = !_statsVisible; FoliageGpuCull.CountTriangles = _statsVisible; break;
+            case Key.F11 when _overlay is not null:
+                _statsVisible = !_statsVisible;
+                FoliageGpuCull.CountTriangles = _statsVisible;
+                break;
             case Key.F12 when shift && _profiler is not null && _overlay is not null: _profiler.ShowVram = !_profiler.ShowVram; break;
-            case Key.F12 when _profiler is not null
-                    && _overlay is not null: _profiler.Showing = (FrameProfiler.Mode)(((int)_profiler.Showing + 1) % 3);
-                    break;
+            case Key.F12 when _profiler is not null && _overlay is not null:
+                _profiler.Showing = (FrameProfiler.Mode)(((int)_profiler.Showing + 1) % 3);
+                break;
         }
     }
 
@@ -439,8 +472,14 @@ sealed class InteractiveSession
             keyboard.ClipboardText = code;
             Console.WriteLine($"camera    copied {code} ({CameraCode.Describe(_camera)})");
         }
-        else if (CameraCode.TryApply(keyboard.ClipboardText, _camera)) Console.WriteLine($"camera    moved to {CameraCode.Describe(_camera)}");
-        else Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one)");
+        else if (CameraCode.TryApply(keyboard.ClipboardText, _camera))
+        {
+            Console.WriteLine($"camera    moved to {CameraCode.Describe(_camera)}");
+        }
+        else
+        {
+            Console.WriteLine("camera    the clipboard holds no camera code (Ctrl+C in a viewer copies one)");
+        }
     }
 
     /// <summary>
@@ -448,9 +487,11 @@ sealed class InteractiveSession
     /// </summary>
     void PrintCamera()
     {
-        Console.WriteLine($"camera target {_camera.Target.X:0}, {_camera.Target.Y:0}, {_camera.Target.Z:0} (zone {WorldLayout.ZoneOf(_camera.Target.X, _camera.Target.Z)}), " +
-            $"yaw {_camera.Yaw * 180 / MathF.PI:0}, pitch {_camera.Pitch * 180 / MathF.PI:0}, distance {_camera.Distance:0}; " +
-            $"--at {_camera.Target.X:0},{_camera.Target.Z:0} --yaw {_camera.Yaw * 180 / MathF.PI:0} --pitch {_camera.Pitch * 180 / MathF.PI:0} --distance {_camera.Distance:0}");
+        Console.WriteLine($"camera target {_camera.Target.X:0}, {_camera.Target.Y:0}, "
+            + $"{_camera.Target.Z:0} (zone {WorldLayout.ZoneOf(_camera.Target.X, _camera.Target.Z)}), "
+            + $"yaw {_camera.Yaw * 180 / MathF.PI:0}, pitch {_camera.Pitch * 180 / MathF.PI:0}, distance {_camera.Distance:0}; "
+            + $"--at {_camera.Target.X:0},{_camera.Target.Z:0} --yaw {_camera.Yaw * 180 / MathF.PI:0} "
+            + $"--pitch {_camera.Pitch * 180 / MathF.PI:0} --distance {_camera.Distance:0}");
     }
 
     /// <summary>
@@ -526,7 +567,8 @@ sealed class InteractiveSession
         _stats.Clear();
         // frame: the wall time from one frame to the next (mean and the longest since the last update), what the fps is made of.
         _stats.Add("Performance");
-        _stats.Add($"  frame rate    {_frames / _titleTimer:0} fps, {(_display.VSync ? "vsync" : "uncapped")}; frame {_titleTimer * 1000 / Math.Max(_frames, 1):0.0} ms (longest {_frameMaxMs:0.0}), " +
+        _stats.Add($"  frame rate    {_frames / _titleTimer:0} fps, {(_display.VSync ? "vsync" : "uncapped")}; "
+            + $"frame {_titleTimer * 1000 / Math.Max(_frames, 1):0.0} ms (longest {_frameMaxMs:0.0}), " +
             $"cpu {_cpuMs / Math.Max(_frames, 1):0.0} ms, graphics card {gpuText} ms");
         _frameMaxMs = 0;
         // The window title carries the frame rate too.
@@ -607,7 +649,8 @@ sealed class InteractiveSession
         if (_meitou.TickSweep() is { } sweepLine) Console.WriteLine(sweepLine);   // Ctrl+F1: the switches flip one a second
         double frameDt = AdvanceClock(renderDt);
         string? takeFile = _cinema.TakeFrame();
-        if (_gpu.Weather is { } clockWeather) clockWeather.Day = _day;   // game speed 1, never paused: the viewer's time is the day and the hour set here
+        // Game speed 1, never paused: the viewer's time is the day and the hour set here.
+        if (_gpu.Weather is { } clockWeather) clockWeather.Day = _day;
         Draw(_gpu, _scene, _camera, _render, size.X, size.Y, _hour, (float)_animSeconds / 600f, _o.FogDistance);
         if (_audio is not null) UpdateAudio(_audio, _gpu, _scene, _camera, _hour, frameDt);
         _cpuMs += _frameWatch.Elapsed.TotalMilliseconds;
@@ -676,7 +719,11 @@ sealed class InteractiveSession
         {
             // --time-speed: the clock runs on, game hours per real minute, into the next day past midnight.
             _hour += _o.TimeSpeed * (float)frameDt / 60f;
-            while (_hour >= 24) { _hour -= 24; _day++; }
+            while (_hour >= 24)
+            {
+                _hour -= 24;
+                _day++;
+            }
         }
         _cinema.Advance(frameDt);   // a flight through the saved shots moves the camera (and the hour)
         return frameDt;

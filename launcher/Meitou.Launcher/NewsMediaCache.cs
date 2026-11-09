@@ -32,7 +32,10 @@ public sealed class NewsMediaCache(HttpClient http)
                 await stream.ReadExactlyAsync(head, ct);
                 return head;
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
         }
         var whole = CacheFile(url, ".img");
         var cached = CacheFile(url, ".head");
@@ -66,7 +69,10 @@ public sealed class NewsMediaCache(HttpClient http)
             {
                 return await File.ReadAllBytesAsync(uri.LocalPath, ct);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return null;
+            }
         }
         var cached = CacheFile(url, ".img");
         try

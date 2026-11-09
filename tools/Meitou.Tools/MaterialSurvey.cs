@@ -34,7 +34,8 @@ static class MaterialSurvey
     {
         int failed = all.Diagnostics.Count(d => d.Code == OgreScriptError.Fatal);
         Console.WriteLine($"All scripts under data/: {all.Files.Count} files compiled (.program + .material), {failed} failed");
-        Console.WriteLine($"  {all.Materials.Count} materials ({all.DuplicateMaterials.Count} duplicate definitions), {all.Programs.Count} GPU programs");
+        Console.WriteLine($"  {all.Materials.Count} materials ({all.DuplicateMaterials.Count} duplicate definitions), "
+            + $"{all.Programs.Count} GPU programs");
         string skipped = string.Join(", ", resources.Skipped.Select(s => $"{s.Type}={Path.GetFileName(s.Path)}"));
         Console.WriteLine($"resources.cfg folders: {resources.Locations.Count} ({resources.Skipped.Count} skipped: {skipped})");
         Console.WriteLine($"  {configured.Files.Count} files, {configured.Materials.Count} materials, {configured.Programs.Count} GPU programs");
@@ -88,7 +89,8 @@ static class MaterialSurvey
         GameInstall install, OgreMaterialLibrary all, OgreMaterialLibrary configured, OgreScriptResources dataIndex, OgreScriptResources resources)
     {
         var audit = OgreMaterialAudit.Run(install, all, dataIndex);
-        Console.WriteLine($"Meshes: {audit.MeshFiles} read ({audit.MeshFailures.Count} failed), {audit.SubMeshes} submeshes, {audit.SubMeshesWithTextureAliases} with texture aliases");
+        Console.WriteLine($"Meshes: {audit.MeshFiles} read ({audit.MeshFailures.Count} failed), "
+            + $"{audit.SubMeshes} submeshes, {audit.SubMeshesWithTextureAliases} with texture aliases");
         string submeshes = $"submeshes resolved: {audit.ResolvedSubMeshes} ({Percent(audit.ResolvedSubMeshes, audit.SubMeshes)})";
         Console.WriteLine($"  distinct mesh material names: {audit.MeshMaterials.Count}, defined: {audit.ResolvedMeshMaterials} " +
                           $"({Percent(audit.ResolvedMeshMaterials, audit.MeshMaterials.Count)}); {submeshes}");
@@ -99,8 +101,9 @@ static class MaterialSurvey
             + $"({Percent(configuredAudit.ResolvedMeshMaterials, configuredAudit.MeshMaterials.Count)})";
         Console.WriteLine($"  with resources.cfg scripts only: {configuredNames}");
 
-        Console.WriteLine($"Textures: {audit.TextureReferences} references, {audit.Textures.Count} distinct, found under data/: {audit.FoundTextures} " +
-                          $"({Percent(audit.FoundTextures, audit.Textures.Count)}); units naming no file: {audit.UnitsWithoutTexture}");
+        Console.WriteLine($"Textures: {audit.TextureReferences} references, {audit.Textures.Count} distinct, "
+            + $"found under data/: {audit.FoundTextures} ({Percent(audit.FoundTextures, audit.Textures.Count)}); "
+            + $"units naming no file: {audit.UnitsWithoutTexture}");
         foreach (var (name, users) in audit.MissingTextures.Take(20))
             Console.WriteLine($"    missing {name,-36} used by {string.Join(", ", users.Take(3))}");
         string configuredFound = $"{configuredAudit.FoundTextures} of {configuredAudit.Textures.Count} "

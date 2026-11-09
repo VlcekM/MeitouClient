@@ -48,7 +48,8 @@ static class SkeletonSurvey
                     }
                 }
                 links += skeleton.AnimationLinks.Count;
-                foreach (var l in skeleton.AnimationLinks) linkTargets[l.SkeletonName] = linkTargets.GetValueOrDefault(l.SkeletonName) + 1;
+                foreach (var l in skeleton.AnimationLinks)
+                    linkTargets[l.SkeletonName] = linkTargets.GetValueOrDefault(l.SkeletonName) + 1;
                 lengthMismatches += skeleton.ChunkLengthMismatches;
                 if (skeleton.ChunkLengthMismatches > 0) mismatchFiles++;
             }

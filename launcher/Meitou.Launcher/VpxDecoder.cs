@@ -40,7 +40,10 @@ sealed unsafe partial class VpxDecoder : IDisposable
             {
                 return vpx_codec_vp8_dx() != 0;
             }
-            catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { return false; }
+            catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+            {
+                return false;
+            }
         }
     }
 

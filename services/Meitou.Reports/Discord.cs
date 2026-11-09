@@ -23,7 +23,10 @@ sealed class Discord(Config config, Intake intake, Roadmap roadmap, IHttpClientF
             return Ed25519.Verify(Convert.FromHexString(config.DiscordPublicKey), Convert.FromHexString(signature),
                     [.. Encoding.UTF8.GetBytes(timestamp), .. body]);
         }
-        catch (FormatException) { return false; }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 
     public async Task<JsonObject> Handle(JsonNode interaction)
@@ -39,12 +42,11 @@ sealed class Discord(Config config, Intake intake, Roadmap roadmap, IHttpClientF
             string typed = (Opt("system") ?? "").Trim();
             var rows = await roadmap.Rows();
             var choices = new JsonArray();
-            foreach (var r in rows.Values
-                         .Where(r => typed.Length == 0 || r.System.Contains(typed, StringComparison.OrdinalIgnoreCase) || r.Id.Contains(typed,
-                                 StringComparison.OrdinalIgnoreCase))
-                         .Take(25))
-                choices.Add((JsonNode)new JsonObject { ["name"] = Trim(r.System, 100),
-                        ["value"] = r.Id });   // the non-generic Add: the generic one is not AOT-safe
+            foreach (var r in rows.Values.Where(r => Matches(r, typed)).Take(25))
+            {
+                // The non-generic Add: the generic one is not AOT-safe.
+                choices.Add((JsonNode)new JsonObject { ["name"] = Trim(r.System, 100), ["value"] = r.Id });
+            }
             return new() { ["type"] = 8, ["data"] = new JsonObject { ["choices"] = choices } };
         }
 
@@ -61,11 +63,20 @@ sealed class Discord(Config config, Intake intake, Roadmap roadmap, IHttpClientF
         var row = (await roadmap.Rows())[report.Row!];
         return Reply(command == "works"
             ? $"Thanks, recorded: **{row.System}** works for you (report {id})."
-            : $"Thanks, recorded: **{row.System}** is broken for you (report {id}). If you can, open an issue with steps and your log.txt: https://github.com/{config.Repo}/issues/new/choose");
+            : $"Thanks, recorded: **{row.System}** is broken for you (report {id}). "
+                + $"If you can, open an issue with steps and your log.txt: https://github.com/{config.Repo}/issues/new/choose");
     }
 
-    static JsonObject Reply(string text) => new() { ["type"] = 4, ["data"] = new JsonObject { ["content"] = text,
-            ["flags"] = 64 } };   // only the reporter sees it
+    /// <summary>
+    /// Whether the autocomplete offers <paramref name="r"/> for what was <paramref name="typed"/>: its system or id holds it.
+    /// </summary>
+    static bool Matches(RoadmapRow r, string typed) =>
+        typed.Length == 0 || r.System.Contains(typed, StringComparison.OrdinalIgnoreCase) || r.Id.Contains(typed, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// An answer saying <paramref name="text"/>; flags 64: only the reporter sees it.
+    /// </summary>
+    static JsonObject Reply(string text) => new() { ["type"] = 4, ["data"] = new JsonObject { ["content"] = text, ["flags"] = 64 } };
 
     static string Trim(string s, int max) => s.Length > max ? s[..(max - 1)] + "…" : s;
 

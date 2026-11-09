@@ -107,12 +107,14 @@ public sealed partial class MainWindow
         GraphicsFileText.Text = found ? GameSettings.FileName : Tr("No {1} found", GameSettings.FileName);
         ToolTip.SetTip(GraphicsFileText, GameSettings.FilePath);
         if (!found)
+        {
             GraphicsPanel.Children.Add(new TextBlock
             {
                 Classes = { "desc" }, Margin = new(0, 0, 0, 8),
                 Text = $"No {GameSettings.FileName} in {LauncherConfig.DataDirectory} yet: the game writes it when it first saves its settings "
                     + "(started with Play), and a change here creates it. Until then the game uses its defaults.",
             });
+        }
     }
 
     /// <summary>
@@ -627,6 +629,7 @@ public sealed partial class MainWindow
     {
         var values = new Dictionary<string, float>();
         foreach (var key in l.Keys)
+        {
             if (_settingByKey.TryGetValue(key, out var s) && l.Meitou.TryGetValue(key, out float meitou))
             {
                 float value = CurrentValue(s);
@@ -634,6 +637,7 @@ public sealed partial class MainWindow
                 if (MathF.Abs(value - meitou) > (toggle ? 0.5f : MathF.Max(s.Step, 1e-4f) / 2))
                     values[key] = toggle ? value >= 0.5f ? 1 : 0 : MathF.Round(value, 3);
             }
+        }
                 try
         {
             LookPresetFile.Save(folder, new(name, l.Made, values));
@@ -937,7 +941,10 @@ public sealed partial class MainWindow
     static TextBlock? ImpactText(string? impact)
     {
         if (impact is not { Length: > 0 }) return null;
-        var text = new TextBlock { Classes = { "desc" }, Text = Tr(impact), Margin = new(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock
+        {
+            Classes = { "desc" }, Text = Tr(impact), Margin = new(12, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center,
+        };
         if (impact.StartsWith("High", StringComparison.Ordinal)
                 && Avalonia.Application.Current?.FindResource("BrassLight") is Avalonia.Media.IBrush brass)
             text.Foreground = brass;
@@ -1147,8 +1154,11 @@ public sealed partial class MainWindow
         float? Parse(string input)
         {
             if (s.OffBelow is not null
-                    && (input.Equals(s.OffText, StringComparison.OrdinalIgnoreCase) || input.Equals(Tr(s.OffText), StringComparison.OrdinalIgnoreCase)))
+                    && (input.Equals(s.OffText, StringComparison.OrdinalIgnoreCase)
+                        || input.Equals(Tr(s.OffText), StringComparison.OrdinalIgnoreCase)))
+            {
                 return s.Min;
+            }
             string suffix = s.Suffix.Trim();
             if (suffix.Length > 0 && input.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 input = input[..^suffix.Length].Trim();

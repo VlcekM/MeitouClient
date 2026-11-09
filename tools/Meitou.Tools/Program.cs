@@ -102,13 +102,17 @@ static int Fcs(string path)
         Console.WriteLine($"  save counter: {merge.SaveCounter}, last merge resolve: {merge.LastMergeResolve}, merged mods: {merge.Merged.Count}");
     if (file.DeleteRequests is { } deletes)
         Console.WriteLine($"  delete requests: {deletes.Count}");
-    Console.WriteLine($"  records: {file.Records.Count(r => !r.IsModified)} new, {file.Records.Count(r => r.IsModified)} modifying ({file.Records.Count(r => r.IsRenamed)} renaming), {file.Records.Count(r => r.IsRemoved)} removing");
+    Console.WriteLine($"  records: {file.Records.Count(r => !r.IsModified)} new, {file.Records.Count(r => r.IsModified)} "
+        + $"modifying ({file.Records.Count(r => r.IsRenamed)} renaming), {file.Records.Count(r => r.IsRemoved)} removing");
     if (file.HeaderTail.Length > 0)
         Console.WriteLine($"  header tail:  {Convert.ToHexString(file.HeaderTail)}");
 
     Console.WriteLine("  records by type:");
     foreach (var g in file.Records.GroupBy(r => r.Type).OrderByDescending(g => g.Count()))
-        Console.WriteLine($"    {g.Key,4} {(Enum.IsDefined((FcsRecordType)g.Key) ? (FcsRecordType)g.Key : "?"),-30} {g.Count(),7}  e.g. {g.First().Name}");
+    {
+        Console.WriteLine($"    {g.Key,4} {(Enum.IsDefined((FcsRecordType)g.Key) ? (FcsRecordType)g.Key : "?"),-30} "
+            + $"{g.Count(),7}  e.g. {g.First().Name}");
+    }
 
     Console.WriteLine("  flags:");
     foreach (var g in file.Records.GroupBy(r => r.Flags).OrderByDescending(g => g.Count()))
@@ -143,17 +147,42 @@ static int Armour(GameInstall install, string name)
     var db = GameDatabase.Load(LoadOrder.FromInstall(install));
     foreach (var r in db.Records.Values.Where(r => r.Name == name && r.Type == FcsRecordType.Armour))
     {
-        Console.WriteLine($"{r.StringId} {r.Name} defined by {r.DefinedBy}, modified by {string.Join(", ", r.ModifiedBy)}");
-        foreach (var f in r.Floats.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
-        foreach (var f in r.Ints.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
-        foreach (var f in r.Strings.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
-        foreach (string list in r.ReferenceLists) Console.WriteLine($"  LIST {list}: " + string.Join(", ", r.GetReferences(list).Select(x => $"{db.Find(x.TargetStringId)?.Name ?? x.TargetStringId}={x.Values.Value0}")));
-        string platoons = Path.Combine(install.Root, "save", "quicksave", "platoon");
-        if (!Directory.Exists(platoons)) continue;
-        foreach (string file in Directory.EnumerateFiles(platoons, "*.platoon"))
-            foreach (var s in Meitou.Data.Save.SaveFile.ReadFile(file).Records.Where(x => x.RecordType == FcsRecordType.InventoryItemState
-                    && x.Strings.GetValueOrDefault("base data sid") == r.StringId))
-                Console.WriteLine($"  SAVED {Path.GetFileName(file)} quality {s.Floats.GetValueOrDefault("quality")} level {s.Ints.GetValueOrDefault("level")} section {s.Strings.GetValueOrDefault("section")} material {s.Strings.GetValueOrDefault("material sid")}");
+        PrintArmour(db, r);
+        PrintSavedCopies(install, r);
     }
     return 0;
 }
+
+// One ARMOUR record: who defines and modifies it, its fields and its reference lists.
+static void PrintArmour(GameDatabase db, GameRecord r)
+{
+    Console.WriteLine($"{r.StringId} {r.Name} defined by {r.DefinedBy}, modified by {string.Join(", ", r.ModifiedBy)}");
+    foreach (var f in r.Floats.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
+    foreach (var f in r.Ints.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
+    foreach (var f in r.Strings.OrderBy(f => f.Key)) Console.WriteLine($"  {f.Key} = {f.Value}");
+    foreach (string list in r.ReferenceLists)
+    {
+        var targets = r.GetReferences(list).Select(x => $"{db.Find(x.TargetStringId)?.Name ?? x.TargetStringId}={x.Values.Value0}");
+        Console.WriteLine($"  LIST {list}: " + string.Join(", ", targets));
+    }
+}
+
+// The quicksave's saved copies of the item r: the inventory item states made from it, per platoon file.
+static void PrintSavedCopies(GameInstall install, GameRecord r)
+{
+    string platoons = Path.Combine(install.Root, "save", "quicksave", "platoon");
+    if (!Directory.Exists(platoons)) return;
+    foreach (string file in Directory.EnumerateFiles(platoons, "*.platoon"))
+    {
+        foreach (var s in Meitou.Data.Save.SaveFile.ReadFile(file).Records.Where(x => IsSavedCopy(x, r)))
+        {
+            Console.WriteLine($"  SAVED {Path.GetFileName(file)} quality {s.Floats.GetValueOrDefault("quality")} level "
+                + $"{s.Ints.GetValueOrDefault("level")} section {s.Strings.GetValueOrDefault("section")} material "
+                + $"{s.Strings.GetValueOrDefault("material sid")}");
+        }
+    }
+}
+
+// Whether the saved record x is an inventory item made from r.
+static bool IsSavedCopy(FcsRecord x, GameRecord r) =>
+    x.RecordType == FcsRecordType.InventoryItemState && x.Strings.GetValueOrDefault("base data sid") == r.StringId;

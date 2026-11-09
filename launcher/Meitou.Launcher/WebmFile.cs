@@ -65,7 +65,9 @@ public sealed class WebmFile
                 pos = end;
             }
         }
-        catch (InvalidDataException) when (head) { }
+        catch (InvalidDataException) when (head)
+        {
+        }
         return file;
     }
 

@@ -24,7 +24,11 @@ sealed class VramWatch : IDisposable
             while (!_stop.IsCancellationRequested)
             {
                 var (used, total) = device.VideoMemory();
-                lock (Gate) { s_peakUsed = Math.Max(s_peakUsed, used); s_budget = total; }
+                lock (Gate)
+                {
+                    s_peakUsed = Math.Max(s_peakUsed, used);
+                    s_budget = total;
+                }
                 if (limit > 0 && total > 0 && used > limit * total)
                 {
                     Console.WriteLine($"vram      ABORT: {used / 1048576.0:0} MB in use of a {total / 1048576.0:0} MB budget "
@@ -68,8 +72,10 @@ sealed class VramWatch : IDisposable
     public static string Describe()
     {
         lock (Gate)
+        {
             return $"peak {s_peakUsed / 1048576.0:0} MB in use of a {s_budget / 1048576.0:0} MB budget "
                 + $"({(s_budget > 0 ? 100.0 * s_peakUsed / s_budget : 0):0.0}%)";
+        }
     }
 
     public void Dispose()
