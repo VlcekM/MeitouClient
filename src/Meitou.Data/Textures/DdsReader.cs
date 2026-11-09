@@ -4,8 +4,8 @@ using System.Text;
 namespace Meitou.Data.Textures;
 
 /// <summary>
-/// Reads <c>.dds</c> files (legacy header and DX10 extension). Layout: docs/formats/dds.md. Written from the
-/// public DDS documentation (Microsoft, "DDS_HEADER" / "DDS_PIXELFORMAT" / "DDS_HEADER_DXT10").
+/// Reads <c>.dds</c> files (legacy header and DX10 extension). Layout: docs/formats/dds.md. Written from the public DDS documentation (Microsoft,
+/// "DDS_HEADER" / "DDS_PIXELFORMAT" / "DDS_HEADER_DXT10").
 /// </summary>
 public static class DdsReader
 {
@@ -28,19 +28,24 @@ public static class DdsReader
 
     public static DdsFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
-    /// <summary>Parses the headers and lays out every surface. Throws <see cref="DdsFormatException"/> on bad or unsupported data.</summary>
+    /// <summary>
+    /// Parses the headers and lays out every surface. Throws <see cref="DdsFormatException"/> on bad or unsupported data.
+    /// </summary>
     public static DdsFile Read(byte[] data) => Parse(data.AsSpan(), data.Length, data);
 
     /// <summary>
-    /// Reads a DDS file from an open handle keeping only what <paramref name="keep"/> chooses. The headers are read first (<paramref name="whole"/>: every surface laid out, no
-    /// data), <paramref name="keep"/> returns the file as it is to be held (its top mips dropped by <see cref="TextureQuality.DropTopMips"/>, the surfaces re-sliced), and only the
-    /// bytes from its first surface on are read. A dropped top level is three quarters of a mip chain's bytes, which were read, held and thrown away with the file.
-    /// The result's <see cref="DdsFile.Data"/> starts at its first surface (the offsets are rebased); when <paramref name="keep"/> returns <paramref name="whole"/> itself (nothing dropped)
-    /// the result is the whole file, as <see cref="Read"/> returns it, and <paramref name="whole"/> is that file.
-    /// With <paramref name="pool"/> the result's <see cref="DdsFile.Data"/> is rented from it and may be longer than the bytes read (go by the surfaces, not its length;
-    /// <see cref="DdsFile.TrailingBytes"/> means nothing): the caller returns it once nothing reads the file any more (docs/engine.md, pooled buffers).
+    /// Reads a DDS file from an open handle keeping only what <paramref name="keep"/> chooses. The headers are read first (<paramref name="whole"/>:
+    /// every surface laid out, no data), <paramref name="keep"/> returns the file as it is to be held (its top mips dropped by
+    /// <see cref="TextureQuality.DropTopMips"/>, the surfaces re-sliced), and only the bytes from its first surface on are read. A dropped top level
+    /// is three quarters of a mip chain's bytes, which were read, held and thrown away with the file. The result's <see cref="DdsFile.Data"/> starts
+    /// at its first surface (the offsets are rebased); when <paramref name="keep"/> returns <paramref name="whole"/> itself (nothing dropped) the
+    /// result is the whole file, as <see cref="Read"/> returns it, and <paramref name="whole"/> is that file. With <paramref name="pool"/> the
+    /// result's <see cref="DdsFile.Data"/> is rented from it and may be longer than the bytes read (go by the surfaces, not its length;
+    /// <see cref="DdsFile.TrailingBytes"/> means nothing): the caller returns it once nothing reads the file any more (docs/engine.md, pooled
+    /// buffers).
     /// </summary>
-    public static DdsFile ReadKept(Microsoft.Win32.SafeHandles.SafeFileHandle file, Func<DdsFile, DdsFile> keep, out DdsFile whole, System.Buffers.ArrayPool<byte>? pool = null)
+    public static DdsFile ReadKept(Microsoft.Win32.SafeHandles.SafeFileHandle file, Func<DdsFile, DdsFile> keep, out DdsFile whole,
+    System.Buffers.ArrayPool<byte>? pool = null)
     {
         long length = RandomAccess.GetLength(file);
         if (length > int.MaxValue) throw new DdsFormatException($"File of {length} bytes is too large.");
@@ -53,7 +58,8 @@ public static class DdsReader
         var data = pool?.Rent(count) ?? new byte[count];
         try
         {
-            if (ReadFully(file, data.AsSpan(0, count), first) != count) throw new DdsFormatException("File ended early.");
+            if (ReadFully(file, data.AsSpan(0, count), first) != count)
+                throw new DdsFormatException("File ended early.");
             if (all) return whole = Parse(data, length, data);
             whole = headers;
             return kept.WithData(data, kept.Surfaces.Select(s => s with { Offset = s.Offset - first }).ToList());
@@ -66,8 +72,9 @@ public static class DdsReader
     }
 
     /// <summary>
-    /// Reads only the first surface (the full-size level of the first image) of a DDS file from an open handle: the headers, then that surface's bytes. The result's
-    /// <see cref="DdsFile.Data"/> holds just that surface (its offset rebased to 0), so a 14-level 8192 x 8192 BC1 file costs 32 MB instead of 43 MB read and held.
+    /// Reads only the first surface (the full-size level of the first image) of a DDS file from an open handle: the headers, then that surface's
+    /// bytes. The result's <see cref="DdsFile.Data"/> holds just that surface (its offset rebased to 0), so a 14-level 8192 x 8192 BC1 file costs 32
+    /// MB instead of 43 MB read and held.
     /// </summary>
     public static DdsFile ReadTopSurface(Microsoft.Win32.SafeHandles.SafeFileHandle file)
     {
@@ -95,7 +102,10 @@ public static class DdsReader
         return read;
     }
 
-    /// <summary>The headers in <paramref name="span"/> (at least the headers) of a file of <paramref name="fileLength"/> bytes, whose bytes are <paramref name="data"/> (empty when only the headers were read).</summary>
+    /// <summary>
+    /// The headers in <paramref name="span"/> (at least the headers) of a file of <paramref name="fileLength"/> bytes, whose bytes are
+    /// <paramref name="data"/> (empty when only the headers were read).
+    /// </summary>
     static DdsFile Parse(ReadOnlySpan<byte> span, long fileLength, byte[] data)
     {
         if (span.Length < 4 + HeaderSize) throw new DdsFormatException($"File too short for a DDS header ({span.Length} bytes).");
@@ -130,7 +140,8 @@ public static class DdsReader
             fourCcText = Encoding.ASCII.GetString(span.Slice(84, 4));
             if (fourCcText == "DX10")
             {
-                if (span.Length < headerEnd + Dx10HeaderSize) throw new DdsFormatException("File too short for the DX10 header.");
+                if (span.Length < headerEnd + Dx10HeaderSize)
+                    throw new DdsFormatException("File too short for the DX10 header.");
                 dxgi = (int)U32(span, headerEnd);
                 int dimension = (int)U32(span, headerEnd + 4);
                 uint misc = U32(span, headerEnd + 8);
@@ -176,7 +187,8 @@ public static class DdsReader
                 int w = Math.Max(1, width >> level), h = Math.Max(1, height >> level), d = Math.Max(1, depth >> level);
                 long length = SurfaceSize(format, masks, w, h) * d;
                 if (offset + length > fileLength)
-                    throw new DdsFormatException($"Surface {image}/{level} ({w}x{h}) ends at {offset + length}, past the end of the file ({fileLength}).");
+                    throw new DdsFormatException(
+                        $"Surface {image}/{level} ({w}x{h}) ends at {offset + length}, past the end of the file ({fileLength}).");
                 surfaces.Add(new DdsSurface(image, level, w, h, d, (int)offset, (int)length));
                 offset += length;
             }
@@ -201,7 +213,9 @@ public static class DdsReader
         };
     }
 
-    /// <summary>Bytes of one 2D surface (one depth slice) of <paramref name="width"/>×<paramref name="height"/>.</summary>
+    /// <summary>
+    /// Bytes of one 2D surface (one depth slice) of <paramref name="width"/>×<paramref name="height"/>.
+    /// </summary>
     public static long SurfaceSize(DdsFormat format, DdsPixelMasks? masks, int width, int height)
     {
         long blocks = (long)((width + 3) / 4) * ((height + 3) / 4);
@@ -221,7 +235,10 @@ public static class DdsReader
         76 or 77 or 78 => (DdsFormat.Bc3, null),
         79 or 80 => (DdsFormat.Bc4, null),            // BC4_TYPELESS / UNORM (SNORM 81 not supported)
         82 or 83 => (DdsFormat.Bc5, null),            // BC5_TYPELESS / UNORM (SNORM 84 not supported)
-        97 or 98 or 99 => (DdsFormat.Bc7, null),      // BC7_TYPELESS / UNORM / UNORM_SRGB (sRGB is not applied: like BC1-BC3 the data is sampled as stored)
+        97 or 98 or 99 => (
+            DdsFormat.Bc7,
+            null
+        ),      // BC7_TYPELESS / UNORM / UNORM_SRGB (sRGB is not applied: like BC1-BC3 the data is sampled as stored)
         27 or 28 or 29 => (DdsFormat.Uncompressed, new DdsPixelMasks(32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000)), // R8G8B8A8
         87 or 90 or 91 => (DdsFormat.Uncompressed, new DdsPixelMasks(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000)), // B8G8R8A8
         88 or 92 or 93 => (DdsFormat.Uncompressed, new DdsPixelMasks(32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0)),          // B8G8R8X8

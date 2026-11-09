@@ -6,15 +6,17 @@ using Meitou.Content;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// <c>data/newland/land/features.dat</c> (magic <c>MF01</c>): the map features (rocks, cliffs and other large
-/// meshes, FCS MAP_FEATURES records) placed in each zone. Layout in docs/formats/zones.md.
+/// <c>data/newland/land/features.dat</c> (magic <c>MF01</c>): the map features (rocks, cliffs and other large meshes, FCS MAP_FEATURES records)
+/// placed in each zone. Layout in docs/formats/zones.md.
 /// </summary>
 public sealed class MapFeatureFile
 {
     public const string RelativePath = "newland/land/features.dat";
     static readonly byte[] Magic = "MF01"u8.ToArray();
 
-    /// <summary>Placements per zone; index <c>y * 64 + x</c> (<see cref="ZoneOf"/>). Zones without features are empty.</summary>
+    /// <summary>
+    /// Placements per zone; index <c>y * 64 + x</c> (<see cref="ZoneOf"/>). Zones without features are empty.
+    /// </summary>
     public List<List<MapFeature>> Zones { get; } = [];
 
     public static ZoneCoordinate ZoneOf(int index) => new(index % WorldLayout.ZoneCount, index / WorldLayout.ZoneCount);

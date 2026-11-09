@@ -4,31 +4,41 @@ using Meitou.Content;
 
 namespace Meitou.Data.World;
 
-/// <summary>The shape of a placed fog volume (docs/formats/fogfeatures.md): the type byte of <c>fogfeatures.dat</c>.</summary>
+/// <summary>
+/// The shape of a placed fog volume (docs/formats/fogfeatures.md): the type byte of <c>fogfeatures.dat</c>.
+/// </summary>
 public enum FogFeatureType : byte
 {
     Sphere = 2,
     Beam = 3,
-    /// <summary>"Block" in the level editor (class <c>FogPlaneVolume</c>): the space inside seven planes.</summary>
+    /// <summary>
+    /// "Block" in the level editor (class <c>FogPlaneVolume</c>): the space inside seven planes.
+    /// </summary>
     Block = 4,
 }
 
 /// <summary>
-/// One placed fog volume from <c>data/newland/land/fogfeatures.dat</c> (docs/formats/fogfeatures.md). <see cref="Colour"/> is the stored RGB
-/// (the stored alpha is read but the game keeps 1). <see cref="Distance"/> is the density distance (the shader's density is its inverse),
+/// One placed fog volume from <c>data/newland/land/fogfeatures.dat</c> (docs/formats/fogfeatures.md). <see cref="Colour"/> is the stored RGB (the
+/// stored alpha is read but the game keeps 1). <see cref="Distance"/> is the density distance (the shader's density is its inverse),
 /// <see cref="Edge"/> the edge softening distance of blocks and beams. A block's <see cref="Planes"/> hold (normal, w) with the inside where
-/// <c>dot(normal, p) &lt; w</c> for all seven; a sphere uses <see cref="Position"/> and <see cref="Radius"/>; a beam runs from
-/// <see cref="Position"/> to <see cref="End"/> with <see cref="Radius"/>.
+/// <c>dot(normal, p) &lt; w</c> for all seven; a sphere uses <see cref="Position"/> and <see cref="Radius"/>; a beam runs from <see cref="Position"/>
+/// to <see cref="End"/> with <see cref="Radius"/>.
 /// </summary>
 public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour, float Alpha, float Distance, float Edge,
     Vector3 Position, Vector3 End, float Radius, Vector4[] Planes)
 {
-    /// <summary>The shader's <c>density</c>: 1 / distance, 1 when the distance is not positive (the game's setter).</summary>
+    /// <summary>
+    /// The shader's <c>density</c>: 1 / distance, 1 when the distance is not positive (the game's setter).
+    /// </summary>
     public float Density => Distance > 0 ? 1f / Distance : 1f;
-    /// <summary>The shader's <c>edgeBlur</c>: 1 / edge.</summary>
+    /// <summary>
+    /// The shader's <c>edgeBlur</c>: 1 / edge.
+    /// </summary>
     public float EdgeBlur => 1f / Edge;
 
-    /// <summary>Whether a point is inside a block's seven planes.</summary>
+    /// <summary>
+    /// Whether a point is inside a block's seven planes.
+    /// </summary>
     public bool Contains(Vector3 p)
     {
         if (Type != FogFeatureType.Block) return false;
@@ -37,8 +47,10 @@ public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour
         return true;
     }
 
-    /// <summary>How far a point lies outside a block: the largest distance past one of its planes (a lower bound of the true distance; 0 inside,
-    /// infinity for a sphere or beam).</summary>
+    /// <summary>
+    /// How far a point lies outside a block: the largest distance past one of its planes (a lower bound of the true distance; 0 inside, infinity for
+    /// a sphere or beam).
+    /// </summary>
     public float DistanceOutside(Vector3 p)
     {
         if (Type != FogFeatureType.Block) return float.PositiveInfinity;
@@ -67,15 +79,19 @@ public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour
                     if (Intersect(Planes[a], Planes[b], Planes[c]) is not { } p) continue;
                     bool inside = true;
                     foreach (var plane in Planes)
-                        if (plane.X * p.X + plane.Y * p.Y + plane.Z * p.Z > plane.W + 0.5f) { inside = false; break; }
+                        if (plane.X * p.X + plane.Y * p.Y + plane.Z * p.Z > plane.W + 0.5f)
+                        {
+                            inside = false;
+                            break;
+                        }
                     if (inside) corners.Add(p);
                 }
         return corners;
     }
 
     /// <summary>
-    /// The x, z extent of a block's cross-section at <paramref name="height"/> (the polygon where all seven planes hold), or null when it is
-    /// empty there. The blocks widen downwards, so the section at the lowest visible height bounds everything of the block that can be seen.
+    /// The x, z extent of a block's cross-section at <paramref name="height"/> (the polygon where all seven planes hold), or null when it is empty
+    /// there. The blocks widen downwards, so the section at the lowest visible height bounds everything of the block that can be seen.
     /// </summary>
     public (Vector2 Min, Vector2 Max)? SectionBounds(float height)
     {
@@ -86,23 +102,34 @@ public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour
         {
             var a = new Vector2(p.X, p.Z);
             float c = p.W - p.Y * height;
-            if (a.LengthSquared() < 1e-12f) { if (c <= 0) return null; continue; }
+            if (a.LengthSquared() < 1e-12f)
+            {
+                if (c <= 0) return null;
+                continue;
+            }
             lines.Add((a, c));
         }
-        var min = new Vector2(float.MaxValue); var max = new Vector2(float.MinValue);
+        var min = new Vector2(float.MaxValue);
+        var max = new Vector2(float.MinValue);
         bool any = false;
         for (int i = 0; i < lines.Count; i++)
             for (int j = i + 1; j < lines.Count; j++)
             {
-                var (a, c) = lines[i]; var (b, d) = lines[j];
+                var (a, c) = lines[i];
+                var (b, d) = lines[j];
                 float det = a.X * b.Y - a.Y * b.X;
                 if (MathF.Abs(det) < 1e-9f) continue;
                 var q = new Vector2((c * b.Y - a.Y * d) / det, (a.X * d - c * b.X) / det);
                 bool inside = true;
                 foreach (var (e, f) in lines)
-                    if (Vector2.Dot(e, q) > f + 0.5f) { inside = false; break; }
+                    if (Vector2.Dot(e, q) > f + 0.5f)
+                    {
+                        inside = false;
+                        break;
+                    }
                 if (!inside) continue;
-                min = Vector2.Min(min, q); max = Vector2.Max(max, q);
+                min = Vector2.Min(min, q);
+                max = Vector2.Max(max, q);
                 any = true;
             }
         return any ? (min, max) : null;
@@ -110,7 +137,9 @@ public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour
 
     static Vector3? Intersect(Vector4 a, Vector4 b, Vector4 c)
     {
-        var na = new Vector3(a.X, a.Y, a.Z); var nb = new Vector3(b.X, b.Y, b.Z); var nc = new Vector3(c.X, c.Y, c.Z);
+        var na = new Vector3(a.X, a.Y, a.Z);
+        var nb = new Vector3(b.X, b.Y, b.Z);
+        var nc = new Vector3(c.X, c.Y, c.Z);
         var bc = Vector3.Cross(nb, nc);
         float det = Vector3.Dot(na, bc);
         if (MathF.Abs(det) < 1e-6f) return null;
@@ -126,7 +155,9 @@ public static class FogFeatures
 {
     public const string RelativePath = "newland/land/fogfeatures.dat";
 
-    /// <summary>The install's file, or an empty list when it has none.</summary>
+    /// <summary>
+    /// The install's file, or an empty list when it has none.
+    /// </summary>
     public static IReadOnlyList<FogFeature> Load(GameInstall install)
     {
         string path = GameFiles.Resolve(Path.Combine(install.DataDirectory, RelativePath));
@@ -134,9 +165,9 @@ public static class FogFeatures
     }
 
     /// <summary>
-    /// Parses the file: magic <c>FF01</c> or <c>FF02</c>, an int32 count, then per volume (FF02 only) a byte-length name, a type byte, RGBA
-    /// colour floats, the density distance, and the type's own fields. Little-endian throughout. Throws on an unknown type (the game would
-    /// lose its place in the file too).
+    /// Parses the file: magic <c>FF01</c> or <c>FF02</c>, an int32 count, then per volume (FF02 only) a byte-length name, a type byte, RGBA colour
+    /// floats, the density distance, and the type's own fields. Little-endian throughout. Throws on an unknown type (the game would lose its place in
+    /// the file too).
     /// </summary>
     public static IReadOnlyList<FogFeature> Read(ReadOnlySpan<byte> data)
     {

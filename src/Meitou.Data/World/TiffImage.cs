@@ -3,9 +3,9 @@ using System.Buffers.Binary;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// Minimal baseline TIFF reader for what the world maps use: one uncompressed greyscale image of 8 or 16
-/// bits per sample, in strips, either byte order. Rows are read on demand, so a 537 MB heightmap never has
-/// to be in memory at once. Layout: TIFF 6.0 (public spec); see docs/formats/terrain.md.
+/// Minimal baseline TIFF reader for what the world maps use: one uncompressed greyscale image of 8 or 16 bits per sample, in strips, either byte
+/// order. Rows are read on demand, so a 537 MB heightmap never has to be in memory at once. Layout: TIFF 6.0 (public spec); see
+/// docs/formats/terrain.md.
 /// </summary>
 public sealed class TiffImage : IDisposable
 {
@@ -37,10 +37,14 @@ public sealed class TiffImage : IDisposable
     public int StripCount => _stripOffsets.Length;
     public int BytesPerRow => Width * (BitsPerSample / 8);
 
-    /// <summary>Every tag of the first image directory, by tag number (including ones this reader ignores).</summary>
+    /// <summary>
+    /// Every tag of the first image directory, by tag number (including ones this reader ignores).
+    /// </summary>
     public IReadOnlyDictionary<int, TiffTag> Tags { get; }
 
-    /// <summary>Byte offset of the first strip's pixel data.</summary>
+    /// <summary>
+    /// Byte offset of the first strip's pixel data.
+    /// </summary>
     public long DataOffset => _stripOffsets[0];
 
     public static TiffImage Open(string path) => Open(File.OpenRead(path), ownsStream: true);
@@ -121,7 +125,8 @@ public sealed class TiffImage : IDisposable
 
     static long[] ReadValues(Stream stream, TiffTag tag, bool le)
     {
-        int size = tag.Type switch { 1 or 2 or 6 or 7 => 1, 3 or 8 => 2, 4 or 9 => 4, _ => throw new NotSupportedException($"TIFF tag {tag.Tag} has unsupported type {tag.Type}.") };
+        int size = tag.Type switch { 1 or 2 or 6 or 7 => 1, 3 or 8 => 2, 4 or 9 => 4,
+        _ => throw new NotSupportedException($"TIFF tag {tag.Tag} has unsupported type {tag.Type}.") };
         long byteCount = size * tag.Count;
         byte[] data;
         if (byteCount <= 4)
@@ -140,7 +145,9 @@ public sealed class TiffImage : IDisposable
         return values;
     }
 
-    /// <summary>Reads one row's raw bytes (in file byte order) into <paramref name="destination"/>.</summary>
+    /// <summary>
+    /// Reads one row's raw bytes (in file byte order) into <paramref name="destination"/>.
+    /// </summary>
     public void ReadRowBytes(int row, Span<byte> destination)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(row);
@@ -149,7 +156,9 @@ public sealed class TiffImage : IDisposable
         _stream.ReadExactly(destination[..BytesPerRow]);
     }
 
-    /// <summary>Reads one row of samples (8-bit samples widen to 0..255).</summary>
+    /// <summary>
+    /// Reads one row of samples (8-bit samples widen to 0..255).
+    /// </summary>
     public void ReadRow(int row, Span<ushort> destination)
     {
         var bytes = new byte[BytesPerRow];
@@ -157,7 +166,9 @@ public sealed class TiffImage : IDisposable
         DecodeRow(bytes, destination);
     }
 
-    /// <summary>Reads the sample at (<paramref name="column"/>, <paramref name="row"/>).</summary>
+    /// <summary>
+    /// Reads the sample at (<paramref name="column"/>, <paramref name="row"/>).
+    /// </summary>
     public ushort ReadSample(int column, int row)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(column);
@@ -171,7 +182,9 @@ public sealed class TiffImage : IDisposable
         return size == 1 ? b[0] : U16(b, LittleEndian);
     }
 
-    /// <summary>Converts raw row bytes (from <see cref="ReadRowBytes"/>) to samples.</summary>
+    /// <summary>
+    /// Converts raw row bytes (from <see cref="ReadRowBytes"/>) to samples.
+    /// </summary>
     public void DecodeRow(ReadOnlySpan<byte> bytes, Span<ushort> destination)
     {
         if (BitsPerSample == 8)
@@ -191,5 +204,7 @@ public sealed class TiffImage : IDisposable
     }
 }
 
-/// <summary>A raw TIFF directory entry. <see cref="RawValue"/> holds the value, or its offset when it doesn't fit in 4 bytes.</summary>
+/// <summary>
+/// A raw TIFF directory entry. <see cref="RawValue"/> holds the value, or its offset when it doesn't fit in 4 bytes.
+/// </summary>
 public sealed record TiffTag(int Tag, int Type, uint Count, byte[] RawValue);

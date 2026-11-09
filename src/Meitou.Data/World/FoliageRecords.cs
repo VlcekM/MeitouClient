@@ -3,15 +3,14 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// FOLIAGE_LAYER <c>visibility range</c> (fcs_enums.def FoliageVisibilityRange). The game's distance is
-/// <see cref="FoliageLayer.Range"/>.
+/// FOLIAGE_LAYER <c>visibility range</c> (fcs_enums.def FoliageVisibilityRange). The game's distance is <see cref="FoliageLayer.Range"/>.
 /// </summary>
 public enum FoliageVisibility { Close, Medium, Far, Feature }
 
 /// <summary>
-/// A FOLIAGE_MESH record as the foliage placer reads it (docs/formats/foliage.md, "Records"). Fields keep their FCS names;
-/// defaults are fcs.def's. <see cref="MinScale"/> / <see cref="MaxScale"/> are the game's scale draw bounds: the record's
-/// <c>min height</c> / <c>max height</c> times 2, clamped to [0.01, 10].
+/// A FOLIAGE_MESH record as the foliage placer reads it (docs/formats/foliage.md, "Records"). Fields keep their FCS names; defaults are fcs.def's.
+/// <see cref="MinScale"/> / <see cref="MaxScale"/> are the game's scale draw bounds: the record's <c>min height</c> / <c>max height</c> times 2,
+/// clamped to [0.01, 10].
 /// </summary>
 public sealed class FoliageMesh
 {
@@ -26,7 +25,9 @@ public sealed class FoliageMesh
     public string? Normal2 { get; init; }
     public string? LeavesTexture { get; init; }
     public string? LeavesNormal { get; init; }
-    /// <summary>MapFeatureMode: 0 UV_MAPPED, 1 TRIPLANAR, 2 TERRAIN, 3 DUAL_TEXTURE, 4 FOLIAGE, 5 DUAL_TRIPLANAR, 6 EMISSIVE.</summary>
+    /// <summary>
+    /// MapFeatureMode: 0 UV_MAPPED, 1 TRIPLANAR, 2 TERRAIN, 3 DUAL_TEXTURE, 4 FOLIAGE, 5 DUAL_TRIPLANAR, 6 EMISSIVE.
+    /// </summary>
     public int MaterialType { get; init; }
     public int AlphaThreshold { get; init; } = 128;
     public int LeavesAlphaThreshold { get; init; } = 80;
@@ -55,17 +56,27 @@ public sealed class FoliageMesh
     public float RoadAvoidance { get; init; } = 10;
     public float GrassSpot { get; init; }
     public float WindFactor { get; init; } = 1;
-    /// <summary>The BUILDING of <c>building type</c> (mineable resources), null for plain foliage.</summary>
+    /// <summary>
+    /// The BUILDING of <c>building type</c> (mineable resources), null for plain foliage.
+    /// </summary>
     public GameRecord? BuildingType { get; init; }
-    /// <summary>Child meshes (<c>meshes</c>) placed around every placed copy of this one.</summary>
+    /// <summary>
+    /// Child meshes (<c>meshes</c>) placed around every placed copy of this one.
+    /// </summary>
     public List<FoliageMesh> Children { get; } = [];
 
-    /// <summary>Lower bound of the scale draw: <c>clamp(2 × min height, 0.01, 10)</c>.</summary>
+    /// <summary>
+    /// Lower bound of the scale draw: <c>clamp(2 × min height, 0.01, 10)</c>.
+    /// </summary>
     public float MinScale => Math.Max(Math.Min(MinHeight * 2, FoliageLayout.MaxScale), FoliageLayout.MinScale);
-    /// <summary>Upper bound of the scale draw: <c>clamp(2 × max height, 0.01, 10)</c>.</summary>
+    /// <summary>
+    /// Upper bound of the scale draw: <c>clamp(2 × max height, 0.01, 10)</c>.
+    /// </summary>
     public float MaxScale => Math.Max(Math.Min(MaxHeight * 2, FoliageLayout.MaxScale), FoliageLayout.MinScale);
 
-    /// <summary>A mesh's material looks: FOLIAGE clips on the normal map's alpha and is double-sided (runtime-materials.md).</summary>
+    /// <summary>
+    /// A mesh's material looks: FOLIAGE clips on the normal map's alpha and is double-sided (runtime-materials.md).
+    /// </summary>
     public bool IsFoliageMaterial => MaterialType == 4;
 
     public static FoliageMesh FromRecord(GameRecord r, GameDatabase db, Dictionary<string, FoliageMesh> cache)
@@ -121,7 +132,9 @@ public sealed class FoliageMesh
     }
 }
 
-/// <summary>A GRASS record (docs/formats/foliage.md, "Grass").</summary>
+/// <summary>
+/// A GRASS record (docs/formats/foliage.md, "Grass").
+/// </summary>
 public sealed class FoliageGrass
 {
     public GameRecord? Record { get; init; }
@@ -147,14 +160,20 @@ public sealed class FoliageGrass
     public float BlackoutNoiseScale { get; init; } = 10;
     public float BlackoutZeroCutoff { get; init; } = 0.57f;
 
-    /// <summary>Quad size bounds the game gives the grass loader: min width/height × 9, max × 17.</summary>
+    /// <summary>
+    /// Quad size bounds the game gives the grass loader: min width/height × 9, max × 17.
+    /// </summary>
     public float QuadMinWidth => MinWidth * 9;
     public float QuadMinHeight => MinHeight * 9;
     public float QuadMaxWidth => MaxWidth * 17;
     public float QuadMaxHeight => MaxHeight * 17;
-    /// <summary>Grass per square unit at full coverage (grass density setting 1): <c>density × 0.005</c>.</summary>
+    /// <summary>
+    /// Grass per square unit at full coverage (grass density setting 1): <c>density × 0.005</c>.
+    /// </summary>
     public float PerSquareUnit => Density * 0.005f;
-    /// <summary>Sway amplitude in units: <c>wind factor × 3</c>.</summary>
+    /// <summary>
+    /// Sway amplitude in units: <c>wind factor × 3</c>.
+    /// </summary>
     public float SwayLength => WindFactor * 3;
 
     public static FoliageGrass FromRecord(GameRecord r)
@@ -188,7 +207,9 @@ public sealed class FoliageGrass
     }
 }
 
-/// <summary>A FOLIAGE_LAYER record: meshes with their count per zone, or grass types with their coverage channel.</summary>
+/// <summary>
+/// A FOLIAGE_LAYER record: meshes with their count per zone, or grass types with their coverage channel.
+/// </summary>
 public sealed class FoliageLayer
 {
     public GameRecord? Record { get; init; }
@@ -198,18 +219,22 @@ public sealed class FoliageLayer
     public List<(FoliageGrass Grass, int Channel)> Grass { get; } = [];
     public bool Wind { get; init; }
     public FoliageVisibility Visibility { get; init; } = FoliageVisibility.Medium;
-    /// <summary><c>lod range</c> × 10 (0 when unset).</summary>
+    /// <summary>
+    /// <c>lod range</c> × 10 (0 when unset).
+    /// </summary>
     public float LodRange { get; init; }
 
     public bool IsGrass => Grass.Count > 0;
 
     /// <summary>
-    /// Distance at which the layer's pages are dropped, at range setting 1: {50, 100, 800, 4000}[visibility] × 10. Grass and
-    /// wind layers use at most FAR.
+    /// Distance at which the layer's pages are dropped, at range setting 1: {50, 100, 800, 4000}[visibility] × 10. Grass and wind layers use at most
+    /// FAR.
     /// </summary>
     public float Range => FoliageLayout.VisibilityRange(IsGrass || Wind ? (FoliageVisibility)Math.Min((int)Visibility, 2) : Visibility);
 
-    /// <summary>Length of the fade between detail levels: 100 units for wind layers, 10 for the others.</summary>
+    /// <summary>
+    /// Length of the fade between detail levels: 100 units for wind layers, 10 for the others.
+    /// </summary>
     public float Transition => Wind ? 100 : 10;
 
     public static FoliageLayer FromRecord(GameRecord r, GameDatabase db, Dictionary<string, FoliageMesh> meshCache)
@@ -233,7 +258,9 @@ public sealed class FoliageLayer
     }
 }
 
-/// <summary>The foliage layers of every biome, by the biome's <c>index</c> colour (BIOMES <c>foliage</c>, in list order).</summary>
+/// <summary>
+/// The foliage layers of every biome, by the biome's <c>index</c> colour (BIOMES <c>foliage</c>, in list order).
+/// </summary>
 public sealed class FoliageCatalog
 {
     public Dictionary<uint, List<FoliageLayer>> ByBiome { get; } = [];
@@ -253,7 +280,8 @@ public sealed class FoliageCatalog
             foreach (var f in b.GetReferences("foliage"))
             {
                 if (db.Find(f.TargetStringId) is not { Type: FcsRecordType.FoliageLayer } lr) continue;
-                if (!c.Layers.TryGetValue(lr.StringId, out var layer)) c.Layers[lr.StringId] = layer = FoliageLayer.FromRecord(lr, db, c.Meshes);
+                if (!c.Layers.TryGetValue(lr.StringId, out var layer))
+                    c.Layers[lr.StringId] = layer = FoliageLayer.FromRecord(lr, db, c.Meshes);
                 list.Add(layer);
             }
             c.ByBiome[index] = list;

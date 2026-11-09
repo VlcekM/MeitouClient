@@ -14,7 +14,9 @@ public sealed partial class SaveFolder
     public const string PlatoonDirectory = "platoon";
     public const string ZoneDirectory = "zone";
     public const string PortraitName = "portraits_texture.png";
-    /// <summary>Meitou's folder of code-mod sidecar files (docs/formats/save.md "Mod data"); the original game's own files never go there.</summary>
+    /// <summary>
+    /// Meitou's folder of code-mod sidecar files (docs/formats/save.md "Mod data"); the original game's own files never go there.
+    /// </summary>
     public const string ModDataDirectory = "meitou-mods";
     const string ModDataExtension = ".dat";
     /// <summary>
@@ -23,7 +25,9 @@ public sealed partial class SaveFolder
     /// </summary>
     public const string ModEnvironmentName = ModDataDirectory + "/environment.json";
 
-    /// <summary>Meitou's own folder of the level editor's session edits (docs/game/level-editor.md "In the game save"); the original ignores it.</summary>
+    /// <summary>
+    /// Meitou's own folder of the level editor's session edits (docs/game/level-editor.md "In the game save"); the original ignores it.
+    /// </summary>
     public const string LevelEditsDirectory = "meitou-level-edits";
 
     const char Backslash = (char)92;
@@ -46,15 +50,21 @@ public sealed partial class SaveFolder
 
     public IReadOnlyList<string> Layers { get; }
 
-    /// <summary>The topmost layer: where a save made from this one goes.</summary>
+    /// <summary>
+    /// The topmost layer: where a save made from this one goes.
+    /// </summary>
     public string TopLayer => Layers[^1];
 
-    /// <summary>Every relative name in the map, ordinal order.</summary>
+    /// <summary>
+    /// Every relative name in the map, ordinal order.
+    /// </summary>
     public IEnumerable<string> Names => _files.Keys.Order(StringComparer.Ordinal);
 
     public bool Exists(string name) => _files.ContainsKey(Normalize(name));
 
-    /// <summary>The full path a name resolves to, or null.</summary>
+    /// <summary>
+    /// The full path a name resolves to, or null.
+    /// </summary>
     public string? Resolve(string name) => _files.GetValueOrDefault(Normalize(name));
 
     public byte[] ReadAllBytes(string name) =>
@@ -66,10 +76,17 @@ public sealed partial class SaveFolder
 
     public SaveFile ReadQuickSave() => ReadFile(QuickSaveName);
 
-    /// <summary>The names of the files in <c>platoon/</c>.</summary>
-    public IEnumerable<string> PlatoonFiles => Names.Where(n => n.StartsWith(PlatoonDirectory + "/", StringComparison.OrdinalIgnoreCase) && n.EndsWith(".platoon", StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// The names of the files in <c>platoon/</c>.
+    /// </summary>
+    public IEnumerable<string> PlatoonFiles => Names.Where(
+        n => n.StartsWith(PlatoonDirectory + "/", StringComparison.OrdinalIgnoreCase)
+        && n.EndsWith(".platoon", StringComparison.OrdinalIgnoreCase)
+    );
 
-    /// <summary>The zones that have a file in <c>zone/</c> (the files, not the CAMERA list: they can differ, which the game warns about).</summary>
+    /// <summary>
+    /// The zones that have a file in <c>zone/</c> (the files, not the CAMERA list: they can differ, which the game warns about).
+    /// </summary>
     public IEnumerable<ZoneCoordinate> ZoneFiles
     {
         get
@@ -81,14 +98,18 @@ public sealed partial class SaveFolder
 
     public static string ModDataName(string modId) => $"{ModDataDirectory}/{modId}{ModDataExtension}";
 
-    /// <summary>The code-mod sidecar files: (mod id, name) for each <c>meitou-mods/&lt;id&gt;.dat</c>.</summary>
+    /// <summary>
+    /// The code-mod sidecar files: (mod id, name) for each <c>meitou-mods/&lt;id&gt;.dat</c>.
+    /// </summary>
     public IEnumerable<(string Id, string Name)> ModDataFiles =>
         Names.Where(IsModDataName).Select(n => (n[(ModDataDirectory.Length + 1)..^ModDataExtension.Length], n));
 
     static bool IsModDataName(string name) =>
         name.StartsWith(ModDataDirectory + "/", StringComparison.Ordinal) && name.EndsWith(ModDataExtension, StringComparison.Ordinal)
         && name.IndexOf('/', ModDataDirectory.Length + 1) < 0;
-    /// <summary>The zones that have a level-edits file (<see cref="LevelEditsDirectory"/>), with the file's name.</summary>
+    /// <summary>
+    /// The zones that have a level-edits file (<see cref="LevelEditsDirectory"/>), with the file's name.
+    /// </summary>
     public IEnumerable<(ZoneCoordinate Zone, string Name)> LevelEditFiles
     {
         get

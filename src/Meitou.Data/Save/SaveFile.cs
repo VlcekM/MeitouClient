@@ -5,14 +5,18 @@ namespace Meitou.Data.Save;
 
 /// <summary>
 /// One file of a save folder (<c>quick.save</c>, <c>*.platoon</c>, <c>*.zone</c>): an FCS file of type 15 followed by the slot lists
-/// (docs/formats/save.md "Object handles and slot lists"). A list is an int32 count and that many ascending int32; <c>quick.save</c> has four,
-/// a zone file one, a platoon file none. Strings are read losslessly (<see cref="Fcs.LosslessUtf8"/>). The game writes every file as type 15, except that a V17 header-carrying platoon file was seen in a quicksave folder (docs/formats/save.md), so any FCS file type is accepted. Reading and writing again gives the same bytes.
+/// (docs/formats/save.md "Object handles and slot lists"). A list is an int32 count and that many ascending int32; <c>quick.save</c> has four, a zone
+/// file one, a platoon file none. Strings are read losslessly (<see cref="Fcs.LosslessUtf8"/>). The game writes every file as type 15, except that a
+/// V17 header-carrying platoon file was seen in a quicksave folder (docs/formats/save.md), so any FCS file type is accepted. Reading and writing
+/// again gives the same bytes.
 /// </summary>
 public sealed class SaveFile
 {
     public FcsFile Data { get; init; } = new() { FileType = FcsFileType.V15 };
 
-    /// <summary>The slot lists after the records, in file order.</summary>
+    /// <summary>
+    /// The slot lists after the records, in file order.
+    /// </summary>
     public List<int[]> SlotLists { get; } = [];
 
     public List<FcsRecord> Records => Data.Records;

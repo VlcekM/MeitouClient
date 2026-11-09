@@ -3,20 +3,26 @@ using System.Numerics;
 namespace Meitou.Data.Physics;
 
 /// <summary>
-/// Turns a collision shape into triangles the way the original's navmesh generator does (docs/formats/collision.md, "Shape to triangles"):
-/// a box is its 8 corners and 12 triangles, a capsule a 16-sided prism around its local Y axis (radius r, half length h/2 + r, no caps
-/// rounding), a convex mesh its hull, a triangle mesh its triangles; planes and spheres give nothing. The result is in the exporter's
-/// space (Z up) with the shape's pose applied; <see cref="ToWorldAxes"/> maps it to Kenshi's Y-up space.
+/// Turns a collision shape into triangles the way the original's navmesh generator does (docs/formats/collision.md, "Shape to triangles"): a box is
+/// its 8 corners and 12 triangles, a capsule a 16-sided prism around its local Y axis (radius r, half length h/2 + r, no caps rounding), a convex
+/// mesh its hull, a triangle mesh its triangles; planes and spheres give nothing. The result is in the exporter's space (Z up) with the shape's pose
+/// applied; <see cref="ToWorldAxes"/> maps it to Kenshi's Y-up space.
 /// </summary>
 public static class CollisionTriangulator
 {
-    /// <summary>Sides of the capsule prism.</summary>
+    /// <summary>
+    /// Sides of the capsule prism.
+    /// </summary>
     public const int CapsuleSides = 16;
 
-    /// <summary>Exporter space to Ogre/Kenshi space: (x, y, z) → (x, z, −y), a −90° rotation about X.</summary>
+    /// <summary>
+    /// Exporter space to Ogre/Kenshi space: (x, y, z) → (x, z, −y), a −90° rotation about X.
+    /// </summary>
     public static Vector3 ToWorldAxes(Vector3 p) => new(p.X, p.Z, -p.Y);
 
-    /// <summary>Appends the shape's triangles (outward-facing under <c>cross(v1 - v0, v2 - v0)</c>) to the lists. Returns the number of triangles added.</summary>
+    /// <summary>
+    /// Appends the shape's triangles (outward-facing under <c>cross(v1 - v0, v2 - v0)</c>) to the lists. Returns the number of triangles added.
+    /// </summary>
     public static int Triangulate(CollisionShape shape, List<Vector3> vertices, List<int> indices)
     {
         int before = indices.Count;
@@ -56,8 +62,16 @@ public static class CollisionTriangulator
     static void Add(List<int> indices, int a, int b, int c, bool flip)
     {
         indices.Add(a);
-        if (flip) { indices.Add(c); indices.Add(b); }
-        else { indices.Add(b); indices.Add(c); }
+        if (flip)
+        {
+            indices.Add(c);
+            indices.Add(b);
+        }
+        else
+        {
+            indices.Add(b);
+            indices.Add(c);
+        }
     }
 
     static void AddBox(Vector3 h, Pose pose, bool flip, List<Vector3> vertices, List<int> indices)

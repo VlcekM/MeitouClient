@@ -1,9 +1,9 @@
 namespace Meitou.Data.Textures;
 
 /// <summary>
-/// Block-compressed (BC1 / BC3) texture data without decoding it: conversions between the two colour layouts and a small
-/// encoder. Used where one GPU array must hold textures that were stored in different formats (the terrain layer arrays,
-/// docs/render-terrain.md). Block layouts are in docs/formats/dds.md.
+/// Block-compressed (BC1 / BC3) texture data without decoding it: conversions between the two colour layouts and a small encoder. Used where one GPU
+/// array must hold textures that were stored in different formats (the terrain layer arrays, docs/render-terrain.md). Block layouts are in
+/// docs/formats/dds.md.
 /// </summary>
 public static class BlockCompression
 {
@@ -13,9 +13,9 @@ public static class BlockCompression
     public static int Bc3Size(int width, int height) => (width + 3) / 4 * ((height + 3) / 4) * 16;
 
     /// <summary>
-    /// BC1 blocks as BC3 blocks with the same pixels. A BC1 block in its 3-colour mode (first endpoint not above the second;
-    /// the fourth colour is transparent black) keeps its alpha exactly (alpha 0 where it was transparent) but has no exact
-    /// BC3 colour for the midpoint, which gets the nearer of BC3's two interpolated colours.
+    /// BC1 blocks as BC3 blocks with the same pixels. A BC1 block in its 3-colour mode (first endpoint not above the second; the fourth colour is
+    /// transparent black) keeps its alpha exactly (alpha 0 where it was transparent) but has no exact BC3 colour for the midpoint, which gets the
+    /// nearer of BC3's two interpolated colours.
     /// </summary>
     public static byte[] Bc1ToBc3(ReadOnlySpan<byte> bc1)
     {
@@ -49,9 +49,8 @@ public static class BlockCompression
     }
 
     /// <summary>
-    /// BC3 blocks reduced to their colour half as BC1 blocks (alpha dropped). BC3 always has four colours; a block whose
-    /// first endpoint is not above the second would be read in BC1's 3-colour mode, so its endpoints are swapped (and the
-    /// indices with them) to keep the colours.
+    /// BC3 blocks reduced to their colour half as BC1 blocks (alpha dropped). BC3 always has four colours; a block whose first endpoint is not above
+    /// the second would be read in BC1's 3-colour mode, so its endpoints are swapped (and the indices with them) to keep the colours.
     /// </summary>
     public static byte[] Bc3ToBc1(ReadOnlySpan<byte> bc3)
     {
@@ -62,7 +61,11 @@ public static class BlockCompression
             var src = bc3.Slice(b * 16 + 8, 8);
             var dst = result.AsSpan(b * 8, 8);
             ushort c0 = (ushort)(src[0] | src[1] << 8), c1 = (ushort)(src[2] | src[3] << 8);
-            if (c0 > c1) { src.CopyTo(dst); continue; }
+            if (c0 > c1)
+            {
+                src.CopyTo(dst);
+                continue;
+            }
             uint indices = (uint)(src[4] | src[5] << 8 | src[6] << 16 | src[7] << 24), mapped = 0;
             for (int i = 0; i < 16; i++)
             {
@@ -75,10 +78,14 @@ public static class BlockCompression
         return result;
     }
 
-    /// <summary>Encodes RGBA8 pixels as BC1 (alpha ignored, four-colour blocks).</summary>
+    /// <summary>
+    /// Encodes RGBA8 pixels as BC1 (alpha ignored, four-colour blocks).
+    /// </summary>
     public static byte[] EncodeBc1(ReadOnlySpan<byte> rgba, int width, int height) => Encode(rgba, width, height, alpha: false);
 
-    /// <summary>Encodes RGBA8 pixels as BC3.</summary>
+    /// <summary>
+    /// Encodes RGBA8 pixels as BC3.
+    /// </summary>
     public static byte[] EncodeBc3(ReadOnlySpan<byte> rgba, int width, int height) => Encode(rgba, width, height, alpha: true);
 
     static byte[] Encode(ReadOnlySpan<byte> rgbaSpan, int width, int height, bool alpha)
@@ -105,7 +112,9 @@ public static class BlockCompression
         return result;
     }
 
-    /// <summary>Endpoints from the colour bounding box (pulled in by 1/16 of its extent), indices to the nearest of the four palette colours.</summary>
+    /// <summary>
+    /// Endpoints from the colour bounding box (pulled in by 1/16 of its extent), indices to the nearest of the four palette colours.
+    /// </summary>
     static void EncodeColour(ReadOnlySpan<byte> px, Span<byte> dst)
     {
         Span<int> lo = [255, 255, 255], hi = [0, 0, 0];
@@ -144,11 +153,16 @@ public static class BlockCompression
                 }
                 indices |= (uint)best << (2 * i);
             }
-        dst[0] = (byte)e0; dst[1] = (byte)(e0 >> 8); dst[2] = (byte)e1; dst[3] = (byte)(e1 >> 8);
+        dst[0] = (byte)e0;
+        dst[1] = (byte)(e0 >> 8);
+        dst[2] = (byte)e1;
+        dst[3] = (byte)(e1 >> 8);
         for (int i = 0; i < 4; i++) dst[4 + i] = (byte)(indices >> (8 * i));
     }
 
-    /// <summary>Alpha from the block's minimum and maximum (eight-value mode), indices to the nearest of the eight values.</summary>
+    /// <summary>
+    /// Alpha from the block's minimum and maximum (eight-value mode), indices to the nearest of the eight values.
+    /// </summary>
     static void EncodeAlpha(ReadOnlySpan<byte> px, Span<byte> dst)
     {
         int lo = 255, hi = 0;
@@ -158,7 +172,8 @@ public static class BlockCompression
         dst[1] = (byte)lo;
         if (hi == lo) return;
         Span<int> values = stackalloc int[8];
-        values[0] = hi; values[1] = lo;
+        values[0] = hi;
+        values[1] = lo;
         for (int k = 1; k <= 6; k++) values[1 + k] = ((7 - k) * hi + k * lo + 3) / 7;
         ulong indices = 0;
         for (int i = 0; i < 16; i++)

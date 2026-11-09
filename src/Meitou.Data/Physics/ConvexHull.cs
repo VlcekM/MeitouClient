@@ -3,8 +3,8 @@ using System.Numerics;
 namespace Meitou.Data.Physics;
 
 /// <summary>
-/// Incremental 3D convex hull for the small point sets of cooked convex meshes (tens of vertices). Triangles come out with
-/// outward normals under <c>cross(v1 - v0, v2 - v0)</c>.
+/// Incremental 3D convex hull for the small point sets of cooked convex meshes (tens of vertices). Triangles come out with outward normals under
+/// <c>cross(v1 - v0, v2 - v0)</c>.
 /// </summary>
 public static class ConvexHull
 {
@@ -16,7 +16,9 @@ public static class ConvexHull
         public bool Dead;
     }
 
-    /// <summary>The hull's triangles as indices into <paramref name="points"/>; empty when the points are (nearly) flat, collinear or fewer than four.</summary>
+    /// <summary>
+    /// The hull's triangles as indices into <paramref name="points"/>; empty when the points are (nearly) flat, collinear or fewer than four.
+    /// </summary>
     public static int[] Triangles(Vector3[] points, float epsilon = 1e-3f)
     {
         int n = points.Length;
@@ -35,7 +37,11 @@ public static class ConvexHull
         for (int i = 0; i < n; i++)
         {
             float d = Vector3.Cross(points[i1] - points[i0], points[i] - points[i0]).LengthSquared();
-            if (d > best) { best = d; i2 = i; }
+            if (d > best)
+            {
+                best = d;
+                i2 = i;
+            }
         }
         if (best < epsilon * epsilon) return [];
         var baseNormal = Vector3.Normalize(Vector3.Cross(points[i1] - points[i0], points[i2] - points[i0]));
@@ -44,7 +50,11 @@ public static class ConvexHull
         for (int i = 0; i < n; i++)
         {
             float d = MathF.Abs(Vector3.Dot(points[i] - points[i0], baseNormal));
-            if (d > best) { best = d; i3 = i; }
+            if (d > best)
+            {
+                best = d;
+                i3 = i;
+            }
         }
         if (best < epsilon) return [];
 
@@ -57,7 +67,12 @@ public static class ConvexHull
             if (len < 1e-9f) return;
             normal /= len;
             float d = Vector3.Dot(normal, points[a]);
-            if (Vector3.Dot(normal, inside) - d > 0) { (b, c) = (c, b); normal = -normal; d = -d; }
+            if (Vector3.Dot(normal, inside) - d > 0)
+            {
+                (b, c) = (c, b);
+                normal = -normal;
+                d = -d;
+            }
             faces.Add(new Face { A = a, B = b, C = c, Normal = normal, D = d });
         }
         AddFace(i0, i1, i2, centre);
@@ -73,14 +88,20 @@ public static class ConvexHull
             var pt = points[p];
             bool any = false;
             foreach (var f in faces)
-                if (!f.Dead && Vector3.Dot(f.Normal, pt) - f.D > epsilon) { f.Dead = true; any = true; }
+                if (!f.Dead && Vector3.Dot(f.Normal, pt) - f.D > epsilon)
+                {
+                    f.Dead = true;
+                    any = true;
+                }
             if (!any) continue;
             // Horizon: directed edges of dead faces whose reverse is not an edge of another dead face.
             horizon.Clear();
             foreach (var f in faces)
             {
                 if (!f.Dead) continue;
-                Edge(f.A, f.B); Edge(f.B, f.C); Edge(f.C, f.A);
+                Edge(f.A, f.B);
+                Edge(f.B, f.C);
+                Edge(f.C, f.A);
             }
             faces.RemoveAll(f => f.Dead);
             foreach (var ((a, b), _) in horizon)

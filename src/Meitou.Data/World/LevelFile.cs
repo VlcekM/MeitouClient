@@ -4,35 +4,38 @@ using Meitou.Data.Fcs;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// A world-state file: <c>zone.X.Y.zone</c> or <c>*.level</c> (docs/formats/zones.md). These are FCS
-/// game-data files (records of the GAMESTATE_* types, instance collections, roads), followed in most files by
-/// a list of int32 values whose meaning is unknown. Formats 15 and 16 are read by <see cref="FcsReader"/> and
-/// round-trip byte for byte; the legacy formats 10 and 13 (only under <c>data/leveldata/</c>) are read by an
-/// own reader and can't be written back.
+/// A world-state file: <c>zone.X.Y.zone</c> or <c>*.level</c> (docs/formats/zones.md). These are FCS game-data files (records of the GAMESTATE_*
+/// types, instance collections, roads), followed in most files by a list of int32 values whose meaning is unknown. Formats 15 and 16 are read by
+/// <see cref="FcsReader"/> and round-trip byte for byte; the legacy formats 10 and 13 (only under <c>data/leveldata/</c>) are read by an own reader
+/// and can't be written back.
 /// </summary>
 public sealed class LevelFile
 {
-    /// <summary>FCS file type number from the first int32: 10, 13, 15 or 16 in the base game (17 is accepted too).</summary>
+    /// <summary>
+    /// FCS file type number from the first int32: 10, 13, 15 or 16 in the base game (17 is accepted too).
+    /// </summary>
     public int Format { get; init; }
 
     /// <summary>
-    /// Header and records. For legacy formats <see cref="FcsFile.FileType"/> is meaningless (kept at its
-    /// default), records have <see cref="FcsRecord.Flags"/> 0, and int ids are stored as decimal strings.
+    /// Header and records. For legacy formats <see cref="FcsFile.FileType"/> is meaningless (kept at its default), records have
+    /// <see cref="FcsRecord.Flags"/> 0, and int ids are stored as decimal strings.
     /// </summary>
     public required FcsFile Data { get; init; }
 
     /// <summary>
-    /// The trailing list after the records, flattened, or null if the file ends after them. Stored as int32
-    /// <c>count</c>, then <c>count</c> entries of <see cref="TrailerEntryInts"/> int32 values each.
+    /// The trailing list after the records, flattened, or null if the file ends after them. Stored as int32 <c>count</c>, then <c>count</c> entries
+    /// of <see cref="TrailerEntryInts"/> int32 values each.
     /// </summary>
     public int[]? Trailer { get; set; }
 
-    /// <summary>Int32 values per trailer entry: 1 in formats 15 and 16, 2 in the legacy format 13 files.</summary>
+    /// <summary>
+    /// Int32 values per trailer entry: 1 in formats 15 and 16, 2 in the legacy format 13 files.
+    /// </summary>
     public int TrailerEntryInts { get; set; } = 1;
 
     /// <summary>
-    /// Format 11–14 only: each record's list of (key, included) tags that the editor uses to pick which fields
-    /// a mod changes. Indexed like <see cref="FcsFile.Records"/>; null for other formats.
+    /// Format 11–14 only: each record's list of (key, included) tags that the editor uses to pick which fields a mod changes. Indexed like
+    /// <see cref="FcsFile.Records"/>; null for other formats.
     /// </summary>
     public List<List<KeyValuePair<string, bool>>>? LegacyFieldTags { get; init; }
 
@@ -74,7 +77,9 @@ public sealed class LevelFile
         return (values, entryInts);
     }
 
-    /// <summary>Writes formats 15 and 16 in the same layout they were read from.</summary>
+    /// <summary>
+    /// Writes formats 15 and 16 in the same layout they were read from.
+    /// </summary>
     public void Write(Stream stream)
     {
         if (IsLegacy)
@@ -98,9 +103,8 @@ public sealed class LevelFile
     }
 
     /// <summary>
-    /// Reader for FCS formats 8–14, following the editor's handling of old files (FCS <c>GameData.load</c> and
-    /// <c>Item.load</c>; facts in docs/formats/zones.md): no file header, no record flags, a field tag list from
-    /// format 11, int32 instance and state ids instead of strings.
+    /// Reader for FCS formats 8–14, following the editor's handling of old files (FCS <c>GameData.load</c> and <c>Item.load</c>; facts in
+    /// docs/formats/zones.md): no file header, no record flags, a field tag list from format 11, int32 instance and state ids instead of strings.
     /// </summary>
     static class LegacyReader
     {

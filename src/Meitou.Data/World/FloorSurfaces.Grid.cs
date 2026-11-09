@@ -5,16 +5,20 @@ namespace Meitou.Data.World;
 public sealed partial class FloorSurfaces
 {
     /// <summary>
-    /// A surface's triangles binned on an X/Z grid over its box (engine choice): a point query tests only the triangles whose box, slightly widened, holds the point's cell,
-    /// in their order in the surface, so it finds what testing them all would. Every character inside a building asks its floor and cover whenever it moves, and a large
-    /// building's floor part holds thousands of triangles.
+    /// A surface's triangles binned on an X/Z grid over its box (engine choice): a point query tests only the triangles whose box, slightly widened,
+    /// holds the point's cell, in their order in the surface, so it finds what testing them all would. Every character inside a building asks its
+    /// floor and cover whenever it moves, and a large building's floor part holds thousands of triangles.
     /// </summary>
     sealed class TriangleGrid
     {
-        /// <summary>The most cells along a side.</summary>
+        /// <summary>
+        /// The most cells along a side.
+        /// </summary>
         const int MaxSide = 128;
 
-        /// <summary>The most entries per triangle on average before the grid is made coarser (large triangles sit in many cells).</summary>
+        /// <summary>
+        /// The most entries per triangle on average before the grid is made coarser (large triangles sit in many cells).
+        /// </summary>
         const int MaxEntriesPerTriangle = 16;
 
         readonly Vector2 _min;
@@ -44,7 +48,9 @@ public sealed partial class FloorSurfaces
 
         static int Side(float extent, float cell) => Math.Clamp((int)MathF.Ceiling(extent / cell), 1, MaxSide);
 
-        /// <summary>The first corner's index of every triangle that may hold <paramref name="q"/> (X/Z), in surface order.</summary>
+        /// <summary>
+        /// The first corner's index of every triangle that may hold <paramref name="q"/> (X/Z), in surface order.
+        /// </summary>
         public ReadOnlySpan<int> At(Vector2 q)
         {
             int c = Cell(q.Y, _min.Y, _perZ, _nz) * _nx + Cell(q.X, _min.X, _perX, _nx);
@@ -53,7 +59,9 @@ public sealed partial class FloorSurfaces
 
         static int Cell(float v, float origin, float per, int n) => Math.Clamp((int)((v - origin) * per), 0, n - 1);
 
-        /// <summary>Counts each cell's triangles into <see cref="_start"/> (shifted by one) and returns the total.</summary>
+        /// <summary>
+        /// Counts each cell's triangles into <see cref="_start"/> (shifted by one) and returns the total.
+        /// </summary>
         int Count(Vector3[] corners)
         {
             int total = 0;
@@ -68,7 +76,9 @@ public sealed partial class FloorSurfaces
             return total;
         }
 
-        /// <summary>Turns the counts into offsets and lists each cell's triangles in surface order.</summary>
+        /// <summary>
+        /// Turns the counts into offsets and lists each cell's triangles in surface order.
+        /// </summary>
         int[] Fill(Vector3[] corners)
         {
             for (int c = 0; c < _nx * _nz; c++) _start[c + 1] += _start[c];
@@ -85,8 +95,8 @@ public sealed partial class FloorSurfaces
         }
 
         /// <summary>
-        /// The cells of triangle <paramref name="i"/>'s X/Z box, widened past the slack the point tests allow at the edges (<see cref="HeightAt"/>, <see cref="RayTriangle"/>:
-        /// a barycentric 1e-4 of the triangle's size).
+        /// The cells of triangle <paramref name="i"/>'s X/Z box, widened past the slack the point tests allow at the edges (<see cref="HeightAt"/>,
+        /// <see cref="RayTriangle"/>: a barycentric 1e-4 of the triangle's size).
         /// </summary>
         (int X0, int X1, int Z0, int Z1) Cells(Vector3[] corners, int i)
         {
@@ -94,7 +104,12 @@ public sealed partial class FloorSurfaces
             var lo = new Vector2(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
             var hi = new Vector2(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
             float pad = 1e-3f * MathF.Max(hi.X - lo.X, hi.Y - lo.Y) + 1e-2f;
-            return (Cell(lo.X - pad, _min.X, _perX, _nx), Cell(hi.X + pad, _min.X, _perX, _nx), Cell(lo.Y - pad, _min.Y, _perZ, _nz), Cell(hi.Y + pad, _min.Y, _perZ, _nz));
+            return (
+                Cell(lo.X - pad, _min.X, _perX, _nx),
+                Cell(hi.X + pad, _min.X, _perX, _nx),
+                Cell(lo.Y - pad, _min.Y, _perZ, _nz),
+                Cell(hi.Y + pad, _min.Y, _perZ, _nz)
+            );
         }
     }
 }

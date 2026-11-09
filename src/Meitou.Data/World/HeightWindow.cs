@@ -3,9 +3,9 @@ using System.Numerics;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// A rectangular window of heightmap samples in memory, taken every <see cref="Step"/>-th sample. Window
-/// point (i, j) is heightmap sample (<see cref="Column0"/> + i·step, <see cref="Row0"/> + j·step); samples past
-/// the heightmap's edge repeat the edge. Column follows world +X, row world +Z (docs/formats/terrain.md).
+/// A rectangular window of heightmap samples in memory, taken every <see cref="Step"/>-th sample. Window point (i, j) is heightmap sample
+/// (<see cref="Column0"/> + i·step, <see cref="Row0"/> + j·step); samples past the heightmap's edge repeat the edge. Column follows world +X, row
+/// world +Z (docs/formats/terrain.md).
 /// </summary>
 public sealed class HeightWindow
 {
@@ -16,24 +16,36 @@ public sealed class HeightWindow
         (Column0, Row0, Step, Columns, Rows, Raw) = (column0, row0, step, columns, rows, raw);
     }
 
-    /// <summary>Heightmap column and row of window point (0, 0); may lie outside the heightmap.</summary>
+    /// <summary>
+    /// Heightmap column and row of window point (0, 0); may lie outside the heightmap.
+    /// </summary>
     public int Column0 { get; }
     public int Row0 { get; }
-    /// <summary>Heightmap samples between neighbouring window points.</summary>
+    /// <summary>
+    /// Heightmap samples between neighbouring window points.
+    /// </summary>
     public int Step { get; }
     public int Columns { get; }
     public int Rows { get; }
-    /// <summary>Raw samples, row-major.</summary>
+    /// <summary>
+    /// Raw samples, row-major.
+    /// </summary>
     public ushort[] Raw { get; }
 
-    /// <summary>World units between neighbouring window points.</summary>
+    /// <summary>
+    /// World units between neighbouring window points.
+    /// </summary>
     public float Spacing => Step * WorldLayout.SampleSpacing;
 
-    /// <summary>World height at window point (i, j), clamped to the window.</summary>
+    /// <summary>
+    /// World height at window point (i, j), clamped to the window.
+    /// </summary>
     public float Height(int i, int j) =>
         WorldLayout.RawToHeight(Raw[Math.Clamp(j, 0, Rows - 1) * Columns + Math.Clamp(i, 0, Columns - 1)]);
 
-    /// <summary>The height at world X/Z interpolated bilinearly between the window's points; false outside the window.</summary>
+    /// <summary>
+    /// The height at world X/Z interpolated bilinearly between the window's points; false outside the window.
+    /// </summary>
     public bool TryHeightAt(double x, double z, out float height)
     {
         var (col, row) = WorldLayout.ToSample(x, z);
@@ -42,14 +54,21 @@ public sealed class HeightWindow
         if (u < 0 || v < 0 || u > Columns - 1 || v > Rows - 1) return false;
         int i = Math.Min((int)u, Columns - 2), j = Math.Min((int)v, Rows - 2);
         double fu = u - i, fv = v - j;
-        height = (float)(Height(i, j) * (1 - fu) * (1 - fv) + Height(i + 1, j) * fu * (1 - fv) + Height(i, j + 1) * (1 - fu) * fv + Height(i + 1, j + 1) * fu * fv);
+        height = (float)(Height(
+            i,
+            j
+        ) * (1 - fu) * (1 - fv) + Height(i + 1, j) * fu * (1 - fv) + Height(i, j + 1) * (1 - fu) * fv + Height(i + 1, j + 1) * fu * fv);
         return true;
     }
 
-    /// <summary>World X/Z of window point (i, j).</summary>
+    /// <summary>
+    /// World X/Z of window point (i, j).
+    /// </summary>
     public (double X, double Z) WorldOf(int i, int j) => WorldLayout.FromSample(Column0 + (double)i * Step, Row0 + (double)j * Step);
 
-    /// <summary>World position of window point (i, j).</summary>
+    /// <summary>
+    /// World position of window point (i, j).
+    /// </summary>
     public Vector3 Position(int i, int j)
     {
         var (x, z) = WorldOf(i, j);
@@ -57,8 +76,8 @@ public sealed class HeightWindow
     }
 
     /// <summary>
-    /// Surface normal at window point (i, j) from central differences of the window's own heights (one-sided at
-    /// the window edge). For y = h(x, z) the normal is (−∂h/∂x, 1, −∂h/∂z), normalised.
+    /// Surface normal at window point (i, j) from central differences of the window's own heights (one-sided at the window edge). For y = h(x, z) the
+    /// normal is (−∂h/∂x, 1, −∂h/∂z), normalised.
     /// </summary>
     public Vector3 Normal(int i, int j)
     {

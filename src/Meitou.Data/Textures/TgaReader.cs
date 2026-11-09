@@ -13,7 +13,10 @@ public static class TgaReader
         int colourMapLength = file[5] | file[6] << 8, colourMapBits = file[7];
         int width = file[12] | file[13] << 8, height = file[14] | file[15] << 8, bits = file[16];
         bool topDown = (file[17] & 0x20) != 0;
-        if (colourMapType != 0 || imageType is not (2 or 10)) throw new NotSupportedException($"TGA image type {imageType} (colour map {colourMapType}) is not supported.");
+        if (
+            colourMapType != 0
+            || imageType is not (2 or 10)
+        ) throw new NotSupportedException($"TGA image type {imageType} (colour map {colourMapType}) is not supported.");
         if (bits is not (24 or 32)) throw new NotSupportedException($"TGA with {bits} bits per pixel is not supported.");
         if (width == 0 || height == 0) throw new FormatException("TGA has no pixels.");
         int bytesPerPixel = bits / 8;
@@ -23,7 +26,8 @@ public static class TgaReader
             file = Unpack(file[start..], width * height, bytesPerPixel);
             start = 0;
         }
-        if (file.Length < start + (long)width * height * bytesPerPixel) throw new FormatException("TGA pixel data is truncated.");
+        if (file.Length < start + (long)width * height * bytesPerPixel)
+            throw new FormatException("TGA pixel data is truncated.");
 
         var pixels = new byte[width * height * 4];
         for (int y = 0; y < height; y++)
@@ -41,8 +45,10 @@ public static class TgaReader
         return new RgbaImage(width, height, pixels);
     }
 
-    /// <summary>The <paramref name="count"/> pixels of run-length packets: a header byte whose top bit marks a run of one pixel repeated, or else
-    /// raw pixels, (low 7 bits + 1) of them.</summary>
+    /// <summary>
+    /// The <paramref name="count"/> pixels of run-length packets: a header byte whose top bit marks a run of one pixel repeated, or else raw pixels,
+    /// (low 7 bits + 1) of them.
+    /// </summary>
     static byte[] Unpack(ReadOnlySpan<byte> packed, int count, int bytesPerPixel)
     {
         var pixels = new byte[count * bytesPerPixel];
@@ -54,7 +60,8 @@ public static class TgaReader
             int bytes = Math.Min(n * bytesPerPixel, pixels.Length - written);
             if ((header & 0x80) != 0)
             {
-                if (read + bytesPerPixel > packed.Length) throw new FormatException("TGA run-length data is truncated.");
+                if (read + bytesPerPixel > packed.Length)
+                    throw new FormatException("TGA run-length data is truncated.");
                 for (int i = 0; i < bytes; i++) pixels[written + i] = packed[read + i % bytesPerPixel];
                 read += bytesPerPixel;
             }

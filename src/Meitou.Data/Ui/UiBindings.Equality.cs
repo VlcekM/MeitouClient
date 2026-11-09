@@ -3,15 +3,19 @@ namespace Meitou.Data.Ui;
 public sealed partial class UiBindings
 {
     /// <summary>
-    /// Whether <paramref name="other"/> binds the same data, so that <see cref="MyGuiPresentation.Arrange"/> makes the same controls from it (a host reuses the last arrangement then).
-    /// Every member counts; a member added to the bindings must be compared here too. <see cref="TextHeight"/> is compared by identity.
+    /// Whether <paramref name="other"/> binds the same data, so that <see cref="MyGuiPresentation.Arrange"/> makes the same controls from it (a host
+    /// reuses the last arrangement then). Every member counts; a member added to the bindings must be compared here too. <see cref="TextHeight"/> is
+    /// compared by identity.
     /// </summary>
     public bool ContentEquals(UiBindings other) =>
         TemplateScale == other.TemplateScale && OpenCombo == other.OpenCombo && TextHeight == other.TextHeight
         && Same(Text, other.Text) && Same(Actions, other.Actions) && Hidden.SetEquals(other.Hidden) && Disabled.SetEquals(other.Disabled)
         && HiddenWidgets.SetEquals(other.HiddenWidgets) && Same(Positions, other.Positions) && Same(RelativePositions, other.RelativePositions)
         && Same(SelectedTabs, other.SelectedTabs) && Same(Progress, other.Progress) && Same(States, other.States)
-        && Same(SelectedItems, other.SelectedItems) && Same(ScrollOffsets, other.ScrollOffsets) && Same(Sorts, other.Sorts) && Same(Canvas, other.Canvas)
+        && Same(
+            SelectedItems,
+            other.SelectedItems
+        ) && Same(ScrollOffsets, other.ScrollOffsets) && Same(Sorts, other.Sorts) && Same(Canvas, other.Canvas)
         && NativeScroll.SetEquals(other.NativeScroll)
         && Same(TabCaptions, other.TabCaptions, (a, b) => a.SequenceEqual(b))
         && Same(Columns, other.Columns, (a, b) => a.SequenceEqual(b))

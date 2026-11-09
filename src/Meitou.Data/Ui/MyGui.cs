@@ -6,7 +6,9 @@ namespace Meitou.Data.Ui;
 
 public enum UiMode { Faithful, Meitou }
 
-/// <summary>Top-left coordinates, in pixels or fractions of the parent.</summary>
+/// <summary>
+/// Top-left coordinates, in pixels or fractions of the parent.
+/// </summary>
 public readonly record struct UiRect(float X, float Y, float Width, float Height)
 {
     public UiRect Intersect(UiRect other)
@@ -28,7 +30,9 @@ public readonly record struct UiRect(float X, float Y, float Width, float Height
         return new(n[0], n[1], n[2], n[3]);
     }
 
-    /// <summary>Align a skin piece when its reference canvas is resized.</summary>
+    /// <summary>
+    /// Align a skin piece when its reference canvas is resized.
+    /// </summary>
     public UiRect AlignTo(UiRect parent, float referenceWidth, float referenceHeight, string align)
     {
         var flags = Flags(align);
@@ -73,14 +77,18 @@ public sealed record MyGuiWidget(string Type, string Name, string Skin, string L
 
 public sealed record MyGuiLayout(string Version, IReadOnlyList<MyGuiWidget> Roots)
 {
-    /// <summary>Every widget, each before its children (depth first).</summary>
+    /// <summary>
+    /// Every widget, each before its children (depth first).
+    /// </summary>
     public IReadOnlyList<MyGuiWidget> Widgets => Index().All;
-    /// <summary>The first widget of <see cref="Widgets"/> named <paramref name="name"/>.</summary>
+    /// <summary>
+    /// The first widget of <see cref="Widgets"/> named <paramref name="name"/>.
+    /// </summary>
     public MyGuiWidget? Find(string name) => Index().ByName.GetValueOrDefault(name);
 
     /// <summary>
-    /// The flattened tree, made once per tree (the HUD asks it every frame). Kept by the roots list rather than in a field, which a <c>with</c> copy would carry over
-    /// to other roots and which would take part in the record's equality.
+    /// The flattened tree, made once per tree (the HUD asks it every frame). Kept by the roots list rather than in a field, which a <c>with</c> copy
+    /// would carry over to other roots and which would take part in the record's equality.
     /// </summary>
     static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IReadOnlyList<MyGuiWidget>, WidgetIndex> Indexes = new();
     WidgetIndex Index() => Indexes.GetValue(Roots, static roots => new WidgetIndex(roots));
@@ -101,7 +109,9 @@ public sealed record MyGuiSkinPart(string Type, UiRect Offset, string Align, IRe
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? StateProperties = null);
 public sealed record MyGuiSkin(string Name, float Width, float Height, string Texture, IReadOnlyList<MyGuiSkinPart> Parts);
 
-/// <summary>Preserves resource XML for image sets, fonts, pointers, settings and templates as well as decoded skins/layers.</summary>
+/// <summary>
+/// Preserves resource XML for image sets, fonts, pointers, settings and templates as well as decoded skins/layers.
+/// </summary>
 public sealed class MyGuiResources
 {
     public Dictionary<string, MyGuiSkin> Skins { get; } = new(StringComparer.Ordinal);
@@ -111,7 +121,9 @@ public sealed class MyGuiResources
     public List<string> LoadedFiles { get; } = [];
     public Dictionary<string, XElement> Documents { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Resolve every List through the caller's game/mod resource lookup. Cycles and repeats are read once.</summary>
+    /// <summary>
+    /// Resolve every List through the caller's game/mod resource lookup. Cycles and repeats are read once.
+    /// </summary>
     public static MyGuiResources Load(string entry, Func<string, string?> resolve, params string[] additionalEntries)
     {
         var result = new MyGuiResources();
@@ -126,14 +138,23 @@ public sealed class MyGuiResources
             result.Documents[path] = new XElement(root);
             foreach (var child in root.Elements())
             {
-                if (child.Name == "List") { Visit(MyGuiReader.Attribute(child, "file")); continue; }
+                if (child.Name == "List")
+                {
+                    Visit(MyGuiReader.Attribute(child, "file"));
+                    continue;
+                }
                 string key = MyGuiReader.Attribute(child, "name");
-                if (child.Name == "Layer") { if (!result.Layers.Contains(key)) result.Layers.Add(key); }
+                if (child.Name == "Layer")
+                {
+                    if (!result.Layers.Contains(key)) result.Layers.Add(key);
+                }
                 else if (child.Name == "Resource")
                 {
                     result.Resources[key] = new XElement(child);
-                    if (MyGuiReader.Attribute(child, "type") == "ResourceLayout") result.Templates[key] = new XElement(child);
-                    if (MyGuiReader.Attribute(child, "type") == "ResourceSkin") result.Skins[key] = MyGuiReader.Skin(child);
+                    if (MyGuiReader.Attribute(child, "type") == "ResourceLayout")
+                        result.Templates[key] = new XElement(child);
+                    if (MyGuiReader.Attribute(child, "type") == "ResourceSkin")
+                        result.Skins[key] = MyGuiReader.Skin(child);
                 }
             }
         }
@@ -173,7 +194,10 @@ public static class MyGuiReader
 
     internal static string Attribute(XElement e, string name) => (string?)e.Attribute(name) ?? "";
     static Dictionary<string, string> Values(XElement e, string kind) => e.Elements(kind)
-        .Aggregate(new Dictionary<string, string>(StringComparer.Ordinal), (map, p) => { map[Attribute(p, "key")] = Attribute(p, "value"); return map; });
+        .Aggregate(new Dictionary<string, string>(StringComparer.Ordinal), (
+            map,
+            p
+        ) => { map[Attribute(p, "key")] = Attribute(p, "value"); return map; });
     static IReadOnlyDictionary<string, string> SkinStateValues(XElement state)
     {
         var values = Values(state, "Property");

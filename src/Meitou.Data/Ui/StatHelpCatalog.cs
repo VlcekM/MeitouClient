@@ -2,7 +2,10 @@ using Meitou.Data.Gameplay.Bodies;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>Stat help read from the user's English gettext template, never embedded game text; shown in the active language when its catalog translates the paragraph.</summary>
+/// <summary>
+/// Stat help read from the user's English gettext template, never embedded game text; shown in the active language when its catalog translates the
+/// paragraph.
+/// </summary>
 public sealed class StatHelpCatalog
 {
     sealed record Entry(int[] Lines, string Text, int EnglishLength);
@@ -16,7 +19,8 @@ public sealed class StatHelpCatalog
     public static StatHelpCatalog From(IEnumerable<PotEntry> template)
     {
         var result = new StatHelpCatalog();
-        // The structure (which paragraph answers which stat) comes from the English template; the text shown is its translation when the language has one.
+        // The structure (which paragraph answers which stat) comes from the English template; the text shown is its translation when the language has
+        // one.
         foreach (var entry in template)
             if (entry.References.Where(r => r.File == "kenshi/statswindow.cpp").Select(r => r.Line).Distinct().ToArray() is { Length: > 0 } lines)
                 result._entries.Add(new(lines, Loc.Tr(entry.Id), entry.Id.Length));

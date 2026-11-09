@@ -2,17 +2,23 @@ using System.Numerics;
 
 namespace Meitou.Data.World;
 
-/// <summary>Meitou's procedural cloud volume; engine choices, not original-game constants.</summary>
+/// <summary>
+/// Meitou's procedural cloud volume; engine choices, not original-game constants.
+/// </summary>
 public static class VolumetricClouds
 {
-    /// <summary>The slab's default base and top (the base is a Meitou setting, <c>SkyRenderer.CloudHeight</c>; the slab keeps its thickness).</summary>
+    /// <summary>
+    /// The slab's default base and top (the base is a Meitou setting, <c>SkyRenderer.CloudHeight</c>; the slab keeps its thickness).
+    /// </summary>
     public const float Bottom = 12000, Top = 19000, Thickness = Top - Bottom, MaxDistance = 500000;
     public const float MinBottom = 4000, MaxBottom = 40000;
     public const float PatternPeriod = 120000, ShapePeriod = 40000, DetailPeriod = 10000;
     public const float Extinction = 0.0012f, ShadowSpan = 320000;
     public const int NoiseSize = 64, TileSize = NoiseSize + 2, AtlasSize = TileSize * 8;
 
-    /// <summary>Intersection with the horizontal cloud slab, including views inside or above it.</summary>
+    /// <summary>
+    /// Intersection with the horizontal cloud slab, including views inside or above it.
+    /// </summary>
     public static bool Intersect(float eyeHeight, float rayY, out Vector2 interval, float bottom = Bottom)
     {
         interval = default;
@@ -35,11 +41,17 @@ public static class VolumetricClouds
         uint h = (uint)(((x % period + period) % period) * 73856093)
                ^ (uint)(((y % period + period) % period) * 19349663)
                ^ (uint)(((z % period + period) % period) * 83492791);
-        h ^= h >> 16; h *= 0x7feb352d; h ^= h >> 15; h *= 0x846ca68b; h ^= h >> 16;
+        h ^= h >> 16;
+        h *= 0x7feb352d;
+        h ^= h >> 15;
+        h *= 0x846ca68b;
+        h ^= h >> 16;
         return (h & 0xffffff) / 16777215f;
     }
 
-    /// <summary>Periodic smooth value noise, shared by all generated channels.</summary>
+    /// <summary>
+    /// Periodic smooth value noise, shared by all generated channels.
+    /// </summary>
     public static float Noise(Vector3 p, int period)
     {
         int x = (int)MathF.Floor(p.X), y = (int)MathF.Floor(p.Y), z = (int)MathF.Floor(p.Z);
@@ -47,7 +59,11 @@ public static class VolumetricClouds
         f *= f * (new Vector3(3) - 2 * f);
         static float L(float a, float b, float t) => a + (b - a) * t;
         return L(L(L(Hash(x, y, z, period), Hash(x + 1, y, z, period), f.X), L(Hash(x, y + 1, z, period), Hash(x + 1, y + 1, z, period), f.X), f.Y),
-                 L(L(Hash(x, y, z + 1, period), Hash(x + 1, y, z + 1, period), f.X), L(Hash(x, y + 1, z + 1, period), Hash(x + 1, y + 1, z + 1, period), f.X), f.Y), f.Z);
+                 L(
+                     L(Hash(x, y, z + 1, period), Hash(x + 1, y, z + 1, period), f.X),
+                     L(Hash(x, y + 1, z + 1, period), Hash(x + 1, y + 1, z + 1, period), f.X),
+                     f.Y
+                 ), f.Z);
     }
 
     static float Worley(Vector3 p, int period)
@@ -64,7 +80,9 @@ public static class VolumetricClouds
         return 1 - Math.Clamp(MathF.Sqrt(nearest), 0, 1);
     }
 
-    /// <summary>A padded 8x8 slice atlas. R: four-octave shape noise; G: cellular erosion; B: broad weather noise.</summary>
+    /// <summary>
+    /// A padded 8x8 slice atlas. R: four-octave shape noise; G: cellular erosion; B: broad weather noise.
+    /// </summary>
     public static byte[] CreateAtlas()
     {
         var volume = new byte[NoiseSize * NoiseSize * NoiseSize * 4];

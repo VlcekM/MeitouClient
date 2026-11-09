@@ -3,24 +3,33 @@ using System.Xml.Linq;
 
 namespace Meitou.Data.Ui;
 
-/// <summary>The FreeType hinting modes of a <c>ResourceTrueTypeFont</c> (<c>Hinting</c> property; any other value is <see cref="UseNative"/>).</summary>
+/// <summary>
+/// The FreeType hinting modes of a <c>ResourceTrueTypeFont</c> (<c>Hinting</c> property; any other value is <see cref="UseNative"/>).
+/// </summary>
 public enum MyGuiHinting { UseNative, ForceAuto, DisableAuto, DisableAll }
 
-/// <summary>Inclusive code point ranges (sorted, merged): the set a <c>ResourceTrueTypeFont</c> generates glyphs for.</summary>
+/// <summary>
+/// Inclusive code point ranges (sorted, merged): the set a <c>ResourceTrueTypeFont</c> generates glyphs for.
+/// </summary>
 public sealed class MyGuiCodeRanges
 {
     readonly (int First, int Last)[] _ranges;
 
-    /// <summary>The Basic Multilingual Plane: the set of a font whose <c>Codes</c> list no <c>range</c>.</summary>
+    /// <summary>
+    /// The Basic Multilingual Plane: the set of a font whose <c>Codes</c> list no <c>range</c>.
+    /// </summary>
     public static MyGuiCodeRanges Bmp { get; } = new([(0, 0xFFFF)], []);
 
-    /// <summary><paramref name="include"/> merged, then every <paramref name="hide"/> range removed (MyGUI applies exclusions last).</summary>
+    /// <summary>
+    /// <paramref name="include"/> merged, then every <paramref name="hide"/> range removed (MyGUI applies exclusions last).
+    /// </summary>
     public MyGuiCodeRanges(IEnumerable<(int First, int Last)> include, IEnumerable<(int First, int Last)> hide)
     {
         var merged = new List<(int First, int Last)>();
         foreach (var (first, last) in include.Where(r => r.First <= r.Last).OrderBy(r => r.First))
         {
-            if (merged.Count > 0 && first <= merged[^1].Last + 1) merged[^1] = (merged[^1].First, Math.Max(merged[^1].Last, last));
+            if (merged.Count > 0 && first <= merged[^1].Last + 1)
+                merged[^1] = (merged[^1].First, Math.Max(merged[^1].Last, last));
             else merged.Add((first, last));
         }
         foreach (var (hideFirst, hideLast) in hide)
@@ -28,7 +37,11 @@ public sealed class MyGuiCodeRanges
             var kept = new List<(int First, int Last)>(merged.Count + 1);
             foreach (var (first, last) in merged)
             {
-                if (hideLast < first || hideFirst > last) { kept.Add((first, last)); continue; }
+                if (hideLast < first || hideFirst > last)
+                {
+                    kept.Add((first, last));
+                    continue;
+                }
                 if (first < hideFirst) kept.Add((first, hideFirst - 1));
                 if (last > hideLast) kept.Add((hideLast + 1, last));
             }
@@ -37,10 +50,14 @@ public sealed class MyGuiCodeRanges
         _ranges = [.. merged];
     }
 
-    /// <summary>The merged ranges, ascending.</summary>
+    /// <summary>
+    /// The merged ranges, ascending.
+    /// </summary>
     public IReadOnlyList<(int First, int Last)> Ranges => _ranges;
 
-    /// <summary>How many code points the set holds.</summary>
+    /// <summary>
+    /// How many code points the set holds.
+    /// </summary>
     public long Count => _ranges.Sum(r => (long)r.Last - r.First + 1);
 
     public bool Contains(int codePoint)
@@ -56,7 +73,9 @@ public sealed class MyGuiCodeRanges
         return false;
     }
 
-    /// <summary>Every code point of the set, ascending.</summary>
+    /// <summary>
+    /// Every code point of the set, ascending.
+    /// </summary>
     public IEnumerable<int> CodePoints()
     {
         foreach (var (first, last) in _ranges)
@@ -79,16 +98,27 @@ public sealed class MyGuiCodeRanges
 public sealed record MyGuiTrueTypeFont(string Source, float Size, float Resolution, bool Antialias, MyGuiHinting Hinting, float TabWidth,
     int OffsetHeight, int SubstituteCode, int Distance, MyGuiCodeRanges Codes)
 {
-    /// <summary>MyGUI's default resolution when the property is absent.</summary>
+    /// <summary>
+    /// MyGUI's default resolution when the property is absent.
+    /// </summary>
     public const float DefaultResolution = 96;
 
-    /// <summary>The font <paramref name="resource"/> describes; null when it is not a <c>ResourceTrueTypeFont</c> or names no source.</summary>
+    /// <summary>
+    /// The font <paramref name="resource"/> describes; null when it is not a <c>ResourceTrueTypeFont</c> or names no source.
+    /// </summary>
     public static MyGuiTrueTypeFont? Read(XElement resource)
     {
         if ((string?)resource.Attribute("type") != "ResourceTrueTypeFont") return null;
-        string? Property(string key) => resource.Elements("Property").FirstOrDefault(p => (string?)p.Attribute("key") == key)?.Attribute("value")?.Value;
-        float Number(string key, float fallback) => float.TryParse(Property(key), NumberStyles.Float, CultureInfo.InvariantCulture, out float n) && float.IsFinite(n) ? n : fallback;
-        int Integer(string key, int fallback) => int.TryParse(Property(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : fallback;
+        string? Property(string key) => resource.Elements("Property").FirstOrDefault(p
+                => (string?)p.Attribute("key") == key)?.Attribute("value")?.Value;
+        float Number(
+            string key,
+            float fallback
+        ) => float.TryParse(Property(key), NumberStyles.Float, CultureInfo.InvariantCulture, out float n) && float.IsFinite(n) ? n : fallback;
+        int Integer(
+            string key,
+            int fallback
+        ) => int.TryParse(Property(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : fallback;
         if (Property("Source") is not { Length: > 0 } source) return null;
 
         var include = new List<(int First, int Last)>();
@@ -105,16 +135,23 @@ public sealed record MyGuiTrueTypeFont(string Source, float Size, float Resoluti
         string? hinting = Property("Hinting");
         return new MyGuiTrueTypeFont(source, Number("Size", 0), Number("Resolution", DefaultResolution),
             Property("Antialias") is { } aa && (aa.Equals("true", StringComparison.OrdinalIgnoreCase) || aa == "1"),
-            hinting switch { "force_auto" => MyGuiHinting.ForceAuto, "disable_auto" => MyGuiHinting.DisableAuto, "disable_all" => MyGuiHinting.DisableAll, _ => MyGuiHinting.UseNative },
-            Number("TabWidth", 0), Integer("OffsetHeight", 0), Integer("SubstituteCode", -1), Integer("Distance", -1), new MyGuiCodeRanges(include, hide));
+            hinting switch { "force_auto" => MyGuiHinting.ForceAuto, "disable_auto" => MyGuiHinting.DisableAuto,
+            "disable_all" => MyGuiHinting.DisableAll, _ => MyGuiHinting.UseNative },
+            Number(
+                "TabWidth",
+                0
+            ), Integer("OffsetHeight", 0), Integer("SubstituteCode", -1), Integer("Distance", -1), new MyGuiCodeRanges(include, hide));
     }
 
-    /// <summary>"first" or "first last" (decimal code points).</summary>
+    /// <summary>
+    /// "first" or "first last" (decimal code points).
+    /// </summary>
     static (int First, int Last)? Range(string? value)
     {
         if (value is null) return null;
         var parts = value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length == 0 || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int first) || first < 0) return null;
+        if (parts.Length == 0 || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int first) || first < 0)
+            return null;
         int last = parts.Length > 1 && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int second) ? second : first;
         return (first, Math.Max(first, last));
     }

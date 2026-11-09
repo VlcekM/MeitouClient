@@ -1,6 +1,8 @@
 namespace Meitou.Data.Textures;
 
-/// <summary>An 8-bit RGBA image, rows from top to bottom, 4 bytes per pixel.</summary>
+/// <summary>
+/// An 8-bit RGBA image, rows from top to bottom, 4 bytes per pixel.
+/// </summary>
 public sealed class RgbaImage
 {
     public RgbaImage(int width, int height, byte[]? pixels = null)

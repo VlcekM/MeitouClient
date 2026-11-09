@@ -3,9 +3,9 @@ using System.Globalization;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The random numbers of Kenshi's foliage placer (docs/formats/foliage.md, "Random numbers"): a 32-bit Mersenne Twister
-/// (MT19937, the standard initialisation and tempering), reseeded for every foliage layer of every zone, with the game's
-/// float draw (in double precision, <c>u / (2^32 − 1)</c>, inclusive of both ends) and its integer draw (mask rejection).
+/// The random numbers of Kenshi's foliage placer (docs/formats/foliage.md, "Random numbers"): a 32-bit Mersenne Twister (MT19937, the standard
+/// initialisation and tempering), reseeded for every foliage layer of every zone, with the game's float draw (in double precision, <c>u / (2^32 −
+/// 1)</c>, inclusive of both ends) and its integer draw (mask rejection).
 /// </summary>
 public sealed class FoliageRandom
 {
@@ -15,7 +15,9 @@ public sealed class FoliageRandom
 
     public FoliageRandom(uint seed) => Seed(seed);
 
-    /// <summary>A generator in the same state, which then draws on its own.</summary>
+    /// <summary>
+    /// A generator in the same state, which then draws on its own.
+    /// </summary>
     public FoliageRandom Clone()
     {
         var copy = new FoliageRandom(0) { _index = _index, Count = Count };
@@ -23,7 +25,9 @@ public sealed class FoliageRandom
         return copy;
     }
 
-    /// <summary>Number of 32-bit results drawn since the last seed.</summary>
+    /// <summary>
+    /// Number of 32-bit results drawn since the last seed.
+    /// </summary>
     public int Count { get; private set; }
 
     public void Seed(uint seed)
@@ -53,7 +57,9 @@ public sealed class FoliageRandom
         return far ^ (y >> 1) ^ (0u - (y & 1) & 0x9908B0DFu);
     }
 
-    /// <summary>The next tempered 32-bit result.</summary>
+    /// <summary>
+    /// The next tempered 32-bit result.
+    /// </summary>
     public uint Next()
     {
         if (_index >= N) Twist();
@@ -66,12 +72,14 @@ public sealed class FoliageRandom
         return y;
     }
 
-    /// <summary>The game's float draw: <c>min + u / (2^32 − 1) × (max − min)</c> in double precision, rounded to single.</summary>
+    /// <summary>
+    /// The game's float draw: <c>min + u / (2^32 − 1) × (max − min)</c> in double precision, rounded to single.
+    /// </summary>
     public float Float(float min, float max) => (float)(Next() * (1.0 / uint.MaxValue) * (double)(max - min) + min);
 
     /// <summary>
-    /// The game's integer draw in [0, <paramref name="range"/>]: results masked to the smallest all-ones mask covering the
-    /// range, redrawn while above it.
+    /// The game's integer draw in [0, <paramref name="range"/>]: results masked to the smallest all-ones mask covering the range, redrawn while above
+    /// it.
     /// </summary>
     public uint IntUpTo(uint range)
     {
@@ -82,13 +90,14 @@ public sealed class FoliageRandom
         mask |= mask >> 8;
         mask |= mask >> 16;
         uint v;
-        do v = Next() & mask; while (v > range);
+        do v = Next() & mask;
+        while (v > range);
         return v;
     }
 
     /// <summary>
-    /// Seed of a foliage layer in a zone: the leading integer of the layer record's string id (its number), minus the
-    /// truncated <c>(h / 2^30) × 16777215 − 16777215</c> for the integer noise hash <c>h</c> of the zone's minimum corner.
+    /// Seed of a foliage layer in a zone: the leading integer of the layer record's string id (its number), minus the truncated <c>(h / 2^30) ×
+    /// 16777215 − 16777215</c> for the integer noise hash <c>h</c> of the zone's minimum corner.
     /// </summary>
     public static uint LayerSeed(string layerStringId, float zoneMinX, float zoneMinZ)
     {
@@ -98,7 +107,9 @@ public sealed class FoliageRandom
         return unchecked((uint)(id - (int)v));
     }
 
-    /// <summary>Like a C++ stream read of an int: optional sign, then digits; 0 when there are none.</summary>
+    /// <summary>
+    /// Like a C++ stream read of an int: optional sign, then digits; 0 when there are none.
+    /// </summary>
     public static int LeadingInteger(string s)
     {
         int i = 0;
@@ -111,17 +122,19 @@ public sealed class FoliageRandom
 }
 
 /// <summary>
-/// Kenshi's value noise for grass coverage and per-position randomness (docs/formats/foliage.md, "Noise"): an integer
-/// hash (the classic value-noise hash with other multipliers), smoothed over the 3 × 3 neighbourhood, cosine interpolated, summed over five octaves.
+/// Kenshi's value noise for grass coverage and per-position randomness (docs/formats/foliage.md, "Noise"): an integer hash (the classic value-noise
+/// hash with other multipliers), smoothed over the 3 × 3 neighbourhood, cosine interpolated, summed over five octaves.
 /// </summary>
 public static class FoliageNoise
 {
-    /// <summary>The exe's π for the cosine interpolation (a double constant 3.1415927).</summary>
+    /// <summary>
+    /// The exe's π for the cosine interpolation (a double constant 3.1415927).
+    /// </summary>
     const double Pi = 3.1415927;
 
     /// <summary>
-    /// The exe's integer hash <c>n = x + 57 z; n ^= n &lt;&lt; 13; (n (n² 60493 + 19990303) + 1376312589) &amp; 0x7FFFFFFF</c>:
-    /// not the textbook 15731 / 789221 multipliers. The exe adds 0xD208DD0D, which is 1376312589 under the mask.
+    /// The exe's integer hash <c>n = x + 57 z; n ^= n &lt;&lt; 13; (n (n² 60493 + 19990303) + 1376312589) &amp; 0x7FFFFFFF</c>: not the textbook
+    /// 15731 / 789221 multipliers. The exe adds 0xD208DD0D, which is 1376312589 under the mask.
     /// </summary>
     public static uint Hash(int x, int z)
     {
@@ -133,10 +146,14 @@ public static class FoliageNoise
         }
     }
 
-    /// <summary>The hash as a value in (−1, 1]: <c>1 − h / 2^30</c>.</summary>
+    /// <summary>
+    /// The hash as a value in (−1, 1]: <c>1 − h / 2^30</c>.
+    /// </summary>
     public static double Value(int x, int z) => 1.0 - Hash(x, z) * (1.0 / 1073741824);
 
-    /// <summary>The value at an integer point smoothed with its neighbours: sides / 8, corners / 16, centre / 4.</summary>
+    /// <summary>
+    /// The value at an integer point smoothed with its neighbours: sides / 8, corners / 16, centre / 4.
+    /// </summary>
     public static float Smooth(float x, float z)
     {
         int ix = (int)x, iz = (int)z, xm = (int)(x - 1), xp = (int)(x + 1), zm = (int)(z - 1), zp = (int)(z + 1);
@@ -148,7 +165,9 @@ public static class FoliageNoise
         return s;
     }
 
-    /// <summary>Smoothed values at the four surrounding integer points, cosine interpolated.</summary>
+    /// <summary>
+    /// Smoothed values at the four surrounding integer points, cosine interpolated.
+    /// </summary>
     public static float Interpolated(float x, float z)
     {
         float fx0 = MathF.Floor(x), fz0 = MathF.Floor(z);
@@ -162,9 +181,8 @@ public static class FoliageNoise
     }
 
     /// <summary>
-    /// The grass coverage noise at world (x, z): five octaves (frequency 2^o / scale, amplitude 0.5^o) mapped to
-    /// <c>0.5 + 0.5 n</c>, zero at or below <paramref name="cutoff"/> and rescaled above it, times
-    /// <paramref name="boost"/>, clamped to [0, <paramref name="cap"/>].
+    /// The grass coverage noise at world (x, z): five octaves (frequency 2^o / scale, amplitude 0.5^o) mapped to <c>0.5 + 0.5 n</c>, zero at or below
+    /// <paramref name="cutoff"/> and rescaled above it, times <paramref name="boost"/>, clamped to [0, <paramref name="cap"/>].
     /// </summary>
     public static float Coverage(double x, double z, double scale, float cutoff, float boost, float cap)
     {

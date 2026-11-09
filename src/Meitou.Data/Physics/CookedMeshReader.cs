@@ -4,8 +4,8 @@ using System.Numerics;
 namespace Meitou.Data.Physics;
 
 /// <summary>
-/// Clean-room decoders of PhysX 2.8 cooked meshes as stored in the NxuStream XML files (layouts in docs/formats/collision.md):
-/// the vertices and triangle indices of a triangle mesh, and the hull vertices of a convex mesh.
+/// Clean-room decoders of PhysX 2.8 cooked meshes as stored in the NxuStream XML files (layouts in docs/formats/collision.md): the vertices and
+/// triangle indices of a triangle mesh, and the hull vertices of a convex mesh.
 /// </summary>
 public static class CookedMeshReader
 {
@@ -25,10 +25,12 @@ public static class CookedMeshReader
         p += 4 + 4 + 4; // convex edge threshold, height field axis, height field extent
         int vertexCount = I32(data, ref p);
         int triangleCount = I32(data, ref p);
-        if (vertexCount < 0 || triangleCount < 0 || vertexCount > 1 << 20 || triangleCount > 1 << 20) throw new InvalidDataException("Implausible mesh counts");
+        if (vertexCount < 0 || triangleCount < 0 || vertexCount > 1 << 20 || triangleCount > 1 << 20)
+            throw new InvalidDataException("Implausible mesh counts");
         var vertices = Vertices(data, ref p, vertexCount);
         int width = (flags & IndicesAre8Bit) != 0 ? 1 : (flags & IndicesAre16Bit) != 0 ? 2 : 4;
-        if (p + (long)triangleCount * 3 * width > data.Length) throw new InvalidDataException("Cooked triangle mesh is truncated");
+        if (p + (long)triangleCount * 3 * width > data.Length)
+            throw new InvalidDataException("Cooked triangle mesh is truncated");
         var indices = new int[triangleCount * 3];
         for (int i = 0; i < indices.Length; i++)
         {
@@ -44,7 +46,9 @@ public static class CookedMeshReader
         return new CookedMesh(vertices, indices);
     }
 
-    /// <summary>The convex mesh's hull vertices. The <c>CVHL</c> block is found by its tag (a <c>CLHL</c> block precedes it).</summary>
+    /// <summary>
+    /// The convex mesh's hull vertices. The <c>CVHL</c> block is found by its tag (a <c>CLHL</c> block precedes it).
+    /// </summary>
     public static CookedMesh ReadConvex(ReadOnlySpan<byte> data)
     {
         if (!data.StartsWith(ConvexMagic)) throw new InvalidDataException("Not a cooked convex mesh (NXS CVXM)");
@@ -67,7 +71,8 @@ public static class CookedMeshReader
         {
             v[i] = new Vector3(F32(data, p), F32(data, p + 4), F32(data, p + 8));
             p += 12;
-            if (!float.IsFinite(v[i].X) || !float.IsFinite(v[i].Y) || !float.IsFinite(v[i].Z)) throw new InvalidDataException("Non-finite mesh vertex");
+            if (!float.IsFinite(v[i].X) || !float.IsFinite(v[i].Y) || !float.IsFinite(v[i].Z))
+                throw new InvalidDataException("Non-finite mesh vertex");
         }
         return v;
     }
