@@ -205,7 +205,8 @@ public class OgreMaterialTests
         Assert.Equal(10, library.DuplicateMaterials.Count);
         var programs = library.Diagnostics.Where(d => !d.Message.StartsWith("material", StringComparison.Ordinal)).ToList();
         Assert.Equal(9, programs.Count(d => d.File == Path.Combine("items", "armour", "meshes", "Shaders.program")));
-        Assert.Equal("vertex_program Deferred_VP_HLSL", Assert.Single(programs, d => d.File.EndsWith("atmospherefog.material", StringComparison.Ordinal)).Message.Split(',')[0]);
+        Assert.Equal("vertex_program Deferred_VP_HLSL",
+            Assert.Single(programs, d => d.File.EndsWith("atmospherefog.material", StringComparison.Ordinal)).Message.Split(',')[0]);
         Assert.Equal(10, programs.Count);
 
         var passes = library.Materials.Values.SelectMany(m => m.Techniques).SelectMany(t => t.Passes).ToList();

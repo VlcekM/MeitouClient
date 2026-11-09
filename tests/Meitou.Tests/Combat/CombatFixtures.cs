@@ -36,7 +36,8 @@ static class CombatFixtures
 
     public static WeaponInstance KatanaAt(float quality, WeaponManufacturer? m = null) => WeaponInstance.Create(quality, Katana, m, null, Constants);
 
-    static ArmourData Plate(string id, ArmourClass cls, ArmourType material, int slot, float cutIntoStun, params (string Part, int Percent)[] coverage) => new()
+    static ArmourData Plate(string id, ArmourClass cls, ArmourType material, int slot, float cutIntoStun,
+        params (string Part, int Percent)[] coverage) => new()
     {
         StringId = id, Name = id, Class = cls, Material = material, Slot = slot, CutIntoStun = cutIntoStun,
         Coverage = [.. coverage.Select(c => new PartCoverage(c.Part, c.Percent))],
@@ -53,7 +54,8 @@ static class CombatFixtures
     /// A COMBAT_TECHNIQUE written out: a katana cut of one blow.
     /// </summary>
     public static CombatTechnique Cut(
-        string name = "cut", float chance = 1, float strike = 0.6f, float animSpeed = 1.2f, int direction = 2, int blows = 1, float strike2 = 0.8f) => new()
+        string name = "cut", float chance = 1, float strike = 0.6f, float animSpeed = 1.2f, int direction = 2, int blows = 1,
+        float strike2 = 0.8f) => new()
     {
         StringId = name, Name = name, AnimName = name, Kinds = WeaponKinds.Katana | WeaponKinds.OneHanded, Blows = blows,
         AttackDirection1 = direction, AttackDirection2 = direction, Chance = chance, AttackDistance = 10, AttackDistanceMinVsStatic = 10,

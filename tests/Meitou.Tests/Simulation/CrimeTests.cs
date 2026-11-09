@@ -326,10 +326,12 @@ public class CrimeInstallTests(ITestOutputHelper output)
             world.Commands.Enqueue(new FocusCommand(site.Position) { Tick = 0 });
             world.RunTicks(60);
             var table = world.Characters;
-            var police = Enumerable.Range(0,
-                    table.HighWater).Where(s => table.Previous[s].Alive && systems.Crime!.IsPoliceLike(world, table.Cold(s)!)).ToList();
+            var police = Enumerable.Range(0, table.HighWater)
+                .Where(s => table.Previous[s].Alive && systems.Crime!.IsPoliceLike(world, table.Cold(s)!))
+                .ToList();
             var wantedBy = police.Select(s => table.Cold(s)!.Faction).Where(f => data.Factions[f].BooksBounties).Distinct().ToList();
-            output.WriteLine($"{town}: {police.Count} police-like ({string.Join(", ", police.Select(s => $"{table.Cold(s)!.Name} {table.Cold(s)!.NpcClass}").Distinct().Take(6))})");
+            output.WriteLine($"{town}: {police.Count} police-like "
+                + $"({string.Join(", ", police.Select(s => $"{table.Cold(s)!.Name} {table.Cold(s)!.NpcClass}").Distinct().Take(6))})");
             if (wantedBy.Count == 0) continue;
             found++;
 
@@ -345,7 +347,8 @@ public class CrimeInstallTests(ITestOutputHelper output)
             table.Cold(me.Slot)!.RecentlyWanted = CrimeSystem.RecentlyWantedSeconds;   // just booked: recognised at once
             world.RunTicks(60);
             var attackers = systems.Arrest!.Log.Where(e => e.Target == me && e.Kind is ArrestEventKind.Attack or ArrestEventKind.Arrest).ToList();
-            output.WriteLine($"  wanted by {data.Factions[wantedBy[0]].Name}: gone after by {attackers.Count} ({string.Join(", ", attackers.Select(e => $"{table.Cold(e.Guard.Slot)?.Name} {e.Kind}"))})");
+            output.WriteLine($"  wanted by {data.Factions[wantedBy[0]].Name}: gone after by {attackers.Count} "
+                + $"({string.Join(", ", attackers.Select(e => $"{table.Cold(e.Guard.Slot)?.Name} {e.Kind}"))})");
 
             Assert.NotEmpty(attackers);
             Assert.Contains(attackers, e => e.Faction == wantedBy[0]);

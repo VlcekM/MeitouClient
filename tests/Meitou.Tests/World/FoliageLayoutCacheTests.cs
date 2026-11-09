@@ -23,7 +23,13 @@ public sealed class FoliageLayoutCacheTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_temp, true); } catch (IOException) { }
+        try
+        {
+            Directory.Delete(_temp, true);
+        }
+        catch (IOException)
+        {
+        }
     }
 
     static FcsRecord Rec(string id, FcsRecordType type) => new() { StringId = id, Flags = 0x10, Name = id, RecordType = type };

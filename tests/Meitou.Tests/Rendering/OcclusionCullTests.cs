@@ -14,9 +14,19 @@ namespace Meitou.Tests.Rendering;
 /// </summary>
 public class OcclusionCullTests
 {
+    /// <summary>
+    /// The depth picture's size in pixels.
+    /// </summary>
     internal const int W = 320, H = 240;
+
+    /// <summary>
+    /// The tangents of half the vertical and of half the horizontal field of view.
+    /// </summary>
     internal static readonly float TanY = MathF.Tan(25f * MathF.PI / 180), TanX = TanY * W / H;
 
+    /// <summary>
+    /// A sphere of the synthetic scene.
+    /// </summary>
     internal sealed record Occluder(Vector3 Centre, float Radius);
 
     /// <summary>
@@ -24,6 +34,9 @@ public class OcclusionCullTests
     /// </summary>
     internal readonly record struct Camera(Vector3 Eye, Vector3 Right, Vector3 Up, Vector3 Back)
     {
+        /// <summary>
+        /// The camera at the eye looking along the yaw and pitch.
+        /// </summary>
         public static Camera Look(Vector3 eye, float yaw, float pitch)
         {
             var forward = new Vector3(MathF.Sin(yaw) * MathF.Cos(pitch), MathF.Sin(pitch), MathF.Cos(yaw) * MathF.Cos(pitch));
@@ -75,9 +88,19 @@ public class OcclusionCullTests
     /// </summary>
     internal sealed class Pyramid
     {
+        /// <summary>
+        /// Each level's size in texels.
+        /// </summary>
         public readonly List<(int W, int H)> Sizes = HizPyramid.Levels(W, H);
+
+        /// <summary>
+        /// Each level's texels, row by row.
+        /// </summary>
         public readonly List<(float Least, float Most)[]> Levels = [];
 
+        /// <summary>
+        /// Builds every level from the depth picture.
+        /// </summary>
         public Pyramid(float[,] z)
         {
             var b = new (float, float)[Sizes[0].W * Sizes[0].H];
@@ -166,6 +189,9 @@ public class OcclusionCullTests
         }
     }
 
+    /// <summary>
+    /// A random unit vector (rejection sampled in the unit ball).
+    /// </summary>
     internal static Vector3 RandomUnit(Random r)
     {
         while (true)
@@ -219,7 +245,8 @@ public class OcclusionCullTests
 
                         Assert.True(Hit(scene, moved, target) is not null,
 
-                            $"trial {trial}: hidden call, delta {delta}, eye moved to {moved}, ray to {target} (sphere {centre} radius {radius}) is not stopped");
+                            $"trial {trial}: hidden call, delta {delta}, eye moved to {moved}, ray to {target} (sphere {centre} radius {radius}) "
+                            + "is not stopped");
                     }
                 }
             }
@@ -236,100 +263,151 @@ public class OcclusionCullTests
 /// </summary>
 public class HizPyramidGpuTests
 {
+    /// <summary>
+    /// Every picture size: the GPU's pyramid of a random depth against the CPU's, texel by texel.
+    /// </summary>
     [Fact]
     [Slow]
     public unsafe void The_kernels_build_the_least_and_greatest_distance_of_every_block_at_every_level()
     {
         Silk.NET.Vulkan.Vk.GetApi();
-        Meitou.Game.Rendering.Gpu.Core.VulkanDevice? d;
-        try { d = Meitou.Game.Rendering.Gpu.Core.VulkanDevice.Create(new Meitou.Game.Rendering.Gpu.Core.VulkanDeviceOptions { Validation = true,
-                SyncValidation = true }); }
-        catch (Exception e)
-            when (e is Meitou.Game.Rendering.Gpu.Core.VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
-        {
-            d = null;
-        }
+        Meitou.Game.Rendering.Gpu.Core.VulkanDevice? d = TryCreate();
 
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
 
         foreach (var (w, h) in new[] { (1000, 700), (1280, 720), (63, 37), (4, 4), (2049, 513) })
-        {
-            var random = new Random(w * 31 + h);
-            var planes = new Vector2(3.7f, 80000f);
-            var depth = new float[w * h];
-            var z = new float[w * h];
-            for (int i = 0; i < depth.Length; i++)
-            {
-                bool sky = random.Next(3) == 0;
-                z[i] = sky ? 1e9f : planes.X * MathF.Pow(planes.Y / planes.X, (float)random.NextDouble());   // view depths spread evenly in log
-                depth[i] = sky ? DepthConvention.Clear : DepthConvention.DepthOf(z[i], planes.X, planes.Y);
-            }
-            var levels = HizPyramid.Levels(w, h);
-            int total = levels.Sum(l => l.W * l.H);
-            using (var ctx = new GpuContext(d!))
-            {
-                ctx.EnsureFrame();
-                var desc = new TextureDesc(InternalFormat.R32F, w, h, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "hiz test depth");
-                using var depthTexture = ctx.Frame.PreFrame.CreateTexture(desc);
-                var region = new PixelRect(0, 0, (uint)w, (uint)h);
-                ctx.Uploads.Write(depthTexture, 0, 0, region, System.Runtime.InteropServices.MemoryMarshal.AsBytes(depth.AsSpan()));
-                using var hiz = new HizPyramid(ctx);
-                hiz.Build(ctx.Frame.PreFrame, depthTexture, planes, w, h, Vector3.Zero, Matrix4x4.Identity, 0.8f, 16f / 9);
-                using var readback = ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
-                ctx.Frame.PreFrame.CopyBuffer(hiz.Storage!.Handle, readback.Handle, new GpuBufferCopy(0, 0, (ulong)total * 8));
-                ctx.EndFrame();
-                d!.Frames.WaitAll();
-                var got = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(readback.Read(0, (ulong)total * 8)).ToArray();
-
-                // The CPU's: level 0 from 4 x 4 pixels, then 2 x 2 texels (clamped at the edge).
-                var level0 = new (float, float)[levels[0].W * levels[0].H];
-                for (int ty = 0; ty < levels[0].H; ty++)
-                    for (int tx = 0; tx < levels[0].W; tx++)
-                    {
-                        float least = float.MaxValue, most = 0;
-                        for (int y = ty * 4; y < Math.Min(ty * 4 + 4, h); y++)
-                            for (int x = tx * 4; x < Math.Min(tx * 4 + 4, w); x++) { least = MathF.Min(least, z[y * w + x]); most = MathF.Max(most,
-                                    z[y * w + x]); }
-                        level0[ty * levels[0].W + tx] = (least, most);
-                    }
-                var previous = level0;
-                int offset = 0;
-                for (int l = 0; l < levels.Count; l++)
-                {
-                    var (lw, lh) = levels[l];
-                    var current = l == 0 ? level0 : new (float, float)[lw * lh];
-                    if (l > 0)
-                        for (int y = 0; y < lh; y++)
-                            for (int x = 0; x < lw; x++)
-                            {
-                                float least = float.MaxValue, most = 0;
-                                for (int dy = 0; dy < 2; dy++)
-                                    for (int dx = 0; dx < 2; dx++)
-                                    {
-                                        var s = previous[Math.Min(y * 2 + dy, levels[l - 1].H - 1) * levels[l - 1].W + Math.Min(x * 2 + dx,
-                                                levels[l - 1].W - 1)];
-                                        least = MathF.Min(least, s.Item1);
-                                        most = MathF.Max(most, s.Item2);
-                                    }
-                                current[y * lw + x] = (least, most);
-                            }
-                    for (int i = 0; i < lw * lh; i++)
-                    {
-                        float gl = got[(offset + i) * 2], gm = got[(offset + i) * 2 + 1];
-
-                        Assert.True(MathF.Abs(gl - current[i].Item1) <= 2e-3f * current[i].Item1 + 1e-3f
-                                && MathF.Abs(gm - current[i].Item2) <= 2e-3f * current[i].Item2 + 1e-3f,
-
-                            $"{w} x {h}, level {l} texel {i}: GPU ({gl}, {gm}), CPU {current[i]}");
-                    }
-                    offset += lw * lh;
-                    previous = current;
-                }
-            }
-        }
+            CheckOneSize(d!, w, h);
 
         Assert.True(d!.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
 
         d.Dispose();
+    }
+
+    /// <summary>
+    /// A Vulkan 1.3 device with validation, or null where there is none.
+    /// </summary>
+    static Meitou.Game.Rendering.Gpu.Core.VulkanDevice? TryCreate()
+    {
+        Meitou.Game.Rendering.Gpu.Core.VulkanDevice? d;
+        try
+        {
+            d = Meitou.Game.Rendering.Gpu.Core.VulkanDevice.Create(new Meitou.Game.Rendering.Gpu.Core.VulkanDeviceOptions { Validation = true,
+                    SyncValidation = true });
+        }
+        catch (Exception e)
+            when (e is Meitou.Game.Rendering.Gpu.Core.VulkanException or DllNotFoundException or EntryPointNotFoundException
+                or Silk.NET.Core.Loader.SymbolLoadingException)
+        {
+            d = null;
+        }
+        return d;
+    }
+
+    /// <summary>
+    /// One picture size: a random scene depth, a third of it cleared, built into a pyramid on the GPU and checked against the CPU's.
+    /// </summary>
+    static void CheckOneSize(Meitou.Game.Rendering.Gpu.Core.VulkanDevice d, int w, int h)
+    {
+        var random = new Random(w * 31 + h);
+        var planes = new Vector2(3.7f, 80000f);
+        var depth = new float[w * h];
+        var z = new float[w * h];
+        RandomDepth(random, planes, depth, z);
+        var levels = HizPyramid.Levels(w, h);
+        int total = levels.Sum(l => l.W * l.H);
+        using (var ctx = new GpuContext(d))
+        {
+            ctx.EnsureFrame();
+            var desc = new TextureDesc(InternalFormat.R32F, w, h, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "hiz test depth");
+            using var depthTexture = ctx.Frame.PreFrame.CreateTexture(desc);
+            var region = new PixelRect(0, 0, (uint)w, (uint)h);
+            ctx.Uploads.Write(depthTexture, 0, 0, region, System.Runtime.InteropServices.MemoryMarshal.AsBytes(depth.AsSpan()));
+            using var hiz = new HizPyramid(ctx);
+            hiz.Build(ctx.Frame.PreFrame, depthTexture, planes, w, h, Vector3.Zero, Matrix4x4.Identity, 0.8f, 16f / 9);
+            using var readback = ReadbackBuffer.Create(ctx, (ulong)total * 8, "hiz readback");
+            ctx.Frame.PreFrame.CopyBuffer(hiz.Storage!.Handle, readback.Handle, new GpuBufferCopy(0, 0, (ulong)total * 8));
+            ctx.EndFrame();
+            d.Frames.WaitAll();
+            var got = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(readback.Read(0, (ulong)total * 8)).ToArray();
+
+            var level0 = CpuLevel0(z, levels, w, h);
+            AssertLevels(got, level0, levels, w, h);
+        }
+    }
+
+    /// <summary>
+    /// A random scene depth, a third of it cleared (the sky): view depths spread evenly in log between the planes, and their depth values.
+    /// </summary>
+    static void RandomDepth(Random random, Vector2 planes, float[] depth, float[] z)
+    {
+        for (int i = 0; i < depth.Length; i++)
+        {
+            bool sky = random.Next(3) == 0;
+            z[i] = sky ? 1e9f : planes.X * MathF.Pow(planes.Y / planes.X, (float)random.NextDouble());   // view depths spread evenly in log
+            depth[i] = sky ? DepthConvention.Clear : DepthConvention.DepthOf(z[i], planes.X, planes.Y);
+        }
+    }
+
+    /// <summary>
+    /// The CPU's level 0: (least, most) of 4 x 4 pixels.
+    /// </summary>
+    static (float, float)[] CpuLevel0(float[] z, List<(int W, int H)> levels, int w, int h)
+    {
+        var level0 = new (float, float)[levels[0].W * levels[0].H];
+        for (int ty = 0; ty < levels[0].H; ty++)
+            for (int tx = 0; tx < levels[0].W; tx++)
+            {
+                float least = float.MaxValue, most = 0;
+                for (int y = ty * 4; y < Math.Min(ty * 4 + 4, h); y++)
+                    for (int x = tx * 4; x < Math.Min(tx * 4 + 4, w); x++)
+                    {
+                        least = MathF.Min(least, z[y * w + x]);
+                        most = MathF.Max(most, z[y * w + x]);
+                    }
+                level0[ty * levels[0].W + tx] = (least, most);
+            }
+        return level0;
+    }
+
+    /// <summary>
+    /// The CPU's levels (level 0, then 2 x 2 texels clamped at the edge) against the GPU's, texel by texel.
+    /// </summary>
+    static void AssertLevels(float[] got, (float, float)[] level0, List<(int W, int H)> levels, int w, int h)
+    {
+        var previous = level0;
+        int offset = 0;
+        for (int l = 0; l < levels.Count; l++)
+        {
+            var (lw, lh) = levels[l];
+            var current = l == 0 ? level0 : new (float, float)[lw * lh];
+            if (l > 0)
+            {
+                for (int y = 0; y < lh; y++)
+                    for (int x = 0; x < lw; x++)
+                    {
+                        float least = float.MaxValue, most = 0;
+                        for (int dy = 0; dy < 2; dy++)
+                            for (int dx = 0; dx < 2; dx++)
+                            {
+                                var s = previous[Math.Min(y * 2 + dy, levels[l - 1].H - 1) * levels[l - 1].W + Math.Min(x * 2 + dx,
+                                        levels[l - 1].W - 1)];
+                                least = MathF.Min(least, s.Item1);
+                                most = MathF.Max(most, s.Item2);
+                            }
+                        current[y * lw + x] = (least, most);
+                    }
+            }
+            for (int i = 0; i < lw * lh; i++)
+            {
+                float gl = got[(offset + i) * 2], gm = got[(offset + i) * 2 + 1];
+
+                Assert.True(MathF.Abs(gl - current[i].Item1) <= 2e-3f * current[i].Item1 + 1e-3f
+                        && MathF.Abs(gm - current[i].Item2) <= 2e-3f * current[i].Item2 + 1e-3f,
+
+                    $"{w} x {h}, level {l} texel {i}: GPU ({gl}, {gm}), CPU {current[i]}");
+            }
+            offset += lw * lh;
+            previous = current;
+        }
     }
 }

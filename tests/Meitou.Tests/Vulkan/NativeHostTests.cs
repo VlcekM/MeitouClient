@@ -13,8 +13,12 @@ public class NativeHostTests
 {
     static VulkanDevice? TryCreate(bool sync = true)
     {
-        try { return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = sync }); }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
+        try
+        {
+            return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = sync });
+        }
+        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException
+            or Silk.NET.Core.Loader.SymbolLoadingException)
         {
             return null;
         }

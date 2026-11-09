@@ -59,8 +59,8 @@ public class HousedSquadTests(ITestOutputHelper output)
         world.RunTicks(3);
         var table = world.Characters;
         var caged = world.Fixtures.OfBuilding(home.Key).Where(f => f.Kind == FixtureKind.Cage && !f.Occupant.IsNone).ToList();
-        output.WriteLine($"{site.Town.Name}, {home.Name} ({home.ResidentsTemplate}): {caged.Count} of {home.Fixtures.Count(f => f.IsCage)} cages hold " +
-            string.Join(", ", caged.Select(f => table.Cold(f.Occupant.Slot)!.Name)));
+        output.WriteLine($"{site.Town.Name}, {home.Name} ({home.ResidentsTemplate}): {caged.Count} of {home.Fixtures.Count(f => f.IsCage)} "
+            + "cages hold " + string.Join(", ", caged.Select(f => table.Cold(f.Occupant.Slot)!.Name)));
 
         Assert.NotEmpty(caged);
         Assert.All(caged, f =>
@@ -83,7 +83,11 @@ public class HousedSquadTests(ITestOutputHelper output)
         using var world = Town(data, squin, StandardParts.Trade);
         world.RunTicks(3);
         var shops = world.Squads.All.Where(s => s.Shop?.Building is not null).ToList();
-        foreach (var s in shops) output.WriteLine($"{s.Name} in {s.HomeBuilding!.Name}: {s.Shop!.Stock.Width} x {s.Shop.Stock.Height}, {s.Shop.Stock.All().Sum(i => i.Quantity)} units, {s.Money} cats");
+        foreach (var s in shops)
+        {
+            output.WriteLine($"{s.Name} in {s.HomeBuilding!.Name}: {s.Shop!.Stock.Width} x {s.Shop.Stock.Height}, "
+                + $"{s.Shop.Stock.All().Sum(i => i.Quantity)} units, {s.Money} cats");
+        }
 
         Assert.NotEmpty(shops);
 

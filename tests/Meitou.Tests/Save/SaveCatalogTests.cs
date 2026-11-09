@@ -42,6 +42,9 @@ public class SaveCatalogTests
             Assert.Equal(123, info.Funds);
             Assert.Equal(2, info.Members);
         }
-        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
     }
 }

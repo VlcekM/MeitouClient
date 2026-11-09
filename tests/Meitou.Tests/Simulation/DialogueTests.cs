@@ -371,7 +371,12 @@ public class DialogueTests
             Rec("trade-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("trade-l")]),
             Rec("trade-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "Looking to trade?"; r.References["lines"] = [Ref("buy-l")]; }),
             Rec("buy-l", FcsRecordType.DialogueLine,
-                    r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "I'm looking to buy some slaves"; r.References["effects"] = [Ref("buy-da")]; }),
+                    r =>
+                    {
+                        r.Ints["speaker"] = (int)Talker.Target;
+                        r.Strings["text0"] = "I'm looking to buy some slaves";
+                        r.References["effects"] = [Ref("buy-da")];
+                    }),
         ]);
         var dialogue = new DialogueSystem(data);
         var ground = new OpenGroundWalkability((_, _) => 150);

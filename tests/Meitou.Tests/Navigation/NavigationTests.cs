@@ -53,7 +53,8 @@ public class NavigationTests
         public void Box(Vector3 min, Vector3 max)
         {
             var v = new int[8];
-            for (int i = 0; i < 8; i++) v[i] = G.AddVertex(new((i & 1) == 0 ? min.X : max.X, (i & 2) == 0 ? min.Y : max.Y, (i & 4) == 0 ? min.Z : max.Z));
+            for (int i = 0; i < 8; i++)
+                v[i] = G.AddVertex(new((i & 1) == 0 ? min.X : max.X, (i & 2) == 0 ? min.Y : max.Y, (i & 4) == 0 ? min.Z : max.Z));
 
             int[][] quads = [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4], [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]];
 
@@ -150,7 +151,10 @@ public class NavigationTests
         // A wall across the whole zone with a 40-unit gate painted as a door.
         s.Box(new(s.X0 - 72, 0, cz - 10), new(cx - 20, 80, cz + 10));
         s.Box(new(cx + 20, 0, cz - 10), new(s.G.ZoneMax.X + 72, 80, cz + 10));
-        s.G.Painters.Add(new NavVolume([new(cx - 20, cz - 10), new(cx + 20, cz - 10), new(cx + 20, cz + 10), new(cx - 20, cz + 10)], 0, 40) { Owner = "gate-1" });
+        s.G.Painters.Add(new NavVolume([new(cx - 20, cz - 10), new(cx + 20, cz - 10), new(cx + 20, cz + 10), new(cx - 20, cz + 10)], 0, 40)
+        {
+            Owner = "gate-1",
+        });
         s.G.Seeds.Add(new(s.X0 + 500, 10, s.Z0 + 500));
         var mesh = s.Build();
         Assert.Contains(NavArea.Door, mesh.Areas);
@@ -201,21 +205,11 @@ public class NavigationTests
         s.Box(new(cx + 60, 0, cz - 40), new(cx + 66, 60, cz + 40));
         s.Box(new(cx - 66, 0, cz - 40), new(cx - 60, 60, cz - 8));
         s.Box(new(cx - 66, 0, cz + 8), new(cx - 60, 60, cz + 40));
-        s.G.Painters.Add(new NavVolume([new(cx - 72, cz - 8), new(cx - 54, cz - 8), new(cx - 54, cz + 8), new(cx - 72, cz + 8)], 0, 40) { Owner = "house" });
+        s.G.Painters.Add(HouseDoor(cx, cz));
         s.G.Seeds.Add(new(s.X0 + 500, 10, s.Z0 + 500));
         var exterior = ZoneNavMeshBuilder.Build(s.G, Settings, out _);
 
-        // The inside: its own floor, clipped to the hull, seeded at its inner door marker.
-        var lo = new Vector2(cx - 72, cz - 52);
-        var interior = new ZoneGeometry { Zone = new(32, 32), ZoneMin = lo, ZoneMax = lo + new Vector2(192), Margin = 8, InteriorHull = new NavVolume(hull, 0, 60), InteriorOf = "house" };
-        int a = interior.AddVertex(new(lo.X - 8, 10, lo.Y - 8)), b = interior.AddVertex(new(lo.X + 200, 10, lo.Y - 8));
-        int c = interior.AddVertex(new(lo.X + 200, 10, lo.Y + 200)), d = interior.AddVertex(new(lo.X - 8, 10, lo.Y + 200));
-        interior.AddTriangle(a, d, c, NavArea.Ground);
-        interior.AddTriangle(a, c, b, NavArea.Ground);
-        ZoneGeometryGatherer.AddOutsideCarvers(interior, hull);
-        interior.Painters.Add(new NavVolume([new(cx - 72, cz - 8), new(cx - 54, cz - 8), new(cx - 54, cz + 8), new(cx - 72, cz + 8)], 0, 40) { Owner = "house" });
-        interior.Seeds.Add(new(cx, 10, cz));
-        var inside = ZoneNavMeshBuilder.Build(interior, Settings with { TileCells = 96 }, out _);   // one tile: the box is 192 units
+        var inside = HouseInterior(hull, cx, cz);
         Assert.Contains(NavArea.Door, inside.Areas);
 
         var combined = NavInteriors.Combine(exterior, [new(inside)]);
@@ -260,6 +254,33 @@ public class NavigationTests
         }
     }
 
+    /// <summary>
+    /// The house's doorway in its west wall, painted as the house's door.
+    /// </summary>
+    static NavVolume HouseDoor(float cx, float cz) =>
+        new([new(cx - 72, cz - 8), new(cx - 54, cz - 8), new(cx - 54, cz + 8), new(cx - 72, cz + 8)], 0, 40) { Owner = "house" };
+
+    /// <summary>
+    /// The inside: its own floor, clipped to the hull, seeded at its inner door marker; built as one tile (the box is 192 units).
+    /// </summary>
+    static ZoneNavMesh HouseInterior(Vector2[] hull, float cx, float cz)
+    {
+        var lo = new Vector2(cx - 72, cz - 52);
+        var interior = new ZoneGeometry
+        {
+            Zone = new(32, 32), ZoneMin = lo, ZoneMax = lo + new Vector2(192), Margin = 8,
+            InteriorHull = new NavVolume(hull, 0, 60), InteriorOf = "house",
+        };
+        int a = interior.AddVertex(new(lo.X - 8, 10, lo.Y - 8)), b = interior.AddVertex(new(lo.X + 200, 10, lo.Y - 8));
+        int c = interior.AddVertex(new(lo.X + 200, 10, lo.Y + 200)), d = interior.AddVertex(new(lo.X - 8, 10, lo.Y + 200));
+        interior.AddTriangle(a, d, c, NavArea.Ground);
+        interior.AddTriangle(a, c, b, NavArea.Ground);
+        ZoneGeometryGatherer.AddOutsideCarvers(interior, hull);
+        interior.Painters.Add(HouseDoor(cx, cz));
+        interior.Seeds.Add(new(cx, 10, cz));
+        return ZoneNavMeshBuilder.Build(interior, Settings with { TileCells = 96 }, out _);   // one tile: the box is 192 units
+    }
+
     [Fact]
     public void A_doorless_interior_is_joined_through_its_open_doorway_and_a_destroyed_one_stays_an_island()
     {
@@ -278,7 +299,11 @@ public class NavigationTests
         var exterior = ZoneNavMeshBuilder.Build(s.G, Settings, out _);
 
         var lo = new Vector2(cx - 72, cz - 52);
-        var interior = new ZoneGeometry { Zone = new(32, 32), ZoneMin = lo, ZoneMax = lo + new Vector2(192), Margin = 8, InteriorHull = new NavVolume(hull, 0, 60), InteriorOf = "hut" };
+        var interior = new ZoneGeometry
+        {
+            Zone = new(32, 32), ZoneMin = lo, ZoneMax = lo + new Vector2(192), Margin = 8,
+            InteriorHull = new NavVolume(hull, 0, 60), InteriorOf = "hut",
+        };
         int a = interior.AddVertex(new(lo.X - 8, 10, lo.Y - 8)), b = interior.AddVertex(new(lo.X + 200, 10, lo.Y - 8));
         int c = interior.AddVertex(new(lo.X + 200, 10, lo.Y + 200)), d = interior.AddVertex(new(lo.X - 8, 10, lo.Y + 200));
         interior.AddTriangle(a, d, c, NavArea.Ground);

@@ -222,7 +222,10 @@ public class ImpostorTests
 
     static VulkanDevice? TryCreate()
     {
-        try { return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true }); }
+        try
+        {
+            return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true });
+        }
         catch (Exception e)
             when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
         {

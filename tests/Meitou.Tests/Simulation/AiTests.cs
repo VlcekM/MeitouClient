@@ -245,7 +245,8 @@ public class AiTests(ITestOutputHelper output)
         int withPackages = templates.Count(t => ai.Packages(t).Count > 0);
         var used = tasks.Select(t => ai.Task(t.StringId)!.Type).Distinct().ToList();
         var built = used.Where(t => TaskBehaviours.Of(t) != AiBehaviour.None).ToList();
-        output.WriteLine($"{withPackages} templates with packages; {built.Count} of {used.Count} task types used acted out: {string.Join(", ", built)}");
+        output.WriteLine($"{withPackages} templates with packages; {built.Count} of {used.Count} task types used acted out: "
+            + $"{string.Join(", ", built)}");
 
         Assert.Equal(0, ai.Problems);
     }
@@ -879,7 +880,10 @@ public class AiTests(ITestOutputHelper output)
                 Assert.Equal(("115-t", "113-t"), (board.Contract!.Id, board.Replacement?.Id));
                 Assert.Equal((float)end, (float)board.ContractEnd);
             }
-            finally { if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true); }
+            finally
+            {
+                if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+            }
         }
 
         // A roaming platoon's package: the saved one is run, and the one it runs now is written back.
@@ -905,7 +909,10 @@ public class AiTests(ITestOutputHelper output)
 
             Assert.Equal("116-t", again.Platoons.Single(x => x.Name == "Testfolk_7").Record.Strings["currentPackage"]);
         }
-        finally { if (Directory.Exists(platoonFolder)) Directory.Delete(platoonFolder, recursive: true); }
+        finally
+        {
+            if (Directory.Exists(platoonFolder)) Directory.Delete(platoonFolder, recursive: true);
+        }
     }
 
     /// <summary>

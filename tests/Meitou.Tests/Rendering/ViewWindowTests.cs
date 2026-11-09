@@ -39,6 +39,9 @@ public class ViewWindowTests
             Assert.Equal(point.X / -point.Z, ray.X / -ray.Z, 1e-3f);
             Assert.Equal(point.Y / -point.Z, ray.Y / -ray.Z, 1e-3f);
         }
-        finally { ViewWindow.Current = ViewWindow.Whole; }
+        finally
+        {
+            ViewWindow.Current = ViewWindow.Whole;
+        }
     }
 }

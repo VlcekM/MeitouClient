@@ -33,8 +33,8 @@ static class SyntheticTown
     /// <c>Faction folk</c> one (<c>12-t</c>, the roaming squads') before the database is made.
     /// </summary>
     public static GameDatabase Database(int residentSquads = 3, bool overrideFlag = false, bool roaming = false, bool anatomy = false,
-            bool items = false,
-        IReadOnlyList<FcsRecord>? extra = null, Action<FcsRecord>? changePatrol = null, Action<FcsRecord>? changeFolk = null, Action<FcsRecord>? changeTown = null)
+        bool items = false, IReadOnlyList<FcsRecord>? extra = null, Action<FcsRecord>? changePatrol = null, Action<FcsRecord>? changeFolk = null,
+        Action<FcsRecord>? changeTown = null)
     {
         var race = Rec("1-t", FcsRecordType.Race, "Testers");
         var parts = new List<FcsRecord>();
@@ -199,7 +199,8 @@ static class SyntheticTown
                         BodyTimeScale = bodyTimeScale, Feed = feed });
 
     public static SimWorld World(ulong seed, int threads, int residentSquads = 3, PopulationSettings? settings = null, bool synchronousPaths = true,
-        GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null, Meitou.Simulation.Bodies.BodyOptions? bodyOptions = null, int minPartition = 16, params ITickSystem[] extra)
+        GameDatabase? db = null, bool bodies = false, float bodyTimeScale = 1, Meitou.Simulation.Items.FeedSettings? feed = null,
+        Meitou.Simulation.Bodies.BodyOptions? bodyOptions = null, int minPartition = 16, params ITickSystem[] extra)
     {
         db ??= Database(residentSquads);
         var walk = new OpenGroundWalkability(Ground);

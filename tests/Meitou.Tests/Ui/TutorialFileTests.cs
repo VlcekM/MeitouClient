@@ -31,6 +31,9 @@ public sealed class TutorialFileTests
             Assert.False(second.Activate(5));   // already active
             Assert.True(second.Activate(3));    // dismissed, so it can come back
         }
-        finally { File.Delete(path); }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 }
