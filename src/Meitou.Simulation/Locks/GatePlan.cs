@@ -84,8 +84,11 @@ sealed class GatePlan : IPlanWorld
         var target = new PlanTarget(Foe, dest);
         if (TaskPlanner.Local.Plan(row, 1, target, this, [], _plan) <= 0) return DoorPlan.Entry.Blocked;
         foreach (var step in _plan)
+        {
             if (step.Type is TaskType.BashGate or TaskType.Unnamed290 or TaskType.BashDoor or TaskType.SmashBuilding)
                 return DoorPlan.Entry.Bash;
+        }
+
         return DoorPlan.Entry.Walk;
     }
 
@@ -93,6 +96,7 @@ sealed class GatePlan : IPlanWorld
     {
         if (row.Type is TaskType.BashDoor or TaskType.BashDoorHere or TaskType.BashGate or TaskType.Unnamed290 or TaskType.SmashBuilding)
             return _aggressive;
+
         float d = TaskProfiles.Of(row.Type).Desire;
         return d >= 0 ? d : 1;
     }

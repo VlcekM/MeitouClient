@@ -56,6 +56,7 @@ sealed class TownPlaceClaims(PopulationData data)
         if (!_turretTaken.TryGetValue(board.Town, out var taken)) _turretTaken[board.Town] = taken = [];
         int hour = world.Hour, claimed = 0;
         for (int pass = 0; pass < 2 && claimed < board.Turrets.Count; pass++)
+        {
             for (int k = 0; k < squad.Members.Count && claimed < board.Turrets.Count; k++)
             {
                 var id = squad.Members[k];
@@ -71,6 +72,7 @@ sealed class TownPlaceClaims(PopulationData data)
                     float d = Vector2.DistanceSquared(Flat(world.Characters.Previous[s].Position), Flat(turret.Position));
                     if (d < bestD) (best, bestD) = (t, d);
                 }
+
                 if (best >= 0)
                 {
                     taken.Add(best);
@@ -79,6 +81,7 @@ sealed class TownPlaceClaims(PopulationData data)
                     claimed++;
                 }
             }
+        }
     }
 
     /// <summary>
@@ -97,6 +100,7 @@ sealed class TownPlaceClaims(PopulationData data)
             if (type == TaskType.ManATurretOnBuilding) home = true;
             else if (type is TaskType.ManATurret or TaskType.ManATurretPlayerJob or TaskType.UseTurret) town = true;
         }
+
         homeOnly = home && !town;
         return home || town;
     }
@@ -178,6 +182,7 @@ sealed class TownPlaceClaims(PopulationData data)
                 relaxes |= bar && roles[g].Task.Type == TaskType.RelaxInTownPackage;
                 sits |= roles[g].Task.Type == TaskType.StayInHome;
             }
+
             if (taken is null && !_seatTaken.TryGetValue(home, out taken)) _seatTaken[home] = taken = [];
             int had = _kept.TryGetValue(s, out var old) ? IndexOf(home, old) : -1;
             if (had >= 0 && Operated(world, home.SeatAt(had).Position)) had = -1;
@@ -186,12 +191,14 @@ sealed class TownPlaceClaims(PopulationData data)
                 if (had >= 0) taken.Remove(had);
                 continue;
             }
+
             if (had >= 0 && (relaxes || StaysAt(old.Kind)))
             {
                 taken.Add(had);
                 board.SeatClaims[s] = old;
                 continue;
             }
+
             int seat = relaxes ? FreeSeat(home, taken, HomeSpotKind.Chair, near) : FreeFurniture(world, home, taken, id);
             if (seat < 0 && relaxes) seat = FreeSeat(home, taken, HomeSpotKind.Bar, near);
             if (seat < 0 && relaxes) seat = FreeSeat(home, taken, HomeSpotKind.General, near);
@@ -209,9 +216,11 @@ sealed class TownPlaceClaims(PopulationData data)
     static void TakeOperatedSeats(World world, TownBuilding home, HashSet<int> taken)
     {
         for (int i = 0; i < home.Spots.Count; i++)
+        {
             if (home.Spots[i].Kind is HomeSpotKind.Chair or HomeSpotKind.ThroneSeat && !taken.Contains(i)
                 && Operated(world, home.Spots[i].Position))
                 taken.Add(i);
+        }
     }
 
     /// <summary>
@@ -263,12 +272,14 @@ sealed class TownPlaceClaims(PopulationData data)
                 sits |= roles[g].Task.Type is TaskType.SitAround or TaskType.SitOnThrone;
                 around |= roles[g].Task.Type == TaskType.SitAround;
             }
+
             bool had = _keptSits.TryGetValue(s, out var old);
             if (!sits || cold.Ai.SeatUnreachable)   // one that gave its seat up leaves it to the next member
             {
                 if (had) TakenOf(old.Building).Remove(old.Index);
                 continue;
             }
+
             bool playerSide = PlayerSide(world, cold);
             var at = world.Characters.Next[s].Position;
             int site = data.TownAt(at);
@@ -285,6 +296,7 @@ sealed class TownPlaceClaims(PopulationData data)
                 board.SitClaims[s] = old;
                 continue;
             }
+
             if (had) TakenOf(old.Building).Remove(old.Index);
             int best = -1;
             float bestD = float.MaxValue;
@@ -294,9 +306,11 @@ sealed class TownPlaceClaims(PopulationData data)
                 if (!Takes(seat.Spot.Kind) || !Mine(seat.Building)
                     || _seatTaken.TryGetValue(seat.Building, out var taken) && taken.Contains(seat.Index))
                     continue;
+
                 float d = Vector3.DistanceSquared(seat.Spot.Position, at);
                 if (d < bestD) (best, bestD) = (i, d);
             }
+
             if (best < 0) continue;
             var found = seats.Seats[best];
             TakenOf(found.Building).Add(found.Index);
@@ -323,6 +337,7 @@ sealed class TownPlaceClaims(PopulationData data)
                 PostsTakenOf(held.Building).Remove(held.Index);
                 mind.TownPost = null;
             }
+
             if (!guards || mind.TownPost is not null) continue;
             mind.TownPost = DrawPost(world, id, posts);
             if (mind.TownPost is { } got) PostsTakenOf(got.Building).Add(got.Index);
@@ -351,9 +366,13 @@ sealed class TownPlaceClaims(PopulationData data)
     void ReservePosts(World world)
     {
         foreach (var squad in world.Squads.All)
+        {
             foreach (var id in squad.Members)
+            {
                 if (world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)?.Ai?.TownPost is { } post)
                     PostsTakenOf(post.Building).Add(post.Index);
+            }
+        }
     }
 
     /// <summary>
@@ -413,6 +432,7 @@ sealed class TownPlaceClaims(PopulationData data)
                 foreach (var spot in board.SeatClaims.Values)
                     if (IndexOf(home, spot) is >= 0 and var i) taken.Add(i);
             }
+
             foreach (var claim in board.SitClaims.Values) TakenOf(claim.Building).Add(claim.Index);
         }
     }
@@ -475,6 +495,7 @@ sealed class TownPlaceClaims(PopulationData data)
             float d = Vector3.DistanceSquared(bar.Spots[i].Position, p);
             if (d < bestD) (best, bestD) = (i, d);
         }
+
         return best;
     }
 

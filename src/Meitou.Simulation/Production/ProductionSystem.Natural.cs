@@ -42,7 +42,9 @@ public sealed partial class ProductionSystem
         /// </summary>
         public bool Touches(Vector3 from)
         {
-            if (Shape is not { } shape || !Matrix4x4.Invert(Transform, out var inverse)) return Vector2.Distance(new Vector2(from.X, from.Z), Flat) < 1.2f * Radius;
+            if (Shape is not { } shape || !Matrix4x4.Invert(Transform, out var inverse))
+                return Vector2.Distance(new Vector2(from.X, from.Z), Flat) < 1.2f * Radius;
+
             var local = Vector3.Transform(new Vector3(from.X, Centre.Y, from.Z), inverse);
             var mid = new Vector2((shape.Min.X + shape.Max.X) / 2, (shape.Min.Z + shape.Max.Z) / 2);
             return shape.InsideXz(mid + (new Vector2(local.X, local.Z) - mid) / 1.2f);
@@ -76,7 +78,10 @@ public sealed partial class ProductionSystem
     BuildSite? TownDummy(World world, string id)
     {
         if (_dummySites.TryGetValue(id, out var known)) return known;
-        if (world.Fixtures.Find(id) is not { Kind: Locks.FixtureKind.Training } f || _db.Find(f.RecordId) is not { Type: FcsRecordType.Building } building) return null;
+        if (world.Fixtures.Find(id) is not { Kind: Locks.FixtureKind.Training } f
+            || _db.Find(f.RecordId) is not { Type: FcsRecordType.Building } building)
+            return null;
+
         return _dummySites[id] = new BuildSite
         {
             Id = id,
@@ -102,11 +107,13 @@ public sealed partial class ProductionSystem
         int at = id.LastIndexOf('@');
         var parts = at > 0 ? id[(at + 1)..].Split(',') : [];
         if (parts.Length == 3 && float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)
-            && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y) && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
+            && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y)
+            && float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z))
         {
             string record = id[NaturalPrefix.Length..at];
             var position = new Vector3(x, y, z);
-            if (_db.Find(record) is { Type: FcsRecordType.Building } building && building.GetBool("is foliage") && Data(record) is { Operable: true, Resource: not 0 })
+            if (_db.Find(record) is { Type: FcsRecordType.Building } building && building.GetBool("is foliage")
+                && Data(record) is { Operable: true, Resource: not 0 })
             {
                 // No rock there is not remembered: the host's rock source may not have placed that zone yet.
                 if (_nodes is not null)
@@ -114,9 +121,12 @@ public sealed partial class ProductionSystem
                     if (_nodes.Near(0, x, z, 1).FirstOrDefault(n => n.Record == record) is not { Record.Length: > 0 } rock) return null;
                     _naturalBounds[id] = new RockBounds(rock.Centre ?? rock.Position, rock.Radius, rock.Shape, rock.Transform);
                 }
-                site = new BuildSite { Id = id, Record = record, Name = building.Name, Position = position, Owner = -1, Materials = [], Complete = true };
+
+                site = new BuildSite { Id = id, Record = record, Name = building.Name, Position = position, Owner = -1, Materials = [],
+                    Complete = true };
             }
         }
+
         return _naturalSites[id] = site;
     }
 
@@ -130,9 +140,15 @@ public sealed partial class ProductionSystem
     {
         if (instance is null) return null;
         if (world.Machines.Find(instance) is { } m)
-            return m.Data is { Function: MachineData.MineFunction or MachineData.NaturalMineFunction, Resource: not 0 and var r } ? new(instance, r, m.Yield) { Owner = Natural(instance)?.Owner ?? -1, TownName = TownNameOf(world, Natural(instance)) } : null;
+        {
+            return m.Data is { Function: MachineData.MineFunction or MachineData.NaturalMineFunction, Resource: not 0 and var r }
+                ? new(instance, r, m.Yield) { Owner = Natural(instance)?.Owner ?? -1, TownName = TownNameOf(world, Natural(instance)) }
+                : null;
+        }
+
         if (Natural(instance) is not { } site || Data(site.Record) is not { Resource: not 0 and var resource } data) return null;
         if (!_naturalYields.TryGetValue(instance, out float y)) _naturalYields[instance] = y = _resources.NodeYield(resource, site.Position);
+
         // A rock nobody has mined yet: no machine, so nobody works it; whole, no power draw; research counts only for the player's buildings (FUN_14082ec70).
         return new(instance, resource, y)
         {

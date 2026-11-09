@@ -71,6 +71,7 @@ public sealed partial class AiSystem
         if (site < 0 && NearestTownOf(at, squad.Faction) is >= 0 and var near
             && Vector2.DistanceSquared(Flat(at), Flat(data.Sites[near].Position)) <= 9.375e6f)
             site = near;
+
         if (site < 0 || data.Sites[site].Town.Type is TownType.SlaveCamp or TownType.Prison) return -1;
 
         if (!world.Fixtures.IsRegistered(site)) world.Fixtures.RegisterSite(world, data, site);
@@ -81,9 +82,11 @@ public sealed partial class AiSystem
             if (f.Owner != squad.Faction
                 && !(data.Relations.Contains(f.Owner) && data.Relations.Contains(squad.Faction) && data.Relations.IsAlly(squad.Faction, f.Owner)))
                 continue;
+
             if (FixtureRegistry.IsFree(table, f) || !table.TryResolveNext(f.Occupant, out int s)
                 || table.Cold(s) is not { Medical.Incapacitated: false, IsPlayer: false } c)
                 continue;
+
             if (unholy && c.Appearance is not { Female: true } && c.Race?.StringId == leaderRace) continue;
             return site;
         }

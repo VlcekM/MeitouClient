@@ -20,6 +20,7 @@ public static class SlaveSave
     public static void Read(FcsRecord? state, CharacterCold cold, PopulationData data)
     {
         if (state is null) return;
+
         // The original keeps any int; Meitou models 0 to 3, so anything out of range loads as free.
         int saved = state.Ints.GetValueOrDefault(StateKey);
         cold.SlaveState = saved is >= 1 and <= 3 ? (byte)saved : (byte)0;

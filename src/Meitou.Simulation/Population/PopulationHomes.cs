@@ -73,7 +73,8 @@ public sealed partial class PopulationSystem
     /// </summary>
     Vector3? HomeFloor(IWalkability walk, TownBuilding home, float x, float z, float y)
     {
-        if (_data.Db.Find(home.BuildingId) is not { } record || record.GetBool("is gateway") || !record.GetReferences("interior mask").Any()) return null;
+        if (_data.Db.Find(home.BuildingId) is not { } record || record.GetBool("is gateway") || !record.GetReferences("interior mask").Any())
+            return null;
 
         float terrain = walk.TerrainHeight(x, z);
         if (HasNode(home))

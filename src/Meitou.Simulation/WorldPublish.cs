@@ -263,7 +263,9 @@ public sealed partial class World
             InspectedBuilding = beds?.DetailOf(this, Player.InspectedBuilding) ?? Fixtures.DetailOf(Player.InspectedBuilding, Player.Faction),
             InspectedRichness = _production?.RichnessOf(this, Player.InspectedBuilding),
             InspectedTurret = combat?.TurretPanelOf(this, Player.InspectedBuilding),
-            Machines = OpenContainerView() is { } container ? [.. _production is null ? [] : Machines.Published(_production.Items), container] : _production is null ? [] : Machines.Published(_production.Items),
+            Machines = OpenContainerView() is { } container
+                ? [.. _production is null ? [] : Machines.Published(_production.Items), container]
+                : _production is null ? [] : Machines.Published(_production.Items),
             MachinesVersion = Machines.Version,
             Research = _production?.ResearchView(this) ?? Production.ResearchSnapshot.Empty,
             Outposts = _production?.OutpostView(this) ?? [],
@@ -302,9 +304,22 @@ public sealed partial class World
 
         var grid = Items.ContainerAccess.GridOf(this, f, out var region);
         var storage = new InventoryView(region.Width, region.Height, 0, 0,
-            Array.AsReadOnly(grid.Items.Select((item, index) => (item, index)).Where(e => region.Holds(e.item)).Select(e => new InventoryItemView(e.index, e.item.Record,
-                e.item.Name, "main", e.item.X - region.X, e.item.Y - region.Y, e.item.Width, e.item.Height, e.item.Quantity, e.item.Weight, e.item.Quality)
-            { Material = e.item.MaterialId, Colour = e.item.ColourId, Charge = e.item.ChargeFraction, Company = e.item.CompanyId, Level = e.item.Level, Charges = e.item.Charges, MaxCharges = e.item.MaxCharges, Unique = e.item.Unique }).ToArray()));
+            Array.AsReadOnly(grid.Items
+                .Select((item, index) => (item, index))
+                .Where(e => region.Holds(e.item))
+                .Select(e => new InventoryItemView(e.index, e.item.Record, e.item.Name, "main", e.item.X - region.X, e.item.Y - region.Y,
+                    e.item.Width, e.item.Height, e.item.Quantity, e.item.Weight, e.item.Quality)
+                {
+                    Material = e.item.MaterialId,
+                    Colour = e.item.ColourId,
+                    Charge = e.item.ChargeFraction,
+                    Company = e.item.CompanyId,
+                    Level = e.item.Level,
+                    Charges = e.item.Charges,
+                    MaxCharges = e.item.MaxCharges,
+                    Unique = e.item.Unique
+                })
+                .ToArray()));
         return new Production.MachineSnapshot(id, f.RecordId, [], null, storage, null, 0, 0, 0) { IsContainer = true };
     }
 
@@ -365,7 +380,8 @@ public sealed partial class World
         bool sneaking = cold is { IsPlayer: true } && (cold.Orders & CharacterOrders.Sneak) != 0;
         var watchers = sneaking ? WatchersOf(cold!) : [];
         bool fightsPlayer = cold is { IsPlayer: false, InCombat: true } && combat?.StateOf(id) is { TargetSlot: >= 0 and var fought } fight
-            && fought < state.Length && state[fought].Alive && state[fought].Generation == fight.TargetGeneration && table.Cold(fought) is { IsPlayer: true };
+            && fought < state.Length && state[fought].Alive && state[fought].Generation == fight.TargetGeneration
+            && table.Cold(fought) is { IsPlayer: true };
 
         return new PublishedCharacter(id, cold, selected, inspected, detailed, shown, sneaking, watchers, fightsPlayer);
     }
@@ -386,7 +402,9 @@ public sealed partial class World
         s.Appearance = cold?.Appearance;
         s.Position = DrawnPosition(cold, state[i].Position);
         s.Yaw = state[i].Yaw;
-        s.Animations = cold?.Animation is { } anim && _animations is not null ? _animations.Publish(anim, s.Layers) : AnimationLayers.For(state[i].Animation, state[i].AnimationTime);
+        s.Animations = cold?.Animation is { } anim && _animations is not null
+            ? _animations.Publish(anim, s.Layers)
+            : AnimationLayers.For(state[i].Animation, state[i].AnimationTime);
         s.DrawYaw = cold?.Animation is { HasDrawYaw: true } drawn ? drawn.DrawYaw : float.NaN;
         s.Faction = cold?.Faction ?? -1;
         s.WeaponDrawn = cold is not null && cold.DrawnWeapon != WeaponKinds.None;
@@ -421,25 +439,39 @@ public sealed partial class World
         var population = f.Population;
         float extraBloodLoss = f.ExtraBloodLoss;
 
-        s.Skills = detailed && cold!.Stats is { } sk ? new SkillSummary(sk[StatsEnumerated.MeleeAttack], sk[StatsEnumerated.MeleeDefence], sk[StatsEnumerated.Dodge], sk.Toughness, sk.Strength, sk.Athletics) : null;
+        s.Skills = detailed && cold!.Stats is { } sk
+            ? new SkillSummary(sk[StatsEnumerated.MeleeAttack], sk[StatsEnumerated.MeleeDefence], sk[StatsEnumerated.Dodge], sk.Toughness,
+                sk.Strength, sk.Athletics)
+            : null;
         s.Inventory = selected && cold!.Inventory is { } carried ? Items.InventoryText.Lines(carried) : [];
         s.AllSkills = detailed && cold!.Stats is { } allStats ? Array.AsReadOnly(allStats.ToArray()) : [];
         s.SkillXpMultipliers = detailed && cold!.Race is { } skillRace ? Array.AsReadOnly((float[])skillRace.StatMultipliers.Clone()) : [];
-        s.Hud = detailed && cold!.Medical is { } hudMed && cold.Race is { } hudRace && cold.Stats is { } hudStats ? HudOf(id, cold, hudMed, hudRace, hudStats, state[i], combat, bodyConstants, !Sight.Outdoors(i), Sight.Inside(i), population?.Db) : null;
+        s.Hud = detailed && cold!.Medical is { } hudMed && cold.Race is { } hudRace && cold.Stats is { } hudStats
+            ? HudOf(id, cold, hudMed, hudRace, hudStats, state[i], combat, bodyConstants, !Sight.Outdoors(i), Sight.Inside(i), population?.Db)
+            : null;
         s.LimbBits = cold?.Medical?.LimbBits ?? 0;
         s.BloodAmounts = cold?.Medical?.ShownBlood ?? 0UL;
         s.Knockdown = cold?.Knockdown ?? default;
         s.ClosedSlots = cold is null || !detailed ? [] : ClosedSlotsOf(cold);
         s.HealthParts = detailed && cold!.Medical is { } health && cold.Race is { } anatomy ? HealthPartsOf(health, anatomy) : [];
-        s.ItemGrid = (selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id)) && cold!.Inventory is { } grid
+        s.ItemGrid = (selected || id == Player.OpenLoot || cold is { IsPlayer: true } && Player.InventoryShown.Contains(id))
+            && cold!.Inventory is { } grid
             ? InventoryViewOf(cold, grid, population, bodyConstants) : null;
-        s.Bounties = detailed && cold!.Bounties is not null ? Crime.CrimeSystem.Lines(cold, Tick, TickSeconds, LocalFaction(cold, state[i].Position, population)) : [];
-        s.Slave = cold is { SlaveState: >= 1 and <= 3 } ? new SlaveView(cold.SlaveState, population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? factions[cold.SlaveOwner].Name : "",
-            _systems.OfType<Kidnap.CaptiveSystem>().FirstOrDefault()?.LooksLikeSlaveLevel(cold) ?? 0) : null;
-        s.Disguise = detailed && cold!.Faction == Player.Faction && (cold.DisguiseLevel > 0 || cold.RecentlyWanted > 0) ? DisguiseOf(cold, state[i].Position, population) : null;
+        s.Bounties = detailed && cold!.Bounties is not null
+            ? Crime.CrimeSystem.Lines(cold, Tick, TickSeconds, LocalFaction(cold, state[i].Position, population))
+            : [];
+        s.Slave = cold is { SlaveState: >= 1 and <= 3 }
+            ? new SlaveView(cold.SlaveState,
+                population is { Factions: { } factions } && (uint)cold.SlaveOwner < (uint)factions.Count ? factions[cold.SlaveOwner].Name : "",
+                _systems.OfType<Kidnap.CaptiveSystem>().FirstOrDefault()?.LooksLikeSlaveLevel(cold) ?? 0)
+            : null;
+        s.Disguise = detailed && cold!.Faction == Player.Faction && (cold.DisguiseLevel > 0 || cold.RecentlyWanted > 0)
+            ? DisguiseOf(cold, state[i].Position, population)
+            : null;
         s.Status = detailed ? StatusOf(id, cold!, state[i].Position, population) : null;
         s.NoLootGuilt = cold is { } guilt
-            && (guilt.NpcClass is FundamentalType.Bandit or FundamentalType.Slave || population is { Factions: { } fl } && (uint)guilt.Faction < (uint)fl.Count && fl[guilt.Faction].NotReal);
+            && (guilt.NpcClass is FundamentalType.Bandit or FundamentalType.Slave || population is { Factions: { } fl }
+                && (uint)guilt.Faction < (uint)fl.Count && fl[guilt.Faction].NotReal);
         s.WarParty = cold is { SquadId: >= 0 } warCold && Squads.Find(warCold.SquadId) is { PlatoonId: >= 0 } warSquad
             && Platoons.Find(warSquad.PlatoonId)?.Campaign is not null;
         s.Body = cold?.Medical is { } med && cold.Race is { } race ? BodyOf(cold, med, race, state[i].Task, extraBloodLoss) : null;
@@ -456,14 +488,17 @@ public sealed partial class World
 
         // The original skips robots' appearances (FUN_140531820) and animals have none.
         s.Build = cold is { Stats: { } buildStats, Medical: { } fed, Race.IsRobot: false, Appearance: { Animal: null } look }
-            ? ShapedBuild(cold, Data.Characters.CharacterShape.BuildFromStats(look.Female, buildStats, static (stats, s) => stats[s], fed.Hunger)) : null;
+            ? ShapedBuild(cold, Data.Characters.CharacterShape.BuildFromStats(look.Female, buildStats, static (stats, s) => stats[s], fed.Hunger))
+            : null;
         bool pathed = detailed && (state[i].Flags & (ushort)MoveFlags.HasPath) != 0;
         s.Path = pathed ? cold!.Path.Skip(state[i].PathCursor).ToArray() : [];
         s.PathExact = pathed && cold!.PathExact != int.MaxValue ? Math.Max(cold.PathExact - state[i].PathCursor, 0) : int.MaxValue;
         s.CarriedBy = cold?.CarriedBy ?? CharacterId.None;
         s.Carry = cold is { CarriedBy.IsNone: false } ? cold.CarryAttach ?? Carrying.CarryPose.Fallback : null;
         s.Carrying = cold?.Carrying ?? CharacterId.None;
-        s.HeldTool = state[i].Task == (byte)CharacterTask.Operate && cold is { OperateSite: not null, Appearance.Animal: null } ? cold.OperateTool : null;
+        s.HeldTool = state[i].Task == (byte)CharacterTask.Operate && cold is { OperateSite: not null, Appearance.Animal: null }
+            ? cold.OperateTool
+            : null;
         s.Mouth = cold?.Mouth?.Record;
         s.MouthTone = cold?.MouthTone ?? default;
         s.WorkEvents = WorkEventsOf(state[i].Task, cold);
@@ -532,12 +567,22 @@ public sealed partial class World
 
         // The turret the combat system runs with this gunner; else (no combat system) at the gun of the turret its squad gave it: the AI's turret
         // goal, walked to and stood at (derived from the claims, not hashed).
-        s.Turret = combat?.TurretOf(cold?.Gunning) is { } gunned ? new MannedTurret(cold!.Gunning!, gunned.BuildingId, gunned.Position, gunned.Yaw, gunned.GunId) { Simulated = true, Aim = gunned.Aim, Angles = gunned.Angles }
-            : cold is { Ai: { Behaviour: Ai.AiBehaviour.Turret, Squad.Ai: { } board } } && (CharacterTask)state[i].Task == CharacterTask.Idle && Ai.AiSystem.Holds(state[i], cold)
-            && board.TurretClaims.TryGetValue(i, out int claimed) && (uint)claimed < (uint)board.Turrets.Count && board.Turrets[claimed] is { Turret: { } post } building
-            ? new MannedTurret(building.Key, building.BuildingId, post.Position, post.Yaw, post.GunId) : null;
+        s.Turret = combat?.TurretOf(cold?.Gunning) is { } gunned
+            ? new MannedTurret(cold!.Gunning!, gunned.BuildingId, gunned.Position, gunned.Yaw, gunned.GunId)
+            {
+                Simulated = true,
+                Aim = gunned.Aim,
+                Angles = gunned.Angles
+            }
+            : cold is { Ai: { Behaviour: Ai.AiBehaviour.Turret, Squad.Ai: { } board } } && (CharacterTask)state[i].Task == CharacterTask.Idle
+                && Ai.AiSystem.Holds(state[i], cold)
+                && board.TurretClaims.TryGetValue(i, out int claimed) && (uint)claimed < (uint)board.Turrets.Count
+                && board.Turrets[claimed] is { Turret: { } post } building
+                    ? new MannedTurret(building.Key, building.BuildingId, post.Position, post.Yaw, post.GunId)
+                    : null;
         s.RangedLine = detailed && cold is not null ? combat?.RangedLineOf(this, id, cold) : null;
-        s.InPlayerBuilding = cold is { IsPlayer: false } && cold.Faction != Player.Faction && (cold.Medical is { Unconscious: true } || Carrying.CarrySystem.Asleep(table, i))
+        s.InPlayerBuilding = cold is { IsPlayer: false } && cold.Faction != Player.Faction
+            && (cold.Medical is { Unconscious: true } || Carrying.CarrySystem.Asleep(table, i))
             && _production?.InPlayerBuilding(this, state[i].Position) == true;
         s.BedRecoveryRate = detailed && cold is { InSomething: Locks.HeldState.Bed } ? _systems
             .OfType<BodySystem>()
@@ -546,22 +591,29 @@ public sealed partial class World
         s.Light = sneaking ? Sight.PeekLight(i) : 1;
         s.Watchers = watchers;
         s.Bar = cold is { IsPlayer: true } ? PickBar(cold, state[i].Task) ?? TrainBar(cold) : null;
-        s.Prison = cold is { IsImprisoned: true } ? new PrisonView(!(cold.InWhat is { } cageId && Fixtures.Find(cageId) is { } cage && cage.Lock is not { EffectivelyLocked: true }), cold.SentenceLength, cold.SentenceStart + cold.SentenceLength - GameHours)
-        {
-            CageOwner = cold.InWhat is { } owned && Fixtures.Find(owned) is { } jail ? jail.Owner : -1,
-            CageId = cold.InWhat,
-            LockLevel = cold.InWhat is { } locked && Fixtures.Find(locked)?.Lock is { } cageLock ? cageLock.Level : -1
-        } : null;
+        s.Prison = cold is { IsImprisoned: true }
+            ? new PrisonView(!(cold.InWhat is { } cageId && Fixtures.Find(cageId) is { } cage && cage.Lock is not { EffectivelyLocked: true }),
+                cold.SentenceLength, cold.SentenceStart + cold.SentenceLength - GameHours)
+            {
+                CageOwner = cold.InWhat is { } owned && Fixtures.Find(owned) is { } jail ? jail.Owner : -1,
+                CageId = cold.InWhat,
+                LockLevel = cold.InWhat is { } locked && Fixtures.Find(locked)?.Lock is { } cageLock ? cageLock.Level : -1
+            }
+            : null;
         s.Ragdoll = _ragdolls?.Publish(id);
         s.CanStealthKo = koSlot >= 0 && i != koSlot && cold is { IsPlayer: false } && Carrying.CarrySystem.CanBeKnockedOut(cold);
-        s.StealthKoChance = s.CanStealthKo && shown ? Carrying.CarrySystem.StealthKoChance(table.Cold(koSlot)!, cold!, aggro?.Spotted(i, table.IdOf(koSlot)) == true) : null;
+        s.StealthKoChance = s.CanStealthKo && shown
+            ? Carrying.CarrySystem.StealthKoChance(table.Cold(koSlot)!, cold!, aggro?.Spotted(i, table.IdOf(koSlot)) == true)
+            : null;
         s.Asleep = Carrying.CarrySystem.Asleep(table, i);
         s.Down = cold is not null && CharacterFacts.Down(cold);
         s.Conscious = cold is not null && CharacterFacts.Conscious(cold);
         s.Standing = cold is not null && CharacterFacts.Standing(cold);
         s.Animal = cold is not null && CharacterFacts.Animal(cold);
         s.CanOpenInventory = cold is not null && Carrying.CarrySystem.Openable(table, i);
-        s.KidnapChance = shown && leadSlot >= 0 && i != leadSlot && cold is { IsPlayer: false } ? Carrying.CarrySystem.KidnapChance(table.Cold(leadSlot)!, cold, Tick) : null;
+        s.KidnapChance = shown && leadSlot >= 0 && i != leadSlot && cold is { IsPlayer: false }
+            ? Carrying.CarrySystem.KidnapChance(table.Cold(leadSlot)!, cold, Tick)
+            : null;
         s.LockpickSkill = cold is { IsPlayer: true } ? Locks.Lockpicking.Skill(cold) : 0;
     }
 
@@ -653,7 +705,9 @@ public sealed partial class World
         if (c.SquadId >= 0 && Squads.Find(c.SquadId) is { PlatoonId: >= 0 } squad && squad.Leader == id
             && Platoons.Find(squad.PlatoonId) is { Campaign: { } inst } platoon && inst.Leader == platoon.Id)
         {
-            return new(_systems.OfType<PopulationSystem>().FirstOrDefault()?.CampaignOf(inst.CampaignId)?.IsHostile == true ? StatusKind.WarLeader : StatusKind.Leader);
+            return new(_systems.OfType<PopulationSystem>().FirstOrDefault()?.CampaignOf(inst.CampaignId)?.IsHostile == true
+                ? StatusKind.WarLeader
+                : StatusKind.Leader);
         }
 
         if (c.Kidnapped) return new(StatusKind.Kidnapped);
@@ -683,7 +737,9 @@ public sealed partial class World
                 : null;
         }
 
-        return task == (byte)CharacterTask.Idle && cold is { ActionWork: { } standing, ActionClip: { } clip } && clip == standing.Clip ? standing : null;
+        return task == (byte)CharacterTask.Idle && cold is { ActionWork: { } standing, ActionClip: { } clip } && clip == standing.Clip
+            ? standing
+            : null;
     }
 
     /// <summary>
@@ -691,14 +747,16 @@ public sealed partial class World
     /// every character's fill, selected or not.
     /// </summary>
     static string[] ClosedSlotsOf(CharacterCold cold) =>
-        [.. ClosableSlots.Where(slot => Items.InventoryCommands.SectionClosed(cold, slot)), .. Items.InventoryCommands.MainClosed(cold) ? MainGrid : []];
+        [.. ClosableSlots.Where(slot => Items.InventoryCommands.SectionClosed(cold, slot)),
+            .. Items.InventoryCommands.MainClosed(cold) ? MainGrid : []];
 
     /// <summary>
     /// The health panel's rows: each body part's flesh, stun, bandage and rig.
     /// </summary>
     static IReadOnlyList<HealthPartView> HealthPartsOf(MedicalState health, RaceData anatomy) =>
         Array.AsReadOnly(health.Parts
-            .Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp, p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb })
+            .Select(p => new HealthPartView(p.Template.StringId, p.Template.Name, p.Flesh, p.Stun, p.Bandage, p.Rig, p.MaxHp,
+                p.IsRobotic(anatomy)) { Vital = p.Template.Vital, Type = p.Template.Type, Limb = p.Limb })
             .ToArray());
 
     /// <summary>
@@ -724,7 +782,8 @@ public sealed partial class World
     /// The inventory panel's items shown in a grid.
     /// </summary>
     static IReadOnlyList<InventoryItemView> ItemsOf(Items.Inventory grid, int faction, PopulationData? population) =>
-        Array.AsReadOnly(grid.Shown().Select(shown => new InventoryItemView(shown.Index, shown.Item.Record, shown.Item.Name, shown.Item.Section, shown.Item.X, shown.Item.Y, shown.Item.Width, shown.Item.Height, shown.Item.Quantity, shown.Item.Weight, shown.Item.Quality)
+        Array.AsReadOnly(grid.Shown().Select(shown => new InventoryItemView(shown.Index, shown.Item.Record, shown.Item.Name, shown.Item.Section,
+            shown.Item.X, shown.Item.Y, shown.Item.Width, shown.Item.Height, shown.Item.Quantity, shown.Item.Weight, shown.Item.Quality)
         {
             Material = shown.Item.MaterialId,
             Colour = shown.Item.ColourId,
@@ -748,7 +807,9 @@ public sealed partial class World
         if (task == (byte)CharacterTask.GoTo) return null;
 
         var l = c.PickingLock is { } id ? Fixtures.Find(id)?.Lock
-            : c.Shackles is { Work: Locks.ShackleWork.Pick } job && Characters.TryResolveNext(job.Wearer, out int w) ? Locks.LockSystem.WornShackles(Characters.Cold(w))?.Lock : null;
+            : c.Shackles is { Work: Locks.ShackleWork.Pick } job && Characters.TryResolveNext(job.Wearer, out int w)
+                ? Locks.LockSystem.WornShackles(Characters.Cold(w))?.Lock
+                : null;
         if (l is not { EffectivelyLocked: true }) return null;
 
         float chance = Locks.Lockpicking.RollChance(c, l.Level);
@@ -812,9 +873,11 @@ public sealed partial class World
         bool robotNeed = robotScore > MedicalState.AidNeedFloor;
         bool robot = !organic && robotNeed;
         return new(med.Blood / capacity, med.WorstPart, med.Hunger, med.Unconscious, med.Dead, organic || robot,
-            task == (byte)CharacterTask.Treat ? CareKind.Treating : task == (byte)CharacterTask.Rest ? CareKind.Resting : CareKind.None, cold.MedicJob, cold.RescueJob,
+            task == (byte)CharacterTask.Treat ? CareKind.Treating : task == (byte)CharacterTask.Rest ? CareKind.Resting : CareKind.None,
+            cold.MedicJob, cold.RescueJob,
             med.NeedsSplint(race, 50), med.KoTimer, med.PlayingDead, med is { StayingLow: true, Prone: true, Crawling: false }, robot)
-        { NeedsOrganicAid = organic, NeedsRepairs = robotNeed, BeingEaten = med.EatenCountdown > 0, Coma = med.Coma, Crawling = med.Crawling, RightArmDisabled = !med.ArmWorks(left: false) };
+        { NeedsOrganicAid = organic, NeedsRepairs = robotNeed, BeingEaten = med.EatenCountdown > 0, Coma = med.Coma, Crawling = med.Crawling,
+            RightArmDisabled = !med.ArmWorks(left: false) };
     }
 
     #endregion
@@ -826,7 +889,8 @@ public sealed partial class World
     /// Crossbows, Precision and Perception in ranged mode with a crossbow, else Martial Arts unarmed or Attack and Defense with a melee weapon; then
     /// Strength, Dexterity, Toughness and, but in ranged mode, Dodge; the lines and their tooltips are <see cref="HudTips"/>'s.
     /// </summary>
-    HudView HudOf(CharacterId id, CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, in CharacterHot hot, Combat.CombatSystem? combat,
+    HudView HudOf(CharacterId id, CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, in CharacterHot hot,
+        Combat.CombatSystem? combat,
         GameConstants? constants, bool inBuilding, bool inside, Data.GameDatabase? db = null)
     {
         // Movement +0x24 currentlyMoving: the current speed (+0xb8, the Athletics line's too) above 0.1 (CharMovement::update).
@@ -835,7 +899,8 @@ public sealed partial class World
         var hc = combat?.HudNumbers(this, id.Slot, cold);
         var lines = HudTips.Lines(cold, med, stats, hc, constants, inBuilding, inside, mode);
         var extended = cold.Extended is { } x0 && _systems.OfType<BodySystem>().FirstOrDefault() is { } bodies
-            ? bodies.WithCombatMode(x0, cold, combat is not null && CharacterFacts.InCombatMode(combat, Characters, id, cold, true, true)) : cold.Extended;
+            ? bodies.WithCombatMode(x0, cold, combat is not null && CharacterFacts.InCombatMode(combat, Characters, id, cold, true, true))
+            : cold.Extended;
         return new HudView(med.Blood, MedicalState.BloodCapacity(race, stats.Strength, med.HasStatsObject, med.ScaleK, med.ScaleZ), med.Bleeding,
             cold.Fighter?.EncumbranceFactor ?? 1, lines.AsReadOnly(), extended)
         {
@@ -855,14 +920,17 @@ public sealed partial class World
     /// crossbow's accuracy error; else, in a melee fight, the class of the weapon in hand at its trained level with its damage; else Stealth when
     /// sneaking, Athletics when moving faster than 9 units a second. Swimming replaces it with the swim speed. Picking a lock is Lockpicking.
     /// </summary>
-    CurrentSkillView? SkillLine(CharacterId id, CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, in CharacterHot hot, Combat.CombatSystem? combat,
+    CurrentSkillView? SkillLine(CharacterId id, CharacterCold cold, MedicalState med, RaceData race, CharacterStats stats, in CharacterHot hot,
+        Combat.CombatSystem? combat,
         int mode)
     {
         float encumbrance = cold.Fighter?.EncumbranceFactor ?? 1;
         if (cold.WaterState == 3)
             return new(StatsEnumerated.Swimming, "Swimming", cold.SwimSpeed, Speed: true) { Swim = SwimTermsOf(cold, med, race, stats, encumbrance) };
 
-        var stat = cold.SkillInUseTick >= Tick - 1 ? cold.SkillInUse : PickBar(cold, hot.Task) is not null ? StatsEnumerated.Lockpicking : StatsEnumerated.None;
+        var stat = cold.SkillInUseTick >= Tick - 1
+            ? cold.SkillInUse
+            : PickBar(cold, hot.Task) is not null ? StatsEnumerated.Lockpicking : StatsEnumerated.None;
 
         if (stat != StatsEnumerated.None)
         {
@@ -876,7 +944,9 @@ public sealed partial class World
 
         if (aiming)
         {
-            var aimStat = cold.LastWeaponCategory == (int)Data.Gameplay.Combat.WeaponCategory.Turret ? StatsEnumerated.Turrets : StatsEnumerated.Crossbows;
+            var aimStat = cold.LastWeaponCategory == (int)Data.Gameplay.Combat.WeaponCategory.Turret
+                ? StatsEnumerated.Turrets
+                : StatsEnumerated.Crossbows;
             if (Combat.CombatSystem.HudAccuracy(cold, aimStat) is { } aim)
                 return new(aimStat, "Accuracy Error:", aim.Deviation) { Accuracy = new(aim.Weapon, aim.Skill, aim.Deviation) };
         }
@@ -919,9 +989,9 @@ public sealed partial class World
 
         return new(StatsEnumerated.Athletics, "Athletics:", (int)stats.Athletics)
         {
-            Athletics = new((int)stats.Athletics, Speed.RunValue(race, stats.Athletics),
-            (int)((1 - Speed.LegFactor(med)) * 100), (int)((1 - encumbrance) * 100), cold.Fighter?.AthleticsFactor ?? 1, (int)((med.LegItemFactor(StatsEnumerated.Athletics) - 1) * 100),
-            hot.MaxSpeed)
+            Athletics = new((int)stats.Athletics, Speed.RunValue(race, stats.Athletics), (int)((1 - Speed.LegFactor(med)) * 100),
+                (int)((1 - encumbrance) * 100), cold.Fighter?.AthleticsFactor ?? 1, (int)((med.LegItemFactor(StatsEnumerated.Athletics) - 1) * 100),
+                hot.MaxSpeed)
         };
     }
 
@@ -935,7 +1005,8 @@ public sealed partial class World
         bool left = med.ArmWorks(left: true), right = med.ArmWorks(left: false);
         float legs = Speed.LegFactor(med) * (left ? 1 : 0.6f) * (right ? 1 : 0.6f);
         float items = med.LegItemFactor(StatsEnumerated.Swimming) * med.ArmItemFactor(StatsEnumerated.Swimming);
-        return new(stats[StatsEnumerated.Swimming], Speed.SwimBase(race, stats), (int)((1 - legs) * 100), (int)((1 - Speed.HungerFactor(med.Hunger)) * 100),
+        return new(stats[StatsEnumerated.Swimming], Speed.SwimBase(race, stats), (int)((1 - legs) * 100),
+            (int)((1 - Speed.HungerFactor(med.Hunger)) * 100),
             (int)((1 - encumbrance) * 100), (int)((1 - items) * 100), !left && !right, cold.SwimSpeed);
     }
 

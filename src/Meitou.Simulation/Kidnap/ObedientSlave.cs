@@ -43,12 +43,14 @@ public static class ObedientSlave
             Reset(world, cold);
             return;
         }
+
         int at = cold.Jobs.FindIndex(j => j.Type == TaskType.SlaveObedience);
         if (at < 0)
         {
             Destroy(world, cold);
             return;
         }
+
         if (SlotOf(world, cold) is >= 0 and var slot) ProductionSystem.RemoveJob(world, slot, at);
         else cold.Jobs.RemoveAt(at);
     }
@@ -74,8 +76,11 @@ public static class ObedientSlave
     {
         int slot = SlotOf(world, cold);
         for (int i = cold.Jobs.Count - 1; i >= 0; i--)
+        {
             if (slot >= 0) ProductionSystem.RemoveJob(world, slot, i);
             else cold.Jobs.RemoveAt(i);
+        }
+
         cold.OrderQueue.Clear();
         if (slot >= 0 && cold.OrderMove && world.Characters.Next[slot].Task == (byte)CharacterTask.GoTo)
             TaskStart.Stand(world.Characters, slot);
@@ -126,6 +131,7 @@ public static class ObedientSlave
                 if (table.Next[s].Alive && table.Cold(s)?.Save?.Source.Handle == job.Saved) target = table.IdOf(s);
             if (!target.IsNone) cold.Jobs[k] = job with { Character = target };
         }
+
         return !target.IsNone && target.Slot != slot && table.IsAlive(target) ? target : null;
     }
 }
@@ -175,6 +181,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         if (!ObedientSlave.Obeys(cold)) return DecisionCheck.No(cold.SlaveState == 1 ? "sneaking" : "not a slave");
         if (Choose(world, slot, cold, k) is not { } pick)
             return DecisionCheck.No("no goal of its master's Slave list runs");
+
         return Continues(world, slot, cold, k, pick.Type) ? DecisionCheck.Runs : DecisionCheck.Run;
     }
 
@@ -207,6 +214,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         var cold = world.Characters.Cold(slot)!;
         if (cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == TaskType.FollowSlavemaster)
             cold.FollowOrder = CharacterId.None;
+
         TaskStart.End(world, slot, TaskEnd.Stopped);
     }
 
@@ -229,16 +237,19 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
             var type = goal.Task.Type;
             if (goal.Task.Priority is < TaskPriority.Fluff or > TaskPriority.Urgent || !goal.InWindow(hour) || !TaskStart.Eligible(world, cold, type))
                 continue;
+
             float desire = Desire(world, slot, cold, k, type);
             if (!(desire > 0)) continue;
             float score = desire * goal.Weight;
             if (cold.Running is { Source: TaskSource.Job, Implicit: false } run && run.Job == k && run.Row == type)
                 score *= Continuity;
+
             if (!(score > 0)) continue;
 
             // The original keys candidates by score and raises a taken key by 0.0001: of equal scores the later-listed ranks first.
             if (best is null || score >= best.Value.Score) best = new Choice(type, score);
         }
+
         return best;
     }
 
@@ -274,6 +285,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
         var table = world.Characters;
         if (world.Squads.Find(cold.SquadId) is { } squad && !squad.Leader.IsNone && table.TryResolveNext(squad.Leader, out int leader))
             return table.Next[leader].Position;
+
         return table.Next[slot].Position;
     }
 
@@ -287,6 +299,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
     {
         if (cold.Running is not { Source: TaskSource.Job, Implicit: false } run || run.Job != k || run.Row != type)
             return false;
+
         var task = (CharacterTask)world.Characters.Next[slot].Task;
         switch (type)
         {
@@ -355,6 +368,7 @@ sealed class ObedientJobs : IJobSource, ITaskHandler
             cold.ArriveWithin = _works.TryGetValue(table.IdOf(slot), out var aim) ? aim.Range : AiSystem.WorkReach;
             return;
         }
+
         MovementSystem.Stop(table, slot);
         if (!_works.TryGetValue(table.IdOf(slot), out var spot)) return;
         ref var n = ref table.Next[slot];

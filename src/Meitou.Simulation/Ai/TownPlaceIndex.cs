@@ -79,66 +79,107 @@ sealed class TownPlaceIndex(PopulationData data)
     {
         _places.Clear();
         _realWork.Clear();
-        var shops = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
-        var bars = new HashSet<TownBuilding>(ReferenceEqualityComparer.Instance);
-        var publicFlag = new Dictionary<TownBuilding, bool>(ReferenceEqualityComparer.Instance);
+        var refresh = new Refresher(this, world, ai, data);
 
-        // The building's own record (designation, last template, public day), else (engine choice, a town not made yet) the template of its level
-        // data's residents.
+        refresh.NoteHomes();
+        refresh.AddTowns();
+    }
+
+    /// <summary>
+    /// One <see cref="Refresh"/>: the shops, bars and public flags noted from the buildings' records and residents, then the places of the squads'
+    /// towns.
+    /// </summary>
+    sealed class Refresher(TownPlaceIndex index, World world, AiSystem ai, PopulationData data)
+    {
+        /// <summary>
+        /// The buildings whose residents trade.
+        /// </summary>
+        readonly HashSet<TownBuilding> _shops = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// The buildings designated bars.
+        /// </summary>
+        readonly HashSet<TownBuilding> _bars = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Each building's public flag as its record or residents have it.
+        /// </summary>
+        readonly Dictionary<TownBuilding, bool> _publicFlag = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// The building shops of the squads living in each building.
+        /// </summary>
+        readonly Dictionary<TownBuilding, List<Trading.Shop>> _stocks = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Notes the homes of every squad, and the shops selling from them.
+        /// </summary>
+        public void NoteHomes()
+        {
+            foreach (var squad in world.Squads.All)
+            {
+                if ((squad.Ai?.OwnHome ?? squad.HomeBuilding) is { } home)
+                {
+                    Note(home, ai.TemplateOf(squad.TemplateId).Template);
+
+                    // Only a building shop sells to shoppers: its stock is in containers, which is all FUN_14054add0 looks at (a trader's carried
+                    // stock is not).
+                    if (squad.Shop is { Building: not null } shop) (_stocks.TryGetValue(home, out var held) ? held : _stocks[home] = []).Add(shop);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Adds the places of each squad's town and of the town it is in.
+        /// </summary>
+        public void AddTowns()
+        {
+            foreach (var squad in world.Squads.All)
+            {
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    // The squad's town, and the one it is in (a bar package away from home takes that town's bar).
+                    int site = pass == 0 ? squad.Ai?.Town ?? -1 : squad.Ai?.InTown.Site ?? -1;
+                    if (site >= 0 && !index._places.ContainsKey(site)) AddPlaces(site);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The building's own record (designation, last template, public day), else (engine choice, a town not made yet) the template of its level
+        /// data's residents.
+        /// </summary>
         void Note(TownBuilding b, SquadTemplate? t)
         {
             if (world.Fixtures.RecordOf(b.Key) is { } record)
             {
-                if (record.Template is { } id && ai.TemplateOf(id).Template is { HasShop: true }) shops.Add(b);
-                if (record.Designation == AiSystem.DesignationBar) bars.Add(b);
-                if (record.PublicDay is { } open) publicFlag[b] = open;
+                if (record.Template is { } id && ai.TemplateOf(id).Template is { HasShop: true }) _shops.Add(b);
+                if (record.Designation == AiSystem.DesignationBar) _bars.Add(b);
+                if (record.PublicDay is { } open) _publicFlag[b] = open;
 
                 return;
             }
 
             if (t is null) return;
-            if (t.HasShop) shops.Add(b);
-            if (t.BuildingDesignation == AiSystem.DesignationBar) bars.Add(b);
+            if (t.HasShop) _shops.Add(b);
+            if (t.BuildingDesignation == AiSystem.DesignationBar) _bars.Add(b);
 
-            publicFlag.TryAdd(b, t.PublicDay);
+            _publicFlag.TryAdd(b, t.PublicDay);
         }
 
-        var stocks = new Dictionary<TownBuilding, List<Trading.Shop>>(ReferenceEqualityComparer.Instance);
-
-        foreach (var squad in world.Squads.All)
-        {
-            if ((squad.Ai?.OwnHome ?? squad.HomeBuilding) is { } home)
-            {
-                Note(home, ai.TemplateOf(squad.TemplateId).Template);
-
-                // Only a building shop sells to shoppers: its stock is in containers, which is all FUN_14054add0 looks at (a trader's carried stock
-                // is not).
-                if (squad.Shop is { Building: not null } shop) (stocks.TryGetValue(home, out var held) ? held : stocks[home] = []).Add(shop);
-            }
-        }
-
-        foreach (var squad in world.Squads.All)
-        {
-            for (int pass = 0; pass < 2; pass++)
-            {
-                // The squad's town, and the one it is in (a bar package away from home takes that town's bar).
-                int site = pass == 0 ? squad.Ai?.Town ?? -1 : squad.Ai?.InTown.Site ?? -1;
-                if (site >= 0 && !_places.ContainsKey(site)) AddPlaces(site);
-            }
-        }
-
+        /// <summary>
+        /// The places of one town: where to wander, shop, drink, sit, work, go inside and stand guard.
+        /// </summary>
         void AddPlaces(int site)
         {
             var buildings = data.Sites[site].Buildings;
             foreach (var b in buildings)
                 if (b.ResidentsTemplate.Length > 0) Note(b, ai.TemplateOf(b.ResidentsTemplate).Template);
 
-            bool IsPublic(TownBuilding b) => world.Fixtures.PublicOf(b.Key)
-                ?? (publicFlag.TryGetValue(b, out bool open) ? open : b.LevelState?.GetBool("is public day", true) ?? true);
             var wander = buildings.Where(b => IsPublic(b)).GroupBy(b => b.Zone).ToDictionary(g => g.Key, g => g.ToArray());
-            var shopList = buildings.Where(b => (b.IsShop || shops.Contains(b)) && IsPublic(b)).ToArray();
+            var shopList = buildings.Where(b => (b.IsShop || _shops.Contains(b)) && IsPublic(b)).ToArray();
             var stock = new Dictionary<TownBuilding, ulong>(ReferenceEqualityComparer.Instance);
-            foreach (var b in shopList) stock[b] = StockOf(world, b, stocks.GetValueOrDefault(b));
+            foreach (var b in shopList) stock[b] = index.StockOf(world, b, _stocks.GetValueOrDefault(b));
 
             // The town's furniture to sit around at (chairs, thrones, dummies) and the faction owning each building: its property owner, else its
             // level owner, else the town's.
@@ -160,14 +201,20 @@ sealed class TownPlaceIndex(PopulationData data)
                 }
             }
 
-            _places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || bars.Contains(b)) && IsPublic(b))],
+            index._places[site] = new(wander, shopList, [.. buildings.Where(b => (b.IsBar || _bars.Contains(b)) && IsPublic(b))],
                 [.. buildings.Where(b => b.IsOutdoorTable)],
                 [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b) && b.Function is >= 0 and var fn && (WorkFunctions >> fn & 1) != 0)],
                 stock, seats, seatOwners,
                 [.. buildings.Where(b => b.HasInterior && !b.IsWall && !world.Fixtures.IsDestroyed(b) && IsPublic(b))],
                 [.. buildings.Where(b => !world.Fixtures.IsDestroyed(b)).SelectMany(TownPlaceClaims.GuardPosts)]);
-            _realWork[site] = [.. _places[site].Workplaces.Where(b => AiSystem.RealWork(world, b))];
+            index._realWork[site] = [.. index._places[site].Workplaces.Where(b => AiSystem.RealWork(world, b))];
         }
+
+        /// <summary>
+        /// Whether a building is open to the public: the player's toggle, else its noted flag, else its level state's.
+        /// </summary>
+        bool IsPublic(TownBuilding b) => world.Fixtures.PublicOf(b.Key)
+            ?? (_publicFlag.TryGetValue(b, out bool open) ? open : b.LevelState?.GetBool("is public day", true) ?? true);
     }
 
     /// <summary>

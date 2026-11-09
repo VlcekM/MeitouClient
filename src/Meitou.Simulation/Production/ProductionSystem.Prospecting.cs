@@ -34,7 +34,8 @@ public sealed partial class ProductionSystem
     /// </summary>
     void ProspectBegin(World world, ProspectOrder order)
     {
-        if (world.Characters.TryResolveNext(order.Character, out int slot)) PlayerOrders.Give(world, slot, new OrderEntry(TaskType.Prospecting, this), order.Queued);
+        if (world.Characters.TryResolveNext(order.Character, out int slot))
+            PlayerOrders.Give(world, slot, new OrderEntry(TaskType.Prospecting, this), order.Queued);
     }
 
     /// <summary>
@@ -70,6 +71,7 @@ public sealed partial class ProductionSystem
                 cold.Prospecting = null;
                 continue;
             }
+
             progress += world.TickSeconds;
             if (progress < ProspectSeconds)
             {
@@ -77,9 +79,11 @@ public sealed partial class ProductionSystem
                 found++;
                 continue;
             }
+
             TaskStart.End(world, i, TaskEnd.Done);
             PublishProspect(world, cold, n.Position);
         }
+
         _prospectors = found;
     }
 
@@ -97,7 +101,8 @@ public sealed partial class ProductionSystem
         if (swamp > 0) environment.Add(new("Swamp", swamp));
         var found = new ProspectLine[ProspectResources.Length];
         for (int k = 0; k < found.Length; k++) found[k] = new(ProspectResources[k].Name, _resources.Yield(ProspectResources[k].Resource, at));
-        world.Prospected = new ProspectReport((world.Prospected?.Serial ?? 0) + 1, at, prospector.Name, (int)skill, _resources.ZoneName(at.X, at.Z) ?? "", (int)at.Y,
+        world.Prospected = new ProspectReport((world.Prospected?.Serial ?? 0) + 1, at, prospector.Name, (int)skill,
+            _resources.ZoneName(at.X, at.Z) ?? "", (int)at.Y,
             (int)((skill * 0.01f * 6000 + 2000) * 0.2f), environment, found, SampleProspectMap(world, at, skill * 0.01f),
             world.Weather?.At(at.X, at.Z)?.WindSpeed ?? 0);
     }
@@ -117,11 +122,19 @@ public sealed partial class ProductionSystem
         for (int k = 0; k < fields.Length; k++)
         {
             int resource = ProspectResources[k].Resource;
-            if (resource is MachineData.WaterResource or MachineData.GroundResource or ResourceField.StoneResource) { fields[k] = new float[size * size]; rocks[k] = []; continue; }
+            if (resource is MachineData.WaterResource or MachineData.GroundResource or ResourceField.StoneResource)
+            {
+                fields[k] = new float[size * size];
+                rocks[k] = [];
+                continue;
+            }
+
             var near = _nodes?.Near(resource, at.X, at.Z, extent * ProspectMap.RockRange) ?? [];
             rocks[k] = near.Select(n => new ProspectRock(n.Position.X, n.Position.Z, _resources.NodeYield(resource, n.Position))).ToArray();
         }
+
         for (int row = 0; row < size; row++)
+        {
             for (int col = 0; col < size; col++)
             {
                 float x = x0 + (col + 0.5f) * cell, z = z0 + (row + 0.5f) * cell, y = walk.TerrainHeight(x, z);
@@ -130,6 +143,8 @@ public sealed partial class ProductionSystem
                 for (int k = 0; k < fields.Length; k++)
                     if (fields[k] is { } field) field[i] = _resources.FieldYield(ProspectResources[k].Resource, new(x, y, z), at);
             }
+        }
+
         return new ProspectMap(size, x0, z0, extent, heights, fields, rocks);
     }
 }

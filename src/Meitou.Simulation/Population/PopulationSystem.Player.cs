@@ -39,7 +39,8 @@ public sealed partial class PopulationSystem
             ApplyStartRelations(relations, start);
             candidates = [.. data.Sites.Where(site => site.Town.Type is TownType.Town or TownType.Village && site.Index < data.SiteFactions.Count
                 && data.SiteFactions[site.Index] is var f and >= 0 && !data.Factions[f].NotReal
-                && data.Factions[f].FundamentalType != FundamentalType.Bandit && relations.Get(f, data.PlayerFaction) > FactionRelations.HostileThreshold)];
+                && data.Factions[f].FundamentalType != FundamentalType.Bandit
+                && relations.Get(f, data.PlayerFaction) > FactionRelations.HostileThreshold)];
         }
 
         if (candidates.Count == 0) return (new Vector2(-43500, -6625), null, missing);
@@ -138,7 +139,9 @@ public sealed partial class PopulationSystem
     {
         var members = new List<BuiltMember>();
         var first = new List<MemberPlan>();
-        var fromTemplate = new HashSet<int>();   // the members the squad templates made: they go through the unique gate, the CHARACTER entries do not (FUN_140583a10)
+
+        // the members the squad templates made: they go through the unique gate, the CHARACTER entries do not (FUN_140583a10)
+        var fromTemplate = new HashSet<int>();
         SquadTemplate? template = null;
         void AddTemplate(GameRecord record)
         {
@@ -182,7 +185,11 @@ public sealed partial class PopulationSystem
         {
             CharacterAppearance? look = null;
             if (_data.Appearances is { } source)   // an animal gets its species' shared look (GeneratedAppearances)
-                look = source.Create(m.RecordId, factionId, (int)(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook + (ulong)m.Index) & 0x7FFFFFFF));
+            {
+                look = source.Create(m.RecordId, factionId,
+                    (int)(Rng.Hash(world.Seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook + (ulong)m.Index) & 0x7FFFFFFF));
+            }
+
             members.Add(new BuiltMember(m, look));
         }
 

@@ -62,8 +62,14 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
             {
                 return _animals.GetOrAdd(recordId, static (_, s) =>
                 {
-                    try { return CharacterAppearance.BuildAnimal(s.db, s.installRoot, s.animal); }
-                    catch (KeyNotFoundException) { return null; }
+                    try
+                    {
+                        return CharacterAppearance.BuildAnimal(s.db, s.installRoot, s.animal);
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        return null;
+                    }
                 }, (db, installRoot, animal));
             }
 
@@ -133,7 +139,8 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     {
         Town = replacement is null
             ? Record
-            : replacement with { Id = Record.Id, Name = Record.Name, UnexploredName = Record.UnexploredName, Faction = replacement.Faction ?? Town.Faction };
+            : replacement with { Id = Record.Id, Name = Record.Name, UnexploredName = Record.UnexploredName,
+                Faction = replacement.Faction ?? Town.Faction };
         Replacement = replacement;
     }
 
@@ -442,7 +449,8 @@ public sealed class PopulationData
 
         foreach (var site in Sites)
         {
-            if (site.Index == exclude.Site || site.Town.Type is not (TownType.Town or TownType.Village or TownType.SlaveCamp or TownType.Military)) continue;
+            if (site.Index == exclude.Site || site.Town.Type is not (TownType.Town or TownType.Village or TownType.SlaveCamp or TownType.Military))
+                continue;
 
             var centre = new Vector2(site.Position.X, site.Position.Z);
             if (Eligible(centre, site.Index < SiteFactions.Count ? SiteFactions[site.Index] : -1, site.Town.IsPublic))
@@ -558,7 +566,8 @@ public sealed class PopulationData
     /// <summary>
     /// The weapon, armour and technique data of combat.
     /// </summary>
-    public Meitou.Data.Gameplay.Combat.CombatDatabase Combat => LazyInitializer.EnsureInitialized(ref _combat, () => Data.Gameplay.Combat.CombatDatabase.From(Db));
+    public Meitou.Data.Gameplay.Combat.CombatDatabase Combat =>
+        LazyInitializer.EnsureInitialized(ref _combat, () => Data.Gameplay.Combat.CombatDatabase.From(Db));
 
     ItemFactory? _items;
 

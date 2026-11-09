@@ -191,7 +191,8 @@ public readonly record struct WaterCost(float Shallow, float Waist, float Deep)
 public static class WalkableSpots
 {
     static readonly float[] Radii = [4, 8, 16, 32, 64, 128];
-    static readonly Vector2[] Directions = [.. Enumerable.Range(0, 8).Select(k => new Vector2(MathF.Cos(k * MathF.PI / 4), MathF.Sin(k * MathF.PI / 4)))];
+    static readonly Vector2[] Directions =
+        [.. Enumerable.Range(0, 8).Select(k => new Vector2(MathF.Cos(k * MathF.PI / 4), MathF.Sin(k * MathF.PI / 4)))];
 
     /// <summary>
     /// <paramref name="at"/> when it is walkable, else the first walkable point on rings of 4 to <paramref name="maxRadius"/> units round it (eight

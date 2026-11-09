@@ -117,12 +117,14 @@ public sealed partial class AiSystem
                 _mind.Plan.Add(new PlanStep(type, default));
                 return true;
             }
+
             if (TaskDataTable.Of(type) is not { } row)
             {
                 _mind.Plan.Clear();
                 _mind.Plan.Add(new PlanStep(type, default));
                 return true;
             }
+
             var target = row.Is(TaskDataFlags.NeedsTarget) && !row.Is(TaskDataFlags.Finder) ? Find(row, default) : default;
             if (row.Is(TaskDataFlags.NeedsTarget) && !row.Is(TaskDataFlags.Finder) && target.IsNone) return false;
             if (row.Done.Length > 0 && Array.TrueForAll(row.Done, c => Holds(c, target))) return false;
@@ -166,9 +168,12 @@ public sealed partial class AiSystem
         {
             if (t.Kind is not (Targets.Machine or Targets.Work)) return null;
             foreach (var m in _world.Machines.All)
+            {
                 if (m.Position.X == t.Position.X && m.Position.Z == t.Position.Z
                     && (t.Kind == Targets.Machine || Production.ProductionSystem.IsTownWork(m.Site)))
                     return m;
+            }
+
             return null;
         }
 
@@ -213,69 +218,86 @@ public sealed partial class AiSystem
                 StateType.HasWeaponEquipped157 => cold.DrawnWeapon != WeaponKinds.None,
                 StateType.HasWeapon => cold.Fighter is { Weapon: not null, Unarmed: false },
                 StateType.IsCarryingSomething => !cold.Carrying.IsNone,
-                // 23 (FUN_140598860): the items or the worn backpack hold a first aid kit. 39 (the state-16 evaluator FUN_14059de10 asked of itself,
-                // Observed): the immediate-threat flag (Character +0x2b0). 139 (FUN_140598e90): deep water (water state 3), 0 held in a bed or cage.
-                // 103 (FUN_1409980c0): a leg down that could still be fixed.
-                StateType.HaveFirstAidKit => FirstAid.FirstAidSystem.HoldsKit(cold, Items.ItemInfo.FirstAidKitFunction),
-                StateType.IsAggressionTowardsMe => _system._combat is { } combat && CharacterFacts.ImmediateThreat(combat, _world, _slot),
-                StateType.MeSwim => cold.WaterState == 3 && cold.InSomething == Locks.HeldState.None,
-                StateType.MyLegsAreMessedUp => cold.Medical is { LegsMessedUp: true },
-                // 121 (FUN_14059b7b0): the inventory or worn backpack holds an item stolen for it (goal 184's list A is !121; TownDutySystem acts it
-                // out).
-                StateType.CarryingExcessLoot => Kidnap.TownDutySystem.CarriesLoot(_world, cold),
-                StateType.IsInBed => cold.InSomething == Locks.HeldState.Bed
-                    || (CharacterTask)Me.Task == CharacterTask.Rest && _mind.Behaviour == AiBehaviour.Sleep,
-                StateType.IsWorking or StateType.IsWorkingPretend or StateType.UsingTargetTurret or StateType.UsingAnyTurret => Settled(target),
-                // AI::iAmInsideTargetBuilding (FUN_14059a4b0) for a target that is not a building: inside its home building (no home: held true).
-                StateType.AmInsideTargetBuilding => _board.Home is not { } inHome || _world.Sight.BuildingOf(_slot) == inHome.Key,
-                StateType.IsAtHome => _board.Home is not { } home || _mind.HomeUnreachable
-                    || Vector2.DistanceSquared(Flat(Me.Position), Flat(home.Position)) <= HomeRadius * HomeRadius,
-                // Without a town it is never at its home town; its destination town (patrolling in town) is wherever it is.
-                StateType.IsAtHomeTown => _board.Town >= 0 && _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot)),
-                // The running package's mission town when it has one (the trader's next town), else the home town.
-                StateType.AtDestinationTown or StateType.AtDestinationTown94 => _board.Destination.IsNone
-                    ? _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot))
-                    : _system.CurrentTown(_world, Me.Position) == _board.Destination,
-                StateType.HasDestinationTown => _board.Town >= 0 || !_board.Destination.IsNone,
-                StateType.AtATown => _system.TownAt(Me.Position) >= 0,
-                // Any alarm of its town in reach (goal 210's own-faction filter is its desire's).
-                StateType.AlarmsInTheVicinity => _system.AlarmOf(_world, _slot, TaskType.InvestigateAlarms, _board) is not null,
-                // FUN_140997c70: no leader, dead, down or crippled
-                StateType.IsLeaderDown => SquadIntact.Down(_world.Characters, _mind.Squad.Leader)
-                    || _world.Characters.TryResolveNext(_mind.Squad.Leader, out int lead)
-                    && _world.Characters.Cold(lead) is { Medical.Crawling: true },
-                // 72 (FUN_1405a0610, Observed): never for a character not of the player's faction, so an NPC's sleep rows (98, 100, 175, 261)
-                // are never done; for the player's a medical float above 0.9 (MedicalSystem +0xb0, meaning Unknown), here "not incapacitated".
-                StateType.IsFullyRested => _playerSide && cold.Medical is not { Incapacitated: true },
-                StateType.HasOneWorkingArm => cold.Medical is not { } arms || arms.ArmWorks(left: true) || arms.ArmWorks(left: false),
-                // 80 (evaluator 1405c7930, Verified): the medical left-arm byte +0x166; the lift rows 213, 240, 225, 246, 68 and 170 need it. States
-                // 7 and 48 are not wired: no goal reaches those rows.
-                StateType.IsCarryingArmOk => cold.Medical is not { } carrier || Carrying.CarrySystem.LeftArmUsable(carrier),
-                StateType.HasTwoWorkingArm => cold.Medical is not { } arms2 || arms2.BothArmsWork,
-                // The turret goals' done test (149, 222, 234: list A "6*"): no enemy near, so guards man the turrets only while enemies come
-                // (docs/simulation.md "AI", turrets).
-                StateType.IsNoEnemiesInVicinity => !EnemyNear(cold),
-                // 26 IS_CROUCHING_OR_LYING (FUN_140599e90): false when crippled (a crawler: the flag is set with posture 2), else true staying low,
-                // playing dead or in a bed; the two unidentified flag reads are not modelled.
-                StateType.IsCrouchingOrLying => CharacterFacts.CrouchingOrLying(cold),
-                // 141 (FUN_14060e640): the building to sleep in is private and a stranger stands in the home. 108 (FUN_14060e5e0): the same finder
-                // without the public test.
-                StateType.StrangersInHouseP => _system.StrangersInHouseP(_world, _board, _slot),
-                StateType.StrangersInHouse => _system.StrangersInHouse(_world, _board, _slot),
-                // Held true: moving, standing up, power and buildings; doors are the movement's and the lock-up round's (docs/simulation.md
-                // "Planner").
-                StateType.IsMovementAllowed or StateType.CanGetUp or StateType.IsBuildingComplete
-                    or StateType.BuildingHasPower or StateType.MachineHasFreeOperatorSlot or StateType.IsReadyForAction
-                    or StateType.DoorIsOpen or StateType.DoorIsOpenHere or StateType.AtLocationBuildingDoor or StateType.AtCurrentLocationBuildingDoor
-                    or StateType.AtLocationBuildingDoorInside or StateType.AtLocationBuildingDoorOutside or StateType.DestinationIsAccessible
-                    or StateType.LocationIsAccessible or StateType.DestinationNotBlockedByFortifications or StateType.AtLocationFortificationGate
-                    or StateType.DoorIsLockedAndImInside or StateType.DoorIsLockedAndImOutside or StateType.AllDoorsLocked or StateType.IsObjectMine
-                    or StateType.IsAlly or StateType.CrowdLimit8 or StateType.TargetStandingStill
-                    or StateType.IsMachineOutputEmpty or StateType.HasBuildingMaterials or StateType.BuildingHasBuildingMaterials => true,
-                _ => false,
+                _ => BodyOrTownHolds(condition.State, target, cold),
             };
             return value == condition.Holds;
         }
+
+        /// <summary>
+        /// The states of the body, its belongings, its home and town and its squad (<see cref="Holds"/> for the others); the rest are held
+        /// true or false.
+        /// </summary>
+        bool BodyOrTownHolds(StateType state, in PlanTarget target, CharacterCold cold) => state switch
+        {
+            // 23 (FUN_140598860): the items or the worn backpack hold a first aid kit. 39 (the state-16 evaluator FUN_14059de10 asked of itself,
+            // Observed): the immediate-threat flag (Character +0x2b0). 139 (FUN_140598e90): deep water (water state 3), 0 held in a bed or cage.
+            // 103 (FUN_1409980c0): a leg down that could still be fixed.
+            StateType.HaveFirstAidKit => FirstAid.FirstAidSystem.HoldsKit(cold, Items.ItemInfo.FirstAidKitFunction),
+            StateType.IsAggressionTowardsMe => _system._combat is { } combat && CharacterFacts.ImmediateThreat(combat, _world, _slot),
+            StateType.MeSwim => cold.WaterState == 3 && cold.InSomething == Locks.HeldState.None,
+            StateType.MyLegsAreMessedUp => cold.Medical is { LegsMessedUp: true },
+            // 121 (FUN_14059b7b0): the inventory or worn backpack holds an item stolen for it (goal 184's list A is !121; TownDutySystem acts it
+            // out).
+            StateType.CarryingExcessLoot => Kidnap.TownDutySystem.CarriesLoot(_world, cold),
+            StateType.IsInBed => cold.InSomething == Locks.HeldState.Bed
+                || (CharacterTask)Me.Task == CharacterTask.Rest && _mind.Behaviour == AiBehaviour.Sleep,
+            StateType.IsWorking or StateType.IsWorkingPretend or StateType.UsingTargetTurret or StateType.UsingAnyTurret => Settled(target),
+            // AI::iAmInsideTargetBuilding (FUN_14059a4b0) for a target that is not a building: inside its home building (no home: held true).
+            StateType.AmInsideTargetBuilding => _board.Home is not { } inHome || _world.Sight.BuildingOf(_slot) == inHome.Key,
+            StateType.IsAtHome => _board.Home is not { } home || _mind.HomeUnreachable
+                || Vector2.DistanceSquared(Flat(Me.Position), Flat(home.Position)) <= HomeRadius * HomeRadius,
+            // Without a town it is never at its home town; its destination town (patrolling in town) is wherever it is.
+            StateType.IsAtHomeTown => _board.Town >= 0 && _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot)),
+            // The running package's mission town when it has one (the trader's next town), else the home town.
+            StateType.AtDestinationTown or StateType.AtDestinationTown94 => _board.Destination.IsNone
+                ? _system.AtHomeTown(_world, _mind.Squad, _board, _world.Characters.IdOf(_slot))
+                : _system.CurrentTown(_world, Me.Position) == _board.Destination,
+            StateType.HasDestinationTown => _board.Town >= 0 || !_board.Destination.IsNone,
+            StateType.AtATown => _system.TownAt(Me.Position) >= 0,
+            // Any alarm of its town in reach (goal 210's own-faction filter is its desire's).
+            StateType.AlarmsInTheVicinity => _system.AlarmOf(_world, _slot, TaskType.InvestigateAlarms, _board) is not null,
+            // FUN_140997c70: no leader, dead, down or crippled
+            StateType.IsLeaderDown => SquadIntact.Down(_world.Characters, _mind.Squad.Leader)
+                || _world.Characters.TryResolveNext(_mind.Squad.Leader, out int lead)
+                && _world.Characters.Cold(lead) is { Medical.Crawling: true },
+            // 72 (FUN_1405a0610, Observed): never for a character not of the player's faction, so an NPC's sleep rows (98, 100, 175, 261)
+            // are never done; for the player's a medical float above 0.9 (MedicalSystem +0xb0, meaning Unknown), here "not incapacitated".
+            StateType.IsFullyRested => _playerSide && cold.Medical is not { Incapacitated: true },
+            StateType.HasOneWorkingArm => cold.Medical is not { } arms || arms.ArmWorks(left: true) || arms.ArmWorks(left: false),
+            // 80 (evaluator 1405c7930, Verified): the medical left-arm byte +0x166; the lift rows 213, 240, 225, 246, 68 and 170 need it. States
+            // 7 and 48 are not wired: no goal reaches those rows.
+            StateType.IsCarryingArmOk => cold.Medical is not { } carrier || Carrying.CarrySystem.LeftArmUsable(carrier),
+            StateType.HasTwoWorkingArm => cold.Medical is not { } arms2 || arms2.BothArmsWork,
+            // The turret goals' done test (149, 222, 234: list A "6*"): no enemy near, so guards man the turrets only while enemies come
+            // (docs/simulation.md "AI", turrets).
+            StateType.IsNoEnemiesInVicinity => !EnemyNear(cold),
+            // 26 IS_CROUCHING_OR_LYING (FUN_140599e90): false when crippled (a crawler: the flag is set with posture 2), else true staying low,
+            // playing dead or in a bed; the two unidentified flag reads are not modelled.
+            StateType.IsCrouchingOrLying => CharacterFacts.CrouchingOrLying(cold),
+            // 141 (FUN_14060e640): the building to sleep in is private and a stranger stands in the home. 108 (FUN_14060e5e0): the same finder
+            // without the public test.
+            StateType.StrangersInHouseP => _system.StrangersInHouseP(_world, _board, _slot),
+            StateType.StrangersInHouse => _system.StrangersInHouse(_world, _board, _slot),
+            _ => HeldTrue(state),
+        };
+
+        /// <summary>
+        /// States held true (moving, standing up, power, buildings, doors); an unlisted state is false.
+        /// </summary>
+        static bool HeldTrue(StateType state) => state switch
+        {
+            // Held true: moving, standing up, power and buildings; doors are the movement's and the lock-up round's (docs/simulation.md
+            // "Planner").
+            StateType.IsMovementAllowed or StateType.CanGetUp or StateType.IsBuildingComplete
+                or StateType.BuildingHasPower or StateType.MachineHasFreeOperatorSlot or StateType.IsReadyForAction
+                or StateType.DoorIsOpen or StateType.DoorIsOpenHere or StateType.AtLocationBuildingDoor or StateType.AtCurrentLocationBuildingDoor
+                or StateType.AtLocationBuildingDoorInside or StateType.AtLocationBuildingDoorOutside or StateType.DestinationIsAccessible
+                or StateType.LocationIsAccessible or StateType.DestinationNotBlockedByFortifications or StateType.AtLocationFortificationGate
+                or StateType.DoorIsLockedAndImInside or StateType.DoorIsLockedAndImOutside or StateType.AllDoorsLocked or StateType.IsObjectMine
+                or StateType.IsAlly or StateType.CrowdLimit8 or StateType.TargetStandingStill
+                or StateType.IsMachineOutputEmpty or StateType.HasBuildingMaterials or StateType.BuildingHasBuildingMaterials => true,
+            _ => false,
+        };
 
         struct EnemyScan
         {
@@ -299,6 +321,7 @@ public sealed partial class AiSystem
                 if (st.Found || other == st.Self || !st.Table.Previous[other].Alive
                     || st.Table.Cold(other) is not { Medical.Incapacitated: false } oc)
                     return;
+
                 if (AggroSystem.IsEnemy(st.Relations, st.Faction, oc.Faction)) st.Found = true;
             });
             return scan.Found;
@@ -318,14 +341,17 @@ public sealed partial class AiSystem
                     // Staying home on its claimed chair, else at home.
                     if (type == TaskType.StayInHome && _board.SeatClaims.TryGetValue(_slot, out var chair) && !_mind.SeatUnreachable)
                         return new PlanTarget(Targets.Seat, chair.Position);
+
                     if (_system.NodeGoalFindsNothing(_mind, _board, type)) return default;
                     return Spot(Targets.Spot, _system.SpotFor(_mind, _board, AiBehaviour.Post, type));
                 case TaskType.GoHomeAndGoToBed or TaskType.GoHomeAndGoToBedSecure:
                     // A character in a bed keeps it (the bed search FUN_1408cfe00, docs/game/locks.md "Bed search"): the target is where it lies.
                     if (_world.Characters.Cold(_slot) is { InSomething: Locks.HeldState.Bed })
                         return Spot(Targets.Bed, (Flat(Me.Position), true, Me.Position.Y, null));
+
                     if (_system.SpareBed(_world, _board, _mind, _slot) is { } spare)
                         return Spot(Targets.Bed, (Flat(spare.Position), true, spare.Position.Y, null));
+
                     if (!_system.HasBed(_world, _board, _mind, _slot)) return default;
                     return Spot(Targets.Bed, _system.SpotFor(_mind, _board, AiBehaviour.Sleep, type));
                 case TaskType.GoHomebuilding:
@@ -350,8 +376,10 @@ public sealed partial class AiSystem
                     // The building it works at: the one it walks to now, else the pick it will make (the same roll, AiMind.WorkEpoch).
                     if (_mind.Behaviour == AiBehaviour.Work && _mind.Goal?.Task.Type == type && _mind.Target is { } current)
                         return new PlanTarget(Targets.Work, current);
+
                     if (_mind.Goal?.Task.Type == type && _mind.WorkPost is { } held)
                         return new PlanTarget(Targets.Work, new Vector3(held.Position.X, float.NaN, held.Position.Z));
+
                     return _system.PickWork(_world, _world.Characters.IdOf(_slot), _board.Town,
                             _mind.WorkEpoch + (_mind.WorkActive ? 1 : 0), type) is { } work
                         ? new PlanTarget(Targets.Work, new Vector3(work.Position.X, float.NaN, work.Position.Z)) : default;
@@ -371,6 +399,7 @@ public sealed partial class AiSystem
                         && _board.Turrets[t].Turret is { } turret
                         ? new PlanTarget(Targets.Turret, TurretSpot(_world, turret)) : default;
             }
+
             return default;
         }
 

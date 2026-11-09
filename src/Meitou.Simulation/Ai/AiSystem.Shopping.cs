@@ -36,6 +36,7 @@ public sealed partial class AiSystem
                 mind.NextBuyTick = 0;
                 continue;
             }
+
             waiting = true;
             if (world.Tick < mind.NextBuyTick) continue;
             if (BuyOnce(world, s, mind, shop)) mind.NextBuyTick = world.Tick + BuyTicks(world);
@@ -46,6 +47,7 @@ public sealed partial class AiSystem
                 mind.ShopAt = null;
             }
         }
+
         if (waiting) Interlocked.Exchange(ref _shopping, 1);
     }
 
@@ -76,10 +78,12 @@ public sealed partial class AiSystem
                 k = list.NextOpen(skipped[..skips]);
                 continue;
             }
+
             list.Use(k);
             if (sale == NpcSale.Sold) return true;
             if (!list.IsOpen(k)) k = list.NextOpen(skipped[..skips]);
         }
+
         return false;
     }
 }

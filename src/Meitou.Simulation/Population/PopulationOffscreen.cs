@@ -64,7 +64,9 @@ public sealed partial class PopulationSystem
                     {
                         if (b.Id == a.Id || gone.Contains(b.Id) || foe is not null && b.Id >= foe.Id) continue;
                         if (Vector2.DistanceSquared(a.Position, b.Position) > FightRadius * FightRadius) continue;
-                        if (!AggroSystem.IsEnemy(_data.Relations, a.Faction, b.Faction) && !AggroSystem.IsEnemy(_data.Relations, b.Faction, a.Faction)) continue;
+                        if (!AggroSystem.IsEnemy(_data.Relations, a.Faction, b.Faction)
+                            && !AggroSystem.IsEnemy(_data.Relations, b.Faction, a.Faction))
+                            continue;
 
                         foe = b;
                     }
@@ -87,7 +89,8 @@ public sealed partial class PopulationSystem
             gone.Add(loser.Id);
             Despawn(world, loser, killed: true);
             if (_townLog.Count >= 256) _townLog.RemoveAt(0);
-            _townLog.Add($"Off screen at {winner.Position.X:0}, {winner.Position.Y:0}: {NameOf(winner)} ({wt:0}) beat {NameOf(loser)} ({lt:0}), losing {losses}");
+            _townLog.Add($"Off screen at {winner.Position.X:0}, {winner.Position.Y:0}: {NameOf(winner)} ({wt:0}) beat {NameOf(loser)} ({lt:0}), "
+                + $"losing {losses}");
         }
     }
 
@@ -101,7 +104,8 @@ public sealed partial class PopulationSystem
     List<(object? Member, float Strength)> Strengths(Platoon p)
     {
         var list = new List<(object?, float)>();
-        static float Of(CharacterStats? s) => s is null ? 25 : 10 + (s[StatsEnumerated.MeleeAttack] + s[StatsEnumerated.MeleeDefence] + s.Toughness) / 3;
+        static float Of(CharacterStats? s) =>
+            s is null ? 25 : 10 + (s[StatsEnumerated.MeleeAttack] + s[StatsEnumerated.MeleeDefence] + s.Toughness) / 3;
         if (p.Stored is { } stored)
         {
             foreach (var m in stored.Members)
@@ -188,7 +192,9 @@ public sealed partial class PopulationSystem
             foreach (var m in saved.Members)
             {
                 if (m.Medical is not { } medical || m.Gone || m.Dead || _data.Db.Find(m.Source.RecordId) is not { } record) continue;
-                if (CharacterAssembly.RaceId(record) is not { } raceId || CharacterAssembly.RaceDataOf(_data.Db, raceId, _recoverRaces) is not { } race) continue;
+                if (CharacterAssembly.RaceId(record) is not { } raceId
+                    || CharacterAssembly.RaceDataOf(_data.Db, raceId, _recoverRaces) is not { } race)
+                    continue;
 
                 var context = new MedicalContext(constants, options, race)
                 {

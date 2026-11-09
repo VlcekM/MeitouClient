@@ -136,47 +136,14 @@ public sealed class RagdollDefinition
             var actor = file.Actors[a];
             if (actor.Static || actor.Shapes.Count == 0) continue;
             if ((rig.Handle(actor.Name) ?? (actor.Bone is { } b ? rig.Handle(b) : null)) is not int bone || bodyOfBone[bone] >= 0) continue;
-            // One shape per actor in every shipped ragdoll; a further one would need a compound (not built: the first stands for the actor).
-            var shape = actor.Shapes[0];
-            var bind = new RigidTransform(shape.Position * scale, shape.Rotation);
-            var boneBind = new RigidTransform(actor.Position * scale, Quaternion.Normalize(Quaternion.Inverse(rig.BindRotationInverse[bone])));
-            Vector3[]? points = null;
-            if (shape.Type == PhysicsShapeType.Mesh)
-            {
-                // The cooked hull is in the shape's frame (its local pose places it on the actor). Bepu centres a hull on its centroid, so the body's frame moves there.
-                if (hull(shape.CookedFile) is not { Length: >= 4 } raw) continue;
-                var scaled = raw.Select(p => p * scale).ToArray();
-                var pool = new BepuUtilities.Memory.BufferPool();
-                try
-                {
-                    var made = new BepuPhysics.Collidables.ConvexHull(scaled, pool, out var centre);
-                    made.Dispose(pool);
-                    points = [.. scaled.Select(p => p - centre)];
-                    bind = new RigidTransform(bind.Apply(centre), bind.Rotation);
-                }
-                finally { pool.Clear(); }
-            }
-            var size = shape.Type switch
-            {
-                PhysicsShapeType.Sphere => new Vector3(shape.Size.X / 2 * scale, 0, 0),
-                PhysicsShapeType.Capsule => new Vector3(shape.Size.X / 2 * scale, shape.Size.Y * scale, 0),
-                _ => shape.Size * scale,
-            };
+
+            if (MakeBody(actor, bone, rig, scale, hull) is not { } body) continue;
+
             bodyOfActor[a] = bodies.Count;
             bodyOfBone[bone] = bodies.Count;
-            bodies.Add(new RagdollBody
-            {
-                Bone = bone,
-                Name = actor.Name,
-                Type = shape.Type,
-                Size = size,
-                Hull = points,
-                Mass = actor.Mass > 0 ? actor.Mass : 1,
-                Bind = bind,
-                BoneInBody = boneBind.Then(bind.Inverse()),
-                Actor = boneBind.Position,
-            });
+            bodies.Add(body);
         }
+
         if (bodies.Count == 0) return null;
 
         var joints = new List<RagdollJoint>();
@@ -185,37 +152,99 @@ public sealed class RagdollDefinition
         {
             int a = j.Actor0 >= 0 && j.Actor0 < bodyOfActor.Length ? bodyOfActor[j.Actor0] : -1;
             int b = j.Actor1 >= 0 && j.Actor1 < bodyOfActor.Length ? bodyOfActor[j.Actor1] : -1;
+
             // A joint to the world (an index of -1 or a static actor) would nail the ragdoll to a point of model space; none of the ragdolls has one.
             if (a < 0 || b < 0 || a == b || j.Type is not (PhysicsJointType.Revolute or PhysicsJointType.Spherical or PhysicsJointType.Fixed)) continue;
-            var axis = j.Axis.LengthSquared() > 1e-8f ? Vector3.Normalize(j.Axis) : Vector3.UnitX;
-            var normal = j.Normal - Vector3.Dot(j.Normal, axis) * axis;
-            normal = normal.LengthSquared() > 1e-8f ? Vector3.Normalize(normal) : Perpendicular(axis);
-            var basis = PhysicsAttachmentFile.FromColumns(normal, Vector3.Cross(axis, normal), axis);
-            var (bindA, bindB) = (bodies[a].Bind, bodies[b].Bind);
-            var anchor = j.Anchor * scale;
-            float deg = MathF.PI / 180;
-            joints.Add(new RagdollJoint
-            {
-                Type = j.Type,
-                A = a,
-                B = b,
-                OffsetA = bindA.Inverse().Apply(anchor),
-                OffsetB = bindB.Inverse().Apply(anchor),
-                BasisA = Quaternion.Normalize(Quaternion.Inverse(bindA.Rotation) * basis),
-                BasisB = Quaternion.Normalize(Quaternion.Inverse(bindB.Rotation) * basis),
-                SpringStiffness = j.Type == PhysicsJointType.Revolute && j.Spring1 is { Spring: > 0 } ? j.Spring1.Value.Spring : 0,
-                SpringDamper = j.Spring1?.Damper ?? 0,
-                SpringTarget = (j.Spring1?.Target ?? 0) * deg,
-                Limits = j.LimitsOn,
-                Low = Math.Min(j.Low, j.High) * deg,
-                High = Math.Max(j.Low, j.High) * deg,
-                Swing = Math.Clamp(j.Swing, 1, 179) * deg,
-            });
+            joints.Add(NewJoint(j, a, b, bodies, scale));
             if (a < 64) joined[b] |= 1UL << a;
             if (b < 64) joined[a] |= 1UL << b;
         }
+
         int root = rig.Handle("Bip01") is int r && bodyOfBone[r] >= 0 ? bodyOfBone[r] : 0;
         return new RagdollDefinition { Bodies = [.. bodies], Joints = [.. joints], BodyOfBone = bodyOfBone, Root = root, Joined = joined };
+    }
+
+    /// <summary>
+    /// The body of an actor bound to <paramref name="bone"/>: its first shape at the actor's bind, a mesh's cooked hull centred on its centroid;
+    /// null when the hull cannot be read.
+    /// </summary>
+    static RagdollBody? MakeBody(PhysicsBodyActor actor, int bone, SkeletonRig rig, float scale, Func<string, Vector3[]?> hull)
+    {
+        // One shape per actor in every shipped ragdoll; a further one would need a compound (not built: the first stands for the actor).
+        var shape = actor.Shapes[0];
+        var bind = new RigidTransform(shape.Position * scale, shape.Rotation);
+        var boneBind = new RigidTransform(actor.Position * scale, Quaternion.Normalize(Quaternion.Inverse(rig.BindRotationInverse[bone])));
+        Vector3[]? points = null;
+        if (shape.Type == PhysicsShapeType.Mesh)
+        {
+            // The cooked hull is in the shape's frame (its local pose places it on the actor). Bepu centres a hull on its centroid, so the body's
+            // frame moves there.
+            if (hull(shape.CookedFile) is not { Length: >= 4 } raw) return null;
+            var scaled = raw.Select(p => p * scale).ToArray();
+            var pool = new BepuUtilities.Memory.BufferPool();
+            try
+            {
+                var made = new BepuPhysics.Collidables.ConvexHull(scaled, pool, out var centre);
+                made.Dispose(pool);
+                points = [.. scaled.Select(p => p - centre)];
+                bind = new RigidTransform(bind.Apply(centre), bind.Rotation);
+            }
+            finally
+            {
+                pool.Clear();
+            }
+        }
+
+        var size = shape.Type switch
+        {
+            PhysicsShapeType.Sphere => new Vector3(shape.Size.X / 2 * scale, 0, 0),
+            PhysicsShapeType.Capsule => new Vector3(shape.Size.X / 2 * scale, shape.Size.Y * scale, 0),
+            _ => shape.Size * scale,
+        };
+        return new RagdollBody
+        {
+            Bone = bone,
+            Name = actor.Name,
+            Type = shape.Type,
+            Size = size,
+            Hull = points,
+            Mass = actor.Mass > 0 ? actor.Mass : 1,
+            Bind = bind,
+            BoneInBody = boneBind.Then(bind.Inverse()),
+            Actor = boneBind.Position,
+        };
+    }
+
+    /// <summary>
+    /// A joint between bodies <paramref name="a"/> and <paramref name="b"/>: its anchor and basis in each body's frame, its spring and limits in
+    /// radians.
+    /// </summary>
+    static RagdollJoint NewJoint(PhysicsJoint j, int a, int b, List<RagdollBody> bodies, float scale)
+    {
+        var axis = j.Axis.LengthSquared() > 1e-8f ? Vector3.Normalize(j.Axis) : Vector3.UnitX;
+        var normal = j.Normal - Vector3.Dot(j.Normal, axis) * axis;
+        normal = normal.LengthSquared() > 1e-8f ? Vector3.Normalize(normal) : Perpendicular(axis);
+        var basis = PhysicsAttachmentFile.FromColumns(normal, Vector3.Cross(axis, normal), axis);
+        var (bindA, bindB) = (bodies[a].Bind, bodies[b].Bind);
+        var anchor = j.Anchor * scale;
+        float deg = MathF.PI / 180;
+        return new RagdollJoint
+        {
+            Type = j.Type,
+            A = a,
+            B = b,
+            OffsetA = bindA.Inverse().Apply(anchor),
+            OffsetB = bindB.Inverse().Apply(anchor),
+            BasisA = Quaternion.Normalize(Quaternion.Inverse(bindA.Rotation) * basis),
+            BasisB = Quaternion.Normalize(Quaternion.Inverse(bindB.Rotation) * basis),
+            SpringStiffness = j.Type == PhysicsJointType.Revolute && j.Spring1 is { Spring: > 0 } ? j.Spring1.Value.Spring : 0,
+            SpringDamper = j.Spring1?.Damper ?? 0,
+            SpringTarget = (j.Spring1?.Target ?? 0) * deg,
+            Limits = j.LimitsOn,
+            Low = Math.Min(j.Low, j.High) * deg,
+            High = Math.Max(j.Low, j.High) * deg,
+            Swing = Math.Clamp(j.Swing, 1, 179) * deg,
+        };
     }
 
     static Vector3 Perpendicular(Vector3 v) => Vector3.Normalize(Vector3.Cross(v, MathF.Abs(v.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX));

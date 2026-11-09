@@ -43,8 +43,15 @@ static class ContainerSave
     public static void Read(string text, Inventory grid, ItemFactory factory)
     {
         List<Entry>? entries;
-        try { entries = JsonSerializer.Deserialize<List<Entry>>(text); }
-        catch (JsonException) { return; }
+        try
+        {
+            entries = JsonSerializer.Deserialize<List<Entry>>(text);
+        }
+        catch (JsonException)
+        {
+            return;
+        }
+
         if (entries is not null) Fill(entries, grid, factory, topLevel: true);
     }
 
@@ -61,6 +68,7 @@ static class ContainerSave
                 grid.AddTo("main", item);
                 continue;
             }
+
             grid.Items.Add(item);
         }
     }

@@ -57,7 +57,8 @@ public sealed partial class ProductionSystem
     /// The player outposts with their grids' totals, for the town panel (docs/game/ui-screens.md "Town panel").
     /// </summary>
     public IReadOnlyList<OutpostSnapshot> OutpostView(World world) => world.Buildings.Towns.Count == 0 ? []
-        : [.. world.Buildings.Towns.Select(t => new OutpostSnapshot(t.Number, t.Name, t.Position, t.Radius, t.Owner, t.Public, _townPower.GetValueOrDefault(t.Number)))];
+        : [.. world.Buildings.Towns.Select(t => new OutpostSnapshot(t.Number, t.Name, t.Position, t.Radius, t.Owner, t.Public,
+            _townPower.GetValueOrDefault(t.Number)))];
 
     /// <summary>
     /// The towns' round-robin cursor of the power frame (the static <c>DAT_14213543c</c>, advanced before each use); not saved.
@@ -75,21 +76,28 @@ public sealed partial class ProductionSystem
             if (m.Data.IsWind) (m.Wind, m.WindRated) = (WindShare(world, m), Rated(world, m));
             if (m.Data.Function == MachineData.RainCollectorFunction)
                 m.Rain = !m.Indoors && world.Weather?.At(m.Position.X, m.Position.Z) is { Affect: not WeatherAffecting.Acid } here ? here.Wetness : 0;
-            if (!m.Data.IsConsumer && !m.Data.IsGenerator && !m.Data.IsBattery || IsTownWork(m.Site) || Site(world, m.Site) is not { Complete: true } site)
+
+            if (!m.Data.IsConsumer && !m.Data.IsGenerator && !m.Data.IsBattery || IsTownWork(m.Site)
+                || Site(world, m.Site) is not { Complete: true } site)
             {
                 m.Power = 1;
                 continue;
             }
+
             if (!_grids.TryGetValue(site.Town, out var grid)) _grids[site.Town] = grid = [];
             grid.Add(m);
         }
+
         ShareOneTown(world, dt);
         foreach (var m in world.Machines.All)
+        {
             if (m.Data.IsGenerator)
             {
                 m.Status = (byte)(m.Demand > 0 ? 2 : 0);
                 if (m.Inputs.Length > 0 && m.PowerOn && Live(world, m)) BurnFuel(m, dt);
             }
+        }
+
         foreach (var m in world.Machines.All)
         {
             var site = Site(world, m.Site);
@@ -142,6 +150,7 @@ public sealed partial class ProductionSystem
             if (rate > 0) b.Charge = Math.Clamp(b.Charge + b.Granted / rate * dt, 0, b.Store);
             (charge, capacity) = (charge + b.Charge, capacity + b.Store);
         }
+
         if (_townPower.TryGetValue(town, out var power)) _townPower[town] = power with { Charge = charge, Capacity = capacity };
     }
 
@@ -171,6 +180,7 @@ public sealed partial class ProductionSystem
             float rate = Rated(world, m);
             saturation = rate > 0 && m.Charge < Capacity(world, m) ? m.Granted / rate : 1;
         }
+
         return m.Active ? share * m.Health * saturation * m.Yield * m.Data.OutputRate * m.ProductionMult : 0;
     }
 
@@ -210,6 +220,7 @@ public sealed partial class ProductionSystem
                 consumers.Add(m);
             }
         }
+
         float generated = supply;
         _townSupply[town] = (generated > 0, batteries > 0);
         consumers.Sort((a, b) => a.Demand != b.Demand ? a.Demand.CompareTo(b.Demand) : string.CompareOrdinal(a.Site, b.Site));
@@ -222,8 +233,10 @@ public sealed partial class ProductionSystem
             c.Granted = give;
             if (give < c.Demand && c.GetsBattery) @short++;
         }
+
         float batteryLeft = batteries;
         if (mode && @short > 0)
+        {
             foreach (var c in consumers)
             {
                 if (!c.GetsBattery || c.Granted >= c.Demand) continue;
@@ -231,6 +244,8 @@ public sealed partial class ProductionSystem
                 batteryLeft -= give;
                 c.Granted += give;
             }
+        }
+
         float charged = 0, drained = 0;
         if (supply <= 0)
         {
@@ -244,6 +259,7 @@ public sealed partial class ProductionSystem
             _batteryMode[town] = false;
             charged = ChargeFromSurplus(world, grid, supply, batteries: grid.Count(b => b.Data.IsBattery));
         }
+
         foreach (var m in grid)
         {
             if (m.Data.IsConsumer) m.Power = m.Demand > 0 ? m.Granted / m.Demand : 1;
@@ -254,6 +270,7 @@ public sealed partial class ProductionSystem
                 m.Usage = generated > 0 && rated > 0 ? MathF.Min(1, m.Demand / rated * (charged + demandTotal) / generated) : 0;
             }
         }
+
         _townPower[town] = new(generated, demandTotal, charged, drained, 0, 0);
     }
 
@@ -276,8 +293,10 @@ public sealed partial class ProductionSystem
                 charged += give;
                 b.Granted = give;
             }
+
             batteries--;
         }
+
         return charged;
     }
 

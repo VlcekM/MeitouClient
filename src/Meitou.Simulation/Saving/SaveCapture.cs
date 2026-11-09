@@ -336,7 +336,8 @@ public static partial class SaveCapture
             Hand? hand = p.StateId is not null && options.Levels?.Level.Find(p.StateId) is { } level && level.Ints.ContainsKey("handI")
                 ? new Hand(level.GetInt("handTYPE"), level.GetInt("handC"), level.GetInt("handCS"), level.GetInt("handI"), level.GetInt("handS"))
                 : null;
-            builder.AddTown("Town state " + record.Name, p.InstanceId, town.Faction ?? "", isNest: false, WorldLayout.ZoneOf(p.Position.X, p.Position.Z), hand: hand);
+            builder.AddTown("Town state " + record.Name, p.InstanceId, town.Faction ?? "", isNest: false,
+                WorldLayout.ZoneOf(p.Position.X, p.Position.Z), hand: hand);
         }
     }
 
@@ -449,7 +450,9 @@ public static partial class SaveCapture
             if (population is not null && index.TryGetValue(f.Id, out int own)) f.Prosperity = (float)population.ProsperityOf(world, own);
             if (loaded is null || !index.TryGetValue(f.Id, out int a) || loaded.RelationBaseline.Length != index.Count * index.Count) continue;
 
-            if (a < loaded.TrustBaseline.Length && data.Relations.GlobalTrust(a) != loaded.TrustBaseline[a]) f.GlobalTrust = data.Relations.GlobalTrust(a);
+            if (a < loaded.TrustBaseline.Length && data.Relations.GlobalTrust(a) != loaded.TrustBaseline[a])
+                f.GlobalTrust = data.Relations.GlobalTrust(a);
+
             if (f.IsPlayer) continue;
 
             if (a < loaded.RankBaseline.Length && data.Relations.Rank(a) != loaded.RankBaseline[a]) f.Rank = data.Relations.Rank(a);
@@ -473,7 +476,8 @@ public static partial class SaveCapture
             if (index.TryGetValue(r.FactionId, out int b))
             {
                 if (data.Relations.Get(a, b) != loaded.RelationBaseline[a * index.Count + b]) value = data.Relations.Get(a, b);
-                if (loaded.WarBaseline.Length == loaded.RelationBaseline.Length && data.Relations.AtWar(a, b) != loaded.WarBaseline[a * index.Count + b])
+                if (loaded.WarBaseline.Length == loaded.RelationBaseline.Length
+                    && data.Relations.AtWar(a, b) != loaded.WarBaseline[a * index.Count + b])
                     war = data.Relations.AtWar(a, b);
             }
 
@@ -652,12 +656,14 @@ public static partial class SaveCapture
     /// loaded ones, else defaults for a new one); a new one's look; what it carries.
     /// </summary>
     static SaveCharacter WriteCharacter(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
         Dictionary<string, RaceData?> races, SavePlatoon platoon, SaveCharacter? sc, CharacterId id, string ownerFactionId, bool isLeader, bool orders)
     {
         ref readonly var hot = ref world.Characters.Previous[id.Slot];
         return WriteCharacter(
-            builder, world, data, options, clock, buildings, races, platoon, sc, world.Characters.Cold(id.Slot)!, hot.Position, hot.Yaw, id, ownerFactionId,
+            builder, world, data, options, clock, buildings, races, platoon, sc, world.Characters.Cold(id.Slot)!, hot.Position, hot.Yaw, id,
+            ownerFactionId,
             isLeader, orders);
     }
 
@@ -666,13 +672,15 @@ public static partial class SaveCapture
     /// (<paramref name="id"/>) or a stored one (none).
     /// </summary>
     static SaveCharacter WriteCharacter(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
         Dictionary<string, RaceData?> races, SavePlatoon platoon, SaveCharacter? sc, CharacterCold cold, Vector3 position, float yaw, CharacterId id,
         string ownerFactionId, bool isLeader, bool orders)
     {
         var hot = (Position: position, Yaw: yaw);
         bool isNew = sc is null;
-        sc ??= builder.AddCharacter(platoon, cold.RecordId, cold.Name, ownerFactionId, hot.Position, SaveRotation.OfYaw(hot.Yaw), isLeader: isLeader, squadMemberType: cold.Role);
+        sc ??= builder.AddCharacter(platoon, cold.RecordId, cold.Name, ownerFactionId, hot.Position, SaveRotation.OfYaw(hot.Yaw), isLeader: isLeader,
+            squadMemberType: cold.Role);
 
         // The handle's own serial is "random" in the original, and the loader rolls a character's look from it: a character with a rolled look gets
         // the look's seed as its serial, so loading a save without its items (one written before inventories were) rolls the same face, hair and
@@ -755,7 +763,8 @@ public static partial class SaveCapture
         db.Find(recordId)?.GetReferences("stats").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId))
             .FirstOrDefault(s => s?.Type == FcsRecordType.Stats)?.GetFloat("warrior spirit") ?? 0;
 
-    static void WriteBody(SaveCharacter sc, string recordId, CharacterStats? stats, MedicalState? medical, bool isNew, PopulationData data, Dictionary<string, RaceData?> races)
+    static void WriteBody(SaveCharacter sc, string recordId, CharacterStats? stats, MedicalState? medical, bool isNew, PopulationData data,
+        Dictionary<string, RaceData?> races)
     {
         if (stats is null && isNew) stats = new CharacterStats();
         if (stats is not null && sc.Stats is { } sr)
@@ -766,6 +775,7 @@ public static partial class SaveCapture
 
         if (medical is null && isNew && RaceOf(recordId, data.Db, races) is { } race)
             medical = MedicalState.Create(race, stats?.Strength ?? 50);
+
         if (medical is not null && sc.Medical is { } mr)
         {
             medical.WriteSave(mr.Floats, mr.Bools, mr.Strings);
@@ -846,7 +856,8 @@ public static partial class SaveCapture
     /// them as they are (in the world now) or were (when it left): place, facing, body, kit, bounties; a character whose body is gone leaves the file.
     /// </summary>
     static void WriteSavedNpcs(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
         Dictionary<string, RaceData?> races)
     {
         if (world.Saved is not { } saved) return;
@@ -898,7 +909,8 @@ public static partial class SaveCapture
     /// The characters of a save's NPC platoon: a corpse gone since leaves the file, one in the world is written as it is, one that left as it was.
     /// </summary>
     static void WriteSavedMembers(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
         Dictionary<string, RaceData?> races, SavePlatoon platoon, SavedPlatoon sp, Squad? squad)
     {
         var table = world.Characters;
@@ -916,7 +928,8 @@ public static partial class SaveCapture
 
             if (!m.Live.IsNone && table.IsAlive(m.Live))
             {
-                WriteCharacter(builder, world, data, options, clock, buildings, races, platoon, sc, m.Live, sc.OwnerFactionId, squad?.Leader == m.Live, orders: false);
+                WriteCharacter(builder, world, data, options, clock, buildings, races, platoon, sc, m.Live, sc.OwnerFactionId,
+                    squad?.Leader == m.Live, orders: false);
             }
             else if (m.Position is { } at)
             {
@@ -982,7 +995,8 @@ public static partial class SaveCapture
     /// file, which the loader makes from its template. Returns the platoons written by world platoon id.
     /// </summary>
     static Dictionary<int, SavePlatoon> WriteFreshNpcs(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
         Dictionary<string, RaceData?> races, LoadedSave? loaded) =>
         new FreshNpcWriter(builder, world, data, options, clock, buildings, races).Write(loaded);
 
@@ -1142,7 +1156,8 @@ public static partial class SaveCapture
         SavePlatoon WriteWorldSquad(Squad squad, Platoon? roamer, List<FreshMember> members, SavePlatoon? into)
         {
             return WritePlatoon(
-                squad.Town, squad.Faction, squad.TemplateId, squad.Money, roamer is { Pinned: false }, squad.HomeBuilding, roamer?.Package ?? squad.Ai?.Current?.Id,
+                squad.Town, squad.Faction, squad.TemplateId, squad.Money, roamer is { Pinned: false }, squad.HomeBuilding,
+                roamer?.Package ?? squad.Ai?.Current?.Id,
                 members, squad.Shop, ai: AiSave.Of(squad.Ai) ?? squad.SavedAi, memory: MemoryOf(_world)?.Snapshot(squad.Id),
                 imprisoned: roamer?.Imprisoned ?? false, dead: roamer?.Dead ?? false, intact: roamer?.IntactFlag ?? squad.Ai?.Intact ?? true,
                 at: roamer is null ? default : Ground(_world, roamer.Position), into: into,
@@ -1231,7 +1246,8 @@ public static partial class SaveCapture
             if (into is null) MarkPools(record, town, site, templateId, roaming, homeBuilding, package);
 
             if (package is not null) record.Strings["currentPackage"] = package;
-            if (missionTown >= 0 && missionTown != town && missionTown < _data.Sites.Count) record.Strings[MissionTownKey] = _data.Sites[missionTown].Town.Id;
+            if (missionTown >= 0 && missionTown != town && missionTown < _data.Sites.Count)
+                record.Strings[MissionTownKey] = _data.Sites[missionTown].Town.Id;
             else record.Strings.Remove(MissionTownKey);
             ShopSave.Write(record, shop, _world);
             AiSave.Write(record, ai);
@@ -1345,12 +1361,16 @@ public static partial class SaveCapture
         if (game.Zones.TryGetValue(b.Zone, out var zone) && zone.BuildingList is { } list)
         {
             var entry = list.Instances.FirstOrDefault(i => i.Id == b.InstanceId);
-            if (entry is not null && zone.File.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.GamestateBuilding && entry.States.Contains(r.StringId)) is { } state
+            if (entry is not null
+                && zone.File.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.GamestateBuilding
+                    && entry.States.Contains(r.StringId)) is { } state
                 && Hand.Read(state, "handle") is { IsNull: false } saved)
                 return saved;
         }
 
-        return b.HandleSlot >= 0 ? new Hand((int)FcsRecordType.Building, SaveZone.ContainerIdOf(b.Zone), ZoneContainerSerial, b.HandleSlot, b.HandleSerial) : null;
+        return b.HandleSlot >= 0
+            ? new Hand((int)FcsRecordType.Building, SaveZone.ContainerIdOf(b.Zone), ZoneContainerSerial, b.HandleSlot, b.HandleSerial)
+            : null;
     }
 
     /// <summary>
@@ -1390,7 +1410,8 @@ public static partial class SaveCapture
             {
                 if (levels is null || !world.Fixtures.HasContents(b)) continue;
 
-                placements ??= levels.Buildings().GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+                placements ??= levels.Buildings().GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(),
+                    StringComparer.Ordinal);
                 if (!placements.TryGetValue(b, out var placement) || AddPlacedState(game, placement) is not { } added) continue;
 
                 buildings[b] = state = added;
@@ -1417,7 +1438,8 @@ public static partial class SaveCapture
         var list = zone.BuildingList;
         if (list is null)
         {
-            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextRecordId(file), Name = "0", StringId = WorldLevelData.BuildingListId };
+            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextRecordId(file), Name = "0",
+                StringId = WorldLevelData.BuildingListId };
             file.Records.Add(list);
         }
 
@@ -1427,7 +1449,9 @@ public static partial class SaveCapture
         state.Bools["destroyed"] = placement.DestroyedOverride ?? false;
         state.Floats["world Y pos"] = placement.WorldY ?? placement.Position.Y;
         state.Ints["flags"] = 1;   // bit 0: outside
-        if (placement.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;   // as the level edits write the same placement
+
+        // as the level edits write the same placement
+        if (placement.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;
         if (placement.ExteriorLayout is { Length: > 0 } exterior) state.Strings["exterior layout name"] = exterior;
         file.Records.Add(state);
         list.Instances.RemoveAll(i => i.Id == placement.InstanceId);

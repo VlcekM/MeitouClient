@@ -316,27 +316,52 @@ public sealed class Machine
         h.Add(Rng.StableHash(Site));
         h.Add(Yield);
         h.Add(Status);
-        h.Add(Power); h.Add(Charge); h.Add(Granted);
+        h.Add(Power);
+        h.Add(Charge);
+        h.Add(Granted);
         if (Broken) h.Add(0x42726B6E);
         if (Data.IsFurnace) { h.Add(Burning ? 1 : 0); h.Add(BurnLevel); }
         foreach (var i in Inputs) { h.Add(i.Count); h.Add(i.Level); }
         if (Output is { } o) { h.Add(o.Count); h.Add(o.Progress); }
-        if (Storage is { } s) { h.Add(s.Items.Count); foreach (var item in s.Items) { h.Add(Rng.StableHash(item.Record)); h.Add(item.Quantity); h.Add(item.X); h.Add(item.Y); } }
+        if (Storage is { } s)
+        {
+            h.Add(s.Items.Count);
+            foreach (var item in s.Items)
+            {
+                h.Add(Rng.StableHash(item.Record));
+                h.Add(item.Quantity);
+                h.Add(item.X);
+                h.Add(item.Y);
+            }
+        }
+
         if (Farm is { } f)
         {
-            h.Add(f.Growth); h.Add(f.Death); h.Add(f.Start); h.Add(f.Harvested); h.Add(f.HarvestProgress); h.Add(f.ClearProgress); h.Add((byte)f.Status);
+            h.Add(f.Growth);
+            h.Add(f.Death);
+            h.Add(f.Start);
+            h.Add(f.Harvested);
+            h.Add(f.HarvestProgress);
+            h.Add(f.ClearProgress);
+            h.Add((byte)f.Status);
             foreach (var p in f.Plants) h.Add(p);
             if (f.EatProgress != 0) h.Add(f.EatProgress);
         }
+
         if (Craft is { } c)
         {
-            h.Add(c.Queue.Count); h.Add(c.Repeat ? 1 : 0); h.Add(c.Done.Count);
+            h.Add(c.Queue.Count);
+            h.Add(c.Repeat ? 1 : 0);
+            h.Add(c.Done.Count);
             foreach (var j in c.Queue) { h.Add(Rng.StableHash(j.Option.Key)); h.Add(j.Progress); h.Add(j.Critical); }
             foreach (var d in c.Done) { h.Add(Rng.StableHash(d.Record)); h.Add(d.Quantity); h.Add(d.Quality); }
+
             // Remembered levels of items no section holds (the held ones are in Inputs), sorted: a loaded map also lists the held ones.
             if (c.Partial.Count > 0)
+            {
                 foreach (var (item, level) in c.Partial.OrderBy(p => p.Key, StringComparer.Ordinal))
                     if (!Inputs.Any(i => i.Item == item)) { h.Add(Rng.StableHash(item)); h.Add(level); }
+            }
         }
     }
 }

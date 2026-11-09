@@ -89,6 +89,9 @@ public sealed partial class LockSystem
     /// </summary>
     internal CombatConstants? CombatConstants { get; set; }
 
+    /// <summary>
+    /// Every basher: the doors it smashes are found every check; each one walks to its door, stops when the door no longer needs it, and swings.
+    /// </summary>
     void Bashers(World world)
     {
         if (Combat is null) return;
@@ -99,6 +102,7 @@ public sealed partial class LockSystem
             _gateGraph = null;
             FindBashers(world);
         }
+
         for (int s = 0; s < table.HighWater; s++)
         {
             if (!next[s].Alive || table.Cold(s) is not { Bashing: { } doorId } c) continue;
@@ -107,72 +111,97 @@ public sealed partial class LockSystem
                 Smash(world, s, c, doorId);
                 continue;
             }
-            var door = world.Fixtures.Find(doorId);
 
-            // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); a planner NPC's plan is dropped once
-            // its door is unlocked and the planner would open it (72) instead (see PlanDropped).
-            if (door is null || door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening || PlanDropped(world, door, c)
-                    || c.Medical is { Incapacitated: true } || (!c.BashOrdered && !c.BashErrand && next[s].Task != (byte)CharacterTask.Attack)
-                            || world.Fixtures.DoorSpotOf(door) is not { } spot)
+            BashDoor(world, next, s, c, doorId);
+        }
+    }
+
+    /// <summary>
+    /// One basher at its door: it stops on a door broken, open or unlocked, walks there, faces it and swings; a breaking blow ends the task.
+    /// </summary>
+    void BashDoor(World world, Span<CharacterHot> next, int s, CharacterCold c, string doorId)
+    {
+        var table = world.Characters;
+        var door = world.Fixtures.Find(doorId);
+
+        // The task itself ends on a broken door or one open or opening and reads no lock (FUN_140348c10); a planner NPC's plan is dropped once
+        // its door is unlocked and the planner would open it (72) instead (see PlanDropped).
+        if (door is null || door.DoorBroken || door.Motion is DoorMotion.Open or DoorMotion.Opening || PlanDropped(world, door, c)
+                || c.Medical is { Incapacitated: true } || (!c.BashOrdered && !c.BashErrand && next[s].Task != (byte)CharacterTask.Attack)
+                        || world.Fixtures.DoorSpotOf(door) is not { } spot)
+        {
+            StopBashing(table, s, c);
+            return;
+        }
+
+        var stand = door.IsGate ? GateStandSpot(spot, Flat(next[s].Position)) : StandSpot(door, spot);
+        bool there = door.IsGate ? GatePlan.AtGate(next[s], spot) : DoorPlan.AtDoor(next[s], spot);
+        if (!there && c.BashOrdered)
+        {
+            // An ordered smash walks by its order's own goal; a new order (another task) ends it.
+            if (next[s].Task != (byte)CharacterTask.GoTo) StopBashing(table, s, c);
+            return;
+        }
+
+        if (!there)
+        {
+            WalkToDoor(table, next, s, c, stand);
+            return;
+        }
+
+        if ((next[s].Flags & (ushort)MoveFlags.AnyPath) != 0)
+        {
+            next[s].Flags = (ushort)(next[s].Flags & ~(ushort)MoveFlags.AnyPath);
+            next[s].PathCursor = 0;
+            c.PathRequest = 0;
+        }
+
+        var face = new Vector2(spot.Centre.X, spot.Centre.Z) - Flat(next[s].Position);
+        if (face.LengthSquared() > 1e-4f) next[s].Yaw = MathF.Atan2(face.X, face.Y);
+
+        // Someone in the way: the task is impossible (the plan fails; an NPC looks again at the next check).
+        if (InTheWay(world, s, face))
+        {
+            StopBashing(table, s, c);
+            return;
+        }
+
+        if (c.BashOrdered && next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
+
+        // Every update in reach books Burglary against the door's owner, before the blow, for any basher (Task_BashDoor, shared by rows
+        // 81/123/226/272/287/290, locks.md).
+        if (Crimes is not null && door.Owner >= 0 && door.Owner != c.Faction)
+            Crimes.SetPending(world, s, Crime.CrimeCode.Burglary, door.Owner, CharacterId.None, Crime.CrimeSystem.MinTimer);
+
+        if (c.BashTime < 0) c.BashTime = 0;
+        if (!BashBlowLands(c, world.TickSeconds)) return;
+
+        // A break's only sound is the door's Break (Task_BashDoor posts no unlock sound), played by the host's door sounds.
+        if (Hit(world, door, c))
+        {
+            world.Fixtures.Touch(door);
+            StopBashing(table, s, c);
+        }
+    }
+
+    /// <summary>
+    /// A basher not at its door walks there (the pursuit leaves a basher alone); a failed path ends it.
+    /// </summary>
+    static void WalkToDoor(CharacterTable table, Span<CharacterHot> next, int s, CharacterCold c, Vector2 stand)
+    {
+        // Walk there (the pursuit leaves a basher alone); a failed path ends it.
+        if ((next[s].Flags & (ushort)MoveFlags.AnyPath) == 0)
+        {
+            if (c.BashTime < 0)
             {
                 StopBashing(table, s, c);
-                continue;
+                return;
             }
-            var stand = door.IsGate ? GateStandSpot(spot, Flat(next[s].Position)) : StandSpot(door, spot);
-            bool there = door.IsGate ? GatePlan.AtGate(next[s], spot) : DoorPlan.AtDoor(next[s], spot);
-            if (!there && c.BashOrdered)
-            {
-                // An ordered smash walks by its order's own goal; a new order (another task) ends it.
-                if (next[s].Task != (byte)CharacterTask.GoTo) StopBashing(table, s, c);
-                continue;
-            }
-            if (!there)
-            {
-                // Walk there (the pursuit leaves a basher alone); a failed path ends it.
-                if ((next[s].Flags & (ushort)MoveFlags.AnyPath) == 0)
-                {
-                    if (c.BashTime < 0)
-                    {
-                        StopBashing(table, s, c);
-                        continue;
-                    }
-                    next[s].Goal = stand;
-                    next[s].Mode = SpeedMode.Free;
-                    next[s].Flags |= (ushort)MoveFlags.NeedPath;
-                    c.BashTime = -1;   // asked once; arriving resets it
-                }
-                continue;
-            }
-            if ((next[s].Flags & (ushort)MoveFlags.AnyPath) != 0)
-            {
-                next[s].Flags = (ushort)(next[s].Flags & ~(ushort)MoveFlags.AnyPath);
-                next[s].PathCursor = 0;
-                c.PathRequest = 0;
-            }
-            var face = new Vector2(spot.Centre.X, spot.Centre.Z) - Flat(next[s].Position);
-            if (face.LengthSquared() > 1e-4f) next[s].Yaw = MathF.Atan2(face.X, face.Y);
 
-            // Someone in the way: the task is impossible (the plan fails; an NPC looks again at the next check).
-            if (InTheWay(world, s, face))
-            {
-                StopBashing(table, s, c);
-                continue;
-            }
-            if (c.BashOrdered && next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
-
-            // Every update in reach books Burglary against the door's owner, before the blow, for any basher (Task_BashDoor, shared by rows
-            // 81/123/226/272/287/290, locks.md).
-            if (Crimes is not null && door.Owner >= 0 && door.Owner != c.Faction)
-                Crimes.SetPending(world, s, Crime.CrimeCode.Burglary, door.Owner, CharacterId.None, Crime.CrimeSystem.MinTimer);
-            if (c.BashTime < 0) c.BashTime = 0;
-            if (!BashBlowLands(c, world.TickSeconds)) continue;
-
-            // A break's only sound is the door's Break (Task_BashDoor posts no unlock sound), played by the host's door sounds.
-            if (Hit(world, door, c))
-            {
-                world.Fixtures.Touch(door);
-                StopBashing(table, s, c);
-            }
+            next[s].Goal = stand;
+            next[s].Mode = SpeedMode.Free;
+            next[s].Flags |= (ushort)MoveFlags.NeedPath;
+            c.BashTime = -1;   // asked once; arriving resets it
         }
     }
 
@@ -213,6 +242,7 @@ public sealed partial class LockSystem
     {
         if (CombatConstants is not { } k || c.Fighter is not { } f || c.Stats is not { } stats || c.Medical is not { } med)
             return null;
+
         float Eff(StatsEnumerated stat) => stats[stat] * stats.Scale * med.StatMultiplier(stat);
         float str = Eff(StatsEnumerated.Strength);
         var packet = f.Unarmed
@@ -231,6 +261,7 @@ public sealed partial class LockSystem
     static bool Damage(World world, Fixture door, float damage)
     {
         if (door.Kind != FixtureKind.Door || door.DoorBroken) return false;
+
         // the damage number at the door (FUN_14029d2b0); queued only while the host shows floaters
         world.Floaters?.Enqueue(Floater.BuildingHit(door.Position, (int)damage));
         door.DoorProgress -= damage * ProgressPerDamage;
@@ -266,6 +297,7 @@ public sealed partial class LockSystem
             if (table.Cold(s) is not { IsPlayer: false, Bashing: null, IsImprisoned: false, Medical.Incapacitated: false, Carrying.IsNone: true,
                     Fighter: not null } c)
                 continue;
+
             var st = Combat!.StateOf(table.IdOf(s));
             int t = st.TargetSlot;
             if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration) continue;
@@ -282,6 +314,7 @@ public sealed partial class LockSystem
                     c.Bashing = door.Id;
                     c.BashTime = 0;
                 }
+
                 break;
             }
         }
@@ -324,6 +357,7 @@ public sealed partial class LockSystem
             // Inside: nearer the origin than its farthest door (engine reading; the building's hull is not consulted).
             if (main is { } m) list.Add((b, origin, radius, m.Door, m.Spot));
         }
+
         return list;
     }
 
@@ -367,6 +401,7 @@ public sealed partial class LockSystem
         {
             if (w.Found || o == w.Self || !w.Table.Previous[o].Alive || w.Table.Cold(o) is { Medical.Incapacitated: true })
                 return;
+
             var to = Flat(w.Table.Previous[o].Position) - w.At;
             float rc = CombatSteering.Radius(w.Table.Cold(o));
             float along = Vector2.Dot(to, w.Face);

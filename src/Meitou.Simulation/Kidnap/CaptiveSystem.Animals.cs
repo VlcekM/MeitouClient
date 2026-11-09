@@ -43,16 +43,21 @@ public sealed partial class CaptiveSystem
             float d = Vector2.DistanceSquared(here, new Vector2(data.Sites[s].Position.X, data.Sites[s].Position.Z));
             if (d < best) (best, site) = (d, s);
         }
+
         foreach (var (n, centre) in world.NestBuildings.Standing)
         {
             float d = Vector2.DistanceSquared(here, centre);
             if (d < best) (best, nest) = (d, n);
         }
+
         var cages = nest >= 0 ? NestCages(world, nest) : site >= 0 ? CagesOf(world, site) : [];
         foreach (var cage in cages)
+        {
             if (OccupantSlot(world, cage) >= 0
                     && _jobs.Any(j => j.Kind == CaptiveJobKind.Eat && j.Captive == cage.Occupant && j.Phase == CaptivePhase.Work))
                 return cage;
+        }
+
         return null;
     }
 
@@ -75,8 +80,10 @@ public sealed partial class CaptiveSystem
             wc.ActionClip = null;
             if (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > WorshipReach)
                 TaskStart.Walk(world, w, to, SpeedMode.Walk, RowOf(j.Kind), TaskSource.Goal);
+
             return true;
         }
+
         if (n.Task == (byte)CharacterTask.GoTo) TaskStart.Stand(table, w);
         var face = cage.Position - n.Position;
         if (face.X * face.X + face.Z * face.Z > 1e-4f) n.Yaw = MathF.Atan2(face.X, face.Z);
@@ -88,6 +95,7 @@ public sealed partial class CaptiveSystem
                             - WorshipMin) * Rng.Float(Rng.Hash(world.Seed, (ulong)Rng.Key(j.Worker), RngPurpose.Slow, AnimalSalt + (ulong)j.Blows++));
             if (j.Blows > 1) world.Defer(new Dialogue.DialogueEvent(j.Worker, CharacterId.None, WorshipEvent) { Tick = world.Tick + 1 });
         }
+
         return true;
     }
 
@@ -124,6 +132,7 @@ public sealed partial class CaptiveSystem
             float d2 = Vector3.DistanceSquared(at, g.Position);
             if (d2 < d2Best) (best, d2Best) = (g, d2);
         }
+
         return best;
     }
 
@@ -160,8 +169,10 @@ public sealed partial class CaptiveSystem
             if (s == slot || !table.Next[s].Alive || table.Cold(s) is not { Mouth: not null, Medical.Incapacitated: false } c
                     || c.Fighter is not { IsAnimal: true } || !Allied(cold.Faction, c.Faction))
                 continue;
+
             if (Vector3.DistanceSquared(at, table.Next[s].Position) <= range * range) return s;
         }
+
         return -1;
     }
 
@@ -194,11 +205,13 @@ public sealed partial class CaptiveSystem
         var table = world.Characters;
         if (!table.TryResolveNext(j.Captive, out int t) || table.Cold(t) is not { Mouth: not null })
             return End(world, j, null);
+
         ref var n = ref table.Next[w];
         var to = new Vector2(table.Next[t].Position.X, table.Next[t].Position.Z);
         if (Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), to) > 10
                 && (n.Task != (byte)CharacterTask.GoTo || Vector2.Distance(n.Goal, to) > 20))
             TaskStart.Walk(world, w, to, SpeedMode.Run, RowOf(j.Kind), TaskSource.Goal);
+
         return true;
     }
 }

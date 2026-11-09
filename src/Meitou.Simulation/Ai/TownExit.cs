@@ -31,6 +31,7 @@ public static class TownExit
             bool gate = b.IsGate && !(destroyed?.Invoke(b) ?? b.Destroyed) && !(regions?.CodeAt(b.Position) > 0);
             if (gate || b.IsWall && b.HasInterior) return Away(centre, new Vector2(b.Position.X, b.Position.Z));
         }
+
         return centre;
     }
 

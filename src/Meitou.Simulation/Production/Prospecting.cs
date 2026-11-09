@@ -45,7 +45,8 @@ public sealed record ProspectReport(long Serial, Vector3 Position, string Prospe
 /// <param name="Heights">The terrain height of each sample.</param>
 /// <param name="Fields">Per resource row: the value of each sample (Water, Fertility, Stone); null for a rock resource.</param>
 /// <param name="Rocks">Per resource row: the rocks within <see cref="RockRange"/> x <see cref="Extent"/> of the spot with their own yields (Iron, Copper); empty for a field resource.</param>
-public sealed record ProspectMap(int Size, float X, float Z, float Extent, float[] Heights, IReadOnlyList<float[]?> Fields, IReadOnlyList<IReadOnlyList<ProspectRock>> Rocks)
+public sealed record ProspectMap(int Size, float X, float Z, float Extent, float[] Heights, IReadOnlyList<float[]?> Fields,
+    IReadOnlyList<IReadOnlyList<ProspectRock>> Rocks)
 {
     /// <summary>
     /// The rock search radius as a share of the side (<b>Verified</b>: squared 0.6 x side, <c>FUN_14049cd60</c>).

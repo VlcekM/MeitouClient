@@ -12,7 +12,8 @@ public readonly record struct MachineSlotView(string Item, string Name, int Coun
 /// <summary>
 /// A farm as the host shows it (docs/simulation.md "Production").
 /// </summary>
-public readonly record struct FarmView(float Growth, float Death, int Harvested, int Plants, FarmStatus Status, float Fertility, float CropMatch, float Ripeness)
+public readonly record struct FarmView(float Growth, float Death, int Harvested, int Plants, FarmStatus Status, float Fertility, float CropMatch,
+    float Ripeness)
 {
     /// <summary>
     /// Each plant's growth (a copy; -10 harvested): what its crop mesh is drawn at.
@@ -75,12 +76,14 @@ public enum MachinePanel : byte { Production, Farm, Bed, Training, Turret }
 /// <summary>
 /// A crafting bench as the host shows it: the queue (the first is being made), the repeat toggle and the finished items waiting in its output.
 /// </summary>
-public sealed record CraftView(IReadOnlyList<(string Key, string Name, float Progress, float Hours)> Queue, bool Repeat, IReadOnlyList<InventoryItemView> Done);
+public sealed record CraftView(IReadOnlyList<(string Key, string Name, float Progress, float Hours)> Queue, bool Repeat,
+    IReadOnlyList<InventoryItemView> Done);
 
 /// <summary>
 /// Something a bench can craft, with its hours and inputs per item, and whether research and the bench level allow it now.
 /// </summary>
-public sealed record CraftOptionView(string Key, string Name, CraftKind Kind, int Level, float Hours, IReadOnlyList<(string Name, float PerItem)> Inputs, bool Unlocked);
+public sealed record CraftOptionView(string Key, string Name, CraftKind Kind, int Level, float Hours,
+    IReadOnlyList<(string Name, float PerItem)> Inputs, bool Unlocked);
 
 /// <summary>
 /// What a bench's current smith would make of one queued craft (<c>FUN_1402bcf60</c>): <paramref name="Quality"/> the armour or crossbow quality (5 to 95; -1 for the other kinds); for a
@@ -101,7 +104,8 @@ public sealed record CraftSmithView(string Name, int Skill, int Penalty, IReadOn
 /// </summary>
 public enum PowerKind : byte { Consumer, Generator, Battery }
 
-public readonly record struct PowerView(PowerKind Kind, float Demand, float Granted, float Usage, float Charge, float Store, bool Fueled, bool PowerOn = true, bool GetsBattery = true)
+public readonly record struct PowerView(PowerKind Kind, float Demand, float Granted, float Usage, float Charge, float Store, bool Fueled,
+    bool PowerOn = true, bool GetsBattery = true)
 {
     /// <summary>
     /// A battery's town grid: whether it has one and whether its batteries charged or drained this tick (<see cref="Machine.GridCharging"/>).
@@ -132,7 +136,8 @@ public readonly record struct FurnaceView(bool Burning, float Metal);
 /// <summary>
 /// A machine of a complete player building after a tick (docs/simulation.md "Production"); <see cref="Site"/> is the building's instance id.
 /// </summary>
-public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<MachineSlotView> Inputs, MachineSlotView? Output, InventoryView? Storage, FarmView? Farm, byte Status, int Operators, int MaxOperators)
+public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<MachineSlotView> Inputs, MachineSlotView? Output,
+    InventoryView? Storage, FarmView? Farm, byte Status, int Operators, int MaxOperators)
 {
     /// <summary>
     /// A container of a building's interior, open (<see cref="PlayerState.OpenContainer"/>): <see cref="Site"/> is its fixture id; no research,
@@ -237,14 +242,25 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
     internal static MachineSnapshot Of(Machine m, ItemFactory items)
     {
         string Name(string record) => items.Info(record)?.Name ?? record;
-        var inputs = m.Inputs.Select(i => new MachineSlotView(i.Item, Name(i.Item), i.Count, i.Recipe.Capacity, Math.Clamp(i.Level, 0, 1), items.Info(i.Item)?.Width ?? 1, items.Info(i.Item)?.Height ?? 1)).ToArray();
-        MachineSlotView? output = m.Output is { } o ? new MachineSlotView(o.Recipe.Item, Name(o.Recipe.Item), o.Count, o.Recipe.Capacity, Math.Clamp(o.Progress, 0, 1), items.Info(o.Recipe.Item)?.Width ?? 1, items.Info(o.Recipe.Item)?.Height ?? 1) : null;
+        var inputs = m.Inputs.Select(i => new MachineSlotView(i.Item, Name(i.Item), i.Count, i.Recipe.Capacity, Math.Clamp(i.Level, 0, 1),
+            items.Info(i.Item)?.Width ?? 1, items.Info(i.Item)?.Height ?? 1)).ToArray();
+        MachineSlotView? output = m.Output is { } o
+            ? new MachineSlotView(o.Recipe.Item, Name(o.Recipe.Item), o.Count, o.Recipe.Capacity, Math.Clamp(o.Progress, 0, 1),
+                items.Info(o.Recipe.Item)?.Width ?? 1, items.Info(o.Recipe.Item)?.Height ?? 1)
+            : null;
         InventoryView? storage = m.Storage is { } s ? new InventoryView(s.Width, s.Height, 0, 0,
-            Array.AsReadOnly(s.Items.Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "main", item.X, item.Y, item.Width, item.Height, item.Quantity, item.Weight, item.Quality)
+            Array.AsReadOnly(s.Items.Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "main", item.X, item.Y, item.Width,
+                item.Height, item.Quantity, item.Weight, item.Quality)
             { Material = item.MaterialId, Colour = item.ColourId, Charge = item.ChargeFraction }).ToArray())) : null;
         FarmView? farm = m.Farm is { } f && m.Data.Farm is { } fd
-            ? new FarmView(f.Growth, f.Death, f.Harvested, f.Plants.Length, f.Status, m.Yield, m.CropMatch, ProductionSystem.Ripeness(f)) { PlantGrowth = [.. f.Plants] } : null;
-        // The classes that update their emitter every frame tell it the efficiency and the power; the others powered it once, when built, with no operators (efficiency 0).
+            ? new FarmView(f.Growth, f.Death, f.Harvested, f.Plants.Length, f.Status, m.Yield, m.CropMatch, ProductionSystem.Ripeness(f))
+            {
+                PlantGrowth = [.. f.Plants]
+            }
+            : null;
+
+        // The classes that update their emitter every frame tell it the efficiency and the power; the others powered it once, when built, with no
+        // operators (efficiency 0).
         var sound = m.Data.PowersEmitterEachFrame ? new MachineSound(m.Efficiency, m.HasPower && m.Efficiency > 0) : new MachineSound(0, true);
         return new MachineSnapshot(m.Site, m.Data.Id, inputs, output, storage, farm, m.Status, m.Operators, m.Data.MaxOperators)
         {
@@ -260,7 +276,7 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
             StorageLimitName = m.Data.StorageLimit is [var only] ? Name(only) : null,
             StorageCapacity = m.Data.StorageLimit is [_] ? (int)m.Data.StackBonusMult : 0,
             Craft = Crafting(m, items),
-            Power = m.Data.IsConsumer || m.Data.IsGenerator || m.Data.IsBattery ? new PowerView(m.Data.IsBattery ? PowerKind.Battery : m.Data.IsGenerator ? PowerKind.Generator : PowerKind.Consumer, m.Demand, m.Granted, m.Usage, m.Charge, m.Store, m.Inputs.Length == 0 || Array.Exists(m.Inputs, i => i.Level > 0 || i.Count > 0), m.PowerOn, m.GetsBattery) { OnGrid = m.OnGrid, GridCharging = m.GridCharging, GridDraining = m.GridDraining } : null,
+            Power = PowerOf(m),
             Panel = PanelOf(m.Data),
             OutputValue = m.Data.OutputValue,
             Research = m.ProductionMult,
@@ -277,16 +293,31 @@ public sealed record MachineSnapshot(string Site, string Record, IReadOnlyList<M
         };
     }
 
+    /// <summary>
+    /// The power panel of a consumer, generator or battery; null for any other machine.
+    /// </summary>
+    static PowerView? PowerOf(Machine m) => m.Data.IsConsumer || m.Data.IsGenerator || m.Data.IsBattery
+        ? new PowerView(m.Data.IsBattery ? PowerKind.Battery : m.Data.IsGenerator ? PowerKind.Generator : PowerKind.Consumer, m.Demand, m.Granted,
+            m.Usage, m.Charge, m.Store, m.Inputs.Length == 0 || Array.Exists(m.Inputs, i => i.Level > 0 || i.Count > 0), m.PowerOn, m.GetsBattery)
+        {
+            OnGrid = m.OnGrid,
+            GridCharging = m.GridCharging,
+            GridDraining = m.GridDraining
+        }
+        : null;
+
     static CraftView? Crafting(Machine m, ItemFactory items) => m.Craft is { } c
         ? new CraftView([.. c.Queue.Select(j => (j.Option.Key, j.Recipe.Name, Math.Clamp(j.Progress, 0, 1), j.Recipe.Hours))], c.Repeat,
-            [.. c.Done.Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "out", 0, 0, item.Width, item.Height, item.Quantity, item.Weight, item.Quality) { Material = item.MaterialId, Colour = item.ColourId })])
+            [.. c.Done.Select((item, index) => new InventoryItemView(index, item.Record, item.Name, "out", 0, 0, item.Width, item.Height,
+                item.Quantity, item.Weight, item.Quality) { Material = item.MaterialId, Colour = item.ColourId })])
         : null;
 }
 
 /// <summary>
 /// A research the player may queue, with its cost and whether the benches can pay it and the bench level allows it.
 /// </summary>
-public readonly record struct ResearchOption(string Id, string Name, string Category, int Level, float Hours, bool Affordable, bool BenchTooLow, float Progress)
+public readonly record struct ResearchOption(string Id, string Name, string Category, int Level, float Hours, bool Affordable, bool BenchTooLow,
+    float Progress)
 {
     public string Description { get; init; } = "";
     /// <summary>
@@ -310,7 +341,8 @@ public readonly record struct ResearchOption(string Id, string Name, string Cate
 /// <summary>
 /// The research state as the host shows it (docs/simulation.md "Production", Research).
 /// </summary>
-public sealed record ResearchSnapshot(int TechLevel, int BenchLevel, IReadOnlyList<(string Id, string Name, float Progress)> Queue, float Rate, IReadOnlyList<ResearchOption> Available)
+public sealed record ResearchSnapshot(int TechLevel, int BenchLevel, IReadOnlyList<(string Id, string Name, float Progress)> Queue, float Rate,
+    IReadOnlyList<ResearchOption> Available)
 {
     /// <summary>
     /// How many researches have been finished (counting repeats): the host plays the notification when it grows.

@@ -22,7 +22,8 @@ public static class PermaJobSave
     /// Writes the list (the old entries are cleared first) and the switch.
     /// </summary>
     public static void Write(
-        FcsRecord ai, CharacterCold cold, BuildingRegistry sites, IReadOnlyDictionary<string, FcsRecord> buildings, Func<CharacterId, Hand>? handleOf = null)
+        FcsRecord ai, CharacterCold cold, BuildingRegistry sites, IReadOnlyDictionary<string, FcsRecord> buildings,
+        Func<CharacterId, Hand>? handleOf = null)
     {
         foreach (var key in ai.Ints.Keys.Where(k => k.StartsWith(Type, StringComparison.Ordinal)).ToList())
             ai.Ints.Remove(key);
@@ -57,7 +58,8 @@ public static class PermaJobSave
     /// <c>jobs</c>).
     /// </summary>
     public static void Read(
-        FcsRecord ai, FcsRecord? state, CharacterCold cold, BuildingRegistry sites, SaveHandles handles, IReadOnlyDictionary<FcsRecord, string> instanceOf,
+        FcsRecord ai, FcsRecord? state, CharacterCold cold, BuildingRegistry sites, SaveHandles handles,
+        IReadOnlyDictionary<FcsRecord, string> instanceOf,
         IReadOnlySet<string> instances)
     {
         for (int i = 0; ai.Ints.TryGetValue(Type + i, out int type); i++)

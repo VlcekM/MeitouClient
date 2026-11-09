@@ -70,8 +70,10 @@ public sealed partial class AiSystem
                 || !table.Previous[e.Target].Alive
                 || table.Previous[e.Target].Generation != e.Generation)
                 continue;
+
             if (world.Sight.BuildingOf(e.Target) == here) return true;
         }
+
         return false;
     }
 }

@@ -186,7 +186,8 @@ public sealed class WorldBoot
         var buildings = TownBuildings.Build(o.Database, levels, layouts, (x, z) => o.Heights.HeightAt((float)x, (float)z));
         int beds = buildings.Values.Sum(l => l.Sum(b => b.Beds));
         int nodes = buildings.Values.Sum(l => l.Sum(b => b.Spots.Count - b.Beds));
-        Console.WriteLine($"homes     {buildings.Values.Sum(l => l.Count)} town buildings, {beds} beds, {nodes} nodes in {buildings.Count} towns ({watch.ElapsedMilliseconds} ms)");
+        Console.WriteLine($"homes     {buildings.Values.Sum(l => l.Count)} town buildings, {beds} beds, {nodes} nodes in {buildings.Count} towns "
+            + $"({watch.ElapsedMilliseconds} ms)");
         return buildings;
     }
 
@@ -207,6 +208,7 @@ public sealed class WorldBoot
             Console.Error.WriteLine($"resource rocks without the layout cache: {e.Message}");
         }
 
-        return new FoliageResourceNodes(new FoliageWorld(o.Install, o.Database, levels, catalog, cache: cache), o.Database, name => o.Assets.Find(name));
+        return new FoliageResourceNodes(new FoliageWorld(o.Install, o.Database, levels, catalog, cache: cache), o.Database,
+            name => o.Assets.Find(name));
     }
 }

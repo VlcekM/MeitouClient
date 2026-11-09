@@ -81,7 +81,10 @@ public static class BuildingSave
                 for (int k = 0; k < materials.Length; k++)
                 {
                     var material = data.Materials[k];
-                    materials[k] = new MaterialSlot(material.Item, material.Required) { Delivered = state.Floats.GetValueOrDefault($"{k}construction mats") };
+                    materials[k] = new MaterialSlot(material.Item, material.Required)
+                    {
+                        Delivered = state.Floats.GetValueOrDefault($"{k}construction mats")
+                    };
                 }
 
                 float target = data.Target;
@@ -151,8 +154,10 @@ public static class BuildingSave
             if (zone.BuildingList is not { } ids) continue;
 
             foreach (var i in ids.Instances)
+            {
                 if (states.TryGetValue(BuildingKey.Of(zone.Coordinate, i.Id), out var record))
                     idOf[record] = IsPlayerBuilt(i.Id, record, playerFactionId) ? i.Id : BuildingKey.Of(zone.Coordinate, i.Id);
+            }
         }
 
         return idOf;
@@ -300,7 +305,8 @@ public static class BuildingSave
     /// <summary>
     /// Writes one site: its instance in the zone's building list, its state record and its keys.
     /// </summary>
-    static void WriteSite(SaveGame game, BuildSite site, string playerFactionId, ulong seed, Hand town, Locks.FixtureRegistry fixtures, IWalkability walkability)
+    static void WriteSite(SaveGame game, BuildSite site, string playerFactionId, ulong seed, Hand town, Locks.FixtureRegistry fixtures,
+        IWalkability walkability)
     {
         var coordinate = site.Zone;
         if (!game.Zones.TryGetValue(coordinate, out var zone)) game.Zones[coordinate] = zone = new SaveZone(coordinate, new SaveFile());
@@ -308,7 +314,8 @@ public static class BuildingSave
         var list = zone.BuildingList;
         if (list is null)
         {
-            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0", StringId = WorldLevelData.BuildingListId };
+            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextNumber(file), Name = "0",
+                StringId = WorldLevelData.BuildingListId };
             file.Records.Add(list);
         }
 

@@ -24,6 +24,7 @@ public sealed partial class FixtureRegistry
         public bool Purchased { get; set; }
         public BuildSite? Construction { get; set; }
     }
+
     readonly Dictionary<string, Property> _properties = new(StringComparer.Ordinal);
     IReadOnlySet<string>? _ownedProperties;
     int _ownedFaction = -1;
@@ -64,6 +65,7 @@ public sealed partial class FixtureRegistry
             _ownedFaction = faction;
             _ownedProperties = _properties.Where(p => faction >= 0 && p.Value.Owner == faction).Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
         }
+
         return _ownedProperties;
     }
 
@@ -71,6 +73,7 @@ public sealed partial class FixtureRegistry
     {
         if (player < 0 || !_properties.TryGetValue(building, out var p) || p.Owner < 0 || p.Owner == player || p.Purchased)
             return null;
+
         var data = p.Data;
         if (data.Sites[p.Site].Town.Type is not (TownType.Outpost or TownType.Town or TownType.Village)
             || data.SiteFactions[p.Site] == player || data.Relations.IsHostile(p.Owner, player)) return null;
@@ -100,6 +103,7 @@ public sealed partial class FixtureRegistry
             world.Post(Loc.Tr("You can't afford that."));
             return;
         }
+
         var p = _properties[order.Building];
         world.Player.Money -= price;
         TakeOver(world, p);
@@ -153,6 +157,7 @@ public sealed partial class FixtureRegistry
         ApplyTownRuins(world, data, site, reset);
         if (Saved is { } saved && reset.Any(saved.ContainsKey))
             Saved = saved.Where(s => !reset.Contains(s.Key)).ToDictionary(s => s.Key, s => s.Value, StringComparer.Ordinal);
+
         foreach (var b in town.Buildings)
             if (reset.Contains(b.Key)) _resetBuildings[b.Key] = (b, data, LevelOwner(b));
         if (!_sites.Contains(site)) return;
@@ -170,6 +175,7 @@ public sealed partial class FixtureRegistry
             foreach (var f in OfBuilding(b.Key)) f.Owner = owner;
             world.ItemSlots.TransferBuilding(world, b, owner);
         }
+
         Bind(world);
         _ownedProperties = null;
         _containerSpots = null;
@@ -228,6 +234,7 @@ public sealed partial class FixtureRegistry
             state.Floats["construction progress"] = site.Progress;
             for (int i = 0; i < site.Materials.Length; i++) state.Floats[$"{i}construction mats"] = site.Materials[i].Delivered;
         }
+
         if (!p.Purchased && p.Construction is null) return;
         state.Strings["owner faction ID"] = p.Data.Factions[p.Owner].Id;
         state.Bools["sell home"] = false;
@@ -250,6 +257,7 @@ public sealed partial class FixtureRegistry
         if (!destroyed && complete && progress >= data.Target && !b.Destroyed
                 && !(saved?.Bools.GetValueOrDefault("meitou town construction") ?? false))
             return;
+
         var placement = b.Resolved?.Placement ?? new BuildingPlacement(b.Zone, b.InstanceId, b.BuildingId, b.Position,
             Quaternion.CreateFromAxisAngle(Vector3.UnitY, b.Yaw), b.LevelState?.StringId, b.Position.Y);
         placement = placement with { WithoutInterior = p.Purchased };   // a bought house's furniture is gone (EmptyInterior)
@@ -294,6 +302,7 @@ public sealed partial class FixtureRegistry
             _all.Add(door);
             _byId[door.Id] = door;
         }
+
         _doorPicks = null;
         SyncDoors(site.Id);
     }

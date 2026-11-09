@@ -83,11 +83,13 @@ public sealed partial class AiSystem
             float d = Vector2.DistanceSquared(at, Flat(site.Position));
             if (d < bestD) (best, bestD, bestR) = (CampaignTown.OfSite(site.Index), d, site.Town.Radius);
         }
+
         foreach (var town in world.Buildings.Towns)
         {
             float d = Vector2.DistanceSquared(at, Flat(town.Position));
             if (d < bestD) (best, bestD, bestR) = (CampaignTown.OfPlayer(town.Number), d, town.Radius);
         }
+
         return bestD <= bestR * bestR ? best : CampaignTown.None;
     }
 
@@ -132,6 +134,7 @@ public sealed partial class AiSystem
             float d = Vector2.DistanceSquared(at, Flat(site.Position));
             if (d < bestD) (best, bestD) = (new PlacedTown(CampaignTown.OfSite(site.Index), Flat(site.Position), site.Town.Radius), d);
         }
+
         return best;
     }
 
@@ -144,6 +147,7 @@ public sealed partial class AiSystem
             float d = Vector2.DistanceSquared(at, Flat(town.Position));
             if (d < bestD) (best, bestD) = (new PlacedTown(CampaignTown.OfPlayer(town.Number), Flat(town.Position), town.Radius), d);
         }
+
         return best;
     }
 
@@ -326,7 +330,8 @@ public sealed partial class AiSystem
     /// Whether a character is alive and not down.
     /// </summary>
     static bool Up(World world, CharacterId id) =>
-        world.Characters.IsAlive(id) && world.Characters.TryResolveNext(id, out int s) && world.Characters.Cold(s)!.Medical is not { Incapacitated: true };
+        world.Characters.IsAlive(id) && world.Characters.TryResolveNext(id, out int s)
+            && world.Characters.Cold(s)!.Medical is not { Incapacitated: true };
 
     int MembersUp(World world, Squad squad)
     {
@@ -343,7 +348,9 @@ public sealed partial class AiSystem
         var table = world.Characters;
         for (int i = 0; i < table.Previous.Length; i++)
         {
-            if (!table.Previous[i].Alive || table.Cold(i) is not { } c || c.Medical is { Incapacitated: true } || !OfFaction(world, c, faction)) continue;
+            if (!table.Previous[i].Alive || table.Cold(i) is not { } c || c.Medical is { Incapacitated: true } || !OfFaction(world, c, faction))
+                continue;
+
             if (Vector2.DistanceSquared(Flat(table.Previous[i].Position), at) <= range * range) return true;
         }
 
@@ -372,6 +379,7 @@ public sealed partial class AiSystem
             }
             else _assaultEnds[squad.Faction] = world.GameHours;
         }
+
         return FactionNear(world, town.Owner, Flat(town.Position), AssaultReach);
     }
 
@@ -415,6 +423,7 @@ public sealed partial class AiSystem
         {
             if (!table.TryResolveNext(m, out int s) || table.Cold(s)?.Ai is not { } mind) continue;
             mind.Post = PostRound(centre, mind.MemberIndex);
+
             // A stroll picked round the old post is dropped, so the next one is round the new.
             if (table.Next[s].Task == (byte)CharacterTask.Wander) Become(world, s, CharacterTask.Idle);
             if (say is { } e) world.Defer(new Dialogue.DialogueEvent(m, CharacterId.None, e) { Tick = world.Tick + 1 });
@@ -446,6 +455,7 @@ public sealed partial class AiSystem
             if (!table.TryResolveNext(id, out int i) || !table.Previous[i].Alive || table.Cold(i) is not { } c) continue;
             if (Stands(c, CurrentTown(world, table.Previous[i].Position) == board.Destination)) return true;
         }
+
         return false;
     }
 
@@ -573,7 +583,9 @@ public sealed partial class AiSystem
     /// </summary>
     static Locks.Fixture? OccupiedBed(World world, Blackboard board, AiMind mind, int slot)
     {
-        if (board.CurrentClass != PackageClass.OccupyTown || board.Destination.PlayerTown <= 0 || world.Characters.Cold(slot) is not { } self) return null;
+        if (board.CurrentClass != PackageClass.OccupyTown || board.Destination.PlayerTown <= 0 || world.Characters.Cold(slot) is not { } self)
+            return null;
+
         var table = world.Characters;
         bool Takes(Locks.Fixture f) =>
             f.Kind == Locks.FixtureKind.Bed && f.Bed.Function == Meitou.Data.World.TownBuildings.BedFunction
@@ -605,11 +617,14 @@ public sealed partial class AiSystem
         if (board.Destination.PlayerTown <= 0 || world.Buildings.FindTown(board.Destination.PlayerTown) is null) return true;
         var table = world.Characters;
         foreach (var m in squad.Members)
+        {
             if (Up(world, m) && CurrentTown(world, table.Previous[m.Slot].Position) == board.Destination)
             {
                 board.OccupyAway = 0;
                 return false;
             }
+        }
+
         board.OccupyAway += world.Every(Settings.PackageEveryTicks) * world.TickSeconds;
         return board.OccupyAway > OccupyGiveUp;
     }
@@ -693,6 +708,7 @@ public sealed partial class AiSystem
             float d = Vector2.DistanceSquared(Flat(at), Flat(site.Position));
             if (d < bestD) (best, bestD) = (site.Index, d);
         }
+
         board.Destination = best >= 0 ? CampaignTown.OfSite(best) : CampaignTown.None;
     }
 
@@ -716,11 +732,13 @@ public sealed partial class AiSystem
             board.RefugeeTarget = RefugeeTargetFor(world, squad, at)?.Id ?? -1;
             return;
         }
+
         if (world.Squads.Find(board.RefugeeTarget) is not { } target || LeaderPosition(world, target) is not { } there)
         {
             board.RefugeeTarget = -1;
             return;
         }
+
         if (Vector3.DistanceSquared(at, there) >= RefugeeJoinRange * RefugeeJoinRange) return;
         if (target.Ai is { Current: { } running } theirs && board.Current is { } mine && running.Id == mine.Id) theirs.RefugeeTarget = -1;
         _merges.Add((squad, target));
@@ -738,6 +756,7 @@ public sealed partial class AiSystem
             float d = Vector3.DistanceSquared(at, there);
             if (d < bestD) (best, bestD) = (other, d);
         }
+
         return best;
     }
 

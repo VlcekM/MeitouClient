@@ -96,7 +96,8 @@ public sealed partial class ProductionSystem
     /// the list (or the player ordered the delivery) and, for a corpse, a machine exists. Otherwise the carrier keeps the body and the errand waits.
     /// </summary>
     bool DeliveryReady(World world, CharacterId self, CharacterCold cold, ErrandKind kind, Vector3 at, bool ordered = false) =>
-        (ordered || PermaJobs.IndexOf(cold, CompanionOf(kind)) >= 0) && (kind != ErrandKind.Corpse || NearestIncinerator(world, at, self, cold.SquadId) is not null);
+        (ordered || PermaJobs.IndexOf(cold, CompanionOf(kind)) >= 0)
+            && (kind != ErrandKind.Corpse || NearestIncinerator(world, at, self, cold.SquadId) is not null);
 
     /// <summary>
     /// The carrying errands under way (serial, slot order, every <see cref="ErrandEveryTicks"/> ticks): each is stepped. Their starts are the
@@ -108,7 +109,10 @@ public sealed partial class ProductionSystem
         var table = world.Characters;
         foreach (var gone in _errands.Keys.Where(k => !table.IsAlive(k)).ToList()) _errands.Remove(gone);
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true } cold && _errands.TryGetValue(table.IdOf(i), out var errand)) StepErrand(world, i, cold, errand);
+        {
+            if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: true } cold && _errands.TryGetValue(table.IdOf(i), out var errand))
+                StepErrand(world, i, cold, errand);
+        }
     }
 
     /// <summary>
@@ -126,11 +130,17 @@ public sealed partial class ProductionSystem
             if (owner.Carry is null || KindOf(cold.Jobs[k].Type) is not { } kind) return DecisionCheck.No(null);
             if (owner._errands.TryGetValue(table.IdOf(slot), out var e))
             {
-                bool mine = e.Kind == kind && (cold.Carrying == e.Body || table.Next[slot].Task == (byte)CharacterTask.PickUp && cold.CarryTarget == e.Body);
+                bool mine = e.Kind == kind
+                    && (cold.Carrying == e.Body || table.Next[slot].Task == (byte)CharacterTask.PickUp && cold.CarryTarget == e.Body);
                 if (!mine) return DecisionCheck.No("another errand");
-                return cold.Carrying.IsNone || owner.DeliveryReady(world, table.IdOf(slot), cold, kind, table.Next[slot].Position, e.Ordered) ? DecisionCheck.Runs : DecisionCheck.No("nothing to deliver to");
+                return cold.Carrying.IsNone || owner.DeliveryReady(world, table.IdOf(slot), cold, kind, table.Next[slot].Position, e.Ordered)
+                    ? DecisionCheck.Runs
+                    : DecisionCheck.No("nothing to deliver to");
             }
-            if (!cold.Carrying.IsNone || !CarrySystem.CanCarry(world, cold, TaskType.DeadGuysGoInThePot) || cold.Fleeing) return DecisionCheck.No("cannot carry");
+
+            if (!cold.Carrying.IsNone || !CarrySystem.CanCarry(world, cold, TaskType.DeadGuysGoInThePot) || cold.Fleeing)
+                return DecisionCheck.No("cannot carry");
+
             var lifted = Lifted(world, cold.SquadId, table.IdOf(slot));
             var body = kind == ErrandKind.Corpse ? owner.FindCorpse(world, slot, cold, lifted) : owner.FindIntruder(world, slot, cold, lifted, kind);
             if (body is not { } b) return DecisionCheck.No("nothing found");
@@ -189,7 +199,10 @@ public sealed partial class ProductionSystem
     void IGoalSource.Publish(World world, SquadGoals goals)
     {
         foreach (var (id, e) in _errands)
-            if (e.Site is not null && world.Characters.TryResolveNext(id, out int i) && world.Characters.Cold(i) is { } c) goals.Add(c.SquadId, id, GoalTarget.At(e.Site));
+        {
+            if (e.Site is not null && world.Characters.TryResolveNext(id, out int i) && world.Characters.Cold(i) is { } c)
+                goals.Add(c.SquadId, id, GoalTarget.At(e.Site));
+        }
     }
 
     // ---- stepping a carrying job ----
@@ -207,6 +220,7 @@ public sealed partial class ProductionSystem
             _errands.Remove(id);
             return;
         }
+
         // An order of the player took the carrier elsewhere: the job is over, the body stays with it.
         if (task == CharacterTask.GoTo && !e.Walking) { _errands.Remove(id); return; }
         if (task is not (CharacterTask.GoTo or CharacterTask.Idle or CharacterTask.Wander or CharacterTask.Follow)) { _errands.Remove(id); return; }
@@ -224,7 +238,10 @@ public sealed partial class ProductionSystem
             e.Site = site.Id;
             goal = GoalOf(world, site, machine);
         }
-        bool arrived = site is not null ? AtSite(world, n, site, machine!) : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
+
+        bool arrived = site is not null
+            ? AtSite(world, n, site, machine!)
+            : Vector2.Distance(new Vector2(n.Position.X, n.Position.Z), goal) <= ErrandArrive;
         if (arrived)
         {
             if (e.Kind == ErrandKind.Corpse) Incinerate(world, i, cold, site!, machine!);
@@ -232,17 +249,20 @@ public sealed partial class ProductionSystem
             _errands.Remove(id);
             return;
         }
+
         if (task == CharacterTask.GoTo)
         {
             e.StoppedAt = null;
             return;   // on its way
         }
+
         if (e.Kind != ErrandKind.Corpse && CarryOutOver(world, e, wasWalking))
         {
             Carry!.BeginPutDown(world, i, TaskSource.Job);
             _errands.Remove(id);
             return;
         }
+
         e.Goal = goal;
         e.Walking = true;
         TaskStart.StepTo(table, i, goal, cold.RunSpeed);
@@ -265,7 +285,10 @@ public sealed partial class ProductionSystem
     /// </summary>
     void NoteWalkEnd(World world, CharacterCold cold, in CharacterHot n, Errand e)
     {
-        if (e.Site is not { } siteId || Site(world, siteId) is not { } site || world.Machines.Find(siteId) is not { } machine || AtSite(world, n, site, machine)) return;
+        if (e.Site is not { } siteId || Site(world, siteId) is not { } site || world.Machines.Find(siteId) is not { } machine
+            || AtSite(world, n, site, machine))
+            return;
+
         cold.NoteUnreachable(siteId, world.Tick + (long)MathF.Ceiling(ConstructionSystem.UnreachableSeconds / world.TickSeconds));
     }
 
@@ -302,11 +325,14 @@ public sealed partial class ProductionSystem
         float bestD = float.MaxValue;
         foreach (var f in world.Fixtures.All)
         {
-            if (f.Kind != FixtureKind.Cage || f.Owner != world.Player.Faction || f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s)) continue;
+            if (f.Kind != FixtureKind.Cage || f.Owner != world.Player.Faction || f.Occupant.IsNone || !table.TryResolveNext(f.Occupant, out int s))
+                continue;
+
             if (!Liftable(world, table, s, f.Occupant, lifted, cageStage: true)) continue;
             float d = Gap(at, f.Position);
             if (d <= Settings.HaulRange && d < bestD) (best, bestD) = (f.Occupant, d);
         }
+
         if (best is null)
         {
             for (int s = 0; s < table.HighWater; s++)
@@ -318,6 +344,7 @@ public sealed partial class ProductionSystem
                 if (d <= ErrandSight && d < bestD) (best, bestD) = (id, d);
             }
         }
+
         return best is { } body ? (body, Vector2.Zero) : null;
     }
 
@@ -351,13 +378,20 @@ public sealed partial class ProductionSystem
         float bestWeight = -1;
         foreach (var m in world.Machines.All)
         {
-            if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site || !world.Fixtures.CanUse(world, carrier, site.Owner, null)) continue;
+            if (m.Data.Function != Meitou.Data.World.TownBuildings.CorpseDisposalFunction || Site(world, m.Site) is not { Complete: true } site
+                || !world.Fixtures.CanUse(world, carrier, site.Owner, null))
+                continue;
+
             if (town is not null && Gap(site.Position, town.Position) > town.Radius * 1.1f) continue;
-            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || MachineClaimed(goals, self, squad, site.Id) || PathImpossible(world, self, site.Id)) continue;
+            if (OperatorsOf(world, site.Id) >= m.Data.MaxOperators || MachineClaimed(goals, self, squad, site.Id)
+                || PathImpossible(world, self, site.Id))
+                continue;
+
             float weight = DisposalWeight(Vector3.DistanceSquared(site.Position, from)) * (site.Owner == world.Player.Faction ? OwnFactionWeight : 1);
             if (weight <= bestWeight) continue;
             (bestSite, best, bestWeight) = (site, m, weight);
         }
+
         return best is null ? null : (bestSite!, best);
     }
 
@@ -389,6 +423,7 @@ public sealed partial class ProductionSystem
             float d = Vector3.DistanceSquared(town.Position, at);
             if (town.Owner == world.Player.Faction && d <= bestD) (best, bestD) = (town, d);
         }
+
         return best;
     }
 
@@ -422,6 +457,7 @@ public sealed partial class ProductionSystem
             float d = Gap(at, table.Next[s].Position);
             if (d <= ErrandSight && d < bestD) (best, bestD) = (id, d);
         }
+
         return best is { } found ? (found, OutsideGoal(world, site, at, kind)) : null;
     }
 
@@ -447,6 +483,7 @@ public sealed partial class ProductionSystem
             float d = Gap(at, table.Next[s].Position);
             if (d <= ErrandSight && d < bestD) (best, bestD) = (id, d);
         }
+
         return best is { } found ? (found, OutsideTownGoal(world, town, at)) : null;
     }
 
@@ -462,6 +499,7 @@ public sealed partial class ProductionSystem
             float d = Gap(town.Position, at);
             if (town.Owner == world.Player.Faction && d <= town.Radius && d < bestD) (best, bestD) = (town, d);
         }
+
         return best;
     }
 
@@ -487,6 +525,7 @@ public sealed partial class ProductionSystem
             if (gap > radius || gap >= bestGap || !world.Fixtures.OfBuilding(site.Id).Any(f => f.Kind == FixtureKind.Door)) continue;
             (best, bestGap) = (site, gap);
         }
+
         return best;
     }
 
@@ -504,6 +543,7 @@ public sealed partial class ProductionSystem
             if (f.Kind == FixtureKind.Door && world.Fixtures.DoorSpotOf(f) is not null && (door is null || f.DoorIndex < door.DoorIndex)) door = f;
         if (door is null || world.Fixtures.DoorSpotOf(door) is not { } leaf)
             return town is not null ? OutsideTownGoal(world, town, from) : new Vector2(site.Position.X, site.Position.Z);
+
         var centre = new Vector2(leaf.Centre.X, leaf.Centre.Z);
         var exit = AiSystem.DoorExit(centre, new Vector2(leaf.Normal.X, leaf.Normal.Z), new Vector2(site.Position.X, site.Position.Z));
         return world.Walkability.IsWalkable(exit.X, exit.Y) ? exit : Outward(world, centre, exit - centre, Vector2.Distance(exit, centre));
@@ -533,6 +573,7 @@ public sealed partial class ProductionSystem
             var p = origin + dir * distance;
             if (world.Walkability.IsWalkable(p.X, p.Y)) return p;
         }
+
         return origin + dir * distance;
     }
 }

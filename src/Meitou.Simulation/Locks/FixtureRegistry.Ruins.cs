@@ -83,10 +83,14 @@ public sealed partial class FixtureRegistry
         if (Saved is null) return;
         int player = world.Player.Faction >= 0 ? world.Player.Faction : data.PlayerFaction;
         foreach (var site in data.Sites)
+        {
             foreach (var b in site.Buildings)
+            {
                 if (!b.Destroyed && Saved.GetValueOrDefault(b.Key)?.Bools.GetValueOrDefault("destroyed") == true
                         && !IsPlayers(data, site.Index, b, player))
                     SetRuin(world, data, site.Index, b, true);
+            }
+        }
     }
 
     /// <summary>
@@ -104,6 +108,7 @@ public sealed partial class FixtureRegistry
             _all.Remove(f);
             _byId.Remove(f.Id);
         }
+
         _containerSpots = null;
         _doorPicks = null;
         _doorsByBuilding = null;
