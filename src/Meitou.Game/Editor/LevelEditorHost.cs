@@ -108,8 +108,8 @@ sealed class LevelEditorHost(GameHost host)
                 bool known = LevelBuildingsByKey(objects).TryGetValue(placement.Key, out var existing) && existing.BuildingId == placement.BuildingId;
                 LevelEdits.Restore(placement);
                 if (!known)
-                        ApplyPlaced(objects, placement, host.BuildingSync.BuildData().TryGetValue(placement.BuildingId, out var data) ? data.PathMode
-                                : 2, townBuilder);
+                    ApplyPlaced(objects, placement,
+                        host.BuildingSync.BuildData().TryGetValue(placement.BuildingId, out var data) ? data.PathMode : 2, townBuilder);
                 placed++;
             }
             foreach (string key in clearKeys)
@@ -126,8 +126,8 @@ sealed class LevelEditorHost(GameHost host)
     {
         game.LevelEdits.Clear();
         if (!ReferenceEquals(_levelEditsWorld, host.Session.World) || LevelEdits.IsEmpty || host.Scene.Objects is not { } objects) return;
-        foreach (var (zone, bytes) in LevelEdits.Snapshot(objects.Levels, id => host.Scene.Database?.Find(id)?.Name
-                ?? id)) game.LevelEdits[zone] = bytes;
+        foreach (var (zone, bytes) in LevelEdits.Snapshot(objects.Levels, id => host.Scene.Database?.Find(id)?.Name ?? id))
+            game.LevelEdits[zone] = bytes;
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ sealed class LevelEditorHost(GameHost host)
         foreach (var ghost in ghosts)
         {
             var placement = LevelEdits.Add(ghost.Building.Id, ghost.Position, ghost.Rotation,
-                    host.Gpu.Terrain.HeightAt(ghost.Position.X, ghost.Position.Z), objects.Levels, PlaceInterior, PlaceExterior);
+                host.Gpu.Terrain.HeightAt(ghost.Position.X, ghost.Position.Z), objects.Levels, PlaceInterior, PlaceExterior);
             ApplyPlaced(objects, placement, ghost.Building.PathMode, townBuilder);
         }
     }
@@ -165,7 +165,7 @@ sealed class LevelEditorHost(GameHost host)
     void ApplyPlaced(WorldObjects objects, BuildingPlacement placement, int pathMode, TownBuildings.Builder? townBuilder)
     {
         objects.Levels.ApplyEdit(placement.Zone,
-                LevelEdits.PlacedFile(placement, host.Scene.Database?.Find(placement.BuildingId)?.Name ?? placement.BuildingId), LevelEdits.ModName);
+            LevelEdits.PlacedFile(placement, host.Scene.Database?.Find(placement.BuildingId)?.Name ?? placement.BuildingId), LevelEdits.ModName);
         host.Gpu.Objects?.AddRuntime(placement);
         if (pathMode != 0) host.Nav?.AddRuntimeBuilding(placement);
         else host.Nav?.LevelChanged(placement.Position);
@@ -193,7 +193,7 @@ sealed class LevelEditorHost(GameHost host)
         if (host.Scene.Database is not { } db
                 || BuildingPlacements.Resolve(placement, db, objects.Levels,
                 (x, z) => host.Gpu.Terrain.HeightAt((float)x, (float)z)) is not { } resolved)
-                return;
+            return;
         host.ActiveLamps?.SetRuntime(placement.InstanceId, WorldLights.ForBuilding(db, objects.Levels, resolved, objects.Layouts));
         host.Gpu.Particles?.SetBuildingEffects(placement.InstanceId, BuildingEffects.ForBuilding(db, objects.Levels, resolved, objects.Layouts));
     }
@@ -253,12 +253,12 @@ sealed class LevelEditorHost(GameHost host)
         {
             Directory.CreateDirectory(mod);
             if (!File.Exists(marker)) File.WriteAllText(marker,
-                    "Written by Meitou's level editor (docs/game/level-editor.md). Meitou only writes into this folder while this file is here.\n");
+                "Written by Meitou's level editor (docs/game/level-editor.md). Meitou only writes into this folder while this file is here.\n");
             // The mod's own game-data file, empty, so the launcher lists it and the game loads its leveldata/ once it is active.
             string data = Path.Combine(mod, LevelEdits.ModName + ".mod");
             if (!File.Exists(data))
-                    Data.Fcs.FcsWriter.WriteFile(new Data.Fcs.FcsFile { Author = "Meitou",
-                            Description = "Buildings placed with Meitou's level editor" }, data);
+                Data.Fcs.FcsWriter.WriteFile(new Data.Fcs.FcsFile { Author = "Meitou", Description = "Buildings placed with Meitou's level editor" },
+                    data);
             var zones = LevelEdits.Save(Path.Combine(mod, "leveldata"), objects.Levels, id => host.Scene.Database?.Find(id)?.Name ?? id);
             Console.WriteLine($"level     saved {LevelEdits.Added.Count} placed and {LevelEdits.Cleared.Count} cleared buildings in {zones.Count} zones to {mod}");
             return $"Saved mod {LevelEdits.ModName}";

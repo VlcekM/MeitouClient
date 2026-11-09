@@ -39,7 +39,7 @@ sealed class InteriorEditorHost(GameHost host)
         if (!_interiorEditorPlacements.Value.ByKey.TryGetValue(key, out var placement)) return null;
         if (BuildingPlacements.Resolve(placement, objects.Database, objects.Levels,
                 (x, z) => host.Gpu.Terrain.HeightAt((float)x, (float)z)) is not { } resolved)
-                return null;
+            return null;
         var state = placement.StateId is { } id && objects.Levels.Zones.TryGetValue(placement.Zone, out var zone) ? zone.Find(id) : null;
         return (resolved, state);
     }
@@ -49,8 +49,8 @@ sealed class InteriorEditorHost(GameHost host)
     /// </summary>
     internal List<GameRecord> InteriorEditorLayouts(GameRecord building, bool exterior) =>
         host.Scene.Objects is not { } objects ? []
-        : [.. objects.Layouts.Names(building,
-                exterior).Distinct(StringComparer.Ordinal).Select(n => objects.Layouts.Find(building, n, exterior)).OfType<GameRecord>().Distinct()];
+        : [.. objects.Layouts.Names(building, exterior).Distinct(StringComparer.Ordinal).Select(n => objects.Layouts.Find(building, n, exterior))
+            .OfType<GameRecord>().Distinct()];
 
     List<LayoutItem> InteriorEditorParts() =>
         _interiorEditorLayout is { } layout && host.Scene.Objects is { } objects ? [.. objects.Layouts.Items(layout)] : [];
@@ -64,9 +64,9 @@ sealed class InteriorEditorHost(GameHost host)
     internal void InteriorEditorKey(EngineKey key)
     {
         var shown = InteriorEditorBuilding();
-        int count = _interiorEditorLayout is not null ? InteriorEditorParts()
-                .Count : shown is { } s ? InteriorEditorLayouts(s.Building.Record, _interiorEditorExterior)
-                .Count : 0;
+        int count = _interiorEditorLayout is not null ? InteriorEditorParts().Count
+            : shown is { } s ? InteriorEditorLayouts(s.Building.Record, _interiorEditorExterior).Count
+            : 0;
         ref int row = ref _interiorEditorLayout is not null ? ref _interiorEditorPart : ref _interiorEditorRow;
         switch (key)
         {
@@ -93,7 +93,7 @@ sealed class InteriorEditorHost(GameHost host)
             case EngineKey.C when shown is { } centre:
                 var at = _interiorEditorLayout is not null && InteriorEditorParts() is { Count: > 0 } parts
                     ? BuildingLayouts.Place(centre.Building.Position, centre.Building.Placement.Rotation,
-                            parts[Math.Min(_interiorEditorPart, parts.Count - 1)]).Position
+                        parts[Math.Min(_interiorEditorPart, parts.Count - 1)]).Position
                     : centre.Building.Position;
                 host.Session.Camera.MovePivot(new Vector2(at.X, at.Z));
                 host.Player.Follow = null;

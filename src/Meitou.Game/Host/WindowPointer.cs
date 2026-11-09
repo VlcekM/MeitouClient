@@ -36,7 +36,7 @@ static partial class WindowPointer
             nint hwnd = native.Hwnd;
             if (GetForegroundWindow() != hwnd || GetCursorPos(out var point) == 0 || ScreenToClient(hwnd, ref point) == 0
                     || GetClientRect(hwnd, out var client) == 0)
-                    return null;
+                return null;
             int width = client.Right - client.Left, height = client.Bottom - client.Top;
             if (width <= 0 || height <= 0 || point.X < 0 || point.Y < 0 || point.X >= width || point.Y >= height) return null;
             return new Vector2(point.X / (float)width, point.Y / (float)height);

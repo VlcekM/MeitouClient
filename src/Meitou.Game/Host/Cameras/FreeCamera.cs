@@ -42,8 +42,8 @@ public sealed class FreeCamera
     /// <summary>
     /// The speed at the current height above the ground, units per second.
     /// </summary>
-    public float Speed => Math.Clamp((Position.Y - _ground(Position.X, Position.Z)) * _settings.FreeSpeedPerHeight, _settings.FreeMinSpeed,
-            _settings.FreeMaxSpeed);
+    public float Speed => Math.Clamp((Position.Y - _ground(Position.X, Position.Z)) * _settings.FreeSpeedPerHeight,
+        _settings.FreeMinSpeed, _settings.FreeMaxSpeed);
 
     /// <summary>
     /// Starts flying from a camera state, at rest, looking the same way.

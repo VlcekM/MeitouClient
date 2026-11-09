@@ -89,7 +89,7 @@ sealed class BloodDecals(GameHost host)
             uint opaque = 0xFF000000 | Abgr(m.Colour);
             long who = (long)(uint)m.Who.Slot << 32 | (uint)m.Who.Generation;
             if (host.Gpu.Decals is { Surfaces: true } surfaces)
-                    SurfaceMark(surfaces, m, who, opaque, tick);   // the walls, floors and objects too, upper floors included
+                SurfaceMark(surfaces, m, who, opaque, tick);   // the walls, floors and objects too, upper floors included
             if (m.Position.Y > host.Gpu.Terrain.HeightAt(m.Position.X, m.Position.Z) + BloodAboveGround) continue;
             switch (m.Kind)
             {
@@ -97,7 +97,7 @@ sealed class BloodDecals(GameHost host)
                 break;
                 case BloodMarkKind.Smear:
                     store.Add(TerrainDecalType.Smear, m.Position, m.Direction, 0.2f, (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour),
-                            TerrainDecalStore.NewLife, BloodRandom);
+                        TerrainDecalStore.NewLife, BloodRandom);
                     break;
                 case BloodMarkKind.Drip: store.Add(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, TerrainDecalStore.NewLife,
                         BloodRandom); break;
@@ -130,7 +130,7 @@ sealed class BloodDecals(GameHost host)
             break;
             case BloodMarkKind.Smear:
                 surfaces.AddSurface(TerrainDecalType.Smear, m.Position, m.Direction, 0.2f,
-                        (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour), BloodRandom);
+                    (uint)(Math.Clamp(m.Amount, 0, 1) * 255) << 24 | Abgr(m.Colour), BloodRandom);
                 break;
             case BloodMarkKind.Drip: surfaces.AddSurface(TerrainDecalType.Pool, m.Position, m.Direction, m.Amount, opaque, BloodRandom);
             break;
@@ -228,7 +228,7 @@ sealed class BloodDecals(GameHost host)
         {
             if (!location.Group.Equals("Blood", StringComparison.Ordinal) || !Directory.Exists(location.Path)) continue;
             int type = Array.FindIndex(BloodFolders,
-                    f => f.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(location.Path)), StringComparison.OrdinalIgnoreCase));
+                f => f.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(location.Path)), StringComparison.OrdinalIgnoreCase));
             if (type < 0) continue;
             files[type].AddRange(Directory.EnumerateFiles(location.Path, "*.dds").Order(StringComparer.OrdinalIgnoreCase));
         }

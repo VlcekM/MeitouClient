@@ -97,7 +97,7 @@ static partial class GameConsole
         // Console's own writers never write a byte-order mark; a StreamWriter over UTF-8 would.
         var encoding = Console.OutputEncoding.CodePage == 65001 ? new UTF8Encoding(false) : Console.OutputEncoding;
         Bind(new StreamWriter(Console.OpenStandardOutput(), encoding) { AutoFlush = true },
-                new StreamWriter(Console.OpenStandardError(), encoding) { AutoFlush = true });
+            new StreamWriter(Console.OpenStandardError(), encoding) { AutoFlush = true });
         Console.SetIn(new StreamReader(Console.OpenStandardInput(), Console.InputEncoding));
     }
 
@@ -120,5 +120,5 @@ static partial class GameConsole
     [LibraryImport("kernel32.dll")] private static partial nint GetStdHandle(int handle);
     [LibraryImport("kernel32.dll")] private static partial uint GetFileType(nint file);
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial int MessageBoxW(nint owner, string text,
-            string caption, uint type);
+        string caption, uint type);
 }

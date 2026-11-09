@@ -78,7 +78,7 @@ sealed class InteriorView(GameHost host)
             // Strictly inside (no margin): one on the doorstep stays drawn.
             else if (objects.InteriorAt(at, ref InteriorMemo(c.Id.Slot)) is { } closed
                     && objects.Construction?.ContainsKey(closed.PlacementId) != true)
-                    HiddenIndoors.Add(c.Id);
+                HiddenIndoors.Add(c.Id);
         }
         host.GroundItemSync.UpdateGroundVisibility();
     }
@@ -97,7 +97,7 @@ sealed class InteriorView(GameHost host)
     /// Whether a place is above the shown floor of a building in the interior view, so what stands there is not drawn (as a character there).
     /// </summary>
     internal bool AboveViewedFloor(System.Numerics.Vector3 at) => ViewedAt(at) is { } inView && InteriorFloors[inView.PlacementId] is var shown
-            && shown < 3 && inView.FloorAt(at) > shown;
+        && shown < 3 && inView.FloorAt(at) > shown;
 
     /// <summary>
     /// The viewed or held-open building <paramref name="at"/> is in (a loop: a lambda here made a closure and a delegate per character per frame).
@@ -128,7 +128,7 @@ sealed class InteriorView(GameHost host)
             if (InteriorFloors.ContainsKey(id)) continue;   // occupied: in the view already
             if (now - open.Occupied > KeepOpenSeconds && objects.Construction?.ContainsKey(id) != true || open.Occupied > now
                     || objects.LoadedInterior(open.Room) is not { } room)
-                    _expired.Add(id);
+                _expired.Add(id);
             else
             {
                 InteriorFloors.Add(id, 3);

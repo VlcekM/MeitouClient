@@ -21,7 +21,7 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
     /// The record names, techniques included, each once.
     /// </summary>
     readonly string[] _names = [Simulation,
-            .. library.Definitions.Select(d => d.Name).Distinct(StringComparer.Ordinal).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)];
+        .. library.Definitions.Select(d => d.Name).Distinct(StringComparer.Ordinal).OrderBy(n => n, StringComparer.OrdinalIgnoreCase)];
     string _filter = "";
     List<string> _shown = [];
     int _scroll, _highlight;
@@ -44,7 +44,7 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
     /// The hero's pose this frame: the picked clip looping by the wall clock, or null for the simulation's.
     /// </summary>
     public CharacterPose[]? Pose() => _current is null ? null
-            : [new CharacterPose(_current, (float)(Stopwatch.GetElapsedTime(_pickedAt).TotalSeconds % _length), 1)];
+        : [new CharacterPose(_current, (float)(Stopwatch.GetElapsedTime(_pickedAt).TotalSeconds % _length), 1)];
 
     public string Status => _current is null ? "" : $"loops {_length:0.00} s";
 
@@ -168,8 +168,8 @@ sealed class SandboxAnimationPicker(AnimationLibrary library, AnimationLengths? 
             float top = _listY0 + (i + 1) * _rowHeight;
             if (k == _highlight) o.Rect(_listX0, top, _listX1, top + _rowHeight, new Vector4(0.25f, 0.3f, 0.4f, 1));
             bool chosen = _shown[k] == (_current ?? Simulation);
-            o.Text(o.FitText((chosen ? "x " : "  ") + _shown[k], width - 8), x + 4, top + 2, chosen ? new Vector4(1f, 0.9f, 0.4f, 1)
-                    : DebugOverlay.TextColour);
+            o.Text(o.FitText((chosen ? "x " : "  ") + _shown[k], width - 8), x + 4, top + 2,
+                chosen ? new Vector4(1f, 0.9f, 0.4f, 1) : DebugOverlay.TextColour);
         }
     }
 }

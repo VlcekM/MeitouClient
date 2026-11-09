@@ -78,8 +78,14 @@ sealed class GameLog : TextWriter
 
     public override void Write(char value) { lock (_gate) { _writer.Write(value); Trim(value == '\n'); } }
     public override void Write(string? value) { lock (_gate) { _writer.Write(value); Trim(value is { Length: > 0 } && value[^1] == '\n'); } }
-    public override void Write(char[] buffer, int index,
-            int count) { lock (_gate) { _writer.Write(buffer, index, count); Trim(count > 0 && buffer[index + count - 1] == '\n'); } }
+    public override void Write(char[] buffer, int index, int count)
+    {
+        lock (_gate)
+        {
+            _writer.Write(buffer, index, count);
+            Trim(count > 0 && buffer[index + count - 1] == '\n');
+        }
+    }
     public override void WriteLine(string? value) { lock (_gate) { _writer.WriteLine(value); Trim(true); } }
 
     void Trim(bool lineEnd)

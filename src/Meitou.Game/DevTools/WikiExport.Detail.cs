@@ -118,8 +118,8 @@ static partial class WikiExport
                 long? price = SaleOf(db, b, home, faction, town, saleAllowedTown && !hostile, functions);
                 string type = role.Length > 0 ? role : "Unassigned building (no resident listed)";
                 string category = home is null ? "unassigned" : town.BarSquads.Any(l => l.Id == home.Id)
-                        || role.Equals("Bar", StringComparison.OrdinalIgnoreCase) ? "bar" : home.HasShop ? "shop" : SlaveShop(home) ? "slave shop"
-                        : "other";
+                    || role.Equals("Bar", StringComparison.OrdinalIgnoreCase) ? "bar" : home.HasShop ? "shop" : SlaveShop(home) ? "slave shop"
+                    : "other";
                 var ty = types.GetValueOrDefault(type, (0, category, 0, 0, []));
                 ty.Count++;
                 if (b.Destroyed) ty.Ruins++;
@@ -130,8 +130,11 @@ static partial class WikiExport
                 g.Count++;
                 if (b.Destroyed) g.Ruins++;
                 if (price is { } p)
-                        { g.Sale++; g.Prices.Add(p); forSale.Add(new SortedDictionary<string, object?> { ["building"] = name, ["price"] = (int)p,
-                                ["ruin"] = b.Destroyed }); }
+                {
+                    g.Sale++;
+                    g.Prices.Add(p);
+                    forSale.Add(new SortedDictionary<string, object?> { ["building"] = name, ["price"] = (int)p, ["ruin"] = b.Destroyed });
+                }
                 groups[key] = g;
             }
             var buildingRows = new List<object?>();
@@ -153,7 +156,7 @@ static partial class WikiExport
             var traders = new List<(SquadTemplate Template, string Source)>();
             foreach (var l in ResidentHomes.Entries(town, faction).Select(e => (e, "resident")).Concat(town.BarSquads.Select(e => (e, "bar"))))
                 if (templates.TryGetValue(l.e.Id, out var tpl) && (tpl.HasShop || SlaveShop(tpl)) && traders.All(x => x.Template.Id != tpl.Id))
-                        traders.Add((tpl, l.Item2));
+                    traders.Add((tpl, l.Item2));
             var shopNames = new List<string>();
             foreach (var (tpl, source) in traders)
             {
@@ -166,8 +169,7 @@ static partial class WikiExport
                     var vrow = VendorRow(v.Id);
                     listNames.Add(vr.Name);
                     vendors.Add(new SortedDictionary<string, object?> { ["id"] = vrow.Id, ["list"] = vr.Name, ["weight"] = v.V0 == 0 ? 100 : v.V0,
-                            ["approxItems"] = (int)Math.Round((double)(v.V0 == 0 ? 100 : v.V0) / Math.Max(1,
-                            weightSum) * tpl.VendorsFillTotalAmount) });
+                        ["approxItems"] = (int)Math.Round((double)(v.V0 == 0 ? 100 : v.V0) / Math.Max(1, weightSum) * tpl.VendorsFillTotalAmount) });
                 }
                 bool slaves = SlaveShop(tpl);
                 if (vendors.Count == 0 && !slaves) continue;
@@ -220,7 +222,7 @@ static partial class WikiExport
             row.Data["shops"] = shopNames;
             row.Data["forSale"] = forSale;
             if (hostile && saleAllowedTown)
-                    row.Data["saleNote"] = "the owning faction is hostile to your faction by default, so the game offers no houses here";
+                row.Data["saleNote"] = "the owning faction is hostile to your faction by default, so the game offers no houses here";
         }
 
         // --- Town overrides: which world states turn a town into another.
@@ -310,8 +312,8 @@ static partial class WikiExport
 
         // --- Unique and bounty characters.
         var characters = Characters(db, placed, templates, id);
-        return new DetailRows(shops, [.. vendorRows.Values.OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.Id, StringComparer.Ordinal)],
-                overrides, characters);
+        return new DetailRows(shops,
+            [.. vendorRows.Values.OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.Id, StringComparer.Ordinal)], overrides, characters);
     }
 
     #endregion
@@ -351,11 +353,11 @@ static partial class WikiExport
     /// The price the game quotes for a town house (docs/game/ui-screens.md "Selected building"), or null when it is not for sale.
     /// </summary>
     static long? SaleOf(GameDatabase db, TownBuilding b, SquadTemplate? home, FactionData? owner, TownData town, bool allowed,
-            Dictionary<string, GameRecord?> functions)
+        Dictionary<string, GameRecord?> functions)
     {
         if (!allowed || owner is null || b.IsGate || b.IsWall || db.Find(b.BuildingId) is not { } record || record.GetBool("is wall gate")
                 || record.GetBool("links together"))
-                return null;
+            return null;
         int? function = TownBuildings.FunctionOf(db, record, functions)?.GetInt("function");
         if (function != 19 && !(function is null && record.GetReferences("interior").Count > 0)) return null;
         var state = b.LevelState;
@@ -373,7 +375,7 @@ static partial class WikiExport
     #region Characters
 
     static List<Row> Characters(GameDatabase db, List<PlacedTown> placed, Dictionary<string, SquadTemplate> templates,
-            Func<string, string, string> id)
+        Func<string, string, string> id)
     {
         // Which squad templates name a character, and in which role.
         var usedBy = new Dictionary<string, List<(SquadTemplate Template, string Role)>>(StringComparer.Ordinal);
@@ -388,8 +390,12 @@ static partial class WikiExport
             foreach (var m in t.Squad) Use(m.Id, t, "member");
             foreach (var m in t.Squad2) Use(m.Id, t, "member");
             foreach (var m in t.ChooseFrom) Use(m.Id, t, "member");
-            foreach (var m in t.Prisoners) if (templates.TryGetValue(m.Id, out var pt)) { if (pt.Leader is { } pl) Use(pl.Id, t,
-                    "prisoner"); foreach (var x in pt.Squad) Use(x.Id, t, "prisoner"); }
+            foreach (var m in t.Prisoners)
+                if (templates.TryGetValue(m.Id, out var pt))
+                {
+                    if (pt.Leader is { } pl) Use(pl.Id, t, "prisoner");
+                    foreach (var x in pt.Squad) Use(x.Id, t, "prisoner");
+                }
         }
         // Towns that list a template (the town's own lists, and the lists of its override variants), with the town's position.
         var townsOf = new Dictionary<string, List<(string Town, float X, float Z, string Via)>>(StringComparer.Ordinal);
@@ -455,13 +461,13 @@ static partial class WikiExport
         var townFaction = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var pt in placed) if (pt.Row.Faction is { Length: > 0 } pf) townFaction.TryAdd(pt.Town.Name, pf);
         var rows = new List<Row>();
-        foreach (var record in db.OfType(FcsRecordType.Character).Concat(db.OfType(FcsRecordType.AnimalCharacter)).OrderBy(r => r.Name,
-                StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
+        foreach (var record in db.OfType(FcsRecordType.Character).Concat(db.OfType(FcsRecordType.AnimalCharacter))
+                .OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.StringId, StringComparer.Ordinal))
         {
             if (record.Name.Length == 0) continue;
             bool unique = record.GetBool("unique");
             int chance = record.GetInt("bounty chance"), amount = record.GetInt("bounty amount"),
-                    fuzz = Math.Max(0, record.GetInt("bounty amount fuzz"));
+                fuzz = Math.Max(0, record.GetInt("bounty amount fuzz"));
             bool bounty = chance > 0 && amount > 0;
             if (!unique && !bounty) continue;
             // Faction: the character record's own, else the squad they lead or belong to (a prisoner's squad belongs to the captor, so it does not
@@ -487,7 +493,7 @@ static partial class WikiExport
                 first ??= (x, z);
                 if (firstTown.Length == 0) firstTown = town;
                 homes.Add(new SortedDictionary<string, object?> { ["town"] = town, ["x"] = (int)Math.Round(x), ["z"] = (int)Math.Round(z),
-                        ["squad"] = squad, ["role"] = role, ["via"] = via.Length == 0 ? "town lists the squad" : "town override " + via });
+                    ["squad"] = squad, ["role"] = role, ["via"] = via.Length == 0 ? "town lists the squad" : "town override " + via });
             }
             if (faction.Length == 0)
                 foreach (var h in homes.OfType<SortedDictionary<string, object?>>().Where(h => (string)h["role"]! != "prisoner"))
@@ -499,7 +505,7 @@ static partial class WikiExport
                 var refs = record.GetReferences("bounty factions");
                 var facs = refs.Count > 0 ? [.. refs.Select(r => FactionNameOf(db, r.TargetStringId)).Where(n => n.Length > 0)]
                     : new List<string> { FactionNameOf(db, "defaultEmpireFactionSID") is { Length: > 0 } de ? de + " (default)"
-                            : "the default empire faction" };
+                        : "the default empire faction" };
                 bountyData["chancePct"] = chance;
                 bountyData["amount"] = amount;
                 bountyData["amountMax"] = amount + fuzz;

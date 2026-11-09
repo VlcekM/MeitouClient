@@ -156,8 +156,8 @@ public sealed class ModSetting
     object? Parse(string text) => Kind switch
     {
         ModSettingKind.Switch => bool.TryParse(text, out bool b) ? b : null,
-        ModSettingKind.Slider => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture,
-                out double d) && double.IsFinite(d) ? d : null,
+        ModSettingKind.Slider => double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) && double.IsFinite(d) ? d
+            : null,
         _ => _options.FirstOrDefault(o => string.Equals(o, text, StringComparison.Ordinal)),
     };
 

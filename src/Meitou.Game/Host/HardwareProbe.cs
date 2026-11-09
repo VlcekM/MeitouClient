@@ -14,8 +14,8 @@ static class HardwareProbe
     /// <summary>
     /// What was found and the preset for it; <see cref="Summary"/> is the line the launcher shows.
     /// </summary>
-    public sealed record Report(string Preset, string Summary, string Gpu, bool Integrated, long VideoMemoryMb, long MemoryMb, int Cores,
-            string? Problem);
+    public sealed record Report(string Preset, string Summary, string Gpu, bool Integrated, long VideoMemoryMb,
+        long MemoryMb, int Cores, string? Problem);
 
     /// <summary>
     /// The preset for the hardware. The thresholds are a judgement, not measured: an integrated GPU (but Apple's with 16 GB or more), under 3 GB
@@ -65,8 +65,7 @@ static class HardwareProbe
     {
         var report = Probe();
         File.WriteAllText(path,
-                JsonSerializer.Serialize(report,
-                new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+            JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
         Console.WriteLine($"hardware  {report.Summary}");
         return 0;
     }

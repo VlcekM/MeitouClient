@@ -80,13 +80,12 @@ sealed class UserConfig
     {
         get => !FrameGeneration ? Rendering.Post.FrameGenerationMethod.Off
             : FrameGenerationVendor == FrameGenerationVendor.Dlss ? Rendering.Post.FrameGenerationMethod.Dlss
-                    : Rendering.Post.FrameGenerationMethod.Fsr;
+                : Rendering.Post.FrameGenerationMethod.Fsr;
         set
         {
             FrameGeneration = value != Rendering.Post.FrameGenerationMethod.Off;
             if (FrameGeneration)
-                    FrameGenerationVendor = value == Rendering.Post.FrameGenerationMethod.Dlss ? FrameGenerationVendor.Dlss
-                            : FrameGenerationVendor.Fsr;
+                FrameGenerationVendor = value == Rendering.Post.FrameGenerationMethod.Dlss ? FrameGenerationVendor.Dlss : FrameGenerationVendor.Fsr;
         }
     }
     /// <summary>
@@ -308,9 +307,9 @@ sealed class UserConfig
         SwapMouseButtons ??= Meitou.Game.Audio.AudioSystem.Setting(install, "swap mouse buttons", 0) != 0;
         FontSize ??= Meitou.Game.Audio.AudioSystem.Setting(install, "font size2", Data.Ui.KenshiFontSize.DefaultSetting, MinFontSize, MaxFontSize);
         CameraMoveSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera speed", Data.World.KenshiCamera.DefaultMoveSpeed,
-                MinCameraMoveSpeed, MaxCameraMoveSpeed);
+            MinCameraMoveSpeed, MaxCameraMoveSpeed);
         CameraZoomSpeed ??= Meitou.Game.Audio.AudioSystem.Setting(install, "camera zoom", Data.World.KenshiCamera.DefaultZoomSpeed,
-                MinCameraZoomSpeed, MaxCameraZoomSpeed);
+            MinCameraZoomSpeed, MaxCameraZoomSpeed);
     }
 
     /// <summary>
@@ -588,8 +587,8 @@ sealed class UserConfig
         if (segments.Count == 0) return false;
         JsonNode? parent = json;
         foreach (var segment in segments.SkipLast(1))
-            parent = segment is int index ? parent is JsonArray a && index < a.Count ? a[index] : null : parent is JsonObject o ? o[(string)segment]
-                    : null;
+            parent = segment is int index ? parent is JsonArray a && index < a.Count ? a[index] : null
+                : parent is JsonObject o ? o[(string)segment] : null;
         switch (parent, segments[^1])
         {
             case (JsonObject o, string key): return o.Remove(key);

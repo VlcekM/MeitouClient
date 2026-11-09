@@ -56,8 +56,8 @@ sealed class FarmCrops(GameHost host)
             {
                 var sub = look.Plants.Meshes[i];
                 float growth = sub.Plant < view.PlantGrowth.Count ? view.PlantGrowth[sub.Plant] : 0;
-                look.Transforms[i] = FarmLayout.Transform(look.Data.Parts[sub.Part], look.Plants.Positions[sub.Plant], sub.Random, growth, view.Death,
-                        look.Height);
+                look.Transforms[i] = FarmLayout.Transform(look.Data.Parts[sub.Part], look.Plants.Positions[sub.Plant], sub.Random,
+                    growth, view.Death, look.Height);
                 look.Tints[i] = FarmLayout.Tint(look.Data, look.Data.Parts[sub.Part], sub.Random, view.Death);
             }
             objects.SetFarmPlants(site.Id, look.Meshes, look.Transforms, look.Tints);
@@ -76,8 +76,8 @@ sealed class FarmCrops(GameHost host)
         if (data is not { Parts.Count: > 0 } || db.Find(site.Record) is not { } building) return null;
         var plants = FarmLayout.Plant(data, site.Position, site.Rotation, host.ActiveGround, WorldObjectLayout.Seed(site.Id));
         var meshes = plants.Meshes.Select(m => data.Parts[m.Part])
-            .Select(p => new PlacedMesh(p.Mesh, Matrix4x4.Identity, p.Record, building, site.Id,
-                    PlacedKind.BuildingPart) { Material = p.Material }).ToArray();
+            .Select(p => new PlacedMesh(p.Mesh, Matrix4x4.Identity, p.Record, building, site.Id, PlacedKind.BuildingPart) { Material = p.Material })
+                .ToArray();
         float height = data.Parts.Max(p => objects.MeshTop(p.Mesh));
         return new FarmLook(site, data, plants, meshes, height);
     }

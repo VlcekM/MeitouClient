@@ -100,7 +100,7 @@ sealed class LevelEditorPanel(PlayerInterface player)
     internal bool LevelEscape()
     {
         if (!LevelBuild || !player.Build.Active || player.Build.CurrentBuilding() is null || player.FaithfulScreens.OpenScreens[^1] != "build")
-                return false;
+            return false;
         DropPlacementChoice();
         return true;
     }
@@ -109,20 +109,20 @@ sealed class LevelEditorPanel(PlayerInterface player)
     /// Every BUILDING counts as available in the editor.
     /// </summary>
     internal IReadOnlySet<string> LevelEveryBuilding() => _levelEveryBuilding ??= player.Build.Services is { } host
-            ? [.. host.Menu.Catalog.Select(b => b.Id)] : [];
+        ? [.. host.Menu.Catalog.Select(b => b.Id)] : [];
 
     /// <summary>
     /// The top bar, centred at the top of the screen as in the original (its layout puts it at the left).
     /// </summary>
     internal static MyGuiLayout LevelEditorBar(MyGuiLayout layout) =>
-        layout with { Roots = [.. layout.Roots.Select(r => r.RealPosition ? r with { Position = r.Position with { X = (1 - r.Position.Width) / 2 } }
-                : r)] };
+        layout with { Roots = [.. layout.Roots.Select(r => r.RealPosition
+            ? r with { Position = r.Position with { X = (1 - r.Position.Width) / 2 } } : r)] };
 
     /// <summary>
     /// The top bar's tools in layout order: the BUILDINGS tool, Save Mod and Exit work; the rest are not done.
     /// </summary>
-    static readonly string[] LevelEditorButtons = ["towns", "populate", "buildings", "items", "snaps", "navmesh", "features", "fogfeatures", "save",
-            "exit"];
+    static readonly string[] LevelEditorButtons = ["towns", "populate", "buildings", "items", "snaps", "navmesh", "features",
+        "fogfeatures", "save", "exit"];
 
     internal void BindLevelEditorScreen(UiBindings b)
     {
@@ -155,7 +155,7 @@ sealed class LevelEditorPanel(PlayerInterface player)
             break;
             default:
                 string caption = e.Widget == "snaps" ? "Fix stuff"
-                        : player.FaithfulScreens.Layout("leveleditor").Find(e.Widget)?.Properties.GetValueOrDefault("Caption") ?? e.Widget;
+                    : player.FaithfulScreens.Layout("leveleditor").Find(e.Widget)?.Properties.GetValueOrDefault("Caption") ?? e.Widget;
                 player.Notice($"{caption}: not in Meitou yet");
                 break;
         }
@@ -167,7 +167,7 @@ sealed class LevelEditorPanel(PlayerInterface player)
     internal static readonly string[] LevelCommandLines =
     [
         "Place Building: Left-Click", "Clear Building: Right-Click", "Rotate: < > or , . keys", "Change Height: + and -", "Change Slope: [ and ]",
-                "Undo: Backspace", "Cancel All: Esc",
+        "Undo: Backspace", "Cancel All: Esc",
         "Press [Confirm] when finished",
     ];
 
@@ -200,7 +200,7 @@ sealed class LevelEditorPanel(PlayerInterface player)
         foreach (var b in host.Added())
             if (player.Build.Services?.Placement.Footprint(b.BuildingId) is { } footprint && b.WorldY is { } y
                 && player.Picking.BuildingRayT(ray, footprint.Place(b.Position, b.Rotation), footprint.YMin, footprint.YMax, b.BuildingId, b.Position,
-                        y, b.Rotation) is { } t && t < bestT)
+                    y, b.Rotation) is { } t && t < bestT)
                 (bestT, best) = (t, b.Key);
         if (best is null && player.BuildingSelection.PickBuilding(p) is { SiteId: null, Record: not null } level) best = level.Instance;
         if (best is null) DropPlacementChoice();

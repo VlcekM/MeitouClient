@@ -50,7 +50,7 @@ sealed class CharacterEditorHost(GameHost host)
         PendingCreation = null;
         _creationWarmOwed = true;
         if (!host.Player.CharacterEditor.OpenEditor(EditKind.Creation, squad))
-                host.Session.World.Commands.Enqueue(new FinishCreation { Tick = host.Session.World.Tick });
+            host.Session.World.Commands.Enqueue(new FinishCreation { Tick = host.Session.World.Tick });
     }
 
     /// <summary>
@@ -62,7 +62,7 @@ sealed class CharacterEditorHost(GameHost host)
         if (!_creationWarmOwed || PendingCreation is not null || host.Player.CharacterEditor.EditorOpen || host.ActiveSceneLoad is not null) return;
         _creationWarmOwed = false;
         if (host.PlayerSquad is { Leader.IsNone: false } squad)
-                host.Player.Follow = squad.Leader;   // a new game starts with the camera locked to the leader
+            host.Player.Follow = squad.Leader;   // a new game starts with the camera locked to the leader
         if (host.Gpu is null || host.MetalRenderer)
         {
             // Metal has no Vulkan loading/warm loop here: the world was loaded and drawn under the editor already. Apply the edits at once.
@@ -84,7 +84,7 @@ sealed class CharacterEditorHost(GameHost host)
     {
         if (host.Player.CharacterEditor.EditorFocus is not { } focus
                 || host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == focus.Character) is not { } c)
-                return;
+            return;
         host.Camera.Target = host.DrawnPosition(c) + new Vector3(0, 10, 0);
     }
 
@@ -120,9 +120,12 @@ sealed class CharacterEditorHost(GameHost host)
         _editorStaged = true;
         if (host.Player.CharacterEditor.EditorView() is not { } view
                 || host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == view.Character) is not { } c)
-                { characters.StageRequest = null; return; }
+        {
+            characters.StageRequest = null;
+            return;
+        }
         characters.StageRequest = new EditorStageRequest(host.DrawKey(view.Character), width, height, view.Yaw, view.Elevation, view.Distance,
-                view.Head, host.Camera.FieldOfView, EditorStageShift);
+            view.Head, host.Camera.FieldOfView, EditorStageShift);
         characters.SetView(width, height, host.Camera.FieldOfView);
         if (!posed) characters.Update(host.DrawnPosition(c));
         characters.DrawStage();
@@ -140,7 +143,7 @@ sealed class CharacterEditorHost(GameHost host)
     {
         if (host.ActiveObjects is not { } objects || host.PopData is not { } data || characters.StageView is not { } stage
                 || characters.StageDrawTarget is not { } target)
-                return;
+            return;
         if (_editorPlatformFor != character)
         {
             _editorPlatformFor = character;
@@ -200,7 +203,7 @@ sealed class CharacterEditorHost(GameHost host)
     /// What <see cref="BeginEditorBar"/> changed for the world's draw: the camera and the weather, which <see cref="EndEditorBar"/> puts back.
     /// </summary>
     internal readonly record struct EditorBarFrame(Vector3 Target, float Yaw, float Pitch, float Distance, SkyWeather Sky, WorldWeather? Weather,
-            bool WeatherParticles, Vector3 Fill, bool Water, bool Reflections);
+        bool WeatherParticles, Vector3 Fill, bool Water, bool Reflections);
     /// <summary>
     /// The neutral fill the characters take in the bar (<see cref="CharacterRenderer.Fill"/>): a little grey light all round, so faces read in the
     /// lamplight.
@@ -213,9 +216,15 @@ sealed class CharacterEditorHost(GameHost host)
     internal void DrawEditorScene(int width, int height)
     {
         if (BeginEditorBar(width, height) is not { } frame) return;
-        try { WorldFrame.Draw(host.Gpu, host.Scene, host.Camera, host.Render, width, height, EditorBarHour,
-                (float)(host.Session.Clock.GameSeconds / 600 % 1e4), host.WorldOptions.FogDistance); }
-        finally { EndEditorBar(frame, width, height); }
+        try
+        {
+            WorldFrame.Draw(host.Gpu, host.Scene, host.Camera, host.Render, width, height, EditorBarHour,
+                (float)(host.Session.Clock.GameSeconds / 600 % 1e4), host.WorldOptions.FogDistance);
+        }
+        finally
+        {
+            EndEditorBar(frame, width, height);
+        }
     }
 
     /// <summary>
@@ -245,7 +254,7 @@ sealed class CharacterEditorHost(GameHost host)
         host.Player.CharacterEditor.EditorInWorld = EditorBarReady;
         var sky = host.Gpu.Sky;
         var frame = new EditorBarFrame(host.Camera.Target, host.Camera.Yaw, host.Camera.Pitch, host.Camera.Distance, sky.Weather, host.Gpu.Weather,
-                host.Gpu.WeatherParticles, host.Gpu.Characters?.Fill ?? default, host.Render.Water, host.Render.Reflections);
+            host.Gpu.WeatherParticles, host.Gpu.Characters?.Fill ?? default, host.Render.Water, host.Render.Reflections);
         PlaceEditorCamera(bar, width, height);
         if (host.Gpu.Characters is { } lit) lit.Fill = EditorBarCharacterFill;
         (host.Gpu.ViewCap, host.Render.Water, host.Render.Reflections) = (EditorBarViewCap, false, false);
@@ -278,9 +287,8 @@ sealed class CharacterEditorHost(GameHost host)
     {
         if (EditorBar is not null || _editorBarMissing) return EditorBar;
         if (host.PopData is not { } data || host.Scene.Database is not { } db || host.Scene.Objects is not { } world
-                || host.ActiveObjects is not { } objects ||
-            host.Player.CharacterEditor.EditorFocus is not { } focus
-                    || host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == focus.Character) is not { } shown) return null;
+            || host.ActiveObjects is not { } objects || host.Player.CharacterEditor.EditorFocus is not { } focus
+            || host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == focus.Character) is not { } shown) return null;
         if (EditorBar.Above(host.Install, data, shown.Position, host.Scene.GroundAt) is not { } bar
                 || db.Find(bar.Placement.BuildingId) is not { } record)
         {
@@ -293,8 +301,7 @@ sealed class CharacterEditorHost(GameHost host)
         // The room's neutral fill: a white point light under the roof at a share of the lamps' mean power, lit day and night.
         float power = lamps.Count > 0 ? lamps.Average(l => l.Intensity) * EditorBar.FillShare : 1;
         lamps.Add(new WorldLight(bar.FillAt, Vector3.One, power, EditorBar.FillRadius, WorldLightType.Point, -Vector3.UnitY, 0, 0, 1,
-                WorldLightEffect.None,
-            WorldLightRule.WhenBuildingOn, true, 0, "meitou:editor-fill", record.StringId, EditorBar.Key));
+            WorldLightEffect.None, WorldLightRule.WhenBuildingOn, true, 0, "meitou:editor-fill", record.StringId, EditorBar.Key));
         host.ActiveLamps?.SetRuntime(EditorBar.Key, lamps);
         objects.Staged = bar.Ground;
         _editorCrowd.Clear();
@@ -346,7 +353,7 @@ sealed class CharacterEditorHost(GameHost host)
     {
         if (host.Player.CharacterEditor.EditorView() is not { } view) return;
         var request = new EditorStageRequest(host.DrawKey(view.Character), width, height, view.Yaw, view.Elevation, view.Distance, view.Head,
-                host.Camera.FieldOfView, EditorStageShift);
+            host.Camera.FieldOfView, EditorStageShift);
         var (eye, pivot) = host.Gpu.Characters?.EditorCamera(request.Key, in request) ?? StandCamera(bar, in request);
         var back = eye - pivot;
         float length = MathF.Max(back.Length(), 1e-3f);
@@ -366,7 +373,7 @@ sealed class CharacterEditorHost(GameHost host)
     {
         var pivot = bar.Stand + new Vector3(0, 12, 0);
         var local = Vector3.Transform(new Vector3(0, 0, r.Distance),
-                Quaternion.CreateFromAxisAngle(Vector3.UnitY, r.Yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -r.Elevation));
+            Quaternion.CreateFromAxisAngle(Vector3.UnitY, r.Yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -r.Elevation));
         return (pivot + Vector3.Transform(local, Quaternion.CreateFromAxisAngle(Vector3.UnitY, bar.StandYaw)), pivot);
     }
 

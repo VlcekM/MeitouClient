@@ -83,7 +83,7 @@ sealed class FeedbackCapture(GameHost host)
         host.Player.FeedbackPanel.FeedbackNewer = null;
         _feedbackNewer = LatestRelease.NewerThan(BuildVersion.Tag);
         host.Player.FeedbackPanel.OpenFeedback(rgba is not null, inGame && host.Nav is not null && host.DebugOverlays.NavOverlayRenderer is not null,
-                inGame ? null : "only in a game");
+            inGame ? null : "only in a game");
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ sealed class FeedbackCapture(GameHost host)
             return;
         }
         if (_feedbackNavStage == FeedbackNavStage.Loading && (_feedbackNavLoad!.IsCompleted || waited > 10))
-                _feedbackNavStage = FeedbackNavStage.Drawing;
+            _feedbackNavStage = FeedbackNavStage.Drawing;
         if (_feedbackNavStage == FeedbackNavStage.Drawing
             && (host.DebugOverlays.NavOverlayBuild is null
                 && host.DebugOverlays.NavOverlayShown == (host.Nav.Walkability.World, DebugOverlays.NavView.Meitou) || waited > 20))
@@ -217,11 +217,10 @@ sealed class FeedbackCapture(GameHost host)
             saveWritten = host.Saves.SaveWrite;
         }
         string[] mods = [.. Data.LoadOrder.FromInstall(host.Install).Entries.Select(e => e.Name)];
-        string? log = form.Log && File.Exists(Path.Combine(AppContext.BaseDirectory, "log.txt")) ? Path.Combine(AppContext.BaseDirectory, "log.txt")
-                : null;
-        var package = new FeedbackPackage(form, BuildVersion.Tag, BuildVersion.Commit, FeedbackSender.Platform(), mods, form.Screenshot
-                ? _feedbackPicture : null,
-            form.Navmesh ? _feedbackNavPicture : null, _feedbackLocation, saveFolder, saveWritten, log);
+        string? log = form.Log && File.Exists(Path.Combine(AppContext.BaseDirectory, "log.txt"))
+            ? Path.Combine(AppContext.BaseDirectory, "log.txt") : null;
+        var package = new FeedbackPackage(form, BuildVersion.Tag, BuildVersion.Commit, FeedbackSender.Platform(), mods,
+            form.Screenshot ? _feedbackPicture : null, form.Navmesh ? _feedbackNavPicture : null, _feedbackLocation, saveFolder, saveWritten, log);
         _feedbackStatus = _feedbackStatusShown = form.Save ? "Saving the game..." : "Sending...";
         host.Player.FeedbackPanel.FeedbackProgress(_feedbackStatus);
         host.Player.FeedbackPanel.FeedbackSending = true;

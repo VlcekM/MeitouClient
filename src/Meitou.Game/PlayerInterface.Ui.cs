@@ -67,23 +67,24 @@ sealed partial class PlayerInterface
         FaithfulHud = MyGuiTemplates.Expand(mainPanel, UiResources);
         FactionWindow.RelationsLineLayout = resolve("Kenshi_FactionRelationsLine.layout") is { } relationsLine ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(relationsLine), UiResources) : null;
         OrdersPanel.OrdersRowLayout = resolve("Kenshi_OrdersPanelOrder.layout") is { } ordersRow ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(ordersRow), UiResources) : null;
-        SquadWindows.SquadBoxLayout = resolve("Kenshi_SquadBox.layout") is { } squadBox ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(squadBox),
-                UiResources) : null;
-        MessageRoller.MessageLayout = resolve("Kenshi_MessagePanel.layout") is { } messages ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(messages),
-                UiResources) : null;
-        StealthView.TaskBarLayout = resolve("Kenshi_ProgressBarPanel.layout") is { } taskBar ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(taskBar),
-                UiResources) : null;
+        SquadWindows.SquadBoxLayout = resolve("Kenshi_SquadBox.layout") is { } squadBox
+            ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(squadBox), UiResources) : null;
+        MessageRoller.MessageLayout = resolve("Kenshi_MessagePanel.layout") is { } messages
+            ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(messages), UiResources) : null;
+        StealthView.TaskBarLayout = resolve("Kenshi_ProgressBarPanel.layout") is { } taskBar
+            ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(taskBar), UiResources) : null;
         TutorialWindow.TutorialPanelLayout = resolve("Kenshi_TutorialPanel.layout") is { } tutorialPanel ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(tutorialPanel), UiResources) : null;
         TutorialWindow.TutorialLineLayout = resolve("Kenshi_TutorialTooltipPanel.layout") is { } tutorialLine ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(tutorialLine), UiResources) : null;
         MessageRoller.MessageClient = MessageRoller.MessageLayout?.Widgets.FirstOrDefault(w => w.Properties.GetValueOrDefault("CaptionOwner") == "MessageTextBox")?.Name;
         FaithfulScreens = new(UiResources) { ClipboardReader = () => ClipboardRead?.Invoke(), ClipboardWriter = text => ClipboardWrite?.Invoke(text),
-                CaretAt = p => UiPainter?.EditCaretAt(p) };
+            CaretAt = p => UiPainter?.EditCaretAt(p) };
         foreach (var (id, file, modal) in FaithfulScreenFiles)
         {
             var layout = MyGuiReader.ReadLayout(resolve(file + ".layout") ?? throw new FileNotFoundException(file));
             if (id is "new-game" or "import")
                 layout = AdvancedOptions.WithAdvancedPanel(layout,
-                        MyGuiReader.ReadLayout(resolve("Kenshi_AdvancedOptionsWindow.layout") ?? throw new FileNotFoundException("Kenshi_AdvancedOptionsWindow.layout")));
+                    MyGuiReader.ReadLayout(resolve("Kenshi_AdvancedOptionsWindow.layout")
+                    ?? throw new FileNotFoundException("Kenshi_AdvancedOptionsWindow.layout")));
             if (id == "load") layout = FrontendScreens.WithSaveFilter(layout);
             if (id == "editor") (CharacterEditor.EditorLayout, CharacterEditor.EditorRowsShape) = (layout, "");
             if (id == "inventory") TradeWindows.CharacterInventoryLayout = layout;
@@ -116,14 +117,14 @@ sealed partial class PlayerInterface
         ("title", "Kenshi_MainMenu", true), ("new-game", "Kenshi_NewGamePanel", true),
         ("save", "Kenshi_SaveGamePanel", true),
         ("load", "Kenshi_LoadGamePanel", true), ("import", "Kenshi_ImportGamePanel", true), ("message", "Kenshi_MessageBox", true),
-        ("bag", "Kenshi_InventoryGenericWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false), ("loot-bag",
-                "Kenshi_InventoryGenericWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false), ("trader", "Kenshi_InventoryTraderWindow",
-                false),
-        ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false), ("storage",
-                "Kenshi_InventoryGenericWindow", false),
+        ("bag", "Kenshi_InventoryGenericWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false),
+        ("loot-bag", "Kenshi_InventoryGenericWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false),
+        ("trader", "Kenshi_InventoryTraderWindow", false),
+        ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false),
+        ("storage", "Kenshi_InventoryGenericWindow", false),
         ("build", "Kenshi_BuildWindow", false), ("editor", "Kenshi_CharacterEditor", true), ("dialogue", "Kenshi_ConversationPanel", true),
-        ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow",
-                false), ("leveleditor", "Kenshi_LevelEditor", false),
+        ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow", false),
+        ("leveleditor", "Kenshi_LevelEditor", false),
         (TradeWindows.CharacterTradeScreen, "Kenshi_CharacterSelectionWindow", false),
     ];
 
@@ -239,7 +240,7 @@ sealed partial class PlayerInterface
             var (_, _, _, buildingStatus, bad, _) = BuildingSelection.BuildingLines(buildingNow);
             b.Text["HealthText"] = buildingStatus;
             b.Properties["HealthText"] = new Dictionary<string, string> { ["TextAlign"] = "Center",
-                    ["TextColour"] = bad ? BadColour : MyGuiColours.TemplateInk(UiResources, "Kenshi_TextboxStandardText") };
+                ["TextColour"] = bad ? BadColour : MyGuiColours.TemplateInk(UiResources, "Kenshi_TextboxStandardText") };
         }
         OrdersPanel.BindJobs(b, own);
         SquadWindows.BindSquadTabs(b);
@@ -341,8 +342,7 @@ sealed partial class PlayerInterface
         {
             float logoWidth = Math.Min(Width * 0.3f, Height * 0.6f);
             controls.Add(new("MeitouTitle", "ImageBox", new(Width * 0.975f - logoWidth, Height * 0.04f, logoWidth, logoWidth * 0.469f), "", "", "",
-                    true,
-                new Dictionary<string, string> { ["ImageTexture"] = TitleMenu.TitleLogoTexture }, Vector4.Zero, Pickable: false));
+                true, new Dictionary<string, string> { ["ImageTexture"] = TitleMenu.TitleLogoTexture }, Vector4.Zero, Pickable: false));
         }
         else
             controls.Add(new("MeitouTitle", "TextBox", new(Width * 0.6f, Height * 0.04f, Width * 0.37f, Height * 0.14f), "KENSHI", "", "", true,
@@ -475,8 +475,8 @@ sealed partial class PlayerInterface
             // A portrait click selects (Shift: adds), a double click centres and follows (docs/game/ui-input.md section 7).
             int index = int.Parse(argument, CultureInfo.InvariantCulture);
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
-            bool doubleClick = index == _lastMemberClick && System.Diagnostics.Stopwatch.GetElapsedTime(_lastMemberClickAt,
-                    now).TotalSeconds <= DoubleTapSeconds;
+            bool doubleClick = index == _lastMemberClick
+                && System.Diagnostics.Stopwatch.GetElapsedTime(_lastMemberClickAt, now).TotalSeconds <= DoubleTapSeconds;
             (_lastMemberClick, _lastMemberClickAt) = (doubleClick ? -1 : index, now);
             SelectMember(index, InventoryWindows.PressShift, doubleClick);
         }
@@ -590,7 +590,7 @@ sealed partial class PlayerInterface
         {
             Frontend.ShowTitle();
             string button = panel[6..] switch { "load" => "LoadGameButton", "import" => "ImportGameButton", "new-game" => "NewGameButton",
-                    "exit" => "ExitButton", _ => "CreditsButton" };
+                "exit" => "ExitButton", _ => "CreditsButton" };
             Frontend.HandleFrontendAction(new("title", button, button));
             UpdateMenuPause();
             return;
@@ -599,8 +599,11 @@ sealed partial class PlayerInterface
         {
             if (panel == "title") Frontend.ShowTitle();
             else if (panel is "save" or "load") Frontend.OpenSlots(panel);
-            else if (panel == "overview-faction") { FaithfulScreens.Open("overview"); FaithfulScreens.SetTab("overview", "TabsMain",
-                    FactionWindow.FactionTab); }
+            else if (panel == "overview-faction")
+            {
+                FaithfulScreens.Open("overview");
+                FaithfulScreens.SetTab("overview", "TabsMain", FactionWindow.FactionTab);
+            }
             else { FaithfulScreens.Open(panel); if (panel == "overview") FaithfulScreens.SetTab(panel, "TabsMain", 0); }
             UpdateMenuPause();
             return;
@@ -723,8 +726,12 @@ sealed partial class PlayerInterface
 
         // Delete or Backspace deletes the save selected in the load, save or import window (LoadSaveWindow::keyPressed, docs/game/ui-screens.md
         // "Deleting a save").
-        if (key is Key.Delete or Key.Backspace && FaithfulScreens.OpenScreens is [..,
-                "load" or "save" or "import"] && Frontend.SelectedSlot is { } doomed) { Frontend.AskDeleteSave(doomed); return true; }
+        if (key is Key.Delete or Key.Backspace && FaithfulScreens.OpenScreens is [.., "load" or "save" or "import"]
+                && Frontend.SelectedSlot is { } doomed)
+        {
+            Frontend.AskDeleteSave(doomed);
+            return true;
+        }
 
         // Tab bound to a window key (Inventory, Character...) opens it on a window with a box; the traversal keeps modal windows (#383).
         if (key == Key.Tab && (FaithfulScreens.HasModal || !GameHotkeys.WindowKey(key)) && FaithfulScreens.FocusNext(shift))
@@ -749,14 +756,16 @@ sealed partial class PlayerInterface
         // A modal screen (the menu, a message box, the character editor) takes the keys, except the host's own: quicksave / quickload, the screenshot
         // and the debug overlays.
         if (FaithfulScreens.HasModal)
-            return !(GameHotkeys.Bound(InputAction.QuickSave, key) || GameHotkeys.Bound(InputAction.QuickLoad,
-                    key) || GameHotkeys.Bound(InputAction.Screenshot, key) ||
-                GameHotkeys.Bound(InputAction.ToggleStats, key) || GameHotkeys.Bound(InputAction.ToggleFps,
-                        key) || GameHotkeys.Bound(InputAction.CycleProfiler, key));
+            return !(GameHotkeys.Bound(InputAction.QuickSave, key) || GameHotkeys.Bound(InputAction.QuickLoad, key)
+                || GameHotkeys.Bound(InputAction.Screenshot, key) || GameHotkeys.Bound(InputAction.ToggleStats, key)
+                || GameHotkeys.Bound(InputAction.ToggleFps, key) || GameHotkeys.Bound(InputAction.CycleProfiler, key));
 
         // change_squad (Tab by default): the squad bar shows the next squad with members (docs/game/ui-input.md section 6).
-        if (GameHotkeys.Bound(InputAction.ChangeSquad,
-                key) && !TitleOpen && !CharacterEditor.EditorOpen) { Say(new ActiveSquadCommand(-1) { Tick = Session.World.Tick }); return true; }
+        if (GameHotkeys.Bound(InputAction.ChangeSquad, key) && !TitleOpen && !CharacterEditor.EditorOpen)
+        {
+            Say(new ActiveSquadCommand(-1) { Tick = Session.World.Tick });
+            return true;
+        }
         if (ReservedKeys.Contains(key)) return false;
         if (GameHotkeys.Bound(InputAction.ToggleInventory, key) || GameHotkeys.Bound(InputAction.ToggleCharacterStats, key))
         { ExecuteUiAction(GameHotkeys.Bound(InputAction.ToggleInventory, key) ? "inventory" : "stats", ""); return true; }
@@ -771,8 +780,8 @@ sealed partial class PlayerInterface
         // toggle_map / toggle_faction / toggle_research / toggle_crafting (M / unbound / T / Y) ask for overview tabs 0 / 1 / 2 / 3
         // (docs/game/ui-input.md section 6). Pressing the key of the tab already showing closes the window (engine choice: the original's toggle rule
         // is not traced).
-        int? tab = GameHotkeys.Bound(InputAction.ToggleMap, key) ? 0 : GameHotkeys.Bound(InputAction.ToggleFaction,
-                key) ? 1 : GameHotkeys.Bound(InputAction.ToggleResearch, key) ? 2 : GameHotkeys.Bound(InputAction.ToggleCrafting, key) ? 3 : null;
+        int? tab = GameHotkeys.Bound(InputAction.ToggleMap, key) ? 0 : GameHotkeys.Bound(InputAction.ToggleFaction, key) ? 1
+            : GameHotkeys.Bound(InputAction.ToggleResearch, key) ? 2 : GameHotkeys.Bound(InputAction.ToggleCrafting, key) ? 3 : null;
         if (tab is { } t)
         {
             if (FaithfulScreens.IsOpen("overview") && FaithfulScreens.GetTab("overview", "TabsMain") == t)
@@ -857,10 +866,10 @@ sealed partial class PlayerInterface
         if (key == EngineKey.Enter)
         {
             FaithfulScreens.EditEnter(ctrl);
-            if (FaithfulScreens.Focus is { Screen: "overview",
-                    Widget: FactionWindow.FactionNameBox }) FaithfulScreens.Blur();   // Enter accepts the faction name
-            if (FaithfulScreens.Focus is { Screen: TownPanel.TownScreen,
-                    Widget: TownPanel.TownNameBox }) FaithfulScreens.Blur();   // and the outpost name (FUN_140722d60)
+            // Enter accepts the faction name
+            if (FaithfulScreens.Focus is { Screen: "overview", Widget: FactionWindow.FactionNameBox }) FaithfulScreens.Blur();
+            // and the outpost name (FUN_140722d60)
+            if (FaithfulScreens.Focus is { Screen: TownPanel.TownScreen, Widget: TownPanel.TownNameBox }) FaithfulScreens.Blur();
         }
         return true;
     }

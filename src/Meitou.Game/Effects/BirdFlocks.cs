@@ -54,7 +54,7 @@ public sealed class BirdFlocks
         /// reads.
         /// </summary>
         public readonly int[] MatchSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)],
-                TotalSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)];
+            TotalSums = new int[(WeatherAreas.Cells + 1) * (WeatherAreas.Cells + 1)];
 
         static int[] BuildAmounts(BirdFlockData kind, Func<int, int, string?> groupOfCell)
         {
@@ -190,7 +190,7 @@ public sealed class BirdFlocks
         var (x0, z0, x1, z1) = WeatherAreas.CellRect(c.X, c.Z);
         float px = x0 + (x1 - x0) * Next(), pz = z0 + (z1 - z0) * Next(), py = _ground(px, pz);
         if (new Vector2(px - focus.X, pz - focus.Z).LengthSquared() < FarSpawn * FarSpawn || py <= kind.SpawnHeightMin || py >= kind.SpawnHeightMax)
-                return;
+            return;
         var at = new Vector3(px, py, pz);
         for (int i = 0; i < kind.SpawnCount; i++)
         {

@@ -79,7 +79,7 @@ sealed class Decapitation(GameHost host)
         if (!look.Headless || host.Gpu.Characters is not { } characters || !_headsSeen.Add(c.Id)) return;
         long from = host.DrawKey(c.Id), key = from ^ (1L << 54);
         if (characters.LastDrawn(from, "Bip01 Head") is not ({ } world, { Headless: false } before, var start) || !characters.HoldPose(key, from))
-                return;
+            return;
         // A look, not the simulation's: no world roll.
         ulong roll = unchecked((ulong)from * 0x9E3779B97F4A7C15UL ^ (ulong)host.Session.ShownTick * 0xBF58476D1CE4E5B9UL);
         roll ^= roll >> 31;
@@ -100,7 +100,7 @@ sealed class Decapitation(GameHost host)
             Spin = 2.5f + ((roll >> 32) & 0xFFFF) / 65536f * 3 + flat.Length() * 0.1f,
             Velocity = thrown,
             Flight = MathF.Sqrt(2 * MathF.Max(start.Y - host.Session.World.Walkability.GroundHeight(start.X, start.Z, start.Y) - HeadRestHeight,
-                    0) / Debris.FallGravity),
+                0) / Debris.FallGravity),
             Blood = c.BloodAmounts,
         };
         _heads.Add(head);
@@ -133,7 +133,7 @@ sealed class Decapitation(GameHost host)
             if (!float.IsNaN(h.Landed)) t = h.Landed;
             float s = h.Flight > 0 ? MathF.Min(t / h.Flight, 1) : 1;
             var at = new Vector3(h.Start.X + (h.Aside.X - h.Start.X) * s + h.Velocity.X * t,
-                    h.Start.Y + h.Velocity.Y * t - 0.5f * Debris.FallGravity * t * t, h.Start.Z + (h.Aside.Y - h.Start.Z) * s + h.Velocity.Z * t);
+                h.Start.Y + h.Velocity.Y * t - 0.5f * Debris.FallGravity * t * t, h.Start.Z + (h.Aside.Y - h.Start.Z) * s + h.Velocity.Z * t);
             if (float.IsNaN(h.Landed))
             {
                 float floor = SurfaceUnder(characters, new Vector2(at.X, at.Z), h) + HeadRestHeight;
@@ -141,7 +141,7 @@ sealed class Decapitation(GameHost host)
             }
             if (!float.IsNaN(h.Landed)) at.Y = h.RestY;
             var world = h.World * Matrix4x4.CreateTranslation(-h.Start) * Matrix4x4.CreateFromAxisAngle(h.Axis,
-                    h.Spin * t) * Matrix4x4.CreateTranslation(at);
+                h.Spin * t) * Matrix4x4.CreateTranslation(at);
             list.Add(new CharacterInstance(h.Key, h.Look, at, 0, []) { World = world, FreezeFrom = h.From, Blood = h.Blood });
         }
     }
@@ -165,7 +165,7 @@ sealed class Decapitation(GameHost host)
                 if (key == head.From && bone is "Bip01 Neck" or "Bip01 Head") continue;
                 if (characters.BonePosition(key, bone) is not { } p || p.Y >= ground + LyingBelow
                         || Vector2.DistanceSquared(new Vector2(p.X, p.Z), at) >= radius * radius)
-                        continue;
+                    continue;
                 float surface = p.Y + radius * 0.6f;
                 if (surface + HeadRestHeight < head.Start.Y) top = MathF.Max(top, surface);
             }
@@ -221,7 +221,7 @@ sealed class Decapitation(GameHost host)
         if (race.BleedRate <= 0) return;
         var recolour = BloodDecals.BloodRecolour(race.BloodColour);
         _spurts.Add(new NeckSpurt { From = from, Colour = 0xFF000000 | BloodDecals.Abgr(race.BloodColour), Recolour = recolour,
-                Neck = host.Gpu.Characters?.BonePosition(from, "Bip01 Neck") ?? head });
+            Neck = host.Gpu.Characters?.BonePosition(from, "Bip01 Neck") ?? head });
         host.Gpu.Particles?.Burst(Debris.BurstSplash, head, Quaternion.Identity, 0.2f, 1.2f, 1.5f, recolour);
     }
 
@@ -245,7 +245,7 @@ sealed class Decapitation(GameHost host)
                 s.Left--;
             }
             else if (s.Emitting is { Stopped: false } unit)
-                    host.Gpu.Particles?.MoveBurst(unit, s.Neck, Debris.Turn(Vector3.UnitZ, SprayDirection(s)));
+                host.Gpu.Particles?.MoveBurst(unit, s.Neck, Debris.Turn(Vector3.UnitZ, SprayDirection(s)));
             // Done once the last pulse has emitted (or a gap after it: particles turned off stop the units' clock).
             if (s.Left <= 0 && (s.Emitting is null or { Stopped: true } || clock >= s.Next)) _spurts.RemoveAt(i);
         }
@@ -259,7 +259,7 @@ sealed class Decapitation(GameHost host)
         if (host.Gpu.Characters is not { } characters || characters.BonePosition(s.From, "Bip01 Neck") is not { } neck) return;
         s.Neck = neck;
         if (characters.BonePosition(s.From, "Bip01 Spine2") is { } spine && Vector3.DistanceSquared(neck, spine) > 1e-4f)
-                s.Along = Vector3.Normalize(neck - spine);
+            s.Along = Vector3.Normalize(neck - spine);
     }
 
     /// <summary>
@@ -271,10 +271,10 @@ sealed class Decapitation(GameHost host)
     {
         float strength = s.Left / (float)SpurtPulses;
         s.Jitter = new Vector3(host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() * 0.5f,
-                host.BloodDecals.BloodRandom.NextSingle() - 0.5f) * 0.6f;
+            host.BloodDecals.BloodRandom.NextSingle() - 0.5f) * 0.6f;
         var dir = SprayDirection(s);
         s.Emitting = host.Gpu.Particles?.Burst(Debris.BurstSpray, s.Neck, Debris.Turn(Vector3.UnitZ, dir), 0.15f + 0.25f * strength,
-                0.8f + 0.6f * strength, 1.5f, s.Recolour);
+            0.8f + 0.6f * strength, 1.5f, s.Recolour);
         SpurtSplash(s, dir, strength);
     }
 
@@ -291,8 +291,8 @@ sealed class Decapitation(GameHost host)
         at.Y = host.Session.World.Walkability.GroundHeight(at.X, at.Z, s.Neck.Y);
         float size = 0.15f + 0.25f * strength;
         if (host.Gpu.Decals is { Surfaces: true } surfaces)
-                surfaces.AddSurface(TerrainDecalType.Splash, at, flat, size, s.Colour, host.BloodDecals.BloodRandom);
+            surfaces.AddSurface(TerrainDecalType.Splash, at, flat, size, s.Colour, host.BloodDecals.BloodRandom);
         if (at.Y <= host.Gpu.Terrain.HeightAt(at.X, at.Z) + BloodDecals.BloodAboveGround)
-                store.Add(TerrainDecalType.Splash, at, flat, size, s.Colour, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
+            store.Add(TerrainDecalType.Splash, at, flat, size, s.Colour, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
     }
 }

@@ -103,7 +103,7 @@ sealed class Debris(GameHost host)
                 var d = Vector2.Normalize(RandomDirection() + blow * 0.5f);
                 float far = MathF.Sqrt(host.BloodDecals.BloodRandom.NextSingle()) * BurstReach;
                 store.Add(TerrainDecalType.Splash, m.Position + new Vector3(d.X, 0, d.Y) * far, d,
-                        0.3f + host.BloodDecals.BloodRandom.NextSingle() * 0.2f, opaque, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
+                    0.3f + host.BloodDecals.BloodRandom.NextSingle() * 0.2f, opaque, TerrainDecalStore.NewLife, host.BloodDecals.BloodRandom);
             }
         }
         var centre = m.Position + new Vector3(0, BurstHeight, 0);
@@ -116,8 +116,8 @@ sealed class Debris(GameHost host)
             {
                 var d = Vector2.Normalize(RandomDirection() + blow * 0.6f);
                 var spray = Vector3.Normalize(new Vector3(d.X, 0.3f + host.BloodDecals.BloodRandom.NextSingle() * 0.7f, d.Y));
-                particles.Burst(BurstSpray, centre, Turn(Vector3.UnitZ, spray), 0.4f + host.BloodDecals.BloodRandom.NextSingle() * 0.3f, MistSize,
-                        MistLife, recolour);
+                particles.Burst(BurstSpray, centre, Turn(Vector3.UnitZ, spray), 0.4f + host.BloodDecals.BloodRandom.NextSingle() * 0.3f,
+                    MistSize, MistLife, recolour);
             }
         }
         if (host.Gpu.Debris is not { } debris) return;
@@ -137,12 +137,12 @@ sealed class Debris(GameHost host)
             // The nest bones are a beast's (up to 3.5 m long): all shrunk alike by BoneScale (±15%), so a vertebra stays smaller than a thigh bone.
             // The meat is a 39 cm slab: torn smaller.
             float scale = limb ? 1 : flesh ? 0.5f + host.BloodDecals.BloodRandom.NextSingle() * 0.4f
-                    : BoneScale * (0.85f + host.BloodDecals.BloodRandom.NextSingle() * 0.3f);
+                : BoneScale * (0.85f + host.BloodDecals.BloodRandom.NextSingle() * 0.3f);
             var extent = size * scale;
             var d = Vector2.Normalize(RandomDirection() + blow * 0.6f);
             float speed = 30 + host.BloodDecals.BloodRandom.NextSingle() * 60;
             var spinAxis = Vector3.Normalize(new Vector3(host.BloodDecals.BloodRandom.NextSingle() - 0.5f,
-                    host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f) + new Vector3(1e-3f));
+                host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f) + new Vector3(1e-3f));
             Pieces.Add(new Piece
             {
                 Mesh = mesh,
@@ -156,8 +156,8 @@ sealed class Debris(GameHost host)
                 Position = centre,
                 Velocity = new Vector3(d.X * speed, 30 + host.BloodDecals.BloodRandom.NextSingle() * 50, d.Y * speed),
                 Rotation = Quaternion.Normalize(new Quaternion(host.BloodDecals.BloodRandom.NextSingle() - 0.5f,
-                        host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f,
-                        host.BloodDecals.BloodRandom.NextSingle() - 0.5f)),
+                    host.BloodDecals.BloodRandom.NextSingle() - 0.5f, host.BloodDecals.BloodRandom.NextSingle() - 0.5f,
+                    host.BloodDecals.BloodRandom.NextSingle() - 0.5f)),
                 Spin = spinAxis * (4 + host.BloodDecals.BloodRandom.NextSingle() * 10),
             });
         }
@@ -266,7 +266,7 @@ sealed class Debris(GameHost host)
     void SampleStump(FallingLimb f)
     {
         if (host.Gpu?.Characters is not { } characters || characters.BonePosition(host.DrawKey(f.Stump.Character), f.Stump.Bone) is not { } start)
-                return;
+            return;
         f.Start = start;
         f.Flight = MathF.Sqrt(2 * MathF.Max(start.Y - f.RestY, 0) / FallGravity);
         f.Drift = f.Flight > 0 ? new Vector2(f.Rest.X - start.X, f.Rest.Z - start.Z) / f.Flight : Vector2.Zero;
@@ -393,8 +393,8 @@ sealed class Debris(GameHost host)
             if (t.Stopped is null && !_boltHeads.ContainsKey(id)) Stop(t, t.Head, clock);
             float length = t.Length;
             if (t.Stopped is { } stopped)
-                length = clock < stopped ? 0
-                        : length - (float)(clock - stopped) * MathF.Max(t.Speed, t.Length / TracerFade);   // back in time: a load
+                // back in time: a load
+                length = clock < stopped ? 0 : length - (float)(clock - stopped) * MathF.Max(t.Speed, t.Length / TracerFade);
             if (length <= 0)
             {
                 if (t.Stopped is not null) _trailsGone.Add(id);
@@ -442,7 +442,7 @@ sealed class Debris(GameHost host)
         p.Position.Y = floor + thin;
         if (!p.Landed && p.Colour != 0 && host.BloodDecals.DecalStore is { } store)
             store.Add(TerrainDecalType.Splash, p.Position, new Vector2(p.Velocity.X, p.Velocity.Z), 0.12f, p.Colour, TerrainDecalStore.NewLife,
-                    host.BloodDecals.BloodRandom);
+                host.BloodDecals.BloodRandom);
         if (!p.Landed && p.Flesh)
         {
             host.Sound.CharacterSounds?.Splat(p.Position);
@@ -493,7 +493,10 @@ sealed class Debris(GameHost host)
     {
         if (host.Scene.Database?.Find(g.Record) is not { } item || WorldObjectLayout.ItemMesh(item) is not { Length: > 0 } mesh
                 || LimbLookOf(g.Record) is not { } look)
-                { host.GroundItemSync.ShowGround(g, rotation, y); return; }
+        {
+            host.GroundItemSync.ShowGround(g, rotation, y);
+            return;
+        }
         RestLimbs[g.Id] = new RestingLimb(mesh, ToneOf(look, g)!, rotation, new Vector3(g.Position.X, y, g.Position.Z));
     }
 
@@ -520,8 +523,8 @@ sealed class Debris(GameHost host)
                 string? Name(string key) => spec?.GetPath(key) is { Length: > 0 } p ? Path.GetFileName(p.Replace('\\', '/')) : null;
                 if (Name("texture map") is { } diffuse)
                     look = new LimbLook(diffuse, Name("color map"), Vector3.Zero,
-                            CharacterAppearance.Rgb(owner.GetInt("blood colour", 0x800000) & 0xFFFFFF), owner.StringId,
-                            Rendering.Characters.CharacterRenderer.SkinByDefault(owner), Name("normal map"));
+                        CharacterAppearance.Rgb(owner.GetInt("blood colour", 0x800000) & 0xFFFFFF), owner.StringId,
+                        Rendering.Characters.CharacterRenderer.SkinByDefault(owner), Name("normal map"));
             }
         }
         return _limbLooks[record] = look;
@@ -531,7 +534,7 @@ sealed class Debris(GameHost host)
     /// The look with the skin tone of the character the limb was cut from (<see cref="FallSource.SkinTone"/>; none for a limb read from a save).
     /// </summary>
     internal static LimbLook? ToneOf(LimbLook? look, GroundItemSnapshot g) => look is null ? null
-            : look with { SkinTone = g.Fall?.SkinTone ?? default };
+        : look with { SkinTone = g.Fall?.SkinTone ?? default };
 
     readonly Dictionary<(string Record, Vector3 Tone), MouthMesh?> _mouthMeshes = [];
 
