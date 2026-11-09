@@ -4,7 +4,9 @@ using Meitou.Data.Gameplay.Economy;
 
 namespace Meitou.Tests.Gameplay;
 
-/// <summary>Item prices (docs/game/economy.md sections 3 and 4) on synthetic records, against the worked examples of section 4.6.</summary>
+/// <summary>
+/// Item prices (docs/game/economy.md sections 3 and 4) on synthetic records, against the worked examples of section 4.6.
+/// </summary>
 public class EconomyTests
 {
     const uint New = 0x10;

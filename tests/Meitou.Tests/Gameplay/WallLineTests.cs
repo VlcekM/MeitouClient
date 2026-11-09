@@ -4,14 +4,22 @@ using Meitou.Game.Building;
 
 namespace Meitou.Tests.Gameplay;
 
-/// <summary><see cref="WallLine.Layout"/> (docs/game/buildings-production.md "Walls"): the greedy split of a straight run and the bend pieces at a snapped joint.</summary>
+/// <summary>
+/// <see cref="WallLine.Layout"/> (docs/game/buildings-production.md "Walls"): the greedy split of a straight run and the bend pieces
+/// at a snapped joint.
+/// </summary>
 public class WallLineTests
 {
-    static readonly BuildingBuildData Short = Piece("short", 4, 40), Connector = Piece("connector", 1, 0), Wedge = Piece("wedge", 2, 0);
+    static readonly BuildingBuildData Short = Piece("short", 4, 40);
+    static readonly BuildingBuildData Connector = Piece("connector", 1, 0);
+    static readonly BuildingBuildData Wedge = Piece("wedge", 2, 0);
     static readonly BuildingBuildData Wall = Piece("wall", 0, 255) with { WallSubsections = ["short", "connector", "wedge"] };
     static readonly Dictionary<string, BuildingBuildData> All = new[] { Wall, Short, Connector, Wedge }.ToDictionary(b => b.Id);
 
-    static BuildingBuildData Piece(string id, int type, float length) => new() { Id = id, Name = id, LinksTogether = true, LinkType = type, LinkLength = length };
+    static BuildingBuildData Piece(string id, int type, float length) => new()
+    {
+        Id = id, Name = id, LinksTogether = true, LinkType = type, LinkLength = length,
+    };
 
     static float Flat(float x, float z) => 100;
 
@@ -43,7 +51,8 @@ public class WallLineTests
         float h = 40 / MathF.Sqrt(2);
         Assert.Equal(new Vector3(h, 100, h), WallLine.Ends(Short, pieces[0].Position, pieces[0].Rotation).End, new Vector3Comparer(1e-2f));
         Assert.Equal(pieces[0].Position + new Vector3(h, 0, h), pieces[1].Position, new Vector3Comparer(1e-2f));
-        Assert.True(Vector3.Distance(WallLine.Ends(Wall, pieces[^1].Position, pieces[^1].Rotation).End, new(0, 100, 800)) < WallLine.StopDistance);
+        var lastEnd = WallLine.Ends(Wall, pieces[^1].Position, pieces[^1].Rotation).End;
+        Assert.True(Vector3.Distance(lastEnd, new(0, 100, 800)) < WallLine.StopDistance);
     }
 
     sealed class Vector3Comparer(float tolerance) : IEqualityComparer<Vector3>

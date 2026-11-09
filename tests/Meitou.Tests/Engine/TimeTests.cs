@@ -16,7 +16,9 @@ public class TimeTests
         return parts;
     }
 
-    /// <summary>A scripted session: the input is a function of the tick number, applied before each tick.</summary>
+    /// <summary>
+    /// A scripted session: the input is a function of the tick number, applied before each tick.
+    /// </summary>
     static (long Ticks, CameraState Camera, double GameSeconds, double Hour) Simulate(double[] frames)
     {
         var step = new FixedStepClock(30, maxCatchUp: 100000);
@@ -69,7 +71,8 @@ public class TimeTests
         {
             var one = new SimulationClock(maxTicksPerFrame: 1_000_000);
             one.SetSpeed(speed);
-            long expected = Enumerable.Repeat(SimulationClock.MaxFrameSeconds, 80).Sum(x => one.Advance(x));   // frames over the cap are cut, so the whole is 80 frames at it
+            // Frames over the cap are cut, so the whole is 80 frames at it.
+            long expected = Enumerable.Repeat(SimulationClock.MaxFrameSeconds, 80).Sum(x => one.Advance(x));
             Assert.Equal((long)Math.Round(total * speed * 30), expected);
             var split = new SimulationClock(maxTicksPerFrame: 1_000_000);
             split.SetSpeed(speed);

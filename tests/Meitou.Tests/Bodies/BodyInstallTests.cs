@@ -7,7 +7,9 @@ using Meitou.Simulation.Bodies;
 
 namespace Meitou.Tests.Bodies;
 
-/// <summary>The probe tables of docs/game/character-stats.md as tests against the installed game (base load order).</summary>
+/// <summary>
+/// The probe tables of docs/game/character-stats.md as tests against the installed game (base load order).
+/// </summary>
 [Slow]
 public class BodyInstallTests
 {
@@ -67,7 +69,11 @@ public class BodyInstallTests
         // The animals' forelegs are ARM parts that do not collapse.
         var foreleg = parts.Values.Where(p => p.Name.Contains("Foreleg")).ToList();
         Assert.Equal(2, foreleg.Count);
-        Assert.All(foreleg, p => { Assert.Equal(BodyPartType.Arm, p.Type); Assert.False(p.Collapses); });
+        Assert.All(foreleg, p =>
+        {
+            Assert.Equal(BodyPartType.Arm, p.Type);
+            Assert.False(p.Collapses);
+        });
     }
 
     [Fact]

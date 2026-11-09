@@ -11,10 +11,18 @@ namespace Meitou.Tests;
 static class InstallData
 {
     static readonly Lazy<GameInstall?> InstallCache = new(GameInstall.Locate, LazyThreadSafetyMode.ExecutionAndPublication);
-    static readonly Lazy<GameDatabase?> BaseGameCache = new(() => Install is { } i ? GameDatabase.Load(LoadOrder.BaseGame(i)) : null, LazyThreadSafetyMode.ExecutionAndPublication);
-    static readonly Lazy<GameDatabase?> FullLoadOrderCache = new(() => Install is { } i ? GameDatabase.Load(LoadOrder.FromInstall(i)) : null, LazyThreadSafetyMode.ExecutionAndPublication);
-    static readonly Lazy<WorldLevelData?> LevelsCache = new(() => Install is { } i ? WorldLevelData.LoadBaseGame(i) : null, LazyThreadSafetyMode.ExecutionAndPublication);
-    static readonly Lazy<WorldLevelData?> LevelsWithInteriorsCache = new(() => Install is { } i ? WorldLevelData.LoadBaseGame(i, includeInteriors: true) : null, LazyThreadSafetyMode.ExecutionAndPublication);
+    static readonly Lazy<GameDatabase?> BaseGameCache = new(
+        () => Install is { } i ? GameDatabase.Load(LoadOrder.BaseGame(i)) : null,
+        LazyThreadSafetyMode.ExecutionAndPublication);
+    static readonly Lazy<GameDatabase?> FullLoadOrderCache = new(
+        () => Install is { } i ? GameDatabase.Load(LoadOrder.FromInstall(i)) : null,
+        LazyThreadSafetyMode.ExecutionAndPublication);
+    static readonly Lazy<WorldLevelData?> LevelsCache = new(
+        () => Install is { } i ? WorldLevelData.LoadBaseGame(i) : null,
+        LazyThreadSafetyMode.ExecutionAndPublication);
+    static readonly Lazy<WorldLevelData?> LevelsWithInteriorsCache = new(
+        () => Install is { } i ? WorldLevelData.LoadBaseGame(i, includeInteriors: true) : null,
+        LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>The install, or null when none is found (tests then skip).</summary>
     public static GameInstall? Install => InstallCache.Value;

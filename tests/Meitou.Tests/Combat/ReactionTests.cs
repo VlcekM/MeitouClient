@@ -5,7 +5,9 @@ using static Meitou.Tests.Combat.CombatFixtures;
 
 namespace Meitou.Tests.Combat;
 
-/// <summary>The defender's reaction and the outcome rule (docs/game/combat.md "Technique choice, block and dodge", "Hit outcome").</summary>
+/// <summary>
+/// The defender's reaction and the outcome rule (docs/game/combat.md "Technique choice, block and dodge", "Hit outcome").
+/// </summary>
 public class ReactionTests
 {
     [Fact]
@@ -36,8 +38,14 @@ public class ReactionTests
         string Pick(float gap, float skill = 50, int category = (int)WeaponCategory.Katanas)
         {
             var seen = new HashSet<string>();
-            var q = new AttackQuery { Category = category, Skill = skill, UnarmedSkill = skill, Encumbrance = 1, WeaponLength = 21, Scale = 1, Gap = gap, Previous = -1, LeftArm = true, RightArm = true };
-            for (float r = 0; r < 1; r += 0.001f)   // fine steps: a row under its "attack distance min vs static" weighs x0.02
+            var q = new AttackQuery
+            {
+                Category = category, Skill = skill, UnarmedSkill = skill, Encumbrance = 1, WeaponLength = 21, Scale = 1, Gap = gap,
+                Previous = -1, LeftArm = true, RightArm = true,
+            };
+
+            // Fine steps: a row under its "attack distance min vs static" weighs x0.02.
+            for (float r = 0; r < 1; r += 0.001f)
             {
                 int i = TechniqueChooser.ChooseAttack(all, q, r, out _);
                 seen.Add(i < 0 ? "-" : all[i].Name);

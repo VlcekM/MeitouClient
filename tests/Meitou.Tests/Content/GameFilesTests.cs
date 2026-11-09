@@ -19,7 +19,10 @@ public sealed class GameFilesTests : IDisposable
     {
         var asked = Path.Combine(_root, "data", "animal", "meshes", "mammal_beak.skeleton");
         Assert.True(GameFiles.Exists(asked));
-        Assert.Equal(Path.Combine(_root, "Data", "Animal", "Meshes", "Mammal_beak.skeleton"), GameFiles.Resolve(asked), ignoreCase: OperatingSystem.IsWindows());
+        Assert.Equal(
+            Path.Combine(_root, "Data", "Animal", "Meshes", "Mammal_beak.skeleton"),
+            GameFiles.Resolve(asked),
+            ignoreCase: OperatingSystem.IsWindows());
 
         // A folder written in another case is found too.
         Assert.NotNull(GameFiles.ExistingDirectory(Path.Combine(_root, "data", "animal")));

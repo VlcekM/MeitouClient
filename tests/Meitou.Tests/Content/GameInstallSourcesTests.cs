@@ -6,7 +6,10 @@ public sealed class GameInstallSourcesTests : IDisposable
 {
     readonly string _home = Path.Combine(Path.GetTempPath(), "meitou-installs-" + Guid.NewGuid().ToString("N"));
 
-    public void Dispose() { if (Directory.Exists(_home)) Directory.Delete(_home, recursive: true); }
+    public void Dispose()
+    {
+        if (Directory.Exists(_home)) Directory.Delete(_home, recursive: true);
+    }
 
     string MakeInstall(params string[] parts)
     {
@@ -24,7 +27,9 @@ public sealed class GameInstallSourcesTests : IDisposable
         var kenshi = MakeInstall("Games", "Heroic", "Kenshi");
         var list = Path.Combine(_home, ".config", "heroic", "gog_store", "installed.json");
         Directory.CreateDirectory(Path.GetDirectoryName(list)!);
-        File.WriteAllText(list, $$"""{"installed":[{"appName":"1","install_path":"{{Path.Combine(_home, "Games", "Heroic", "Other").Replace("\\", "\\\\")}}"},{"appName":"2","install_path":"{{kenshi.Replace("\\", "\\\\")}}"}]}""");
+        var otherPath = Path.Combine(_home, "Games", "Heroic", "Other").Replace("\\", "\\\\");
+        var kenshiPath = kenshi.Replace("\\", "\\\\");
+        File.WriteAllText(list, $$"""{"installed":[{"appName":"1","install_path":"{{otherPath}}"},{"appName":"2","install_path":"{{kenshiPath}}"}]}""");
         Assert.Equal(kenshi, FirstValid(GameInstallSources.Launchers(_home)));
         File.WriteAllText(list, "{ not json");
         Assert.Empty(GameInstallSources.HeroicInstalls(list));

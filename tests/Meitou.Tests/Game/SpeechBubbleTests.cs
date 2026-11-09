@@ -4,7 +4,9 @@ using Meitou.Game.Ui;
 
 namespace Meitou.Tests.Game;
 
-/// <summary>The speech bubbles' push-apart (<c>FUN_140671f50</c>, docs/game/dialogue.md "Speech bubbles").</summary>
+/// <summary>
+/// The speech bubbles' push-apart (<c>FUN_140671f50</c>, docs/game/dialogue.md "Speech bubbles").
+/// </summary>
 public class SpeechBubbleTests
 {
     [Fact]

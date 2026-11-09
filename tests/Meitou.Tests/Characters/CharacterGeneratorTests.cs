@@ -30,7 +30,9 @@ public class CharacterGeneratorTests
         var head = male.Ranges.Single(r => r.Name == "Head size");
         Assert.Equal(2, head.Variation); // random_variation 10 % of 20
         var cheeks = male.Ranges.Single(r => r.Name == "Cheekbones");
-        Assert.Equal(("wide_cheekbones", "narrow_cheekbones", 0, AppearanceCategory.Face), (cheeks.Target, cheeks.TargetOpposite, cheeks.Mid, cheeks.Category));
+        Assert.Equal(
+            ("wide_cheekbones", "narrow_cheekbones", 0, AppearanceCategory.Face),
+            (cheeks.Target, cheeks.TargetOpposite, cheeks.Mid, cheeks.Category));
         Assert.Equal(-1, cheeks.Group);
         var skin = male.Colours.Single(c => c.Name == "Skin Tone");
         Assert.Equal((6, 0, 50, 25), (skin.Colours.Count, skin.Min, skin.Max, skin.Mid));
@@ -94,8 +96,10 @@ public class CharacterGeneratorTests
 
             // The sliders of a race with editor_data_human.xml stay within its mid ± variation; the face is one of "morph num" faces.
             if (l.Race.GetPath("editor limits").EndsWith("editor_data_human.xml", StringComparison.OrdinalIgnoreCase))
+            {
                 foreach (var r in limits.Ranges.Where(r => r.Target is null && r.Category is AppearanceCategory.Face or AppearanceCategory.Body))
                     Assert.InRange(l.Appearance.Get(r.Name, float.NaN), r.Mid - r.Variation, r.Mid + r.Variation);
+            }
             Assert.InRange(l.MorphIndex, 0, 4);
             heads.Add(l.Appearance.HeadId!);
             skins.Add(l.Appearance.SkinTone!.Value);
