@@ -181,6 +181,8 @@ public sealed class PuTechniqueDef
 
 public sealed class PuSystemDef
 {
+    #region Definition
+
     public required string Name { get; init; }
     public string File { get; init; } = "";
     public string Category { get; init; } = "";
@@ -200,6 +202,10 @@ public sealed class PuSystemDef
     public bool KeepLocal { get; init; }
     public IReadOnlyList<PuTechniqueDef> Techniques { get; init; } = [];
     public required PuNode Source { get; init; }
+
+    #endregion
+
+    #region Measures
 
     /// <summary>
     /// The largest extent of the Box emitters (width, height, depth) and the Circle emitters' diameter, times the scale's largest component (the
@@ -234,33 +240,63 @@ public sealed class PuSystemDef
             foreach (var t in Techniques)
             {
                 if (!t.Enabled) continue;
-                float growth = 0;
-                foreach (var a in t.Affectors.Where(a => a.Type == PuAffectorType.Scale))
-                    growth += (a.ScaleXyz is not null ? [a.ScaleXyz] : new[] { a.ScaleX, a.ScaleY, a.ScaleZ })
-                        .Where(d => d is not null).Select(d => Math.Max(Math.Abs(d!.Range.Min), Math.Abs(d.Range.Max)))
-                            .DefaultIfEmpty(0).Max() * scale;
-                float force = t.Affectors.Where(a => a.Type == PuAffectorType.LinearForce).Select(a => a.Force.Length()).DefaultIfEmpty(0).Sum();
-                foreach (var e in t.Emitters)
-                {
-                    float life = e.Life.Range.Max;
-                    float extent = e.Type switch
-                    {
-                        PuEmitterType.Box => e.BoxSize.Length() * 0.5f * scale,
-                        PuEmitterType.Circle or PuEmitterType.SphereSurface => e.Radius * scale,
-                        PuEmitterType.Line => e.End.Length() * scale,
-                        _ => 0,
-                    };
-                    float speed = Math.Max(Math.Abs(e.Velocity.Range.Min), Math.Abs(e.Velocity.Range.Max)) * ScaleVelocity;
-                    float size = (e.AllDimensions is not null ? [e.AllDimensions] : new[] { e.Width, e.Height })
-                        .Where(d => d is not null).Select(d => d!.Range.Max).DefaultIfEmpty(Math.Max(t.DefaultWidth, t.DefaultHeight)).Max() * scale;
-                    float reach = (t.Position + e.Position * Scale).Length() + extent + speed * life
-                        + 0.5f * force * life * life + size + growth * life;
-                    radius = Math.Max(radius, reach);
-                }
+                radius = TechniqueReach(t, scale, radius);
             }
             return Math.Min(radius, 30000);
         }
     }
+
+    /// <summary>
+    /// <paramref name="radius"/> raised to the reach of each of the technique's emitters (<paramref name="scale"/>: the scale's largest component).
+    /// </summary>
+    float TechniqueReach(PuTechniqueDef t, float scale, float radius)
+    {
+        float growth = ScaleGrowth(t, scale);
+        float force = t.Affectors.Where(a => a.Type == PuAffectorType.LinearForce).Select(a => a.Force.Length()).DefaultIfEmpty(0).Sum();
+        foreach (var e in t.Emitters)
+        {
+            float reach = EmitterReach(t, e, scale, growth, force);
+            radius = Math.Max(radius, reach);
+        }
+        return radius;
+    }
+
+    /// <summary>
+    /// How fast the technique's scale affectors grow a particle at most (per second, scaled).
+    /// </summary>
+    static float ScaleGrowth(PuTechniqueDef t, float scale)
+    {
+        float growth = 0;
+        foreach (var a in t.Affectors.Where(a => a.Type == PuAffectorType.Scale))
+            growth += (a.ScaleXyz is not null ? [a.ScaleXyz] : new[] { a.ScaleX, a.ScaleY, a.ScaleZ })
+                .Where(d => d is not null).Select(d => Math.Max(Math.Abs(d!.Range.Min), Math.Abs(d.Range.Max)))
+                    .DefaultIfEmpty(0).Max() * scale;
+        return growth;
+    }
+
+    /// <summary>
+    /// How far an emitter's particle gets: its position and extent, its speed over its life, the linear forces' reach, its size and its growth.
+    /// </summary>
+    float EmitterReach(PuTechniqueDef t, PuEmitterDef e, float scale, float growth, float force)
+    {
+        float life = e.Life.Range.Max;
+        float extent = e.Type switch
+        {
+            PuEmitterType.Box => e.BoxSize.Length() * 0.5f * scale,
+            PuEmitterType.Circle or PuEmitterType.SphereSurface => e.Radius * scale,
+            PuEmitterType.Line => e.End.Length() * scale,
+            _ => 0,
+        };
+        float speed = Math.Max(Math.Abs(e.Velocity.Range.Min), Math.Abs(e.Velocity.Range.Max)) * ScaleVelocity;
+        float size = (e.AllDimensions is not null ? [e.AllDimensions] : new[] { e.Width, e.Height })
+            .Where(d => d is not null).Select(d => d!.Range.Max).DefaultIfEmpty(Math.Max(t.DefaultWidth, t.DefaultHeight)).Max() * scale;
+        return (t.Position + e.Position * Scale).Length() + extent + speed * life
+            + 0.5f * force * life * life + size + growth * life;
+    }
+
+    #endregion
+
+    #region Building
 
     /// <summary>
     /// Builds the typed system from a parsed <c>system</c> block.
@@ -286,6 +322,9 @@ public sealed class PuSystemDef
         };
     }
 
+    /// <summary>
+    /// A <c>technique</c> block: its quotas, defaults, renderer (Billboard when it has none), emitters, affectors and observers.
+    /// </summary>
     static PuTechniqueDef Technique(PuNode t)
     {
         var rendererNode = t.Blocks("renderer").LastOrDefault();
@@ -310,6 +349,9 @@ public sealed class PuSystemDef
         };
     }
 
+    /// <summary>
+    /// A <c>renderer</c> block.
+    /// </summary>
     static PuRendererDef Renderer(PuNode r) => new()
     {
         TypeName = r.Type,
@@ -322,18 +364,12 @@ public sealed class PuSystemDef
         AccurateFacing = r.Bool("accurate_facing"),
     };
 
+    /// <summary>
+    /// An <c>emitter</c> block, with the plugin's defaults for what it leaves out.
+    /// </summary>
     static PuEmitterDef Emitter(PuNode e)
     {
-        var type = e.Type switch
-        {
-            "Box" => PuEmitterType.Box,
-            "Circle" => PuEmitterType.Circle,
-            "Point" => PuEmitterType.Point,
-            "SphereSurface" => PuEmitterType.SphereSurface,
-            "Line" => PuEmitterType.Line,
-            "Slave" => PuEmitterType.Slave,
-            _ => PuEmitterType.Unknown,
-        };
+        var type = EmitterType(e.Type);
         var emits = e.Find("emits");
         return new PuEmitterDef
         {
@@ -371,33 +407,27 @@ public sealed class PuSystemDef
         };
     }
 
+    /// <summary>
+    /// The emitter type of a type name.
+    /// </summary>
+    static PuEmitterType EmitterType(string type) => type switch
+    {
+        "Box" => PuEmitterType.Box,
+        "Circle" => PuEmitterType.Circle,
+        "Point" => PuEmitterType.Point,
+        "SphereSurface" => PuEmitterType.SphereSurface,
+        "Line" => PuEmitterType.Line,
+        "Slave" => PuEmitterType.Slave,
+        _ => PuEmitterType.Unknown,
+    };
+
+    /// <summary>
+    /// An <c>affector</c> block; the fields of every affector type are read, each type uses its own.
+    /// </summary>
     static PuAffectorDef Affector(PuNode a)
     {
-        var type = a.Type switch
-        {
-            "Colour" => PuAffectorType.Colour,
-            "Scale" => PuAffectorType.Scale,
-            "TextureRotator" => PuAffectorType.TextureRotator,
-            "LinearForce" => PuAffectorType.LinearForce,
-            "Vortex" => PuAffectorType.Vortex,
-            "Gravity" => PuAffectorType.Gravity,
-            "Randomiser" => PuAffectorType.Randomiser,
-            "SineForce" => PuAffectorType.SineForce,
-            "ForceField" => PuAffectorType.ForceField,
-            "Jet" => PuAffectorType.Jet,
-            "Align" => PuAffectorType.Align,
-            "FlockCentering" => PuAffectorType.FlockCentering,
-            "GeometryRotator" => PuAffectorType.GeometryRotator,
-            "ScaleVelocity" => PuAffectorType.ScaleVelocity,
-            _ => PuAffectorType.Unknown,
-        };
-        var colours = new List<(float, Vector4)>();
-        foreach (var p in a.All("time_colour"))
-            if (p.Values.Length >= 5 && PuProperty.TryFloat(p.Values[0], out float t)
-                && PuProperty.TryFloat(p.Values[1], out float r) && PuProperty.TryFloat(p.Values[2], out float g)
-                && PuProperty.TryFloat(p.Values[3], out float b) && PuProperty.TryFloat(p.Values[4], out float al))
-                colours.Add((t, new Vector4(r, g, b, al)));
-        colours.Sort((x, y) => x.Item1.CompareTo(y.Item1));
+        var type = AffectorType(a.Type);
+        var colours = TimeColours(a);
         return new PuAffectorDef
         {
             Type = type,
@@ -429,28 +459,50 @@ public sealed class PuSystemDef
         };
     }
 
+    /// <summary>
+    /// The affector type of a type name.
+    /// </summary>
+    static PuAffectorType AffectorType(string type) => type switch
+    {
+        "Colour" => PuAffectorType.Colour,
+        "Scale" => PuAffectorType.Scale,
+        "TextureRotator" => PuAffectorType.TextureRotator,
+        "LinearForce" => PuAffectorType.LinearForce,
+        "Vortex" => PuAffectorType.Vortex,
+        "Gravity" => PuAffectorType.Gravity,
+        "Randomiser" => PuAffectorType.Randomiser,
+        "SineForce" => PuAffectorType.SineForce,
+        "ForceField" => PuAffectorType.ForceField,
+        "Jet" => PuAffectorType.Jet,
+        "Align" => PuAffectorType.Align,
+        "FlockCentering" => PuAffectorType.FlockCentering,
+        "GeometryRotator" => PuAffectorType.GeometryRotator,
+        "ScaleVelocity" => PuAffectorType.ScaleVelocity,
+        _ => PuAffectorType.Unknown,
+    };
+
+    /// <summary>
+    /// The <c>time_colour</c> keys (time, r, g, b, a), sorted by time; keys with fewer or unreadable values are left out.
+    /// </summary>
+    static List<(float, Vector4)> TimeColours(PuNode a)
+    {
+        var colours = new List<(float, Vector4)>();
+        foreach (var p in a.All("time_colour"))
+            if (p.Values.Length >= 5 && PuProperty.TryFloat(p.Values[0], out float t)
+                && PuProperty.TryFloat(p.Values[1], out float r) && PuProperty.TryFloat(p.Values[2], out float g)
+                && PuProperty.TryFloat(p.Values[3], out float b) && PuProperty.TryFloat(p.Values[4], out float al))
+                colours.Add((t, new Vector4(r, g, b, al)));
+        colours.Sort((x, y) => x.Item1.CompareTo(y.Item1));
+        return colours;
+    }
+
+    /// <summary>
+    /// An <c>observer</c> block, with its condition and its handlers' types.
+    /// </summary>
     static PuObserverDef Observer(PuNode o)
     {
-        var type = o.Type switch
-        {
-            "OnPosition" => PuObserverType.OnPosition,
-            "OnTime" => PuObserverType.OnTime,
-            "OnClear" => PuObserverType.OnClear,
-            "OnEmission" => PuObserverType.OnEmission,
-            _ => PuObserverType.Unknown,
-        };
-        int axis = -1;
-        PuCompare compare = PuCompare.LessThan;
-        float value = 0;
-        foreach (var p in o.Properties)
-        {
-            if (p.Name is "position_x" or "position_y" or "position_z" && p.Values.Length >= 2)
-            {
-                axis = p.Name[^1] - 'x';
-                (compare, value) = Compare(p.Values);
-            }
-            else if (p.Name == "on_time" && p.Values.Length >= 2) (compare, value) = Compare(p.Values);
-        }
+        var type = ObserverType(o.Type);
+        var (axis, compare, value) = Condition(o);
         return new PuObserverDef
         {
             Type = type,
@@ -466,9 +518,47 @@ public sealed class PuSystemDef
         };
     }
 
+    /// <summary>
+    /// The observer type of a type name.
+    /// </summary>
+    static PuObserverType ObserverType(string type) => type switch
+    {
+        "OnPosition" => PuObserverType.OnPosition,
+        "OnTime" => PuObserverType.OnTime,
+        "OnClear" => PuObserverType.OnClear,
+        "OnEmission" => PuObserverType.OnEmission,
+        _ => PuObserverType.Unknown,
+    };
+
+    /// <summary>
+    /// The observer's condition: the axis of the last <c>position_x|y|z</c> (-1 without one), and the comparison and value of the last
+    /// <c>position_*</c> or <c>on_time</c>.
+    /// </summary>
+    static (int Axis, PuCompare Compare, float Value) Condition(PuNode o)
+    {
+        int axis = -1;
+        PuCompare compare = PuCompare.LessThan;
+        float value = 0;
+        foreach (var p in o.Properties)
+        {
+            if (p.Name is "position_x" or "position_y" or "position_z" && p.Values.Length >= 2)
+            {
+                axis = p.Name[^1] - 'x';
+                (compare, value) = Compare(p.Values);
+            }
+            else if (p.Name == "on_time" && p.Values.Length >= 2) (compare, value) = Compare(p.Values);
+        }
+        return (axis, compare, value);
+    }
+
+    /// <summary>
+    /// A condition's comparison (<c>less_than</c>, <c>greater_than</c>, else equals) and value (0 when unreadable).
+    /// </summary>
     static (PuCompare, float) Compare(string[] v)
     {
         var c = v[0] switch { "less_than" => PuCompare.LessThan, "greater_than" => PuCompare.GreaterThan, _ => PuCompare.Equals };
         return (c, PuProperty.TryFloat(v[1], out float f) ? f : 0);
     }
+
+    #endregion
 }

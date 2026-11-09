@@ -51,17 +51,14 @@ public sealed record EditorControl(string Label, EditorControlKind Kind, int Min
 }
 
 /// <summary>
-/// A playable race in the editor's lists: its RACE_GROUP (the RACE buttons) and the group's playable RACEs (the SUBRACE buttons), in data order.
-/// </summary>
-public sealed record EditorRaceGroup(GameRecord Group, IReadOnlyList<GameRecord> Races);
-
-/// <summary>
 /// The look being edited in the character editor: a copy of a CHARACTER_APPEARANCE that the controls read and write (docs/characters.md "Character
 /// editor"). The copy keeps every key of the record it was made from, so writing it back keeps the original's key set. Pure data: the simulation
 /// validates the result (<see cref="Sanitize"/>) when the editor confirms.
 /// </summary>
 public sealed class CharacterDraft
 {
+    #region Look
+
     readonly GameDatabase _db;
     readonly string _installRoot;
     readonly Dictionary<(string, bool), AppearanceLimits?> _limitsCache;
@@ -143,12 +140,6 @@ public sealed class CharacterDraft
         return file;
     }
 
-    AppearanceLimits? LimitsFor(GameRecord race, bool female)
-    {
-        if (_limitsCache.TryGetValue((race.StringId, female), out var cached)) return cached;
-        return _limitsCache[(race.StringId, female)] = ReadLimits(_db, _installRoot, race, female);
-    }
-
     /// <summary>
     /// The race's <c>editor limits</c> config of one gender, or null (no file, unreadable, no config).
     /// </summary>
@@ -164,34 +155,22 @@ public sealed class CharacterDraft
     }
 
     /// <summary>
-    /// The races the editor offers: every RACE_GROUP in data order with its <c>races</c> that are <c>playable</c> and have an <c>editor limits</c>
-    /// file (fcs.def: "For it to be completely playable it must have a editor limits file and be on any race group"); groups left empty are not
-    /// offered.
+    /// <see cref="ReadLimits"/> of a race and gender, read once per draft.
     /// </summary>
-    public static IReadOnlyList<EditorRaceGroup> PlayableRaces(GameDatabase db) =>
-        PlayableRaceCache.GetValue(db, static db => [.. Enumerable
-            .Where<EditorRaceGroup>(db.OfType(FcsRecordType.RaceGroup)
-                .Select(g => new EditorRaceGroup(g, [.. g.GetReferences("races").Select(r => db.Find(r.TargetStringId))
-                    .Where(r => r is { Type: FcsRecordType.Race } && r.GetBool("playable", true)
-                            && r.GetPath("editor limits").Length > 0).Select(r => r!)])), g => g.Races.Count > 0)]);
-
-    /// <summary>
-    /// The playable races by database, made once: the editor's interface asks every frame, and the search walks every record.
-    /// </summary>
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameDatabase, IReadOnlyList<EditorRaceGroup>> PlayableRaceCache = new();
-
-    /// <summary>
-    /// <see cref="PlayableRaces(GameDatabase)"/> limited to <paramref name="only"/> (a start's <c>force race</c>); when that leaves none, the
-    /// original says "Game start has no valid races" and offers every playable race (docs/characters.md "Character editor").
-    /// </summary>
-    public static IReadOnlyList<EditorRaceGroup> PlayableRaces(GameDatabase db, IReadOnlyCollection<string> only)
+    AppearanceLimits? LimitsFor(GameRecord race, bool female)
     {
-        var all = PlayableRaces(db);
-        if (only.Count == 0) return all;
-        var limited = all.Select(g => new EditorRaceGroup(g.Group,
-                [.. g.Races.Where(r => only.Contains(r.StringId))])).Where(g => g.Races.Count > 0).ToList();
-        return limited.Count > 0 ? limited : all;
+        if (_limitsCache.TryGetValue((race.StringId, female), out var cached)) return cached;
+        return _limitsCache[(race.StringId, female)] = ReadLimits(_db, _installRoot, race, female);
     }
+
+    #endregion
+
+    #region Controls
+
+    /// <summary>
+    /// <see cref="IdleStances"/>, made on first use.
+    /// </summary>
+    IReadOnlyList<string>? _idleStances;
 
     /// <summary>
     /// The choices of the Idle stance slider (the original's list, <c>FUN_14007d480</c> and <c>FUN_1405bbd40</c>, <b>Observed</b>): the record names
@@ -203,7 +182,6 @@ public sealed class CharacterDraft
         .Where(a => a.GetBool("idle") && !a.GetBool("disabled") && a.GetInt("weather type") < 1 && a.GetString("layer", "") != "overlay"
             && a.GetInt("has weapon L") == 0 && a.GetInt("has weapon R") == 0 && !a.GetBool("crouched"))
         .Select(a => a.Name)];
-    IReadOnlyList<string>? _idleStances;
 
     /// <summary>
     /// The controls of a tab in the original's order (<c>FUN_1405ebd50</c>): BODY the Idle stance slider, <c>Skin Tone</c> (with more than one
@@ -320,6 +298,10 @@ public sealed class CharacterDraft
         }
     }
 
+    #endregion
+
+    #region Pickers
+
     /// <summary>
     /// A picker's choices: the race's heads of the gender (with a texture map), its hairs of the slot; hair and beard start with "none".
     /// </summary>
@@ -380,6 +362,10 @@ public sealed class CharacterDraft
     /// </summary>
     public void Step(EditorControlKind kind, int direction) => SetOption(kind, OptionIndex(kind) + direction);
 
+    #endregion
+
+    #region Randomise and reset
+
     /// <summary>
     /// RANDOMISE (<paramref name="tab"/>) or RANDOMISE ALL (null) with a sequence seeded by <paramref name="seed"/> (<see cref="RandomisedLook"/>).
     /// </summary>
@@ -387,6 +373,23 @@ public sealed class CharacterDraft
     {
         Record = RandomisedLook(seed, tab);
         Version++;
+    }
+
+    /// <summary>
+    /// The look RANDOMISE ALL (<paramref name="tab"/> null) or a tab's RANDOMISE would give with <paramref name="seed"/>, the draft unchanged (the
+    /// editor prepares it ahead). The original's randomisers in its draw order (<b>Verified</b> by decompilation, docs/characters.md "Character
+    /// editor"): RANDOMISE ALL (<c>FUN_1405ef930</c>) the hair without the faction's limits, the face (head, face sliders), the body without the skin
+    /// re-roll, then the face poses; FACE the face and its poses; BODY the body; HAIR the hair (<c>FUN_1405efa50</c>). Everything else stays.
+    /// </summary>
+    public FcsRecord RandomisedLook(int seed, EditorTab? tab = null)
+    {
+        var next = Copy(Record);
+        var rng = MsvcRandom.FromSeed(seed);
+        if (tab is null or EditorTab.Hair) CharacterGenerator.RollHair(_db, Race, null, next, rng);
+        if (tab is null or EditorTab.Face) CharacterGenerator.RollFace(_db, Race, Limits, next, rng);
+        if (tab is null or EditorTab.Body) CharacterGenerator.RollBody(Limits, next, rng, skinReroll: false);
+        if (tab is null or EditorTab.Face) CharacterGenerator.RollFacePoses(Limits, next, rng);
+        return next;
     }
 
     /// <summary>
@@ -421,6 +424,10 @@ public sealed class CharacterDraft
         record.Strings["beard"] = "";
         record.Strings["idle stance"] = "idle_stand_normal";
     }
+
+    #endregion
+
+    #region Race and gender
 
     /// <summary>
     /// The look the character had as each race and gender it was shown as, by race id and gender (the original's per-character map,
@@ -493,23 +500,9 @@ public sealed class CharacterDraft
         return next;
     }
 
-    /// <summary>
-    /// The look RANDOMISE ALL (<paramref name="tab"/> null) or a tab's RANDOMISE would give with <paramref name="seed"/>, the draft unchanged (the
-    /// editor prepares it ahead). The original's randomisers in its draw order (<b>Verified</b> by decompilation, docs/characters.md "Character
-    /// editor"): RANDOMISE ALL (<c>FUN_1405ef930</c>) the hair without the faction's limits, the face (head, face sliders), the body without the skin
-    /// re-roll, then the face poses; FACE the face and its poses; BODY the body; HAIR the hair (<c>FUN_1405efa50</c>). Everything else stays.
-    /// </summary>
-    public FcsRecord RandomisedLook(int seed, EditorTab? tab = null)
-    {
-        var next = Copy(Record);
-        var rng = MsvcRandom.FromSeed(seed);
-        if (tab is null or EditorTab.Hair) CharacterGenerator.RollHair(_db, Race, null, next, rng);
-        if (tab is null or EditorTab.Face) CharacterGenerator.RollFace(_db, Race, Limits, next, rng);
-        if (tab is null or EditorTab.Body) CharacterGenerator.RollBody(Limits, next, rng, skinReroll: false);
-        if (tab is null or EditorTab.Face) CharacterGenerator.RollFacePoses(Limits, next, rng);
-        return next;
-    }
+    #endregion
 
+    #region Validation
 
     /// <summary>
     /// A proposed look made valid (what the simulation applies, docs/characters.md "Character editor"): race and gender as given (a single-gender
@@ -522,6 +515,19 @@ public sealed class CharacterDraft
         bool female = r.Bools.TryGetValue("sex female", out var f) && f && !race.GetBool("single gender");
         r.Bools["sex female"] = female;
         r.References["race"] = [new FcsReference(race.StringId, 0, 0, 0)];
+
+        SanitizePickers(db, r, race, female);
+        ClampHairColour(r);
+        if (ReadLimits(db, installRoot, race, female) is { } limits) ClampSliders(r, limits);
+        ClampColours(r);
+        return r;
+    }
+
+    /// <summary>
+    /// Head, hair and beard among the race's choices for the gender: else the first head, no hair, no beard (women never have one).
+    /// </summary>
+    static void SanitizePickers(GameDatabase db, FcsRecord r, GameRecord race, bool female)
+    {
         foreach (var kind in new[] { EditorControlKind.Head, EditorControlKind.HairStyle, EditorControlKind.Beard })
         {
             string key = KeyOf(kind), id = r.Strings.GetValueOrDefault(key) ?? "";
@@ -531,32 +537,51 @@ public sealed class CharacterDraft
                     ?? id : "";
             if (r.Strings.ContainsKey(key) || id.Length > 0) r.Strings[key] = id;
         }
+    }
+
+    /// <summary>
+    /// The hair colour sliders clamped to 0..100 (a value that is not finite: 0).
+    /// </summary>
+    static void ClampHairColour(FcsRecord r)
+    {
         foreach (var key in new[] { "Hair Colour", "Hair Saturation", "Hair Brightness" })
             if (r.Floats.TryGetValue(key, out var v)) r.Floats[key] = float.IsFinite(v) ? Math.Clamp(v, 0, 100) : 0;
-        if (ReadLimits(db, installRoot, race, female) is { } limits)
+    }
+
+    /// <summary>
+    /// Every editor slider and pose pair the record has clamped to its limits (a value that is not finite: the mid).
+    /// </summary>
+    static void ClampSliders(FcsRecord r, AppearanceLimits limits)
+    {
+        foreach (var range in limits.Ranges)
         {
-            foreach (var range in limits.Ranges)
+            if (range.Target is null)
             {
-                if (range.Target is null)
-                {
-                    if (r.Floats.TryGetValue(range.Name, out var v))
-                        r.Floats[range.Name] = float.IsFinite(v) ? Math.Clamp(v, range.Min, range.Max) : range.Mid;
-                    continue;
-                }
-                if (!r.Floats.ContainsKey(range.Target) && (range.TargetOpposite is not { } other || !r.Floats.ContainsKey(other)))
-                    continue;
-                float plus = r.Floats.GetValueOrDefault(range.Target), minus = range.TargetOpposite is { } o ? r.Floats.GetValueOrDefault(o) : 0;
-                float value = (minus > 0 && plus <= 0 ? -minus : plus) * 100;
-                if (!float.IsFinite(value)) value = range.Mid;
-                Write(r, new EditorControl(range.Name, EditorControlKind.Pose, range.Min, range.Max, range.Mid) { Range = range },
-                    CharacterGenerator.Round(Math.Clamp(value, range.Min, range.Max)));
+                if (r.Floats.TryGetValue(range.Name, out var v))
+                    r.Floats[range.Name] = float.IsFinite(v) ? Math.Clamp(v, range.Min, range.Max) : range.Mid;
+                continue;
             }
+            if (!r.Floats.ContainsKey(range.Target) && (range.TargetOpposite is not { } other || !r.Floats.ContainsKey(other)))
+                continue;
+            float plus = r.Floats.GetValueOrDefault(range.Target), minus = range.TargetOpposite is { } o ? r.Floats.GetValueOrDefault(o) : 0;
+            float value = (minus > 0 && plus <= 0 ? -minus : plus) * 100;
+            if (!float.IsFinite(value)) value = range.Mid;
+            Write(r, new EditorControl(range.Name, EditorControlKind.Pose, range.Min, range.Max, range.Mid) { Range = range },
+                CharacterGenerator.Round(Math.Clamp(value, range.Min, range.Max)));
         }
+    }
+
+    /// <summary>
+    /// Every colour clamped to 0..1 (one with a component that is not finite: grey).
+    /// </summary>
+    static void ClampColours(FcsRecord r)
+    {
         foreach (var key in r.Vector3S.Keys.ToArray())
         {
             var v = r.Vector3S[key];
             r.Vector3S[key] = Vector3.Clamp(float.IsFinite(v.X + v.Y + v.Z) ? v : new Vector3(0.5f), Vector3.Zero, Vector3.One);
         }
-        return r;
     }
+
+    #endregion
 }

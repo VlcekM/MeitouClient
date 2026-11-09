@@ -139,7 +139,7 @@ public static class CharacterEditing
                 return false;
             }
 
-            bool playable = CharacterDraft.PlayableRaces(data.Db, world.Player.CreationRaces)
+            bool playable = PlayableRaces.Of(data.Db, world.Player.CreationRaces)
                 .Any(g => g.Races.Any(r => r.StringId == proposedRace.StringId));
             if (!playable && !sameRace)
             {

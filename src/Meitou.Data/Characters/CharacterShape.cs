@@ -116,6 +116,11 @@ public static class CharacterShape
     /// </summary>
     public const int HumanBoneCount = 30;
 
+    #region Bone shape
+
+    /// <summary>
+    /// 1 moved towards <paramref name="to"/> by <paramref name="t"/>.
+    /// </summary>
     static float Lerp1(float to, float t) => 1 + (to - 1) * t;
 
     /// <summary>
@@ -283,6 +288,10 @@ public static class CharacterShape
         if (hasBone("Bip01 Jaw")) Size("Bip01 Jaw", new Vector3(SliderValue(input, "Jaw"), 1, 1) * head);
     }
 
+    #endregion
+
+    #region Stat-driven body
+
     /// <summary>
     /// Muscle from stats: the largest of strength, weapon smithing and armour smithing (0–100), × 0.01, mapped so 0.2 → 0
     /// and 0.99 → 1 (not clamped).
@@ -322,6 +331,10 @@ public static class CharacterShape
     /// </summary>
     public static float StarvationFromNutrition(float nutrition) => Math.Clamp((1 - Math.Clamp(nutrition - 1, 0, 1)) * 1.5f, 0, 1);
 
+    #endregion
+
+    #region Normal maps and poses
+
     /// <summary>
     /// Which normal maps the body blends and by how much: base <c>nm</c> toward <c>nm strong</c> by the muscle definition,
     /// unless starvation is above 0.25 or above the definition: then toward <c>nm skinny</c> by the starvation, with
@@ -351,6 +364,10 @@ public static class CharacterShape
             _ => stored,
         };
     }
+
+    #endregion
+
+    #region Inputs
 
     /// <summary>
     /// The skeleton's movement scale H = <c>Height</c> + <c>Leg length</c> - 1 (sliders / 100, a missing one 100) of a character's body file
@@ -404,19 +421,7 @@ public static class CharacterShape
     /// </summary>
     public static float FeetLiftOf(IEnumerable<CharacterPart> parts)
     {
-        float boot = 0, left = 0, right = 0;
-        int flags = 0;
-        foreach (var p in parts)
-        {
-            if (p.Record.Type == FcsRecordType.Armour && p.Slot == AttachSlot.Boots)
-                boot = p.Record.GetFloat("boot height");
-            else if (p.Record.Type == FcsRecordType.LimbReplacement)
-                switch (p.Record.GetInt("slot"))
-                {
-                    case 52: flags |= 1; left = p.Record.GetFloat("offset"); break;
-                    case 53: flags |= 2; right = p.Record.GetFloat("offset"); break;
-                }
-        }
+        var (boot, left, right, flags) = WornLegs(parts);
         return flags == 3 ? Math.Min(left, right) : boot;
     }
 
@@ -427,6 +432,21 @@ public static class CharacterShape
     /// Without a leg item it is not set (0).
     /// </summary>
     public static float LegRatioOf(IEnumerable<CharacterPart> parts)
+    {
+        var (boot, left, right, flags) = WornLegs(parts);
+        if (flags == 0) return 0;
+        if (flags == 1) return (boot + 4) / (left + 4);
+        float x = right, y = flags == 2 ? boot : left;
+        if (x < y) return (x + 4) / (y + 4);
+        if (y < x || flags == 2) return -((y + 4) / (x + 4));
+        return 0;
+    }
+
+    /// <summary>
+    /// The worn boots' <c>boot height</c> (the last boots worn; 0 without), the <c>offset</c> of the LIMB_REPLACEMENT in slot 52 and in 53, and
+    /// which of the two slots are worn (bit 0: 52, bit 1: 53).
+    /// </summary>
+    static (float Boot, float Left, float Right, int Flags) WornLegs(IEnumerable<CharacterPart> parts)
     {
         float boot = 0, left = 0, right = 0;
         int flags = 0;
@@ -441,13 +461,12 @@ public static class CharacterShape
                     case 53: flags |= 2; right = p.Record.GetFloat("offset"); break;
                 }
         }
-        if (flags == 0) return 0;
-        if (flags == 1) return (boot + 4) / (left + 4);
-        float x = right, y = flags == 2 ? boot : left;
-        if (x < y) return (x + 4) / (y + 4);
-        if (y < x || flags == 2) return -((y + 4) / (x + 4));
-        return 0;
+        return (boot, left, right, flags);
     }
+
+    #endregion
+
+    #region Overrides
 
     /// <summary>
     /// Applies <c>name=value</c> overrides (as given on the command line). Slider names are matched case-insensitively;
@@ -465,44 +484,67 @@ public static class CharacterShape
             int eq = spec.IndexOf('=');
             if (eq <= 0) throw new FormatException($"--shape '{spec}': expected name=value");
             string key = spec[..eq].Trim(), text = spec[(eq + 1)..].Trim();
-            switch (key.ToLowerInvariant())
-            {
-                case "muscle": result = result with { Muscle = Number(text) }; applied.Add($"muscle={result.Muscle:0.###}"); continue;
-                case "starve" or "starvation":
-                    result = result with { Starvation = Number(text) };
-                    applied.Add($"starvation={result.Starvation:0.###}");
-                    continue;
-                case "legratio": result = result with { LegRatio = Number(text) }; applied.Add($"legratio={result.LegRatio:0.###}"); continue;
-                case "hidestump":
-                    result = result with { HideStump = (HideStump)(int)Number(text) };
-                    applied.Add($"hide stump={result.HideStump}");
-                    continue;
-                case "missing":
-                    foreach (var limb in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                        missing.Add(limb.ToLowerInvariant() switch
-                        {
-                            "larm" => Limb.LeftArm,
-                            "rarm" => Limb.RightArm,
-                            "lleg" => Limb.LeftLeg,
-                            "rleg" => Limb.RightLeg,
-                            _ => throw new FormatException($"--shape missing: unknown limb '{limb}' (larm, rarm, lleg, rleg)"),
-                        });
-                    applied.Add($"missing={string.Join(",", missing)}");
-                    continue;
-            }
-            string bareKey = key.Replace(" ", "").Replace("-", "").Replace("_", "");
-            string? slider = Sliders.FirstOrDefault(s => string.Equals(s, key, StringComparison.OrdinalIgnoreCase))
-                ?? Sliders.FirstOrDefault(s => string.Equals(s.Replace(" ", "").Replace("-", ""), bareKey, StringComparison.OrdinalIgnoreCase));
-            if (slider is null)
-                throw new FormatException(
-                    $"--shape: unknown slider '{key}' (known: {string.Join(", ", Sliders)}, muscle, starve, legratio, missing, hidestump)");
-            float value = Number(text);
-            if (Math.Abs(value) <= 3) value *= 100;
-            sliders[slider] = value;
-            applied.Add($"{slider}={value:0.##}");
+            if (OverrideExtra(key, text, ref result, missing, applied)) continue;
+            OverrideSlider(key, text, sliders, applied);
         }
         return result with { Sliders = sliders, Missing = missing };
     }
 
+    /// <summary>
+    /// Applies one of the extra keys (<c>muscle</c>, <c>starve</c>, <c>legratio</c>, <c>hidestump</c>, <c>missing</c>); false for any other key.
+    /// </summary>
+    static bool OverrideExtra(string key, string text, ref CharacterShapeInput result, HashSet<Limb> missing, List<string> applied)
+    {
+        switch (key.ToLowerInvariant())
+        {
+            case "muscle": result = result with { Muscle = Number(text) }; applied.Add($"muscle={result.Muscle:0.###}"); return true;
+            case "starve" or "starvation":
+                result = result with { Starvation = Number(text) };
+                applied.Add($"starvation={result.Starvation:0.###}");
+                return true;
+            case "legratio": result = result with { LegRatio = Number(text) }; applied.Add($"legratio={result.LegRatio:0.###}"); return true;
+            case "hidestump":
+                result = result with { HideStump = (HideStump)(int)Number(text) };
+                applied.Add($"hide stump={result.HideStump}");
+                return true;
+            case "missing":
+                foreach (var limb in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    missing.Add(limb.ToLowerInvariant() switch
+                    {
+                        "larm" => Limb.LeftArm,
+                        "rarm" => Limb.RightArm,
+                        "lleg" => Limb.LeftLeg,
+                        "rleg" => Limb.RightLeg,
+                        _ => throw new FormatException($"--shape missing: unknown limb '{limb}' (larm, rarm, lleg, rleg)"),
+                    });
+                applied.Add($"missing={string.Join(",", missing)}");
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Applies a slider value: the slider matched by name ignoring case, then ignoring spaces, hyphens and underscores; values of 3 or less are
+    /// fractions.
+    /// </summary>
+    static void OverrideSlider(string key, string text, Dictionary<string, float> sliders, List<string> applied)
+    {
+        string bareKey = key.Replace(" ", "").Replace("-", "").Replace("_", "");
+        string? slider = Sliders.FirstOrDefault(s => string.Equals(s, key, StringComparison.OrdinalIgnoreCase))
+            ?? Sliders.FirstOrDefault(s => string.Equals(s.Replace(" ", "").Replace("-", ""), bareKey, StringComparison.OrdinalIgnoreCase));
+        if (slider is null)
+            throw new FormatException(
+                $"--shape: unknown slider '{key}' (known: {string.Join(", ", Sliders)}, muscle, starve, legratio, missing, hidestump)");
+        float value = Number(text);
+        if (Math.Abs(value) <= 3) value *= 100;
+        sliders[slider] = value;
+        applied.Add($"{slider}={value:0.##}");
+    }
+
+    /// <summary>
+    /// An override's number (invariant culture).
+    /// </summary>
     static float Number(string text) => float.Parse(text, NumberStyles.Float, CultureInfo.InvariantCulture);
+
+    #endregion
 }
