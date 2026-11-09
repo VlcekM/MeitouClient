@@ -7,7 +7,9 @@ namespace Meitou.Game.Rendering.Characters;
 
 internal sealed unsafe partial class CharacterRenderer
 {
-    /// <summary>The last <see cref="Capacity"/> samples of a cost in milliseconds and how many there were in all (a ring: a session records one per frame).</summary>
+    /// <summary>
+    /// The last <see cref="Capacity"/> samples of a cost in milliseconds and how many there were in all (a ring: a session records one per frame).
+    /// </summary>
     sealed class SampleRing
     {
         public const int Capacity = 64;
@@ -17,7 +19,9 @@ internal sealed unsafe partial class CharacterRenderer
 
         public void Add(double value) => _values[Count++ % Capacity] = value;
 
-        /// <summary>The mean of the last <paramref name="count"/> samples (fewer when there are fewer; 0 when none).</summary>
+        /// <summary>
+        /// The mean of the last <paramref name="count"/> samples (fewer when there are fewer; 0 when none).
+        /// </summary>
         public double Tail(int count)
         {
             int n = Math.Min(Math.Min(count, Count), Capacity);
@@ -50,13 +54,16 @@ internal sealed unsafe partial class CharacterRenderer
         }
     }
 
-    /// <summary>The pixel rectangle of the box round a sphere; null when a corner is behind the eye.</summary>
+    /// <summary>
+    /// The pixel rectangle of the box round a sphere; null when a corner is behind the eye.
+    /// </summary>
     static Vector4? ScreenBox(Vector3 centre, float radius, Matrix4x4 viewProjection, int width, int height)
     {
         var box = new Vector4(float.MaxValue, float.MaxValue, float.MinValue, float.MinValue);
         for (int corner = 0; corner < 8; corner++)
         {
-            var p = centre + new Vector3((corner & 1) == 0 ? -radius : radius, (corner & 2) == 0 ? -radius : radius, (corner & 4) == 0 ? -radius : radius);
+            var p = centre + new Vector3((corner & 1) == 0 ? -radius : radius, (corner & 2) == 0 ? -radius : radius,
+                    (corner & 4) == 0 ? -radius : radius);
             var clip = Vector4.Transform(new Vector4(p, 1), viewProjection);
             if (clip.W <= 0.01f) return null;
             float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;
@@ -69,7 +76,9 @@ internal sealed unsafe partial class CharacterRenderer
     readonly List<double> _polled = [];
     int _updateCount;
 
-    /// <summary>Takes in the GPU times of the passes whose frames have completed.</summary>
+    /// <summary>
+    /// Takes in the GPU times of the passes whose frames have completed.
+    /// </summary>
     void PollTimers()
     {
         _polled.Clear();
@@ -80,12 +89,23 @@ internal sealed unsafe partial class CharacterRenderer
         foreach (var ms in _polled) _depthGpu.Add(ms);
     }
 
-    /// <summary>The last frames' costs (the stills' timed frames): the render thread's milliseconds and the GPU's per pass.</summary>
+    /// <summary>
+    /// The last frames' costs (the stills' timed frames): the render thread's milliseconds and the GPU's per pass.
+    /// </summary>
     public string Statistics()
     {
         PollTimers();
+        string levels = LevelSummary();
         return string.Create(CultureInfo.InvariantCulture,
-            $"{Posed} posed, {DrawnCharacters} drawn ({DrawnParts} parts) in {DrawCalls} calls, {DrawnTriangles:N0} triangles in the last view; by level {string.Join(", ", Enumerable.Range(0, 5).Where(l => LevelParts[l] > 0).Select(l => $"L{l} {LevelParts[l]} parts {LevelTriangles[l] / 1000}k"))}; last frames: cpu update {_updateCpu.Tail(10):0.00} ms (gather {_gatherCpu.Tail(10):0.00}, pose {_poseCpu.Tail(10):0.00}), " +
-            $"draw {_drawCpu.Tail(10):0.00} ms; gpu colour {_colourGpu.Tail(10):0.00} ms, shadow cascades {_depthGpu.Tail(40):0.00} ms per call ({_depthGpu.Count} calls), {_motionCalls} motion passes; {Describe()}");
+            $"{Posed} posed, {DrawnCharacters} drawn ({DrawnParts} parts) in {DrawCalls} calls, {DrawnTriangles:N0} triangles in the last view; "
+            + $"by level {levels}; last frames: cpu update {_updateCpu.Tail(10):0.00} ms (gather {_gatherCpu.Tail(10):0.00}, "
+            + $"pose {_poseCpu.Tail(10):0.00}), draw {_drawCpu.Tail(10):0.00} ms; gpu colour {_colourGpu.Tail(10):0.00} ms, "
+            + $"shadow cascades {_depthGpu.Tail(40):0.00} ms per call ({_depthGpu.Count} calls), {_motionCalls} motion passes; {Describe()}");
     }
+
+    /// <summary>
+    /// The parts and triangles per level of the last view, for the statistics line.
+    /// </summary>
+    string LevelSummary() =>
+        string.Join(", ", Enumerable.Range(0, 5).Where(l => LevelParts[l] > 0).Select(l => $"L{l} {LevelParts[l]} parts {LevelTriangles[l] / 1000}k"));
 }

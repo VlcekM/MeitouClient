@@ -7,61 +7,102 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
-/// Generated mesh levels of one foliage mesh (docs/formats/foliage.md, "Generated levels"). The game ships no LOD levels for these meshes; the levels are
-/// Meitou's own, made by <see cref="MeshSimplifier"/> (so every level indexes the part's one vertex buffer) and kept with the deviation each one has from the
-/// original surface, in mesh units. Level 0 is the original and is not stored.
+/// Generated mesh levels of one foliage mesh (docs/formats/foliage.md, "Generated levels"). The game ships no LOD levels for these meshes; the levels
+/// are Meitou's own, made by <see cref="MeshSimplifier"/> (so every level indexes the part's one vertex buffer) and kept with the deviation each one
+/// has from the original surface, in mesh units. Level 0 is the original and is not stored.
 /// </summary>
 public sealed class FoliageLodSet
 {
-    /// <summary>Per level above 0: the part's index list (<c>[part][level - 1]</c>); parts with nothing to reduce repeat their original.</summary>
+    /// <summary>
+    /// Per level above 0: the part's index list (<c>[part][level - 1]</c>); parts with nothing to reduce repeat their original.
+    /// </summary>
     public required uint[][][] Indices { get; init; }
-    /// <summary>The deviation of each level, in mesh units (<c>Errors[0]</c> is 0): the largest distance between the original surface and the level's, both ways,
-    /// over all parts, never decreasing with the level.</summary>
+    /// <summary>
+    /// The deviation of each level, in mesh units (<c>Errors[0]</c> is 0): the largest distance between the original surface and the level's, both
+    /// ways, over all parts, never decreasing with the level.
+    /// </summary>
     public required float[] Errors { get; init; }
-    /// <summary>The shading deviation of each level in radians (<c>NormalAngles[0]</c> is 0): the angle between the interpolated normals of the level and of the original (97th percentile over samples; <see cref="FoliageLodBuilder.Measure"/>), over all parts, never decreasing.</summary>
+    /// <summary>
+    /// The shading deviation of each level in radians (<c>NormalAngles[0]</c> is 0): the angle between the interpolated normals of the level and of
+    /// the original (97th percentile over samples; <see cref="FoliageLodBuilder.Measure"/>), over all parts, never decreasing.
+    /// </summary>
     public required float[] NormalAngles { get; init; }
-    /// <summary>Triangles per level, summed over the parts.</summary>
+    /// <summary>
+    /// Triangles per level, summed over the parts.
+    /// </summary>
     public required int[] Triangles { get; init; }
-    /// <summary>Levels including level 0.</summary>
+    /// <summary>
+    /// Levels including level 0.
+    /// </summary>
     public int Levels => Errors.Length;
-    /// <summary>Bytes of the levels' indices on the GPU.</summary>
+    /// <summary>
+    /// Bytes of the levels' indices on the GPU.
+    /// </summary>
     public long IndexBytes => Indices.Sum(p => p.Sum(l => (long)l.Length * sizeof(uint)));
 }
 
 /// <summary>
-/// Makes <see cref="FoliageLodSet"/>s: <see cref="MeshSimplifier.Chain"/> to 50 %, 25 % and 10 % of the triangles (floor <see cref="Floor"/>), the deviation of each
-/// level measured against the original, and levels that do not pay (hardly fewer triangles than the one before, or a deviation beyond
-/// <see cref="MaxRelativeError"/> of the mesh's radius) left out.
+/// Makes <see cref="FoliageLodSet"/>s: <see cref="MeshSimplifier.Chain"/> to 50 %, 25 % and 10 % of the triangles (floor <see cref="Floor"/>), the
+/// deviation of each level measured against the original, and levels that do not pay (hardly fewer triangles than the one before, or a deviation
+/// beyond <see cref="MaxRelativeError"/> of the mesh's radius) left out.
 /// </summary>
 public static class FoliageLodBuilder
 {
-    /// <summary>Bumped when the simplifier, the fractions or the error measure change: it is part of the disk cache's key.</summary>
+    /// <summary>
+    /// Bumped when the simplifier, the fractions or the error measure change: it is part of the disk cache's key.
+    /// </summary>
     public const int Version = 3;
     public static readonly float[] Fractions = [0.5f, 0.25f, 0.1f];
-    /// <summary>The fewest triangles a level reduces a part to; a part with fewer than twice this is not reduced.</summary>
+    /// <summary>
+    /// The fewest triangles a level reduces a part to; a part with fewer than twice this is not reduced.
+    /// </summary>
     public const int Floor = 48;
-    /// <summary>Meshes with fewer triangles get no levels: the few triangles a level would save cost more in shading changes (low-poly cliffs and boulders) than they gain.</summary>
+    /// <summary>
+    /// Meshes with fewer triangles get no levels: the few triangles a level would save cost more in shading changes (low-poly cliffs and boulders)
+    /// than they gain.
+    /// </summary>
     public const int MinTriangles = 500;
-    /// <summary>A level whose deviation is more than this share of the mesh's radius is not kept (it could only ever show far away, where the level before is cheap enough).</summary>
+    /// <summary>
+    /// A level whose deviation is more than this share of the mesh's radius is not kept (it could only ever show far away, where the level before is
+    /// cheap enough).
+    /// </summary>
     public const float MaxRelativeError = 0.25f;
-    /// <summary>A level whose shading deviates more than this many radians (97 degrees; was 0.6 = 34 until 2026-10-09, which left the thin swamp plant without its 25 % level) is not kept. The cull weighs the angle by 0.02 radii a radian, so a rough level is only used far away.</summary>
+    /// <summary>
+    /// A level whose shading deviates more than this many radians (97 degrees; was 0.6 = 34 until 2026-10-09, which left the thin swamp plant without
+    /// its 25 % level) is not kept. The cull weighs the angle by 0.02 radii a radian, so a rough level is only used far away.
+    /// </summary>
     public const float MaxNormalAngle = 1.7f;
-    /// <summary>The limit before 2026-10-09: the levels with a shading deviation above it are the ones the <c>lod-far</c> switch (off) leaves out again.</summary>
+    /// <summary>
+    /// The limit before 2026-10-09: the levels with a shading deviation above it are the ones the <c>lod-far</c> switch (off) leaves out again.
+    /// </summary>
     public const float LegacyMaxNormalAngle = 0.6f;
-    /// <summary>A level must have at most this share of the triangles of the level before it.</summary>
+    /// <summary>
+    /// A level must have at most this share of the triangles of the level before it.
+    /// </summary>
     public const float MinGain = 0.8f;
     const int MaxSamples = 1500;
 
-    /// <summary>The steps and limits of a build: the fractions of the triangles each level keeps (descending), the fewest triangles a part is reduced to, the limits on a level's deviation (share of the mesh radius, radians of shading), the least gain a level must have over the one before, and whether collapses must keep the texture coordinates (<see cref="MeshSimplifier.Chain"/>'s <c>uvPerWorld</c>).</summary>
-    public readonly record struct Settings(float[] Fractions, int Floor, float MaxRelativeError, float MaxNormalAngle, float MinGain, bool UvAware, bool TwoSided = false);
+    /// <summary>
+    /// The steps and limits of a build: the fractions of the triangles each level keeps (descending), the fewest triangles a part is reduced to, the
+    /// limits on a level's deviation (share of the mesh radius, radians of shading), the least gain a level must have over the one before, and
+    /// whether collapses must keep the texture coordinates (<see cref="MeshSimplifier.Chain"/>'s <c>uvPerWorld</c>).
+    /// </summary>
+    public readonly record struct Settings(float[] Fractions, int Floor, float MaxRelativeError, float MaxNormalAngle, float MinGain, bool UvAware,
+            bool TwoSided = false);
 
-    /// <summary>What the foliage meshes are built with.</summary>
+    /// <summary>
+    /// What the foliage meshes are built with.
+    /// </summary>
     public static readonly Settings Foliage = new(Fractions, Floor, MaxRelativeError, MaxNormalAngle, MinGain, false);
 
-    /// <summary>Builds the levels of a model (the parts with indices, in order). Null when no level pays.</summary>
+    /// <summary>
+    /// Builds the levels of a model (the parts with indices, in order). Null when no level pays.
+    /// </summary>
     public static FoliageLodSet? Build(Model model, float radius) => Build(model, radius, Foliage);
 
-    /// <summary>Builds the levels of a model with the given steps and limits (<see cref="Settings"/>); the foliage uses <see cref="Foliage"/>.</summary>
+    /// <summary>
+    /// Builds the levels of a model with the given steps and limits (<see cref="Settings"/>); the foliage uses <see cref="Foliage"/>.
+    /// </summary>
     public static FoliageLodSet? Build(Model model, float radius, Settings settings)
     {
         var parts = model.Parts.Where(p => p.Indices.Length > 0).ToList();
@@ -79,11 +120,13 @@ public static class FoliageLodBuilder
                 angles[p] = new float[steps];
                 continue;
             }
-            chains[p] = MeshSimplifier.Chain(part.Vertices, part.Indices, settings.Fractions, settings.Floor, settings.UvAware ? MeshSimplifier.UvPerWorld(part.Vertices, part.Indices) : 0);
+            chains[p] = MeshSimplifier.Chain(part.Vertices, part.Indices, settings.Fractions, settings.Floor,
+                    settings.UvAware ? MeshSimplifier.UvPerWorld(part.Vertices, part.Indices) : 0);
             errors[p] = new float[steps];
             angles[p] = new float[steps];
             for (int k = 0; k < steps; k++)
-                if (chains[p][k].Length != part.Indices.Length) (errors[p][k], angles[p][k]) = Measure(part.Vertices, part.Indices, chains[p][k], settings.TwoSided);
+                if (chains[p][k].Length != part.Indices.Length)
+                    (errors[p][k], angles[p][k]) = Measure(part.Vertices, part.Indices, chains[p][k], settings.TwoSided);
         }
 
         // Which of the steps become levels.
@@ -93,7 +136,8 @@ public static class FoliageLodBuilder
         {
             long triangles = 0;
             float error = 0, angle = 0;
-            for (int p = 0; p < parts.Count; p++) { triangles += chains[p][k].Length / 3; error = Math.Max(error, errors[p][k]); angle = Math.Max(angle, angles[p][k]); }
+            for (int p = 0; p < parts.Count; p++) { triangles += chains[p][k].Length / 3; error = Math.Max(error,
+                    errors[p][k]); angle = Math.Max(angle, angles[p][k]); }
             if (error > settings.MaxRelativeError * radius || angle > settings.MaxNormalAngle) break;
             if (triangles > previous * settings.MinGain) continue;
             kept.Add(k);
@@ -129,14 +173,18 @@ public static class FoliageLodBuilder
 
     // ---- the deviation of a level from the original surface ----
 
-    /// <summary>The geometric deviation of <see cref="Measure"/> alone.</summary>
+    /// <summary>
+    /// The geometric deviation of <see cref="Measure"/> alone.
+    /// </summary>
     internal static float Deviation(Vertex[] vertices, uint[] original, uint[] level) => Measure(vertices, original, level).Distance;
 
     /// <summary>
-    /// How far a level is from the original, both ways: <c>Distance</c>, the largest distance between the two surfaces (from sampled points of the original, its used vertices and triangle
-    /// centres, to the level's triangles, and from points of the level, centres and edge midpoints, to the original's; a thin part the level loses shows in the first, a bridge over a gap in the
-    /// second), and <c>Angle</c>, the angle in radians between the interpolated vertex normals at triangle centres of one surface and at the nearest point of the other, the 97th percentile
-    /// (a collapse moves corners onto vertices that keep their own normals, so the shading of a flat-shaded or hard-edged mesh changes where the shape hardly does).
+    /// How far a level is from the original, both ways: <c>Distance</c>, the largest distance between the two surfaces (from sampled points of the
+    /// original, its used vertices and triangle centres, to the level's triangles, and from points of the level, centres and edge midpoints, to the
+    /// original's; a thin part the level loses shows in the first, a bridge over a gap in the second), and <c>Angle</c>, the angle in radians between
+    /// the interpolated vertex normals at triangle centres of one surface and at the nearest point of the other, the 97th percentile (a collapse
+    /// moves corners onto vertices that keep their own normals, so the shading of a flat-shaded or hard-edged mesh changes where the shape hardly
+    /// does).
     /// </summary>
     internal static (float Distance, float Angle) Measure(Vertex[] vertices, uint[] original, uint[] level, bool twoSided = false)
     {
@@ -189,7 +237,10 @@ public static class FoliageLodBuilder
         return result;
     }
 
-    /// <summary>The largest over <paramref name="points"/> of the distance to the nearest of <paramref name="triangles"/>; for a point with a normal, the angle to the nearest triangle's normal there is added to <paramref name="angles"/>.</summary>
+    /// <summary>
+    /// The largest over <paramref name="points"/> of the distance to the nearest of <paramref name="triangles"/>; for a point with a normal, the
+    /// angle to the nearest triangle's normal there is added to <paramref name="angles"/>.
+    /// </summary>
     static float Farthest(List<(Vector3 P, Vector3 N)> points, Tri[] triangles, List<float> angles, bool twoSided = false)
     {
         float worst = 0;
@@ -211,7 +262,8 @@ public static class FoliageLodBuilder
                 ref readonly var t = ref triangles[bestTriangle];
                 var (u, v, w) = Barycentric(ClosestPoint(p, t.A, t.B, t.C), t.A, t.B, t.C);
                 var other = Normalized(t.Na * u + t.Nb * v + t.Nc * w);
-                if (other != Vector3.Zero) angles.Add(MathF.Acos(Math.Clamp(twoSided ? MathF.Abs(Vector3.Dot(n, other)) : Vector3.Dot(n, other), -1f, 1f)));
+                if (other != Vector3.Zero)
+                    angles.Add(MathF.Acos(Math.Clamp(twoSided ? MathF.Abs(Vector3.Dot(n, other)) : Vector3.Dot(n, other), -1f, 1f)));
             }
         }
         return MathF.Sqrt(worst);
@@ -227,10 +279,14 @@ public static class FoliageLodBuilder
         return (1 - v - w, v, w);
     }
 
-    /// <summary>The squared distance from <paramref name="p"/> to a triangle.</summary>
+    /// <summary>
+    /// The squared distance from <paramref name="p"/> to a triangle.
+    /// </summary>
     internal static float DistanceSquared(Vector3 p, Vector3 a, Vector3 b, Vector3 c) => (p - ClosestPoint(p, a, b, c)).LengthSquared();
 
-    /// <summary>The point of a triangle nearest <paramref name="p"/> (by the regions of its Voronoi diagram).</summary>
+    /// <summary>
+    /// The point of a triangle nearest <paramref name="p"/> (by the regions of its Voronoi diagram).
+    /// </summary>
     internal static Vector3 ClosestPoint(Vector3 p, Vector3 a, Vector3 b, Vector3 c)
     {
         var ab = b - a;
@@ -261,7 +317,8 @@ public static class FoliageLodCache
 {
     const uint Magic = 0x444F4C4D;   // "MLOD"
 
-    public static string Root { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou", "lods");
+    public static string Root { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
+            "lods");
 
     public static string PathFor(string name, byte[] fileBytes, string? root = null, int version = FoliageLodBuilder.Version, string variant = "")
     {
@@ -271,13 +328,16 @@ public static class FoliageLodCache
         return Path.Combine(root ?? Root, $"{safe}_{hash}{variant}_v{version}.mlod");
     }
 
-    /// <summary>The cached levels (null in the result's <c>Set</c>: the mesh has none), or <c>Hit</c> false when there is no readable file.</summary>
+    /// <summary>
+    /// The cached levels (null in the result's <c>Set</c>: the mesh has none), or <c>Hit</c> false when there is no readable file.
+    /// </summary>
     public static (bool Hit, FoliageLodSet? Set) TryLoad(string path, int partCount, int version = FoliageLodBuilder.Version)
     {
         try
         {
             if (!File.Exists(path)) return (false, null);
-            using var reader = new BinaryReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16));
+            using var reader = new BinaryReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
+                    1 << 16));
             if (reader.ReadUInt32() != Magic || reader.ReadInt32() != version) return (false, null);
             int levels = reader.ReadInt32(), parts = reader.ReadInt32();
             if (levels == 0) return (true, null);

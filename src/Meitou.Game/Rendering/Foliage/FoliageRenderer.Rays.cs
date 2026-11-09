@@ -4,16 +4,21 @@ using Meitou.Game.Rendering.Gpu;
 
 namespace Meitou.Game.Rendering.Foliage;
 
-/// <summary>The foliage in the ray-traced scene of the global illumination (docs/render-gi.md "Foliage"): the instances big enough to matter.</summary>
+/// <summary>
+/// The foliage in the ray-traced scene of the global illumination (docs/render-gi.md "Foliage"): the instances big enough to matter.
+/// </summary>
 public sealed partial class FoliageRenderer
 {
-    /// <summary>A part of a <see cref="RayMesh"/>: its buffers (the drawn ones), its index count, and the alpha threshold of a cut-out part (0: opaque).</summary>
+    /// <summary>
+    /// A part of a <see cref="RayMesh"/>: its buffers (the drawn ones), its index count, and the alpha threshold of a cut-out part (0: opaque).
+    /// </summary>
     internal readonly record struct RayPart(DeviceBuffer Vertices, DeviceBuffer Indices, int IndexCount, float AlphaThreshold);
 
     /// <summary>
     /// A resident foliage mesh as the traced scene takes it: the main mesh's parts and then the leaves', keyed by the asset's main
     /// <see cref="GpuMesh"/> (a reload makes a new one). <see cref="Textures"/>: per part, this frame's bindless indices of its diffuse map and of
-    /// the map whose alpha cuts it out (the normal map, as the draws cut: <c>AlphaSource</c> 2), 0 when absent or not resident (<see cref="RefreshRayTextures"/>).
+    /// the map whose alpha cuts it out (the normal map, as the draws cut: <c>AlphaSource</c> 2), 0 when absent or not resident
+    /// (<see cref="RefreshRayTextures"/>).
     /// </summary>
     internal sealed class RayMesh
     {
@@ -26,7 +31,9 @@ public sealed partial class FoliageRenderer
     }
 
     readonly Dictionary<MeshAsset, RayMesh> _rayMeshes = [];
-    /// <summary>The usage a mesh buffer needs to be built into the traced scene (none without ray queries).</summary>
+    /// <summary>
+    /// The usage a mesh buffer needs to be built into the traced scene (none without ray queries).
+    /// </summary>
     BufferUse RayInput => Gpu.HasRayQuery ? BufferUse.RayInput : 0;
 
     /// <summary>
@@ -54,10 +61,14 @@ public sealed partial class FoliageRenderer
         }
     }
 
-    /// <summary>Counts the foliage meshes deleted: a traced scene built before a change holds structures and records of freed buffers.</summary>
+    /// <summary>
+    /// Counts the foliage meshes deleted: a traced scene built before a change holds structures and records of freed buffers.
+    /// </summary>
     internal int RayGeneration { get; private set; }
 
-    /// <summary>Sets <paramref name="mesh"/>'s <see cref="RayMesh.Textures"/> for this frame (once a frame). Render thread (it may register bindless entries).</summary>
+    /// <summary>
+    /// Sets <paramref name="mesh"/>'s <see cref="RayMesh.Textures"/> for this frame (once a frame). Render thread (it may register bindless entries).
+    /// </summary>
     internal void RefreshRayTextures(RayMesh mesh)
     {
         long stamp = Gpu.Frame.Number;

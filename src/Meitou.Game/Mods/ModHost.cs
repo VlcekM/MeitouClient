@@ -8,7 +8,9 @@ using Meitou.Simulation.Population;
 
 namespace Meitou.Modding;
 
-/// <summary>A code mod that loaded: its mod, manifest, assemblies and entry instance.</summary>
+/// <summary>
+/// A code mod that loaded: its mod, manifest, assemblies and entry instance.
+/// </summary>
 public sealed class LoadedMod
 {
     internal LoadedMod(ModInfo info, CodeModManifest manifest)
@@ -46,9 +48,9 @@ public sealed record ModHostOptions(
     IReadOnlyList<ModInfo>? Disabled = null);
 
 /// <summary>
-/// The code mods of a session (docs/modding.md): loads the enabled ones at startup, runs their <see cref="IMod.Initialize"/> once, and holds what they
-/// registered for the host: the simulation extensions every world is built with, the interface extensions, the debug rows, and the save data of their systems.
-/// A mod that fails anywhere is left out with a log line and a notice; the game goes on.
+/// The code mods of a session (docs/modding.md): loads the enabled ones at startup, runs their <see cref="IMod.Initialize"/> once, and holds what
+/// they registered for the host: the simulation extensions every world is built with, the interface extensions, the debug rows, and the save data of
+/// their systems. A mod that fails anywhere is left out with a log line and a notice; the game goes on.
 /// </summary>
 public sealed class ModHost
 {
@@ -61,19 +63,27 @@ public sealed class ModHost
 
     public IReadOnlyList<LoadedMod> Mods => _mods;
 
-    /// <summary>What went wrong or was left out, one line per mod, for the player's notices.</summary>
+    /// <summary>
+    /// What went wrong or was left out, one line per mod, for the player's notices.
+    /// </summary>
     public IReadOnlyList<string> Notices => _notices;
 
-    /// <summary>The reason each refused code mod was not loaded, by mod name (the <c>.mod</c> file's stem, as in mods.cfg).</summary>
+    /// <summary>
+    /// The reason each refused code mod was not loaded, by mod name (the <c>.mod</c> file's stem, as in mods.cfg).
+    /// </summary>
     public IReadOnlyDictionary<string, string> Refused => _pass.Refusals;
 
-    /// <summary>What every world is built with; null without registrations.</summary>
+    /// <summary>
+    /// What every world is built with; null without registrations.
+    /// </summary>
     public SimulationExtensions? Simulation => _registry.Simulation.IsEmpty ? null : _registry.Simulation;
 
     public IReadOnlyList<IUiExtension> UiExtensions => _registry.Ui;
     public IReadOnlyList<ModDebugCommand> DebugCommands => _registry.DebugCommands;
 
-    /// <summary>A mod registered a combat hit feed: the host then gives each world a <see cref="World.CombatHitFeed"/> and drains it every frame.</summary>
+    /// <summary>
+    /// A mod registered a combat hit feed: the host then gives each world a <see cref="World.CombatHitFeed"/> and drains it every frame.
+    /// </summary>
     public bool WantsCombatHits => _registry.HitFeeds.Count > 0;
 
     /// <summary>
@@ -95,16 +105,24 @@ public sealed class ModHost
         }
     }
 
-    /// <summary>The settings the mods registered, in load order (docs/modding.md "Settings").</summary>
+    /// <summary>
+    /// The settings the mods registered, in load order (docs/modding.md "Settings").
+    /// </summary>
     public IReadOnlyList<ModSettingsGroup> Settings => _registry.Settings;
 
-    /// <summary>The record types mods claimed (number, mod's name for it).</summary>
+    /// <summary>
+    /// The record types mods claimed (number, mod's name for it).
+    /// </summary>
     public IReadOnlyDictionary<int, string> RecordTypes => _registry.RecordTypes;
 
-    /// <summary>The enabled mods of <c>mods.cfg</c>, in order, that carry code (<see cref="ModInfo.HasCode"/>).</summary>
+    /// <summary>
+    /// The enabled mods of <c>mods.cfg</c>, in order, that carry code (<see cref="ModInfo.HasCode"/>).
+    /// </summary>
     public static List<ModInfo> EnabledCodeMods(GameInstall install) => CodeMods(install).Enabled;
 
-    /// <summary>The code mods on disk: the enabled ones in <c>mods.cfg</c> order, then the others.</summary>
+    /// <summary>
+    /// The code mods on disk: the enabled ones in <c>mods.cfg</c> order, then the others.
+    /// </summary>
     /// <remarks>A folder that cannot be read gives none (logged): a failing scan must not stop a game that may have no code mods at all.</remarks>
     public static (List<ModInfo> Enabled, List<ModInfo> Disabled) CodeMods(GameInstall install)
     {
@@ -121,7 +139,9 @@ public sealed class ModHost
         }
     }
 
-    /// <summary>Loads and initializes the code mods, in order. Never throws for a mod's fault.</summary>
+    /// <summary>
+    /// Loads and initializes the code mods, in order. Never throws for a mod's fault.
+    /// </summary>
     public static ModHost Load(ModHostOptions options)
     {
         var host = new ModHost();
@@ -162,7 +182,9 @@ public sealed class ModHost
         _pass.Refused(mod, reason);
     }
 
-    /// <summary>The manifest checks, the assemblies and the entry instance.</summary>
+    /// <summary>
+    /// The manifest checks, the assemblies and the entry instance.
+    /// </summary>
     LoadedMod Prepare(ModInfo info, IReadOnlyList<CodeModEntry> entries, int index, CodeModVersion? gameVersion)
     {
         CodeModManifest manifest;
@@ -171,7 +193,8 @@ public sealed class ModHost
         {
             throw new ModLoadException($"bad {ModList.CodeManifestFile}: {e.Message}");
         }
-        if (CodeModChecks.Problems(manifest, index, entries, _pass, gameVersion) is [var problem, ..]) throw new ModLoadException(problem);
+        if (CodeModChecks.Problems(manifest, index, entries, _pass, gameVersion) is [var problem, ..])
+            throw new ModLoadException(problem);
         var mod = new LoadedMod(info, manifest);
         mod.Dependencies = LoadedDependencies(manifest);
         var imports = Imports(mod.Dependencies);
@@ -196,7 +219,9 @@ public sealed class ModHost
         return resolved;
     }
 
-    /// <summary>What the dependencies export, merged; two of them exporting different assemblies under one simple name refuse the mod.</summary>
+    /// <summary>
+    /// What the dependencies export, merged; two of them exporting different assemblies under one simple name refuse the mod.
+    /// </summary>
     static Dictionary<string, Assembly> Imports(IReadOnlyList<LoadedMod> dependencies)
     {
         var imports = new Dictionary<string, Assembly>(StringComparer.OrdinalIgnoreCase);
@@ -245,7 +270,9 @@ public sealed class ModHost
         return (IMod)Activator.CreateInstance(type)!;
     }
 
-    /// <summary>Runs <see cref="IMod.Initialize"/>; commits the registrations when it returns, removes the mod's patches when it throws.</summary>
+    /// <summary>
+    /// Runs <see cref="IMod.Initialize"/>; commits the registrations when it returns, removes the mod's patches when it throws.
+    /// </summary>
     void Initialize(LoadedMod mod, ModHostOptions options)
     {
         var context = new ModContext(mod, _registry, options.Data, options.Population, options.World, options.SavedSettings?.Invoke(mod.Manifest.Id));
@@ -274,7 +301,9 @@ public sealed class ModHost
         }
     }
 
-    /// <summary>The mods <paramref name="mod"/> depends on, transitively, each once, nearest first.</summary>
+    /// <summary>
+    /// The mods <paramref name="mod"/> depends on, transitively, each once, nearest first.
+    /// </summary>
     static List<LoadedMod> DependencyClosure(LoadedMod mod)
     {
         var all = new List<LoadedMod>();
@@ -298,8 +327,8 @@ public sealed class ModHost
     }
 
     /// <summary>
-    /// The save data of the world's mod systems (<see cref="IModSaveData"/>) into <paramref name="files"/>, one file per mod by id; between ticks. A mod without such
-    /// systems, or whose write fails, keeps the file it had (a save made without the mod keeps the mod's data too).
+    /// The save data of the world's mod systems (<see cref="IModSaveData"/>) into <paramref name="files"/>, one file per mod by id; between ticks. A
+    /// mod without such systems, or whose write fails, keeps the file it had (a save made without the mod keeps the mod's data too).
     /// </summary>
     public void CaptureSaveData(World world, IDictionary<string, byte[]> files)
     {
@@ -310,7 +339,9 @@ public sealed class ModHost
         }
     }
 
-    /// <summary>Hands each mod system of a world just loaded its saved data; between ticks, before the first. A system without data stays as made.</summary>
+    /// <summary>
+    /// Hands each mod system of a world just loaded its saved data; between ticks, before the first. A system without data stays as made.
+    /// </summary>
     public void RestoreSaveData(World world, IReadOnlyDictionary<string, byte[]> files)
     {
         foreach (var group in SaveableSystems(world).GroupBy(s => s.Tag.ModId))
@@ -320,7 +351,8 @@ public sealed class ModHost
             {
                 var entries = ModSaveFile.Read(file);
                 foreach (var (system, tag) in group)
-                    if (entries.TryGetValue(tag.Name, out var data)) system.Read(new MemoryStream(data, writable: false));
+                    if (entries.TryGetValue(tag.Name, out var data))
+                        system.Read(new MemoryStream(data, writable: false));
             }
             catch (Exception e) { Console.Error.WriteLine($"mod       {group.Key}: save data not read: {e}"); }
         }
@@ -339,10 +371,14 @@ public sealed class ModHost
         return stream.ToArray();
     }
 
-    /// <summary>The mod and the registered name of a world's system; null for a standard system.</summary>
+    /// <summary>
+    /// The mod and the registered name of a world's system; null for a standard system.
+    /// </summary>
     public (string ModId, string Name)? OwnerOf(ITickSystem system) => _registry.TagOf(system) is { } tag ? (tag.ModId, tag.Name) : null;
 
-    /// <summary>Registers the mods' interface extensions with a new interface; one that throws is logged and skipped.</summary>
+    /// <summary>
+    /// Registers the mods' interface extensions with a new interface; one that throws is logged and skipped.
+    /// </summary>
     public List<IDisposable> RegisterUi(Func<IUiExtension, IDisposable> register)
     {
         var registrations = new List<IDisposable>();
@@ -354,9 +390,13 @@ public sealed class ModHost
         return registrations;
     }
 
-    /// <summary>The Harmony version every mod patches with, for the log.</summary>
+    /// <summary>
+    /// The Harmony version every mod patches with, for the log.
+    /// </summary>
     public static string HarmonyVersion => typeof(Harmony).Assembly.GetName().Version?.ToString() ?? "?";
 }
 
-/// <summary>A mod refused for a reason the player can act on (no stack trace in the log).</summary>
+/// <summary>
+/// A mod refused for a reason the player can act on (no stack trace in the log).
+/// </summary>
 sealed class ModLoadException(string message) : Exception(message);

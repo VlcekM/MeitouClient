@@ -11,13 +11,20 @@ internal sealed class CharacterTextureBudget
     const long IntervalMs = 500;
     long _lastRebalance;
 
-    /// <summary>The factor on every texture's need (distance over texel size): 1 while the cache is within its mark.</summary>
+    /// <summary>
+    /// The factor on every texture's need (distance over texel size): 1 while the cache is within its mark.
+    /// </summary>
     public float NeedScale { get; private set; } = 1;
 
-    /// <summary>The next <see cref="Update"/> commits the needs: the frame whose users offer them (and mark their textures used).</summary>
+    /// <summary>
+    /// The next <see cref="Update"/> commits the needs: the frame whose users offer them (and mark their textures used).
+    /// </summary>
     public bool Due => Environment.TickCount64 - _lastRebalance >= IntervalMs;
 
-    /// <summary>Once per <see cref="IntervalMs"/>: adjusts <see cref="NeedScale"/>, tells the cache how eagerly to coarsen, commits the frame's needs and rebalances.</summary>
+    /// <summary>
+    /// Once per <see cref="IntervalMs"/>: adjusts <see cref="NeedScale"/>, tells the cache how eagerly to coarsen, commits the frame's needs and
+    /// rebalances.
+    /// </summary>
     public void Update(WorldTextureCache cache)
     {
         long tick = Environment.TickCount64;

@@ -4,16 +4,20 @@ using Meitou.Game.Rendering.Frame;
 namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
-/// The cap over a headless body's neck (Meitou decapitation, docs/game/character-stats.md "Decapitation (Meitou)"): no race has a stump mesh for the head, so it is made
-/// from the body. The body's visible triangles are those with no head vertex (<see cref="CharacterContent.HeadBit"/>, hidden by the shader); each of their edges that a
-/// hidden triangle shares is on the rim of the hole. Each connected rim is fanned to its centre, every triangle wound against the body triangle beside it, so the cap
-/// faces out as the surface around it does. The rim's vertices keep their skinning and face-morph slot, so the cap follows the neck exactly; the centre takes the rim's
-/// weights summed (the four largest). Its texture coordinates are a planar projection, (0, 0) at the centre and length 1 at the farthest rim point.
+/// The cap over a headless body's neck (Meitou decapitation, docs/game/character-stats.md "Decapitation (Meitou)"): no race has a stump mesh for the
+/// head, so it is made from the body. The body's visible triangles are those with no head vertex (<see cref="CharacterContent.HeadBit"/>, hidden by
+/// the shader); each of their edges that a hidden triangle shares is on the rim of the hole. Each connected rim is fanned to its centre, every
+/// triangle wound against the body triangle beside it, so the cap faces out as the surface around it does. The rim's vertices keep their skinning and
+/// face-morph slot, so the cap follows the neck exactly; the centre takes the rim's weights summed (the four largest). Its texture coordinates are a
+/// planar projection, (0, 0) at the centre and length 1 at the farthest rim point.
 /// </summary>
 internal static class NeckCap
 {
-    /// <summary>The cap of <paramref name="body"/> (its vertices marked by <c>CharacterContent.MarkBody</c>), one skinned part; null when the body has no head vertices.
-    /// <paramref name="head"/>: the cut-off head's cap instead, over the rim of its triangles that have only head vertices (the triangles across the cut are drawn by neither side).</summary>
+    /// <summary>
+    /// The cap of <paramref name="body"/> (its vertices marked by <c>CharacterContent.MarkBody</c>), one skinned part; null when the body has no head
+    /// vertices. <paramref name="head"/>: the cut-off head's cap instead, over the rim of its triangles that have only head vertices (the triangles
+    /// across the cut are drawn by neither side).
+    /// </summary>
     public static ModelPart? Build(Model body, bool head = false)
     {
         var all = new List<Vertex>();
@@ -58,6 +62,7 @@ internal static class NeckCap
             var centre = Vector3.Zero;
             foreach (var (a, _) in edges) centre += all[a].Position;
             centre /= edges.Count;
+
             // The cap's normal: the fan's triangles (b, a, centre) summed, which face out as the body beside them does.
             var normal = Vector3.Zero;
             foreach (var (a, b) in edges) normal += Vector3.Cross(all[a].Position - all[b].Position, centre - all[b].Position);
@@ -70,7 +75,8 @@ internal static class NeckCap
             Vertex Cap(Vertex source, Vector3 at)
             {
                 var d = (at - centre) / reach;
-                return source with { Position = at, Normal = normal, Uv = new Vector2(Vector3.Dot(d, u), Vector3.Dot(d, w)), Tangent = new Vector4(u, 1), Colour = source.Colour with { Y = 0, Z = 0 } };
+                return source with { Position = at, Normal = normal, Uv = new Vector2(Vector3.Dot(d, u), Vector3.Dot(d, w)), Tangent = new Vector4(u,
+                        1), Colour = source.Colour with { Y = 0, Z = 0 } };
             }
             uint centreIndex = (uint)vertices.Count;
             vertices.Add(Cap(default, centre));
@@ -93,8 +99,11 @@ internal static class NeckCap
             foreach (var (a, b) in edges)
             {
                 uint ia = RimVertex(a), ib = RimVertex(b);
-                indices.Add(ib); indices.Add(ia); indices.Add(centreIndex);
+                indices.Add(ib);
+                indices.Add(ia);
+                indices.Add(centreIndex);
             }
+
             // The centre: the rim's bones, the four heaviest, normalised.
             var top = weights.OrderByDescending(x => x.Value).Take(4).ToList();
             float sum = top.Sum(x => x.Value);
@@ -120,10 +129,13 @@ internal static class NeckCap
 
     static Vector3 Round(Vector3 p) => new(MathF.Round(p.X, 3), MathF.Round(p.Y, 3), MathF.Round(p.Z, 3));
 
-    /// <summary>An undirected edge by its ends' positions (a UV seam splits vertices, not the surface).</summary>
+    /// <summary>
+    /// An undirected edge by its ends' positions (a UV seam splits vertices, not the surface).
+    /// </summary>
     static (Vector3, Vector3) Key(Vector3 a, Vector3 b)
     {
-        a = Round(a); b = Round(b);
+        a = Round(a);
+        b = Round(b);
         return a.X < b.X || a.X == b.X && (a.Y < b.Y || a.Y == b.Y && a.Z <= b.Z) ? (a, b) : (b, a);
     }
 }

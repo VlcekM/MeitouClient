@@ -8,19 +8,25 @@ using Meitou.Game.Rendering.Gpu;
 namespace Meitou.Game.Rendering.Characters;
 
 /// <summary>
-/// The face and body poses (Ogre morph targets) of a mesh as sparse per-vertex slots (docs/character-renderer.md, "Face poses"): the vertices any pose moves
-/// get a slot number 1..n (stored in the vertex's colour X, see <see cref="CharacterContent"/>), and each pose is a list of (slot, offset). An appearance's
-/// morph is one offset per slot, the poses summed at their weights, kept in the <see cref="MorphArena"/>; the vertex program adds it before skinning.
+/// The face and body poses (Ogre morph targets) of a mesh as sparse per-vertex slots (docs/character-renderer.md, "Face poses"): the vertices any
+/// pose moves get a slot number 1..n (stored in the vertex's colour X, see <see cref="CharacterContent"/>), and each pose is a list of (slot,
+/// offset). An appearance's morph is one offset per slot, the poses summed at their weights, kept in the <see cref="MorphArena"/>; the vertex program
+/// adds it before skinning.
 /// </summary>
 internal sealed class MeshMorphs
 {
     public required int SlotCount;
-    /// <summary>The submesh the poses move (all of them target one).</summary>
+    /// <summary>
+    /// The submesh the poses move (all of them target one).
+    /// </summary>
     public required int SubMeshIndex;
     public required Dictionary<string, (int[] Slots, Vector3[] Offsets)> Poses;
     public bool HasCuttableHorns => Poses.ContainsKey("bone_horns_top_short");
 
-    /// <summary>The poses of <paramref name="mesh"/> on <paramref name="model"/>'s parts; null when it has none, or they do not line up with the part's vertices.</summary>
+    /// <summary>
+    /// The poses of <paramref name="mesh"/> on <paramref name="model"/>'s parts; null when it has none, or they do not line up with the part's
+    /// vertices.
+    /// </summary>
     public static MeshMorphs? From(OgreMesh mesh, Model model, List<string> messages, string name)
     {
         if (mesh.Poses.Count == 0) return null;
@@ -36,7 +42,8 @@ internal sealed class MeshMorphs
         foreach (var pose in mesh.Poses)
             if (pose.Target - 1 == target)
                 foreach (var v in pose.Vertices)
-                    if (v.Index < part.Vertices.Length && !slotOf.ContainsKey(v.Index)) slotOf[v.Index] = slotOf.Count + 1;
+                    if (v.Index < part.Vertices.Length && !slotOf.ContainsKey(v.Index))
+                        slotOf[v.Index] = slotOf.Count + 1;
         var poses = new Dictionary<string, (int[], Vector3[])>(StringComparer.Ordinal);
         foreach (var pose in mesh.Poses)
         {
@@ -44,6 +51,7 @@ internal sealed class MeshMorphs
             var valid = pose.Vertices.Where(v => v.Index < part.Vertices.Length).ToArray();
             poses[pose.Name] = ([.. valid.Select(v => slotOf[v.Index])], [.. valid.Select(v => v.Offset)]);
         }
+
         // The vertex's slot rides in the colour's X as raw bits (the characters use no vertex colours): 0 for a vertex no pose moves.
         foreach (var p in model.Parts)
             for (int i = 0; i < p.Vertices.Length; i++)
@@ -54,13 +62,17 @@ internal sealed class MeshMorphs
         return new MeshMorphs { SlotCount = slotOf.Count, SubMeshIndex = target, Poses = poses! };
     }
 
-    /// <summary>One offset per slot for the appearance's pose weights (the file's values baked as Kenshi does, <see cref="CharacterShape.BakeWeight"/>); null when none applies.</summary>
+    /// <summary>
+    /// One offset per slot for the appearance's pose weights (the file's values baked as Kenshi does, <see cref="CharacterShape.BakeWeight"/>); null
+    /// when none applies.
+    /// </summary>
     public Vector4[]? Deltas(IReadOnlyDictionary<string, float> weights, bool cutHorns)
     {
         Vector4[]? result = null;
         foreach (var (name, stored) in weights)
         {
-            if (!Poses.TryGetValue(name, out var pose) || CharacterShape.BakeWeight(name, stored, cutHorns) is not { } w) continue;
+            if (!Poses.TryGetValue(name, out var pose) || CharacterShape.BakeWeight(name, stored, cutHorns) is not { } w)
+                continue;
             result ??= new Vector4[SlotCount];
             for (int i = 0; i < pose.Slots.Length; i++) result[pose.Slots[i] - 1] += new Vector4(pose.Offsets[i] * w, 0);
         }
@@ -69,9 +81,9 @@ internal sealed class MeshMorphs
 }
 
 /// <summary>
-/// The appearances' morph offsets, one growing storage buffer (binding 8 of the characters' frame): a set is <c>n</c> vec4s of slot offsets, found by its
-/// first index minus one (<see cref="Add"/>), identical sets stored once (a town's squads share their faces). Written while the frame is being prepared,
-/// before anything binds it; growing makes a new buffer and rewrites every set from the host copy.
+/// The appearances' morph offsets, one growing storage buffer (binding 8 of the characters' frame): a set is <c>n</c> vec4s of slot offsets, found by
+/// its first index minus one (<see cref="Add"/>), identical sets stored once (a town's squads share their faces). Written while the frame is being
+/// prepared, before anything binds it; growing makes a new buffer and rewrites every set from the host copy.
 /// </summary>
 internal sealed class MorphArena : IDisposable
 {
@@ -91,7 +103,9 @@ internal sealed class MorphArena : IDisposable
     public int Entries => _used;
     public long Bytes => (long)_host.Length * 16;
 
-    /// <summary>The base to give instances of the character: the vertex program reads entry <c>base + slot</c>.</summary>
+    /// <summary>
+    /// The base to give instances of the character: the vertex program reads entry <c>base + slot</c>.
+    /// </summary>
     public uint Add(string key, Vector4[] deltas)
     {
         if (_known.TryGetValue(key, out uint existing)) return existing;
@@ -102,12 +116,15 @@ internal sealed class MorphArena : IDisposable
         return baseIndex;
     }
 
-    /// <summary>Three regions of <see cref="_scratchSlots"/> entries (the frames in flight and one more) that <see cref="Scratch"/> rewrites in turn.</summary>
+    /// <summary>
+    /// Three regions of <see cref="_scratchSlots"/> entries (the frames in flight and one more) that <see cref="Scratch"/> rewrites in turn.
+    /// </summary>
     int _scratchFirst, _scratchSlots, _scratchTurn;
 
     /// <summary>
-    /// The base for a morph that changes every frame (the character editor's blend between two looks): <paramref name="deltas"/> written into the next of three
-    /// regions that are reused, so a frame in flight never reads the entries this one writes and the arena does not grow with every frame. Once per frame.
+    /// The base for a morph that changes every frame (the character editor's blend between two looks): <paramref name="deltas"/> written into the
+    /// next of three regions that are reused, so a frame in flight never reads the entries this one writes and the arena does not grow with every
+    /// frame. Once per frame.
     /// </summary>
     public uint Scratch(Vector4[] deltas)
     {
@@ -121,7 +138,10 @@ internal sealed class MorphArena : IDisposable
         return (uint)(first - 1);
     }
 
-    /// <summary>Makes room for <paramref name="count"/> entries at the end and returns where they start; growing makes a new buffer and rewrites every set from the host copy.</summary>
+    /// <summary>
+    /// Makes room for <paramref name="count"/> entries at the end and returns where they start; growing makes a new buffer and rewrites every set
+    /// from the host copy.
+    /// </summary>
     int Reserve(int count)
     {
         int first = _used;

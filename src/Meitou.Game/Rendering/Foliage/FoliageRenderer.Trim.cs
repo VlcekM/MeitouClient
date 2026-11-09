@@ -8,27 +8,32 @@ namespace Meitou.Game.Rendering.Foliage;
 public sealed unsafe partial class FoliageRenderer
 {
     // ---- card trimming (docs/render-foliage.md, "Card trimming") ----
-    // The alpha-tested cards of a mesh (leaf quads, fern fronds) are cut down to the outline of what the cut-out lets through, so the rasteriser spends no fragments on the
-    // transparent corners. The mesh is trimmed when it is decoded (on the worker, with the masks read from FoliageCardMask's disk cache); the trimmed triangles follow the
-    // original ones in the part's index buffer, and a draw picks one range or the other, so the Meitou switch can flip it.
+    // The alpha-tested cards of a mesh (leaf quads, fern fronds) are cut down to the outline of what the cut-out lets through, so the rasteriser
+    // spends no fragments on the transparent corners. The mesh is trimmed when it is decoded (on the worker, with the masks read from
+    // FoliageCardMask's disk cache); the trimmed triangles follow the original ones in the part's index buffer, and a draw picks one range or the
+    // other, so the Meitou switch can flip it.
 
     /// <summary>
-    /// The Meitou <c>card-trim</c> switch: the alpha-tested cards of FOLIAGE-mode meshes and leaves are drawn cut to the opaque outline of their texture. Faithful draws the
-    /// whole cards.
+    /// The Meitou <c>card-trim</c> switch: the alpha-tested cards of FOLIAGE-mode meshes and leaves are drawn cut to the opaque outline of their
+    /// texture. Faithful draws the whole cards.
     /// </summary>
     public bool CardTrim { get; set; } = true;
 
-    /// <summary>What the trimming did to the meshes decoded so far (cards, triangles and areas; the sum over the parts).</summary>
+    /// <summary>
+    /// What the trimming did to the meshes decoded so far (cards, triangles and areas; the sum over the parts).
+    /// </summary>
     public FoliageCardTrimStats CardTrimStats { get; private set; }
 
-    /// <summary>The first index and the index count a draw of <paramref name="part"/> uses.</summary>
+    /// <summary>
+    /// The first index and the index count a draw of <paramref name="part"/> uses.
+    /// </summary>
     uint DrawFirst(GpuPart part) => CardTrim && part.TrimCount > 0 ? (uint)part.Count : 0;
     uint DrawCount(GpuPart part) => CardTrim && part.TrimCount > 0 ? (uint)part.TrimCount : (uint)part.Count;
 
     /// <summary>
-    /// <see cref="Decode"/>, then the trimming when the mesh is cut out at draw time: FOLIAGE mode (or the leaves mesh) with the diffuse and the normal map both found,
-    /// no tiling (the card's texture coordinates are the texture's). The mesh's bounds stay the untrimmed ones, so nothing that depends on them (size classes, impostor
-    /// distances) moves.
+    /// <see cref="Decode"/>, then the trimming when the mesh is cut out at draw time: FOLIAGE mode (or the leaves mesh) with the diffuse and the
+    /// normal map both found, no tiling (the card's texture coordinates are the texture's). The mesh's bounds stay the untrimmed ones, so nothing
+    /// that depends on them (size classes, impostor distances) moves.
     /// </summary>
     Model? DecodeTrimmed(string name, FoliageMesh mesh, bool leaves, bool weld)
     {

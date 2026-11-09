@@ -11,18 +11,26 @@ public sealed class GpuLock : IDisposable
 {
     FileStream? _stream;
 
-    /// <summary>Tests point the lock at a file of their own so they never touch a real run's.</summary>
+    /// <summary>
+    /// Tests point the lock at a file of their own so they never touch a real run's.
+    /// </summary>
     internal static string? PathOverride;
 
     public static string FilePath => PathOverride ?? Path.Combine(Path.GetTempPath(), "meitou-gpu.lock");
 
-    /// <summary>How long <see cref="Acquire"/> waited.</summary>
+    /// <summary>
+    /// How long <see cref="Acquire"/> waited.
+    /// </summary>
     public TimeSpan Waited { get; private set; }
 
-    /// <summary>The lock was left behind by a process that no longer exists (its PID).</summary>
+    /// <summary>
+    /// The lock was left behind by a process that no longer exists (its PID).
+    /// </summary>
     public int? StaleHolder { get; private set; }
 
-    /// <summary>Waits for the lock (printing who holds it) and takes it.</summary>
+    /// <summary>
+    /// Waits for the lock (printing who holds it) and takes it.
+    /// </summary>
     public static GpuLock Acquire(TextWriter log)
     {
         var watch = Stopwatch.StartNew();

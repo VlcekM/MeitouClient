@@ -3,42 +3,66 @@ using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Game.Rendering.Foliage;
 
-/// <summary>How <see cref="FoliageCardTrimmer"/> decides (docs/render-foliage.md, "Card trimming").</summary>
+/// <summary>
+/// How <see cref="FoliageCardTrimmer"/> decides (docs/render-foliage.md, "Card trimming").
+/// </summary>
 public sealed record FoliageCardTrimOptions
 {
-    /// <summary>The most vertices a trimmed card's outline may have: a quad is 4 (two triangles, the same as before), 6 is four triangles.</summary>
+    /// <summary>
+    /// The most vertices a trimmed card's outline may have: a quad is 4 (two triangles, the same as before), 6 is four triangles.
+    /// </summary>
     public int MaxVertices { get; init; } = 6;
-    /// <summary>What a triangle more than the card had costs, as a share of the card's area: the outline with the least area plus this per extra triangle wins.</summary>
+    /// <summary>
+    /// What a triangle more than the card had costs, as a share of the card's area: the outline with the least area plus this per extra triangle
+    /// wins.
+    /// </summary>
     public float TriangleCost { get; init; } = 0.05f;
-    /// <summary>A card is trimmed only when its outline plus the extra triangles saves at least this share of its area.</summary>
+    /// <summary>
+    /// A card is trimmed only when its outline plus the extra triangles saves at least this share of its area.
+    /// </summary>
     public float MinSaving { get; init; } = 0.1f;
-    /// <summary>Cells the outline is grown by on every side.</summary>
+    /// <summary>
+    /// Cells the outline is grown by on every side.
+    /// </summary>
     public float Margin { get; init; } = 0.25f;
-    /// <summary>The size on screen, in pixels across, below which a card may lose the fringe that the coarser mips of its texture let through: a card that many texels across is trimmed to the mask level that holds the mips down to that many texels per pixel, and a smaller one to a finer level.</summary>
+    /// <summary>
+    /// The size on screen, in pixels across, below which a card may lose the fringe that the coarser mips of its texture let through: a card that
+    /// many texels across is trimmed to the mask level that holds the mips down to that many texels per pixel, and a smaller one to a finer level.
+    /// </summary>
     public float MinPixels { get; init; } = 16f;
 }
 
-/// <summary>What a trim did to one part (areas are the sums over its triangles).</summary>
+/// <summary>
+/// What a trim did to one part (areas are the sums over its triangles).
+/// </summary>
 public readonly record struct FoliageCardTrimStats(int Units, int Trimmed, int Removed, int TrianglesBefore, int TrianglesAfter,
     double UvAreaBefore, double UvAreaAfter, double WorldAreaBefore, double WorldAreaAfter, int OutsideUv = 0, int TinyCards = 0)
 {
-    public static FoliageCardTrimStats operator +(FoliageCardTrimStats a, FoliageCardTrimStats b) => new(a.Units + b.Units, a.Trimmed + b.Trimmed, a.Removed + b.Removed,
+    public static FoliageCardTrimStats operator +(FoliageCardTrimStats a, FoliageCardTrimStats b) => new(a.Units + b.Units, a.Trimmed + b.Trimmed,
+            a.Removed + b.Removed,
         a.TrianglesBefore + b.TrianglesBefore, a.TrianglesAfter + b.TrianglesAfter, a.UvAreaBefore + b.UvAreaBefore, a.UvAreaAfter + b.UvAreaAfter,
         a.WorldAreaBefore + b.WorldAreaBefore, a.WorldAreaAfter + b.WorldAreaAfter, a.OutsideUv + b.OutsideUv, a.TinyCards + b.TinyCards);
 }
 
 /// <summary>
-/// Cuts alpha-tested cards down to the part of their texture that is opaque. A card is a triangle, or two triangles that share an edge and map the texture, positions and
-/// every other vertex attribute affinely (a leaf quad). Its outline in texture space is the convex hull of the cells of a <see cref="FoliageCardMask"/> it overlaps, simplified
-/// to a few vertices by removing edges (each removal extends the neighbours, so the outline only grows), grown by a margin and clipped to the card; the vertices are
-/// worked out by the card's own interpolation, so nothing but the transparent border changes.
+/// Cuts alpha-tested cards down to the part of their texture that is opaque. A card is a triangle, or two triangles that share an edge and map the
+/// texture, positions and every other vertex attribute affinely (a leaf quad). Its outline in texture space is the convex hull of the cells of a
+/// <see cref="FoliageCardMask"/> it overlaps, simplified to a few vertices by removing edges (each removal extends the neighbours, so the outline
+/// only grows), grown by a margin and clipped to the card; the vertices are worked out by the card's own interpolation, so nothing but the
+/// transparent border changes.
 /// </summary>
 public static class FoliageCardTrimmer
 {
-    /// <summary>The result for a part: <see cref="Vertices"/> are the original vertices followed by the new ones, <see cref="Indices"/> the whole triangle list with the cards trimmed.</summary>
+    /// <summary>
+    /// The result for a part: <see cref="Vertices"/> are the original vertices followed by the new ones, <see cref="Indices"/> the whole triangle
+    /// list with the cards trimmed.
+    /// </summary>
     public sealed record Result(Vertex[] Vertices, uint[] Indices, FoliageCardTrimStats Stats);
 
-    /// <summary>Trims the cards of a part against <paramref name="mask"/>; the result holds the part's own arrays when no card gains (<c>Stats.Trimmed</c> is 0); null when the part has no texture coordinates.</summary>
+    /// <summary>
+    /// Trims the cards of a part against <paramref name="mask"/>; the result holds the part's own arrays when no card gains (<c>Stats.Trimmed</c> is
+    /// 0); null when the part has no texture coordinates.
+    /// </summary>
     public static Result? Trim(ModelPart part, FoliageCardMask mask, FoliageCardTrimOptions options)
     {
         var verts = part.Vertices;
@@ -46,13 +70,15 @@ public static class FoliageCardTrimmer
         int triangles = src.Length / 3;
         if (triangles == 0 || !part.HasUv) return null;
 
-        // Triangles are matched by what they look like (position and texture coordinate), not by vertex number: exporters often duplicate the corners of a quad.
+        // Triangles are matched by what they look like (position and texture coordinate), not by vertex number: exporters often duplicate the corners
+        // of a quad.
         var canonical = new int[verts.Length];
         var ids = new Dictionary<(int, int, int, int, int), int>();
         for (int i = 0; i < verts.Length; i++)
         {
             ref readonly var v = ref verts[i];
-            var key = ((int)MathF.Round(v.Position.X * 100), (int)MathF.Round(v.Position.Y * 100), (int)MathF.Round(v.Position.Z * 100), (int)MathF.Round(v.Uv.X * 10000), (int)MathF.Round(v.Uv.Y * 10000));
+            var key = ((int)MathF.Round(v.Position.X * 100), (int)MathF.Round(v.Position.Y * 100), (int)MathF.Round(v.Position.Z * 100),
+                    (int)MathF.Round(v.Uv.X * 10000), (int)MathF.Round(v.Uv.Y * 10000));
             if (!ids.TryGetValue(key, out int id)) ids[key] = id = ids.Count;
             canonical[i] = id;
         }
@@ -75,6 +101,7 @@ public static class FoliageCardTrimmer
             if (used[t]) continue;
             used[t] = true;
             int i0 = (int)src[t * 3], i1 = (int)src[t * 3 + 1], i2 = (int)src[t * 3 + 2];
+
             // A partner: the triangle across one edge, when the two make a convex quad of one affine map.
             int partner = -1, opposite = -1, afterEdge = 0;
             for (int e = 0; e < 3 && partner < 0; e++)
@@ -84,6 +111,7 @@ public static class FoliageCardTrimmer
                 if (!edges.TryGetValue(key, out var pair) || pair.Count != 2) continue;
                 int u = pair.First == t ? pair.Second : pair.First;
                 if (u < 0 || used[u]) continue;
+
                 // The vertex of u that is not on the shared edge.
                 int o = -1;
                 for (int k = 0; k < 3; k++)
@@ -91,7 +119,8 @@ public static class FoliageCardTrimmer
                     int c = canonical[src[u * 3 + k]];
                     if (c != a && c != b) { o = (int)src[u * 3 + k]; break; }
                 }
-                if (o < 0 || !Consistent(verts, i0, i1, i2, (int)src[u * 3], (int)src[u * 3 + 1], (int)src[u * 3 + 2])) continue;
+                if (o < 0 || !Consistent(verts, i0, i1, i2, (int)src[u * 3], (int)src[u * 3 + 1], (int)src[u * 3 + 2]))
+                    continue;
                 if (!ConvexQuad(verts, i0, i1, i2, e, o)) continue;
                 (partner, opposite, afterEdge) = (u, o, e);
             }
@@ -105,8 +134,10 @@ public static class FoliageCardTrimmer
             for (int k = 0; k < poly.Length; k++) poly[k] = new Vector2(verts[corners[k]].Uv.X * mask.Width, verts[corners[k]].Uv.Y * mask.Height);
 
             double uvArea = Math.Abs(SignedArea(poly));
-            double worldArea = WorldArea(verts, i0, i1, i2) + (partner >= 0 ? WorldArea(verts, (int)src[partner * 3], (int)src[partner * 3 + 1], (int)src[partner * 3 + 2]) : 0);
-            stats = stats with { Units = stats.Units + 1, TrianglesBefore = stats.TrianglesBefore + originalTriangles, UvAreaBefore = stats.UvAreaBefore + uvArea, WorldAreaBefore = stats.WorldAreaBefore + worldArea };
+            double worldArea = WorldArea(verts, i0, i1, i2) + (partner >= 0 ? WorldArea(verts, (int)src[partner * 3], (int)src[partner * 3 + 1],
+                    (int)src[partner * 3 + 2]) : 0);
+            stats = stats with { Units = stats.Units + 1, TrianglesBefore = stats.TrianglesBefore + originalTriangles,
+                    UvAreaBefore = stats.UvAreaBefore + uvArea, WorldAreaBefore = stats.WorldAreaBefore + worldArea };
 
             // A card in a repeat of the texture (coordinates outside 0 to 1) is worked out in the first repeat and moved back.
             var tile = new Vector2(MathF.Floor(poly.Min(p => p.X) / mask.Width + 0.01f), MathF.Floor(poly.Min(p => p.Y) / mask.Height + 0.01f));
@@ -118,16 +149,21 @@ public static class FoliageCardTrimmer
             else if (uvArea < 4) stats = stats with { TinyCards = stats.TinyCards + 1 };
             if (inside && uvArea >= 4)
             {
-                int level = Math.Clamp((int)MathF.Floor(MathF.Log2(MathF.Max(MathF.Sqrt((float)uvArea) / options.MinPixels, 1))), 0, mask.LevelCount - 1);
+                int level = Math.Clamp((int)MathF.Floor(MathF.Log2(MathF.Max(MathF.Sqrt((float)uvArea) / options.MinPixels, 1))), 0,
+                        mask.LevelCount - 1);
                 var key = new Key(poly, level);
-                if (!memo.TryGetValue(key, out outline)) memo[key] = outline = Outline(poly, mask, level, options, originalTriangles);
+                if (!memo.TryGetValue(key, out outline))
+                    memo[key] = outline = Outline(poly, mask, level, options, originalTriangles);
             }
 
             if (outline is null)
             {
-                output.Add((uint)i0); output.Add((uint)i1); output.Add((uint)i2);
+                output.Add((uint)i0);
+                output.Add((uint)i1);
+                output.Add((uint)i2);
                 if (partner >= 0) for (int k = 0; k < 3; k++) output.Add(src[partner * 3 + k]);
-                stats = stats with { TrianglesAfter = stats.TrianglesAfter + originalTriangles, UvAreaAfter = stats.UvAreaAfter + uvArea, WorldAreaAfter = stats.WorldAreaAfter + worldArea };
+                stats = stats with { TrianglesAfter = stats.TrianglesAfter + originalTriangles, UvAreaAfter = stats.UvAreaAfter + uvArea,
+                        WorldAreaAfter = stats.WorldAreaAfter + worldArea };
                 continue;
             }
             if (outline.Length == 0)
@@ -138,7 +174,9 @@ public static class FoliageCardTrimmer
             }
 
             // New corners by the card's own interpolation (the first triangle's affine map; the quad's other corner agreed with it), in the first triangle's winding.
-            var uv0 = verts[i0].Uv; var uv1 = verts[i1].Uv; var uv2 = verts[i2].Uv;
+            var uv0 = verts[i0].Uv;
+            var uv1 = verts[i1].Uv;
+            var uv2 = verts[i2].Uv;
             float det = (uv1.X - uv0.X) * (uv2.Y - uv0.Y) - (uv2.X - uv0.X) * (uv1.Y - uv0.Y);
             var ring = (Vector2[])outline.Clone();
             if (Math.Sign(SignedArea(ring)) != Math.Sign(det)) Array.Reverse(ring);
@@ -156,7 +194,8 @@ public static class FoliageCardTrimmer
             for (int k = 1; k + 1 < ring.Length; k++) { output.Add(indices[0]); output.Add(indices[k]); output.Add(indices[k + 1]); }
             double newUv = Math.Abs(SignedArea(ring));
             double ratio = uvArea > 0 ? newUv / uvArea : 1;
-            stats = stats with { Trimmed = stats.Trimmed + 1, TrianglesAfter = stats.TrianglesAfter + ring.Length - 2, UvAreaAfter = stats.UvAreaAfter + newUv, WorldAreaAfter = stats.WorldAreaAfter + worldArea * ratio };
+            stats = stats with { Trimmed = stats.Trimmed + 1, TrianglesAfter = stats.TrianglesAfter + ring.Length - 2,
+                    UvAreaAfter = stats.UvAreaAfter + newUv, WorldAreaAfter = stats.WorldAreaAfter + worldArea * ratio };
         }
         if (stats.Trimmed == 0) return new Result(verts, src, stats);
         return new Result([.. vertices], [.. output], stats);
@@ -164,10 +203,14 @@ public static class FoliageCardTrimmer
 
     // ---- cards ----
 
-    /// <summary>Whether the three corners of the partner triangle are where the first triangle's affine map puts them, for every attribute.</summary>
+    /// <summary>
+    /// Whether the three corners of the partner triangle are where the first triangle's affine map puts them, for every attribute.
+    /// </summary>
     static bool Consistent(Vertex[] v, int i0, int i1, int i2, int j0, int j1, int j2)
     {
-        ref readonly var a = ref v[i0]; ref readonly var b = ref v[i1]; ref readonly var c = ref v[i2];
+        ref readonly var a = ref v[i0];
+        ref readonly var b = ref v[i1];
+        ref readonly var c = ref v[i2];
         float det = (b.Uv.X - a.Uv.X) * (c.Uv.Y - a.Uv.Y) - (c.Uv.X - a.Uv.X) * (b.Uv.Y - a.Uv.Y);
         if (MathF.Abs(det) < 1e-9f) return false;
         float size = MathF.Max(1, (b.Position - a.Position).Length() + (c.Position - a.Position).Length());
@@ -183,7 +226,9 @@ public static class FoliageCardTrimmer
         return true;
     }
 
-    /// <summary>The quad's corners in order (the triangle's with <paramref name="o"/> after edge <paramref name="edge"/>) turn the same way at every corner.</summary>
+    /// <summary>
+    /// The quad's corners in order (the triangle's with <paramref name="o"/> after edge <paramref name="edge"/>) turn the same way at every corner.
+    /// </summary>
     static bool ConvexQuad(Vertex[] v, int i0, int i1, int i2, int edge, int o)
     {
         int[] ring = [i0, i1, i2];
@@ -192,7 +237,9 @@ public static class FoliageCardTrimmer
         float sign = 0;
         for (int k = 0; k < 4; k++)
         {
-            var p = v[list[k]].Uv; var q = v[list[(k + 1) % 4]].Uv; var r = v[list[(k + 2) % 4]].Uv;
+            var p = v[list[k]].Uv;
+            var q = v[list[(k + 1) % 4]].Uv;
+            var r = v[list[(k + 2) % 4]].Uv;
             float cross = (q.X - p.X) * (r.Y - q.Y) - (q.Y - p.Y) * (r.X - q.X);
             if (MathF.Abs(cross) < 1e-12f) return false;
             if (sign == 0) sign = MathF.Sign(cross);
@@ -201,7 +248,9 @@ public static class FoliageCardTrimmer
         return true;
     }
 
-    /// <summary>The vertex at texture coordinate <paramref name="uv"/> by the affine map of the triangle a, b, c (barycentric, so it also extrapolates).</summary>
+    /// <summary>
+    /// The vertex at texture coordinate <paramref name="uv"/> by the affine map of the triangle a, b, c (barycentric, so it also extrapolates).
+    /// </summary>
     static Vertex Interpolate(in Vertex a, in Vertex b, in Vertex c, Vector2 uv, float det)
     {
         float l1 = ((uv.X - a.Uv.X) * (c.Uv.Y - a.Uv.Y) - (c.Uv.X - a.Uv.X) * (uv.Y - a.Uv.Y)) / det;
@@ -222,7 +271,8 @@ public static class FoliageCardTrimmer
         };
     }
 
-    static double WorldArea(Vertex[] v, int a, int b, int c) => 0.5 * Vector3.Cross(v[b].Position - v[a].Position, v[c].Position - v[a].Position).Length();
+    static double WorldArea(Vertex[] v, int a, int b, int c) => 0.5 * Vector3.Cross(v[b].Position - v[a].Position,
+            v[c].Position - v[a].Position).Length();
 
     // ---- outlines ----
 
@@ -245,7 +295,8 @@ public static class FoliageCardTrimmer
     }
 
     /// <summary>
-    /// The outline for a card: null when it should stay as it is, an empty array when nothing of it can show, else the vertices of the convex polygon (in cells) to draw.
+    /// The outline for a card: null when it should stay as it is, an empty array when nothing of it can show, else the vertices of the convex polygon
+    /// (in cells) to draw.
     /// </summary>
     public static Vector2[]? Outline(Vector2[] card, FoliageCardMask mask, int level, FoliageCardTrimOptions options, int originalTriangles)
     {
@@ -267,8 +318,9 @@ public static class FoliageCardTrimmer
     }
 
     /// <summary>
-    /// The convex hull of the set cells a card overlaps, as the corners of the extreme set cell of each row it crosses (grown by <paramref name="margin"/>): the hull of all
-    /// of them is the hull of the first and last cell of every row. Empty when no set cell is under the card.
+    /// The convex hull of the set cells a card overlaps, as the corners of the extreme set cell of each row it crosses (grown by
+    /// <paramref name="margin"/>): the hull of all of them is the hull of the first and last cell of every row. Empty when no set cell is under the
+    /// card.
     /// </summary>
     public static Vector2[] Hull(Vector2[] card, FoliageCardMask mask, int level, float margin)
     {
@@ -276,13 +328,16 @@ public static class FoliageCardTrimmer
         float minY = float.MaxValue, maxY = float.MinValue;
         foreach (var p in card) (minY, maxY) = (MathF.Min(minY, p.Y), MathF.Max(maxY, p.Y));
         var cells = mask.Levels[Math.Clamp(level, 0, mask.LevelCount - 1)];
-        int row0 = Math.Clamp((int)MathF.Floor(minY + 1e-4f), 0, mask.Height - 1), row1 = Math.Clamp((int)MathF.Ceiling(maxY - 1e-4f) - 1, row0, mask.Height - 1);
+        int row0 = Math.Clamp((int)MathF.Floor(minY + 1e-4f), 0, mask.Height - 1), row1 = Math.Clamp((int)MathF.Ceiling(maxY - 1e-4f) - 1, row0,
+                mask.Height - 1);
+
         // A clip writes at most two points per point it is given: a card's two clips need four times its corners.
         int stripMax = 4 * card.Length, pointMax = 4 * (row1 - row0 + 1);
         var rented = System.Buffers.ArrayPool<Vector2>.Shared.Rent(2 * stripMax + pointMax);
         try
         {
-            Span<Vector2> half = rented.AsSpan(0, stripMax), strip = rented.AsSpan(stripMax, stripMax), points = rented.AsSpan(2 * stripMax, pointMax);
+            Span<Vector2> half = rented.AsSpan(0, stripMax), strip = rented.AsSpan(stripMax, stripMax), points = rented.AsSpan(2 * stripMax,
+                    pointMax);
             int count = 0;
             for (int r = row0; r <= row1; r++)
             {
@@ -291,7 +346,8 @@ public static class FoliageCardTrimmer
                 if (n == 0) continue;
                 float minX = float.MaxValue, maxX = float.MinValue;
                 foreach (var p in strip[..n]) (minX, maxX) = (MathF.Min(minX, p.X), MathF.Max(maxX, p.X));
-                int c0 = Math.Clamp((int)MathF.Floor(minX + 1e-4f), 0, mask.Width - 1), c1 = Math.Clamp((int)MathF.Ceiling(maxX - 1e-4f) - 1, c0, mask.Width - 1);
+                int c0 = Math.Clamp((int)MathF.Floor(minX + 1e-4f), 0, mask.Width - 1), c1 = Math.Clamp((int)MathF.Ceiling(maxX - 1e-4f) - 1, c0,
+                        mask.Width - 1);
                 int first = -1, last = -1;
                 for (int c = c0; c <= c1; c++)
                     if (cells[r * mask.Width + c]) { if (first < 0) first = c; last = c; }
@@ -307,14 +363,18 @@ public static class FoliageCardTrimmer
         }
     }
 
-    /// <summary>Andrew's monotone chain; counter-clockwise in a y-up frame (clockwise on the screen), collinear points dropped.</summary>
+    /// <summary>
+    /// Andrew's monotone chain; counter-clockwise in a y-up frame (clockwise on the screen), collinear points dropped.
+    /// </summary>
     public static Vector2[] ConvexHull(List<Vector2> points)
     {
         var copy = points.ToArray();
         return ConvexHull(copy.AsSpan());
     }
 
-    /// <summary><see cref="ConvexHull(List{Vector2})"/> sorting <paramref name="points"/> in place.</summary>
+    /// <summary>
+    /// <see cref="ConvexHull(List{Vector2})"/> sorting <paramref name="points"/> in place.
+    /// </summary>
     static Vector2[] ConvexHull(Span<Vector2> points)
     {
         // Sorted by x then y, repeats dropped (equal points are next to each other once sorted).
@@ -351,8 +411,9 @@ public static class FoliageCardTrimmer
     static float Cross(Vector2 o, Vector2 a, Vector2 b) => (a.X - o.X) * (b.Y - o.Y) - (a.Y - o.Y) * (b.X - o.X);
 
     /// <summary>
-    /// A convex polygon (counter-clockwise, <see cref="ConvexHull"/>'s order) reduced to at most <paramref name="cap"/> vertices by repeatedly removing the edge whose
-    /// removal adds the least area: the two edges next to it are extended until they meet, so the result contains the polygon. Stops early when no edge's neighbours meet.
+    /// A convex polygon (counter-clockwise, <see cref="ConvexHull"/>'s order) reduced to at most <paramref name="cap"/> vertices by repeatedly
+    /// removing the edge whose removal adds the least area: the two edges next to it are extended until they meet, so the result contains the
+    /// polygon. Stops early when no edge's neighbours meet.
     /// </summary>
     public static Vector2[] Simplify(Vector2[] polygon, int cap)
     {
@@ -364,9 +425,14 @@ public static class FoliageCardTrimmer
             Vector2 bestPoint = default;
             for (int i = 0; i < n; i++)
             {
-                var a = p[(i + n - 1) % n]; var b = p[i]; var c = p[(i + 1) % n]; var d = p[(i + 2) % n];
+                var a = p[(i + n - 1) % n];
+                var b = p[i];
+                var c = p[(i + 1) % n];
+                var d = p[(i + 2) % n];
+
                 // b + t (b - a) = c + s (c - d), t and s >= 0.
-                var d1 = b - a; var d2 = c - d;
+                var d1 = b - a;
+                var d2 = c - d;
                 float denom = d1.X * d2.Y - d1.Y * d2.X;
                 if (MathF.Abs(denom) < 1e-9f) continue;
                 var w = c - b;
@@ -384,14 +450,18 @@ public static class FoliageCardTrimmer
         return [.. p];
     }
 
-    /// <summary>The part of <paramref name="polygon"/> inside the convex <paramref name="card"/> (either winding); empty when they do not overlap.</summary>
+    /// <summary>
+    /// The part of <paramref name="polygon"/> inside the convex <paramref name="card"/> (either winding); empty when they do not overlap.
+    /// </summary>
     public static Vector2[] Clip(Vector2[] polygon, Vector2[] card)
     {
         var result = polygon;
         float sign = SignedArea(card) >= 0 ? 1 : -1;
         for (int i = 0; i < card.Length && result.Length > 0; i++)
         {
-            var a = card[i]; var b = card[(i + 1) % card.Length];
+            var a = card[i];
+            var b = card[(i + 1) % card.Length];
+
             // Inside is where sign * cross(b - a, p - a) >= 0.
             var edge = b - a;
             var normal = new Vector2(-edge.Y, edge.X) * sign;   // points inside
@@ -401,7 +471,9 @@ public static class FoliageCardTrimmer
         return result;
     }
 
-    /// <summary>Keeps the part of a polygon where <c>dot(normal, p) + offset &gt;= 0</c> (Sutherland-Hodgman).</summary>
+    /// <summary>
+    /// Keeps the part of a polygon where <c>dot(normal, p) + offset &gt;= 0</c> (Sutherland-Hodgman).
+    /// </summary>
     static Vector2[] ClipHalf(Vector2[] polygon, Vector2 normal, float offset)
     {
         if (polygon.Length == 0) return polygon;
@@ -410,17 +482,22 @@ public static class FoliageCardTrimmer
         finally { System.Buffers.ArrayPool<Vector2>.Shared.Return(rented); }
     }
 
-    /// <summary><see cref="ClipHalf(Vector2[], Vector2, float)"/> into <paramref name="result"/> (twice the polygon's length at least, not overlapping it); the count written.</summary>
+    /// <summary>
+    /// <see cref="ClipHalf(Vector2[], Vector2, float)"/> into <paramref name="result"/> (twice the polygon's length at least, not overlapping it);
+    /// the count written.
+    /// </summary>
     static int ClipHalf(ReadOnlySpan<Vector2> polygon, Span<Vector2> result, Vector2 normal, float offset)
     {
         int n = 0;
         for (int i = 0; i < polygon.Length; i++)
         {
-            var p = polygon[i]; var q = polygon[(i + 1) % polygon.Length];
+            var p = polygon[i];
+            var q = polygon[(i + 1) % polygon.Length];
             float dp = Vector2.Dot(normal, p) + offset, dq = Vector2.Dot(normal, q) + offset;
             if (dp >= 0) result[n++] = p;
             if ((dp >= 0) != (dq >= 0)) result[n++] = p + (q - p) * (dp / (dp - dq));
         }
+
         // Points that coincide (a clip through a corner) are one vertex.
         for (int i = n - 1; i >= 0 && n > 1; i--)
             if ((result[i] - result[(i + 1) % n]).LengthSquared() < 1e-10f)
@@ -431,7 +508,9 @@ public static class FoliageCardTrimmer
         return n;
     }
 
-    /// <summary>The signed area (positive when the vertices go counter-clockwise in a y-up frame).</summary>
+    /// <summary>
+    /// The signed area (positive when the vertices go counter-clockwise in a y-up frame).
+    /// </summary>
     public static float SignedArea(Vector2[] p)
     {
         double a = 0;
@@ -440,17 +519,21 @@ public static class FoliageCardTrimmer
     }
 }
 
-/// <summary>Trimming a decoded model's parts against the alpha of the normal map its material cuts out on.</summary>
+/// <summary>
+/// Trimming a decoded model's parts against the alpha of the normal map its material cuts out on.
+/// </summary>
 public static class FoliageCardTrimming
 {
     /// <summary>
-    /// Gives every part of <paramref name="model"/> its <see cref="ModelPart.TrimmedIndices"/> (the parts are replaced in the model's list; its bounds stay the original's).
-    /// <paramref name="normalPath"/> is the resolved file of the normal map, <paramref name="threshold"/> the cut-out threshold (0-1). The sum of what was done.
+    /// Gives every part of <paramref name="model"/> its <see cref="ModelPart.TrimmedIndices"/> (the parts are replaced in the model's list; its
+    /// bounds stay the original's). <paramref name="normalPath"/> is the resolved file of the normal map, <paramref name="threshold"/> the cut-out
+    /// threshold (0-1). The sum of what was done.
     /// </summary>
     public static FoliageCardTrimStats Apply(Model model, string? normalPath, float threshold, FoliageCardTrimOptions? options = null)
     {
         var total = default(FoliageCardTrimStats);
-        if (normalPath is null || !(threshold > 0) || FoliageCardMask.Obtain(normalPath, threshold) is not { } mask) return total;
+        if (normalPath is null || !(threshold > 0) || FoliageCardMask.Obtain(normalPath, threshold) is not { } mask)
+            return total;
         options ??= new FoliageCardTrimOptions();
         for (int i = 0; i < model.Parts.Count; i++)
         {

@@ -29,9 +29,12 @@ internal sealed class CrowdHarness
     readonly Func<float> _time;
 
     CrowdHarness(CharacterAppearance[] appearances, Vector3[] positions, float[] yaws, float[] phases, CharacterPose[][] poses, Func<float> time)
-        => (this._appearances, this._positions, this._yaws, this._phases, this._poses, this._time) = (appearances, positions, yaws, phases, poses, time);
+        => (this._appearances, this._positions, this._yaws, this._phases, this._poses, this._time) = (appearances, positions, yaws, phases, poses,
+                time);
 
-    /// <summary>Fills <paramref name="list"/> for this frame.</summary>
+    /// <summary>
+    /// Fills <paramref name="list"/> for this frame.
+    /// </summary>
     public void Fill(CharacterDrawList list)
     {
         float t = _time();
@@ -43,8 +46,11 @@ internal sealed class CrowdHarness
         }
     }
 
-    /// <summary>The renderer with a crowd attached (settled when not interactive, so a still shows every character).</summary>
-    public static CharacterRenderer Create(IGpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive)
+    /// <summary>
+    /// The renderer with a crowd attached (settled when not interactive, so a still shows every character).
+    /// </summary>
+    public static CharacterRenderer Create(IGpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o,
+            bool interactive)
     {
         var db = scene.Database ?? throw new InvalidOperationException("--crowd needs the game data");
         var watch = Stopwatch.StartNew();
@@ -65,7 +71,8 @@ internal sealed class CrowdHarness
         var failures = 0;
         Parallel.For(0, n, i =>
         {
-            try { appearances[i] = CharacterAppearance.Build(db, install.Root, picks[i].StringId, new CharacterOptions { Seed = 100003 + i, Faction = faction?.StringId }); }
+            try { appearances[i] = CharacterAppearance.Build(db, install.Root, picks[i].StringId, new CharacterOptions { Seed = 100003 + i,
+                    Faction = faction?.StringId }); }
             catch (Exception e) when (e is KeyNotFoundException or InvalidOperationException or IOException or ArgumentException)
             {
                 Interlocked.Increment(ref failures);
@@ -95,19 +102,23 @@ internal sealed class CrowdHarness
         }
         var clock = Stopwatch.StartNew();
         const float fixedTime = 0.35f;   // the pose time of stills
-        var harness = new CrowdHarness(chosen, positions, yaws, phases, poseLists, interactive ? () => (float)clock.Elapsed.TotalSeconds : () => fixedTime);
+        var harness = new CrowdHarness(chosen, positions, yaws, phases, poseLists,
+                interactive ? () => (float)clock.Elapsed.TotalSeconds : () => fixedTime);
         var renderer = new CharacterRenderer(context, install, db, assets) { Source = harness.Fill, LoadBudget = interactive ? 4 : 0 };
         renderer.SettleFirst = !interactive;   // a still waits for everything at its first frame, once the camera is known (the textures' mip streaming needs it)
         return renderer;
     }
 
-    /// <summary>The CHARACTER records the town's residents and bar squads choose from (weighted), and the town's faction.</summary>
+    /// <summary>
+    /// The CHARACTER records the town's residents and bar squads choose from (weighted), and the town's faction.
+    /// </summary>
     static (List<(GameRecord Record, double Weight)> Records, GameRecord? Faction) Candidates(GameDatabase db, string? townName)
     {
         var result = new List<(GameRecord, double)>();
         GameRecord? faction = null;
         IEnumerable<GameRecord> templates;
-        if (townName is not null && db.OfType(FcsRecordType.Town).Where(t => t.Name.Contains(townName, StringComparison.OrdinalIgnoreCase)).OrderBy(t => t.Name.Length).FirstOrDefault() is { } town)
+        if (townName is not null && db.OfType(FcsRecordType.Town).Where(t => t.Name.Contains(townName,
+                StringComparison.OrdinalIgnoreCase)).OrderBy(t => t.Name.Length).FirstOrDefault() is { } town)
         {
             faction = town.GetReferences("faction").Select(r => db.Find(r.TargetStringId)).FirstOrDefault(x => x is not null);
             templates = town.GetReferences("residents").Concat(town.GetReferences("bar squads")).Select(r => db.Find(r.TargetStringId))
