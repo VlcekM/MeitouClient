@@ -7,7 +7,21 @@ namespace Meitou.Data.Characters;
 /// <summary>
 /// The tabs of the character editor (<c>Kenshi_CharacterEditor</c>: BODY, FACE, HAIR).
 /// </summary>
-public enum EditorTab { Body, Face, Hair }
+public enum EditorTab
+{
+    /// <summary>
+    /// The BODY tab.
+    /// </summary>
+    Body,
+    /// <summary>
+    /// The FACE tab.
+    /// </summary>
+    Face,
+    /// <summary>
+    /// The HAIR tab.
+    /// </summary>
+    Hair
+}
 
 /// <summary>
 /// What an editor control edits (docs/characters.md "Character editor").
@@ -27,13 +41,29 @@ public enum EditorControlKind
     /// </summary>
     Colour,
     /// <summary>
-    /// <c>Hair Colour</c>, <c>Hair Saturation</c>, <c>Hair Brightness</c> (HSB × 100).
+    /// <c>Hair Colour</c>: the hair hue (HSB × 100).
     /// </summary>
-    HairHue, HairSaturation, HairBrightness,
+    HairHue,
     /// <summary>
-    /// Pickers: the HEAD (<c>head</c>), the hair and the beard ATTACHMENTs (<c>hair style</c>, <c>beard</c>).
+    /// <c>Hair Saturation</c> (HSB × 100).
     /// </summary>
-    Head, HairStyle, Beard,
+    HairSaturation,
+    /// <summary>
+    /// <c>Hair Brightness</c> (HSB × 100).
+    /// </summary>
+    HairBrightness,
+    /// <summary>
+    /// A picker of the HEAD (<c>head</c>).
+    /// </summary>
+    Head,
+    /// <summary>
+    /// A picker of the hair ATTACHMENT (<c>hair style</c>).
+    /// </summary>
+    HairStyle,
+    /// <summary>
+    /// A picker of the beard ATTACHMENT (<c>beard</c>).
+    /// </summary>
+    Beard,
     /// <summary>
     /// <c>idle stance</c>: a slider over <see cref="CharacterDraft.IdleStances"/>, 1-based.
     /// </summary>
@@ -45,8 +75,19 @@ public enum EditorControlKind
 /// </summary>
 public sealed record EditorControl(string Label, EditorControlKind Kind, int Min, int Max, int Mid)
 {
+    /// <summary>
+    /// For a slider or pose control: the body-file range it edits.
+    /// </summary>
     public AppearanceRange? Range { get; init; }
+
+    /// <summary>
+    /// For a colour control: the colour range it edits.
+    /// </summary>
     public AppearanceColourRange? Colour { get; init; }
+
+    /// <summary>
+    /// Whether the control is a picker (head, hair style or beard) rather than a slider.
+    /// </summary>
     public bool IsPicker => Kind is EditorControlKind.Head or EditorControlKind.HairStyle or EditorControlKind.Beard;
 }
 
@@ -59,23 +100,54 @@ public sealed class CharacterDraft
 {
     #region Look
 
+    /// <summary>
+    /// The database the race, heads and hairs are found in.
+    /// </summary>
     readonly GameDatabase _db;
+
+    /// <summary>
+    /// The install root body files resolve against.
+    /// </summary>
     readonly string _installRoot;
+
+    /// <summary>
+    /// The appearance limits by race string id and gender, null when the race has none.
+    /// </summary>
     readonly Dictionary<(string, bool), AppearanceLimits?> _limitsCache;
 
     /// <summary>
     /// The record as edited so far.
     /// </summary>
     public FcsRecord Record { get; private set; }
+
+    /// <summary>
+    /// The character's name, edited alongside the look.
+    /// </summary>
     public string Name { get; set; }
+
+    /// <summary>
+    /// The RACE the look is for: the record's <c>race</c>, else the first RACE.
+    /// </summary>
     public GameRecord Race { get; private set; }
+
+    /// <summary>
+    /// Whether the look is female (<c>sex female</c>).
+    /// </summary>
     public bool Female => Record.Bools.TryGetValue("sex female", out var f) && f;
+
+    /// <summary>
+    /// The editor limits of <see cref="Race"/> and the gender; null when none.
+    /// </summary>
     public AppearanceLimits? Limits { get; private set; }
+
     /// <summary>
     /// Counts the changes, so a preview is rebuilt only when the look changed.
     /// </summary>
     public int Version { get; private set; }
 
+    /// <summary>
+    /// A draft of a copy of <paramref name="appearance"/> named <paramref name="name"/>.
+    /// </summary>
     public CharacterDraft(GameDatabase db, string installRoot, FcsRecord appearance, string name)
     {
         this._db = db;
@@ -151,7 +223,10 @@ public sealed class CharacterDraft
             return AppearanceLimits.Read(CharacterGenerator.Resolve(installRoot, path), female,
                     GameConstants.FromDatabase(db).AppearanceRandomDeviation);
         }
-        catch (Exception e) when (e is IOException or System.Xml.XmlException or UnauthorizedAccessException) { return null; }
+        catch (Exception e) when (e is IOException or System.Xml.XmlException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -175,8 +250,7 @@ public sealed class CharacterDraft
     /// <summary>
     /// The choices of the Idle stance slider (the original's list, <c>FUN_14007d480</c> and <c>FUN_1405bbd40</c>, <b>Observed</b>): the record names
     /// of the ANIMATIONs, in data order, that are <c>idle</c>, not <c>disabled</c>, of no <c>weather type</c>, not on the <c>overlay</c> layer, with
-    /// no weapon in either hand and not
-    /// <c>crouched</c>.
+    /// no weapon in either hand and not <c>crouched</c>.
     /// </summary>
     public IReadOnlyList<string> IdleStances => _idleStances ??= [.. _db.OfType(FcsRecordType.Animation)
         .Where(a => a.GetBool("idle") && !a.GetBool("disabled") && a.GetInt("weather type") < 1 && a.GetString("layer", "") != "overlay"
@@ -277,6 +351,9 @@ public sealed class CharacterDraft
         Version++;
     }
 
+    /// <summary>
+    /// Writes a slider's value into its keys of <paramref name="record"/>: a pose splits the value between its target and opposite target.
+    /// </summary>
     static void Write(FcsRecord record, EditorControl c, int value)
     {
         switch (c.Kind)
@@ -307,6 +384,9 @@ public sealed class CharacterDraft
     /// </summary>
     public IReadOnlyList<GameRecord?> Options(EditorControlKind kind) => OptionsFor(_db, Race, Female, kind);
 
+    /// <summary>
+    /// The picker choices of <paramref name="kind"/> for <paramref name="race"/> and the gender (see <see cref="Options"/>).
+    /// </summary>
     static IReadOnlyList<GameRecord?> OptionsFor(GameDatabase db, GameRecord race, bool female, EditorControlKind kind)
     {
         if (kind == EditorControlKind.Head)
@@ -319,9 +399,15 @@ public sealed class CharacterDraft
         return list;
     }
 
+    /// <summary>
+    /// The record key a picker writes: <c>head</c>, <c>beard</c> or <c>hair style</c>.
+    /// </summary>
     static string KeyOf(EditorControlKind kind) => kind switch { EditorControlKind.Head => "head", EditorControlKind.Beard => "beard",
             _ => "hair style" };
 
+    /// <summary>
+    /// The index of a picker's current choice among <see cref="Options"/>; 0 when the choice is not among them.
+    /// </summary>
     public int OptionIndex(EditorControlKind kind)
     {
         string id = Record.Strings.GetValueOrDefault(KeyOf(kind)) ?? "";
@@ -336,6 +422,9 @@ public sealed class CharacterDraft
     /// </summary>
     public string OptionName(EditorControlKind kind) => Options(kind).ElementAtOrDefault(OptionIndex(kind))?.Name ?? "None";
 
+    /// <summary>
+    /// Picks choice <paramref name="index"/> (wrapped around the choices); nothing when there are none.
+    /// </summary>
     public void SetOption(EditorControlKind kind, int index)
     {
         var options = Options(kind);
@@ -395,8 +484,7 @@ public sealed class CharacterDraft
     /// <summary>
     /// RESET ALL: the appearance template's defaults (<c>FUN_14007a490</c>, <b>Observed</b>: hair, beard, colours, <c>Posture</c>, <c>idle stance</c>
     /// "idle_stand_normal"). The template's slider values are not traced: Meitou puts each body/face slider at its editor-limits mid, each face pose
-    /// at 0,
-    /// <c>Posture</c> at 20, the skin tone at its mid colour, no hair or beard, hair colour (0, 0, 100). Race, gender and head stay.
+    /// at 0, <c>Posture</c> at 20, the skin tone at its mid colour, no hair or beard, hair colour (0, 0, 100). Race, gender and head stay.
     /// </summary>
     public void Reset()
     {
@@ -436,8 +524,8 @@ public sealed class CharacterDraft
     readonly Dictionary<(string Race, bool Female), FcsRecord> _looks = [];
 
     /// <summary>
-    /// Changes race (a single-gender race makes the character male): the look comes back as it was for that race and gender, else a new one is
-    /// rolled.
+    /// Changes race (a single-gender race makes the character male): the look comes back as it was for that race and gender, else a new one
+    /// is rolled.
     /// </summary>
     public void SetRace(GameRecord race, int seed)
     {
@@ -471,8 +559,8 @@ public sealed class CharacterDraft
     }
 
     /// <summary>
-    /// The look <see cref="SetRace"/> or <see cref="SetFemale"/> would give with <paramref name="seed"/>, the draft unchanged (the editor prepares it
-    /// ahead).
+    /// The look <see cref="SetRace"/> or <see cref="SetFemale"/> would give with <paramref name="seed"/>, the draft unchanged (the editor prepares
+    /// it ahead).
     /// </summary>
     public FcsRecord SwitchedLook(GameRecord race, bool female, int seed)
     {

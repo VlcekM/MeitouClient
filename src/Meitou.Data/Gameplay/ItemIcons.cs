@@ -6,7 +6,21 @@ namespace Meitou.Data.Gameplay;
 /// <summary>
 /// What an inventory cell shows of an item (<see cref="ItemIcons.Choose"/>): a PNG file, a picture to draw from the item's mesh, or nothing.
 /// </summary>
-public enum ItemIconSource { None, File, Render }
+public enum ItemIconSource
+{
+    /// <summary>
+    /// No icon.
+    /// </summary>
+    None,
+    /// <summary>
+    /// A PNG file (<see cref="ItemIconChoice.File"/>).
+    /// </summary>
+    File,
+    /// <summary>
+    /// A picture drawn from the item's mesh (<see cref="ItemIconStyle"/>).
+    /// </summary>
+    Render
+}
 
 /// <summary>
 /// <see cref="Colour"/>: the COLOR_DATA string id a drawn icon is dyed with ("" undyed).
@@ -22,6 +36,9 @@ public readonly record struct ItemIconChoice(ItemIconSource Source, string? File
 /// </summary>
 public sealed class ItemIcons(GameDatabase database, Func<string, string?> resolve, ItemIconCache cache)
 {
+    /// <summary>
+    /// The database the item records are found in.
+    /// </summary>
     public GameDatabase Database => database;
 
     /// <summary>
@@ -61,8 +78,8 @@ public sealed class ItemIcons(GameDatabase database, Func<string, string?> resol
     }
 
     /// <summary>
-    /// The material record an icon is drawn with: <paramref name="materialId"/> (the instance's), else the item's first (likeliest) <c>material</c>
-    /// reference.
+    /// The material record an icon is drawn with: <paramref name="materialId"/> (the instance's), else the item's first (likeliest)
+    /// <c>material</c> reference.
     /// </summary>
     public static GameRecord? MaterialOf(GameDatabase db, GameRecord item, string materialId)
     {
@@ -94,10 +111,12 @@ public sealed record ItemIconStyle(
     /// Pixels of the picture per inventory cell along each side (the game asks for 2 x 25).
     /// </summary>
     public const int PixelsPerCell = 50;
+
     /// <summary>
     /// The vertical field of view of the icon camera, in degrees.
     /// </summary>
     public const float FieldOfView = 45;
+
     /// <summary>
     /// The camera's distance from the origin per unit of <c>icon zoom</c>.
     /// </summary>
@@ -119,6 +138,9 @@ public sealed record ItemIconStyle(
     /// </summary>
     public (int Width, int Height) TextureSize => (PowerOfTwo(Width), PowerOfTwo(Height));
 
+    /// <summary>
+    /// <paramref name="n"/> rounded up to a power of two (at least 1).
+    /// </summary>
     static int PowerOfTwo(int n) => (int)BitOperations.RoundUpToPowerOf2((uint)Math.Max(n, 1));
 
     /// <summary>
@@ -180,6 +202,9 @@ public sealed record ItemIconStyle(
 /// </summary>
 public sealed class ItemIconCache
 {
+    /// <summary>
+    /// The cached PNGs by item string id: each file's material, colour and path, in directory order.
+    /// </summary>
     readonly Dictionary<string, List<(string Material, string Colour, string Path)>> _byItem = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -221,6 +246,9 @@ public sealed class ItemIconCache
         return ids.Count is 2 or 3 && ids.All(IsStringId) ? (ids[0], ids[1], ids.Count == 3 ? ids[2] : "") : null;
     }
 
+    /// <summary>
+    /// Whether <paramref name="id"/> has the <c>&lt;number&gt;-&lt;file&gt;</c> form: digits, a dash, then at least one character.
+    /// </summary>
     static bool IsStringId(string id)
     {
         int dash = id.IndexOf('-');

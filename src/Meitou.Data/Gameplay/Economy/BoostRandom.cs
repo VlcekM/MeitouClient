@@ -8,10 +8,19 @@ namespace Meitou.Data.Gameplay.Economy;
 /// </summary>
 public sealed class BoostRandom
 {
+    /// <summary>
+    /// The MT19937 engine every draw takes from.
+    /// </summary>
     readonly FoliageRandom _mt;
 
+    /// <summary>
+    /// A generator seeded with <paramref name="seed"/> (MT19937's seeding).
+    /// </summary>
     public BoostRandom(uint seed) => _mt = new FoliageRandom(seed);
 
+    /// <summary>
+    /// A generator drawing from <paramref name="mt"/> (for <see cref="Clone"/>).
+    /// </summary>
     BoostRandom(FoliageRandom mt) => this._mt = mt;
 
     /// <summary>

@@ -6,9 +6,19 @@ namespace Meitou.Data.Characters;
 /// </summary>
 public sealed class NamePool
 {
+    /// <summary>
+    /// The male names: <c>namesM.txt</c> then <c>namesMF.txt</c>.
+    /// </summary>
     public IReadOnlyList<string> Male { get; }
+
+    /// <summary>
+    /// The female names: <c>namesF.txt</c> then <c>namesMF.txt</c>.
+    /// </summary>
     public IReadOnlyList<string> Female { get; }
 
+    /// <summary>
+    /// Pools of the given lines, <paramref name="both"/> appended to each.
+    /// </summary>
     public NamePool(IEnumerable<string> male, IEnumerable<string> female, IEnumerable<string> both)
     {
         var shared = both.ToList();
@@ -28,6 +38,10 @@ public sealed class NamePool
         return new NamePool(Lines(install, data, "namesM.txt"), Lines(install, data, "namesF.txt"), Lines(install, data, "namesMF.txt"));
     }
 
+    /// <summary>
+    /// The trimmed non-blank lines of file <paramref name="name"/>: the game's resource copy, else the language's or <c>data/</c>'s; none when
+    /// missing or unreadable.
+    /// </summary>
     static IEnumerable<string> Lines(Content.GameInstall? install, string data, string name)
     {
         try
@@ -35,7 +49,10 @@ public sealed class NamePool
             var path = (install is null ? null : Ogre.GameResources.Find(install, name, "General")) ?? Loc.FindTextFile(data, name);
             return path is not null ? [.. File.ReadAllLines(path).Select(l => l.Trim()).Where(l => l.Length > 0)] : [];
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 
     /// <summary>

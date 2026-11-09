@@ -8,11 +8,29 @@ namespace Meitou.Data.Save;
 /// </summary>
 public sealed class SaveHandles
 {
+    /// <summary>
+    /// The platoons by their handle's container.
+    /// </summary>
     readonly Dictionary<int, SavePlatoon> _platoons = [];
+
+    /// <summary>
+    /// The characters by their handle's (container, slot).
+    /// </summary>
     readonly Dictionary<(int C, int I), SaveCharacter> _characters = [];
+
+    /// <summary>
+    /// The towns and nests by their handle's container.
+    /// </summary>
     readonly Dictionary<int, SaveTown> _towns = [];
+
+    /// <summary>
+    /// The zones' building states by their own handle's (container, slot).
+    /// </summary>
     readonly Dictionary<(int C, int I), FcsRecord> _buildings = [];
 
+    /// <summary>
+    /// Indexes the platoons, characters, towns and building states of <paramref name="game"/>; null handles are left out.
+    /// </summary>
     internal SaveHandles(SaveGame game)
     {
         foreach (var p in game.Platoons)
@@ -28,9 +46,24 @@ public sealed class SaveHandles
                 if (Hand.Read(s, "handle") is { IsNull: false } h) _buildings[(h.C, h.I)] = s;
     }
 
+    /// <summary>
+    /// The platoon a PLATOON handle names, or null.
+    /// </summary>
     public SavePlatoon? Platoon(Hand h) => h.Type == (int)FcsRecordType.Platoon ? _platoons.GetValueOrDefault(h.C) : null;
+
+    /// <summary>
+    /// The character a CHARACTER handle names, or null.
+    /// </summary>
     public SaveCharacter? Character(Hand h) => h.Type == (int)FcsRecordType.Character ? _characters.GetValueOrDefault((h.C, h.I)) : null;
+
+    /// <summary>
+    /// The town a TOWN or NEST (85) handle names, or null.
+    /// </summary>
     public SaveTown? Town(Hand h) => h.Type is (int)FcsRecordType.Town or 85 ? _towns.GetValueOrDefault(h.C) : null;
+
+    /// <summary>
+    /// The building state a BUILDING handle names, or null.
+    /// </summary>
     public FcsRecord? Building(Hand h) => h.Type == (int)FcsRecordType.Building ? _buildings.GetValueOrDefault((h.C, h.I)) : null;
 
     /// <summary>

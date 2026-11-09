@@ -8,8 +8,8 @@ namespace Meitou.Data.Gameplay.Ai;
 public readonly record struct TaskCondition(StateType State, bool Holds);
 
 /// <summary>
-/// The planner fields of a TaskData row beyond its lists (docs/game/ai-tasks.md "Planner", Observed; <see cref="Acts"/> and <see cref="NeedsTarget"/>
-/// Verified).
+/// The planner fields of a TaskData row beyond its lists (docs/game/ai-tasks.md "Planner", Observed; <see cref="Acts"/> and
+/// <see cref="NeedsTarget"/> Verified).
 /// </summary>
 [Flags]
 public enum TaskDataFlags : byte
@@ -48,6 +48,9 @@ public enum TaskDataFlags : byte
 public sealed record TaskDataRow(
     TaskType Type, string Text, int Category, TaskDataFlags Flags, TaskCondition[] Done, TaskCondition[] Needs, TaskCondition? Effect)
 {
+    /// <summary>
+    /// Whether the flag bits hold <paramref name="flag"/>.
+    /// </summary>
     public bool Is(TaskDataFlags flag) => (Flags & flag) != 0;
 }
 
@@ -56,6 +59,10 @@ public sealed record TaskDataRow(
 /// </summary>
 public static class TaskDataTable
 {
+    /// <summary>
+    /// Every row in the original's registration order, transcribed from docs/game/ai-tasks.md "TaskData registry" (state lists as StateType ids,
+    /// <c>!</c> wanting false).
+    /// </summary>
     public static IReadOnlyList<TaskDataRow> Rows { get; } =
     [
         R(1, "Moving", 0x63, Acts | NeedsTarget, "1 !69 40 41", "27 !24 !83 60 90 59"),
@@ -313,7 +320,15 @@ public static class TaskDataTable
         R(254, "Kidnapper", 0x1, 0, "0", "153 154"),
     ];
 
+    /// <summary>
+    /// The row of each task type by its number (0 to 290); null where a type has none.
+    /// </summary>
     static readonly TaskDataRow?[] ByType = BuildByType();
+
+    /// <summary>
+    /// <see cref="Providers"/> results by (category, state), filled on first ask from any thread.
+    /// </summary>
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<(int, TaskCondition), TaskDataRow[]> ProviderCache = new();
 
     /// <summary>
     /// The row of a type; null for the 37 named types without one.
@@ -321,16 +336,17 @@ public static class TaskDataTable
     public static TaskDataRow? Of(TaskType type) => (uint)type < (uint)ByType.Length ? ByType[(int)type] : null;
 
     /// <summary>
-    /// The rows of a category (a registration flag bit) whose list A holds a state with the wanted value, in ascending task type (the original fills
-    /// them from its registry map keyed by type), not <see cref="TaskDataFlags.NotProvider"/> ones (docs/game/ai-tasks.md "Planner": the provider
-    /// maps).
+    /// The rows of a category (a registration flag bit) whose list A holds a state with the wanted value, in ascending task type (the original
+    /// fills them from its registry map keyed by type), not <see cref="TaskDataFlags.NotProvider"/> ones (docs/game/ai-tasks.md "Planner": the
+    /// provider maps).
     /// </summary>
     public static IReadOnlyList<TaskDataRow> Providers(int category, TaskCondition state) =>
         ProviderCache.GetOrAdd((category, state), static k =>
             [.. Rows.Where(r => (r.Category & k.Item1) != 0 && !r.Is(NotProvider) && r.Done.Contains(k.Item2)).OrderBy(r => (int)r.Type)]);
 
-    static readonly System.Collections.Concurrent.ConcurrentDictionary<(int, TaskCondition), TaskDataRow[]> ProviderCache = new();
-
+    /// <summary>
+    /// Indexes <see cref="Rows"/> by task type.
+    /// </summary>
     static TaskDataRow?[] BuildByType()
     {
         var a = new TaskDataRow?[291];
@@ -338,9 +354,16 @@ public static class TaskDataTable
         return a;
     }
 
+    /// <summary>
+    /// A row from its type number, text, category bits, flags and its lists written as space-separated StateType ids (<c>!</c> for false); the effect
+    /// is the first entry of its list, null when none is given.
+    /// </summary>
     static TaskDataRow R(int type, string text, int category, TaskDataFlags flags, string done, string needs, string? effect = null) =>
         new((TaskType)type, text, category, flags, List(done), List(needs), effect is null ? null : List(effect)[0]);
 
+    /// <summary>
+    /// Parses a space-separated list of StateType ids, a leading <c>!</c> wanting the state false.
+    /// </summary>
     static TaskCondition[] List(string s) =>
         [.. s.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(e =>
             e[0] == '!' ? new TaskCondition((StateType)int.Parse(e[1..]), false) : new TaskCondition((StateType)int.Parse(e), true))];

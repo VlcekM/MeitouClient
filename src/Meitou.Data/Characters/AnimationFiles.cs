@@ -4,9 +4,8 @@ namespace Meitou.Data.Characters;
 
 /// <summary>
 /// The skeleton files a character's skeleton takes extra animations from (docs/animation.md, "Animation files"): the ANIMATION_FILE records of its
-/// race's
-/// <c>animation files</c>, then of its own record's, latest-created first, each giving its <c>male animation</c> or <c>female animation</c>. A clip
-/// is looked for in the body's own skeleton first, then in these in order; a file named twice is linked once.
+/// race's <c>animation files</c>, then of its own record's, latest-created first, each giving its <c>male animation</c> or <c>female animation</c>. A
+/// clip is looked for in the body's own skeleton first, then in these in order; a file named twice is linked once.
 /// </summary>
 public static class AnimationFiles
 {
@@ -28,11 +27,17 @@ public static class AnimationFiles
                 StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>
+    /// The ANIMATION_FILE records <paramref name="owner"/>'s <c>animation files</c> list names, in list order (missing ones left out).
+    /// </summary>
     static IEnumerable<GameRecord> Records(GameDatabase db, GameRecord owner) => owner.GetReferences("animation files")
         .Select(r => db.Find(r.TargetStringId)).OfType<GameRecord>().Where(r => r.Type == FcsRecordType.AnimationFile);
 
-    // Sorted by the load-order index of the file that created each record, highest first (the game's qsort on GameData::createdIndex); records of one
-    // file keep their list order (the game's qsort leaves ties in no defined order). The game links the bare file name, so one name links once.
+    /// <summary>
+    /// The <paramref name="field"/> paths of <paramref name="records"/>, sorted by the load-order index of the file that created each record, highest
+    /// first (the game's qsort on <c>GameData::createdIndex</c>); records of one file keep their list order (the game's qsort leaves ties in no
+    /// defined order). The game links the bare file name, so one name links once.
+    /// </summary>
     static IReadOnlyList<string> Linked(GameDatabase db, IEnumerable<GameRecord> records, string field) => records
         .OrderByDescending(r => db.Files.IndexOf(r.DefinedBy))
         .Select(r => r.GetPath(field)).Where(p => p.Length > 0)

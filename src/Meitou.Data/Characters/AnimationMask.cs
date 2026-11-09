@@ -10,15 +10,38 @@ namespace Meitou.Data.Characters;
 public sealed record AnimationMask(string AnimationName, string? RecordName, string Layer, IReadOnlySet<string> DeletedBones,
         IReadOnlySet<string> OverrideBones)
 {
+    /// <summary>
+    /// The left arm's bones (<c>override L arm</c>, <c>delete L arm</c>).
+    /// </summary>
     static readonly string[] LeftArm = ["Bip01 L Clavicle", "Bip01 L UpperArm", "Bip01 L Forearm", "Bip01 L Hand"];
+
+    /// <summary>
+    /// The right arm's bones (<c>override R arm</c>, <c>delete R arm</c>).
+    /// </summary>
     static readonly string[] RightArm = ["Bip01 R Clavicle", "Bip01 R UpperArm", "Bip01 R Forearm", "Bip01 R Hand"];
+
+    /// <summary>
+    /// The root, pelvis and leg bones <c>delete below waist</c> removes.
+    /// </summary>
     static readonly string[] BelowWaist =
     [
         "Bip01", "Bip01 Pelvis", "Bip01 R Thigh", "Bip01 L Thigh", "Bip01 R Calf", "Bip01 L Calf",
         "Bip01 R Foot", "Bip01 L Foot", "Bip01 R Toe0", "Bip01 L Toe0",
     ];
+
+    /// <summary>
+    /// The spine, neck and head bones <c>delete body head</c> removes.
+    /// </summary>
     static readonly string[] BodyHead = ["Bip01 Spine", "Bip01 Spine1", "Bip01 Spine2", "Bip01 Neck", "Bip01 Head"];
+
+    /// <summary>
+    /// The tail bones <c>delete tail</c> (default true) removes.
+    /// </summary>
     static readonly string[] Tail = ["Bip01 Tail", "Bip01 Tail1", "Bip01 Tail2", "Bip01 Tail3", "Bip01 Tail4"];
+
+    /// <summary>
+    /// The hand and prop bones deleted from the <c>postures</c>, <c>shoulder set</c> and <c>neck set</c> animations.
+    /// </summary>
     static readonly string[] HandsAndProps = ["Bip01 L Hand", "Bip01 R Hand", "Bip01 Prop1", "Bip01 Prop2"];
 
     /// <summary>
@@ -92,8 +115,7 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
 
     /// <summary>
     /// The mask for <paramref name="name"/>: an ANIMATION record of that name, else a COMBAT_TECHNIQUE of that name, else the first ANIMATION record
-    /// whose
-    /// <c>anim name</c> is it (the one that keeps the name when duplicates are renamed), else <see cref="Plain"/>.
+    /// whose <c>anim name</c> is it (the one that keeps the name when duplicates are renamed), else <see cref="Plain"/>.
     /// </summary>
     public static AnimationMask Find(GameDatabase? db, string name)
     {
@@ -106,17 +128,32 @@ public sealed record AnimationMask(string AnimationName, string? RecordName, str
 
     /// <summary>
     /// <see cref="Find"/>'s lookups over a database, the first record in its order for each name (case-insensitive), made once per
-    /// <see cref="GameDatabase.Version"/>: scanning every record for each layer of each new rig took two seconds of a town's loading with a heavy mod
-    /// list.
+    /// <see cref="GameDatabase.Version"/>: scanning every record for each layer of each new rig took two seconds of a town's loading with a heavy
+    /// mod list.
     /// </summary>
     sealed class Index
     {
+        /// <summary>
+        /// The index of each database, replaced when its version changes.
+        /// </summary>
         static readonly System.Runtime.CompilerServices.ConditionalWeakTable<GameDatabase, Index> Made = new();
+
+        /// <summary>
+        /// The <see cref="GameDatabase.Version"/> the index was made at.
+        /// </summary>
         int _version;
+
+        /// <summary>
+        /// The first ANIMATION of each name, the first COMBAT_TECHNIQUE of each name, and the first ANIMATION of each <c>anim name</c> (all
+        /// ignoring case).
+        /// </summary>
         public readonly Dictionary<string, GameRecord> ByName = new(StringComparer.OrdinalIgnoreCase),
             Techniques = new(StringComparer.OrdinalIgnoreCase),
             ByAnimation = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// The index of <paramref name="db"/>: the one made for its current version, else a new one.
+        /// </summary>
         public static Index Of(GameDatabase db)
         {
             if (Made.TryGetValue(db, out var index) && index._version == db.Version) return index;

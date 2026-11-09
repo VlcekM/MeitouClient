@@ -11,9 +11,24 @@ namespace Meitou.Data.Gameplay;
 /// </summary>
 public sealed record NewGameStart
 {
+    /// <summary>
+    /// The standard start of the base game (difficulty "Default", the one with the Wanderer squad).
+    /// </summary>
+    public const string DefaultName = "Wanderer";
+
+    /// <summary>
+    /// The data files' name when set apart from <see cref="Name"/>; null: the same.
+    /// </summary>
     string? _baseName;
 
+    /// <summary>
+    /// The NEW_GAME_STARTOFF's string id.
+    /// </summary>
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The start's name in the active language.
+    /// </summary>
     public required string Name { get; init; }
 
     /// <summary>
@@ -31,9 +46,25 @@ public sealed record NewGameStart
     /// drawn from <see cref="Towns"/>).
     /// </summary>
     public Vector2 StartPosition { get; init; }
+
+    /// <summary>
+    /// <c>force start pos</c>: the squad starts at <see cref="StartPosition"/>.
+    /// </summary>
     public bool ForceStartPos { get; init; }
+
+    /// <summary>
+    /// <c>description</c>: the new-game screen's text of the start.
+    /// </summary>
     public string Description { get; init; } = "";
+
+    /// <summary>
+    /// <c>difficulty</c>: shown on the new-game screen.
+    /// </summary>
     public string Difficulty { get; init; } = "";
+
+    /// <summary>
+    /// <c>style</c>: shown on the new-game screen.
+    /// </summary>
     public string Style { get; init; } = "";
 
     /// <summary>
@@ -50,6 +81,10 @@ public sealed record NewGameStart
     /// <c>faction relations</c>: each sets that faction's relation with the player to v0, both ways.
     /// </summary>
     public IReadOnlyList<RecordLink> FactionRelations { get; init; } = [];
+
+    /// <summary>
+    /// <c>research</c>.
+    /// </summary>
     public IReadOnlyList<RecordLink> Research { get; init; } = [];
 
     /// <summary>
@@ -57,6 +92,9 @@ public sealed record NewGameStart
     /// </summary>
     public IReadOnlyList<RecordLink> ForceRace { get; init; } = [];
 
+    /// <summary>
+    /// Reads a NEW_GAME_STARTOFF record.
+    /// </summary>
     public static NewGameStart From(GameRecord r)
     {
         IReadOnlyList<RecordLink> Links(string list) => [.. r.GetReferences(list).Select(RecordLink.From)];
@@ -84,11 +122,6 @@ public sealed record NewGameStart
     /// The start-offs of the database, in its order.
     /// </summary>
     public static List<NewGameStart> LoadAll(GameDatabase db) => [.. db.OfType(FcsRecordType.NewGameStartoff).Select(From)];
-
-    /// <summary>
-    /// The standard start of the base game (difficulty "Default", the one with the Wanderer squad).
-    /// </summary>
-    public const string DefaultName = "Wanderer";
 
     /// <summary>
     /// Finds a start by name (case-insensitive; the shown or the data-file name) or string id.

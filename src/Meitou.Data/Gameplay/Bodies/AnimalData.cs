@@ -9,6 +9,9 @@ namespace Meitou.Data.Gameplay.Bodies;
 /// </summary>
 public sealed record AnimalData
 {
+    /// <summary>
+    /// The ANIMAL_CHARACTER's string id.
+    /// </summary>
     public required string StringId { get; init; }
 
     /// <summary>
@@ -28,8 +31,8 @@ public sealed record AnimalData
     public int AnimalStrength { get; init; }
 
     /// <summary>
-    /// <c>HP mult</c>, 1 when 0 or below (<b>Observed</b>, <c>FUN_14062f000</c>): the character's slot-0x238 scale (part body scale and blood
-    /// capacity).
+    /// <c>HP mult</c>, 1 when 0 or below (<b>Observed</b>, <c>FUN_14062f000</c>): the character's slot-0x238 scale (part body scale and
+    /// blood capacity).
     /// </summary>
     public float HpMult { get; init; } = 1;
 
@@ -37,11 +40,15 @@ public sealed record AnimalData
     /// <c>scale min</c> / <c>scale max</c>: the size the animal has at age 0 and 1 (slot 0x390 = lerp(age, min, max)).
     /// </summary>
     public float ScaleMin { get; init; } = 1;
+
+    /// <summary>
+    /// <c>scale max</c>: the size at age 1 (default 1).
+    /// </summary>
     public float ScaleMax { get; init; } = 1;
 
     /// <summary>
-    /// <c>lifespan</c> (<c>+0x6f8</c>): the game days the animal takes to grow from age 0 to 1 (<see cref="AgePerSecond"/>, docs/game/animals.md
-    /// "Ageing").
+    /// <c>lifespan</c> (<c>+0x6f8</c>): the game days the animal takes to grow from age 0 to 1 (<see cref="AgePerSecond"/>,
+    /// docs/game/animals.md "Ageing").
     /// </summary>
     public float Lifespan { get; init; }
 
@@ -50,7 +57,15 @@ public sealed record AnimalData
     /// consumers were not found (<b>Unknown</b>).
     /// </summary>
     public float SmellBlood { get; init; }
+
+    /// <summary>
+    /// <c>smell eggs</c> (<c>+0x6ec</c>); consumer <b>Unknown</b>.
+    /// </summary>
     public float SmellEggs { get; init; }
+
+    /// <summary>
+    /// <c>turn rate</c>; consumer <b>Unknown</b>.
+    /// </summary>
     public float TurnRate { get; init; }
 
     /// <summary>
@@ -77,8 +92,8 @@ public sealed record AnimalData
     public float AgePerSecond => Lifespan > 0 ? 1 / (Construction.MachineData.DaySeconds * Lifespan) : 0;
 
     /// <summary>
-    /// The animal's size at <paramref name="age"/> (<c>CharacterAnimal</c> slot 0x390, <b>Observed</b>): lerp(age, scale min, scale max), not
-    /// clamped.
+    /// The animal's size at <paramref name="age"/> (<c>CharacterAnimal</c> slot 0x390, <b>Observed</b>): lerp(age, scale min, scale max),
+    /// not clamped.
     /// </summary>
     public float Scale(float age) => ScaleMin + (ScaleMax - ScaleMin) * age;
 

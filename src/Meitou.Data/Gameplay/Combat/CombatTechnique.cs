@@ -11,17 +11,64 @@ namespace Meitou.Data.Gameplay.Combat;
 /// </summary>
 public sealed record CombatTechnique
 {
+    /// <summary>
+    /// The COMBAT_TECHNIQUE's string id.
+    /// </summary>
     public required string StringId { get; init; }
+
+    /// <summary>
+    /// The COMBAT_TECHNIQUE's name in the active language.
+    /// </summary>
     public string Name { get; init; } = "";
+
+    /// <summary>
+    /// <c>anim name</c>: the animation clip the technique plays.
+    /// </summary>
     public string AnimName { get; init; } = "";
+
+    /// <summary>
+    /// <c>is block</c>: a block rather than an attack.
+    /// </summary>
     public bool IsBlock { get; init; }
+
+    /// <summary>
+    /// <c>is dodge</c>.
+    /// </summary>
     public bool IsDodge { get; init; }
+
+    /// <summary>
+    /// <c>is stumble dodge</c>.
+    /// </summary>
     public bool IsStumbleDodge { get; init; }
+
+    /// <summary>
+    /// <c>is prone</c>.
+    /// </summary>
     public bool IsProne { get; init; }
+
+    /// <summary>
+    /// <c>low strike</c>.
+    /// </summary>
     public bool LowStrike { get; init; }
+
+    /// <summary>
+    /// <c>gains ground</c>.
+    /// </summary>
     public bool GainsGround { get; init; }
+
+    /// <summary>
+    /// <c>disabled</c>.
+    /// </summary>
     public bool Disabled { get; init; }
+
+    /// <summary>
+    /// <c>use L arm</c>.
+    /// </summary>
     public bool UseLeftArm { get; init; }
+
+    /// <summary>
+    /// <c>use R arm</c>.
+    /// </summary>
     public bool UseRightArm { get; init; }
 
     /// <summary>
@@ -47,26 +94,109 @@ public sealed record CombatTechnique
     /// </summary>
     public IReadOnlyList<CombatBlow> MoreBlows { get; init; } = [];
 
+    /// <summary>
+    /// <c>attack direction 1</c>: blow 1's CutDirection (default 0).
+    /// </summary>
     public int AttackDirection1 { get; init; }
+
+    /// <summary>
+    /// <c>attack direction 2</c>: blow 2's CutDirection (default 0).
+    /// </summary>
     public int AttackDirection2 { get; init; }
+
+    /// <summary>
+    /// <c>power 1</c>: blow 1's power (default 100).
+    /// </summary>
     public int Power1 { get; init; } = 100;
+
+    /// <summary>
+    /// <c>power 2</c>: blow 2's power (default 100).
+    /// </summary>
     public int Power2 { get; init; } = 100;
+
+    /// <summary>
+    /// <c>limb 1</c>: blow 1's limb (0 left arm, 1 right arm, 2 and 3 legs, 4 the weapon; the reader's default 4).
+    /// </summary>
     public int Limb1 { get; init; }
+
+    /// <summary>
+    /// <c>limb 2</c>: blow 2's limb (the reader's default 4).
+    /// </summary>
     public int Limb2 { get; init; }
+
+    /// <summary>
+    /// <c>max simultaneous hits</c> (default 1).
+    /// </summary>
     public int MaxSimultaneousHits { get; init; } = 1;
+
+    /// <summary>
+    /// <c>chance</c> (default 1).
+    /// </summary>
     public float Chance { get; init; } = 1;
+
+    /// <summary>
+    /// <c>min skill</c> (default -100).
+    /// </summary>
     public float MinSkill { get; init; } = -100;
+
+    /// <summary>
+    /// <c>max skill</c> (default 999).
+    /// </summary>
     public float MaxSkill { get; init; } = 999;
+
+    /// <summary>
+    /// <c>max encumbrance</c> (default 999).
+    /// </summary>
     public float MaxEncumbrance { get; init; } = 999;
+
+    /// <summary>
+    /// <c>attack distance</c> (default 0).
+    /// </summary>
     public float AttackDistance { get; init; }
+
+    /// <summary>
+    /// <c>attack distance min vs static</c> (default 0).
+    /// </summary>
     public float AttackDistanceMinVsStatic { get; init; }
+
+    /// <summary>
+    /// <c>anim hesitate point</c> (default 0).
+    /// </summary>
     public float HesitatePoint { get; init; }
+
+    /// <summary>
+    /// <c>anim speed mult</c> (default 1).
+    /// </summary>
     public float AnimSpeedMult { get; init; } = 1;
+
+    /// <summary>
+    /// <c>num frames</c> (default 1): 1 makes the frame fields fractions of the clip, a larger value frame numbers.
+    /// </summary>
     public float NumFrames { get; init; } = 1;
+
+    /// <summary>
+    /// <c>anim blocked frame 1</c>: where blow 1 arrives (default 1).
+    /// </summary>
     public float BlockedFrame1 { get; init; } = 1;
+
+    /// <summary>
+    /// <c>anim blocked frame 2</c>: where blow 2 arrives (default 1).
+    /// </summary>
     public float BlockedFrame2 { get; init; } = 1;
+
+    /// <summary>
+    /// <c>anim stop frame 1</c>: where the clip stops when blow 1 is stopped (default 1).
+    /// </summary>
     public float StopFrame1 { get; init; } = 1;
+
+    /// <summary>
+    /// <c>anim stop frame 2</c>: where the clip stops when blow 2 is stopped (default 1).
+    /// </summary>
     public float StopFrame2 { get; init; } = 1;
+
+    /// <summary>
+    /// <c>acceptable end time</c> (default 0.95), as a frame or fraction like the other frame fields (<see cref="EndProgress"/>).
+    /// </summary>
     public float AcceptableEndTime { get; init; } = 0.95f;
 
     /// <summary>
@@ -110,8 +240,14 @@ public sealed record CombatTechnique
     /// </summary>
     public float EndProgress => ToProgress(AcceptableEndTime);
 
+    /// <summary>
+    /// A frame field as clip progress: divided by <see cref="NumFrames"/> when that is above 1, clamped to 0..1.
+    /// </summary>
     float ToProgress(float frame) => Math.Clamp(NumFrames > 1 ? frame / NumFrames : frame, 0, 1);
 
+    /// <summary>
+    /// Reads a COMBAT_TECHNIQUE record: the weapon-kind flags, every blow (<c>num techniques</c>, default 1) and the defaults named on each property.
+    /// </summary>
     public static CombatTechnique From(GameRecord r)
     {
         WeaponKinds kinds = WeaponKinds.None;
@@ -172,6 +308,9 @@ public sealed record CombatTechnique
         };
     }
 
+    /// <summary>
+    /// Reads blow <paramref name="n"/> (3 and up) from its numbered fields, with the editor's defaults.
+    /// </summary>
     static CombatBlow ReadBlow(GameRecord r, int n) => new(
         RecordReading.Int(r, $"attack direction {n}", 0),
         RecordReading.Int(r, $"power {n}", 100),
@@ -186,5 +325,8 @@ public sealed record CombatTechnique
 /// </summary>
 public readonly record struct CombatBlow(int Direction, int Power, int Limb, float BlockedFrame, float StopFrame)
 {
+    /// <summary>
+    /// A blow with every field at the editor's default (direction 0, power 100, limb 4, frames 1).
+    /// </summary>
     public static readonly CombatBlow Default = new(0, 100, 4, 1, 1);
 }

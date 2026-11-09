@@ -8,40 +8,129 @@ namespace Meitou.Data.Gameplay.Bodies;
 /// </summary>
 public sealed record LimbReplacement
 {
+    /// <summary>
+    /// The <c>slot</c> number of the left arm, the first of the four limb slots (fcs_enums.def <c>LimbSlot</c> LEFT_ARM=50).
+    /// </summary>
     public const int FirstSlot = 50;
 
+    /// <summary>
+    /// The LIMB_REPLACEMENT's string id.
+    /// </summary>
     public required string StringId { get; init; }
+
+    /// <summary>
+    /// The LIMB_REPLACEMENT's name in the active language.
+    /// </summary>
     public string Name { get; init; } = "";
+
     /// <summary>
     /// <c>slot</c>: 50 left arm, 51 right arm, 52 left leg, 53 right leg.
     /// </summary>
     public int Slot { get; init; }
+
+    /// <summary>
+    /// <c>craft time hrs</c> (game hours, default 0).
+    /// </summary>
     public float CraftTimeHours { get; init; }
+
+    /// <summary>
+    /// <c>HP</c>: the part's base HP at the lowest quality (default 0).
+    /// </summary>
     public float HpLow { get; init; }
+
+    /// <summary>
+    /// <c>HP 1</c>: the part's base HP at the highest quality (default <see cref="HpLow"/>).
+    /// </summary>
     public float HpHigh { get; init; }
+
+    /// <summary>
+    /// <c>unarmed damage bonus</c> at the lowest quality (default 0).
+    /// </summary>
     public float UnarmedDamageBonusLow { get; init; }
+
+    /// <summary>
+    /// <c>unarmed damage bonus 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float UnarmedDamageBonusHigh { get; init; }
+
+    /// <summary>
+    /// <c>overall mult</c> at the lowest quality (default 1).
+    /// </summary>
     public float OverallMultLow { get; init; } = 1;
+
+    /// <summary>
+    /// <c>overall mult 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float OverallMultHigh { get; init; } = 1;
+
+    /// <summary>
+    /// <c>swimming mult</c> at the lowest quality (default 1).
+    /// </summary>
     public float SwimmingLow { get; init; } = 1;
+
+    /// <summary>
+    /// <c>swimming mult 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float SwimmingHigh { get; init; } = 1;
+
+    /// <summary>
+    /// <c>strength mult</c> at the lowest quality (default 1).
+    /// </summary>
     public float StrengthLow { get; init; } = 1;
+
+    /// <summary>
+    /// <c>strength mult 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float StrengthHigh { get; init; } = 1;
+
+    /// <summary>
+    /// <c>dexterity mult</c> at the lowest quality (default 1).
+    /// </summary>
     public float DexterityLow { get; init; } = 1;
+
+    /// <summary>
+    /// <c>dexterity mult 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float DexterityHigh { get; init; } = 1;
+
     /// <summary>
     /// <c>thievery mult</c>, applied to both thieving (10) and lockpicking (37).
     /// </summary>
     public float ThieveryLow { get; init; } = 1;
+
+    /// <summary>
+    /// <c>thievery mult 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float ThieveryHigh { get; init; } = 1;
+
     /// <summary>
     /// <c>ranged mult</c> (stat 35, crossbows).
     /// </summary>
     public float RangedLow { get; init; } = 1;
+
+    /// <summary>
+    /// <c>ranged mult 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float RangedHigh { get; init; } = 1;
+
+    /// <summary>
+    /// <c>athletics mult</c> at the lowest quality (default 1).
+    /// </summary>
     public float AthleticsLow { get; init; } = 1;
+
+    /// <summary>
+    /// <c>athletics mult 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float AthleticsHigh { get; init; } = 1;
+
+    /// <summary>
+    /// <c>stealth mult</c> at the lowest quality (default 1).
+    /// </summary>
     public float StealthLow { get; init; } = 1;
+
+    /// <summary>
+    /// <c>stealth mult 1</c> at the highest quality (default the low value).
+    /// </summary>
     public float StealthHigh { get; init; } = 1;
 
     /// <summary>
@@ -49,6 +138,9 @@ public sealed record LimbReplacement
     /// </summary>
     public int LimbSlot => Slot - FirstSlot;
 
+    /// <summary>
+    /// True for the two leg slots (limb slots 2 and 3).
+    /// </summary>
     public bool IsLeg => LimbSlot is 2 or 3;
 
     /// <summary>
@@ -107,8 +199,14 @@ public sealed record LimbReplacement
         return low + (high - low) * (level * 0.01f);
     }
 
+    /// <summary>
+    /// Lerps from <paramref name="a"/> to <paramref name="b"/> by <paramref name="t"/> clamped to 0..1.
+    /// </summary>
     static float Lerp(float a, float b, float t) => a + (b - a) * Math.Clamp(t, 0, 1);
 
+    /// <summary>
+    /// Reads a LIMB_REPLACEMENT record: each multiplier pair from <c>X</c> and <c>X 1</c>, the second defaulting to the first.
+    /// </summary>
     public static LimbReplacement From(GameRecord r)
     {
         // "X mult" is the low-quality value, "X mult 1" the high-quality one; a record that has only the first uses it for both.

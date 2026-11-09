@@ -17,7 +17,14 @@ public readonly record struct TurretPart(int Parent, bool Yaw, Vector3 Offset, s
 /// </summary>
 public sealed record TurretGun
 {
+    /// <summary>
+    /// The BUILDING the gun belongs to.
+    /// </summary>
     public required string BuildingId { get; init; }
+
+    /// <summary>
+    /// The building's <c>gun turret</c> GUN_DATA.
+    /// </summary>
     public required GunData Gun { get; init; }
 
     /// <summary>
@@ -109,6 +116,9 @@ public static class TurretRig
         }
     }
 
+    /// <summary>
+    /// A BUILDING_PART's <c>offset X</c>, <c>offset Y</c>, <c>offset Z</c> (0 for a missing one).
+    /// </summary>
     static Vector3 OffsetOf(GameRecord part) =>
         new(part.GetFloat("offset X"), part.GetFloat("offset Y"), part.GetFloat("offset Z"));
 
@@ -167,7 +177,14 @@ public static class TurretRig
 /// </summary>
 public sealed class TurretCatalog(GameDatabase db)
 {
+    /// <summary>
+    /// Built guns by BUILDING id; null for a building that is no turret. Its own lock.
+    /// </summary>
     readonly Dictionary<string, TurretGun?> _guns = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Output values by BUILDING id. Its own lock.
+    /// </summary>
     readonly Dictionary<string, float> _outputs = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -185,8 +202,8 @@ public sealed class TurretCatalog(GameDatabase db)
     }
 
     /// <summary>
-    /// A building's output value (<see cref="TurretGun.Output"/>): the turret bonus in percent of the wall a turret is mounted on; 0 for an unknown
-    /// record.
+    /// A building's output value (<see cref="TurretGun.Output"/>): the turret bonus in percent of the wall a turret is mounted on; 0 for an
+    /// unknown record.
     /// </summary>
     public float OutputOf(string buildingId)
     {

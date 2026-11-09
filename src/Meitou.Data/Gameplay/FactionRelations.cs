@@ -16,6 +16,7 @@ public sealed class FactionRelations
     /// At or below this a faction is hostile to another (section 3.3, <b>Verified</b>).
     /// </summary>
     public const float HostileThreshold = -30;
+
     /// <summary>
     /// At or above this a faction counts as an ally (section 3.3). The game's "now your allies" message fires only above it.
     /// </summary>
@@ -25,10 +26,12 @@ public sealed class FactionRelations
     /// Faction id to its position in <see cref="Factions"/>.
     /// </summary>
     readonly Dictionary<string, int> _index;
+
     /// <summary>
     /// The relation of A towards B at <c>A * Count + B</c>.
     /// </summary>
     readonly float[] _relation;
+
     /// <summary>
     /// Whether A lists B in <c>coexistence</c>, at <c>A * Count + B</c>.
     /// </summary>
@@ -52,6 +55,7 @@ public sealed class FactionRelations
     /// The factions of the table, in the order their numbers are.
     /// </summary>
     public IReadOnlyList<FactionData> Factions { get; }
+
     /// <summary>
     /// How many factions the table has.
     /// </summary>
@@ -140,12 +144,12 @@ public sealed class FactionRelations
     }
 
     /// <summary>
-    /// The relation event of slot 5 (<c>FUN_1406b2d20</c>, section 3.4, <b>Observed</b>): faction <paramref name="a"/>'s view of <paramref name="b"/>
-    /// moves by the kind's delta times <paramref name="x"/>, only while it is above the kind's floor (a fall) or below its ceiling (a rise), so one
-    /// event can overshoot the floor by up to the delta; then it is clamped to [-100, 100]. Nothing happens when <paramref name="a"/> is <c>not
-    /// real</c>, the kind has no row, or <paramref name="a"/> is the player's faction (the player's table, <c>PlayerFactionRelations</c>, has empty
-    /// slots 2 to 5). <see cref="RelationEventKind.FirstAid"/>'s <paramref name="x"/> carries the update's seconds. Returns the value before and
-    /// after.
+    /// The relation event of slot 5 (<c>FUN_1406b2d20</c>, section 3.4, <b>Observed</b>): faction <paramref name="a"/>'s view of
+    /// <paramref name="b"/> moves by the kind's delta times <paramref name="x"/>, only while it is above the kind's floor (a fall) or below its
+    /// ceiling (a rise), so one event can overshoot the floor by up to the delta; then it is clamped to [-100, 100]. Nothing happens when
+    /// <paramref name="a"/> is <c>not real</c>, the kind has no row, or <paramref name="a"/> is the player's faction (the player's table,
+    /// <c>PlayerFactionRelations</c>, has empty slots 2 to 5). <see cref="RelationEventKind.FirstAid"/>'s <paramref name="x"/> carries the update's
+    /// seconds. Returns the value before and after.
     /// </summary>
     public (float Before, float After) Event(int a, int b, RelationEventKind kind, float x)
     {

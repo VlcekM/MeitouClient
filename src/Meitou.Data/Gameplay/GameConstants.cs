@@ -23,18 +23,22 @@ public sealed record GameConstants
     /// <c>days per year</c>.
     /// </summary>
     public int DaysPerYear { get; init; }
+
     /// <summary>
     /// <c>sunrise</c> (game hour).
     /// </summary>
     public float Sunrise { get; init; }
+
     /// <summary>
     /// <c>sunset</c> (game hour).
     /// </summary>
     public float Sunset { get; init; }
+
     /// <summary>
     /// <c>latitude</c> (degrees).
     /// </summary>
     public float Latitude { get; init; }
+
     /// <summary>
     /// <c>night darkness</c>: exposure factor at night (formats/lighting.md).
     /// </summary>
@@ -45,30 +49,46 @@ public sealed record GameConstants
     /// <c>build speed</c>: multiplier for overall construction rate.
     /// </summary>
     public float BuildSpeed { get; init; }
+
     /// <summary>
     /// <c>production speed</c>.
     /// </summary>
     public float ProductionSpeed { get; init; }
+
     /// <summary>
     /// <c>research rate</c>: multiplier for research TIMES, so below 1 is faster.
     /// </summary>
     public float ResearchRate { get; init; }
+
     /// <summary>
     /// <c>research level increase rate</c>: research time growth per tech level.
     /// </summary>
     public float ResearchLevelIncreaseRate { get; init; }
+
     /// <summary>
     /// <c>prison time</c>: multiplier for imprisonment time.
     /// </summary>
     public float PrisonTime { get; init; }
+
     /// <summary>
     /// <c>min dismantle materials percentage</c>, stored x0.01.
     /// </summary>
     public float MinDismantleMaterialsFraction { get; init; }
 
     // Squad caps (factions-squads-towns.md section 9).
+    /// <summary>
+    /// <c>max squads</c> (default 10): the player's squad cap, enforced by the squads screen.
+    /// </summary>
     public int MaxSquads { get; init; }
+
+    /// <summary>
+    /// <c>max squad size</c> (default 20).
+    /// </summary>
     public int MaxSquadSize { get; init; }
+
+    /// <summary>
+    /// <c>max faction size</c> (default 30).
+    /// </summary>
     public int MaxFactionSize { get; init; }
 
     // Hunger, blood, healing (character-stats.md).
@@ -76,106 +96,132 @@ public sealed record GameConstants
     /// <c>starvation time</c>: game hours per 100 hunger points.
     /// </summary>
     public float StarvationTime { get; init; }
+
     /// <summary>
     /// <c>fed recovery rate mult</c>.
     /// </summary>
     public float FedRecoveryRateMult { get; init; }
+
     /// <summary>
     /// <c>bed hunger rate</c>.
     /// </summary>
     public float BedHungerRate { get; init; }
+
     /// <summary>
     /// <c>encumbrance hunger rate</c>.
     /// </summary>
     public float EncumbranceHungerRate { get; init; }
+
     /// <summary>
     /// <c>food quality mult</c>: scales a food item's charges (stored as is).
     /// </summary>
     public float FoodQualityMult { get; init; }
+
     /// <summary>
     /// <c>bleed rate</c>, stored x0.1.
     /// </summary>
     public float BleedRate { get; init; }
+
     /// <summary>
     /// <c>immediate blood loss</c>.
     /// </summary>
     public float ImmediateBloodLoss { get; init; }
+
     /// <summary>
     /// <c>bleeding clot rate</c>, stored x0.1.
     /// </summary>
     public float BleedingClotRate { get; init; }
+
     /// <summary>
     /// <c>extra blood loss from bodyparts</c>.
     /// </summary>
     public float ExtraBloodLossFromBodyparts { get; init; }
+
     /// <summary>
     /// <c>blood recovery rate</c>, stored x0.1.
     /// </summary>
     public float BloodRecoveryRate { get; init; }
+
     /// <summary>
     /// <c>bodypart degeneration rate</c>.
     /// </summary>
     public float BodypartDegenerationRate { get; init; }
+
     /// <summary>
     /// <c>degeneration mult 1</c> (at level 1; the value at level 99 is below).
     /// </summary>
     public float DegenerationMult1 { get; init; }
+
     /// <summary>
     /// <c>degeneration mult 99</c>.
     /// </summary>
     public float DegenerationMult99 { get; init; }
+
     /// <summary>
     /// <c>knockout mult 1</c>.
     /// </summary>
     public float KnockoutMult1 { get; init; }
+
     /// <summary>
     /// <c>knockout mult 99</c>.
     /// </summary>
     public float KnockoutMult99 { get; init; }
+
     /// <summary>
     /// <c>knockout time base</c>.
     /// </summary>
     public float KnockoutTimeBase { get; init; }
+
     /// <summary>
     /// <c>min toughness ko point</c>.
     /// </summary>
     public float MinToughnessKoPoint { get; init; }
+
     /// <summary>
     /// <c>max toughness ko point</c>.
     /// </summary>
     public float MaxToughnessKoPoint { get; init; }
+
     /// <summary>
     /// <c>stun recovery rate</c>.
     /// </summary>
     public float StunRecoveryRate { get; init; }
+
     /// <summary>
     /// <c>blunt permanent organ damage</c>.
     /// </summary>
     public float BluntPermanentOrganDamage { get; init; }
+
     /// <summary>
     /// <c>heal rate mult</c>.
     /// </summary>
     public float HealRateMult { get; init; }
+
     /// <summary>
     /// <c>resting heal rate mult</c>.
     /// </summary>
     public float RestingHealRateMult { get; init; }
+
     /// <summary>
     /// <c>medic speed mult</c>.
     /// </summary>
     public float MedicSpeedMult { get; init; }
+
     /// <summary>
     /// <c>medkit drain 1</c>, stored x0.1.
     /// </summary>
     public float MedkitDrain1 { get; init; }
+
     /// <summary>
     /// <c>medkit drain 99</c>, stored x0.1.
     /// </summary>
     public float MedkitDrain99 { get; init; }
+
     /// <summary>
     /// <c>robot medic speed mult</c>.
     /// </summary>
     public float RobotMedicSpeedMult { get; init; }
+
     /// <summary>
     /// <c>robot wear rate</c>.
     /// </summary>
@@ -186,46 +232,57 @@ public sealed record GameConstants
     /// <c>exp gain multiplier</c>, stored x0.25.
     /// </summary>
     public float ExpGainMultiplier { get; init; }
+
     /// <summary>
     /// <c>XP rate medic 1</c>.
     /// </summary>
     public float XpRateMedic1 { get; init; }
+
     /// <summary>
     /// <c>XP rate medic 99</c>.
     /// </summary>
     public float XpRateMedic99 { get; init; }
+
     /// <summary>
     /// <c>skill diff xp 2x bonus</c>.
     /// </summary>
     public float SkillDiffXp2XBonus { get; init; }
+
     /// <summary>
     /// <c>skill diff xp 0x penalty</c>.
     /// </summary>
     public float SkillDiffXp0XPenalty { get; init; }
+
     /// <summary>
     /// <c>min strength xp mult</c>.
     /// </summary>
     public float MinStrengthXpMult { get; init; }
+
     /// <summary>
     /// <c>weight strength diff 1x</c>.
     /// </summary>
     public float WeightStrengthDiff1X { get; init; }
+
     /// <summary>
     /// <c>weight strength diff max</c>.
     /// </summary>
     public float WeightStrengthDiffMax { get; init; }
+
     /// <summary>
     /// <c>xp rate strength</c>.
     /// </summary>
     public float XpRateStrength { get; init; }
+
     /// <summary>
     /// <c>xp rate strength from walking</c>.
     /// </summary>
     public float XpRateStrengthFromWalking { get; init; }
+
     /// <summary>
     /// <c>xp rate athletics</c>, stored x0.5.
     /// </summary>
     public float XpRateAthletics { get; init; }
+
     /// <summary>
     /// <c>xp rate toughness</c>.
     /// </summary>
@@ -236,14 +293,17 @@ public sealed record GameConstants
     /// <c>encumbrance base</c>.
     /// </summary>
     public float EncumbranceBase { get; init; }
+
     /// <summary>
     /// <c>carry weight mult</c>.
     /// </summary>
     public float CarryWeightMult { get; init; }
+
     /// <summary>
     /// <c>carry person weight</c>.
     /// </summary>
     public float CarryPersonWeight { get; init; }
+
     /// <summary>
     /// <c>weapon inventory weight mult</c>.
     /// </summary>
@@ -260,6 +320,7 @@ public sealed record GameConstants
     /// <c>animation blend rate</c>: speed of blending between animations.
     /// </summary>
     public float AnimationBlendRate { get; init; }
+
     /// <summary>
     /// <c>appearance random deviation percentage</c>, stored x0.5.
     /// </summary>

@@ -8,101 +8,234 @@ namespace Meitou.Data.Gameplay;
 /// </summary>
 public sealed record AnimationDefinition
 {
+    /// <summary>
+    /// The idle weight factor when the held weapon type is unarmed (<see cref="IdleWeight"/>): the loaded constant <c>DAT_14167fad0</c>.
+    /// </summary>
+    public const float UnarmedHeldYesFactor = 0.1f;
+
+    /// <summary>
+    /// The record's string id.
+    /// </summary>
     public required string Id { get; init; }
+
     /// <summary>
     /// The record's name: what the renderer resolves to this record's track masks (<see cref="AnimationMask.Find"/>).
     /// </summary>
     public required string Name { get; init; }
+
     /// <summary>
     /// <c>anim name</c>: the skeleton animation it plays.
     /// </summary>
     public required string Clip { get; init; }
+
+    /// <summary>
+    /// <c>layer</c> (default upper): the body part the clip plays on.
+    /// </summary>
     public AnimationArea Area { get; init; }
+
+    /// <summary>
+    /// <c>idle</c>.
+    /// </summary>
     public bool Idle { get; init; }
+
+    /// <summary>
+    /// <c>is action</c>.
+    /// </summary>
     public bool IsAction { get; init; }
+
     /// <summary>
     /// <c>disables movement</c>: while this is the character's action clip it cannot move along waypoints
     /// (<c>AnimationData::restrictsMovementOrders</c>, <b>Verified</b>).
     /// </summary>
     public bool DisablesMovement { get; init; }
+
+    /// <summary>
+    /// <c>loop</c>.
+    /// </summary>
     public bool Loop { get; init; }
+
+    /// <summary>
+    /// <c>synchs</c>.
+    /// </summary>
     public bool Synchs { get; init; }
+
+    /// <summary>
+    /// <c>synch offset</c>.
+    /// </summary>
     public float SynchOffset { get; init; }
+
     /// <summary>
     /// The speed this movement clip travels at (<c>move speed</c>, units per second); 0 for an idle or an action.
     /// </summary>
     public float MoveSpeed { get; init; }
+
     /// <summary>
     /// <c>play speed</c>: a clip's rate multiplier; for movement clips it is multiplied by the movement speed.
     /// </summary>
     public float PlaySpeed { get; init; }
+
     /// <summary>
     /// <c>idle chance</c> (relative) and the seconds an idle plays before another is chosen.
     /// </summary>
     public float IdleChance { get; init; }
+
+    /// <summary>
+    /// <c>idle time min</c> (seconds).
+    /// </summary>
     public float IdleTimeMin { get; init; }
+
+    /// <summary>
+    /// <c>idle time max</c> (seconds).
+    /// </summary>
     public float IdleTimeMax { get; init; }
+
+    /// <summary>
+    /// <c>chance</c>.
+    /// </summary>
     public int Chance { get; init; }
+
     /// <summary>
     /// <c>has weapon L/R</c>: 0 NO, 1 YES, 2 EITHER (the Either enum).
     /// </summary>
     public int WeaponLeft { get; init; }
+
+    /// <summary>
+    /// <c>has weapon R</c>: 0 NO, 1 YES, 2 EITHER.
+    /// </summary>
     public int WeaponRight { get; init; }
+
+    /// <summary>
+    /// <c>is combat mode</c>: 0 only out of combat mode, 1 only in it, 2 either.
+    /// </summary>
     public int CombatMode { get; init; }
+
+    /// <summary>
+    /// <c>stealth mode</c>: 0 only out of stealth mode, 1 only in it, 2 either.
+    /// </summary>
     public int StealthMode { get; init; }
+
+    /// <summary>
+    /// <c>crouched</c>: the posture must match.
+    /// </summary>
     public bool Crouched { get; init; }
+
+    /// <summary>
+    /// <c>prone</c>: the posture must match.
+    /// </summary>
     public bool Prone { get; init; }
+
+    /// <summary>
+    /// <c>carrying left</c>: must match on the upper and overlay picks.
+    /// </summary>
     public bool CarryingLeft { get; init; }
+
+    /// <summary>
+    /// <c>carrying right</c>: must match on the upper and overlay picks.
+    /// </summary>
     public bool CarryingRight { get; init; }
+
+    /// <summary>
+    /// <c>being carried</c>: must match on the upper and overlay picks.
+    /// </summary>
     public bool BeingCarried { get; init; }
+
     /// <summary>
     /// <c>uses left arm</c> / <c>uses right arm</c> (record bytes <c>+0x9f</c> / <c>+0x9e</c>): the layer holds that arm, which the injury hold
     /// (<c>FUN_14051fe60</c>) and the carrying arm check.
     /// </summary>
     public bool UsesLeftArm { get; init; }
+
+    /// <summary>
+    /// <c>uses right arm</c> (record byte <c>+0x9e</c>): the layer holds the right arm.
+    /// </summary>
     public bool UsesRightArm { get; init; }
+
+    /// <summary>
+    /// The weapon kinds the clip suits (the <c>katanas</c>, <c>sabre</c>, <c>blunt</c>, <c>heavy weapons</c>, <c>hackers</c>, <c>polearm</c>,
+    /// <c>unarmed</c>, <c>1 handed</c> flags).
+    /// </summary>
     public WeaponKinds Kinds { get; init; }
+
+    /// <summary>
+    /// <c>L leg damage min</c>: the lowest left leg health the clip fits (<see cref="LegFloor"/>; 1000 with the max: not used).
+    /// </summary>
     public float LeftLegMin { get; init; }
+
+    /// <summary>
+    /// <c>L leg damage max</c>: the highest left leg health the clip fits (<see cref="LegCeil"/>).
+    /// </summary>
     public float LeftLegMax { get; init; }
+
+    /// <summary>
+    /// <c>R leg damage min</c>: the lowest right leg health the clip fits (<see cref="LegFloor"/>; 1000 with the max: not used).
+    /// </summary>
     public float RightLegMin { get; init; }
+
+    /// <summary>
+    /// <c>R leg damage max</c>: the highest right leg health the clip fits (<see cref="LegCeil"/>).
+    /// </summary>
     public float RightLegMax { get; init; }
+
     /// <summary>
     /// <c>min speed</c> / <c>max speed</c>: where the speed weight of a movement clip starts rising and has fallen back to 0 (docs/animation.md
     /// "Choosing candidates").
     /// </summary>
     public float MinSpeed { get; init; }
+
+    /// <summary>
+    /// <c>max speed</c> (see <see cref="MinSpeed"/>).
+    /// </summary>
     public float MaxSpeed { get; init; }
+
     /// <summary>
     /// <c>strafe speed max</c>: on a lower clip with no <c>move speed</c>, the side-step clip of a fighter (<c>strafe lower</c>, docs/animation.md
     /// "Side steps"); 0 on the walking clips.
     /// </summary>
     public float StrafeSpeedMax { get; init; }
+
     /// <summary>
     /// <c>L/R leg damage ideal</c>: the leg health the leg weight peaks at.
     /// </summary>
     public float LeftLegIdeal { get; init; } = 100;
+
+    /// <summary>
+    /// <c>R leg damage ideal</c>: the right leg health the leg weight peaks at (default 100).
+    /// </summary>
     public float RightLegIdeal { get; init; } = 100;
+
     /// <summary>
     /// Hit reactions: <c>stumbles</c> (the LOCATIONAL_DAMAGE string ids of the body parts whose hit plays it), <c>big stumble</c> and <c>stumble
     /// from</c> (0 front, 1 rear).
     /// </summary>
     public IReadOnlyList<string> Stumbles { get; init; } = [];
+
+    /// <summary>
+    /// <c>big stumble</c> (default true).
+    /// </summary>
     public bool BigStumble { get; init; }
+
+    /// <summary>
+    /// <c>stumble from</c>: 0 front, 1 rear.
+    /// </summary>
     public int StumbleFrom { get; init; }
+
     /// <summary>
     /// <c>category</c> (CharacterAnimCategory: 0 ANIM_NORMAL ... 8 RANGED). Only category 0 is chosen as movement, idle or stumble; the RANGED clips
     /// (crossbow aim and reload) are played by the combat system's timing like techniques.
     /// </summary>
     public int Category { get; init; }
+
     /// <summary>
     /// The category a weather-type record (<see cref="AnimationLibrary.WeatherCategory"/>, taken by no selector but the stumble pick) really has;
     /// null for every other record.
     /// </summary>
     public int? StumbleCategory { get; init; }
+
     /// <summary>
     /// A COMBAT_TECHNIQUE (attack, block or dodge): played by the combat system's timing, never chosen as movement or idle.
     /// </summary>
     public bool Technique { get; init; }
+
     /// <summary>
     /// The clip moves the character (<see cref="Characters.AnimationMask.MovesCharacter"/>): the renderer keeps only the height of its <c>Bip01</c>
     /// track and the simulation moves the character by the rest (<see cref="AnimationLengths.Root"/>).
@@ -156,6 +289,9 @@ public sealed record AnimationDefinition
         RightLegMax = 1000,
     };
 
+    /// <summary>
+    /// Reads an ANIMATION record (unset numbers 0, <c>layer</c> upper, <c>big stumble</c> true, leg ideals 100).
+    /// </summary>
     public static AnimationDefinition From(GameRecord r)
     {
         WeaponKinds kinds = WeaponKinds.None;
@@ -253,6 +389,11 @@ public sealed record AnimationDefinition
         return Ramp(health, min, ideal, max, min < 1, false);
     }
 
+    /// <summary>
+    /// The ramp of <paramref name="v"/>: 0 below <paramref name="min"/>, rising to 1 at <paramref name="peak"/> (1 throughout when
+    /// <paramref name="flatBelow"/>), falling to 0 at <paramref name="max"/>; with <paramref name="lineAbove"/> the fall goes on along the line past
+    /// max, clamped to 0..1.
+    /// </summary>
     static float Ramp(float v, float min, float peak, float max, bool flatBelow, bool lineAbove)
     {
         if (v < min) return 0;
@@ -269,6 +410,10 @@ public sealed record AnimationDefinition
     /// 99 is 101, so a leg already below 0 (limping, not yet collapsed) still fits the records that say 0 .. 100.
     /// </summary>
     public static float LegFloor(float min) => min < 1 ? -101 : min;
+
+    /// <summary>
+    /// The loader's reading of a record's leg max: over 99 is 101.
+    /// </summary>
     public static float LegCeil(float max) => max > 99 ? 101 : max;
 
     /// <summary>
@@ -316,6 +461,9 @@ public sealed record AnimationDefinition
     /// </summary>
     public bool KindFits(in AnimationStance s) => HeldKind(s) is var held && (held == WeaponKinds.Unarmed || (Kinds & held) != 0);
 
+    /// <summary>
+    /// The kind of the weapon held: the right hand's, else the left's, else unarmed.
+    /// </summary>
     static WeaponKinds HeldKind(in AnimationStance s) => s.Right.Holds ? s.Right.Weapon : s.Left.Holds ? s.Left.Weapon : WeaponKinds.Unarmed;
 
     /// <summary>
@@ -330,11 +478,6 @@ public sealed record AnimationDefinition
     }
 
     /// <summary>
-    /// The loaded constant <c>DAT_14167fad0</c>.
-    /// </summary>
-    public const float UnarmedHeldYesFactor = 0.1f;
-
-    /// <summary>
     /// Whether the record can play as a character's own <c>idle stance</c> (the original's idle pick <c>FUN_14051f230</c>, <b>Verified</b> by
     /// decompilation, docs/animation.md "Idle stance"): normal category, the combat and stealth modes fit, and the arm check, so a character with a
     /// weapon in hand does not stand in the stance of the empty-handed (it draws from the idle list: <c>stand 1 sword</c>). No other test (legs,
@@ -343,5 +486,8 @@ public sealed record AnimationDefinition
     public bool FitsAsStance(in AnimationStance s) =>
         Category == 0 && !s.BeingCarried && Mode(CombatMode, s.Combat) && Mode(StealthMode, s.Stealth) && ArmsFit(s);
 
+    /// <summary>
+    /// Whether a mode field (0 off, 1 on, 2 either) passes for the character's mode <paramref name="on"/>.
+    /// </summary>
     static bool Mode(int wants, bool on) => wants switch { 0 => !on, 1 => on, _ => true };
 }

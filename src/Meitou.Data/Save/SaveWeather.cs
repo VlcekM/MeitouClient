@@ -6,9 +6,10 @@ using Meitou.Data.World;
 namespace Meitou.Data.Save;
 
 /// <summary>
-/// The weather of every region in the BIOMES record of <c>quick.save</c> (docs/formats/save.md "BIOMES"): each BIOME_GROUP id maps to a key prefix <c>p</c>, and
-/// <c>p_w_s_*</c> / <c>p_w_w_id</c> / <c>p_w_wi_*</c> hold the region's season, weather and wind. Read into and written from <see cref="WeatherRegionSnapshot"/>s.
-/// The original's wind angle turns the other way from Meitou's heading (its direction is <c>(cos a, 0, −sin a)</c>), so heading = −angle.
+/// The weather of every region in the BIOMES record of <c>quick.save</c> (docs/formats/save.md "BIOMES"): each BIOME_GROUP id maps to a key prefix
+/// <c>p</c>, and <c>p_w_s_*</c> / <c>p_w_w_id</c> / <c>p_w_wi_*</c> hold the region's season, weather and wind. Read into and written from
+/// <see cref="WeatherRegionSnapshot"/>s. The original's wind angle turns the other way from Meitou's heading (its direction is <c>(cos a, 0, −sin
+/// a)</c>), so heading = −angle.
 /// </summary>
 public static class SaveWeather
 {
@@ -46,7 +47,8 @@ public static class SaveWeather
             float speed = biomes.Floats.GetValueOrDefault(p + "_w_wi_speed");
             var dir = biomes.Vector3S.GetValueOrDefault(p + "_w_wi_dir", Vector3.UnitX);
             float heading = MathF.Atan2(dir.Z, dir.X);
-            // The last wind change: from (speed, angle) at t0 to the targets at t1 (a finished one the game loaded has both times 0); without its keys, the current wind held.
+            // The last wind change: from (speed, angle) at t0 to the targets at t1 (a finished one the game loaded has both times 0); without its keys,
+            // the current wind held.
             var wind = biomes.Floats.ContainsKey(p + "_w_wi_bu_a_e")
                 ? new WindInterpolation(t0, Math.Max(0, t1 - t0), biomes.Floats.GetValueOrDefault(p + "_w_wi_bu_s_s", speed),
                     -biomes.Floats.GetValueOrDefault(p + "_w_wi_bu_a_s", -heading), biomes.Floats.GetValueOrDefault(p + "_w_wi_bu_s_e", speed),
@@ -60,9 +62,10 @@ public static class SaveWeather
     }
 
     /// <summary>
-    /// Writes the regions into the record at game time <paramref name="now"/>. A record that has regions (a loaded save) is written for those only: the
-    /// original's region table is what it walked, and Meitou's data can hold BIOME_GROUPs that are not in it. An empty record (a new save) gets every region,
-    /// numbered in order, each with its <c>_nestcount</c> (the BIOME_GROUP's <c>num nests</c>). <c>_w_fog_a</c> and the nest keys are left as they are.
+    /// Writes the regions into the record at game time <paramref name="now"/>. A record that has regions (a loaded save) is written for those only:
+    /// the original's region table is what it walked, and Meitou's data can hold BIOME_GROUPs that are not in it. An empty record (a new save) gets
+    /// every region, numbered in order, each with its <c>_nestcount</c> (the BIOME_GROUP's <c>num nests</c>). <c>_w_fog_a</c> and the nest keys are
+    /// left as they are.
     /// </summary>
     public static void Write(FcsRecord biomes, IEnumerable<WeatherRegionSnapshot> regions, WeatherTime now, GameDatabase? db)
     {
@@ -101,5 +104,8 @@ public static class SaveWeather
         }
     }
 
+    /// <summary>
+    /// A minute count as the int the save stores (floored, clamped to the int range).
+    /// </summary>
     static int Minute(double minutes) => (int)Math.Clamp(Math.Floor(minutes), int.MinValue, int.MaxValue);
 }
