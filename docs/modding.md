@@ -111,7 +111,7 @@ holds refuses the second mod.
   collision; pre-damage part health is not supplied. Callbacks run serially in system order, may read the world and change their own
   hashed state, and queue later commands for gameplay changes; they must not mutate world state or call combat recursively. A
   throwing callback is logged (the mod id and the system's registered name) and disabled for that world; others continue. Melee callbacks run in Commit, projectile callbacks in
-  `CombatSystem.Schedule` (`FlyProjectiles`), both before every `SlowWorld` of the tick; execution callbacks run in the captives'
+  `CombatSystem.Schedule` (`ProjectileFlight.Fly`), both before every `SlowWorld` of the tick; execution callbacks run in the captives'
   `SlowWorld`, which has no anchor, so a system draining its own hit queue in `SlowWorld` sees them the same tick only at
   `SystemAnchor.End`, else the next tick. Faulted registrations enter the state hash. Without observers or a hit feed, no payload or event
   queue is made; either way no additional rolls occur (the pre-hit flags are reads).

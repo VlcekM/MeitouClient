@@ -265,29 +265,88 @@ public sealed partial class CombatSystem
         float range = t.Gun.Gun.Range;
         int current = t.Target >= 0 && t.Target < prev.Length && prev[t.Target].Alive && prev[t.Target].Generation == t.TargetGeneration ? t.Target : -1;
 
-        // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it lives, is free, is not down and the gunner does not regard it as friendly;
-        // otherwise the order is dropped and the gunner chooses as it always does (row 235 list A state 7, which counts a crawler; out of range or blocked, the
-        // turret waits).
+        int kept = KeptTurretOrder(world, g, gc);
+        if (kept >= 0) return kept;
+
+        var found = TurretCandidates(world, at, range);
+        var facing = new Vector3(MathF.Sin(t.Yaw), 0, MathF.Cos(t.Yaw));
+        int generation = prev[g].Generation;
+        var choice = new TurretChoice(world, _read, t, g, gc, at, range, facing, generation, found);
+
+        // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it scores above 0 (closeness x arc: in range and not blocked) and the
+        // gunner does not regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does. A target out of range still
+        // scores 0.001 (kept, never fired at); one blocked (inside elsewhere) scores 0.
         if (!gc.TurretTarget.IsNone)
         {
             var talk = world.SystemOf<Dialogue.DialogueSystem>();
-            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, gc, table.Cold(ordered))
-                && !CharacterFacts.TargetDown(table.Cold(ordered)) && (talk is null || !talk.RegardsFriendly(world, g, ordered)))
-                return ordered;   // row 235 ends on state 7 (isTargetDown: crawling too)
+            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive
+                && choice.Score(ordered, TurretFormulas.FullRange, current) > 0 && (talk is null || !talk.RegardsFriendly(world, g, ordered)))
+                return ordered;
 
             gc.TurretTarget = CharacterId.None;
         }
 
+        // The current target is dropped when it no longer scores.
+        if (current >= 0 && choice.Score(current, TurretFormulas.FullRange, current) <= 0) current = -1;
+
+        int best = choice.BestEnemy(Relations, current, out float bestScore);
+        if (best < 0) best = current;
+        if (best >= 0 || Relations is null) return best;
+
+        if (gc.IsPlayer) return choice.ShootFirst(Relations, current, best, bestScore);
+
+        return choice.HostileOrAttacker(Relations, current, best, bestScore);
+    }
+
+    /// <summary>
+    /// Shoot At (<c>FUN_140437f40</c>, <b>Verified</b>): the ordered target is kept while it lives, is free, is not down and the gunner does not regard
+    /// it as friendly; otherwise the order is dropped and the gunner chooses as it always does (row 235 list A state 7, which counts a crawler; out of
+    /// range or blocked, the turret waits). Returns the ordered target kept, else -1.
+    /// </summary>
+    static int KeptTurretOrder(World world, int g, CharacterCold gc)
+    {
+        if (gc.TurretTarget.IsNone) return -1;
+
+        var table = world.Characters;
+        var prev = table.Previous;
+        var talk = world.SystemOf<Dialogue.DialogueSystem>();
+        if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && !ScoresZero(world, gc, table.Cold(ordered))
+            && !CharacterFacts.TargetDown(table.Cold(ordered)) && (talk is null || !talk.RegardsFriendly(world, g, ordered)))
+            return ordered;   // row 235 ends on state 7 (isTargetDown: crawling too)
+
+        gc.TurretTarget = CharacterId.None;
+        return -1;
+    }
+
+    /// <summary>
+    /// The characters within 1.5 x <paramref name="range"/> of the gunner at <paramref name="at"/>, in slot order (the thread's reused list).
+    /// </summary>
+    static List<int> TurretCandidates(World world, Vector3 at, float range)
+    {
         var found = s_turretCandidates ??= [];
         found.Clear();
-        var scan = new TurretScan { Table = table, Found = found };
+        var scan = new TurretScan { Table = world.Characters, Found = found };
         world.Grid.Query(at.X, at.Z, range * 1.5f, ref scan, static (int other, ref TurretScan st) => st.Found.Add(other));
         found.Sort();
-        var facing = new Vector3(MathF.Sin(t.Yaw), 0, MathF.Cos(t.Yaw));
-        int generation = prev[g].Generation;
 
-        float Score(int o, float rangeFactor)
+        return found;
+    }
+
+    /// <summary>
+    /// One turret's choice among its <paramref name="found"/> candidates (<see cref="ChooseTurretTarget"/>): gunner <paramref name="g"/>
+    /// (<paramref name="gc"/>, of <paramref name="generation"/>) at <paramref name="at"/>, the turret <paramref name="t"/> facing
+    /// <paramref name="facing"/> with the gun's <paramref name="range"/>, and <paramref name="read"/> the last tick's combat slots.
+    /// </summary>
+    readonly struct TurretChoice(World world, CombatSlot[] read, TurretState t, int g, CharacterCold gc, Vector3 at, float range, Vector3 facing,
+        int generation, List<int> found)
+    {
+        /// <summary>
+        /// The score of candidate <paramref name="o"/> (<c>FUN_140435d70</c>) at <paramref name="rangeFactor"/> x the range, + 0.1 when it is the
+        /// <paramref name="current"/> target.
+        /// </summary>
+        public float Score(int o, float rangeFactor, int current)
         {
+            var table = world.Characters;
             var oc = table.Cold(o);
             if (ScoresZero(world, gc, oc)) return 0;
 
@@ -304,83 +363,89 @@ public sealed partial class CombatSystem
             s *= TurretFormulas.Arc(facing, there - t.Position, Indoors(world, g, o));
             if (s <= 0) return 0;
 
-            if (_read[o].TargetSlot == g && _read[o].TargetGeneration == generation) s *= 1.5f;
+            if (read[o].TargetSlot == g && read[o].TargetGeneration == generation) s *= 1.5f;
             if (o == current) s += 0.1f;
 
             return s;
         }
 
-        // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it scores above 0 (closeness x arc: in range and not blocked) and the
-        // gunner does not regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does. A target out of range still
-        // scores 0.001 (kept, never fired at); one blocked (inside elsewhere) scores 0.
-        if (!gc.TurretTarget.IsNone)
+        /// <summary>
+        /// The first pass: the gunner's enemies (the faction relations, or anyone fighting it; another faction without relations), the current target
+        /// x 1.5 again. Returns the best above <see cref="TurretFormulas.MinScore"/>, -1 for none, and its score.
+        /// </summary>
+        public int BestEnemy(FactionRelations? relations, int current, out float bestScore)
         {
-            var talk = world.SystemOf<Dialogue.DialogueSystem>();
-            if (table.TryResolveNext(gc.TurretTarget, out int ordered) && prev[ordered].Alive && Score(ordered, TurretFormulas.FullRange) > 0
-                && (talk is null || !talk.RegardsFriendly(world, g, ordered)))
-                return ordered;
-
-            gc.TurretTarget = CharacterId.None;
-        }
-
-        // The current target is dropped when it no longer scores.
-        if (current >= 0 && Score(current, TurretFormulas.FullRange) <= 0) current = -1;
-
-        int best = -1;
-        float bestScore = TurretFormulas.MinScore;
-        foreach (int o in found)
-        {
-            if (o == g || !prev[o].Alive) continue;
-
-            var oc = table.Cold(o);
-            if (oc is null) continue;
-
-            bool enemy = _read[o].TargetSlot == g && _read[o].TargetGeneration == generation
-                || (Relations is not null ? AggroSystem.IsEnemy(Relations, gc.Faction, oc.Faction) : oc.Faction != gc.Faction);
-            if (!enemy) continue;
-
-            float s = Score(o, TurretFormulas.FullRange);
-            if (o == current) s *= 1.5f;
-            if (s > bestScore) (best, bestScore) = (o, s);
-        }
-
-        if (best < 0) best = current;
-        if (best >= 0 || Relations is null) return best;
-
-        if (gc.IsPlayer)
-        {
-            // Shoot first (the squad AI option): with no enemy in its sights a player gunner also takes dangerous neutrals, scored at range factor
-            // 0.6 (no extra weight).
-            if ((world.Player.SquadAi & SquadAi.ShootFirst) == 0) return best;
-
+            var table = world.Characters;
+            var prev = table.Previous;
+            int best = -1;
+            bestScore = TurretFormulas.MinScore;
             foreach (int o in found)
             {
-                if (o == g || !prev[o].Alive || table.Cold(o) is not { } oc || !Relations.Contains(oc.Faction)) continue;
+                if (o == g || !prev[o].Alive) continue;
 
-                var faction = Relations.Factions[oc.Faction];
-                if (!SquadAiRules.ShootsFirstAt(world.Player.SquadAi, (int)faction.FundamentalType, faction.DefaultRelation)) continue;
+                var oc = table.Cold(o);
+                if (oc is null) continue;
 
-                float s = Score(o, TurretFormulas.ShootFirstRange);
+                bool enemy = read[o].TargetSlot == g && read[o].TargetGeneration == generation
+                    || (relations is not null ? AggroSystem.IsEnemy(relations, gc.Faction, oc.Faction) : oc.Faction != gc.Faction);
+                if (!enemy) continue;
+
+                float s = Score(o, TurretFormulas.FullRange, current);
+                if (o == current) s *= 1.5f;
                 if (s > bestScore) (best, bestScore) = (o, s);
             }
 
             return best;
         }
 
-        foreach (int o in found)
+        /// <summary>
+        /// Shoot first (the squad AI option): with no enemy in its sights a player gunner also takes dangerous neutrals, scored at range factor 0.6
+        /// (no extra weight).
+        /// </summary>
+        public int ShootFirst(FactionRelations relations, int current, int best, float bestScore)
         {
-            if (o == g || !prev[o].Alive || table.Cold(o) is not { } oc) continue;
+            if ((world.Player.SquadAi & SquadAi.ShootFirst) == 0) return best;
 
-            bool hostile = Relations.Contains(oc.Faction) && Relations.Factions[oc.Faction].DefaultRelation < FactionRelations.HostileThreshold;
-            int their = _read[o].TargetSlot;
-            bool attacksFriend = their >= 0 && their < prev.Length && prev[their].Alive && table.Cold(their) is { } victim && victim.Faction == gc.Faction;
-            if (!hostile && !attacksFriend) continue;
+            var table = world.Characters;
+            var prev = table.Previous;
+            foreach (int o in found)
+            {
+                if (o == g || !prev[o].Alive || table.Cold(o) is not { } oc || !relations.Contains(oc.Faction)) continue;
 
-            float s = Score(o, TurretFormulas.FullRange);
-            if (s > bestScore) (best, bestScore) = (o, s);
+                var faction = relations.Factions[oc.Faction];
+                if (!SquadAiRules.ShootsFirstAt(world.Player.SquadAi, (int)faction.FundamentalType, faction.DefaultRelation)) continue;
+
+                float s = Score(o, TurretFormulas.ShootFirstRange, current);
+                if (s > bestScore) (best, bestScore) = (o, s);
+            }
+
+            return best;
         }
 
-        return best;
+        /// <summary>
+        /// An NPC gunner's pass with no enemy: characters of default-hostile factions (own default relation below -30) and anyone fighting a member
+        /// of the gunner's faction.
+        /// </summary>
+        public int HostileOrAttacker(FactionRelations relations, int current, int best, float bestScore)
+        {
+            var table = world.Characters;
+            var prev = table.Previous;
+            foreach (int o in found)
+            {
+                if (o == g || !prev[o].Alive || table.Cold(o) is not { } oc) continue;
+
+                bool hostile = relations.Contains(oc.Faction) && relations.Factions[oc.Faction].DefaultRelation < FactionRelations.HostileThreshold;
+                int their = read[o].TargetSlot;
+                bool attacksFriend = their >= 0 && their < prev.Length && prev[their].Alive
+                    && table.Cold(their) is { } victim && victim.Faction == gc.Faction;
+                if (!hostile && !attacksFriend) continue;
+
+                float s = Score(o, TurretFormulas.FullRange, current);
+                if (s > bestScore) (best, bestScore) = (o, s);
+            }
+
+            return best;
+        }
     }
 
     /// <summary>
@@ -405,7 +470,7 @@ public sealed partial class CombatSystem
         var (damage, range, speed) = TurretFormulas.Harpoon(lo, hi, gun.Range, gun.ShotSpeed, TurretFormulas.PowerFactor(t.Efficiency), hm, w);
         _projectiles.Add(new Projectile
         {
-            Id = _nextProjectile++,
+            Id = _projectiles.NextId(),
             Shooter = g,
             ShooterGeneration = prev[g].Generation,
             Target = target,

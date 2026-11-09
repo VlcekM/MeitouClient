@@ -7,7 +7,7 @@ public sealed partial class CombatSystem
     /// <summary>
     /// Queues a sound-worthy happening for the host when it plays them (<see cref="World.Sounds"/>); display only.
     /// </summary>
-    static void Sound(
+    internal static void Sound(
         World world,
         SoundKind kind,
         int subject,

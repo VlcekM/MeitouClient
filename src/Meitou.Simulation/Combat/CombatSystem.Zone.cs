@@ -55,7 +55,7 @@ public sealed partial class CombatSystem
     /// <summary>
     /// A blow's attack zone on the ground: the box's centre and heading (X/Z), half width, half depth, the attacker's feet height and the half height test.
     /// </summary>
-    readonly record struct Zone(Vector2 From, Vector2 Centre, Vector2 Forward, float Half, float Deep, float Y, float High);
+    internal readonly record struct Zone(Vector2 From, Vector2 Centre, Vector2 Forward, float Half, float Deep, float Y, float High);
 
     /// <summary>
     /// The characters each fighter's attack zone held when it last looked, double-buffered.
@@ -203,6 +203,11 @@ public sealed partial class CombatSystem
     #region Buildings in the zone
 
     /// <summary>
+    /// The doors and walls a blow's zone reaches (<see cref="ZoneBuildings.Collect"/>).
+    /// </summary>
+    readonly ZoneBuildings _zoneBuildings = new();
+
+    /// <summary>
     /// The construction system, for which sites are walls (<see cref="Construction.ConstructionSystem.Data"/>) and their footprints; null: blows hit no wall.
     /// </summary>
     public Construction.ConstructionSystem? Construction { get; set; }
@@ -211,8 +216,6 @@ public sealed partial class CombatSystem
     /// The lock system, whose door damage a blow on a door takes (<see cref="Locks.LockSystem.Strike"/>); null: blows hit no door.
     /// </summary>
     public Locks.LockSystem? Locks { get; set; }
-
-    readonly List<(float Key, string? Door, Construction.BuildSite? Wall)> _buildingScratch = [];
 
     /// <summary>
     /// The walls and doors in a blow's zone (<c>attackImpactCheck</c>: <c>WallBuilding</c> and <c>DoorStuff</c> are the buildings whose <c>hitByMeleeAttack</c>
@@ -241,13 +244,9 @@ public sealed partial class CombatSystem
         var packet = Powered(raw, tech, blow);
         float f = 2 * packet.Blunt + 0.5f * packet.Cut;
 
-        var found = _buildingScratch;
-        found.Clear();
-        CollectDoors(world, zone, found);
-        CollectWalls(world, zone, found);
+        var found = _zoneBuildings.Collect(world, zone, Locks, Construction);
         if (found.Count == 0) return;
 
-        found.Sort(static (x, y) => x.Key.CompareTo(y.Key));
         for (int n = 0; n < found.Count && n < left; n++)
         {
             var (_, doorId, wall) = found[n];
@@ -257,53 +256,6 @@ public sealed partial class CombatSystem
         }
 
         if ((e.Arg & 0x100) == 0 && aSlot.AttackSeq == (int)e.Amount && aSlot.AttackTech >= 0) aSlot.LastOutcome = BlowOutcome.Hit;
-    }
-
-    /// <summary>
-    /// Adds the doors of the level's fixtures that the zone reaches and that are not broken (<see cref="ApplyZoneBuildings"/>).
-    /// </summary>
-    void CollectDoors(World world, Zone zone, List<(float Key, string? Door, Construction.BuildSite? Wall)> found)
-    {
-        if (Locks is null) return;
-
-        foreach (var pick in world.Fixtures.DoorPicks)
-        {
-            var d = new Vector2(pick.Position.X, pick.Position.Z) - zone.Centre;
-            float reach = zone.Deep + zone.Half + 30;
-            if (d.LengthSquared() > reach * reach || MathF.Abs(pick.Position.Y - zone.Y) > zone.High + 20) continue;
-            if (world.Fixtures.Find(pick.Id) is not { DoorBroken: false } door || world.Fixtures.DoorSpotOf(door) is not { } spot) continue;
-
-            float along = MathF.Abs(Vector2.Dot(d, zone.Forward));
-            float across = MathF.Abs(d.X * zone.Forward.Y - d.Y * zone.Forward.X);
-            if (MathF.Max(0, across - zone.Half) > spot.HalfWidth || MathF.Max(0, along - zone.Deep) > spot.HalfWidth) continue;
-
-            found.Add((d.LengthSquared(), pick.Id, null));
-        }
-    }
-
-    /// <summary>
-    /// Adds the walls of the construction system that the zone reaches (<see cref="ApplyZoneBuildings"/>).
-    /// </summary>
-    void CollectWalls(World world, Zone zone, List<(float Key, string? Door, Construction.BuildSite? Wall)> found)
-    {
-        if (Construction is not { } construction) return;
-
-        foreach (var site in world.Buildings.All)
-        {
-            if (site.Destroyed || site.Progress <= 0 || construction.Data(site.Record) is not { LinksTogether: true }) continue;
-
-            float best = float.MaxValue;
-            for (int n = -1; n <= 1; n++)
-            {
-                var at = zone.Centre + zone.Forward * (n * zone.Deep);
-                float gap = construction.Settings.EdgeGap?.Invoke(site, at) ?? Vector2.Distance(at, new Vector2(site.Position.X, site.Position.Z));
-                best = MathF.Min(best, gap);
-            }
-
-            if (best > zone.Half) continue;
-
-            found.Add((Vector2.DistanceSquared(new Vector2(site.Position.X, site.Position.Z), zone.From), null, site));
-        }
     }
 
     /// <summary>
