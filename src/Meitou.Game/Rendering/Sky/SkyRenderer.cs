@@ -54,7 +54,7 @@ public readonly record struct SkyColours(Vector3 Sun, Vector3 Zenith, Vector3 Ho
 /// composite (<see cref="MinLuminance"/>, <see cref="MaxLuminance"/>). Simple mode is the old colour model. A shader that wants any of it includes
 /// <see cref="AtmosphereShaders.Functions"/> and gets its uniforms from <see cref="Apply"/>.
 /// </summary>
-public sealed unsafe partial class SkyRenderer : IDisposable
+public sealed unsafe class SkyRenderer : IDisposable
 {
     #region Fields
 
@@ -550,13 +550,14 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// </summary>
     public float HazeDistance { get; set; } = Meitou.Data.World.KenshiHaze.FarDistance(Meitou.Data.World.KenshiHaze.ViewDistanceSetting);
     /// <summary>
-    /// The viewer's haze strength (not the game's; 1 = the game's haze): scales how far the atmosphere haze is blended in (the game's ramp, or the
-    /// physical haze's amount), not the weather's fog.
-    /// </summary>
-    /// <summary>
     /// The Meitou haze switch: the haze at <see cref="HazeStrength"/>; Faithful is the game's (1).
     /// </summary>
     public bool MeitouHaze { get; set; } = true;
+
+    /// <summary>
+    /// The viewer's haze strength (not the game's; 1 = the game's haze): scales how far the atmosphere haze is blended in (the game's ramp, or the
+    /// physical haze's amount), not the weather's fog.
+    /// </summary>
     public float HazeStrength { get; set; } = Enhancements.MeitouHazeStrength;
     /// <summary>
     /// The Meitou <c>night</c> switch, "night air" (viewer, not the game's; docs/formats/sky.md "Night air"): the game's haze colour is SkyX's sunlit
@@ -835,7 +836,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// </summary>
     public string LightingTextures => _textures.LightingTextures;
 
-    struct State
+    internal struct State
     {
         public Vector3 Sun, SunLight, LightDirection, CloudSun, CloudZenith;   // the last two: sunColour.rgb and zenithLight of the cloud pass
         public Vector3 CloudKey, CloudKeyDirection, CloudAmbient;   // the Meitou clouds' key light (colour, direction) and ambient (MeitouClouds)
@@ -849,6 +850,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     {
         Gpu = gpu;
         _textures = new SkyTextures(gpu);
+        Clouds = new SkyClouds(gpu);
         _simple = new SkyProg(gpu, Vertex, SimpleFragment, "sky simple");
         _sky = new SkyProg(gpu, Vertex, SkyFragment, "sky");
         _skyTimer = new PassTimer(gpu);
@@ -1122,10 +1124,10 @@ public sealed unsafe partial class SkyRenderer : IDisposable
             {
                 var w = CloudLayer.TextureShift(_cloudOffset);
                 return VolumeShadows
-                    ? new Vector4(_volume!.ShadowOrigin.X, _volume.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, 0)
+                    ? new Vector4(Clouds.ShadowOrigin.X, Clouds.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, 0)
                     : new Vector4(w.X, w.Y, 0, 0);
             }, Valid);
-        g.Publish("uAtmoClouds", () => VolumeShadows ? _volume!.ShadowMap : _state.Valid && _textures.CloudsSmooth is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoClouds", () => VolumeShadows ? Clouds.ShadowMap : _state.Valid && _textures.CloudsSmooth is { } t ? t.Sampled() : default);
         g.Publish("uAtmoCloudsTile", () => _state.Valid && _textures.CloudsTileSmooth is { } t ? t.Sampled() : default);
     }
 
@@ -1191,58 +1193,19 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         Gpu.EndGuest(cmd);
     }
 
+    /// <summary>
+    /// The physical sky's own uniforms: the stars, the planets and the clouds, then which textures it has and the textures themselves.
+    /// </summary>
     void SetSkyUniforms(SkyProg program)
     {
         float coverage = CloudDensity;
-        SetStarUniforms(program, coverage);
+        program.SetStars(MeitouStars, _state.Sun.Y, StarLayers, StarSeconds, StarGain);
+        program.SetCelestialAxes(Clock, Day, Hour);
+        program.SetExtra(PlanetFill, coverage, StarHours);
         program.SetPlanets(Day, Hour, PlanetTurn);
-        SetCloudUniforms(program, coverage);
-        BindSkyTextures(program);
-    }
-
-    /// <summary>
-    /// The Meitou stars, the celestial axes and the extra row (planet fill, coverage, the star field's shift).
-    /// </summary>
-    void SetStarUniforms(SkyProg program, float coverage)
-    {
-        var p = program.P;
-        // The Meitou stars: nothing to draw once the sun is high (SkyX's night factor is 0 by day; the game's texture is not drawn then either), so
-        // the pass skips them.
-        bool meitou = MeitouStars;
-        bool night = meitou && _state.Sun.Y < 0.3f;
-        p.Set(program.StarsMeitou, meitou ? (night ? 1 : -1) : 0, StarLayers, StarSeconds, StarGain);
-        // Staging the title's sun must not turn the stars, which stay continuous into the loading sky.
-        var frame = CelestialSphere.Frame(Clock with { SunTurn = 0 }, Day, Hour);
-        p.Set(program.CelX, frame.X.X, frame.X.Y, frame.X.Z, 0);
-        p.Set(program.CelY, frame.Y.X, frame.Y.Y, frame.Y.Z, 0);
-        p.Set(program.CelZ, frame.Z.X, frame.Z.Y, frame.Z.Z, 0);
-        p.Set(program.Extra, PlanetFill, coverage, Starfield.Shift(StarHours), 0);
-    }
-
-    /// <summary>
-    /// The cloud pass's light and offsets, the Meitou clouds' key and ambient, and which textures the shader has.
-    /// </summary>
-    void SetCloudUniforms(SkyProg program, float coverage)
-    {
-        var p = program.P;
-        var s = _state;
-        // The cloud pass: zenithLight and Darkness, sunColour.rgb and DensityOffset, the wind offset's texture shift.
-        var zenith = s.CloudZenith;
-        p.Set(program.CloudLight, zenith.X, zenith.Y, zenith.Z, CloudLayer.Darkness(coverage));
-        p.Set(program.CloudSun, s.CloudSun.X, s.CloudSun.Y, s.CloudSun.Z, CloudLayer.DensityOffset(coverage));
-        var shift = CloudLayer.TextureShift(_cloudOffset);
-        p.Set(program.CloudWind, shift.X, shift.Y, 0, 0);
-        var key = s.CloudKey;
-        var keyDir = s.CloudKeyDirection;
-        var ambient = s.CloudAmbient;
-        // The Meitou clouds are anchored to the world (the eye's parallax, MeitouClouds.Parallax), so the cloud overhead is the one whose shadow
-        // falls here; the game's follow the eye.
-        var (parallaxScale, parallaxOffset) = LitClouds ? MeitouClouds.Parallax(Eye.X, Eye.Y, Eye.Z) : (1f, Vector2.Zero);
-        p.Set(program.CloudMeitou, LitClouds ? (_volumeImage.IsNull ? 1 : 2) : 0, parallaxScale, parallaxOffset.X, parallaxOffset.Y);
-        p.Set(program.CloudKey, key.X, key.Y, key.Z, 0);
-        p.Set(program.CloudKeyDir, keyDir.X, keyDir.Y, keyDir.Z, 0);
-        p.Set(program.CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
+        program.SetClouds(in _state, coverage, CloudLayer.TextureShift(_cloudOffset), LitClouds, !Clouds.VolumeImage.IsNull, Eye);
         _textures.SetPresence(program);
+        BindSkyTextures(program);
     }
 
     /// <summary>
@@ -1252,7 +1215,81 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     {
         var p = program.P;
         _textures.Bind(program);
-        if (!_volumeImage.IsNull) p.Bind(program.VolumeImage, _volumeImage);
+        if (!Clouds.VolumeImage.IsNull) p.Bind(program.VolumeImage, Clouds.VolumeImage);
+    }
+
+    #endregion
+
+    #region Clouds
+
+    /// <summary>
+    /// The Meitou volumetric clouds (docs/render-clouds.md): the volume, its images and the frame's skip switches.
+    /// </summary>
+    public SkyClouds Clouds { get; }
+
+    /// <summary>
+    /// Whether the volume is drawn this frame: the Meitou clouds on the game's sky with a state, and clouds to show (or the warm-up).
+    /// </summary>
+    bool VolumeEnabled => LitClouds && Physical && _state.Valid && (CloudDensity > 0 || Clouds.Warm);
+
+    /// <summary>
+    /// Whether the land is shaded by the volume's shadow map this frame (else by the flat layer's, or not at all).
+    /// </summary>
+    bool VolumeShadows => VolumeEnabled && CloudShadows && Clouds.ShadowsReady;
+
+    /// <summary>
+    /// The cloud slab of this frame: the base height, the density and the wind's texture shift.
+    /// </summary>
+    CloudSlab Slab() => new(CloudHeight, CloudDensity, CloudLayer.TextureShift(_cloudOffset));
+
+    /// <summary>
+    /// Records the volume's sun-transmission map before any world or reflection pass.
+    /// </summary>
+    public void PrepareCloudShadows()
+    {
+        Clouds.DropShadows();
+        if (!VolumeEnabled || !CloudShadows || _state.Sun.Y <= 0.03f && !Clouds.Warm) return;
+        Clouds.RenderShadow(Eye, Slab(), _state.Sun);
+    }
+
+    /// <summary>
+    /// True when the sky pass's weather fog (the game's fog over pixels with no geometry: the ease-in-out curve of the far clip over the fog
+    /// distance, times the weather's weight) is at least <see cref="FogComplete"/>, as in <see cref="FogCullDistanceOf"/>: the sky then shows the fog
+    /// colour to 0.0002 whatever is drawn under it, clouds included. The sky shader applies that term after the clouds in either view, so it holds
+    /// for both.
+    /// </summary>
+    public static bool WeatherFogHidesSky(in AtmosphereUniforms u)
+    {
+        if (!(u.Fog.Z > 0) || !(u.Haze.W > 0)) return false;
+        float amount = Math.Clamp(u.Fog.W * u.Haze.W, 0f, 1f);
+        float curve = (amount < 0.5f ? 2f * amount * amount : 1f - 2f * (amount - 1f) * (amount - 1f)) * u.Fog.Z;
+        return curve >= FogComplete;
+    }
+
+    /// <summary>
+    /// Ray marches and filters this view's clouds before opening its scene host. <paramref name="fogVolumes"/>: the fog volume pass will run over
+    /// this view's finished sky (the main view with volumes in view), so texels it hides completely need no march.
+    /// </summary>
+    public void PrepareClouds(Matrix4x4 viewProjection, int width, int height, Vector3 eye, bool reflection = false, bool fogVolumes = false)
+    {
+        Clouds.BeginView(reflection);
+        // Made with the first frame that could show it (under the loading cover), not when the weather first brings clouds: its noise atlas and three
+        // programs held that frame ~30 ms (docs/bench.md "Play benchmark").
+        if (LitClouds && Physical && _state.Valid) Clouds.EnsureVolume();
+        if (!VolumeEnabled)
+        {
+            Clouds.Invalidate();
+            return;
+        }
+
+        if (Clouds.CloudFogSkip && !Clouds.Warm && WeatherFogHidesSky(Uniforms()))
+        {
+            // The sky shader falls back to the flat layer, which the same fog covers; the history starts again when the fog thins.
+            Clouds.FogCovers(reflection);
+            return;
+        }
+
+        Clouds.Render(in _state, viewProjection, eye, width, height, Slab(), reflection, fogVolumes);
     }
 
     #endregion
@@ -1278,17 +1315,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     }
 
     public string DescribeCost() =>
-        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)" + CloudCostText()
+        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)" + Clouds.CostText(VolumeEnabled)
                  : $"simple sky: GPU {GpuMs:0.00} ms/frame";
-
-    /// <summary>
-    /// The cloud part of <see cref="DescribeCost"/>: the sky's skip, the fog's, or the clouds' GPU times.
-    /// </summary>
-    string CloudCostText() =>
-        SkySkipped ? "; sky and clouds not drawn (a fog block hides the sky)"
-        : _volume is null || !VolumeEnabled ? ""
-        : CloudsFogged ? $"; clouds not marched (the weather fog covers the sky), shadow map {_volume.ShadowGpuMs:0.00} ms"
-        : $"; GPU clouds {_volume.MainGpuMs:0.00}, reflection {_volume.ReflectionGpuMs:0.00}, shadow map {_volume.ShadowGpuMs:0.00} ms";
 
     /// <summary>
     /// Mean GPU time of a sky pass over the last hundred or so (a running mean, halved now and then).
@@ -1299,9 +1327,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     {
         if (Active == this) Active = null;
         _textures.Dispose();
-        _volumeShadowsReady = false;
-        _volume?.Dispose();
-        _volume = null;
+        Clouds.Dispose();
         _simple.Dispose();
         _sky.Dispose();
     }

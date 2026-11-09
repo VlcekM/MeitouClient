@@ -82,54 +82,20 @@ public readonly record struct WorldLighting(Vector3 SunDirection, Vector3 SunCol
 /// </summary>
 public sealed unsafe class TerrainRenderer : IDisposable
 {
-    static readonly bool PrivateStatics = Environment.GetEnvironmentVariable("MEITOU_METAL_PRIVATE_STATIC") == "1";
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IGpuContext, ActiveTerrain> ActiveTerrains = new();
-    readonly DeviceBuffer _gridVertices, _gridIndices;
-    readonly TerrainTexture _coarseTexture;
-    TerrainTexture _fineTexture;
-    readonly int[] _indexOffsets = new int[5], _indexCounts = new int[5], _firstIndices = new int[5];
-    readonly TerrainHeightBounds _bounds;
-    readonly List<TerrainNode> _nodes = [];
-    HeightWindow _fine;
-    readonly ushort[] _coarse;
-    readonly int _coarseSize;
-    float _fineBand;
-    readonly TerrainQuadtree _quadtree;
-    // The reflection's own tree (its own, smaller picture), so the two passes do not reset each other's ranges every frame.
-    readonly TerrainQuadtree _spare;
-    TerrainQuadtree _current = null!;   // the tree the running Draw selects with
-    TerrainTextures? _textures;
-    bool _ownsTextures = true;
-    internal TerrainTextures? TextureSet => _textures;
+    #region Construction
 
-    /// <summary>
-    /// The texture field's tile at world (<paramref name="x"/>, <paramref name="z"/>) (<see cref="GroundRelief.FieldCentre"/>): its label, or null.
-    /// </summary>
-    public string? FieldLabelAt(float x, float z) => _textures?.FieldLabel(x, z);
-    Frame _frame;
+    static readonly bool PrivateStatics = Environment.GetEnvironmentVariable("MEITOU_METAL_PRIVATE_STATIC") == "1";
 
     const int GridCells = 64;
-
-    record struct Frame(Matrix4x4 ViewProjection, Vector3 Eye, WorldRenderOptions Options, WorldLighting Light);
+    readonly IGpuContext _gpu;
+    readonly DeviceBuffer _gridVertices, _gridIndices;
+    readonly int[] _indexOffsets = new int[5], _indexCounts = new int[5], _firstIndices = new int[5];
 
     /// <summary>
     /// The grid's vertex attribute at location 0 and its index buffer, as VkGl fed them from the GL vertex array.
     /// </summary>
     readonly LegacyProgram.Attribute _gridVertex;
     readonly GpuBufferBinding _gridElements;
-    internal const int Colour = 0, Depth = 1, Solid = 2;
-    readonly IGpuContext _gpu;
-    int _frameNumber;
-    readonly List<(TerrainTexture Texture, int Frame)> _retired = [];
-    bool _latePending;
-    Frame _lateFrame;
-    PatchDraw[] _cutDraws = new PatchDraw[64];
-    int _plainCount, _cutCount;
-    uint _cutMask;
-    PatchDraw[] _reliefDraws = new PatchDraw[16], _cutReliefDraws = new PatchDraw[16];
-    int _reliefCount, _cutReliefCount;
-    double[] _nodeKeys = [];
-    DrawState? _lastGlState, _lastPatchState, _lastWireState, _lastPrepassState, _lastLateState, _lastLateEqualState;
     readonly NativeFrame _nativeFrame;
     readonly GpuSetLayout _constantsLayout;
 
@@ -139,50 +105,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
     readonly TerrainPrograms _programs;
     readonly ulong _uniformAlign;
     readonly uint _standIn2D, _standInArray, _standInUInt;
-
-    // The terrain set (set 2): this segment's TerrainConstants in the frame's constants, bound with a dynamic offset into a set made once per
-    // constants chunk (LegacyProgram's pattern for its default blocks).
-    TerrainConstants _constants, _written;
-    long _writtenFrame = -1;
-    Transient _constantsSlice;
-    readonly Dictionary<ulong, GpuSet> _constantSets = [];
-    ulong _lastSetKey;
-    GpuSet _lastSet;
-    Vector4 _lastRegion;
-    Vector2 _lastCellGrid;
-    PatchDraw[] _patchDraws = new PatchDraw[512];
-    readonly List<PatchPipeline> _patchPipelines = [];
-    long _patchTriangles;
-    readonly JobPool<PatchJob> _patchJobs = new();
-
-    /// <summary>
-    /// The interior cut of the mesh draw being prepared (<see cref="DrawMeshes"/>, <see cref="DrawMeshesIndirect"/>; docs/render-interior-cut.md),
-    /// null otherwise.
-    /// </summary>
-    InteriorMaskRenderer? _meshCut;
-    bool _depthReady;
-
-    // Per program kind: the last segment state and its number; numbers are stable per state (a mesh compares one int per draw).
-    readonly Dictionary<(int Kind, SegmentPipeline State), int> _segmentByState = [];
-    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[3];
-    readonly int[] _segmentIds = new int[3];
-    int _segmentCount;
-
-    /// <summary>
-    /// The TERRAIN-mode meshes' instanced groups and this call's placements.
-    /// </summary>
-    readonly TerrainMeshGroups _meshGroups;
-
-    /// <summary>
-    /// The layered material baked round the eye (docs/render-terrain.md "Material cache").
-    /// </summary>
-    readonly MaterialCache _materialCache;
-
-    /// <summary>
-    /// The impostor bake of TERRAIN-mode rocks.
-    /// </summary>
-    readonly TerrainRockBake _rockBake;
-    readonly JobPool<MeshJob> _meshJobs = new();
 
     /// <param name="coarse">Whole-world raw heights, (<paramref name="coarseSize"/>)² samples (2^n + 1 per side).</param>
     /// <param name="fine">The loaded region at its own step.</param>
@@ -226,6 +148,23 @@ public sealed unsafe class TerrainRenderer : IDisposable
         _gridElements = new GpuBufferBinding(_gridIndices.Handle, 0, _gridIndices.Size);
     }
 
+    public void Dispose()
+    {
+        _materialCache.Dispose();
+        _gridVertices.Dispose();
+        _gridIndices.Dispose();
+        _coarseTexture.Dispose();
+        _fineTexture.Dispose();
+        foreach (var r in _retired) r.Texture.Dispose();
+        if (_ownsTextures) _textures?.Dispose();
+        _programs.Dispose();
+        _rockBake.Dispose();
+        _gpu.Bindless.Free(BindlessKind.Texture2D, _standIn2D);
+        _gpu.Bindless.Free(BindlessKind.Texture2DArray, _standInArray);
+        _gpu.Bindless.Free(BindlessKind.UintTexture2D, _standInUInt);
+        _nativeFrame.Dispose();
+    }
+
     /// <summary>
     /// The patch grid's points (location 0: two floats each), (<see cref="GridCells"/> + 1)² of them.
     /// </summary>
@@ -267,11 +206,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
     }
 
     /// <summary>
-    /// Width of the band at the fine window's border where it fades into the coarse grid.
-    /// </summary>
-    static float BandOf(HeightWindow w) => Math.Clamp((w.Columns - 1) * w.Spacing * 0.1f, w.Spacing * 4, 3000);
-
-    /// <summary>
     /// A height texture (GL's R16, one level, linear, clamped) through <paramref name="batch"/>, with <paramref name="raw"/> written when given.
     /// </summary>
     TerrainTexture HeightTexture(IGpuUploadBatch batch, ushort[]? raw, int width, int height)
@@ -283,11 +217,21 @@ public sealed unsafe class TerrainRenderer : IDisposable
     }
 
     static PixelRect Rect(int x, int y, int width, int height) => new(x, y, (uint)width, (uint)height);
+    static SamplerInfo StandInInfo(bool arrayed, ScalarKind kind) => new("", 0, 0, SamplerDimension.Dim2D, arrayed, false, false, kind, 0);
 
-    public int LevelCount => _quadtree.LevelCount;
-    public double FinestSpacing => _quadtree.Spacing(0);
-    public int DrawnChunks { get; private set; }
-    public long DrawnTriangles { get; private set; }
+    #endregion
+
+    #region Heights
+
+    readonly TerrainTexture _coarseTexture;
+    TerrainTexture _fineTexture;
+    readonly TerrainHeightBounds _bounds;
+    HeightWindow _fine;
+    readonly ushort[] _coarse;
+    readonly int _coarseSize;
+    float _fineBand;
+    int _frameNumber;
+    readonly List<(TerrainTexture Texture, int Frame)> _retired = [];
 
     /// <summary>
     /// Starts counting drawn nodes and triangles for a new frame (several views add up).
@@ -299,37 +243,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         // A replaced window is let go a few frames after the swap (its image and bindless entry are freed after the frames in flight).
         for (int i = _retired.Count - 1; i >= 0; i--)
             if (_frameNumber - _retired[i].Frame >= 4) { _retired[i].Texture.Dispose(); _retired.RemoveAt(i); }
-    }
-
-    /// <summary>
-    /// Uses biome textures and land maps from now on (null: untextured).
-    /// </summary>
-    public void SetTextures(TerrainTextures? t, bool owns = true) { _textures = t; _ownsTextures = owns; }
-
-    /// <summary>
-    /// The textures the TERRAIN-mode meshes' biome rows come from (null: none, every row -1): a caller keeping
-    /// <see cref="FeatureBiomeRowAny"/> per placement computes it again when this object changes.
-    /// </summary>
-    public object? FeatureBiomes => _textures;
-
-    /// <summary>
-    /// The biome row <see cref="DrawMeshes"/> gives a placement at (x, z) in colour: the biome map's row there when resident, else -1.
-    /// </summary>
-    public int FeatureBiomeRow(float x, float z) => _textures?.FeatureBiomeRow(x, z) ?? -1;
-
-    /// <summary>
-    /// The biome map's row at (x, z) whatever its residency (-1: none); <see cref="FeatureBiomeRow"/> once <see cref="FeatureResidentBiomes"/> has
-    /// its bit.
-    /// </summary>
-    public int FeatureBiomeRowAny(float x, float z) => _textures?.FeatureBiomeRowAny(x, z) ?? -1;
-
-    /// <summary>
-    /// A bit per resident biome row (row r: word r / 32, bit r % 32), as <see cref="FeatureBiomeRow"/> tests them now.
-    /// </summary>
-    public void FeatureResidentBiomes(Span<uint> bits)
-    {
-        if (_textures is null) bits.Clear();
-        else _textures.ResidentBiomeBits(bits);
     }
 
     /// <summary>
@@ -387,6 +300,16 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     public void DropFine(FineStandby standby) => _retired.Add((standby.Texture, _frameNumber));
 
+    /// <summary>
+    /// Height at a world point from the same grids the shaders read (bilinear, blended at the region's edge).
+    /// </summary>
+    public float HeightAt(float x, float z) => Snapshot().HeightAt(x, z);
+
+    /// <summary>
+    /// The height sources as they are now, for a worker thread (render thread only: the fine window is swapped there).
+    /// </summary>
+    internal HeightSnapshot Snapshot() => new(_coarse, _coarseSize, _fine, _fineBand);
+
     void Swap(FineStandby next)
     {
         _fineTexture = next.Texture;
@@ -423,14 +346,136 @@ public sealed unsafe class TerrainRenderer : IDisposable
     }
 
     /// <summary>
-    /// Height at a world point from the same grids the shaders read (bilinear, blended at the region's edge).
+    /// Width of the band at the fine window's border where it fades into the coarse grid.
     /// </summary>
-    public float HeightAt(float x, float z) => Snapshot().HeightAt(x, z);
+    static float BandOf(HeightWindow w) => Math.Clamp((w.Columns - 1) * w.Spacing * 0.1f, w.Spacing * 4, 3000);
+
+    static Vector4 CoarseRect => new(-WorldLayout.HalfWorldSize, -WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize);
+
+    Vector4 FineRect
+    {
+        get
+        {
+            var (x0, z0) = _fine.WorldOf(0, 0);
+            return new((float)x0, (float)z0, (float)x0 + (_fine.Columns - 1) * _fine.Spacing, (float)z0 + (_fine.Rows - 1) * _fine.Spacing);
+        }
+    }
+
+    #endregion
+
+    #region Frame globals
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IGpuContext, ActiveTerrain> ActiveTerrains = new();
 
     /// <summary>
-    /// The height sources as they are now, for a worker thread (render thread only: the fine window is swapped there).
+    /// The heights as frame globals (docs/renderer-native.md 4.3): the two textures (native, with the linear, clamped sampler their GL versions had)
+    /// and the <see cref="TerrainShaders.HeightFunctions"/> uniforms, read when a consumer draws or applies its globals.
     /// </summary>
-    internal HeightSnapshot Snapshot() => new(_coarse, _coarseSize, _fine, _fineBand);
+    sealed class ActiveTerrain { public TerrainRenderer? Owner; }
+    internal void Activate()
+    {
+        var binding = ActiveTerrains.GetValue(_gpu, static _ => new());
+        if (ReferenceEquals(binding.Owner, this)) return;
+        binding.Owner = this;
+        PublishGlobals();
+    }
+
+    void PublishGlobals()
+    {
+        var g = _gpu.Globals;
+        g.Publish("uHeightCoarse", () => _coarseTexture.Sampled());
+        g.Publish("uHeightFine", () => _fineTexture.Sampled());
+        g.PublishUniform("uCoarseRect", () => CoarseRect);
+        g.PublishUniform("uCoarseCells", () => new Vector2(_coarseSize - 1f, _coarseSize - 1f));
+        g.PublishUniform("uFineRect", () => FineRect);
+        g.PublishUniform("uFineCells", () => new Vector2(_fine.Columns - 1f, _fine.Rows - 1f));
+        g.PublishUniform("uFineBand", () => _fineBand);
+        g.PublishUniform("uHasFine", () => 1);
+        // The whole-world ground colour: the weather's dust takes its colour from it (docs/formats/weather.md "Dust").
+        g.Publish("uWeatherGround", () => _textures?.Textures.Ground is { } ground ? ground.Sampled() : default);
+    }
+
+    #endregion
+
+    #region Biome textures
+
+    TerrainTextures? _textures;
+    bool _ownsTextures = true;
+    internal TerrainTextures? TextureSet => _textures;
+
+    /// <summary>
+    /// The texture field's tile at world (<paramref name="x"/>, <paramref name="z"/>) (<see cref="GroundRelief.FieldCentre"/>): its label, or null.
+    /// </summary>
+    public string? FieldLabelAt(float x, float z) => _textures?.FieldLabel(x, z);
+
+    /// <summary>
+    /// Uses biome textures and land maps from now on (null: untextured).
+    /// </summary>
+    public void SetTextures(TerrainTextures? t, bool owns = true) { _textures = t; _ownsTextures = owns; }
+
+    /// <summary>
+    /// The textures the TERRAIN-mode meshes' biome rows come from (null: none, every row -1): a caller keeping
+    /// <see cref="FeatureBiomeRowAny"/> per placement computes it again when this object changes.
+    /// </summary>
+    public object? FeatureBiomes => _textures;
+
+    /// <summary>
+    /// The biome row <see cref="DrawMeshes"/> gives a placement at (x, z) in colour: the biome map's row there when resident, else -1.
+    /// </summary>
+    public int FeatureBiomeRow(float x, float z) => _textures?.FeatureBiomeRow(x, z) ?? -1;
+
+    /// <summary>
+    /// The biome map's row at (x, z) whatever its residency (-1: none); <see cref="FeatureBiomeRow"/> once <see cref="FeatureResidentBiomes"/> has
+    /// its bit.
+    /// </summary>
+    public int FeatureBiomeRowAny(float x, float z) => _textures?.FeatureBiomeRowAny(x, z) ?? -1;
+
+    /// <summary>
+    /// A bit per resident biome row (row r: word r / 32, bit r % 32), as <see cref="FeatureBiomeRow"/> tests them now.
+    /// </summary>
+    public void FeatureResidentBiomes(Span<uint> bits)
+    {
+        if (_textures is null) bits.Clear();
+        else _textures.ResidentBiomeBits(bits);
+    }
+
+    #endregion
+
+    #region Patches
+
+    readonly List<TerrainNode> _nodes = [];
+    readonly TerrainQuadtree _quadtree;
+
+    // The reflection's own tree (its own, smaller picture), so the two passes do not reset each other's ranges every frame.
+    readonly TerrainQuadtree _spare;
+    TerrainQuadtree _current = null!;   // the tree the running Draw selects with
+    Frame _frame;
+    bool _latePending;
+    Frame _lateFrame;
+    PatchDraw[] _cutDraws = new PatchDraw[64];
+    int _plainCount, _cutCount;
+    uint _cutMask;
+    PatchDraw[] _reliefDraws = new PatchDraw[16], _cutReliefDraws = new PatchDraw[16];
+    int _reliefCount, _cutReliefCount;
+    double[] _nodeKeys = [];
+    DrawState? _lastGlState, _lastPatchState, _lastWireState, _lastPrepassState, _lastLateState, _lastLateEqualState;
+    PatchDraw[] _patchDraws = new PatchDraw[512];
+    readonly List<PatchPipeline> _patchPipelines = [];
+    long _patchTriangles;
+    readonly JobPool<PatchJob> _patchJobs = new();
+    bool _depthReady;
+
+    record struct Frame(Matrix4x4 ViewProjection, Vector3 Eye, WorldRenderOptions Options, WorldLighting Light);
+
+    public int LevelCount => _quadtree.LevelCount;
+    public double FinestSpacing => _quadtree.Spacing(0);
+    public int DrawnChunks { get; private set; }
+    public long DrawnTriangles { get; private set; }
+
+    /// <summary>
+    /// Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).
+    /// </summary>
+    public long DepthTriangles { get; set; }
 
     /// <summary>
     /// The fog cull (set by the world frame around the main camera's draw only): nodes wholly hidden by the fog the eye is in are skipped.
@@ -438,10 +483,16 @@ public sealed unsafe class TerrainRenderer : IDisposable
     internal FogVolumes? FogCull { get; set; }
 
     /// <summary>
-    /// Bakes what the material cache's levels need this frame round <paramref name="eye"/> (before the scene, outside a pass;
-    /// <see cref="MaterialCache.Record"/>).
+    /// The interior cut of the main view (docs/render-interior-cut.md; set by the world frame around its scene's terrain draws, null otherwise): the
+    /// mask's depth range, read by the cut programs, which only the patches overlapping a drawn building take (a <c>discard</c> costs the early depth
+    /// test).
     /// </summary>
-    public void RecordMaterialCache(Vector3 eye) => _materialCache.Record(eye);
+    internal InteriorMaskRenderer? InteriorCut { get; set; }
+
+    /// <summary>
+    /// The blood on the ground the patches lay over their albedo (docs/game/blood-decals.md; null: none). The host records it before the scene.
+    /// </summary>
+    public TerrainDecalRenderer? Decals { get; set; }
 
     /// <summary>
     /// Draws the terrain; nodes whose highest point is under <paramref name="cullBelow"/> are skipped (the reflection pass clips everything below the
@@ -467,6 +518,59 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
         if (options.Wireframe != 2) RecordFilled(deferred: defer && !secondary && options.Wireframe == 0);
         if (options.Wireframe != 0) RecordWireframe();
+    }
+
+    /// <summary>
+    /// The terrain colour of a <see cref="Draw"/> that was called with <c>defer</c> (its depth is in the buffer): the same patches and material with
+    /// the depth test on and no depth write, so only the fragments the objects and foliage left uncovered are shaded (docs/render-terrain.md,
+    /// "Terrain colour after the occluders"). Nothing between the two calls may select other patches (the shadows and the reflection draw before the
+    /// scene).
+    /// </summary>
+    public void DrawDeferred()
+    {
+        if (!_latePending) return;
+        _latePending = false;
+        _frame = _lateFrame;
+        PrepareConstants(material: true, patches: true);
+        RecordPatches(PatchColour, "terrain", PatchMode.Late, _plainCount);
+        if (_reliefCount > 0)
+            RecordPatches(_programs.PatchColourTess!, "terrain relief", PatchMode.Late, _reliefCount, _reliefDraws);
+        // The cut patches' colour without the cut: their prepass discarded the cut fragments, so an equal depth test leaves them out early. The cut's
+        // discard here turned the early depth test off, and the GPU drained between these draws (1.4 ms for 19 of them; docs/render-terrain.md
+        // "Registers"). Both passes run the same vertex and tessellation stages (invariant positions): a kept fragment meets its own depth.
+        if (_cutCount > 0)
+            RecordPatches(PatchColour, "terrain interior cut", PatchMode.LateEqual, _cutCount, _cutDraws);
+        if (_cutReliefCount > 0)
+            RecordPatches(_programs.PatchColourTess!, "terrain relief interior cut", PatchMode.LateEqual, _cutReliefCount, _cutReliefDraws);
+    }
+
+    /// <summary>
+    /// Draws the terrain's depth for a shadow cascade (<see cref="ShadowShaders.DepthFragment"/>, the caster bias): the main tree's patches chosen by
+    /// the camera's <paramref name="eye"/> (so the casters' detail matches what the picture shows), culled by
+    /// <paramref name="frustum"/>. Sets the frame's matrix for <see cref="DrawMeshes"/> with <c>depth</c>. <paramref name="coarseTexel"/>: the texel
+    /// of a far cascade (world units; 0: not coarsened), which keeps the nodes from being split finer than <see cref="ShadowLod.TerrainFloorLevel"/>.
+    /// </summary>
+    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, float coarseTexel = 0)
+    {
+        _depthReady = true;
+        _quadtree.SetRanges(options.TerrainLod);
+        _frame = new Frame(viewProjection, eye, options, _frame.Light);
+        _quadtree.FloorLevel = ShadowLod.TerrainFloorLevel(coarseTexel, _quadtree.Spacing(0), TerrainLod.Roughness, _quadtree.LevelCount);
+        try
+        {
+            _quadtree.Select(eye, _bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), _nodes);
+        }
+        finally
+        {
+            _quadtree.FloorLevel = 0;
+        }
+        PreparePatches(_quadtree);
+        if (_nodes.Count > 0)
+        {
+            PrepareConstants(material: false, patches: true);
+            RecordPatches(_programs.PatchDepth, "terrain depth");
+            DepthTriangles += _patchTriangles;
+        }
     }
 
     /// <summary>
@@ -522,42 +626,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         RecordPatches(PatchColour, "terrain wireframe", PatchMode.Wireframe, _plainCount);
         RecordPatches(PatchColour, "terrain wireframe", PatchMode.Wireframe, _cutCount, _cutDraws);
     }
-
-    /// <summary>
-    /// The terrain colour of a <see cref="Draw"/> that was called with <c>defer</c> (its depth is in the buffer): the same patches and material with
-    /// the depth test on and no depth write, so only the fragments the objects and foliage left uncovered are shaded (docs/render-terrain.md,
-    /// "Terrain colour after the occluders"). Nothing between the two calls may select other patches (the shadows and the reflection draw before the
-    /// scene).
-    /// </summary>
-    public void DrawDeferred()
-    {
-        if (!_latePending) return;
-        _latePending = false;
-        _frame = _lateFrame;
-        PrepareConstants(material: true, patches: true);
-        RecordPatches(PatchColour, "terrain", PatchMode.Late, _plainCount);
-        if (_reliefCount > 0)
-            RecordPatches(_programs.PatchColourTess!, "terrain relief", PatchMode.Late, _reliefCount, _reliefDraws);
-        // The cut patches' colour without the cut: their prepass discarded the cut fragments, so an equal depth test leaves them out early. The cut's
-        // discard here turned the early depth test off, and the GPU drained between these draws (1.4 ms for 19 of them; docs/render-terrain.md
-        // "Registers"). Both passes run the same vertex and tessellation stages (invariant positions): a kept fragment meets its own depth.
-        if (_cutCount > 0)
-            RecordPatches(PatchColour, "terrain interior cut", PatchMode.LateEqual, _cutCount, _cutDraws);
-        if (_cutReliefCount > 0)
-            RecordPatches(_programs.PatchColourTess!, "terrain relief interior cut", PatchMode.LateEqual, _cutReliefCount, _cutReliefDraws);
-    }
-
-    /// <summary>
-    /// The interior cut of the main view (docs/render-interior-cut.md; set by the world frame around its scene's terrain draws, null otherwise): the
-    /// mask's depth range, read by the cut programs, which only the patches overlapping a drawn building take (a <c>discard</c> costs the early depth
-    /// test).
-    /// </summary>
-    internal InteriorMaskRenderer? InteriorCut { get; set; }
-
-    /// <summary>
-    /// The blood on the ground the patches lay over their albedo (docs/game/blood-decals.md; null: none). The host records it before the scene.
-    /// </summary>
-    public TerrainDecalRenderer? Decals { get; set; }
 
     /// <summary>
     /// Moves the patches whose square overlaps a building of <paramref name="cut"/>'s (when it drew any) out of <see cref="_patchDraws"/> into
@@ -679,9 +747,201 @@ public sealed unsafe class TerrainRenderer : IDisposable
         };
     }
 
-    // ---- the native model (docs/renderer-native.md 7.1, wave 3b agent B: step O) ----
-    // Native programs (TerrainShaders' native variants: the same maths; the camera in ViewConstants, the terrain's values and the bindless
-    // indices of its textures in TerrainConstants at set 2, a patch's node in push constants), recorded into the pass VkGl has open. Per
+    /// <summary>
+    /// One selected node as its draw needs it (Prepare fills the list, Record walks it): the push constants (<c>uNode</c>,
+    /// <c>uMorph</c>) and the index range (<c>Quadrant + 1</c>).
+    /// </summary>
+    struct PatchDraw
+    {
+        public TerrainPush Push;
+        public int Part;
+    }
+
+    /// <summary>
+    /// A patch program resolved for one pass state: the pipeline, the grid's vertex buffer and its index buffer.
+    /// </summary>
+    sealed class PatchPipeline
+    {
+        public SegmentPipeline Segment;
+        public GpuPipeline Pipeline = default;
+        public GpuBufferBinding Vertex;
+        public GpuBufferBinding Elements;
+    }
+
+    /// <summary>
+    /// Fills <see cref="_patchDraws"/> from <see cref="_nodes"/> (the tree's morph ranges, the index range per node) and counts them.
+    /// </summary>
+    void PreparePatches(TerrainQuadtree tree)
+    {
+        int n = _nodes.Count;
+        if (_patchDraws.Length < n) _patchDraws = new PatchDraw[Math.Max(n, _patchDraws.Length * 2)];
+        long triangles = 0;
+        for (int i = 0; i < n; i++)
+        {
+            var node = _nodes[i];
+            float start = tree.MorphStart[node.Level], end = tree.MorphEnd[node.Level];
+            int part = node.Quadrant + 1;
+            _patchDraws[i] = new PatchDraw
+            {
+                Push = new TerrainPush
+                {
+                    Node = new Vector4((float)node.X0, (float)node.Z0, (float)node.Size, GridCells),
+                    Morph = new Vector2(start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end),
+                },
+                Part = part,
+            };
+            triangles += _indexCounts[part] / 3;
+        }
+        _patchTriangles = triangles;
+    }
+
+    /// <summary>
+    /// Records <see cref="_patchDraws"/> into one native segment of the pass being drawn into (<see cref="PatchState"/>: back faces culled): the
+    /// dynamic state, the sets, the pipeline, the grid's vertex and index buffers once; per node its push constants and the draw of its index range.
+    /// </summary>
+    void RecordPatches(TerrainProgram p, string label, PatchMode mode = PatchMode.Solid, int count = -1, PatchDraw[]? draws = null)
+    {
+        if (count < 0) count = _nodes.Count;
+        if (count == 0) return;
+        draws ??= _patchDraws;
+        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass's targets and state now, the pipeline, the sets, the draws, into a job.
+        var targets = _gpu.CurrentTargets();
+        var state = PatchState(_gpu.CurrentState(), mode);
+        if (p.P.Tessellated) state = state with { Cull = CullMode.None };   // the raised triangles' winding is not checked: draw both sides
+        var r = ResolvePatches(p, state, targets, label);
+        var job = _patchJobs.Rent();
+        job.Owner = this;
+        (job.Targets, job.State, job.Program, job.Pipeline, job.Vertex, job.Elements) = (targets, state, p.P, r.Pipeline, r.Vertex, r.Elements);
+        job.Stages = GpuStage.Graphics;
+        var view = View();
+        job.Frame = _nativeFrame.Prepare(in view);
+        (job.ConstantSet, job.ConstantOffset) = PrepareConstantsBinding();
+        if (job.Draws.Length < count) job.Draws = new PatchDraw[Math.Max(count, job.Draws.Length * 2)];
+        draws.AsSpan(0, count).CopyTo(job.Draws);
+        job.Count = count;
+        _gpu.Record(label, job);
+    }
+
+    /// <summary>
+    /// The patches of one view as prepared (<see cref="RecordPatches"/>): recorded on any thread, the same commands as before wave 4.
+    /// </summary>
+    sealed class PatchJob : RecordJob
+    {
+        public TerrainRenderer Owner = null!;
+        public PassTargets Targets = null!;
+        public DrawState State = null!;
+        public GpuProgram Program = default;
+        public GpuPipeline Pipeline = default;
+        public GpuBufferBinding Vertex, Elements;
+        public FrameBinding Frame;
+        public GpuSet ConstantSet;
+        public uint ConstantOffset;
+        public GpuStage Stages;   // the program's push range: a push names every stage of it
+        public PatchDraw[] Draws = new PatchDraw[256];
+        public int Count;
+        public override int Size => Count;
+
+        public override void Record(IGpuCommandList cmd)
+        {
+            State.Record(cmd, Targets);
+            NativeFrame.Record(cmd, Program, in Frame);
+            uint offset = ConstantOffset;
+            cmd.BindSets(Program, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in ConstantSet), new ReadOnlySpan<uint>(in offset));
+            cmd.BindPipeline(Pipeline);
+            cmd.BindVertexBuffers(0, new ReadOnlySpan<GpuBufferBinding>(in Vertex));
+            cmd.BindIndexBuffer(Elements, IndexKind.U32);
+            var (counts, firsts) = (Owner._indexCounts, Owner._firstIndices);
+            for (int i = 0; i < Count; i++)
+            {
+                ref readonly var d = ref Draws[i];
+                cmd.PushConstants(Program, Stages, in d.Push);
+                cmd.DrawIndexed((uint)counts[d.Part], 1, (uint)firsts[d.Part]);
+            }
+        }
+
+        public override void Release() => Owner._patchJobs.Return(this);
+    }
+
+    /// <summary>
+    /// The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the state stays the same (the reflection's multisampled
+    /// target alternates with the scene's: a few entries). The grid is the terrain's own vertex and index buffer.
+    /// </summary>
+    PatchPipeline ResolvePatches(TerrainProgram p, DrawState state, PassTargets targets, string label)
+    {
+        var segment = new SegmentPipeline(p.P, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage,
+            state.DepthClamp);
+        foreach (var e in _patchPipelines)
+            if (e.Segment == segment) return e;
+        if (_patchPipelines.Count >= 16) _patchPipelines.Clear();
+        Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
+        attributes[0] = _gridVertex;
+        Span<GpuBufferBinding> vertex = stackalloc GpuBufferBinding[1];
+        p.Buffers(attributes, vertex);
+        var entry = new PatchPipeline
+        {
+            Segment = segment,
+            Pipeline = _gpu.Pipelines.Get(state.Pipeline(p.P, p.VertexLayout(attributes),
+                p.P.Tessellated ? PrimitiveType.PatchList : PrimitiveType.Triangles, targets.Formats, label)),
+            Vertex = vertex[0],
+            Elements = _gridElements,
+        };
+        _patchPipelines.Add(entry);
+        return entry;
+    }
+
+    #endregion
+
+    #region Material and constants
+
+    // The terrain set (set 2): this segment's TerrainConstants in the frame's constants, bound with a dynamic offset into a set made once per
+    // constants chunk (LegacyProgram's pattern for its default blocks).
+    TerrainConstants _constants, _written;
+    long _writtenFrame = -1;
+    Transient _constantsSlice;
+    readonly Dictionary<ulong, GpuSet> _constantSets = [];
+    ulong _lastSetKey;
+    GpuSet _lastSet;
+    Vector4 _lastRegion;
+    Vector2 _lastCellGrid;
+
+    /// <summary>
+    /// The layered material baked round the eye (docs/render-terrain.md "Material cache").
+    /// </summary>
+    readonly MaterialCache _materialCache;
+
+    /// <summary>
+    /// Bakes what the material cache's levels need this frame round <paramref name="eye"/> (before the scene, outside a pass;
+    /// <see cref="MaterialCache.Record"/>).
+    /// </summary>
+    public void RecordMaterialCache(Vector3 eye) => _materialCache.Record(eye);
+
+    /// <summary>
+    /// The terrain set of the constants chunk <paramref name="buffer"/>, made the first time (the bakes' own constants).
+    /// </summary>
+    internal GpuSet ConstantSetOf(GpuBuffer buffer)
+    {
+        ulong key = (ulong)buffer.Index;
+        if (!_constantSets.TryGetValue(key, out var set)) _constantSets[key] = set = ConstantSet(buffer);
+        return set;
+    }
+
+    /// <summary>
+    /// <see cref="_constants"/> prepared for the patches' material (<see cref="PrepareConstants"/>), for the material cache's bake.
+    /// </summary>
+    internal TerrainConstants MaterialConstants()
+    {
+        PrepareConstants(material: true, patches: true);
+        return _constants;
+    }
+
+    /// <summary>
+    /// The options of the frame being drawn.
+    /// </summary>
+    internal WorldRenderOptions FrameOptions => _frame.Options;
+
+    // The native model (docs/renderer-native.md 7.1, step O). Native programs (TerrainShaders' native variants: the same maths; the camera in
+    // ViewConstants, the terrain's values and the bindless indices of its textures in TerrainConstants at set 2, a patch's node in push
+    // constants), recorded into the pass VkGl has open. Per
     // segment: the frame set (NativeFrame), the terrain set, the dynamic state; per draw only commands (a patch: a push and a draw; a mesh
     // group: its pipeline, buffers and draw, kept per mesh while the vertex-array stamp holds).
 
@@ -701,7 +961,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
     /// </summary>
     TerrainProgram Smoothed(TerrainProgram p, TerrainProgram? tessellated) => RockSmoothing.TessellateActive && tessellated is not null
         ? tessellated : p;
-    static SamplerInfo StandInInfo(bool arrayed, ScalarKind kind) => new("", 0, 0, SamplerDimension.Dim2D, arrayed, false, false, kind, 0);
 
     /// <summary>
     /// The bindless index of a native texture of the terrain's (<see cref="TerrainTexture.Bindless"/>: a new index when its sampler changed), or the
@@ -879,212 +1138,35 @@ public sealed unsafe class TerrainRenderer : IDisposable
 
     GpuSet ConstantSet(GpuBuffer buffer) => _gpu.AllocateConstantSet(_constantsLayout, buffer, (ulong)sizeof(TerrainConstants));
 
-    /// <summary>
-    /// The terrain set of the constants chunk <paramref name="buffer"/>, made the first time (the bakes' own constants).
-    /// </summary>
-    internal GpuSet ConstantSetOf(GpuBuffer buffer)
-    {
-        ulong key = (ulong)buffer.Index;
-        if (!_constantSets.TryGetValue(key, out var set)) _constantSets[key] = set = ConstantSet(buffer);
-        return set;
-    }
+    #endregion
+
+    #region Meshes
+
+    internal const int Colour = 0, Depth = 1, Solid = 2;
 
     /// <summary>
-    /// <see cref="_constants"/> prepared for the patches' material (<see cref="PrepareConstants"/>), for the material cache's bake.
+    /// The interior cut of the mesh draw being prepared (<see cref="DrawMeshes"/>, <see cref="DrawMeshesIndirect"/>; docs/render-interior-cut.md),
+    /// null otherwise.
     /// </summary>
-    internal TerrainConstants MaterialConstants()
-    {
-        PrepareConstants(material: true, patches: true);
-        return _constants;
-    }
+    InteriorMaskRenderer? _meshCut;
+
+    // Per program kind: the last segment state and its number; numbers are stable per state (a mesh compares one int per draw).
+    readonly Dictionary<(int Kind, SegmentPipeline State), int> _segmentByState = [];
+    readonly SegmentPipeline[] _lastSegment = new SegmentPipeline[3];
+    readonly int[] _segmentIds = new int[3];
+    int _segmentCount;
 
     /// <summary>
-    /// The options of the frame being drawn.
+    /// The TERRAIN-mode meshes' instanced groups and this call's placements.
     /// </summary>
-    internal WorldRenderOptions FrameOptions => _frame.Options;
-
-    // ---- the terrain patches ----
+    readonly TerrainMeshGroups _meshGroups;
+    readonly JobPool<MeshJob> _meshJobs = new();
 
     /// <summary>
-    /// One selected node as its draw needs it (Prepare fills the list, Record walks it): the push constants (<c>uNode</c>,
-    /// <c>uMorph</c>) and the index range (<c>Quadrant + 1</c>).
+    /// A TERRAIN-mode mesh drawn indirect (<see cref="DrawMeshesIndirect"/>): the vertex array (position at 0, normal at 1), its index count, and
+    /// whether its placements mirror (the winding turns round), as <see cref="DrawMeshes"/> groups them.
     /// </summary>
-    struct PatchDraw
-    {
-        public TerrainPush Push;
-        public int Part;
-    }
-
-    /// <summary>
-    /// A patch program resolved for one pass state: the pipeline, the grid's vertex buffer and its index buffer.
-    /// </summary>
-    sealed class PatchPipeline
-    {
-        public SegmentPipeline Segment;
-        public GpuPipeline Pipeline = default;
-        public GpuBufferBinding Vertex;
-        public GpuBufferBinding Elements;
-    }
-
-    /// <summary>
-    /// Fills <see cref="_patchDraws"/> from <see cref="_nodes"/> (the tree's morph ranges, the index range per node) and counts them.
-    /// </summary>
-    void PreparePatches(TerrainQuadtree tree)
-    {
-        int n = _nodes.Count;
-        if (_patchDraws.Length < n) _patchDraws = new PatchDraw[Math.Max(n, _patchDraws.Length * 2)];
-        long triangles = 0;
-        for (int i = 0; i < n; i++)
-        {
-            var node = _nodes[i];
-            float start = tree.MorphStart[node.Level], end = tree.MorphEnd[node.Level];
-            int part = node.Quadrant + 1;
-            _patchDraws[i] = new PatchDraw
-            {
-                Push = new TerrainPush
-                {
-                    Node = new Vector4((float)node.X0, (float)node.Z0, (float)node.Size, GridCells),
-                    Morph = new Vector2(start == float.MaxValue ? 1e31f : start, end == float.MaxValue ? 2e31f : end),
-                },
-                Part = part,
-            };
-            triangles += _indexCounts[part] / 3;
-        }
-        _patchTriangles = triangles;
-    }
-
-    /// <summary>
-    /// Records <see cref="_patchDraws"/> into one native segment of the pass being drawn into (<see cref="PatchState"/>: back faces culled): the
-    /// dynamic state, the sets, the pipeline, the grid's vertex and index buffers once; per node its push constants and the draw of its index range.
-    /// </summary>
-    void RecordPatches(TerrainProgram p, string label, PatchMode mode = PatchMode.Solid, int count = -1, PatchDraw[]? draws = null)
-    {
-        if (count < 0) count = _nodes.Count;
-        if (count == 0) return;
-        draws ??= _patchDraws;
-        // Prepare (wave 4, docs/renderer-native.md 6.2): the pass's targets and state now, the pipeline, the sets, the draws, into a job.
-        var targets = _gpu.CurrentTargets();
-        var state = PatchState(_gpu.CurrentState(), mode);
-        if (p.P.Tessellated) state = state with { Cull = CullMode.None };   // the raised triangles' winding is not checked: draw both sides
-        var r = ResolvePatches(p, state, targets, label);
-        var job = _patchJobs.Rent();
-        job.Owner = this;
-        (job.Targets, job.State, job.Program, job.Pipeline, job.Vertex, job.Elements) = (targets, state, p.P, r.Pipeline, r.Vertex, r.Elements);
-        job.Stages = GpuStage.Graphics;
-        var view = View();
-        job.Frame = _nativeFrame.Prepare(in view);
-        (job.ConstantSet, job.ConstantOffset) = PrepareConstantsBinding();
-        if (job.Draws.Length < count) job.Draws = new PatchDraw[Math.Max(count, job.Draws.Length * 2)];
-        draws.AsSpan(0, count).CopyTo(job.Draws);
-        job.Count = count;
-        _gpu.Record(label, job);
-    }
-
-    /// <summary>
-    /// The patches of one view as prepared (<see cref="RecordPatches"/>): recorded on any thread, the same commands as before wave 4.
-    /// </summary>
-    sealed class PatchJob : RecordJob
-    {
-        public TerrainRenderer Owner = null!;
-        public PassTargets Targets = null!;
-        public DrawState State = null!;
-        public GpuProgram Program = default;
-        public GpuPipeline Pipeline = default;
-        public GpuBufferBinding Vertex, Elements;
-        public FrameBinding Frame;
-        public GpuSet ConstantSet;
-        public uint ConstantOffset;
-        public GpuStage Stages;   // the program's push range: a push names every stage of it
-        public PatchDraw[] Draws = new PatchDraw[256];
-        public int Count;
-        public override int Size => Count;
-
-        public override void Record(IGpuCommandList cmd)
-        {
-            State.Record(cmd, Targets);
-            NativeFrame.Record(cmd, Program, in Frame);
-            uint offset = ConstantOffset;
-            cmd.BindSets(Program, TerrainShaders.ConstantsSet, new ReadOnlySpan<GpuSet>(in ConstantSet), new ReadOnlySpan<uint>(in offset));
-            cmd.BindPipeline(Pipeline);
-            cmd.BindVertexBuffers(0, new ReadOnlySpan<GpuBufferBinding>(in Vertex));
-            cmd.BindIndexBuffer(Elements, IndexKind.U32);
-            var (counts, firsts) = (Owner._indexCounts, Owner._firstIndices);
-            for (int i = 0; i < Count; i++)
-            {
-                ref readonly var d = ref Draws[i];
-                cmd.PushConstants(Program, Stages, in d.Push);
-                cmd.DrawIndexed((uint)counts[d.Part], 1, (uint)firsts[d.Part]);
-            }
-        }
-
-        public override void Release() => Owner._patchJobs.Return(this);
-    }
-
-    /// <summary>
-    /// The pipeline and bindings for <paramref name="p"/> in this pass state, kept while the state stays the same (the reflection's multisampled
-    /// target alternates with the scene's: a few entries). The grid is the terrain's own vertex and index buffer.
-    /// </summary>
-    PatchPipeline ResolvePatches(TerrainProgram p, DrawState state, PassTargets targets, string label)
-    {
-        var segment = new SegmentPipeline(p.P, targets.Formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage,
-            state.DepthClamp);
-        foreach (var e in _patchPipelines)
-            if (e.Segment == segment) return e;
-        if (_patchPipelines.Count >= 16) _patchPipelines.Clear();
-        Span<LegacyProgram.Attribute?> attributes = stackalloc LegacyProgram.Attribute?[16];
-        attributes[0] = _gridVertex;
-        Span<GpuBufferBinding> vertex = stackalloc GpuBufferBinding[1];
-        p.Buffers(attributes, vertex);
-        var entry = new PatchPipeline
-        {
-            Segment = segment,
-            Pipeline = _gpu.Pipelines.Get(state.Pipeline(p.P, p.VertexLayout(attributes),
-                p.P.Tessellated ? PrimitiveType.PatchList : PrimitiveType.Triangles, targets.Formats, label)),
-            Vertex = vertex[0],
-            Elements = _gridElements,
-        };
-        _patchPipelines.Add(entry);
-        return entry;
-    }
-
-    static Vector4 CoarseRect => new(-WorldLayout.HalfWorldSize, -WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize, WorldLayout.HalfWorldSize);
-
-    Vector4 FineRect
-    {
-        get
-        {
-            var (x0, z0) = _fine.WorldOf(0, 0);
-            return new((float)x0, (float)z0, (float)x0 + (_fine.Columns - 1) * _fine.Spacing, (float)z0 + (_fine.Rows - 1) * _fine.Spacing);
-        }
-    }
-
-    /// <summary>
-    /// The heights as frame globals (docs/renderer-native.md 4.3): the two textures (native, with the linear, clamped sampler their GL versions had)
-    /// and the <see cref="TerrainShaders.HeightFunctions"/> uniforms, read when a consumer draws or applies its globals.
-    /// </summary>
-    sealed class ActiveTerrain { public TerrainRenderer? Owner; }
-    internal void Activate()
-    {
-        var binding = ActiveTerrains.GetValue(_gpu, static _ => new());
-        if (ReferenceEquals(binding.Owner, this)) return;
-        binding.Owner = this;
-        PublishGlobals();
-    }
-
-    void PublishGlobals()
-    {
-        var g = _gpu.Globals;
-        g.Publish("uHeightCoarse", () => _coarseTexture.Sampled());
-        g.Publish("uHeightFine", () => _fineTexture.Sampled());
-        g.PublishUniform("uCoarseRect", () => CoarseRect);
-        g.PublishUniform("uCoarseCells", () => new Vector2(_coarseSize - 1f, _coarseSize - 1f));
-        g.PublishUniform("uFineRect", () => FineRect);
-        g.PublishUniform("uFineCells", () => new Vector2(_fine.Columns - 1f, _fine.Rows - 1f));
-        g.PublishUniform("uFineBand", () => _fineBand);
-        g.PublishUniform("uHasFine", () => 1);
-        // The whole-world ground colour: the weather's dust takes its colour from it (docs/formats/weather.md "Dust").
-        g.Publish("uWeatherGround", () => _textures?.Textures.Ground is { } ground ? ground.Sampled() : default);
-    }
+    public readonly record struct IndirectMesh(MeshBindings Mesh, int IndexCount, bool Mirrored);
 
     /// <summary>
     /// Draws other meshes with the terrain material (TERRAIN-mode map features), after <see cref="Draw"/> set the frame. Each item: a mesh with
@@ -1100,8 +1182,14 @@ public sealed unsafe class TerrainRenderer : IDisposable
         {
             // Placements over an interior mask (the caller splits them out): the program with the cut, on for this draw.
             _meshCut = cut;
-            try { PrepareConstants(material: true, patches: false); }
-            finally { _meshCut = null; }
+            try
+            {
+                PrepareConstants(material: true, patches: false);
+            }
+            finally
+            {
+                _meshCut = null;
+            }
             return DrawGroups(Smoothed(MeshColour, _programs.MeshColourTess), Colour, "terrain meshes interior cut");
         }
         PrepareConstants(material: true, patches: false);
@@ -1110,35 +1198,41 @@ public sealed unsafe class TerrainRenderer : IDisposable
             : DrawGroups(Smoothed(MeshColour, _programs.MeshColourTess), Colour, "terrain meshes");
     }
 
-    // ---- depth only (the sun's shadow map, ShadowPass) ----
-
     /// <summary>
-    /// Draws the terrain's depth for a shadow cascade (<see cref="ShadowShaders.DepthFragment"/>, the caster bias): the main tree's patches chosen by
-    /// the camera's <paramref name="eye"/> (so the casters' detail matches what the picture shows), culled by
-    /// <paramref name="frustum"/>. Sets the frame's matrix for <see cref="DrawMeshes"/> with <c>depth</c>. <paramref name="coarseTexel"/>: the texel
-    /// of a far cascade (world units; 0: not coarsened), which keeps the nodes from being split finer than <see cref="ShadowLod.TerrainFloorLevel"/>.
+    /// <see cref="DrawMeshes"/> with placements and draw arguments made on the GPU (the foliage's GPU cull, docs/renderer-native.md 5.6.1): mesh
+    /// <c>i</c> is drawn by the <c>VkDrawIndexedIndirectCommand</c> at <paramref name="argsOffset"/> + 20 i, its instances read from
+    /// <paramref name="rows"/> (64 bytes each, the four rows of the matrix, row 0's w the biome row in colour, as <see cref="DrawMeshes"/>
+    /// writes them) from <paramref name="rowsOffset"/>, with the argument's firstInstance. Same programs, state, and GL state left behind as
+    /// <see cref="DrawMeshes"/>; the caller orders the meshes. Returns the number of draw calls.
     /// </summary>
-    public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, float coarseTexel = 0)
+    public int DrawMeshesIndirect(ReadOnlySpan<IndirectMesh> meshes, GpuBuffer rows, ulong rowsOffset, GpuBuffer args, ulong argsOffset,
+        bool depth = false, bool solid = false,
+        InteriorMaskRenderer? cut = null)
     {
-        _depthReady = true;
-        _quadtree.SetRanges(options.TerrainLod);
-        _frame = new Frame(viewProjection, eye, options, _frame.Light);
-        _quadtree.FloorLevel = ShadowLod.TerrainFloorLevel(coarseTexel, _quadtree.Spacing(0), TerrainLod.Roughness, _quadtree.LevelCount);
-        try { _quadtree.Select(eye, _bounds, (min, max) => WorldCamera.Intersects(frustum, min, max), _nodes); }
-        finally { _quadtree.FloorLevel = 0; }
-        PreparePatches(_quadtree);
-        if (_nodes.Count > 0)
+        if (meshes.Length == 0) return 0;
+        if (depth)
         {
-            PrepareConstants(material: false, patches: true);
-            RecordPatches(_programs.PatchDepth, "terrain depth");
-            DepthTriangles += _patchTriangles;
+            if (!_depthReady) return 0;   // the frame's matrix is the cascade's once DrawDepth has run
+            PrepareConstants(material: false, patches: false);
+            var program = Smoothed(_programs.MeshDepth, _programs.MeshDepthTess);
+            return DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, program, Depth, "terrain mesh depth");
         }
+        bool solidDraw = solid && EarlyDepth.Enabled;
+        // cut: the interior cut on in the program with the discard (the caller's cull lays the placements over a mask out with the fading ones).
+        _meshCut = solidDraw ? null : cut;
+        try
+        {
+            PrepareConstants(material: true, patches: false);
+        }
+        finally
+        {
+            _meshCut = null;
+        }
+        // solid: none of these placements is mid cross-fade (the caller splits them), so the program without the discard draws them (EarlyDepth).
+        return solidDraw
+            ? DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, Smoothed(MeshSolid, _programs.MeshSolidTess), Solid, "terrain meshes solid")
+            : DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, Smoothed(MeshColour, _programs.MeshColourTess), Colour, "terrain meshes");
     }
-
-    /// <summary>
-    /// Terrain triangles the depth draws have drawn since the counter was last reset (by the caller).
-    /// </summary>
-    public long DepthTriangles { get; set; }
 
     int DrawMeshesDepth(List<(MeshBindings Mesh, int IndexCount, Matrix4x4 Model)> meshes)
     {
@@ -1148,7 +1242,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return DrawGroups(Smoothed(_programs.MeshDepth, _programs.MeshDepthTess), Depth, "terrain mesh depth");
     }
 
-    // ---- the TERRAIN-mode meshes, instanced ----
     // One instanced draw per (vertex array, index count, winding) instead of one draw per placement (a draw costs ~4 µs of CPU
     // through VkGl, and a forest has hundreds of TERRAIN-mode rocks on screen and thousands in a shadow cascade). The placements keep
     // their order within a group; the groups follow the first placement of each. The pictures are the same as with one draw each
@@ -1346,42 +1439,6 @@ public sealed unsafe class TerrainRenderer : IDisposable
         }
     }
 
-    /// <summary>
-    /// A TERRAIN-mode mesh drawn indirect (<see cref="DrawMeshesIndirect"/>): the vertex array (position at 0, normal at 1), its index count, and
-    /// whether its placements mirror (the winding turns round), as <see cref="DrawMeshes"/> groups them.
-    /// </summary>
-    public readonly record struct IndirectMesh(MeshBindings Mesh, int IndexCount, bool Mirrored);
-
-    /// <summary>
-    /// <see cref="DrawMeshes"/> with placements and draw arguments made on the GPU (the foliage's GPU cull, docs/renderer-native.md 5.6.1): mesh
-    /// <c>i</c> is drawn by the <c>VkDrawIndexedIndirectCommand</c> at <paramref name="argsOffset"/> + 20 i, its instances read from
-    /// <paramref name="rows"/> (64 bytes each, the four rows of the matrix, row 0's w the biome row in colour, as <see cref="DrawMeshes"/>
-    /// writes them) from <paramref name="rowsOffset"/>, with the argument's firstInstance. Same programs, state, and GL state left behind as
-    /// <see cref="DrawMeshes"/>; the caller orders the meshes. Returns the number of draw calls.
-    /// </summary>
-    public int DrawMeshesIndirect(ReadOnlySpan<IndirectMesh> meshes, GpuBuffer rows, ulong rowsOffset, GpuBuffer args, ulong argsOffset,
-        bool depth = false, bool solid = false,
-        InteriorMaskRenderer? cut = null)
-    {
-        if (meshes.Length == 0) return 0;
-        if (depth)
-        {
-            if (!_depthReady) return 0;   // the frame's matrix is the cascade's once DrawDepth has run
-            PrepareConstants(material: false, patches: false);
-            var program = Smoothed(_programs.MeshDepth, _programs.MeshDepthTess);
-            return DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, program, Depth, "terrain mesh depth");
-        }
-        bool solidDraw = solid && EarlyDepth.Enabled;
-        // cut: the interior cut on in the program with the discard (the caller's cull lays the placements over a mask out with the fading ones).
-        _meshCut = solidDraw ? null : cut;
-        try { PrepareConstants(material: true, patches: false); }
-        finally { _meshCut = null; }
-        // solid: none of these placements is mid cross-fade (the caller splits them), so the program without the discard draws them (EarlyDepth).
-        return solidDraw
-            ? DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, Smoothed(MeshSolid, _programs.MeshSolidTess), Solid, "terrain meshes solid")
-            : DrawIndirect(meshes, rows, rowsOffset, args, argsOffset, Smoothed(MeshColour, _programs.MeshColourTess), Colour, "terrain meshes");
-    }
-
     int DrawIndirect(ReadOnlySpan<IndirectMesh> meshes, GpuBuffer rows, ulong rowsOffset, GpuBuffer args, ulong argsOffset, TerrainProgram p,
         int kind, string label)
     {
@@ -1440,6 +1497,15 @@ public sealed unsafe class TerrainRenderer : IDisposable
         (n.SegA, n.PipeA) = (segment, pipeline);
         return pipeline;
     }
+
+    #endregion
+
+    #region Rock bake
+
+    /// <summary>
+    /// The impostor bake of TERRAIN-mode rocks.
+    /// </summary>
+    readonly TerrainRockBake _rockBake;
 
     /// <summary>
     /// The vertex layout and buffers of a rock's mesh part for the bake program (<see cref="TerrainRockBake.Vertices"/>).
@@ -1555,21 +1621,5 @@ public sealed unsafe class TerrainRenderer : IDisposable
         return (region, ground, worldColour, colour, (float)WorldLayout.HalfWorldSize, materialDistance * 0.8f, materialDistance, flags);
     }
 
-
-    public void Dispose()
-    {
-        _materialCache.Dispose();
-        _gridVertices.Dispose();
-        _gridIndices.Dispose();
-        _coarseTexture.Dispose();
-        _fineTexture.Dispose();
-        foreach (var r in _retired) r.Texture.Dispose();
-        if (_ownsTextures) _textures?.Dispose();
-        _programs.Dispose();
-        _rockBake.Dispose();
-        _gpu.Bindless.Free(BindlessKind.Texture2D, _standIn2D);
-        _gpu.Bindless.Free(BindlessKind.Texture2DArray, _standInArray);
-        _gpu.Bindless.Free(BindlessKind.UintTexture2D, _standInUInt);
-        _nativeFrame.Dispose();
-    }
+    #endregion
 }

@@ -356,9 +356,9 @@ static partial class WorldApp
     /// </summary>
     static void RegisterSkyAndSceneToggles(WorldGpu gpu, WorldRenderOptions render)
     {
-        AbToggles.Register("cloud-fog-skip", () => gpu.Sky.CloudFogSkip, v => gpu.Sky.CloudFogSkip = v,
+        AbToggles.Register("cloud-fog-skip", () => gpu.Sky.Clouds.CloudFogSkip, v => gpu.Sky.Clouds.CloudFogSkip = v,
                 "volumetric clouds not marched where the fog hides the sky: the whole pass under complete weather fog, and in the main view each texel the placed fog volumes hide; B: every upward ray marched");
-        AbToggles.Register("sky-fog-skip", () => gpu.Sky.SkyFogSkip, v => gpu.Sky.SkyFogSkip = v,
+        AbToggles.Register("sky-fog-skip", () => gpu.Sky.Clouds.SkyFogSkip, v => gpu.Sky.Clouds.SkyFogSkip = v,
                 "the main view's sky pass and cloud march left out where the placed fog block hides the sky in every direction of the view; B: drawn");
         if (gpu.Lamps is { } lamps) AbToggles.Register("lights", () => lamps.Enabled, v => lamps.Enabled = v,
                 "the lamps: the game's point and spot lights on the world");
