@@ -4,13 +4,13 @@ using System.Runtime.InteropServices;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The terrain's blood decals by cell (the game's <c>TerrainDecalsManager</c>, docs/game/blood-decals.md): adding a decal, the growing pool under a bleeding
-/// character that stands still, and the ageing. The renderer draws the cells near the camera from <see cref="In"/>; <see cref="CellVersion"/> tells it
-/// when a cell changed. Not thread-safe: the host owns it on one thread.
+/// The terrain's blood decals by cell (the game's <c>TerrainDecalsManager</c>, docs/game/blood-decals.md): adding a decal, the growing pool under a
+/// bleeding character that stands still, and the ageing. The renderer draws the cells near the camera from <see cref="In"/>;
+/// <see cref="CellVersion"/> tells it when a cell changed. Not thread-safe: the host owns it on one thread.
 /// </summary>
 /// <remarks>
-/// Inside the store a decal's <see cref="TerrainDecal.Life"/> is the <see cref="Clock"/> time it runs out at, so ageing touches only the cells where one has
-/// (<see cref="LifeLeft"/> gives the seconds left); <see cref="All"/> and <see cref="Load"/> use seconds left, as a save holds them.
+/// Inside the store a decal's <see cref="TerrainDecal.Life"/> is the <see cref="Clock"/> time it runs out at, so ageing touches only the cells where
+/// one has (<see cref="LifeLeft"/> gives the seconds left); <see cref="All"/> and <see cref="Load"/> use seconds left, as a save holds them.
 /// </remarks>
 public sealed class TerrainDecalStore
 {
@@ -33,10 +33,22 @@ public sealed class TerrainDecalStore
     /// </summary>
     sealed class Cell
     {
+        /// <summary>
+        /// The cell's decals in the order they were placed.
+        /// </summary>
         public readonly List<TerrainDecal> Decals = [];
+        /// <summary>
+        /// The index in <see cref="Decals"/> of the first pool at each cell place.
+        /// </summary>
         public readonly Dictionary<int, int> Pools = [];
+        /// <summary>
+        /// The soonest <see cref="Clock"/> time a decal of the cell runs out.
+        /// </summary>
         public float Soonest = float.PositiveInfinity;
 
+        /// <summary>
+        /// Appends <paramref name="d"/>, noting it as the place's pool if it is the first there.
+        /// </summary>
         public void Add(in TerrainDecal d)
         {
             if (d.Type == TerrainDecalType.Pool) Pools.TryAdd(Place(d.LocalX, d.LocalZ), Decals.Count);
@@ -67,21 +79,51 @@ public sealed class TerrainDecalStore
             return true;
         }
 
+        /// <summary>
+        /// The key of a cell place: x in the low 16 bits, z in the high.
+        /// </summary>
         static int Place(short x, short z) => (ushort)x | (ushort)z << 16;
     }
 
+    /// <summary>
+    /// For each <see cref="TerrainDecalType"/>, the sizes in texels of its textures, by variant.
+    /// </summary>
     readonly (int Width, int Height)[][] _sizes;
+    /// <summary>
+    /// The cells that hold decals, by key.
+    /// </summary>
     readonly Dictionary<uint, Cell> _cells = [];
+    /// <summary>
+    /// Each cell's <see cref="CellVersion"/> and <see cref="CellRewrite"/>.
+    /// </summary>
     readonly Dictionary<uint, int> _versions = [], _rewrites = [];
-    // Per cell, the decals placed or grown since its last rewrite, in that order.
+    /// <summary>
+    /// Per cell, the decals placed or grown since its last rewrite, in that order.
+    /// </summary>
     readonly Dictionary<uint, List<TerrainDecal>> _appended = [];
+    /// <summary>
+    /// The pool of each bleeding character, by character.
+    /// </summary>
     readonly Dictionary<long, BleedToken> _bleeds = [];
+    /// <summary>
+    /// Scratch of <see cref="Age"/>: the cells where decals ran out.
+    /// </summary>
     readonly List<uint> _touched = [];
+    /// <summary>
+    /// Scratch of <see cref="Age"/>: the cells left with no decals.
+    /// </summary>
     readonly List<uint> _emptied = [];
+    /// <summary>
+    /// The last version handed out.
+    /// </summary>
     int _nextVersion;
+    /// <summary>
+    /// See <see cref="Clock"/>.
+    /// </summary>
     float _clock;
 
-    /// <param name="sizes">For each <see cref="TerrainDecalType"/>, the sizes in texels of its folder's textures (the variants); a type without any makes no decals.</param>
+    /// <param name="sizes">For each <see cref="TerrainDecalType"/>, the sizes in texels of its folder's textures (the variants); a type without any
+    /// makes no decals.</param>
     public TerrainDecalStore(IReadOnlyList<IReadOnlyList<(int Width, int Height)>> sizes)
     {
         this._sizes = new (int, int)[4][];
@@ -98,6 +140,9 @@ public sealed class TerrainDecalStore
     /// </summary>
     public IEnumerable<uint> Cells => _cells.Keys;
 
+    /// <summary>
+    /// How many decals the cells hold (a decal over several cells counts once per cell).
+    /// </summary>
     public int Count { get; private set; }
 
     /// <summary>
@@ -121,9 +166,9 @@ public sealed class TerrainDecalStore
     public int CellVersion(uint key) => _versions.GetValueOrDefault(key);
 
     /// <summary>
-    /// A number that changes when decals leave <paramref name="key"/> (ageing, a new world): a texture of the cell must be drawn again from <see cref="In"/>. While it
-    /// stays, the cell's changes are only additions: <see cref="Appended"/>, in order, drawn over what the texture holds (the original likely draws a cell's new decals onto
-    /// its texture too: it clears it only for a new cell, docs/game/blood-decals.md).
+    /// A number that changes when decals leave <paramref name="key"/> (ageing, a new world): a texture of the cell must be drawn again from
+    /// <see cref="In"/>. While it stays, the cell's changes are only additions: <see cref="Appended"/>, in order, drawn over what the texture holds
+    /// (the original likely draws a cell's new decals onto its texture too: it clears it only for a new cell, docs/game/blood-decals.md).
     /// </summary>
     public int CellRewrite(uint key) => _rewrites.GetValueOrDefault(key);
 
@@ -167,8 +212,8 @@ public sealed class TerrainDecalStore
 
     /// <summary>
     /// A new decal (<c>FUN_1408dce50</c>, <c>FUN_1408dc6b0</c>): a random texture of <paramref name="type"/>'s, turned so its width runs along
-    /// <paramref name="direction"/> (X/Z), its width and height <paramref name="size"/> × the texture's texels × the cell's 288 units / 2048, stored in each cell its
-    /// corners fall in. Nothing when the type has no textures or <paramref name="life"/> is not positive.
+    /// <paramref name="direction"/> (X/Z), its width and height <paramref name="size"/> × the texture's texels × the cell's 288 units / 2048, stored
+    /// in each cell its corners fall in. Nothing when the type has no textures or <paramref name="life"/> is not positive.
     /// </summary>
     public void Add(TerrainDecalType type, Vector3 at, Vector2 direction, float size, uint abgr, float life, Random random)
     {
@@ -180,9 +225,9 @@ public sealed class TerrainDecalStore
     }
 
     /// <summary>
-    /// A bleeding character standing still (<c>FUN_1408dcfa0</c>): <paramref name="bleeding"/> × <paramref name="dt"/> × 0.2 grows the pool at its feet, more slowly
-    /// the bigger it is (by that over the larger of 1 and ten times the size), up to <see cref="PoolMax"/>; moved more than √10 units away, it starts a new pool. The
-    /// pool's decal is replaced when its size in the cell changes.
+    /// A bleeding character standing still (<c>FUN_1408dcfa0</c>): <paramref name="bleeding"/> × <paramref name="dt"/> × 0.2 grows the pool at its
+    /// feet, more slowly the bigger it is (by that over the larger of 1 and ten times the size), up to <see cref="PoolMax"/>; moved more than √10
+    /// units away, it starts a new pool. The pool's decal is replaced when its size in the cell changes.
     /// </summary>
     public void Bleed(long who, Vector3 at, float bleeding, float dt, uint abgr, Random random)
     {
@@ -214,8 +259,9 @@ public sealed class TerrainDecalStore
     public void Stanch(long who) => _bleeds.Remove(who);
 
     /// <summary>
-    /// Ages every decal by <paramref name="dt"/> seconds of game time (the scaled frame time: nothing while paused) and removes those whose life ran out, except
-    /// in the cells <paramref name="drawn"/> says are on a texture now (the game keeps what it has drawn until the cell's texture is given to another; <c>FUN_1408dd860</c>).
+    /// Ages every decal by <paramref name="dt"/> seconds of game time (the scaled frame time: nothing while paused) and removes those whose life ran
+    /// out, except in the cells <paramref name="drawn"/> says are on a texture now (the game keeps what it has drawn until the cell's texture is
+    /// given to another; <c>FUN_1408dd860</c>).
     /// </summary>
     public void Age(float dt, Func<uint, bool> drawn)
     {
@@ -236,18 +282,27 @@ public sealed class TerrainDecalStore
         _touched.Clear();
     }
 
+    /// <summary>
+    /// The cell of <paramref name="key"/>, made when it has none.
+    /// </summary>
     Cell CellOf(uint key)
     {
         if (!_cells.TryGetValue(key, out var cell)) _cells[key] = cell = new Cell();
         return cell;
     }
 
+    /// <summary>
+    /// The size in texels of <paramref name="d"/>'s texture; (0, 0) for an unknown variant.
+    /// </summary>
     (int Width, int Height) Texels(in TerrainDecal d)
     {
         var variants = _sizes[(int)d.Type];
         return d.Variant < variants.Length ? variants[d.Variant] : (0, 0);
     }
 
+    /// <summary>
+    /// The place of <paramref name="at"/> in cell <paramref name="key"/>, in thousandths of the cell's size.
+    /// </summary>
     static (short X, short Z) Local(uint key, Vector2 at)
     {
         var (x0, z0) = TerrainDecalCells.Origin(key);
@@ -270,6 +325,9 @@ public sealed class TerrainDecalStore
         corners[3] = at - width - height;
     }
 
+    /// <summary>
+    /// Places <paramref name="d"/> at <paramref name="at"/>, sized <paramref name="size"/>: a copy in each cell its corners reach.
+    /// </summary>
     void Place(TerrainDecal d, Vector2 at, float size)
     {
         var (w, h) = Texels(d);
@@ -293,8 +351,9 @@ public sealed class TerrainDecalStore
     }
 
     /// <summary>
-    /// A pool <paramref name="d"/> (a cell's copy, centred on <paramref name="at"/>) grown to <paramref name="size"/>: each cell's copy is replaced where it lies in
-    /// the list, and the cells its larger corners now reach get one. A pool only grows, so no cell loses it, and a cell that had it is drawn again (<see cref="CellRewrite"/>).
+    /// A pool <paramref name="d"/> (a cell's copy, centred on <paramref name="at"/>) grown to <paramref name="size"/>: each cell's copy is replaced
+    /// where it lies in the list, and the cells its larger corners now reach get one. A pool only grows, so no cell loses it, and a cell that had it
+    /// is drawn again (<see cref="CellRewrite"/>).
     /// </summary>
     void Regrow(TerrainDecal d, Vector2 at, float size)
     {
@@ -320,8 +379,9 @@ public sealed class TerrainDecalStore
                 at0 = cell.Decals.FindIndex(x => x.Type == old.Type && Same(x, old) && x.LocalX == lx && x.LocalZ == lz);
             if (at0 >= 0)
             {
-                // Meitou: a grown pool's cell is drawn again from its list (one pass a frame however often the pool grew), not with the larger copy over the old one: that stacked
-                // the pool's translucent edge a hundred times, hardening it, and showed a pop when the cell was redrawn later.
+                // Meitou: a grown pool's cell is drawn again from its list (one pass a frame however often the pool grew), not with the larger copy
+                // over the old one: that stacked the pool's translucent edge a hundred times, hardening it, and showed a pop when the cell was
+                // redrawn later.
                 cell.Decals[at0] = copy with { Life = cell.Decals[at0].Life };
                 Rewrite(key);
             }
@@ -331,6 +391,9 @@ public sealed class TerrainDecalStore
         static bool Same(in TerrainDecal x, in TerrainDecal old) => x.Variant == old.Variant && x.Rotation == old.Rotation;
     }
 
+    /// <summary>
+    /// Gives cell <paramref name="key"/> and the store a new version.
+    /// </summary>
     void Touch(uint key)
     {
         _versions[key] = ++_nextVersion;

@@ -7,6 +7,9 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class BuildingRandom(uint seed)
 {
+    /// <summary>
+    /// The generator's state.
+    /// </summary>
     uint _state = seed;
 
     /// <summary>

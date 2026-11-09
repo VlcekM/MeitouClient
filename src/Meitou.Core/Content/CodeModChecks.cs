@@ -5,7 +5,13 @@ namespace Meitou.Content;
 /// </summary>
 public static class CodeModApi
 {
+    /// <summary>
+    /// The newest code-mod API this build implements; a manifest asking for a later one is refused.
+    /// </summary>
     public const int Newest = 2;
+    /// <summary>
+    /// The oldest code-mod API this build still loads.
+    /// </summary>
     public const int Oldest = 1;
 
     /// <summary>
@@ -20,7 +26,13 @@ public static class CodeModApi
 /// </summary>
 public sealed class CodeModPass
 {
+    /// <summary>
+    /// The mods loaded so far in load order, with their manifests.
+    /// </summary>
     readonly List<(string Name, CodeModManifest Manifest)> _loaded = [];
+    /// <summary>
+    /// Why each refused mod did not load, by mod name.
+    /// </summary>
     readonly Dictionary<string, string> _refused = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -28,8 +40,14 @@ public sealed class CodeModPass
     /// </summary>
     public IReadOnlyDictionary<string, string> Refusals => _refused;
 
+    /// <summary>
+    /// Records that the mod <paramref name="name"/> loaded (in the launcher: will load).
+    /// </summary>
     public void Loaded(string name, CodeModManifest manifest) => _loaded.Add((name, manifest));
 
+    /// <summary>
+    /// Records that the mod <paramref name="name"/> did not load, and why; a later refusal of the same name replaces the reason.
+    /// </summary>
     public void Refused(string name, string reason) => _refused[name] = reason;
 
     /// <summary>
@@ -149,12 +167,18 @@ public static class CodeModChecks
         return $"needs code mod '{dependency.Id}', which is not installed";
     }
 
+    /// <summary>
+    /// The refusal when the installed version of a dependency is outside its range; null when it fits.
+    /// </summary>
     static string? VersionProblem(CodeModDependency dependency, string name, CodeModVersion? installed)
     {
         if (dependency.Accepts(installed)) return null;
         return $"needs {name} ('{dependency.Id}') {dependency.Range}; {installed?.ToString() ?? "a version without a number"} is installed";
     }
 
+    /// <summary>
+    /// The reason the mod <paramref name="name"/> did not load in <paramref name="pass"/>, else a generic one.
+    /// </summary>
     static string WhyRefused(string name, CodeModPass pass) => pass.Refusals.GetValueOrDefault(name) ?? "it did not load";
 
     /// <summary>

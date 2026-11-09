@@ -9,8 +9,8 @@ public readonly record struct ResolvedBuilding(BuildingPlacement Placement, Game
 
 /// <summary>
 /// Resolves a zone's <see cref="BuildingPlacement"/> the way the game places it (docs/formats/zones.md, "From placements to meshes"): a placement at
-/// the origin is unplaced, the record is looked up by id, Y is the placement's absolute <see cref="BuildingPlacement.WorldY"/> when there is one and else the
-/// terrain height plus the instance's Y, and the state record of the zone file says whether the building is destroyed.
+/// the origin is unplaced, the record is looked up by id, Y is the placement's absolute <see cref="BuildingPlacement.WorldY"/> when there is one and
+/// else the terrain height plus the instance's Y, and the state record of the zone file says whether the building is destroyed.
 /// </summary>
 public static class BuildingPlacements
 {
@@ -20,6 +20,9 @@ public static class BuildingPlacements
     public static IEnumerable<BuildingPlacement> Overlay(IEnumerable<BuildingPlacement> original, IReadOnlyList<BuildingPlacement> changes) =>
         changes.Count == 0 ? original : OverlayWith(original, changes);
 
+    /// <summary>
+    /// <paramref name="original"/> with each placement replaced by the change of the same key, then the changes that replaced nothing.
+    /// </summary>
     static IEnumerable<BuildingPlacement> OverlayWith(IEnumerable<BuildingPlacement> original, IReadOnlyList<BuildingPlacement> changes)
     {
         var replacements = changes.ToDictionary(p => p.Key, StringComparer.Ordinal);

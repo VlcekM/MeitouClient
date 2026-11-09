@@ -8,6 +8,9 @@ namespace Meitou.Data.World;
 public readonly record struct FoliageInstance(FoliageMesh Mesh, FoliageLayer Layer, Vector3 Position, float Scale, float YawDegrees,
     Quaternion Orientation)
 {
+    /// <summary>
+    /// The instance's transform (<see cref="TransformOf"/>).
+    /// </summary>
     public Matrix4x4 Transform => TransformOf(Scale, Orientation, Position);
 
     /// <summary>
@@ -28,8 +31,17 @@ public sealed record FoliageGrassPatch(FoliageLayer Layer, FoliageGrass Grass, i
 /// </summary>
 public sealed class FoliageZone
 {
+    /// <summary>
+    /// The zone.
+    /// </summary>
     public required ZoneCoordinate Zone { get; init; }
+    /// <summary>
+    /// The placed meshes.
+    /// </summary>
     public List<FoliageInstance> Instances { get; } = [];
+    /// <summary>
+    /// The grass layers.
+    /// </summary>
     public List<FoliageGrassPatch> Grass { get; } = [];
     /// <summary>
     /// Instances of meshes with a <c>building type</c> (mineable rocks), also in <see cref="Instances"/>.
@@ -46,7 +58,13 @@ public sealed class FoliageZone
 /// </summary>
 public sealed class FoliageZoneInput
 {
+    /// <summary>
+    /// The zone.
+    /// </summary>
     public required ZoneCoordinate Zone { get; init; }
+    /// <summary>
+    /// The zone's height grid.
+    /// </summary>
     public required FoliageGround Ground { get; init; }
     /// <summary>
     /// The overlay around the zone; the placer writes grass coverage (R) and grass spots (G) into it.
@@ -158,8 +176,15 @@ public static class FoliageLayout
         return zone;
     }
 
+    /// <summary>
+    /// One mesh layer's placing: the zone's input and output, the layer, its random sequence and the zone's X/Z bounds.
+    /// </summary>
     sealed record Context(FoliageZoneInput Input, FoliageZone Zone, FoliageLayer Layer, FoliageRandom Rng, float X0, float Z0, float X1, float Z1);
 
+    /// <summary>
+    /// Places <paramref name="count"/> copies of <paramref name="mesh"/> (in clusters when it is clustered), each accepted after the slope, zone,
+    /// town, altitude and road tests, with its children placed round it; <paramref name="biome"/>, when given, ends a cluster at another biome.
+    /// </summary>
     static void PlaceMesh(Context c, FoliageMesh mesh, int count, uint? biome)
     {
         var rng = c.Rng;
@@ -226,7 +251,8 @@ public static class FoliageLayout
         if (slope > mesh.MaxSlope || slope < mesh.MinSlope) return false;
         if (p.X < c.X0 || p.X > c.X1 || p.Y < c.Z0 || p.Y > c.Z1) return true;
         bool rejected = false;
-        // A resource mesh (one with a building type) is not rejected inside the no-foliage range of a town the player's faction owns (FUN_1406d2410:146-156, Verified).
+        // A resource mesh (one with a building type) is not rejected inside the no-foliage range of a town the player's faction owns
+        // (FUN_1406d2410:146-156, Verified).
         if (mesh.AvoidTowns && input.NearestTown?.Invoke(p.X, p.Y) is { } town && !(mesh.BuildingType is not null && town.Owned) &&
             Vector2.DistanceSquared(town.At, p) < town.Range * town.Range)
             rejected = true;

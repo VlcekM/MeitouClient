@@ -5,8 +5,100 @@ namespace Meitou.Data.Ui;
 /// </summary>
 public enum TutorialAdvance
 {
-    None, CameraControls, CharSelection, CharMovement, CenterChar, SelectCharacter, Map, Signs, Medkiting, RecruitSelect, RecruitStats, SquadArrange,
-    SelectUnconscious, Lockpicking, LockpickingSuccessful, CraftButton, CraftTab, ProductionSelection, ConstructionMaterials,
+    /// <summary>
+    /// No test: the page waits for the player's button.
+    /// </summary>
+    None,
+
+    /// <summary>
+    /// Moves on once the camera has both panned and zoomed, after the page's wait.
+    /// </summary>
+    CameraControls,
+
+    /// <summary>
+    /// Moves on when the selection's lead is a player character.
+    /// </summary>
+    CharSelection,
+
+    /// <summary>
+    /// Moves on when the lead character has moved.
+    /// </summary>
+    CharMovement,
+
+    /// <summary>
+    /// Moves on when the camera follows a character.
+    /// </summary>
+    CenterChar,
+
+    /// <summary>
+    /// Moves on when the selection's lead is a player character, as <see cref="CharSelection"/>.
+    /// </summary>
+    SelectCharacter,
+
+    /// <summary>
+    /// Moves on once the overview screen's map tab (tab 0) was open, after the page's wait.
+    /// </summary>
+    Map,
+
+    /// <summary>
+    /// Moves on once Alt (the signs key) was held, after the page's wait.
+    /// </summary>
+    Signs,
+
+    /// <summary>
+    /// Moves on once a player character treats someone, after the page's wait.
+    /// </summary>
+    Medkiting,
+
+    /// <summary>
+    /// Moves on when the tutorial's recruit is the selection's lead (at once without a recruit).
+    /// </summary>
+    RecruitSelect,
+
+    /// <summary>
+    /// Moves on when the stats screen is open.
+    /// </summary>
+    RecruitStats,
+
+    /// <summary>
+    /// Moves on when the overview screen shows its main tab 4.
+    /// </summary>
+    SquadArrange,
+
+    /// <summary>
+    /// Moves on when the lead is a player character lying unconscious (not playing dead).
+    /// </summary>
+    SelectUnconscious,
+
+    /// <summary>
+    /// Moves on once a player character picks a lock, after the page's wait; the imprisoned player characters at that moment are remembered.
+    /// </summary>
+    Lockpicking,
+
+    /// <summary>
+    /// Moves on when one of the prisoners <see cref="Lockpicking"/> remembered is in a cage whose lock is open.
+    /// </summary>
+    LockpickingSuccessful,
+
+    /// <summary>
+    /// Moves on when the overview screen shows its main tab 2 or 3.
+    /// </summary>
+    CraftButton,
+
+    /// <summary>
+    /// Moves on when the overview screen shows its main tab 3, crafting.
+    /// </summary>
+    CraftTab,
+
+    /// <summary>
+    /// Moves on when the focused building is a complete production building with an output.
+    /// </summary>
+    ProductionSelection,
+
+    /// <summary>
+    /// Moves on when the focused building is complete.
+    /// </summary>
+    ConstructionMaterials,
 }
 
 /// <summary>
@@ -14,11 +106,179 @@ public enum TutorialAdvance
 /// </summary>
 public enum TutorialHighlight
 {
-    None, Portraits, PanelStats, PanelStatsBottom, PanelStatsBottomPowerButton, PanelStatsBottomWorkers, PanelMedical, PanelMedicalStatus,
-    PanelMedicalBarBody, PanelMedicalBarLimbs, PanelMedicalBarBlood, PanelMedicalBarPower, PanelMedicalBarMaterials, PanelMedicalBarMaterialsBuilding,
-    PanelMedicalBarCondition, PanelMedicalBarConditionBuilding, PanelGameSpeed, PanelTimeMoney, ButtonBuild, PanelBounty, PanelMenuBar,
-    PanelMenuBarSquad, PanelMenuBarStats, PanelMenuBarTech, PanelOrders, PanelOrdersCommands, PanelOrdersJobs, PanelOrdersJobRemove,
-    PanelOrdersJobObedience, PanelOrdersMedicButton, PanelOrdersRescueButton, MapscreenCraftTab, MapscreenCraftTabItems, BuildingInventoryInput,
+    /// <summary>
+    /// Highlights nothing.
+    /// </summary>
+    None,
+
+    /// <summary>
+    /// The squad's portraits.
+    /// </summary>
+    Portraits,
+
+    /// <summary>
+    /// The selected character's name panel.
+    /// </summary>
+    PanelStats,
+
+    /// <summary>
+    /// The stats panel.
+    /// </summary>
+    PanelStatsBottom,
+
+    /// <summary>
+    /// The stats panel's Power line.
+    /// </summary>
+    PanelStatsBottomPowerButton,
+
+    /// <summary>
+    /// The stats panel's Workers line.
+    /// </summary>
+    PanelStatsBottomWorkers,
+
+    /// <summary>
+    /// The medical panel.
+    /// </summary>
+    PanelMedical,
+
+    /// <summary>
+    /// The medical panel's status part.
+    /// </summary>
+    PanelMedicalStatus,
+
+    /// <summary>
+    /// The medical panel's second bar.
+    /// </summary>
+    PanelMedicalBarBody,
+
+    /// <summary>
+    /// The medical panel's fifth bar.
+    /// </summary>
+    PanelMedicalBarLimbs,
+
+    /// <summary>
+    /// The medical panel's first bar.
+    /// </summary>
+    PanelMedicalBarBlood,
+
+    /// <summary>
+    /// The medical panel's second bar.
+    /// </summary>
+    PanelMedicalBarPower,
+
+    /// <summary>
+    /// The medical panel's second bar: an unfinished building's materials.
+    /// </summary>
+    PanelMedicalBarMaterials,
+
+    /// <summary>
+    /// The medical panel's third bar: the materials of an unfinished building with a door.
+    /// </summary>
+    PanelMedicalBarMaterialsBuilding,
+
+    /// <summary>
+    /// The medical panel's first bar: an unfinished building's condition.
+    /// </summary>
+    PanelMedicalBarCondition,
+
+    /// <summary>
+    /// The medical panel's second bar: the condition of an unfinished building with a door.
+    /// </summary>
+    PanelMedicalBarConditionBuilding,
+
+    /// <summary>
+    /// The game speed buttons.
+    /// </summary>
+    PanelGameSpeed,
+
+    /// <summary>
+    /// The time and money panel.
+    /// </summary>
+    PanelTimeMoney,
+
+    /// <summary>
+    /// The build button's panel.
+    /// </summary>
+    ButtonBuild,
+
+    /// <summary>
+    /// The bounty panel.
+    /// </summary>
+    PanelBounty,
+
+    /// <summary>
+    /// The menu bar of shortcut buttons.
+    /// </summary>
+    PanelMenuBar,
+
+    /// <summary>
+    /// The menu bar's squad button.
+    /// </summary>
+    PanelMenuBarSquad,
+
+    /// <summary>
+    /// The menu bar's stats button.
+    /// </summary>
+    PanelMenuBarStats,
+
+    /// <summary>
+    /// The menu bar's tech button.
+    /// </summary>
+    PanelMenuBarTech,
+
+    /// <summary>
+    /// The orders panel.
+    /// </summary>
+    PanelOrders,
+
+    /// <summary>
+    /// The order buttons together: block, hold, passive, chase, taunt, ranged and sneak.
+    /// </summary>
+    PanelOrdersCommands,
+
+    /// <summary>
+    /// The jobs list.
+    /// </summary>
+    PanelOrdersJobs,
+
+    /// <summary>
+    /// The button that removes a job.
+    /// </summary>
+    PanelOrdersJobRemove,
+
+    /// <summary>
+    /// The row of the first Obedient Slave job; nothing when there is none.
+    /// </summary>
+    PanelOrdersJobObedience,
+
+    /// <summary>
+    /// The orders panel's medic button.
+    /// </summary>
+    PanelOrdersMedicButton,
+
+    /// <summary>
+    /// The orders panel's rescue button.
+    /// </summary>
+    PanelOrdersRescueButton,
+
+    /// <summary>
+    /// The overview screen's crafting tab button (main tab 3).
+    /// </summary>
+    MapscreenCraftTab,
+
+    /// <summary>
+    /// The contents of the overview screen's crafting tab.
+    /// </summary>
+    MapscreenCraftTabItems,
+
+    /// <summary>
+    /// The input column of a building's inventory.
+    /// </summary>
+    BuildingInventoryInput,
+
+    /// <summary>
+    /// The build mode's list of buildings.
+    /// </summary>
     BuildModePanelBuildings,
 }
 
@@ -36,13 +296,28 @@ public readonly record struct TutorialPage(int Line, bool Continue, TutorialAdva
 /// </summary>
 public sealed class TutorialCatalog
 {
+    /// <summary>
+    /// The source file the tutorials' msgids are referenced from in the template.
+    /// </summary>
     const string Source = "kenshi/TutorialsData.cpp";
 
+    /// <summary>
+    /// A page that only goes on with CONTINUE.
+    /// </summary>
     static TutorialPage G(int line) => new(line, true);
+    /// <summary>
+    /// A page that moves on by its own <paramref name="advance"/>; its button reads SKIP.
+    /// </summary>
     static TutorialPage S(int line, TutorialAdvance advance, TutorialHighlight highlight = TutorialHighlight.None, bool run = false) =>
         new(line, false, advance, highlight, run);
+    /// <summary>
+    /// A page whose button reads CONTINUE, with an optional advance and highlight.
+    /// </summary>
     static TutorialPage C(int line, TutorialAdvance advance = TutorialAdvance.None, TutorialHighlight highlight = TutorialHighlight.None,
         bool run = false) => new(line, true, advance, highlight, run);
+    /// <summary>
+    /// A CONTINUE page that highlights <paramref name="highlight"/>.
+    /// </summary>
     static TutorialPage H(int line, TutorialHighlight highlight, bool run = false) => new(line, true, TutorialAdvance.None, highlight, run);
 
     /// <summary>
@@ -98,6 +373,9 @@ public sealed class TutorialCatalog
         (2601, [G(2602), G(2603)]),
     ];
 
+    /// <summary>
+    /// The English msgids by their source line in <see cref="Source"/>.
+    /// </summary>
     readonly Dictionary<int, string> _texts = [];
 
     /// <summary>
@@ -108,12 +386,18 @@ public sealed class TutorialCatalog
     /// The text at a source line in the active language.
     /// </summary>
     public string TextAt(int line) => Loc.Tr(EnglishAt(line));
+    /// <summary>
+    /// The title of tutorial <paramref name="id"/> in the active language.
+    /// </summary>
     public string Title(int id) => TextAt(Items[id].Title);
     /// <summary>
     /// The template had the tutorials' texts.
     /// </summary>
     public bool HasTexts => _texts.Count > 0;
 
+    /// <summary>
+    /// The catalog of the template's <paramref name="entries"/>: each msgid referenced from <see cref="Source"/>, by its line.
+    /// </summary>
     public static TutorialCatalog From(IEnumerable<PotEntry> entries)
     {
         var result = new TutorialCatalog();

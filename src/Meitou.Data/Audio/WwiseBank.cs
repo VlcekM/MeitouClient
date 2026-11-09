@@ -15,24 +15,51 @@ public sealed class WwiseBank
     /// </summary>
     public const uint DecodedVersion = 112;
 
+    /// <summary>
+    /// The whole bank file; media are slices of it.
+    /// </summary>
     readonly byte[] _data;
+    /// <summary>
+    /// The HIRC objects by id.
+    /// </summary>
     readonly Dictionary<uint, WwiseObject> _byId = [];
+    /// <summary>
+    /// The embedded media by WEM id.
+    /// </summary>
     readonly Dictionary<uint, WwiseMedia> _mediaById = [];
 
+    /// <summary>
+    /// A bank over <paramref name="data"/>; <see cref="Read"/> fills it.
+    /// </summary>
     WwiseBank(byte[] data) => this._data = data;
 
+    /// <summary>
+    /// The bank version from <c>BKHD</c>: 112 for Kenshi's banks but <c>SFX_Bank.bnk</c> (88).
+    /// </summary>
     public uint Version { get; private set; }
+    /// <summary>
+    /// The bank's id from <c>BKHD</c>: the hash of its name.
+    /// </summary>
     public uint Id { get; private set; }
+    /// <summary>
+    /// The language id from <c>BKHD</c>.
+    /// </summary>
     public uint LanguageId { get; private set; }
     /// <summary>
     /// The sections in file order: tag, offset of the body, body length.
     /// </summary>
     public IReadOnlyList<(string Tag, int Offset, int Length)> Sections { get; private set; } = [];
+    /// <summary>
+    /// The embedded WEMs in <c>DIDX</c> order; empty when the bank has none.
+    /// </summary>
     public IReadOnlyList<WwiseMedia> Media { get; private set; } = [];
     /// <summary>
     /// The <c>STID</c> table: bank ids and names (Kenshi's banks list only themselves).
     /// </summary>
     public IReadOnlyDictionary<uint, string> BankNames { get; private set; } = new Dictionary<uint, string>();
+    /// <summary>
+    /// The <c>HIRC</c> objects in file order, decoded in a version <see cref="DecodedVersion"/> bank and raw otherwise.
+    /// </summary>
     public IReadOnlyList<WwiseObject> Objects { get; private set; } = [];
     /// <summary>
     /// <c>STMG</c> (only in <c>Init.bnk</c>): each game parameter's default value, by id.
@@ -43,8 +70,17 @@ public sealed class WwiseBank
     /// </summary>
     public IReadOnlyDictionary<uint, int> StateGroupTransitions { get; private set; } = new Dictionary<uint, int>();
 
+    /// <summary>
+    /// The <c>HIRC</c> object with id <paramref name="id"/>; null when the bank has none.
+    /// </summary>
     public WwiseObject? Find(uint id) => _byId.GetValueOrDefault(id);
+    /// <summary>
+    /// The <c>HIRC</c> object with id <paramref name="id"/> when it is a <typeparamref name="T"/>; null otherwise.
+    /// </summary>
     public T? Find<T>(uint id) where T : WwiseObject => _byId.GetValueOrDefault(id) as T;
+    /// <summary>
+    /// The embedded WEM with id <paramref name="id"/>; null when the bank does not hold it.
+    /// </summary>
     public WwiseMedia? FindMedia(uint id) => _mediaById.TryGetValue(id, out var m) ? m : null;
 
     /// <summary>
@@ -52,8 +88,15 @@ public sealed class WwiseBank
     /// </summary>
     public ReadOnlyMemory<byte> MediaBytes(WwiseMedia media) => _data.AsMemory(media.Offset, media.Length);
 
+    /// <summary>
+    /// <see cref="Read"/> of the file at <paramref name="path"/>, its case resolved as on disk.
+    /// </summary>
     public static WwiseBank ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
+    /// <summary>
+    /// Reads a whole bank: its sections, the media table, the bank names, the global settings and the objects. <see cref="InvalidDataException"/>
+    /// when it is not a bank or a section runs past the end.
+    /// </summary>
     public static WwiseBank Read(byte[] data)
     {
         var bank = new WwiseBank(data);
@@ -173,6 +216,9 @@ public sealed class WwiseBank
         bank.GameParameterDefaults = defaults;
     }
 
+    /// <summary>
+    /// Reads the little-endian int32 at <paramref name="p"/> of an <c>STMG</c> section and moves past it.
+    /// </summary>
     static int U32(ReadOnlySpan<byte> s, ref int p)
     {
         if (p + 4 > s.Length) throw new InvalidDataException("STMG is truncated");

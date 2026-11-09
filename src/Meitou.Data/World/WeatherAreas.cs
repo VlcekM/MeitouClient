@@ -10,15 +10,34 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class WeatherAreas
 {
+    /// <summary>
+    /// Cells per side of the map.
+    /// </summary>
     public const int Cells = 64;
+    /// <summary>
+    /// The edge of a cell in world units: one zone.
+    /// </summary>
     public const float CellSize = 4608f;
+    /// <summary>
+    /// Pixels of <c>areasmap.tga</c> per cell side.
+    /// </summary>
     public const int PixelsPerCell = 4;
     /// <summary>
     /// The cell index of world coordinate 0 on each axis: <c>cell = floor(coord / 4608) + 32</c>.
     /// </summary>
     public const int Origin = 32;
+    /// <summary>
+    /// The map's path under the data folder.
+    /// </summary>
     public const string RelativePath = "newland/land/areasmap.tga";
+    /// <summary>
+    /// The offset of the camera's region lookup (<see cref="CameraCellOf"/>): 32 × 4608 + 9.
+    /// </summary>
+    const float CameraOrigin = 147465f;
 
+    /// <summary>
+    /// Each cell's colour (0xRRGGBB), row-major (z, then x).
+    /// </summary>
     readonly int[] _colours;
 
     /// <param name="colours">Row-major (z, then x), 64 × 64 entries, 0xRRGGBB.</param>
@@ -29,13 +48,17 @@ public sealed class WeatherAreas
     }
 
     /// <summary>
-    /// The map of a game install: <c>areasmap.tga</c> of resource group <c>Overlaymaps</c> (<b>Verified</b> <c>FUN_140408fa0</c>, <c>FUN_140408970</c>: Ogre's
-    /// <c>resourceExists</c> then <c>Image::load</c> there, so an enabled mod's <c>newland/land/areasmap.tga</c> replaces it), else <c>data/newland/land/areasmap.tga</c>.
+    /// The map of a game install: <c>areasmap.tga</c> of resource group <c>Overlaymaps</c> (<b>Verified</b> <c>FUN_140408fa0</c>,
+    /// <c>FUN_140408970</c>: Ogre's <c>resourceExists</c> then <c>Image::load</c> there, so an enabled mod's <c>newland/land/areasmap.tga</c>
+    /// replaces it), else <c>data/newland/land/areasmap.tga</c>.
     /// </summary>
     public static WeatherAreas Load(GameInstall install) =>
         FromTga(File.ReadAllBytes(Ogre.GameResources.Find(install, "areasmap.tga", "Overlaymaps")
             ?? Path.Combine(install.DataDirectory, RelativePath)));
 
+    /// <summary>
+    /// The map of a TGA file's bytes.
+    /// </summary>
     public static WeatherAreas FromTga(ReadOnlySpan<byte> tga) => FromImage(TgaReader.Read(tga));
 
     /// <summary>
@@ -63,14 +86,16 @@ public sealed class WeatherAreas
     public static (int X, int Z) CellOf(float x, float z) => ((int)MathF.Floor(x / CellSize) + Origin, (int)MathF.Floor(z / CellSize) + Origin);
 
     /// <summary>
-    /// The cell of the camera's region lookup (<c>FUN_1408f56b0</c>): <c>(int)((coordinate + 147465) / 4608)</c> truncated toward zero and clamped to 0..63 per axis, so a position off the map takes the
-    /// edge cell. The origin 147465 = 32 x 4608 + 9 puts the original's cell boundaries 9 units from <see cref="CellOf"/>'s.
+    /// The cell of the camera's region lookup (<c>FUN_1408f56b0</c>): <c>(int)((coordinate + 147465) / 4608)</c> truncated toward zero and clamped to
+    /// 0..63 per axis, so a position off the map takes the edge cell. The origin 147465 = 32 x 4608 + 9 puts the original's cell boundaries 9 units
+    /// from <see cref="CellOf"/>'s.
     /// </summary>
     public static (int X, int Z) CameraCellOf(float x, float z) =>
         (Math.Clamp((int)((x + CameraOrigin) / CellSize), 0, Cells - 1), Math.Clamp((int)((z + CameraOrigin) / CellSize), 0, Cells - 1));
 
-    const float CameraOrigin = 147465f;
-
+    /// <summary>
+    /// Whether cell (<paramref name="cx"/>, <paramref name="cz"/>) lies on the map.
+    /// </summary>
     public static bool InMap(int cx, int cz) => (uint)cx < Cells && (uint)cz < Cells;
 
     /// <summary>
@@ -99,6 +124,9 @@ public sealed class WeatherAreas
     /// </summary>
     public RegionDef RegionOf(WeatherData data, int cx, int cz) => InMap(cx, cz) ? data.RegionOfColour(_colours[cz * Cells + cx]) : data.None;
 
+    /// <summary>
+    /// The region at world (<paramref name="x"/>, <paramref name="z"/>) (<see cref="CellOf"/>).
+    /// </summary>
     public RegionDef RegionAt(WeatherData data, float x, float z)
     {
         var (cx, cz) = CellOf(x, z);

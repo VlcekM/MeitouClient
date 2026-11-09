@@ -8,5 +8,8 @@ namespace Meitou.Data.World;
 /// </summary>
 public static class BuildingKey
 {
+    /// <summary>
+    /// The key of instance <paramref name="instanceId"/> of <paramref name="zone"/>'s file.
+    /// </summary>
     public static string Of(ZoneCoordinate zone, string instanceId) => $"{zone.X}.{zone.Y}:{instanceId}";
 }

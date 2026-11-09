@@ -10,8 +10,14 @@ namespace Meitou.Localisation;
 /// </summary>
 public sealed class PluralRule
 {
+    /// <summary>
+    /// The parsed <c>plural</c> expression: the form index for a count (not yet clamped).
+    /// </summary>
     readonly Func<long, long> _select;
 
+    /// <summary>
+    /// A rule of <paramref name="forms"/> forms that picks one with <paramref name="select"/>.
+    /// </summary>
     PluralRule(int forms, Func<long, long> select) => (Forms, this._select) = (forms, select);
 
     /// <summary>
@@ -53,11 +59,19 @@ public sealed class PluralRule
         catch (FormatException) { return Germanic; }
     }
 
-    // Recursive descent over the C operator precedence; every node is a closure over n, so evaluation allocates nothing.
+    /// <summary>
+    /// Recursive descent over the C operator precedence; every node is a closure over n, so evaluation allocates nothing.
+    /// </summary>
     sealed class Parser(string text)
     {
+        /// <summary>
+        /// The index of the next unread character of the expression.
+        /// </summary>
         int _at;
 
+        /// <summary>
+        /// The whole expression as a function of <c>n</c>; <see cref="FormatException"/> when text is left over or it is malformed.
+        /// </summary>
         public Func<long, long> Parse()
         {
             var result = Ternary();
@@ -66,8 +80,14 @@ public sealed class PluralRule
             return result;
         }
 
+        /// <summary>
+        /// Moves <see cref="_at"/> past whitespace.
+        /// </summary>
         void Skip() { while (_at < text.Length && char.IsWhiteSpace(text[_at])) _at++; }
 
+        /// <summary>
+        /// Consumes <paramref name="token"/> after any whitespace when it is next; false (nothing consumed) otherwise.
+        /// </summary>
         bool Take(string token)
         {
             Skip();
@@ -80,6 +100,9 @@ public sealed class PluralRule
             return true;
         }
 
+        /// <summary>
+        /// <c>a ? b : c</c>, right-associative; the lowest precedence.
+        /// </summary>
         Func<long, long> Ternary()
         {
             var condition = Or();
@@ -90,6 +113,9 @@ public sealed class PluralRule
             return n => condition(n) != 0 ? yes(n) : no(n);
         }
 
+        /// <summary>
+        /// <c>||</c> chains, each giving 1 or 0.
+        /// </summary>
         Func<long, long> Or()
         {
             var left = And();
@@ -102,6 +128,9 @@ public sealed class PluralRule
             return left;
         }
 
+        /// <summary>
+        /// <c>&amp;&amp;</c> chains, each giving 1 or 0.
+        /// </summary>
         Func<long, long> And()
         {
             var left = Equality();
@@ -114,6 +143,9 @@ public sealed class PluralRule
             return left;
         }
 
+        /// <summary>
+        /// <c>==</c> and <c>!=</c>, left to right, each giving 1 or 0.
+        /// </summary>
         Func<long, long> Equality()
         {
             var left = Relational();
@@ -134,6 +166,9 @@ public sealed class PluralRule
             }
         }
 
+        /// <summary>
+        /// <c>&lt;=</c>, <c>&gt;=</c>, <c>&lt;</c> and <c>&gt;</c>, left to right, each giving 1 or 0.
+        /// </summary>
         Func<long, long> Relational()
         {
             var left = Additive();
@@ -164,6 +199,9 @@ public sealed class PluralRule
             }
         }
 
+        /// <summary>
+        /// <c>+</c> and <c>-</c>, left to right.
+        /// </summary>
         Func<long, long> Additive()
         {
             var left = Multiplicative();
@@ -184,6 +222,9 @@ public sealed class PluralRule
             }
         }
 
+        /// <summary>
+        /// <c>*</c>, <c>/</c> and <c>%</c>, left to right; dividing by zero gives 0 instead of throwing.
+        /// </summary>
         Func<long, long> Multiplicative()
         {
             var left = Unary();
@@ -209,6 +250,9 @@ public sealed class PluralRule
             }
         }
 
+        /// <summary>
+        /// Logical not <c>!</c> (1 for 0, else 0), or a primary.
+        /// </summary>
         Func<long, long> Unary()
         {
             if (Take("!"))
@@ -219,6 +263,9 @@ public sealed class PluralRule
             return Primary();
         }
 
+        /// <summary>
+        /// A parenthesised expression, <c>n</c>, or a non-negative integer literal.
+        /// </summary>
         Func<long, long> Primary()
         {
             Skip();

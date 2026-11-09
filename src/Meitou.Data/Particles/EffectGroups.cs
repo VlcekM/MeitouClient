@@ -14,12 +14,31 @@ public readonly record struct EffectCamera(Vector3 Eye, Vector3 Forward);
 /// </summary>
 public abstract class EffectGroup
 {
+    /// <summary>
+    /// The group's live units; the derived group makes and moves them, <see cref="RemoveDone"/> drops the finished ones.
+    /// </summary>
     protected readonly List<EffectUnit> _units = [];
+    /// <summary>
+    /// The group's own random source, seeded from its seed: positions, lives, timers.
+    /// </summary>
     protected readonly Random _random;
+    /// <summary>
+    /// The terrain, area and density the group places its units in.
+    /// </summary>
     protected EffectWorld _world;
+    /// <summary>
+    /// The group's seed; each unit's simulation seed is made from it and the unit's number.
+    /// </summary>
     readonly int _seed;
+    /// <summary>
+    /// How many units the group has made, numbering the next one.
+    /// </summary>
     int _made;
 
+    /// <summary>
+    /// A group for <paramref name="effect"/> (and its weather <paramref name="entry"/>, null for a placer) running <paramref name="system"/> in
+    /// <paramref name="world"/>.
+    /// </summary>
     protected EffectGroup(EffectRecord effect, WeatherEffectEntry? entry, PuSystemDef system, int seed, EffectWorld world)
     {
         Effect = effect;
@@ -37,17 +56,35 @@ public abstract class EffectGroup
     /// </summary>
     internal void Rebind(EffectWorld to) => _world = to;
 
+    /// <summary>
+    /// The EFFECT record the group runs.
+    /// </summary>
     public EffectRecord Effect { get; }
+    /// <summary>
+    /// The weather's entry the group belongs to; null for a map-feature placer.
+    /// </summary>
     public WeatherEffectEntry? Entry { get; }
+    /// <summary>
+    /// The particle system each unit simulates.
+    /// </summary>
     public PuSystemDef System { get; }
+    /// <summary>
+    /// The group's live units.
+    /// </summary>
     public IReadOnlyList<EffectUnit> Units => _units;
     /// <summary>
     /// The EFFECT's <c>colour multiplier</c> applied to the particles' rgb (Observed: "for weather effects only"; a black multiplier, which would
     /// blank the particles, is ignored: <c>Sand-Stream any altitude</c> has one next to <c>ground colour</c>).
     /// </summary>
     public Vector3 Tint { get; }
+    /// <summary>
+    /// How many particles all units' simulations hold now.
+    /// </summary>
     public int ParticleCount => _units.Sum(u => u.Simulation?.ParticleCount ?? 0);
 
+    /// <summary>
+    /// The EFFECT's colour multiplier, or white when it is black.
+    /// </summary>
     static Vector3 TintOf(EffectRecord e) => e.ColourMultiplier.LengthSquared() < 1e-4f ? Vector3.One : e.ColourMultiplier;
 
     /// <summary>
@@ -114,6 +151,10 @@ public abstract class EffectGroup
         return lo > 0 && windSpeed < lo ? 0 : 1;
     }
 
+    /// <summary>
+    /// What the units' simulations read this frame: the wind, the effect's wind settings and the emission scale (the wind span times the
+    /// world's density).
+    /// </summary>
     protected ParticleEnvironment Environment(WeatherEffectInput weather)
     {
         var e = Effect;
@@ -121,6 +162,10 @@ public abstract class EffectGroup
         return new ParticleEnvironment(weather.Wind, e.WindSpeedMultiplier, windSpan, e.WindAffected, e.WindDirectionEmission);
     }
 
+    /// <summary>
+    /// Makes and adds a unit at <paramref name="position"/>: its seed, tint (times the ground colour when the effect asks), bounding radius, and a
+    /// life between the effect's times to live unless it is immortal.
+    /// </summary>
     protected EffectUnit NewUnit(Vector3 position)
     {
         var u = new EffectUnit(Effect, System, _seed * 31 + _made++)
@@ -138,6 +183,9 @@ public abstract class EffectGroup
         return u;
     }
 
+    /// <summary>
+    /// A random value between <paramref name="a"/> and <paramref name="b"/>.
+    /// </summary>
     protected float Range(float a, float b) => a + (b - a) * _random.NextSingle();
 
     /// <summary>
@@ -169,6 +217,9 @@ public abstract class EffectGroup
         if (u.Active) u.Pending += dt;
     }
 
+    /// <summary>
+    /// Removes the units that have finished.
+    /// </summary>
     protected void RemoveDone()
     {
         for (int i = _units.Count - 1; i >= 0; i--)
@@ -186,10 +237,22 @@ public abstract class EffectGroup
 /// </summary>
 public sealed class CameraEffectGroup : EffectGroup
 {
+    /// <summary>
+    /// The group's one unit.
+    /// </summary>
     readonly EffectUnit _unit;
+    /// <summary>
+    /// <c>d</c>: the effect's size, 0.75 times the largest emitter extent (100 when that is 0).
+    /// </summary>
     readonly float _distance;
+    /// <summary>
+    /// Whether the unit has been placed at the camera and activated.
+    /// </summary>
     bool _started;
 
+    /// <summary>
+    /// The group of <paramref name="entry"/>: one unit that wraps its particles in the cube ahead of the camera.
+    /// </summary>
     public CameraEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld? world = null)
         : base(entry.Effect, entry, system, seed, world ?? new EffectWorld())
     {
@@ -209,12 +272,18 @@ public sealed class CameraEffectGroup : EffectGroup
     /// The cube's edge, <c>2d / 1.5</c>.
     /// </summary>
     public float Edge => _distance * 2 / 1.5f;
+    /// <summary>
+    /// The unit's simulation.
+    /// </summary>
     public ParticleSimulation Simulation => _unit.Simulation!;
     /// <summary>
     /// Where the simulation's own coordinate origin is in the world: add it to <see cref="ParticleSimulation.Collect"/>'s positions.
     /// </summary>
     public Vector3 Anchor => _unit.Anchor;
 
+    /// <summary>
+    /// The camera's view direction, normalised; -Z when it has none.
+    /// </summary>
     static Vector3 Forward(in EffectCamera camera) => camera.Forward.LengthSquared() > 1e-6f ? Vector3.Normalize(camera.Forward) : -Vector3.UnitZ;
 
     /// <summary>
@@ -222,6 +291,9 @@ public sealed class CameraEffectGroup : EffectGroup
     /// </summary>
     public Vector3 Centre(in EffectCamera camera) => camera.Eye + Forward(camera) * _distance;
 
+    /// <summary>
+    /// Puts the unit at the camera and the wrap cube ahead of it; the first time also activates the unit and anchors its coordinates there.
+    /// </summary>
     void Follow(in EffectCamera camera)
     {
         _unit.Position = camera.Eye;
@@ -260,10 +332,22 @@ public sealed class CameraEffectGroup : EffectGroup
 /// </summary>
 public sealed class RespawningEffectGroup : EffectGroup
 {
+    /// <summary>
+    /// The most units a group keeps, and the most made in one frame.
+    /// </summary>
     const int MaxUnits = 256;
+    /// <summary>
+    /// Whether the units wander (WANDERING types); whether they are lightning strikes (POINT_LIGHTING).
+    /// </summary>
     readonly bool _wandering, _lightning;
+    /// <summary>
+    /// Seconds until the next unit is made.
+    /// </summary>
     float _timer;
 
+    /// <summary>
+    /// The group of <paramref name="entry"/>, its timer at the entry's minimum respawn time.
+    /// </summary>
     public RespawningEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world)
         : base(entry.Effect, entry, system, seed, world)
     {
@@ -272,8 +356,15 @@ public sealed class RespawningEffectGroup : EffectGroup
         _timer = entry.RespawnMin;
     }
 
+    /// <summary>
+    /// The entry's <c>count</c>: the most units at once; 0 no limit.
+    /// </summary>
     int Count => Entry!.Count;
 
+    /// <summary>
+    /// Makes a unit: a lightning strike at a random place within 3000 of the camera, else where the world places the effect; a wandering one gets a
+    /// random heading.
+    /// </summary>
     void Spawn(in EffectCamera camera)
     {
         Vector3 p;
@@ -298,6 +389,9 @@ public sealed class RespawningEffectGroup : EffectGroup
         }
     }
 
+    /// <summary>
+    /// Counts the timer down by <paramref name="dt"/> and makes units while it is due and the count allows, adding a random respawn time after each.
+    /// </summary>
     void Schedule(float dt, in EffectCamera camera)
     {
         _timer -= dt;
@@ -311,6 +405,10 @@ public sealed class RespawningEffectGroup : EffectGroup
         }
     }
 
+    /// <summary>
+    /// Moves a wandering unit: along its heading at the wandering speed, plus the wind when wind affected, turning on its timer, its height on the
+    /// ground every half second near the camera.
+    /// </summary>
     void Move(EffectUnit u, float dt, WeatherEffectInput weather)
     {
         if (!_wandering) return;
@@ -366,9 +464,18 @@ public sealed class RespawningEffectGroup : EffectGroup
 /// </summary>
 public sealed class GlobalEffectGroup : EffectGroup
 {
+    /// <summary>
+    /// <c>d</c>: the effect's size, 0.75 times the largest emitter extent (100 when that is 0); the units' wrap radius.
+    /// </summary>
     readonly float _size;
+    /// <summary>
+    /// The camera's position last frame, for its direction of movement; null before the first.
+    /// </summary>
     Vector3? _lastEye;
 
+    /// <summary>
+    /// The group of <paramref name="entry"/>.
+    /// </summary>
     public GlobalEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world)
         : base(entry.Effect, entry, system, seed, world)
     {
@@ -376,6 +483,9 @@ public sealed class GlobalEffectGroup : EffectGroup
         _size = s > 0 ? s : 100;
     }
 
+    /// <summary>
+    /// Where the units sit: at the camera's x and z, the ground there + 100, limited to the effect's altitudes when either is set.
+    /// </summary>
     Vector3 Node(in EffectCamera camera)
     {
         float y = _world.GroundHeight(camera.Eye.X, camera.Eye.Z) + 100;
@@ -429,14 +539,24 @@ public sealed class GlobalEffectGroup : EffectGroup
 /// </summary>
 public sealed class GlobalPointEffectGroup : EffectGroup
 {
+    /// <summary>
+    /// <c>R</c>: the effect's maximum view distance, 1000 when 0.
+    /// </summary>
     readonly float _radius;
 
+    /// <summary>
+    /// The group of <paramref name="entry"/>.
+    /// </summary>
     public GlobalPointEffectGroup(WeatherEffectEntry entry, PuSystemDef system, int seed, EffectWorld world)
         : base(entry.Effect, entry, system, seed, world)
     {
         _radius = entry.Effect.MaximumViewDistance > 0 ? entry.Effect.MaximumViewDistance : 1000;
     }
 
+    /// <summary>
+    /// Makes a unit on the ground at a random distance from the camera between <paramref name="inner"/> and <paramref name="outer"/>, trying up to 10
+    /// places for one within the effect's altitudes and slopes.
+    /// </summary>
     void Spawn(in EffectCamera camera, float inner, float outer)
     {
         Vector3 p = default;
@@ -495,6 +615,9 @@ public sealed class GlobalPointEffectGroup : EffectGroup
 /// </summary>
 public sealed class PlacerEffectGroup : EffectGroup
 {
+    /// <summary>
+    /// A unit at every one of <paramref name="positions"/>, unturned.
+    /// </summary>
     public PlacerEffectGroup(EffectRecord effect, PuSystemDef system, IEnumerable<Vector3> positions, int seed, EffectWorld world)
         : this(effect, system, positions.Select(p => (p, Quaternion.Identity)), seed, world) { }
 
@@ -563,8 +686,14 @@ public sealed class BurstEffectGroup(PuSystemDef system, int seed, EffectWorld w
     public override void BeginWarm(float seconds, in EffectCamera camera, WeatherEffectInput weather) { }
 }
 
+/// <summary>
+/// Makes the weather group of an effect entry by its EFFECT type.
+/// </summary>
 public static class EffectGroups
 {
+    /// <summary>
+    /// A small particle system for <see cref="PrimeJit"/>.
+    /// </summary>
     const string PrimeScript = """
         system prime
         {

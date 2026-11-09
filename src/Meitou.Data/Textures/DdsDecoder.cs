@@ -167,6 +167,9 @@ public static class DdsDecoder
         }
     }
 
+    /// <summary>
+    /// Expands an RGB565 colour to 8-bit RGBA into <paramref name="rgba"/>, the top bits repeated into the low ones, alpha 255.
+    /// </summary>
     static void Expand565(ushort c, Span<int> rgba)
     {
         int r = c >> 11, g = (c >> 5) & 0x3F, b = c & 0x1F;
@@ -198,6 +201,10 @@ public static class DdsDecoder
         for (int i = 0; i < 16; i++) values[i] = (byte)palette[(int)((bits >> (3 * i)) & 7)];
     }
 
+    /// <summary>
+    /// Decodes an uncompressed surface by its channel <paramref name="masks"/>; <see cref="ArgumentException"/> when <paramref name="data"/> is
+    /// too short.
+    /// </summary>
     static void DecodeUncompressed(DdsPixelMasks masks, ReadOnlySpan<byte> data, int width, int height, Span<byte> rgba)
     {
         int bpp = masks.BytesPerPixel;
@@ -218,8 +225,14 @@ public static class DdsDecoder
         }
     }
 
+    /// <summary>
+    /// One colour channel of an uncompressed format: its bit mask, the shift to its lowest bit and its largest value.
+    /// </summary>
     readonly record struct Channel(uint Mask, int Shift, uint Max)
     {
+        /// <summary>
+        /// The channel of <paramref name="mask"/>; the default (absent) channel for 0.
+        /// </summary>
         public static Channel Of(uint mask) =>
             mask == 0 ? default : new Channel(mask, BitOperations.TrailingZeroCount(mask), mask >> BitOperations.TrailingZeroCount(mask));
 

@@ -4,8 +4,9 @@ using System.Text;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The read position in a foliage layout cache file's bytes (<see cref="FoliageLayoutCache"/>), little-endian, bounded by the end of its data (the bytes
-/// before the checksum): a read past it throws <see cref="InvalidDataException"/>. A ref struct passed by <c>ref</c>, so decoding allocates nothing for it.
+/// The read position in a foliage layout cache file's bytes (<see cref="FoliageLayoutCache"/>), little-endian, bounded by the end of its data (the
+/// bytes before the checksum): a read past it throws <see cref="InvalidDataException"/>. A ref struct passed by <c>ref</c>, so decoding allocates
+/// nothing for it.
 /// </summary>
 ref struct FoliageLayoutFileCursor
 {

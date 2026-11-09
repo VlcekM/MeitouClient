@@ -8,6 +8,9 @@ namespace Meitou.Data.Ui;
 /// </summary>
 public sealed record UiColumn(string Caption, float Width, bool Fill = false);
 
+/// <summary>
+/// The bindings the run-time widgets read: list columns and sorting, scroll canvases and native scrolling, text measuring, the open combo box.
+/// </summary>
 public sealed partial class UiBindings
 {
     /// <summary>

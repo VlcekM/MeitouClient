@@ -7,9 +7,21 @@ namespace Meitou.Data.Havok;
 /// </summary>
 public sealed class HkClass(string name, int version, HkClass? parent, IReadOnlyList<HkMember> own)
 {
+    /// <summary>
+    /// The Havok class name, e.g. <c>hkRootLevelContainer</c>.
+    /// </summary>
     public string Name { get; } = name;
+    /// <summary>
+    /// The class version the file records.
+    /// </summary>
     public int Version { get; } = version;
+    /// <summary>
+    /// The class this one extends; null for a root class.
+    /// </summary>
     public HkClass? Parent { get; } = parent;
+    /// <summary>
+    /// The members this class adds, in file order, without the parent's.
+    /// </summary>
     public IReadOnlyList<HkMember> Own { get; } = own;
     /// <summary>
     /// Every member, the parent's first: the order of the presence bits and values.
@@ -24,8 +36,17 @@ public sealed class HkClass(string name, int version, HkClass? parent, IReadOnly
 /// </summary>
 public sealed record HkMember(string Name, int Type, int TupleSize, string? ClassName)
 {
+    /// <summary>
+    /// The member's value kind, the type's low nibble (0 void, 1 byte, 2 int, 3 real, 4..7 vectors of 4..16 floats, 8 object, 9 struct, 10 string).
+    /// </summary>
     public int Kind => Type & 0xF;
+    /// <summary>
+    /// Whether the member is an array of <see cref="Kind"/> (type bit 0x10).
+    /// </summary>
     public bool IsArray => (Type & 0x10) != 0;
+    /// <summary>
+    /// Whether the member is a fixed-size tuple of <see cref="TupleSize"/> values (type bit 0x20).
+    /// </summary>
     public bool IsTuple => (Type & 0x20) != 0;
 }
 
@@ -34,8 +55,17 @@ public sealed record HkMember(string Name, int Type, int TupleSize, string? Clas
 /// </summary>
 public sealed class HkObject(HkClass type)
 {
+    /// <summary>
+    /// The object's class.
+    /// </summary>
     public HkClass Type { get; } = type;
+    /// <summary>
+    /// The values of the members present in the file, by member name; absent members are missing.
+    /// </summary>
     public Dictionary<string, object?> Fields { get; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The value of <paramref name="member"/>; null when it is absent or null.
+    /// </summary>
     public object? this[string member] => Fields.GetValueOrDefault(member);
     public override string ToString() => Type.Name;
 }
@@ -48,31 +78,76 @@ public sealed class HkObject(HkClass type)
 /// </summary>
 public sealed class HavokTagfile
 {
+    /// <summary>
+    /// The two 32-bit words a tagfile starts with.
+    /// </summary>
     const uint Magic0 = 0xCAB00D1E, Magic1 = 0xD011FACE;
+    /// <summary>
+    /// The member kinds (<see cref="HkMember.Kind"/>); 5 and 6 are the 8- and 12-float vectors between <see cref="KindVec4"/> and
+    /// <see cref="KindVec16"/>.
+    /// </summary>
     const int KindVoid = 0, KindByte = 1, KindInt = 2, KindReal = 3, KindVec4 = 4, KindVec16 = 7, KindObject = 8, KindStruct = 9, KindString = 10;
 
+    /// <summary>
+    /// The whole file.
+    /// </summary>
     readonly byte[] _data;
+    /// <summary>
+    /// The read position in <see cref="_data"/>.
+    /// </summary>
     int _at;
+    /// <summary>
+    /// The remembered strings by index; 0 is the empty string and 1 null, as a negative string length refers to them.
+    /// </summary>
     readonly List<string?> _strings = ["", null];
+    /// <summary>
+    /// The classes by index, in file order; index 0 is no class.
+    /// </summary>
     readonly List<HkClass?> _classes = [null];
+    /// <summary>
+    /// The classes by name, for struct members, which name their class.
+    /// </summary>
     readonly Dictionary<string, HkClass> _byName = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The remembered objects (tag 4) by index; index 0 is null.
+    /// </summary>
     readonly List<HkObject?> _objects = [null];
-    // Pointers to objects not read yet: filled in once the file is read.
+    /// <summary>
+    /// Pointers to objects not read yet: filled in once the file is read. Each entry sets the pointer member to the object of that index.
+    /// </summary>
     readonly List<(Action<HkObject?> Set, int Index)> _forward = [];
 
+    /// <summary>
+    /// The tagfile version, 2..5.
+    /// </summary>
     public int Version { get; private set; }
+    /// <summary>
+    /// The Havok SDK string of a version 4 or 5 file; null for older ones.
+    /// </summary>
     public string? Sdk { get; private set; }
     /// <summary>
     /// The first object of the file (an <c>hkRootLevelContainer</c>).
     /// </summary>
     public HkObject? Root { get; private set; }
+    /// <summary>
+    /// The classes the file describes, in file order.
+    /// </summary>
     public IReadOnlyList<HkClass> Classes => [.. _classes.Skip(1).OfType<HkClass>()];
 
+    /// <summary>
+    /// A reader over <paramref name="data"/>; <see cref="Read"/> is the way in.
+    /// </summary>
     HavokTagfile(byte[] data) => this._data = data;
 
+    /// <summary>
+    /// Whether <paramref name="data"/> starts with the binary tagfile magic.
+    /// </summary>
     public static bool IsTagfile(ReadOnlySpan<byte> data) =>
         data.Length >= 8 && BitConverter.ToUInt32(data) == Magic0 && BitConverter.ToUInt32(data[4..]) == Magic1;
 
+    /// <summary>
+    /// Reads a whole binary tagfile; <see cref="InvalidDataException"/> when it is not one or is malformed.
+    /// </summary>
     public static HavokTagfile Read(byte[] data)
     {
         if (!IsTagfile(data)) throw new InvalidDataException("not a Havok binary tagfile (magic mismatch)");
@@ -81,6 +156,9 @@ public sealed class HavokTagfile
         return file;
     }
 
+    /// <summary>
+    /// <see cref="Read"/> of the file at <paramref name="path"/>, its case resolved as on disk.
+    /// </summary>
     public static HavokTagfile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     /// <summary>
@@ -95,6 +173,9 @@ public sealed class HavokTagfile
         return null;
     }
 
+    /// <summary>
+    /// Reads tags until the end tag 7: 1 file info, 2 a class, 3/4/6 an object. At the end the forward pointers are set and <see cref="Root"/> taken.
+    /// </summary>
     void ReadTags()
     {
         while (true)
@@ -121,6 +202,9 @@ public sealed class HavokTagfile
         }
     }
 
+    /// <summary>
+    /// Reads tag 1: the version (2..5 accepted), the SDK string from version 4, and from version 5 a block that is skipped.
+    /// </summary>
     void FileInfo()
     {
         Version = Int();
@@ -134,6 +218,9 @@ public sealed class HavokTagfile
         }
     }
 
+    /// <summary>
+    /// Reads tag 2: a class's name, version, parent index and members (name, type, a tuple's size, an object's or struct's class name).
+    /// </summary>
     HkClass ClassInfo()
     {
         string name = String() ?? "";
@@ -171,6 +258,9 @@ public sealed class HavokTagfile
         return o;
     }
 
+    /// <summary>
+    /// Reads <paramref name="count"/> presence bits, least significant first, padded to whole bytes.
+    /// </summary>
     bool[] Bits(int count)
     {
         var bits = new bool[count];
@@ -179,6 +269,10 @@ public sealed class HavokTagfile
         return bits;
     }
 
+    /// <summary>
+    /// Reads one member's value by its kind; an object member's pointer may be filled in later into <paramref name="owner"/>'s
+    /// <paramref name="name"/>.
+    /// </summary>
     object? Value(HkMember m, HkObject owner, string name)
     {
         if (m.IsArray) return Array(m, Int());
@@ -197,6 +291,9 @@ public sealed class HavokTagfile
         };
     }
 
+    /// <summary>
+    /// The float count of a vector kind: 4 for kind 4 up to 16 for kind 7.
+    /// </summary>
     static int VectorSize(int kind) => 4 * (kind - KindVec4 + 1);
 
     /// <summary>
@@ -204,6 +301,9 @@ public sealed class HavokTagfile
     /// </summary>
     object? Tuple(HkMember m, int size) => Elements(m with { Type = m.Kind }, size);
 
+    /// <summary>
+    /// An array of <paramref name="count"/> elements; an array of structs must name its class.
+    /// </summary>
     object? Array(HkMember m, int count)
     {
         if (m.Kind == KindStruct && m.ClassName is null)
@@ -293,6 +393,9 @@ public sealed class HavokTagfile
         }
     }
 
+    /// <summary>
+    /// The class a struct member names; <see cref="InvalidDataException"/> when the file did not describe it.
+    /// </summary>
     HkClass ClassOf(HkMember m) =>
         m.ClassName is { } n && _byName.TryGetValue(n, out var c)
             ? c : throw new InvalidDataException($"tagfile: struct of unknown class {m.ClassName}");
@@ -308,6 +411,9 @@ public sealed class HavokTagfile
         return null;
     }
 
+    /// <summary>
+    /// Reads <paramref name="count"/> little-endian floats.
+    /// </summary>
     float[] Floats(int count)
     {
         var f = new float[count];
@@ -315,6 +421,9 @@ public sealed class HavokTagfile
         return f;
     }
 
+    /// <summary>
+    /// Reads one little-endian float.
+    /// </summary>
     float Float()
     {
         float f = BitConverter.ToSingle(_data, _at);
@@ -340,6 +449,9 @@ public sealed class HavokTagfile
         return negative ? -v : v;
     }
 
+    /// <summary>
+    /// <see cref="Long"/> cut to an int.
+    /// </summary>
     int Int() => (int)Long();
 
     /// <summary>

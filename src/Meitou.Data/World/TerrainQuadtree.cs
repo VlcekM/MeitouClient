@@ -10,6 +10,9 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class TerrainHeightBounds
 {
+    /// <summary>
+    /// Per level, the lowest and highest height of each cell (row = +Z).
+    /// </summary>
     readonly float[][] _min, _max;
 
     /// <param name="coarse">(<paramref name="size"/>)² raw samples covering the world, size = 2^n + 1 (row = +Z).</param>
@@ -115,6 +118,10 @@ public sealed class TerrainHeightBounds
     /// </summary>
     public void Apply(Patch patch) => Apply(patch, rebuildAll: true);
 
+    /// <summary>
+    /// Widens the cells of <paramref name="patch"/>, and with <paramref name="rebuildAll"/> refreshes the levels above them (the constructor rebuilds
+    /// every level itself).
+    /// </summary>
     void Apply(Patch patch, bool rebuildAll)
     {
         for (int z = 0; z < patch.Height; z++)
@@ -132,6 +139,9 @@ public sealed class TerrainHeightBounds
     /// Level-0 cells per side and their edge length in world units.
     /// </summary>
     public int Cells { get; }
+    /// <summary>
+    /// See <see cref="Cells"/>.
+    /// </summary>
     public double CellSize { get; }
 
     /// <summary>
@@ -175,6 +185,19 @@ public readonly record struct TerrainNode(int Level, double X0, double Z0, doubl
 /// </summary>
 public sealed class TerrainQuadtree
 {
+    /// <summary>
+    /// Where in a level's distance band the morph starts (<see cref="SetRanges(ReadOnlySpan{float})"/>).
+    /// </summary>
+    readonly float _morphFraction;
+    /// <summary>
+    /// The rule the ranges were last taken from; null when they were set directly.
+    /// </summary>
+    TerrainLod? _lastLod;
+    /// <summary>
+    /// See <see cref="FloorLevel"/>.
+    /// </summary>
+    int _floorLevel;
+
     /// <param name="finestSpacing">Vertex spacing wanted at level 0 in world units (the finest heightmap spacing drawn).</param>
     /// <param name="lodDistance">Range of a level in multiples of its node size (at least 2 keeps neighbours within one level).</param>
     public TerrainQuadtree(float finestSpacing, int gridCells = 32, float lodDistance = 2.5f, float morphFraction = 0.7f)
@@ -202,8 +225,6 @@ public sealed class TerrainQuadtree
     /// </summary>
     public TerrainQuadtree(float finestSpacing, int gridCells, TerrainLod lod) : this(finestSpacing, gridCells) => SetRanges(lod);
 
-    readonly float _morphFraction;
-
     /// <summary>
     /// Takes the level ranges of <paramref name="lod"/>; false when they are the ones in use already.
     /// </summary>
@@ -214,8 +235,6 @@ public sealed class TerrainQuadtree
         _lastLod = lod;
         return changed;
     }
-
-    TerrainLod? _lastLod;
 
     /// <summary>
     /// Sets the level ranges (increasing; the last one is ignored: the root is drawn wherever nothing finer is) and the morph
@@ -246,13 +265,37 @@ public sealed class TerrainQuadtree
         return true;
     }
 
+    /// <summary>
+    /// Grid cells per node side, the same at every level.
+    /// </summary>
     public int GridCells { get; }
+    /// <summary>
+    /// How many levels the tree has; the root is the last.
+    /// </summary>
     public int LevelCount { get; }
+    /// <summary>
+    /// The edge of a level-0 node in world units.
+    /// </summary>
     public double LeafSize { get; }
+    /// <summary>
+    /// The edge of a node of <paramref name="level"/> in world units.
+    /// </summary>
     public double NodeSize(int level) => LeafSize * (1 << level);
+    /// <summary>
+    /// The vertex spacing of <paramref name="level"/>'s grid in world units.
+    /// </summary>
     public double Spacing(int level) => NodeSize(level) / GridCells;
+    /// <summary>
+    /// Per level, the distance from the eye within which a node of the level is drawn; the root's is infinite.
+    /// </summary>
     public float[] Ranges { get; }
+    /// <summary>
+    /// Per level, the distance at which a vertex starts to slide onto the coarser grid.
+    /// </summary>
     public float[] MorphStart { get; }
+    /// <summary>
+    /// Per level, the distance at which a vertex has slid onto the coarser grid: the level's range.
+    /// </summary>
     public float[] MorphEnd { get; }
 
     /// <summary>
@@ -260,7 +303,6 @@ public sealed class TerrainQuadtree
     /// cascades' coarser casters, ShadowLod). 0: the distance rule alone.
     /// </summary>
     public int FloorLevel { get => _floorLevel; set => _floorLevel = Math.Max(value, 0); }
-    int _floorLevel;
 
     /// <summary>
     /// The nodes to draw for an eye position, skipping those <paramref name="visible"/> rejects (box min, max).
@@ -271,6 +313,10 @@ public sealed class TerrainQuadtree
         Select(LevelCount - 1, -WorldLayout.HalfWorldSize, -WorldLayout.HalfWorldSize, eye, bounds, visible, result);
     }
 
+    /// <summary>
+    /// Adds the nodes to draw within the node of <paramref name="level"/> at (<paramref name="x0"/>, <paramref name="z0"/>); false when the node is
+    /// out of range, so its parent draws that quarter.
+    /// </summary>
     bool Select(int level, double x0, double z0, Vector3 eye, TerrainHeightBounds bounds, Func<Vector3, Vector3, bool>? visible,
         List<TerrainNode> result)
     {
@@ -295,6 +341,9 @@ public sealed class TerrainQuadtree
         return true;
     }
 
+    /// <summary>
+    /// Whether the sphere of <paramref name="radius"/> round <paramref name="centre"/> touches the box (always for an infinite radius).
+    /// </summary>
     public static bool SphereTouchesBox(Vector3 centre, float radius, Vector3 min, Vector3 max)
     {
         if (radius == float.MaxValue) return true;

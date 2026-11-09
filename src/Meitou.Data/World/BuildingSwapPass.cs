@@ -4,12 +4,14 @@ using Meitou.Data.Gameplay;
 namespace Meitou.Data.World;
 
 /// <summary>
-/// The factions' building swaps applied to the level's placed buildings (docs/game/factions-squads-towns.md "Building swaps"): <c>RootObjectFactory::createBuilding</c> (<c>FUN_14057cc70</c>) asks the
-/// owner's faction (the placement's own <c>owner faction ID</c>, else the faction of the town it stands in) whether a building is replaced, skipped or randomly swapped before it makes it, in a zone
-/// that is made fresh. Meitou resolves it once for the level data, which every consumer of the placements shares (the drawn world, the town buildings, the fixtures, the navmesh): a replaced
-/// placement takes the new building's id, a skipped one is cleared. The original's weighted pick is unseeded and its result lives in the zone's saved building list; here the roll is fixed by the
-/// placement, so a game and its reloads agree (engine choice). The layouts' furniture goes through the same swaps (other callers of <c>createBuilding</c>): the levels keep
-/// the swaps and owners (<see cref="WorldLevelData.FurnitureSwaps"/>) for every <see cref="BuildingLayouts"/> read from them.
+/// The factions' building swaps applied to the level's placed buildings (docs/game/factions-squads-towns.md "Building swaps"):
+/// <c>RootObjectFactory::createBuilding</c> (<c>FUN_14057cc70</c>) asks the owner's faction (the placement's own <c>owner faction ID</c>, else the
+/// faction of the town it stands in) whether a building is replaced, skipped or randomly swapped before it makes it, in a zone that is made fresh.
+/// Meitou resolves it once for the level data, which every consumer of the placements shares (the drawn world, the town buildings, the fixtures, the
+/// navmesh): a replaced placement takes the new building's id, a skipped one is cleared. The original's weighted pick is unseeded and its result
+/// lives in the zone's saved building list; here the roll is fixed by the placement, so a game and its reloads agree (engine choice). The layouts'
+/// furniture goes through the same swaps (other callers of <c>createBuilding</c>): the levels keep the swaps and owners
+/// (<see cref="WorldLevelData.FurnitureSwaps"/>) for every <see cref="BuildingLayouts"/> read from them.
 /// </summary>
 public static class BuildingSwapPass
 {

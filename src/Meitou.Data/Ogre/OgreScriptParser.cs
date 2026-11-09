@@ -1,6 +1,50 @@
 namespace Meitou.Data.Ogre;
 
-public enum OgreConcreteNodeType { Word, Quote, Variable, VariableAssign, Import, LeftBrace, RightBrace, Colon }
+/// <summary>
+/// What a concrete node is (Ogre's <c>ConcreteNodeType</c>).
+/// </summary>
+public enum OgreConcreteNodeType
+{
+    /// <summary>
+    /// A bare word: an object class or name, a property name or value.
+    /// </summary>
+    Word,
+
+    /// <summary>
+    /// A quoted phrase.
+    /// </summary>
+    Quote,
+
+    /// <summary>
+    /// A <c>$variable</c> access.
+    /// </summary>
+    Variable,
+
+    /// <summary>
+    /// A <c>set</c> line; its children are the variable and the value.
+    /// </summary>
+    VariableAssign,
+
+    /// <summary>
+    /// An <c>import</c> line; its children are the target and the source.
+    /// </summary>
+    Import,
+
+    /// <summary>
+    /// A <c>{</c>; its children are the block's nodes.
+    /// </summary>
+    LeftBrace,
+
+    /// <summary>
+    /// A <c>}</c> closing a block.
+    /// </summary>
+    RightBrace,
+
+    /// <summary>
+    /// A <c>:</c> before an object's base list; its children are the bases.
+    /// </summary>
+    Colon
+}
 
 /// <summary>
 /// Ogre's "concrete" syntax tree: one node per word, with the rest of its line (and a following <c>{ }</c> block) as children.
@@ -8,6 +52,9 @@ public enum OgreConcreteNodeType { Word, Quote, Variable, VariableAssign, Import
 /// </summary>
 public sealed class OgreConcreteNode
 {
+    /// <summary>
+    /// What the node is.
+    /// </summary>
     public OgreConcreteNodeType Type { get; init; }
 
     /// <summary>
@@ -15,9 +62,21 @@ public sealed class OgreConcreteNode
     /// </summary>
     public string Token { get; set; } = "";
 
+    /// <summary>
+    /// The script file the node's token came from.
+    /// </summary>
     public string File { get; init; } = "";
+    /// <summary>
+    /// The line of the node's token.
+    /// </summary>
     public int Line { get; init; }
+    /// <summary>
+    /// The node this one is a child of; null at the top level.
+    /// </summary>
     public OgreConcreteNode? Parent { get; set; }
+    /// <summary>
+    /// The rest of the node's line and its <c>{ }</c> block, in order.
+    /// </summary>
     public List<OgreConcreteNode> Children { get; } = [];
 
     public override string ToString() => $"{Type} '{Token}' ({File}:{Line})";
@@ -29,8 +88,14 @@ public sealed class OgreConcreteNode
 /// </summary>
 public static class OgreScriptParser
 {
+    /// <summary>
+    /// The concrete tree of the script <paramref name="text"/> of <paramref name="file"/>.
+    /// </summary>
     public static List<OgreConcreteNode> Parse(string text, string file) => Parse(OgreScriptLexer.Tokenize(text, file));
 
+    /// <summary>
+    /// The concrete tree of <paramref name="tokens"/>.
+    /// </summary>
     public static List<OgreConcreteNode> Parse(IReadOnlyList<OgreScriptToken> tokens)
     {
         var parser = new Parser(tokens);
@@ -56,9 +121,15 @@ public static class OgreScriptParser
         return nodes;
     }
 
+    /// <summary>
+    /// A node of <paramref name="type"/> with <paramref name="text"/>, at <paramref name="token"/>'s file and line.
+    /// </summary>
     static OgreConcreteNode New(OgreConcreteNodeType type, OgreScriptToken token, string text) =>
         new() { Type = type, Token = text, File = token.File, Line = token.Line };
 
+    /// <summary>
+    /// A word or quote child of <paramref name="parent"/>; a quote's text is <paramref name="quotedText"/>, else its lexeme without the quotes.
+    /// </summary>
     static OgreConcreteNode Child(OgreConcreteNode parent, OgreScriptToken token, string? quotedText) => new()
     {
         Type = token.Type == OgreScriptTokenType.Word ? OgreConcreteNodeType.Word : OgreConcreteNodeType.Quote,
@@ -68,9 +139,16 @@ public static class OgreScriptParser
         Parent = parent,
     };
 
+    /// <summary>
+    /// <c>std::string::substr</c>: the part of <paramref name="s"/> from <paramref name="start"/>, at most <paramref name="length"/> long; empty when
+    /// the start is past the end.
+    /// </summary>
     static string SafeSubstring(string s, int start, int length) =>
         start >= s.Length ? "" : s.Substring(start, Math.Min(Math.Max(length, 0), s.Length - start));
 
+    /// <summary>
+    /// The index of the first token at or after <paramref name="i"/> that is not a newline.
+    /// </summary>
     static int SkipNewlines(IReadOnlyList<OgreScriptToken> tokens, int i)
     {
         while (i < tokens.Count && tokens[i].Type == OgreScriptTokenType.Newline) i++;

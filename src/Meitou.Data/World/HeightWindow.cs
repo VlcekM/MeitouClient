@@ -9,6 +9,10 @@ namespace Meitou.Data.World;
 /// </summary>
 public sealed class HeightWindow
 {
+    /// <summary>
+    /// A window of <paramref name="columns"/> × <paramref name="rows"/> <paramref name="raw"/> samples from (<paramref name="column0"/>,
+    /// <paramref name="row0"/>), <paramref name="step"/> apart.
+    /// </summary>
     public HeightWindow(int column0, int row0, int step, int columns, int rows, ushort[] raw)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(step, 1);
@@ -20,12 +24,21 @@ public sealed class HeightWindow
     /// Heightmap column and row of window point (0, 0); may lie outside the heightmap.
     /// </summary>
     public int Column0 { get; }
+    /// <summary>
+    /// See <see cref="Column0"/>.
+    /// </summary>
     public int Row0 { get; }
     /// <summary>
     /// Heightmap samples between neighbouring window points.
     /// </summary>
     public int Step { get; }
+    /// <summary>
+    /// Window points along X.
+    /// </summary>
     public int Columns { get; }
+    /// <summary>
+    /// Window points along Z.
+    /// </summary>
     public int Rows { get; }
     /// <summary>
     /// Raw samples, row-major.

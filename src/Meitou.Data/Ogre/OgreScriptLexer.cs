@@ -1,7 +1,13 @@
 namespace Meitou.Data.Ogre;
 
+/// <summary>
+/// What a script token is (Ogre's <c>ScriptToken</c> types).
+/// </summary>
 public enum OgreScriptTokenType
 {
+    /// <summary>
+    /// A run of characters up to whitespace, a newline, a brace or a colon.
+    /// </summary>
     Word,
     /// <summary>
     /// A quoted phrase; the lexeme still includes the quotes.
@@ -11,12 +17,27 @@ public enum OgreScriptTokenType
     /// A <c>$name</c> variable reference; the lexeme includes the <c>$</c>.
     /// </summary>
     Variable,
+    /// <summary>
+    /// A <c>{</c>.
+    /// </summary>
     LeftBrace,
+    /// <summary>
+    /// A <c>}</c>.
+    /// </summary>
     RightBrace,
+    /// <summary>
+    /// A <c>:</c>.
+    /// </summary>
     Colon,
+    /// <summary>
+    /// The end of a line (a carriage return counts too).
+    /// </summary>
     Newline,
 }
 
+/// <summary>
+/// A token: its type, its text, and the file and line it came from.
+/// </summary>
 public sealed record OgreScriptToken(OgreScriptTokenType Type, string Lexeme, string File, int Line)
 {
     public override string ToString() => $"{Type} '{Lexeme}' ({File}:{Line})";
@@ -28,7 +49,13 @@ public sealed record OgreScriptToken(OgreScriptTokenType Type, string Lexeme, st
 public sealed class OgreScriptException(string message, string file, int line)
     : FormatException($"{file}({line}): {message}")
 {
+    /// <summary>
+    /// The script file the error is in.
+    /// </summary>
     public string File { get; } = file;
+    /// <summary>
+    /// The line the error is at.
+    /// </summary>
     public int Line { get; } = line;
 }
 
@@ -38,7 +65,46 @@ public sealed class OgreScriptException(string message, string file, int line)
 /// </summary>
 public static class OgreScriptLexer
 {
-    enum State { Ready, Comment, MultiComment, Word, Quote, Variable, PossibleComment }
+    /// <summary>
+    /// Where the lexer's state machine is (Ogre's ScriptLexer states).
+    /// </summary>
+    enum State
+    {
+        /// <summary>
+        /// Between tokens.
+        /// </summary>
+        Ready,
+
+        /// <summary>
+        /// Inside a line comment, up to the newline.
+        /// </summary>
+        Comment,
+
+        /// <summary>
+        /// Inside a block comment, up to its closing star and slash.
+        /// </summary>
+        MultiComment,
+
+        /// <summary>
+        /// Inside a word.
+        /// </summary>
+        Word,
+
+        /// <summary>
+        /// Inside a quoted phrase.
+        /// </summary>
+        Quote,
+
+        /// <summary>
+        /// Inside a <c>$variable</c>.
+        /// </summary>
+        Variable,
+
+        /// <summary>
+        /// After a word's leading slash: a second slash or a star makes it a comment.
+        /// </summary>
+        PossibleComment
+    }
 
     /// <summary>
     /// Script files are read byte for byte (Latin-1), as Ogre does: no encoding or BOM handling. A few base-game files contain non-ASCII bytes in
@@ -46,6 +112,9 @@ public static class OgreScriptLexer
     /// </summary>
     public static string ReadText(string path) => System.Text.Encoding.Latin1.GetString(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
+    /// <summary>
+    /// The tokens of the script <paramref name="text"/> of <paramref name="file"/>; <see cref="OgreScriptException"/> for a quote left open.
+    /// </summary>
     public static List<OgreScriptToken> Tokenize(string text, string file)
     {
         var lexer = new Lexer(file);

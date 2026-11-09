@@ -10,17 +10,41 @@ namespace Meitou.Data.Audio;
 /// </summary>
 public sealed class WwiseVorbis
 {
+    /// <summary>
+    /// Channel count, 1..8 (<c>fmt </c> offset 2).
+    /// </summary>
     public int Channels { get; private init; }
+    /// <summary>
+    /// Samples per second per channel (<c>fmt </c> offset 4).
+    /// </summary>
     public int SampleRate { get; private init; }
+    /// <summary>
+    /// The average data rate the <c>fmt </c> chunk states (offset 8); the rebuilt identification header writes it as the nominal bitrate.
+    /// </summary>
     public int AverageBytesPerSecond { get; private init; }
     /// <summary>
     /// The number of sample frames the sound plays.
     /// </summary>
     public int SampleCount { get; private init; }
+    /// <summary>
+    /// Where the setup packet starts in <see cref="Data"/>.
+    /// </summary>
     public int SetupOffset { get; private init; }
+    /// <summary>
+    /// Where the first audio packet starts in <see cref="Data"/>.
+    /// </summary>
     public int FirstAudioOffset { get; private init; }
+    /// <summary>
+    /// The short block size as a power of two (6..13).
+    /// </summary>
     public int Blocksize0Exponent { get; private init; }
+    /// <summary>
+    /// The long block size as a power of two (at least <see cref="Blocksize0Exponent"/>, at most 13).
+    /// </summary>
     public int Blocksize1Exponent { get; private init; }
+    /// <summary>
+    /// The WEM's own id from the <c>fmt </c> chunk; the Ogg stream's serial number.
+    /// </summary>
     public uint Uid { get; private init; }
     /// <summary>
     /// The <c>data</c> chunk: the setup packet, then the audio packets, each after a u16 size.
@@ -128,6 +152,9 @@ public sealed class WwiseVorbis
         return read == samples.Length ? samples : samples[..read];
     }
 
+    /// <summary>
+    /// The packet at <paramref name="offset"/> in <see cref="Data"/> (after its u16 size); <paramref name="next"/> is where the following one starts.
+    /// </summary>
     ReadOnlyMemory<byte> Packet(int offset, out int next)
     {
         var d = Data.Span;
@@ -138,6 +165,9 @@ public sealed class WwiseVorbis
         return Data.Slice(offset + 2, size);
     }
 
+    /// <summary>
+    /// The Vorbis identification header (packet type 1) rebuilt from the <c>fmt </c> chunk.
+    /// </summary>
     byte[] IdentificationHeader()
     {
         var w = new VorbisBitWriter();
@@ -155,6 +185,9 @@ public sealed class WwiseVorbis
         return w.ToArray();
     }
 
+    /// <summary>
+    /// A Vorbis comment header (packet type 3) with Meitou's vendor string and no comments.
+    /// </summary>
     static byte[] CommentHeader()
     {
         var w = new VorbisBitWriter();
@@ -490,6 +523,10 @@ public sealed class WwiseVorbis
         /// </summary>
         bool _continuation;
 
+        /// <summary>
+        /// Adds <paramref name="packet"/> with its granule position, split into lacing segments; a page is written once it holds over 8 KiB, at 255
+        /// segments, and after the <paramref name="last"/> packet.
+        /// </summary>
         public void Packet(byte[] packet, long packetGranule, bool last)
         {
             int left = packet.Length, at = 0;
@@ -508,8 +545,15 @@ public sealed class WwiseVorbis
             if (_body.Length > 8192 || last) Flush();
         }
 
+        /// <summary>
+        /// Writes the open page, if any, so the next packet starts a new page.
+        /// </summary>
         public void Flush() => Flush(continued: false);
 
+        /// <summary>
+        /// Writes the open page with its header and CRC; <paramref name="continued"/> when a packet goes on into the next page (granule position
+        /// -1 then).
+        /// </summary>
         void Flush(bool continued)
         {
             if (_segments.Count == 0) return;
@@ -532,8 +576,14 @@ public sealed class WwiseVorbis
             _continuation = continued;
         }
 
+        /// <summary>
+        /// The pages written so far as one Ogg stream.
+        /// </summary>
         public byte[] ToArray() => _output.ToArray();
 
+        /// <summary>
+        /// The Ogg CRC-32 table (polynomial 0x04C11DB7, not reflected).
+        /// </summary>
         static uint[] MakeTable()
         {
             var t = new uint[256];
@@ -546,6 +596,9 @@ public sealed class WwiseVorbis
             return t;
         }
 
+        /// <summary>
+        /// Folds <paramref name="data"/> into the running Ogg CRC <paramref name="crc"/>.
+        /// </summary>
         static uint Crc(uint crc, ReadOnlySpan<byte> data)
         {
             foreach (var b in data) crc = (crc << 8) ^ Table[(crc >> 24) ^ b];

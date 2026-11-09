@@ -9,23 +9,53 @@ namespace Meitou.Data.Textures;
 /// </summary>
 public static class DdsReader
 {
-    public const uint Magic = 0x20534444; // "DDS "
+    /// <summary>
+    /// "DDS " the first four bytes of every DDS file, little-endian.
+    /// </summary>
+    public const uint Magic = 0x20534444;
+    /// <summary>
+    /// The DDS_HEADER size after the magic, and the size of the DX10 extension header that follows it when the FourCC is <c>DX10</c>.
+    /// </summary>
     const int HeaderSize = 124, Dx10HeaderSize = 20;
 
     // DDS_HEADER.flags
+    /// <summary>
+    /// DDS_HEADER.flags bit: the header's mip map count is valid; without it the file has one level.
+    /// </summary>
     public const uint FlagMipMapCount = 0x20000;
+    /// <summary>
+    /// DDS_HEADER.flags bit: the header's depth is valid (a volume texture).
+    /// </summary>
     public const uint FlagDepth = 0x800000;
 
     // DDS_PIXELFORMAT.flags
+    /// <summary>
+    /// DDS_PIXELFORMAT.flags bits: alpha present, alpha only, FourCC valid, RGB masks valid, YUV (refused) and luminance.
+    /// </summary>
     const uint PfAlphaPixels = 0x1, PfAlpha = 0x2, PfFourCc = 0x4, PfRgb = 0x40, PfYuv = 0x200, PfLuminance = 0x20000;
 
     // caps2
+    /// <summary>
+    /// caps2 bits: a cubemap, a volume texture.
+    /// </summary>
     const uint Caps2Cubemap = 0x200, Caps2Volume = 0x200000;
+    /// <summary>
+    /// caps2 bits of the cube faces present, in file order: +X, -X, +Y, -Y, +Z, -Z.
+    /// </summary>
     static readonly uint[] CubeFaces = [0x400, 0x800, 0x1000, 0x2000, 0x4000, 0x8000];
 
+    /// <summary>
+    /// DX10 header miscFlag bit: the texture array is of cubes.
+    /// </summary>
     const uint Dx10MiscTextureCube = 0x4;
+    /// <summary>
+    /// DX10 header resourceDimension value of a 3D (volume) texture.
+    /// </summary>
     const int Dx10DimensionTexture3D = 4;
 
+    /// <summary>
+    /// <see cref="Read"/> of the file at <paramref name="path"/>, its case resolved as on disk.
+    /// </summary>
     public static DdsFile ReadFile(string path) => Read(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
     /// <summary>
@@ -34,13 +64,15 @@ public static class DdsReader
     public static DdsFile Read(byte[] data) => Parse(data.AsSpan(), data.Length, data);
 
     /// <summary>
-    /// Reads a DDS file from an open handle keeping only what <paramref name="keep"/> chooses. The headers are read first (<paramref name="whole"/>: every surface laid out, no
-    /// data), <paramref name="keep"/> returns the file as it is to be held (its top mips dropped by <see cref="TextureQuality.DropTopMips"/>, the surfaces re-sliced), and only the
-    /// bytes from its first surface on are read. A dropped top level is three quarters of a mip chain's bytes, which were read, held and thrown away with the file.
-    /// The result's <see cref="DdsFile.Data"/> starts at its first surface (the offsets are rebased); when <paramref name="keep"/> returns <paramref name="whole"/> itself (nothing dropped)
-    /// the result is the whole file, as <see cref="Read"/> returns it, and <paramref name="whole"/> is that file.
-    /// With <paramref name="pool"/> the result's <see cref="DdsFile.Data"/> is rented from it and may be longer than the bytes read (go by the surfaces, not its length;
-    /// <see cref="DdsFile.TrailingBytes"/> means nothing): the caller returns it once nothing reads the file any more (docs/engine.md, pooled buffers).
+    /// Reads a DDS file from an open handle keeping only what <paramref name="keep"/> chooses. The headers are read first (<paramref name="whole"/>:
+    /// every surface laid out, no data), <paramref name="keep"/> returns the file as it is to be held (its top mips dropped by
+    /// <see cref="TextureQuality.DropTopMips"/>, the surfaces re-sliced), and only the bytes from its first surface on are read. A dropped top level
+    /// is three quarters of a mip chain's bytes, which were read, held and thrown away with the file. The result's <see cref="DdsFile.Data"/> starts
+    /// at its first surface (the offsets are rebased); when <paramref name="keep"/> returns <paramref name="whole"/> itself (nothing dropped) the
+    /// result is the whole file, as <see cref="Read"/> returns it, and <paramref name="whole"/> is that file. With <paramref name="pool"/> the
+    /// result's <see cref="DdsFile.Data"/> is rented from it and may be longer than the bytes read (go by the surfaces, not its length;
+    /// <see cref="DdsFile.TrailingBytes"/> means nothing): the caller returns it once nothing reads the file any more (docs/engine.md,
+    /// pooled buffers).
     /// </summary>
     public static DdsFile ReadKept(Microsoft.Win32.SafeHandles.SafeFileHandle file, Func<DdsFile, DdsFile> keep, out DdsFile whole,
         System.Buffers.ArrayPool<byte>? pool = null)
@@ -69,8 +101,9 @@ public static class DdsReader
     }
 
     /// <summary>
-    /// Reads only the first surface (the full-size level of the first image) of a DDS file from an open handle: the headers, then that surface's bytes. The result's
-    /// <see cref="DdsFile.Data"/> holds just that surface (its offset rebased to 0), so a 14-level 8192 x 8192 BC1 file costs 32 MB instead of 43 MB read and held.
+    /// Reads only the first surface (the full-size level of the first image) of a DDS file from an open handle: the headers, then that surface's
+    /// bytes. The result's <see cref="DdsFile.Data"/> holds just that surface (its offset rebased to 0), so a 14-level 8192 x 8192 BC1 file costs 32
+    /// MB instead of 43 MB read and held.
     /// </summary>
     public static DdsFile ReadTopSurface(Microsoft.Win32.SafeHandles.SafeFileHandle file)
     {
@@ -86,6 +119,9 @@ public static class DdsReader
         return headers.WithData(data, [top with { Offset = 0 }]);
     }
 
+    /// <summary>
+    /// Reads from <paramref name="offset"/> until <paramref name="buffer"/> is full or the file ends; the number of bytes read.
+    /// </summary>
     static int ReadFully(Microsoft.Win32.SafeHandles.SafeFileHandle file, Span<byte> buffer, long offset)
     {
         int read = 0;
@@ -277,6 +313,9 @@ public static class DdsReader
         };
     }
 
+    /// <summary>
+    /// The format (and masks for an uncompressed one) of a DX10 header's DXGI format number; <see cref="DdsFormatException"/> for an unsupported one.
+    /// </summary>
     static (DdsFormat, DdsPixelMasks?) FromDxgi(int dxgi) => dxgi switch
     {
         70 or 71 or 72 => (DdsFormat.Bc1, null),      // BC1_TYPELESS / UNORM / UNORM_SRGB
@@ -297,8 +336,14 @@ public static class DdsReader
         _ => throw new DdsFormatException($"Unsupported DXGI format {dxgi}."),
     };
 
+    /// <summary>
+    /// The little-endian uint32 at byte <paramref name="at"/>.
+    /// </summary>
     static uint U32(ReadOnlySpan<byte> s, int at) => BinaryPrimitives.ReadUInt32LittleEndian(s[at..]);
 
+    /// <summary>
+    /// A FourCC for an error message: its text when printable ASCII, else the value in hex.
+    /// </summary>
     static string Printable(string text, uint value) => text.All(c => c is >= ' ' and <= '~') ? text : $"0x{value:X8}";
 
     /// <summary>

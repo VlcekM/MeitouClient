@@ -9,12 +9,18 @@ namespace Meitou.Settings;
 /// </summary>
 public sealed class SettingsSchema
 {
+    /// <summary>
+    /// The schema's file name, beside the game's executable.
+    /// </summary>
     public const string FileName = "settings-schema.json";
     /// <summary>
     /// The layout of this file. Adding properties keeps it; anything a reader would misread raises it, and the launcher then shows nothing.
     /// </summary>
     public const int CurrentFormat = 1;
 
+    /// <summary>
+    /// The layout this file was written in (<see cref="CurrentFormat"/> when written); <see cref="Read"/> refuses a newer one.
+    /// </summary>
     public int Format { get; set; } = CurrentFormat;
     /// <summary>
     /// The <c>meitou.user.json</c> layout this release reads and writes (its <c>version</c> key).
@@ -37,6 +43,9 @@ public sealed class SettingsSchema
     /// </summary>
     public SettingsLooks? Looks { get; set; }
 
+    /// <summary>
+    /// The schema as indented camel-case JSON, nulls left out (what <c>--settings-schema</c> writes).
+    /// </summary>
     public string ToJson() => JsonSerializer.Serialize(this, SettingsSchemaJson.Default.SettingsSchema);
 
     /// <summary>
@@ -54,9 +63,18 @@ public sealed class SettingsSchema
     }
 }
 
+/// <summary>
+/// One section of the settings: a launcher tab, a page of the game's menu.
+/// </summary>
 public sealed class SettingsSection
 {
+    /// <summary>
+    /// The section's title, as the game's menu shows it.
+    /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The section's settings in menu order.
+    /// </summary>
     public List<SettingDescription> Settings { get; set; } = [];
     /// <summary>
     /// The section's features, as the game's menu folds them; null in an older schema (every setting a row of its own).
@@ -70,9 +88,21 @@ public sealed class SettingsSection
 /// </summary>
 public sealed class SettingsGroup
 {
+    /// <summary>
+    /// The key of the setting that heads the row; null when the row is headed by <see cref="Title"/> alone.
+    /// </summary>
     public string? Header { get; set; }
+    /// <summary>
+    /// The row's title when no setting heads it.
+    /// </summary>
     public string Title { get; set; } = "";
+    /// <summary>
+    /// The row's description when no setting heads it.
+    /// </summary>
     public string Description { get; set; } = "";
+    /// <summary>
+    /// The keys of the settings folded under the row, in order.
+    /// </summary>
     public List<string> Members { get; set; } = [];
 }
 
@@ -83,15 +113,33 @@ public sealed class SettingsGroup
 /// </summary>
 public sealed class SettingsPresets
 {
+    /// <summary>
+    /// The top-level <c>meitou.user.json</c> key that holds the preset's name.
+    /// </summary>
     public string Key { get; set; } = "";
+    /// <summary>
+    /// The preset row's title.
+    /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The preset row's description.
+    /// </summary>
     public string Description { get; set; } = "";
+    /// <summary>
+    /// The presets' names, in the order they are offered.
+    /// </summary>
     public List<string> Names { get; set; } = [];
+    /// <summary>
+    /// The name saved when the settings sit at no preset; the game then applies nothing.
+    /// </summary>
     public string Custom { get; set; } = "";
     /// <summary>
     /// The preset shown while nothing is saved (the game's start settings).
     /// </summary>
     public string Default { get; set; } = "";
+    /// <summary>
+    /// The <c>graphics</c> keys a preset sets; changing one of them makes the preset <see cref="Custom"/>.
+    /// </summary>
     public List<string> Keys { get; set; } = [];
     /// <summary>
     /// The game's option that picks a preset for the hardware: <c>&lt;exe&gt; &lt;Detect&gt; &lt;file&gt;</c> writes a JSON object whose
@@ -110,13 +158,37 @@ public sealed class SettingsPresets
 /// </summary>
 public sealed class SettingsLooks
 {
+    /// <summary>
+    /// The look row's title.
+    /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The look row's description.
+    /// </summary>
     public string Description { get; set; } = "";
+    /// <summary>
+    /// The top-level <c>meitou.user.json</c> key that is true for the Faithful look.
+    /// </summary>
     public string FaithfulKey { get; set; } = "";
+    /// <summary>
+    /// The top-level <c>meitou.user.json</c> key that names the Meitou look preset; missing for Meitou's own.
+    /// </summary>
     public string PresetKey { get; set; } = "";
+    /// <summary>
+    /// The <c>graphics</c> values of the Faithful look, by key.
+    /// </summary>
     public Dictionary<string, float> Faithful { get; set; } = [];
+    /// <summary>
+    /// The <c>graphics</c> values of the Meitou look, which every preset starts from, by key.
+    /// </summary>
     public Dictionary<string, float> Meitou { get; set; } = [];
+    /// <summary>
+    /// The built-in look presets, Meitou's own first.
+    /// </summary>
     public List<SettingsLook> Presets { get; set; } = [];
+    /// <summary>
+    /// The folder beside <c>meitou.user.json</c> that holds the player's own look presets.
+    /// </summary>
     public string Folder { get; set; } = "";
     /// <summary>
     /// The look's own settings (the look tabs): what a preset saves, and what differs from the look counts as a change.
@@ -133,11 +205,31 @@ public sealed class SettingsLooks
 /// </summary>
 public sealed class SettingsLook
 {
+    /// <summary>
+    /// The preset's name, as offered and saved under <see cref="SettingsLooks.PresetKey"/>.
+    /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The <c>graphics</c> values the preset sets over Meitou's, by key.
+    /// </summary>
     public Dictionary<string, float> Values { get; set; } = [];
 }
 
-public enum SettingKind { Toggle, Slider }
+/// <summary>
+/// How a setting is shown.
+/// </summary>
+public enum SettingKind
+{
+    /// <summary>
+    /// A switch between two states, saved 1 on and 0 off.
+    /// </summary>
+    Toggle,
+
+    /// <summary>
+    /// A slider between <see cref="SettingDescription.Min"/> and <see cref="SettingDescription.Max"/>.
+    /// </summary>
+    Slider
+}
 
 /// <summary>
 /// One setting: a top-level key of <c>meitou.user.json</c>, or (<see cref="Graphics"/>) a Tab panel slider or switch under <c>graphics</c> (a slider
@@ -145,10 +237,25 @@ public enum SettingKind { Toggle, Slider }
 /// </summary>
 public sealed record SettingDescription
 {
+    /// <summary>
+    /// The key the value is saved under: top-level in <c>meitou.user.json</c>, or under <c>graphics</c> when <see cref="Graphics"/>.
+    /// </summary>
     public string Key { get; set; } = "";
+    /// <summary>
+    /// Whether the setting is a Tab panel value under <c>graphics</c> rather than a top-level key.
+    /// </summary>
     public bool Graphics { get; set; }
+    /// <summary>
+    /// Whether the setting is a switch or a slider.
+    /// </summary>
     public SettingKind Kind { get; set; }
+    /// <summary>
+    /// The setting's label.
+    /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The setting's explanation, shown with it.
+    /// </summary>
     public string Description { get; set; } = "";
     /// <summary>
     /// How much the setting costs (No / Low / Medium / High impact, Faster with Meitou), shown beside its name; null when not ranked.
@@ -160,15 +267,33 @@ public sealed record SettingDescription
     /// <see cref="Shown"/> (a graphics toggle offers the game's default as a choice of its own).
     /// </summary>
     public float? Default { get; set; }
+    /// <summary>
+    /// Where the slider sits while the key is missing and <see cref="Default"/> is null.
+    /// </summary>
     public float Shown { get; set; }
     /// <summary>
     /// A toggle's two states.
     /// </summary>
     public string On { get; set; } = "On";
+    /// <summary>
+    /// The text of a toggle's off state.
+    /// </summary>
     public string Off { get; set; } = "Off";
+    /// <summary>
+    /// The slider's lowest value.
+    /// </summary>
     public float Min { get; set; }
+    /// <summary>
+    /// The slider's highest value.
+    /// </summary>
     public float Max { get; set; } = 1;
+    /// <summary>
+    /// The slider's step between values.
+    /// </summary>
     public float Step { get; set; } = 1;
+    /// <summary>
+    /// Whether the slider moves on a logarithmic scale (the launcher does so only when <see cref="Min"/> is above 0).
+    /// </summary>
     public bool Logarithmic { get; set; }
     /// <summary>
     /// A slider whose stored value falls as the setting improves (texture quality's level 0 is Maximum): drawn mirrored, so right is always more; the
@@ -180,10 +305,25 @@ public sealed record SettingDescription
     /// <see cref="Suffix"/>; below <see cref="OffBelow"/> it reads <see cref="OffText"/>.
     /// </summary>
     public string[]? Labels { get; set; }
+    /// <summary>
+    /// The .NET number format of a slider's value (after <see cref="Scale"/>).
+    /// </summary>
     public string Format { get; set; } = "0";
+    /// <summary>
+    /// The factor a slider's value is shown at (e.g. 100 for a percentage).
+    /// </summary>
     public float Scale { get; set; } = 1;
+    /// <summary>
+    /// The text after a slider's shown value (a unit).
+    /// </summary>
     public string Suffix { get; set; } = "";
+    /// <summary>
+    /// The value below which the slider reads <see cref="OffText"/>; null when it never does.
+    /// </summary>
     public float? OffBelow { get; set; }
+    /// <summary>
+    /// The text a slider shows below <see cref="OffBelow"/>.
+    /// </summary>
     public string OffText { get; set; } = "Off";
     /// <summary>
     /// A slider's named values (render scale's quality modes): a drop-down of them and Custom, the slider shown only under Custom; a value that is
@@ -196,6 +336,9 @@ public sealed record SettingDescription
     /// </summary>
     public SettingCondition? ShownWhen { get; set; }
 
+    /// <summary>
+    /// How the slider reads at <paramref name="value"/>: <see cref="OffText"/>, a label, or the scaled, formatted value with its suffix.
+    /// </summary>
     public string Text(float value)
     {
         if (OffBelow is { } off && value < off) return OffText;
@@ -210,7 +353,13 @@ public sealed record SettingDescription
 /// </summary>
 public sealed record SettingMode
 {
+    /// <summary>
+    /// The mode's name in the drop-down.
+    /// </summary>
     public string Name { get; set; } = "";
+    /// <summary>
+    /// The slider value the mode writes.
+    /// </summary>
     public float Value { get; set; }
 
     /// <summary>
@@ -224,12 +373,24 @@ public sealed record SettingMode
 /// </summary>
 public sealed record SettingCondition
 {
+    /// <summary>
+    /// The key of the setting the condition looks at, in the same section.
+    /// </summary>
     public string Key { get; set; } = "";
+    /// <summary>
+    /// The whole value that setting must be at.
+    /// </summary>
     public float Value { get; set; }
 
+    /// <summary>
+    /// Whether <paramref name="value"/> rounds to <see cref="Value"/> (within half a step either way).
+    /// </summary>
     public bool Matches(float value) => MathF.Abs(value - Value) < 0.5f;
 }
 
+/// <summary>
+/// The source-generated JSON context for the schema (camel case, enums as strings, nulls left out); the launcher is Native AOT.
+/// </summary>
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, UseStringEnumConverter = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(SettingsSchema))]

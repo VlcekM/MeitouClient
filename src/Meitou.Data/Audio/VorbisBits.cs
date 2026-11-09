@@ -5,10 +5,22 @@ namespace Meitou.Data.Audio;
 /// </summary>
 ref struct VorbisBitReader(ReadOnlySpan<byte> data)
 {
+    /// <summary>
+    /// The packet's bytes.
+    /// </summary>
     readonly ReadOnlySpan<byte> _data = data;
 
+    /// <summary>
+    /// The next bit to read, counted from the first byte's lowest bit.
+    /// </summary>
     public int Position { get; private set; }
+    /// <summary>
+    /// The packet's length in bits.
+    /// </summary>
     public readonly int Length => _data.Length * 8;
+    /// <summary>
+    /// Bits not read yet.
+    /// </summary>
     public readonly int Remaining => Length - Position;
 
     /// <summary>
@@ -31,6 +43,9 @@ ref struct VorbisBitReader(ReadOnlySpan<byte> data)
         return (uint)value;
     }
 
+    /// <summary>
+    /// Reads one bit as a flag.
+    /// </summary>
     public bool Flag() => Read(1) != 0;
 }
 
@@ -39,7 +54,13 @@ ref struct VorbisBitReader(ReadOnlySpan<byte> data)
 /// </summary>
 sealed class VorbisBitWriter
 {
+    /// <summary>
+    /// The bytes written so far; grows as needed, never shrinks.
+    /// </summary>
     byte[] _bytes = new byte[256];
+    /// <summary>
+    /// The next bit to write, counted from the first byte's lowest bit.
+    /// </summary>
     int _bit;
 
     /// <summary>
@@ -57,6 +78,9 @@ sealed class VorbisBitWriter
         _bit += bits;
     }
 
+    /// <summary>
+    /// Writes one bit: 1 for true.
+    /// </summary>
     public void Write(bool flag) => Write(flag ? 1u : 0u, 1);
 
     /// <summary>
@@ -72,11 +96,17 @@ sealed class VorbisBitWriter
         }
     }
 
+    /// <summary>
+    /// Writes each byte of <paramref name="data"/> as 8 bits.
+    /// </summary>
     public void WriteBytes(ReadOnlySpan<byte> data)
     {
         foreach (var b in data) Write(b, 8);
     }
 
+    /// <summary>
+    /// The bytes written so far, the last one padded with zero bits.
+    /// </summary>
     public byte[] ToArray() => _bytes[..((_bit + 7) >> 3)];
 
     /// <summary>

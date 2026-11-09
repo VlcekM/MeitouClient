@@ -99,6 +99,9 @@ public sealed record ExposureConstants(float Min, float Max, float NightDarkness
     /// </summary>
     public static readonly ExposureConstants Default = new(0.8f, 1.2f, 0.35f);
 
+    /// <summary>
+    /// The CONSTANTS record's <c>exposure min</c>, <c>exposure max</c> and <c>night darkness</c>, <see cref="Default"/>'s where missing.
+    /// </summary>
     public static ExposureConstants FromDatabase(GameDatabase db)
     {
         var c = Gameplay.ConstantsRecord.Find(db);
@@ -115,6 +118,9 @@ public sealed record ExposureConstants(float Min, float Max, float NightDarkness
 /// </summary>
 public static class AmbientMap
 {
+    /// <summary>
+    /// Half the world's side in world units.
+    /// </summary>
     public const float HalfWorld = 147456;
 
     /// <summary>

@@ -7,6 +7,9 @@ namespace Meitou.Data.Particles;
 /// </summary>
 public interface IEffectArea
 {
+    /// <summary>
+    /// A random point of the area, from <paramref name="random"/>; false when the area has none.
+    /// </summary>
     bool TryPick(Random random, out float x, out float z);
 }
 
@@ -15,6 +18,7 @@ public interface IEffectArea
 /// </summary>
 public sealed class DiscArea(float centreX, float centreZ, float radius) : IEffectArea
 {
+    /// <inheritdoc/>
     public bool TryPick(Random random, out float x, out float z)
     {
         float a = random.NextSingle() * MathF.Tau, r = MathF.Sqrt(random.NextSingle()) * radius;
@@ -31,9 +35,18 @@ public sealed class DiscArea(float centreX, float centreZ, float radius) : IEffe
 /// </summary>
 public sealed class RegionArea : IEffectArea
 {
+    /// <summary>
+    /// The region's cells as rectangles in x and z.
+    /// </summary>
     readonly (float X0, float Z0, float X1, float Z1)[] _rects;
 
+    /// <summary>
+    /// An area of the cells <paramref name="rects"/>.
+    /// </summary>
     public RegionArea(IEnumerable<(float X0, float Z0, float X1, float Z1)> rects) => this._rects = [.. rects];
+    /// <summary>
+    /// How many cells the area has.
+    /// </summary>
     public int Count => _rects.Length;
 
     /// <summary>
@@ -51,6 +64,7 @@ public sealed class RegionArea : IEffectArea
         return new RegionArea(list);
     }
 
+    /// <inheritdoc/>
     public bool TryPick(Random random, out float x, out float z)
     {
         x = z = 0;

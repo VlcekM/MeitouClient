@@ -9,7 +9,13 @@ namespace Meitou.Data.World;
 /// </summary>
 public enum FogFeatureType : byte
 {
+    /// <summary>
+    /// 2: a sphere.
+    /// </summary>
     Sphere = 2,
+    /// <summary>
+    /// 3: a beam (a cylinder from its start to its end).
+    /// </summary>
     Beam = 3,
     /// <summary>
     /// "Block" in the level editor (class <c>FogPlaneVolume</c>): the space inside seven planes.
@@ -120,6 +126,9 @@ public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour
         return any ? (min, max) : null;
     }
 
+    /// <summary>
+    /// The point where the three planes (normal, w) meet; null when they do not meet in one point.
+    /// </summary>
     static Vector3? Intersect(Vector4 a, Vector4 b, Vector4 c)
     {
         var na = new Vector3(a.X, a.Y, a.Z); var nb = new Vector3(b.X, b.Y, b.Z); var nc = new Vector3(c.X, c.Y, c.Z);
@@ -136,6 +145,9 @@ public sealed record FogFeature(string Name, FogFeatureType Type, Vector3 Colour
 /// </summary>
 public static class FogFeatures
 {
+    /// <summary>
+    /// The file's path under the data folder.
+    /// </summary>
     public const string RelativePath = "newland/land/fogfeatures.dat";
 
     /// <summary>
@@ -213,6 +225,9 @@ public static class FogFeatures
         return list;
     }
 
+    /// <summary>
+    /// The next <paramref name="n"/> bytes at <paramref name="at"/>, moved past; throws when the file ends early.
+    /// </summary>
     static ReadOnlySpan<byte> Take(ReadOnlySpan<byte> data, ref int at, int n)
     {
         if (at + n > data.Length) throw new FormatException("fogfeatures: the file ends early");
@@ -221,6 +236,12 @@ public static class FogFeatures
         return s;
     }
 
+    /// <summary>
+    /// The next float.
+    /// </summary>
     static float F(ReadOnlySpan<byte> data, ref int at) => BitConverter.ToSingle(Take(data, ref at, 4));
+    /// <summary>
+    /// The next three floats as a vector.
+    /// </summary>
     static Vector3 V3(ReadOnlySpan<byte> data, ref int at) => new(F(data, ref at), F(data, ref at), F(data, ref at));
 }

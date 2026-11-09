@@ -14,8 +14,8 @@ public static class KenshiFontSize
     public const float DefaultSetting = 3;
 
     /// <summary>
-    /// The size in points that replaces <paramref name="size"/> (points at <paramref name="resolution"/> dpi) for the TrueType font <paramref name="ttf"/>;
-    /// <paramref name="size"/> itself when the font's tables cannot be read.
+    /// The size in points that replaces <paramref name="size"/> (points at <paramref name="resolution"/> dpi) for the TrueType font
+    /// <paramref name="ttf"/>; <paramref name="size"/> itself when the font's tables cannot be read.
     /// </summary>
     public static float Effective(ReadOnlySpan<byte> ttf, float size, float resolution, float setting = DefaultSetting)
     {
@@ -24,8 +24,8 @@ public static class KenshiFontSize
     }
 
     /// <summary>
-    /// MyGUI's default height at <paramref name="em"/> pixels: the ascent (hhea ascender) plus descent (descender), each rounded to the nearest pixel and
-    /// at least the OS/2 Windows metric at the whole pixel size.
+    /// MyGUI's default height at <paramref name="em"/> pixels: the ascent (hhea ascender) plus descent (descender), each rounded to the nearest pixel
+    /// and at least the OS/2 Windows metric at the whole pixel size.
     /// </summary>
     static int? DefaultHeight(ReadOnlySpan<byte> ttf, float em)
     {
@@ -48,7 +48,8 @@ public static class KenshiFontSize
     }
 
     /// <summary>
-    /// The OS/2 table's typographic (sTypo) and Windows (usWin) ascent and descent in font units, which MyGUI raises its line height to; null without the table.
+    /// The OS/2 table's typographic (sTypo) and Windows (usWin) ascent and descent in font units, which MyGUI raises its line height to; null without
+    /// the table.
     /// </summary>
     public static (int TypoAscender, int TypoDescender, int WinAscent, int WinDescent)? Os2Metrics(ReadOnlySpan<byte> ttf)
     {
@@ -58,6 +59,9 @@ public static class KenshiFontSize
             BinaryPrimitives.ReadUInt16BigEndian(os2[74..]), BinaryPrimitives.ReadUInt16BigEndian(os2[76..]));
     }
 
+    /// <summary>
+    /// The bytes of the TrueType table <paramref name="tag"/> in <paramref name="ttf"/>; empty when the font has none or it runs past the file.
+    /// </summary>
     static ReadOnlySpan<byte> Table(ReadOnlySpan<byte> ttf, string tag)
     {
         if (ttf.Length < 12) return default;

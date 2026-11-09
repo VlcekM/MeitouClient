@@ -16,17 +16,21 @@ public static class MeitouClouds
     /// blobs are about 0.05..0.1 across).
     /// </summary>
     public const int LightSteps = 4;
+    /// <summary>
+    /// See <see cref="LightSteps"/>.
+    /// </summary>
     public const float LightStep = 0.015f;
 
     /// <summary>
-    /// The cloud's depth towards the light is the lesser of two paths: up through the layer (the pixel's own density over the light's height, the slant at most
-    /// <see cref="MaxSlant"/>) and sideways across it (the taps' sum × <see cref="SidePath"/>). The light's extinction over that depth is <see cref="Extinction"/>.
+    /// The cloud's depth towards the light is the lesser of two paths: up through the layer (the pixel's own density over the light's height, the
+    /// slant at most <see cref="MaxSlant"/>) and sideways across it (the taps' sum × <see cref="SidePath"/>). The light's extinction over that depth
+    /// is <see cref="Extinction"/>.
     /// </summary>
     public const float MaxSlant = 6, SidePath = 0.6f, Extinction = 0.6f;
 
     /// <summary>
-    /// Multiple scattering, folded into one term: a share <see cref="MultipleShare"/> of the light goes through with the extinction × <see cref="MultipleExtinction"/>,
-    /// so thick cores stay grey rather than black (the octave approximation of Wrenninge et al., one octave).
+    /// Multiple scattering, folded into one term: a share <see cref="MultipleShare"/> of the light goes through with the extinction ×
+    /// <see cref="MultipleExtinction"/>, so thick cores stay grey rather than black (the octave approximation of Wrenninge et al., one octave).
     /// </summary>
     public const float MultipleShare = 0.5f, MultipleExtinction = 0.15f;
 
@@ -47,10 +51,14 @@ public static class MeitouClouds
     public const float AmbientFromSky = 0.2f;
 
     /// <summary>
-    /// How grey the ambient is (0 the sky's own colour, 1 its luminance): <see cref="AmbientGrey"/> in a clear sky, rising to 1 as the cloud density c does (under an overcast
-    /// the light the clouds get comes from other clouds, not from blue sky). The blue sky colour on its own made the clouds cyan.
+    /// How grey the ambient is (0 the sky's own colour, 1 its luminance): <see cref="AmbientGrey"/> in a clear sky, rising to 1 as the cloud density
+    /// c does (under an overcast the light the clouds get comes from other clouds, not from blue sky). The blue sky colour on its own made the
+    /// clouds cyan.
     /// </summary>
     public const float AmbientGrey = 0.45f;
+    /// <summary>
+    /// The ambient's greyness at cloud density <paramref name="c"/>.
+    /// </summary>
     public static float AmbientGreyAt(float c) => AmbientGrey + (1 - AmbientGrey) * Math.Clamp(c, 0, 1);
 
     /// <summary>
@@ -90,9 +98,10 @@ public static class MeitouClouds
         (1 - MultipleShare) * MathF.Exp(-Extinction * depth) + MultipleShare * MathF.Exp(-Extinction * MultipleExtinction * depth);
 
     /// <summary>
-    /// The key light: its direction and colour in the cloud pass's units (<c>sunColour.rgb</c>, which the game's layer uses: <see cref="KenshiLighting.SunColour"/>).
-    /// By day the sun (its saturation cut by <see cref="DayKey"/>); with <paramref name="planetLight"/> (the planetshine's light, in <see cref="KenshiLighting.SunLight"/>'s unit, 0 without it) the planet joins
-    /// at <see cref="PlanetShare"/>, converted to the sun colour's unit, and <see cref="Planetshine.Combine"/> makes the two one light.
+    /// The key light: its direction and colour in the cloud pass's units (<c>sunColour.rgb</c>, which the game's layer uses:
+    /// <see cref="KenshiLighting.SunColour"/>). By day the sun (its saturation cut by <see cref="DayKey"/>); with <paramref name="planetLight"/> (the
+    /// planetshine's light, in <see cref="KenshiLighting.SunLight"/>'s unit, 0 without it) the planet joins at <see cref="PlanetShare"/>, converted
+    /// to the sun colour's unit, and <see cref="Planetshine.Combine"/> makes the two one light.
     /// </summary>
     public static (Vector3 Direction, Vector3 Colour) Key(Vector3 sun, Vector3 planetDirection, Vector3 planetLight)
     {
@@ -102,8 +111,9 @@ public static class MeitouClouds
     }
 
     /// <summary>
-    /// The sky's mean light on the clouds (the HDR scattering colour, the sky pass's units before the exposure's √): the zenith and four directions 20 degrees up,
-    /// times the weather's sky colour multiplier, plus the night air's glow (<paramref name="nightAir"/>: rgb at full night, w its weight; 0 by day or without it).
+    /// The sky's mean light on the clouds (the HDR scattering colour, the sky pass's units before the exposure's √): the zenith and four directions
+    /// 20 degrees up, times the weather's sky colour multiplier, plus the night air's glow (<paramref name="nightAir"/>: rgb at full night, w its
+    /// weight; 0 by day or without it).
     /// </summary>
     public static Vector3 Ambient(Vector3 sun, Vector3 skyMultiplier, Vector4 nightAir)
     {
@@ -167,15 +177,17 @@ public static class MeitouClouds
     // ---- the smoothed textures (docs/formats/clouds.md "Smoothed textures") ----
 
     /// <summary>
-    /// The Gaussian sigma, in texels, of the blur the Meitou clouds' copies of <c>Clouds.dds</c> and <c>CloudsTile.dds</c> get. Both are BC1 (DXT1): every 4 × 4
-    /// block holds four values between two 5-bit red endpoints, so a smooth density comes out as small blocks with steps between them. The game's flat white
-    /// hid them; lit, their steps became contour bands and grain. A sigma of 1.2 removes the blocks and keeps the clouds' shapes (their features are 50 to 100 texels).
+    /// The Gaussian sigma, in texels, of the blur the Meitou clouds' copies of <c>Clouds.dds</c> and <c>CloudsTile.dds</c> get. Both are BC1 (DXT1):
+    /// every 4 × 4 block holds four values between two 5-bit red endpoints, so a smooth density comes out as small blocks with steps between them.
+    /// The game's flat white hid them; lit, their steps became contour bands and grain. A sigma of 1.2 removes the blocks and keeps the clouds'
+    /// shapes (their features are 50 to 100 texels).
     /// </summary>
     public const float SmoothSigma = 1.2f;
 
     /// <summary>
-    /// The red channel of a tiling RGBA8 image (the game's density; the other channels of <c>Clouds.dds</c> are other data) blurred by a separable Gaussian of
-    /// <paramref name="sigma"/> texels, wrapping at the edges as the texture repeats, written to all three colour channels (alpha 255). Rounded to 8 bits.
+    /// The red channel of a tiling RGBA8 image (the game's density; the other channels of <c>Clouds.dds</c> are other data) blurred by a separable
+    /// Gaussian of <paramref name="sigma"/> texels, wrapping at the edges as the texture repeats, written to all three colour channels (alpha 255).
+    /// Rounded to 8 bits.
     /// </summary>
     public static byte[] SmoothRed(ReadOnlySpan<byte> rgba, int width, int height, float sigma = SmoothSigma)
     {
@@ -206,9 +218,9 @@ public static class MeitouClouds
     }
 
     /// <summary>
-    /// How much of its colour the daytime key light keeps (the rest goes to its luminance): SkyX's sun colour is a warm cream at noon, and against the greyed
-    /// blue ambient that made a warm rim on every thin cloud edge and blue-grey cores (an oily look). Full colour at a low sun (sunset stays orange), this share
-    /// from a sun height of <see cref="KeyDesaturateFrom"/> up.
+    /// How much of its colour the daytime key light keeps (the rest goes to its luminance): SkyX's sun colour is a warm cream at noon, and against
+    /// the greyed blue ambient that made a warm rim on every thin cloud edge and blue-grey cores (an oily look). Full colour at a low sun (sunset
+    /// stays orange), this share from a sun height of <see cref="KeyDesaturateFrom"/> up.
     /// </summary>
     public const float DayKeySaturation = 0.4f, KeyDesaturateFrom = 0.35f, KeyDesaturateTo = 0.1f;
 

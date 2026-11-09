@@ -70,9 +70,18 @@ public static class OgreMeshWeld
     /// </summary>
     readonly record struct Column(byte[] Data, int Stride, int Offset)
     {
+        /// <summary>
+        /// The column of element <paramref name="e"/> in <paramref name="data"/>; null when the element is absent.
+        /// </summary>
         public static Column? Of(OgreVertexData data, OgreVertexElement? e) =>
             e is null ? null : new Column(data.Buffers[e.Source].Data, data.Buffers[e.Source].VertexSize, e.Offset);
+        /// <summary>
+        /// Float <paramref name="component"/> of the element at vertex <paramref name="v"/>.
+        /// </summary>
         public float Float(int v, int component) => BitConverter.ToSingle(Data, v * Stride + Offset + component * 4);
+        /// <summary>
+        /// The element at vertex <paramref name="v"/> as three floats.
+        /// </summary>
         public Vector3 Vector(int v) => MemoryMarshal.Read<Vector3>(Data.AsSpan(v * Stride + Offset, 12));
     }
 
@@ -425,10 +434,25 @@ public static class OgreMeshWeld
     /// </summary>
     sealed class ByteKey : IEqualityComparer<byte[]>, IAlternateEqualityComparer<ReadOnlySpan<byte>, byte[]>
     {
+        /// <summary>
+        /// The one comparer.
+        /// </summary>
         public static readonly ByteKey Instance = new();
+        /// <summary>
+        /// Whether two keys hold the same bytes.
+        /// </summary>
         public bool Equals(byte[]? a, byte[]? b) => a.AsSpan().SequenceEqual(b);
+        /// <summary>
+        /// The hash of a key's bytes (as for its span).
+        /// </summary>
         public int GetHashCode(byte[] k) => GetHashCode(k.AsSpan());
+        /// <summary>
+        /// Whether a span holds the same bytes as a key.
+        /// </summary>
         public bool Equals(ReadOnlySpan<byte> a, byte[] b) => a.SequenceEqual(b);
+        /// <summary>
+        /// The hash of a span's bytes, mixed eight bytes at a time; the same for a key and its span.
+        /// </summary>
         public int GetHashCode(ReadOnlySpan<byte> k)
         {
             // Eight bytes at a time (a vertex key is some 50 to 100 bytes, hashed once per vertex).
@@ -438,6 +462,10 @@ public static class OgreMeshWeld
             for (int i = words.Length * 8; i < k.Length; i++) h = (h ^ k[i]) * 0x100000001B3UL;
             return (int)(h ^ (h >> 32));
         }
+
+        /// <summary>
+        /// Copies a new key out of its span.
+        /// </summary>
         public byte[] Create(ReadOnlySpan<byte> k) => k.ToArray();
     }
 }
