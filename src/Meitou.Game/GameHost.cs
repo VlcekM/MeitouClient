@@ -211,7 +211,7 @@ sealed partial class GameHost(
 
     #region Renderer services
 
-    internal WorldFrame.Gpu Gpu = null!;
+    internal WorldGpu Gpu = null!;
     internal Rendering.Upscalers.Streamline? Streamline;
     internal Rendering.Upscalers.Ngx? Ngx;
 
@@ -220,7 +220,7 @@ sealed partial class GameHost(
     /// </summary>
     internal bool MetalRenderer = false;   // set by the Metal loop (GameHost.Metal.cs, macOS builds only)
 
-    // Fallback services for a host whose renderers are not in WorldFrame.Gpu yet (the shared title, audio and save code asks through these).
+    // Fallback services for a host whose renderers are not in WorldGpu yet (the shared title, audio and save code asks through these).
     WorldWeather? _fallbackWeather = null;
     WorldObjectRenderer? _hostObjects = null;
     FoliageRenderer? _hostFoliage = null;

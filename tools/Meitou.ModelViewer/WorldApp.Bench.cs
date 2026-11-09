@@ -23,7 +23,7 @@ static partial class WorldApp
     /// sides of one switch when asked, and writes per-stage statistics (mean, median, p95, p99, max for each side and the paired difference) as a
     /// table and JSON.
     /// </summary>
-    static int Bench(Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render,
+    static int Bench(Game.Rendering.Display.VulkanDisplay display, WorldGpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render,
             WorldOptions o, int w, int h)
     {
         var context = display.Context;
@@ -251,7 +251,7 @@ static partial class WorldApp
     /// <summary>
     /// The runtime switches of <see cref="Bench"/>, first part: the Faithful / Meitou ones, the water, shadow and foliage culls and the fog volumes.
     /// </summary>
-    static void RegisterCullToggles(Gpu gpu, PostProcess post, WorldOptions o, WorldCamera camera, WorldRenderOptions render)
+    static void RegisterCullToggles(WorldGpu gpu, PostProcess post, WorldOptions o, WorldCamera camera, WorldRenderOptions render)
     {
         // The runtime switches: the Faithful / Meitou ones under their ids (A = Meitou), then what can flip between two frames (A = on).
         AbToggles.Clear();
@@ -317,7 +317,7 @@ static partial class WorldApp
     /// <summary>
     /// The shadow pass's and the foliage's switches.
     /// </summary>
-    static void RegisterShadowAndFoliageToggles(Gpu gpu)
+    static void RegisterShadowAndFoliageToggles(WorldGpu gpu)
     {
         if (gpu.Shadow is { } shadowPass) AbToggles.Register("shadow-pass", () => shadowPass.Enabled, v => shadowPass.Enabled = v,
                 "the whole shadow pass");
@@ -354,7 +354,7 @@ static partial class WorldApp
     /// <summary>
     /// The sky's fog skips, the lamps, anisotropy, weather particles, threaded recording and the objects.
     /// </summary>
-    static void RegisterSkyAndSceneToggles(Gpu gpu, WorldRenderOptions render)
+    static void RegisterSkyAndSceneToggles(WorldGpu gpu, WorldRenderOptions render)
     {
         AbToggles.Register("cloud-fog-skip", () => gpu.Sky.CloudFogSkip, v => gpu.Sky.CloudFogSkip = v,
                 "volumetric clouds not marched where the fog hides the sky: the whole pass under complete weather fog, and in the main view each texel the placed fog volumes hide; B: every upward ray marched");
@@ -376,7 +376,7 @@ static partial class WorldApp
     /// <summary>
     /// The global illumination's switches (with <c>--gi</c>).
     /// </summary>
-    static void RegisterGiToggles(Gpu gpu)
+    static void RegisterGiToggles(WorldGpu gpu)
     {
         if (gpu.Gi is not null)
         {
@@ -429,7 +429,7 @@ static partial class WorldApp
     /// <summary>
     /// The terrain cost probes, the objects' draw order and programs, the terrain switches, normal maps, the water and its reflection.
     /// </summary>
-    static void RegisterTerrainObjectAndWaterToggles(Gpu gpu, WorldRenderOptions render)
+    static void RegisterTerrainObjectAndWaterToggles(WorldGpu gpu, WorldRenderOptions render)
     {
         {
             // Cost probes for the terrain (side B: error doubled, about a quarter of the triangles; ground colour only, no textured material).
@@ -504,7 +504,7 @@ static partial class WorldApp
     /// The main view's draw counts per frame, from 20 frames after a settle (the foliage's triangles from its GPU cull's arguments, which need
     /// <see cref="FoliageGpuCull.CountTriangles"/>).
     /// </summary>
-    static Dictionary<string, double> MeasureCounts(Gpu gpu, Func<long, bool, double> frame)
+    static Dictionary<string, double> MeasureCounts(WorldGpu gpu, Func<long, bool, double> frame)
     {
         const int settle = 10, counted = 20, late = 6;
         FoliageGpuCull.CountTriangles = true;
@@ -558,7 +558,7 @@ static partial class WorldApp
     /// the colour programs swapped for counting variants and the reflection off (it draws the same programs). The camera keeps moving as in the
     /// counting frames. Neither runs in a timed frame.
     /// </summary>
-    static void MeasureTriangles(GpuContext context, Gpu gpu, WorldRenderOptions render, Func<long, bool, double> frame, BenchResult result,
+    static void MeasureTriangles(GpuContext context, WorldGpu gpu, WorldRenderOptions render, Func<long, bool, double> frame, BenchResult result,
             string side)
     {
         const int frames = 8, settle = 4;
@@ -699,7 +699,7 @@ static partial class WorldApp
     /// One still of each side from the start camera (no time advance: the frame clock stays where it was, the same number of frames is drawn for
     /// each so the upscaler's jitter phase and the caches agree), their PNGs, the differing pixels and a heat map.
     /// </summary>
-    static PictureDiffResult StillPictures(Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera,
+    static PictureDiffResult StillPictures(Game.Rendering.Display.VulkanDisplay display, WorldGpu gpu, WorldScene scene, WorldCamera camera,
             WorldRenderOptions render, WorldOptions o, int w, int h,
         AbToggles.Toggle toggle, (Vector3 Target, float Yaw, float Pitch,
                 float Distance) start, bool moved, float clock, string stem, Func<long, bool, double> frame)

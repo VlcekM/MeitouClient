@@ -38,7 +38,7 @@ static partial class WorldFrame
     public const int CoarseStep = 8;
 
     /// <summary>
-    /// How long <see cref="GpuState.Areas"/> holds its highest count before it may fall.
+    /// How long <see cref="WorldGpu.Areas"/> holds its highest count before it may fall.
     /// </summary>
     public const int AreasHoldMs = 30000;
 
@@ -207,258 +207,6 @@ static partial class WorldFrame
 
     #endregion
 
-    #region Gpu
-
-    internal sealed class Gpu : IDisposable
-    {
-        public required TerrainRenderer Terrain;
-        public required SkyRenderer Sky;
-        public WaterRenderer? Water;
-
-        /// <summary>
-        /// The weather's wetness, dust and rain for every surface shader (null without a game database).
-        /// </summary>
-        public WeatherSurfaces? Surfaces;
-
-        /// <summary>
-        /// The placed fog volumes of <c>fogfeatures.dat</c> (null when the install has none).
-        /// </summary>
-        public FogVolumes? FogVolumes;
-
-        /// <summary>
-        /// This frame's weather fog spheres (<see cref="ParticleRenderer.CollectFogVolumes"/>), reused.
-        /// </summary>
-        public readonly List<FogVolumes.EffectFog> EffectFogs = [];
-
-        /// <summary>
-        /// The weather's particle effects (null while there are none: a clear weather, or <c>--no-particles</c>); <see cref="EnsureParticles"/> makes
-        /// it.
-        /// </summary>
-        public ParticleRenderer? Particles;
-
-        /// <summary>
-        /// The movement marker the game interface shows after a ground move order (null in the viewer, or without <c>position.mesh</c>).
-        /// </summary>
-        public MarkerRenderer? Markers;
-
-        /// <summary>
-        /// The blood decals on the ground (null in the viewer, or with the game's <c>Blood</c> setting off) and the host's decals they draw
-        /// (docs/game/blood-decals.md).
-        /// </summary>
-        public TerrainDecalRenderer? Decals;
-        public TerrainDecalStore? DecalStore;
-
-        /// <summary>
-        /// luckyren Mode's flying bones and limbs (null until the host makes it) and the pieces it draws this frame (docs/game/luckyren.md).
-        /// </summary>
-        public DebrisRenderer? Debris;
-
-        /// <summary>
-        /// This frame's bolts stuck in characters (<see cref="CharacterRenderer.CollectBolts"/>), drawn with the debris.
-        /// </summary>
-        public readonly List<DebrisPiece> BoltPieces = [];
-        public readonly List<DebrisPiece> DebrisPieces = [];
-
-        /// <summary>
-        /// The birds of this frame (<see cref="Meitou.Game"/>'s flocks), drawn as loose meshes after the debris.
-        /// </summary>
-        public readonly List<DebrisPiece> BirdPieces = [];
-
-        /// <summary>
-        /// The buildings' interior masks the terrain, foliage and map features are cut by (made with the first frame that has objects;
-        /// docs/render-interior-cut.md).
-        /// </summary>
-        public InteriorMaskRenderer? InteriorMask;
-
-        /// <summary>
-        /// The navmesh debug view (null in the viewer; drawn while visible).
-        /// </summary>
-        public NavmeshOverlayRenderer? NavmeshOverlay;
-
-        /// <summary>
-        /// The pick & collision inspector's drawing (Meitou only): pick hulls and shapes, same kind of renderer as the navmesh view.
-        /// </summary>
-        public NavmeshOverlayRenderer? InspectorOverlay;
-
-        /// <summary>
-        /// The hover outline the game draws round the character under the mouse, and with Alt those near (null in the viewer); <see
-        /// cref="HoverKeys"/> picks the characters by their draw-list keys, each with its colour (empty: none).
-        /// </summary>
-        public HoverOutlineRenderer? HoverOutline;
-        public IReadOnlyList<(long Key, Vector4 Colour)> HoverKeys = [];
-
-        /// <summary>
-        /// The buildings <see cref="HoverOutline"/> outlines too (the selected and the hovered one), by placement key, above its floor height, in its
-        /// colour (empty: none;
-        /// nothing for one the interior view shows).
-        /// </summary>
-        public IReadOnlyList<(string Key, float Floor, Vector4 Colour)> OutlinedBuildings = [];
-
-        /// <summary>
-        /// A presentation cap on how far the frame reaches (the Meitou editor's bar, high above the world): the far plane and the shadow cascades end
-        /// there, so the world below leaves the view; null in play.
-        /// </summary>
-        public float? ViewCap;
-
-        /// <summary>
-        /// The Tab panel's weather particles at 0 and its particle density, given to <see cref="Particles"/> every frame (it is made only with the
-        /// first weather).
-        /// </summary>
-        public bool WeatherParticles = true;
-        public float ParticleDensity = 1;
-
-        /// <summary>
-        /// Makes the particle renderer on demand (null with <c>--no-particles</c>).
-        /// </summary>
-        public Func<ParticleRenderer>? MakeParticles;
-
-        /// <summary>
-        /// The weather regions' cells, and the colour of the camera's cell the particle area was made for.
-        /// </summary>
-        public WeatherAreas? WeatherAreas;
-        public int ParticleAreaColour = -1;
-        public ReflectionPass? Reflection;
-        public ShadowPass? Shadow;
-        public int DebugShadows;
-
-        /// <summary>
-        /// The ray-traced global illumination's scene and debug view (null without <c>--gi-debug</c> or ray queries; docs/render-gi.md).
-        /// </summary>
-        internal Gi.GiScene? Gi;
-        internal Gi.GiDebugPass? GiDebugPass;
-        internal Gi.GiProbes? Probes;
-
-        /// <summary>
-        /// A backend-owned probe GI (Metal's native ray tracing); Vulkan uses <see cref="Gi"/> and <see cref="Probes"/> instead.
-        /// </summary>
-        internal Gi.IProbeGi? ProbeGi;
-        internal WorldLamps? Lamps;
-
-        /// <summary>
-        /// The placed buildings' effects (campfires, torches, smoke; docs/formats/lights.md "Effects on buildings"), read on a worker, handed to the
-        /// particles once read.
-        /// </summary>
-        internal Task<List<PlacedEffect>>? BuildingEffects;
-        public int GiDebug;
-
-        /// <summary>
-        /// Whether the traced scene is updated (and the debug view drawn) this frame: the bench's gi-scene switch.
-        /// </summary>
-        public bool GiActive = true;
-
-        /// <summary>
-        /// The GI resolve's divisor (0 the lit fragments read the probes, 1 full size, 2 half; the bench's gi-resolve switch; docs/render-gi.md
-        /// "Resolve").
-        /// </summary>
-        public int GiResolve = 2;
-
-        /// <summary>
-        /// The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.
-        /// </summary>
-        public PostProcess? Post;
-
-        /// <summary>
-        /// The chain <see cref="WorldFrame.Draw"/> runs: <see cref="Post"/> on Vulkan (also when a host sets only that), the host's seam chain on
-        /// Metal.
-        /// </summary>
-        public IWorldPostChain? PostChain { get => _postChain ?? Post; set => _postChain = value; }
-        IWorldPostChain? _postChain;
-        public WorldObjectRenderer? Objects;
-        public FoliageRenderer? Foliage;
-
-        /// <summary>
-        /// The characters (null without <c>--crowd</c> or a host that feeds them).
-        /// </summary>
-        public Characters.CharacterRenderer? Characters;
-        public TerrainStreamer? Streamer;
-
-        /// <summary>
-        /// Where the camera is about to arrive (a character flight's end view's eye; null otherwise): the object and terrain texture streaming load
-        /// there too.
-        /// </summary>
-        public Vector3? Ahead;
-
-        /// <summary>
-        /// The host flies the camera this frame (a character flight or squad tour hop under way, not its hold): the far shadow cascades are not drawn
-        /// (docs/render-shadows.md "Flights").
-        /// </summary>
-        public bool CameraFlying;
-
-        /// <summary>
-        /// Points whose surroundings stay loaded besides the camera's (the player's characters, "Keep textures at characters"): object meshes and
-        /// textures, terrain biome textures.
-        /// </summary>
-        public IReadOnlyList<Vector3> Kept = [];
-
-        /// <summary>
-        /// Places kept loaded: the eye's and each merged kept point's, held at its highest for <see cref="AreasHoldMs"/> (the merge flickers near its
-        /// distance, and the grass store and terrain arrays reallocate when it grows). The texture, mesh and grass budgets scale with it.
-        /// </summary>
-        public int Areas = 1;
-        public long AreasAt;
-
-        /// <summary>
-        /// Keeps the video memory under the budget by clamping the ranges and pausing the streaming (null with <c>MEITOU_VRAM_GUARD=0</c>).
-        /// </summary>
-        public VramGuard? Guard;
-
-        /// <summary>
-        /// The scene's native host (wave 4), made at the first frame.
-        /// </summary>
-        public SceneHost? Scene;
-
-        /// <summary>
-        /// The heat haze's target this frame (the weather's <c>heat haze</c> × strength 1 × the sun factor), for the statistics.
-        /// </summary>
-        public float HeatHazeTarget;
-
-        /// <summary>
-        /// Game hours since the load for the heat haze's animation, when the caller runs a game clock; null: real time at game speed 1.
-        /// </summary>
-        public double? GameHours;
-
-        /// <summary>
-        /// The weather scheduler hooked to the frame (null without a game database). The host sets <see cref="WorldWeather.Day"/>, <see
-        /// cref="WorldWeather.GameSpeed"/> and <see cref="WorldWeather.Paused"/>.
-        /// </summary>
-        public WorldWeather? Weather;
-
-        /// <summary>
-        /// The weather at the camera this frame (what the other renderers read; <see cref="WeatherState.Clear"/> without a scheduler).
-        /// </summary>
-        public WeatherState WeatherState => Weather?.State ?? WeatherState.Clear;
-        internal readonly Stopwatch HeatHazeClock = new();
-        internal double HeatHazeHours;
-        public void Dispose()
-        {
-            GiDebugPass?.Dispose();
-            ProbeGi?.Dispose();
-            Probes?.Dispose();
-            Lamps?.Dispose();
-            Gi?.Dispose();
-            Streamer?.Dispose();
-            Foliage?.Dispose();
-            Characters?.Dispose();
-            Objects?.Dispose();
-            Particles?.Dispose();
-            Markers?.Dispose();
-            Decals?.Dispose();
-            Debris?.Dispose();
-            InteriorMask?.Dispose();
-            NavmeshOverlay?.Dispose();
-            InspectorOverlay?.Dispose();
-            Water?.Dispose();
-            Surfaces?.Dispose();
-            Reflection?.Dispose();
-            Shadow?.Dispose();
-            Post?.Dispose();   // a seam-only chain (MetalPostChain) is owned by its host
-            Sky.Dispose();
-            Terrain.Dispose();
-        }
-    }
-
-    #endregion
-
     #region Loading completion
 
     /// <summary>
@@ -489,7 +237,7 @@ static partial class WorldFrame
     /// Feeds the particle renderer the weather state's effect list, strength and wind (the renderer is made the first time a weather has effects; a
     /// weather without any empties it again). The effect groups are rebuilt only when the weather's list changes.
     /// </summary>
-    static void UpdateParticles(Gpu gpu, WorldCamera camera)
+    static void UpdateParticles(WorldGpu gpu, WorldCamera camera)
     {
         if (gpu.Weather is not { } weather || gpu.MakeParticles is null) return;
         // In flight (KenshiCamera.FlightHeight, the platoons' gate) the weather's effects stop, as its fog does (SkyRenderer.WeatherFogScale).
@@ -513,7 +261,7 @@ static partial class WorldFrame
     /// The particle renderer (reads the scripts and materials, makes the pass's program) if there is none yet; for whoever feeds it a weather's
     /// effect list.
     /// </summary>
-    public static ParticleRenderer EnsureParticles(Gpu gpu, IGpuContext context, AssetLocator assets)
+    public static ParticleRenderer EnsureParticles(WorldGpu gpu, IGpuContext context, AssetLocator assets)
     {
         if (gpu.Particles is { } existing) return existing;
         return gpu.Particles = ParticleRenderer.Create(context, assets);
@@ -522,7 +270,7 @@ static partial class WorldFrame
     /// <summary>
     /// The renderer for <paramref name="scene"/>, built step by step (<see cref="WorldGpuBuilder.Create"/>).
     /// </summary>
-    public static Gpu CreateGpu(IGpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive,
+    public static WorldGpu CreateGpu(IGpuContext context, GameInstall install, WorldScene scene, AssetLocator assets, WorldOptions o, bool interactive,
         Action<string>? step = null, Action<Task>? wait = null, bool terrainTextures = true, bool particlesEnabled = true, int objectLoadBudget = -1,
         Func<(ulong Used, ulong Budget)>? vramSample = null) =>
         WorldGpuBuilder.Create(context, install, scene, assets, o, interactive, step, wait, terrainTextures, particlesEnabled, objectLoadBudget,
@@ -626,7 +374,7 @@ static partial class WorldFrame
     /// The Faithful / Meitou switches over the live renderer (the game's Shift+F keys, the viewer's F keys, the Tab checkboxes): they change the
     /// options and, once made, the renderer's parts; the distances follow the mode's defaults unless a Tab slider moved them.
     /// </summary>
-    internal static IReadOnlyList<Enhancement> LiveSwitches(WorldOptions o, Func<Gpu?> gpu, Func<WorldCamera?> camera,
+    internal static IReadOnlyList<Enhancement> LiveSwitches(WorldOptions o, Func<WorldGpu?> gpu, Func<WorldCamera?> camera,
         Func<WorldRenderOptions?> render) =>
         Enhancements.Create(o.Post, () => gpu()?.Sky.MeitouHaze ?? o.MeitouHaze, v => { o.MeitouHaze = v; if (gpu() is { } g) g.Sky.MeitouHaze = v; },
             () => gpu()?.Shadow?.Meitou ?? o.MeitouShadows, v =>
@@ -678,7 +426,7 @@ static partial class WorldFrame
     /// The Tab settings panel over <paramref name="g"/>'s renderers: the sliders (the viewer's clock, window and the render settings), the Faithful /
     /// Meitou switches as checkboxes, the cache actions, the texture column and the weather choices.
     /// </summary>
-    public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, Gpu g, WorldRenderOptions r, Func<float>? getHour = null,
+    public static SettingsPanel CreateSettingsPanel(DebugOverlay ui, WorldGpu g, WorldRenderOptions r, Func<float>? getHour = null,
         Action<float>? setHour = null,
         Func<bool>? getVSync = null, Action<bool>? setVSync = null, IReadOnlyList<Enhancement>? switches = null,
         Func<float>? getTimeSpeed = null, Action<float>? setTimeSpeed = null, Func<bool>? getFullScreen = null, Action<bool>? setFullScreen = null,
@@ -802,7 +550,7 @@ static partial class WorldFrame
     /// <summary>
     /// The water's reflection and clarity.
     /// </summary>
-    static void AddWaterSliders(List<Slider> sliders, Gpu g)
+    static void AddWaterSliders(List<Slider> sliders, WorldGpu g)
     {
         // The game's `water reflection` (0 off .. 4 everything) and `reflection range` (x the haze distance), docs/formats/settings.md.
         if (g.Reflection is { } reflection)
@@ -829,7 +577,7 @@ static partial class WorldFrame
     /// The terrain's pixel error and the ground relief (ours, docs/render-terrain.md "Ground relief": the march's quality, the depth and where each
     /// ends).
     /// </summary>
-    static void AddTerrainSliders(List<Slider> sliders, Gpu g, WorldRenderOptions r)
+    static void AddTerrainSliders(List<Slider> sliders, WorldGpu g, WorldRenderOptions r)
     {
         sliders.Add(new Slider(TerrainErrorSlider, 4, 32, () => r.TerrainPixelError, v => r.TerrainPixelError = v, "0.0", Logarithmic: true,
             Faithful: WorldRenderOptions.DefaultTerrainPixelError, Meitou: Enhancements.MeitouTerrainPixelError));
@@ -893,7 +641,7 @@ static partial class WorldFrame
     /// The post chain's rows: anti-aliasing and upscaling, the weather's particles, then the look (tone map, grade, haze, bloom, night grade,
     /// shafts).
     /// </summary>
-    static void AddPostSliders(List<Slider> sliders, Gpu g, PostProcess post)
+    static void AddPostSliders(List<Slider> sliders, WorldGpu g, PostProcess post)
     {
         // Upscaling (docs/engine.md "Upscaling"): FSR and DLSS fall back to TAA where their library or backend is missing.
         var up = post.Options.Upscale;
@@ -981,7 +729,7 @@ static partial class WorldFrame
     /// tessellation shaders), then the optional effects: the fifth cascade, bloom (off in both looks, docs/render-post.md "Bloom"; a look preset may
     /// turn it on), and with tessellation the rock smoothing and outline refinement.
     /// </summary>
-    static List<Toggle> SettingsToggles(Gpu g, IReadOnlyList<Enhancement>? switches, Toggle? fifthCascade)
+    static List<Toggle> SettingsToggles(WorldGpu g, IReadOnlyList<Enhancement>? switches, Toggle? fifthCascade)
     {
         bool tessellation = g.Sky.Gpu.HasTessellation;
         var toggles = switches?
@@ -1007,7 +755,7 @@ static partial class WorldFrame
     /// <summary>
     /// The billboard (impostor atlas) disk cache's delete: deleted files are baked again when next needed; the resident atlases stay until evicted.
     /// </summary>
-    static List<PanelAction> SettingsActions(Gpu g)
+    static List<PanelAction> SettingsActions(WorldGpu g)
     {
         var actions = new List<PanelAction>();
         if (g.Foliage?.ImpostorDiskCache is not { } cache) return actions;
@@ -1071,7 +819,7 @@ static partial class WorldFrame
     /// <summary>
     /// Sky-only loading frames, with the existing sky and post chain and without touching world streaming or character content.
     /// </summary>
-    public static void DrawLoadingSky(Gpu gpu, WorldScene scene, WorldCamera camera, int width, int height, float hour, float seconds,
+    public static void DrawLoadingSky(WorldGpu gpu, WorldScene scene, WorldCamera camera, int width, int height, float hour, float seconds,
         float fogDistance)
     {
         gpu.Terrain.Activate();
@@ -1157,7 +905,7 @@ static partial class WorldFrame
     /// </summary>
     internal static float Overcast(float cloudDensity, float rain) => MathF.Max(Math.Clamp(cloudDensity, 0, 1), WeatherSurfaces.RainAmount(rain));
 
-    static float Overcast(Gpu gpu) => Overcast(gpu.Sky.CloudDensity, gpu.Surfaces?.Rain ?? 0);
+    static float Overcast(WorldGpu gpu) => Overcast(gpu.Sky.CloudDensity, gpu.Surfaces?.Rain ?? 0);
 
     /// <summary>
     /// What is left of the light shafts under the cloud layer (docs/render-shafts.md "Cloud cover"): the game's sun shines through any
@@ -1177,7 +925,7 @@ static partial class WorldFrame
     /// moves towards it at 1/3 per second of real time (game speed 1), and jumps there for still pictures. The animation's
     /// <c>gameTime</c> is the caller's game clock when it has one, else real time at game speed 1 (held still for pictures).
     /// </summary>
-    static void UpdateHeatHaze(Gpu gpu, IWorldPostChain post, float sunY)
+    static void UpdateHeatHaze(WorldGpu gpu, IWorldPostChain post, float sunY)
     {
         float dt = (float)Math.Min(gpu.HeatHazeClock.Elapsed.TotalSeconds, 0.25);
         bool first = !gpu.HeatHazeClock.IsRunning;
@@ -1205,7 +953,7 @@ static partial class WorldFrame
     /// </summary>
     /// <param name="sunHeight">The real sun's height: the map is drawn along the lighting direction while the sun still has a colour (as the
     /// game).</param>
-    public static void DrawShadows(Gpu gpu, WorldCamera camera, WorldRenderOptions render, WorldLighting light, int width, int height,
+    public static void DrawShadows(WorldGpu gpu, WorldCamera camera, WorldRenderOptions render, WorldLighting light, int width, int height,
         float? sunHeight = null,
         bool? temporal = null)
     {
@@ -1236,7 +984,7 @@ static partial class WorldFrame
     /// One <see cref="DrawShadows"/>'s casters: each cascade's terrain, objects, characters and foliage by the renderers' depth-only paths, timed per
     /// kind.
     /// </summary>
-    sealed class ShadowCasters(Gpu gpu, ShadowPass shadow, WorldRenderOptions render)
+    sealed class ShadowCasters(WorldGpu gpu, ShadowPass shadow, WorldRenderOptions render)
     {
         int _objects, _foliage;
         readonly System.Text.StringBuilder? _cascades = DetailedStats ? new() : null;

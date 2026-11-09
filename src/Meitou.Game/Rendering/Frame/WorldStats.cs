@@ -28,7 +28,7 @@ static class WorldStats
     public const string CharacterBoxesOff = "[ ] boxes", CharacterBoxesOn = "[x] boxes";
     public const string PathsOff = "[ ] paths", PathsOn = "[x] paths";
 
-    public static void Add(List<string> stats, GpuContext context, WorldFrame.Gpu gpu, Vector3 camera, in Triangles tris, bool characterBoxes = false)
+    public static void Add(List<string> stats, GpuContext context, WorldGpu gpu, Vector3 camera, in Triangles tris, bool characterBoxes = false)
     {
         stats.Add("");
         stats.Add("Scene");

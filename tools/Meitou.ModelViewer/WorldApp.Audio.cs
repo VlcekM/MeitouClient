@@ -1,6 +1,5 @@
 using Meitou.Game.Audio;
 using Meitou.Game.Rendering.Frame;
-using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 
@@ -11,7 +10,7 @@ static partial class WorldApp
     /// camera's target (the game's pivot), the hour against sunrise and sunset, the eye's height above the ground, and the weather's rain and
     /// wind.
     /// </summary>
-    static void UpdateAudio(AudioSystem audio, Gpu gpu, WorldScene scene, WorldCamera camera, float hour, double realSeconds)
+    static void UpdateAudio(AudioSystem audio, WorldGpu gpu, WorldScene scene, WorldCamera camera, float hour, double realSeconds)
     {
         var target = camera.Target;
         var eye = camera.Eye;
