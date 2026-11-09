@@ -202,6 +202,7 @@ internal sealed unsafe class GiScene : IDisposable
         var topSlot = SharedTop ? slots[0] : slot;
         instances.Clear();
         records.Clear();
+        objectCasters.Clear();
         BuiltThisFrame = 0;
         seg = null;
         // With the pass meter (MEITOU_PASS_STATS=1) the native list is cut after its barrier and before the top level, to time the barrier, the bottom-level builds and the top level apart.
@@ -272,6 +273,7 @@ internal sealed unsafe class GiScene : IDisposable
             foreach (var inst in farObjects)
                 if (!TryAddObject(inst, objects, lamps, room)) break;
         }
+        UpdateCasters();
         UpdateGrass(eye, foliage);
         UpdateCharacters(eye, characters);
         Evict();
@@ -321,6 +323,65 @@ internal sealed unsafe class GiScene : IDisposable
 
     readonly List<ObjectStreamer.Instance> farObjects = [];
 
+    // ---- what stands still, per cell of the world, for the lamps' cached tiles (LampTiles): the terrain's grids follow the eye and are not counted ----
+
+    const float CasterCell = 128;
+    const int CasterSettleFrames = 60;
+    const int CasterCells = 256;
+    readonly ulong[] casterCells = new ulong[CasterCells * CasterCells];
+    readonly List<(ulong Hash, Vector3 Centre, float Radius)> objectCasters = [], foliageCasterList = [];
+    ulong casterTotal;
+
+    /// <summary>Goes up when something that casts a cached shadow came, went or moved (a building, a tree, a zone streamed in).</summary>
+    public long CasterVersion { get; private set; }
+
+    static ulong CasterHash(ulong blas, in Matrix4x4 m) =>
+        (ulong)(uint)HashCode.Combine(blas, m.M11, m.M13, m.M31, m.M33) << 32 | (uint)HashCode.Combine(m.M22, m.M41, m.M42, m.M43, blas);
+
+    static ulong CellMix(int x, int z) => (ulong)(uint)(x * 73856093 ^ z * 19349663) * 0x9E3779B97F4A7C15UL | 1;
+
+    static int CasterIndex(int x, int z) => (z & (CasterCells - 1)) * CasterCells + (x & (CasterCells - 1));
+
+    void NoteCasters(List<(ulong Hash, Vector3 Centre, float Radius)> list)
+    {
+        foreach (var (hash, centre, radius) in list)
+        {
+            int x0 = (int)MathF.Floor((centre.X - radius) / CasterCell), x1 = (int)MathF.Floor((centre.X + radius) / CasterCell);
+            int z0 = (int)MathF.Floor((centre.Z - radius) / CasterCell), z1 = (int)MathF.Floor((centre.Z + radius) / CasterCell);
+            for (int z = z0; z <= z1; z++)
+                for (int x = x0; x <= x1; x++)
+                    casterCells[CasterIndex(x, z)] ^= hash * CellMix(x, z);
+        }
+    }
+
+    void UpdateCasters()
+    {
+        ulong total = 0;
+        foreach (var (hash, _, _) in objectCasters) total += hash;
+        foreach (var (hash, _, _) in foliageCasterList) total += hash;
+        if (total == casterTotal) return;
+        casterTotal = total;
+        Array.Clear(casterCells);
+        NoteCasters(objectCasters);
+        NoteCasters(foliageCasterList);
+        CasterVersion++;
+    }
+
+    /// <summary>The characters in the scene now: each one's key and the sphere it fits in.</summary>
+    public void CollectMovers(List<(long Key, Vector3 Centre, float Radius)> into) => people?.CollectMovers(into);
+
+    /// <summary>A value that changes when what stands within <paramref name="radius"/> of <paramref name="at"/> does.</summary>
+    public ulong CastersAround(Vector3 at, float radius)
+    {
+        ulong sum = 0;
+        int x0 = (int)MathF.Floor((at.X - radius) / CasterCell), x1 = (int)MathF.Floor((at.X + radius) / CasterCell);
+        int z0 = (int)MathF.Floor((at.Z - radius) / CasterCell), z1 = (int)MathF.Floor((at.Z + radius) / CasterCell);
+        for (int z = z0; z <= z1; z++)
+            for (int x = x0; x <= x1; x++)
+                sum ^= casterCells[CasterIndex(x, z)];
+        return sum;
+    }
+
     /// <summary>The object into the scene when it has a structure (built now within the frame's budget) and the instances stay under <paramref name="limit"/>; false when full.</summary>
     bool TryAddObject(ObjectStreamer.Instance inst, WorldObjectRenderer objects, WorldLamps? lamps, int limit)
     {
@@ -337,6 +398,10 @@ internal sealed unsafe class GiScene : IDisposable
     void AddObject(ObjectStreamer.Instance inst, MeshEntry entry, WorldObjectRenderer objects, WorldLamps? lamps)
     {
         var world = inst.Transform;
+        // What keeps moving (a lift, a rotor, a falling thing) counts only once it has stood still a while: the lamps round it would be traced again every frame. A door counts at once, its shadow must follow it.
+        ulong casterHash = CasterHash(entry.Blas.Address, in world);
+        if (inst.CasterHash != casterHash) (inst.CasterHash, inst.CasterChanged) = (casterHash, frame);
+        if (inst.Placed.DoorIndex >= 0 || frame - inst.CasterChanged >= CasterSettleFrames) objectCasters.Add((casterHash, inst.Centre, inst.Radius));
         world.Translation -= Origin;
         uint first = (uint)records.Count;
         bool cut = false;
@@ -467,6 +532,7 @@ internal sealed unsafe class GiScene : IDisposable
         foliageBlock.Clear();
         foliageRecords.Clear();
         foliageSources.Clear();
+        foliageCasterList.Clear();
         rayFoliage.Clear();
         // The traced sun's trees reach as far as its shadows, nearest first while the budget lasts; the probes' rays are shorter than either.
         foliage.RayInstances(eye, Casters ? MathF.Max(FoliageRange, Range) : FoliageRange, FoliageMinSize, rayFoliage);
@@ -503,6 +569,7 @@ internal sealed unsafe class GiScene : IDisposable
         entry.LastUsed = frame;
         var world = transform;
         world.M14 = 0;
+        foliageCasterList.Add((CasterHash(entry.Blas.Address, in world), world.Translation, 32));
         world.Translation -= foliageOrigin;
         foliageBlock.Add(InstanceRecord.Of(world, (uint)foliageRecords.Count, mask, entry.Blas.Address));
         for (int k = 0; k < entry.Records.Length; k++)

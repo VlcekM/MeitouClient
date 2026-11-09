@@ -330,6 +330,12 @@ sealed unsafe class TracedCharacters : IDisposable
     }
 
     /// <summary>The lamps stopped tracing: the structures go (the kernel stays).</summary>
+    /// <summary>The characters in the scene now, for what must follow them: each one's key and the sphere it fits in.</summary>
+    public void CollectMovers(List<(long Key, Vector3 Centre, float Radius)> into)
+    {
+        foreach (var (c, _, _) in shown) into.Add((c.Key, c.Centre, c.Radius));
+    }
+
     public void Release()
     {
         shown.Clear();

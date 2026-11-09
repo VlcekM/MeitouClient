@@ -63,10 +63,21 @@ sealed partial class GameHost
             InteriorDebug.NoObjectSort = args[0] == "off";
             con.Print("object sort " + args[0]);
         });
+        add("gpu-times", "gpu-times [frames]", "debug: the GPU's mean ms per frame stage over the newest frames (default 60, at most 300), largest first", (args, con) =>
+        {
+            if (profiler is null) { con.Error("no profiler in this run"); return; }
+            con.Print(profiler.GpuMeans(args.Count > 0 ? int.Parse(args[0], System.Globalization.CultureInfo.InvariantCulture) : 60));
+        });
         add("lamps", "lamps list [radius] | lamps off <index...> | lamps on", "debug: the lamps reaching the camera's target (index, position relative to it, colour, power, radius, type, cone, falloff, rule, owner); off leaves those indices out, on brings them all back", (args, con) =>
         {
             if (ActiveLamps is not { } lamps || args.Count == 0) { con.Error("usage: lamps list [radius] | lamps off <index...> | lamps on"); return; }
             if (args[0] == "on") { lamps.DebugOff.Clear(); con.Print("all lamps on"); return; }
+            if (args[0] == "tiles")
+            {
+                if (args.Count > 1) lamps.TilesEnabled = args[1] == "on";
+                con.Print($"lamp tiles {(lamps.TilesEnabled ? "on" : "off")}: {lamps.TilesDescription}");
+                return;
+            }
             if (args[0] == "off") { foreach (var a in args.Skip(1)) lamps.DebugOff.Add(int.Parse(a)); con.Print($"{lamps.DebugOff.Count} lamps off"); return; }
             float radius = args.Count > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 0;
             var at = camera.Target;

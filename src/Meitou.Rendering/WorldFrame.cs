@@ -856,6 +856,7 @@ static partial class WorldFrame
         /// <summary>Whether this frame's sun is traced (<see cref="WorldFrame.BeginFrame"/>; docs/render-shadows.md "Traced sun").</summary>
         public bool Traced;
         internal Gi.TracedSunPass? TracedSun;
+        internal Gi.LampTiles? LampTiles;
         internal Gi.TracedSunVolume? TracedSunVolume;
         /// <summary>The Vulkan post chain (its reflection and GI also read it); null on a backend with a seam-only chain.</summary>
         public PostProcess? Post;

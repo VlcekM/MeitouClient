@@ -383,6 +383,14 @@ static partial class WorldFrame
         }
         // With the lamps traced the rays stop their light at the walls: the room's hull would only trim the wall round a door into a dark polygon.
         if (gpu.Lamps is { } hull) hull.RoomMargin = gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } ? WorldLamps.TracedRoomMargin : WorldLamps.RoomSurfaceMargin;
+        // The lamps' visibility cache: while their shadows are on and the traced scene exists.
+        if (gpu.Lamps is { } tiledLamps)
+        {
+            bool tiled = Gi.LampTiles.Enabled && gpu.Post is { Options.LampShadows: true, GiResolve: > 0 } && gpu.GiActive && gpu.Gi is not null;
+            if (tiled) gpu.LampTiles ??= new Gi.LampTiles(gpu.Post!.Gpu);
+            tiledLamps.Tiles = tiled ? gpu.LampTiles : null;
+            if (tiled) gpu.LampTiles!.BeginFrame(f.Eye, gpu.Gi);
+        }
         gpu.Lamps?.Update(f.Eye, gpu.Objects, WorldLights.DaylightFactor(f.Hour, f.Scene.Clock.Sunrise, f.Scene.Clock.Sunset));
 
         // The traced scene of the global illumination: its acceleration structures for this eye (docs/render-gi.md).
@@ -397,6 +405,7 @@ static partial class WorldFrame
             // Traced, the objects cast as far as the cascades reached (the probes see them too).
             gi.Range = gpu.Traced && gpu.Shadow is { } reach ? Math.Max(Gi.GiScene.ProbeRange, reach.Settings.Range) : Gi.GiScene.ProbeRange;
             gi.Update(f.Eye, heights, objects, gpu.Foliage is { Enabled: true } giFoliage ? giFoliage : null, gpu.Lamps, gpu.Characters);
+            if (gpu.Lamps is { Tiles: { } lampTiles } tileLamps) { lampTiles.Fill(gi, tileLamps); StageClock.Sub("lamp tiles"); }
             // The traced sun's volume for what draws no traced pixel, before anything reads it (the reflection first).
             if (gpu.Traced && gpu.Shadow is { TracedVolume: not null } volumeShadow && gpu.Post is { } volumePost)
             {
@@ -879,8 +888,9 @@ static partial class WorldFrame
         var camera = f.Camera;
 
         post.RunGiResolve();
+        StageClock.Lap(14, "gi resolve");
         gpu.Post?.RunLampShadows(gpu.Gi, gpu.Lamps);
-        StageClock.Lap(14, "gi resolve");   // the resolve is the gi stage's (its time was the particles stage's before, with the shafts and the fog volumes)
+        StageClock.Lap(StageClock.LampShadows);
         gpu.Post?.RunReflections(gpu.GiActive ? gpu.Probes : null, gpu.Gi);
         StageClock.Lap(14, "reflections");
 

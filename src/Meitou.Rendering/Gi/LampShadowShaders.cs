@@ -231,6 +231,99 @@ static class LampShadowShaders
         """;
 
     /// <summary>
+    /// The lamp tiles' fill (LampTiles): one workgroup per 8 texels square of the areas of a frame, one closest-hit ray per texel from the lamp, the distance over the lamp's reach (1: nothing).
+    /// Two rays, one for what stands on the ground and one for the ground (<c>groundExit</c>).
+    /// </summary>
+    public static readonly string TileFill = $$"""
+        #version 460
+        #extension GL_EXT_ray_query : require
+        #extension GL_EXT_buffer_reference : require
+        #extension GL_EXT_buffer_reference_uvec2 : require
+        #extension GL_EXT_scalar_block_layout : require
+        layout(local_size_x = 8, local_size_y = 8) in;
+        {{Meitou.Rendering.Gpu.BindlessTable.Declarations(1)}}
+
+        layout(set = 0, binding = 0) uniform accelerationStructureEXT uScene;
+        {{GiShaders.GeometryStruct}}
+        layout(set = 0, binding = 1, std430) readonly buffer Geometries { Geometry geometries[]; };
+        layout(set = 0, binding = 2, std140) uniform Jobs
+        {
+            vec4 uHeader;           // x: the jobs
+            vec4 uJob[350 * 5];     // position (relative to the scene's origin) and reach; axis and cos of the outer half angle; tile x, y, side, sphere; the area of the tile traced (x, y, w, h);
+                                    // emitter, first workgroup, what a ray leaves out at its start, mode (0 still, 1 characters, 2 everything, 3 nothing)
+        };
+        layout(set = 0, binding = 3, r16) uniform writeonly image2D uAtlas;
+        {{Constants}}
+        {{LampShaders.TileMapping}}
+        {{GiShaders.HitBuffers}}
+        {{TracedSunShaders.CasterCutout}}
+
+        // What stands on the ground: the nearest kept surface.
+        float objectHit(vec3 from, vec3 dir, float near, float reach, uint emitter, uint mask)
+        {
+            uint flags = gl_RayFlagsCullBackFacingTrianglesEXT;
+            if (emitter != 0u) flags |= gl_RayFlagsNoOpaqueEXT;
+            rayQueryEXT q;
+            rayQueryInitializeEXT(q, uScene, flags, mask, from, near, dir, reach);
+            while (rayQueryProceedEXT(q))
+            {
+                int record = rayQueryGetIntersectionInstanceCustomIndexEXT(q, false) + rayQueryGetIntersectionGeometryIndexEXT(q, false);
+                if ((emitter == 0u || geometries[record].emitter != emitter) && casterKept(record,
+                    rayQueryGetIntersectionPrimitiveIndexEXT(q, false), rayQueryGetIntersectionBarycentricsEXT(q, false), 2.0))
+                    rayQueryConfirmIntersectionEXT(q);
+            }
+            return rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT ? reach : rayQueryGetIntersectionTEXT(q, true);
+        }
+
+        // The ground: where a ray from the lamp comes out of it, on a slope facing away from the lamp. The grid it is traced on is coarser than the drawn ground, so where the ray goes in
+        // says nothing (a graze of the grid would shade the ground behind it): this is the rule of a ray from the surface to the lamp, passing up through the grid and stopped by a rise.
+        float groundExit(vec3 from, vec3 dir, float near, float reach)
+        {
+            rayQueryEXT q;
+            rayQueryInitializeEXT(q, uScene, gl_RayFlagsCullFrontFacingTrianglesEXT | gl_RayFlagsOpaqueEXT, {{TracedSunShaders.LampTileGround}}, from, near, dir, reach);
+            while (rayQueryProceedEXT(q)) { }
+            return rayQueryGetIntersectionTypeEXT(q, true) == gl_RayQueryCommittedIntersectionNoneEXT ? reach : rayQueryGetIntersectionTEXT(q, true);
+        }
+
+        float firstHit(vec3 from, vec3 dir, float near, float reach, uint emitter, int mode)
+        {
+            if (mode == 3) return 1.0;
+            if (mode == 1) return clamp(objectHit(from, dir, near, reach, 0u, {{TracedSunShaders.Characters}}u) / reach, 0.0, 1.0);
+            uint mask = {{TracedSunShaders.LampTileObjects}}u;
+            if (mode == 2) mask |= {{TracedSunShaders.Characters}}u;
+            return clamp(min(objectHit(from, dir, near, reach, emitter, mask), groundExit(from, dir, near, reach)) / reach, 0.0, 1.0);
+        }
+
+        void main()
+        {
+            int jobs = int(uHeader.x), job = 0;
+            uint group = gl_WorkGroupID.x;
+            int low = 0, high = jobs - 1;
+            while (low < high)
+            {
+                int mid = (low + high + 1) / 2;
+                if (float(group) >= uJob[mid * 5 + 4].y) low = mid; else high = mid - 1;
+            }
+            job = low;
+            vec4 p = uJob[job * 5], axis = uJob[job * 5 + 1], tile = uJob[job * 5 + 2], area = uJob[job * 5 + 3], more = uJob[job * 5 + 4];
+            uint inGroup = group - uint(more.y), perRow = uint((int(area.z) + 7) / 8);
+            ivec2 texel = ivec2(area.xy) + ivec2(int(inGroup % perRow), int(inGroup / perRow)) * 8 + ivec2(gl_LocalInvocationID.xy);
+            if (texel.x >= int(area.x + area.z) || texel.y >= int(area.y + area.w)) return;
+            vec2 uv = (vec2(texel) + 0.5) / tile.z;
+            vec3 dir;
+            if (tile.w > 0.5) dir = lampOctDir(uv);
+            else
+            {
+                vec3 x, y;
+                lampBasis(axis.xyz, x, y);
+                vec2 q = (uv * 2.0 - 1.0) * lampTileTan(axis.w);
+                dir = normalize(axis.xyz + x * q.x + y * q.y);
+            }
+            imageStore(uAtlas, ivec2(tile.xy) + texel, vec4(firstHit(p.xyz, dir, more.z, p.w, uint(more.x), int(more.w))));
+        }
+        """;
+
+    /// <summary>
     /// The lost light times the albedo and the haze's transmittance (as the fragment's light was hazed; <see cref="GiResolveShaders.Resolve"/>), blended off the
     /// scene (<c>dst - src</c>; red, green and blue).
     /// </summary>

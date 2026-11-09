@@ -79,11 +79,13 @@ static partial class NativeShaders
             uint lightCells;
             uint lightIndex;
             uint lightData;
+            uint lampTiles;
             vec4 atmoNight;
             vec4 atmoCloud;
             vec4 atmoCloudWind;
             uint atmoClouds;
             uint atmoCloudsTile;
+            uint lampMovers;
         } frame;
 
         """;
@@ -184,7 +186,7 @@ static partial class NativeShaders
         ["uGiParams"] = "frame.giParams", ["uGiGrid"] = "frame.giGrid", ["uGiIrradiance"] = "textures2D[frame.giIrradiance]",
         ["uGiDistance"] = "textures2D[frame.giDistance]", ["uGiBase"] = "textures2D[frame.giBase]",
         ["uLightGrid"] = "frame.lightGrid", ["uLightCells"] = "textures2D[frame.lightCells]", ["uLightIndex"] = "textures2D[frame.lightIndex]",
-        ["uLightData"] = "textures2D[frame.lightData]",
+        ["uLightData"] = "textures2D[frame.lightData]", ["uLampTiles"] = "textures2D[frame.lampTiles]", ["uLampMovers"] = "textures2D[frame.lampMovers]",
     };
 
     /// <summary>The per-view uniforms the world shaders share: <see cref="ViewConstants"/> members.</summary>
@@ -336,6 +338,7 @@ unsafe struct FrameConstants
     [FieldOffset(8624)] public uint LightCells;
     [FieldOffset(8628)] public uint LightIndex;
     [FieldOffset(8632)] public uint LightData;
+    [FieldOffset(8636)] public uint LampTiles;
     /// <summary>Meitou night air (<c>uAtmoNight</c>, docs/formats/sky.md "Night air"): rgb the colour at full night, w its weight.</summary>
     [FieldOffset(8640)] public Vector4 AtmoNight;
     /// <summary>Meitou cloud shadows (<c>uAtmoCloud</c>, <c>uAtmoCloudWind</c>, docs/formats/clouds.md "Meitou cloud shadows"): the layer's numbers, the wind shift, and its two textures.</summary>
@@ -343,6 +346,7 @@ unsafe struct FrameConstants
     [FieldOffset(8672)] public Vector4 AtmoCloudWind;
     [FieldOffset(8688)] public uint AtmoClouds;
     [FieldOffset(8692)] public uint AtmoCloudsTile;
+    [FieldOffset(8696)] public uint LampMovers;
 
     /// <summary>The frame-global uniform each member holds (<see cref="FrameGlobals"/> names, as <c>SkyRenderer</c> publishes them): offset and size.</summary>
     public static readonly (string Name, int Offset, int Size)[] Uniforms =
@@ -363,8 +367,8 @@ unsafe struct FrameConstants
         ("uShadowBlocker", BindlessKind.Texture2DArray, 232), ("uShadowLandmark", BindlessKind.Shadow2D, 236),
         ("uWeatherGround", BindlessKind.Texture2D, 272), ("uWeatherDustNoise", BindlessKind.Texture2D, 276),
         ("uGiIrradiance", BindlessKind.Texture2D, 8592), ("uGiDistance", BindlessKind.Texture2D, 8596), ("uGiBase", BindlessKind.Texture2D, 8600),
-        ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632),
-        ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692),
+        ("uLightCells", BindlessKind.Texture2D, 8624), ("uLightIndex", BindlessKind.Texture2D, 8628), ("uLightData", BindlessKind.Texture2D, 8632), ("uLampTiles", BindlessKind.Texture2D, 8636),
+        ("uAtmoClouds", BindlessKind.Texture2D, 8688), ("uAtmoCloudsTile", BindlessKind.Texture2D, 8692), ("uLampMovers", BindlessKind.Texture2D, 8696),
     ];
 }
 

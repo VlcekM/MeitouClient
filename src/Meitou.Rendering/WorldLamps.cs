@@ -17,7 +17,7 @@ internal sealed class WorldLamps : IDisposable
 {
     public const int Cells = 64, IndexWidth = 1024, IndexRows = 16, MaxLamps = 1024;
     public const float CellSize = 128;
-    internal const int MaxRoomEdges = 32, DataWidth = 5 + MaxRoomEdges;
+    internal const int MaxRoomEdges = 32, DataWidth = 6 + MaxRoomEdges;
     // Allow for the small offset between collision masks and visible wall/floor surfaces.
     internal const float RoomSurfaceMargin = 0.5f, TracedRoomMargin = 100000f;
     /// <summary>How far past an interior lamp's room hull its light still reaches (set each frame): <see cref="RoomSurfaceMargin"/>, or <see cref="TracedRoomMargin"/> when the lamps are traced.</summary>
@@ -33,6 +33,9 @@ internal sealed class WorldLamps : IDisposable
     // The world's lamps at the start of lamps (those of no replaced building); the placed buildings' follow.
     int worldCount;
     readonly GpuTexture[] cells, index, data;
+    readonly GpuTexture noTiles;
+    /// <summary>The lamps' visibility cache while the lamps are shadowed; null: none (each lamp's tile reads as none).</summary>
+    internal Gi.LampTiles? Tiles { get; set; }
     readonly GpuSampler nearest;
     readonly float[] cellValues = new float[Cells * Cells * 2];
     readonly float[] indexValues = new float[IndexWidth * IndexRows];
@@ -51,6 +54,14 @@ internal sealed class WorldLamps : IDisposable
     /// <summary>The lamps of the world, once loaded; and those in this frame's grid.</summary>
     public int Count => lamps?.Length ?? 0;
     public int InGrid { get; private set; }
+
+    /// <summary>Debug (the console's <c>lamps tiles</c>): the cached tiles, or the per-pixel rays when off.</summary>
+    public bool TilesEnabled { get => Gi.LampTiles.Enabled; set => Gi.LampTiles.Enabled = value; }
+    /// <summary>Debug: the cache's state.</summary>
+    public string TilesDescription => Tiles?.Describe() ?? "none";
+
+    /// <summary>How far from the eye the lamps can hold a tile: the traced scene's range.</summary>
+    public float TileReach { get; set; } = float.MaxValue;
 
     /// <summary>Debug (the console's <c>lamps</c>): the lamps left out of the grid, by index.</summary>
     public HashSet<int> DebugOff { get; } = [];
@@ -88,6 +99,10 @@ internal sealed class WorldLamps : IDisposable
         g.Publish("uLightCells", () => Sampled(cells[slot]));
         g.Publish("uLightIndex", () => Sampled(index[slot]));
         g.Publish("uLightData", () => Sampled(data[slot]));
+        noTiles = ctx.CreateTexture(new TextureDesc(InternalFormat.R16, 1, 1, Use: use, Name: "lamp tiles none"));
+        using (var batch = ctx.Uploads.Begin()) batch.Write(noTiles, 0, 0, new PixelRect(0, 0, 1, 1), stackalloc byte[2]);
+        g.Publish("uLampTiles", () => Sampled(Tiles?.Atlas ?? noTiles));
+        g.Publish("uLampMovers", () => Sampled(Tiles?.Movers ?? noTiles));
     }
 
     SampledTexture Sampled(GpuTexture t) => new(nearest, t.View());
@@ -236,14 +251,17 @@ internal sealed class WorldLamps : IDisposable
             dataValues[row + 1] = new Vector4(l.Colour * power, l.Type == WorldLightType.Spot ? 1 : 0);
             dataValues[row + 2] = new Vector4(l.Direction, MathF.Cos(outer * 0.5f));
             dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), l.Falloff > 0 ? l.Falloff : 1, room?.Footprint.Length ?? 0, Emitter(l.PlacementId));
+            // The lamp's place in the cache: a carried lamp's is traced whole each frame.
+            var tile = Tiles is not { } shadows ? default : lamp < lamps.Length ? shadows.Place(l, TileReach) : shadows.PlaceMoving(l);
+            dataValues[row + 4] = new Vector4(room is null ? 0 : room.YMin - RoomMargin, room is null ? 0 : room.YMax + RoomMargin, tile.X, tile.Y);
+            dataValues[row + 5] = new Vector4(Gi.LampTiles.SourceRadius(l), tile.Z, tile.W, 0);
             if (room is null) continue;
-            dataValues[row + 4] = new Vector4(room.YMin - RoomMargin, room.YMax + RoomMargin, 0, 0);
             for (int e = 0; e < room.Footprint.Length; e++)
             {
                 var at = room.Footprint[e];
                 var edge = room.Footprint[(e + 1) % room.Footprint.Length] - at;
                 var inward = Vector2.Normalize(new Vector2(-edge.Y, edge.X));
-                dataValues[row + 5 + e] = new Vector4(inward, -Vector2.Dot(inward, at) + RoomMargin, 0);
+                dataValues[row + 6 + e] = new Vector4(inward, -Vector2.Dot(inward, at) + RoomMargin, 0);
             }
         }
 
@@ -295,5 +313,6 @@ internal sealed class WorldLamps : IDisposable
     public void Dispose()
     {
         foreach (var t in cells.Concat(index).Concat(data)) t.Dispose();
+        noTiles.Dispose();
     }
 }

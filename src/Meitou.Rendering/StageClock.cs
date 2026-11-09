@@ -8,7 +8,7 @@ namespace Meitou.Rendering;
 /// </summary>
 static class StageClock
 {
-    public static readonly string[] Names = ["upd-terrain", "upd-objects", "upd-foliage", "sky-prepare", "reflection", "sky-draw", "terrain", "objects", "foliage", "water", "post", "ui", "shadows", "particles", "gi", "uploads", "cull", "bake", "shafts", "fog", "characters", "upd-chars", "submit", "driver-wait", "host", "blood", "sim", "birds"];
+    public static readonly string[] Names = ["upd-terrain", "upd-objects", "upd-foliage", "sky-prepare", "reflection", "sky-draw", "terrain", "objects", "foliage", "water", "post", "ui", "shadows", "particles", "gi", "uploads", "cull", "bake", "shafts", "fog", "characters", "upd-chars", "submit", "driver-wait", "host", "blood", "sim", "birds", "lamp-shadows"];
 
     // Stages 15 to 17 exist on the GPU only: the pre-frame command buffer's uploads (what it holds besides the next two), the foliage and grass culls and the
     // impostor bakes, timed by stamps in that buffer (FrameProfiler.PreStamp). The render thread has no lap for them. 18 and 19 are the light shafts and the fog volumes, 20 and 21 the characters' colour and motion draws and their update.
@@ -20,6 +20,8 @@ static class StageClock
     public const int Sim = 26;
     // 27 is the game host's birds (the step runs on its own thread; this is the host's share: collecting the last step's flocks and starting the next).
     public const int Birds = 27;
+    // 28 is the lamps' traced shadows (part of the gi group in the legend).
+    public const int LampShadows = 28;
     public static int LastStage { get; private set; }
     public static bool SubmissionStarted { get; private set; }
     public static bool CpuOnly(int stage) => stage is DriverWait or Sim;

@@ -11,6 +11,154 @@ namespace Meitou.Rendering;
 /// </summary>
 static class LampShaders
 {
+    /// <summary>
+    /// A lamp tile's mapping (Gi.LampTiles): a sphere by octahedral directions, a cone by its plane, a little wider than the cone so a lookup at the rim stays inside. For the fill and for the lookup.
+    /// </summary>
+    public const string TileMapping = """
+        const float LAMP_TILE_GUARD = 1.04;
+        void lampBasis(vec3 a, out vec3 x, out vec3 y)
+        {
+            float s = a.z >= 0.0 ? 1.0 : -1.0, e = -1.0 / (s + a.z), f = a.x * a.y * e;
+            x = vec3(1.0 + s * a.x * a.x * e, s * f, -s * a.x);
+            y = vec3(f, s + a.y * a.y * e, -a.y);
+        }
+        float lampTileTan(float cosOuter) { return sqrt(max(1.0 - cosOuter * cosOuter, 0.0)) / max(cosOuter, 0.05) * LAMP_TILE_GUARD; }
+        vec2 lampOctWrap(vec2 v) { return (1.0 - abs(v.yx)) * vec2(v.x >= 0.0 ? 1.0 : -1.0, v.y >= 0.0 ? 1.0 : -1.0); }
+        vec2 lampOctUv(vec3 d)
+        {
+            vec2 p = d.xz / (abs(d.x) + abs(d.y) + abs(d.z));
+            if (d.y < 0.0) p = lampOctWrap(p);
+            return p * 0.5 + 0.5;
+        }
+        vec3 lampOctDir(vec2 uv)
+        {
+            vec2 p = uv * 2.0 - 1.0;
+            float y = 1.0 - abs(p.x) - abs(p.y);
+            if (y < 0.0) p = lampOctWrap(p);
+            return normalize(vec3(p.x, y, p.y));
+        }
+
+        """;
+
+    /// <summary>
+    /// <c>lampTileVisibility</c>: how much of a lamp reaches a point, from its tile (<c>uLampTiles</c>; column 4 of the lamp's row: z the place, w the side, negative for a sphere, 0 none; column 5: x the
+    /// lamp's radius, y and z the moving layer's place and side, in <c>uLampMovers</c>). The penumbra is the lamp's own: its radius seen past the blockers a fixed spiral of lookups finds. A lookup beside the point is compared with the surface's plane there, not with the
+    /// point's own depth (a slope turned from the lamp would shade itself). Nothing here changes from frame to frame.
+    /// </summary>
+    public const string TileVisibility = """
+        ivec2 lampMoverCorner = ivec2(-1);   // the lamp's moving layer in uLampMovers, set by lampTileVisibility (x -1: none)
+        float lampTileAt(ivec2 corner, int side, ivec2 q)
+        {
+            ivec2 at = clamp(q, ivec2(0), ivec2(side - 1));
+            float v = texelFetch(uLampTiles, corner + at, 0).r;
+            return lampMoverCorner.x < 0 ? v : min(v, texelFetch(uLampMovers, lampMoverCorner + at, 0).r);
+        }
+        // Whether a point at depth receiver gets past the blockers, filtered over a texel.
+        float lampTileLit(ivec2 corner, int side, vec2 st, float receiver)
+        {
+            vec2 at = st - 0.5, base = floor(at), f = at - base;
+            ivec2 q = ivec2(base);
+            float l00 = step(receiver, lampTileAt(corner, side, q));
+            float l10 = step(receiver, lampTileAt(corner, side, q + ivec2(1, 0)));
+            float l01 = step(receiver, lampTileAt(corner, side, q + ivec2(0, 1)));
+            float l11 = step(receiver, lampTileAt(corner, side, q + ivec2(1, 1)));
+            return mix(mix(l00, l10, f.x), mix(l01, l11, f.x), f.y);
+        }
+        // How far from the lamp the surface lies along another ray: the plane through the point, a lookup beside it reads the surface beside it.
+        float lampTilePlane(float d, float facing, vec3 n, vec3 ray)
+        {
+            float along = dot(n, ray);
+            return along < -1e-3 ? clamp(d * facing / along, 0.5 * d, 2.0 * d) : d;
+        }
+        // The direction from the lamp of a place in its tile.
+        vec3 lampTileRay(vec2 st, int side, bool sphere, vec3 axis, vec3 x, vec3 y, float span)
+        {
+            vec2 uv = st / float(side);
+            if (sphere) return lampOctDir(uv);
+            vec2 q = (uv * 2.0 - 1.0) * span;
+            return normalize(axis + x * q.x + y * q.y);
+        }
+        float lampTileVisibility(int lamp, vec3 toLamp, float d, vec3 n)
+        {
+            vec4 t = texelFetch(uLightData, ivec2(4, lamp), 0);
+            int side = int(abs(t.w));
+            if (side < 1) return 1.0;
+            vec4 m = texelFetch(uLightData, ivec2(5, lamp), 0);
+            float reach = texelFetch(uLightData, ivec2(0, lamp), 0).w, radius = m.x;
+            int moverPlace = int(m.y), moverRow = moverPlace / 128;
+            lampMoverCorner = int(m.z) == side ? ivec2(moverPlace - moverRow * 128, moverRow) * LAMP_TILE_UNIT : ivec2(-1);
+            vec3 l = toLamp / max(d, 1e-4);
+            vec2 uv;
+            float texelPerDepth, span = 0.0;
+            vec3 axis = vec3(0.0), x = vec3(0.0), y = vec3(0.0);
+            bool sphere = t.w < 0.0;
+            if (sphere)
+            {
+                uv = lampOctUv(-l);
+                texelPerDepth = 3.5 / float(side);
+            }
+            else
+            {
+                vec4 s = texelFetch(uLightData, ivec2(2, lamp), 0);
+                axis = s.xyz;
+                span = lampTileTan(s.w);
+                lampBasis(axis, x, y);
+                float z = max(dot(-l, s.xyz), 1e-3);
+                uv = vec2(dot(-l, x), dot(-l, y)) / z / span * 0.5 + 0.5;
+                texelPerDepth = 2.0 * span / float(side);
+            }
+            float texel = texelPerDepth * d;
+            float nl = clamp(dot(n, l), 0.03, 1.0);
+            float slope = min(sqrt(1.0 - nl * nl) / nl, 8.0), margin = 1.0 + texel * (1.0 + slope), facing = dot(n, -l);
+            int place = int(t.z), row = place / 128;
+            ivec2 corner = ivec2(place - row * 128, row) * LAMP_TILE_UNIT;
+            vec2 st = uv * float(side);
+            #ifdef LAMP_SKIN
+            // A character's skin: one filtered lookup. Its shadows fall on a small, busy surface, and characters overlap on screen by the dozen in a fight.
+            return lampTileLit(corner, side, st, (d - margin - 2.0) / reach);
+            #endif
+
+            // Is anything in the way of any part of the lamp, and how far off it: the region a blocker near the lamp can cover, read by a spiral.
+            float search = clamp(radius / (texelPerDepth * max(0.1 * d, 15.0)), 1.5, 48.0);
+            float sum = 0.0, held = 0.0;
+            for (int k = 0; k < 8; k++)
+            {
+                float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / 8.0) * search;
+                vec2 p = st + vec2(cos(a), sin(a)) * r;
+                float v = lampTileAt(corner, side, ivec2(floor(p)));
+                if (v < 0.9999 && v < (lampTilePlane(d, facing, n, lampTileRay(p, side, sphere, axis, x, y, span)) - margin) / reach) { sum += v; held += 1.0; }
+            }
+            if (held < 0.5) return 1.0;
+            float blocker = sum / held * reach;
+            float spread = clamp(radius * max(d - blocker, 0.0) / max(blocker, 1.0) / texel, 1.0, 64.0);
+
+            // The filter: a fixed spiral of lookups over the penumbra, more for a wide one.
+            float lit = 0.0;
+            if (spread < 2.5)
+            {
+                // A narrow edge: a few filtered lookups keep it smooth.
+                for (int k = 0; k < 4; k++)
+                {
+                    float a = float(k) * 1.57079633 + 0.6, r = 0.75 * spread;
+                    vec2 p = st + vec2(cos(a), sin(a)) * r;
+                    lit += lampTileLit(corner, side, p, (lampTilePlane(d, facing, n, lampTileRay(p, side, sphere, axis, x, y, span)) - margin) / reach);
+                }
+                return lit / 4.0;
+            }
+            // A wide one: single texels, a spiral dense enough for them.
+            int taps = spread > 8.0 ? 24 : 12;
+            for (int k = 0; k < taps; k++)
+            {
+                float a = float(k) * 2.39996323, r = sqrt((float(k) + 0.5) / float(taps)) * spread;
+                vec2 p = st + vec2(cos(a), sin(a)) * r;
+                float v = lampTileAt(corner, side, ivec2(floor(p)));
+                lit += v >= 0.9999 || v >= (lampTilePlane(d, facing, n, lampTileRay(p, side, sphere, axis, x, y, span)) - margin) / reach ? 1.0 : 0.0;
+            }
+            return lit / float(taps);
+        }
+
+        """;
+
     public const string Lighting = """
         #ifndef LAMP_VISIBILITY
         #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) 1.0
@@ -53,7 +201,7 @@ static class LampShaders
                     bool inside = true;
                     for (int e = 0; e < edges; e++)
                     {
-                        vec3 plane = texelFetch(uLightData, ivec2(5 + e, lamp), 0).xyz;
+                        vec3 plane = texelFetch(uLightData, ivec2(6 + e, lamp), 0).xyz;
                         if (dot(plane.xy, world.xz) + plane.z < 0.0) { inside = false; break; }
                     }
                     if (!inside) continue;
@@ -99,5 +247,5 @@ static class LampShaders
         """;
 
     /// <summary>The defines <see cref="Lighting"/> needs, ahead of it.</summary>
-    public static string Defines => $"#define LAMP_INDEX_WIDTH {WorldLamps.IndexWidth}\n#define LAMP_DIFFUSE {(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular).ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture)}\n";
+    public static string Defines => $"#define LAMP_INDEX_WIDTH {WorldLamps.IndexWidth}\n#define LAMP_TILE_UNIT {Gi.LampTiles.MinTile}\n#define LAMP_DIFFUSE {(1 - Meitou.Data.World.KenshiLighting.DielectricSpecular).ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture)}\n";
 }

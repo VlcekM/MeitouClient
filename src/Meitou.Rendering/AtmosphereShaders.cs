@@ -114,8 +114,10 @@ static class AtmosphereShaders
         uniform sampler2D uGiIrradiance, uGiDistance, uGiBase;
         {{Gi.GiShaders.ProbeSampling}}
         uniform vec4 uLightGrid;      // the lamps (docs/render-lights.md): the grid's corner x, z, its cell size, cells per side (0: no lamps)
-        uniform sampler2D uLightCells, uLightIndex, uLightData;
-        {{LampShaders.Defines}}{{LampShaders.Lighting}}
+        uniform sampler2D uLightCells, uLightIndex, uLightData, uLampTiles, uLampMovers;
+        {{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
+        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampTileVisibility(lamp, toLamp, d, n)
+        {{LampShaders.Lighting}}
 
         // ---- the weather's surfaces (docs/formats/weather.md "Rain and wetness", "Dust") ----
         // common/wet.hlsl makeWet: waterRel = the water's height minus the pixel's, edge the width of the water-line band (0.5 objects and foliage, 2 terrain).

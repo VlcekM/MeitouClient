@@ -16,6 +16,8 @@ static class TracedSunShaders
     public const byte TerrainFine = 0x01, Objects = 0x02, Foliage = 0x04, TerrainCoarse = 0x08, SmallFoliage = 0x10, Grass = 0x20, Characters = 0x40;
     public const byte GiMask = TerrainFine | Objects | Foliage | TerrainCoarse;
     public const byte LampMask = GiMask | SmallFoliage | Grass | Characters;
+    /// <summary>What a lamp's cached tile holds (LampTiles): what stands still and does not follow the eye, the ground apart as it takes its own ray.</summary>
+    public const byte LampTileObjects = Objects | Foliage | SmallFoliage, LampTileGround = TerrainFine | TerrainCoarse;
 
     /// <summary>
     /// A shadow ray's cut-out test at a candidate: kept where the map the draw cuts with reaches its threshold (an object part's own pair for the casters, else the probes'). A grass

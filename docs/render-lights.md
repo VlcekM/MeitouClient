@@ -74,3 +74,16 @@ The game has none: this is Meitou's. From KenshiNative's traced lamp shadows (ne
 - The lights of weather effects are not in the list (formats/lights.md).
 - **Observed** (save spotlight-cross, console `lamps`): the pale blue band with a straight edge and stripes on the dune ripples is one lamp of `lights_otto.mod` (`5430`, spot, cone 90/100, almost horizontal): it goes with that lamp alone. Whether the original shows the same band is **Unknown** (only its formula and the spot direction rule are **Verified**).
 - The Large Torch Post's light may sit about 25 units above its flame (scale applied twice, as in the exe); not checked in a picture yet.
+
+## Lamp tiles
+
+Replaces the per-pixel rays of "Traced lamp shadows" while on (`Gi/LampTiles`, console `lamps tiles on|off`). Every lamp of a pixel is shadowed, with no limit on their number.
+
+- **Layers.** Each lamp near the eye holds a distance tile, traced from the lamp: still world in one atlas (8192², R16), characters in a second (4096²), the lookup taking the nearer. A carried lamp's tile is traced whole each frame (16 at most, nearest first come).
+- **Mapping.** A cone on its plane, a point lamp or a cone over 150° by octahedral directions. Side from reach and cone for about 1.25 units per texel at the end of the reach, halved past 1500 and 3500 units from the eye.
+- **Invalidation.** `GiScene` keeps a hash per 128-unit cell of the object and foliage instances, so anything placed, removed or moved (a zone streamed in, a building built or ruined, a door) retraces the lamps whose reach holds that cell, 3 M rays a frame at most. An object counts once it has stood still 60 frames (a door at once), so what keeps moving retraces nothing; it casts as it stood when its tile was traced. A tile that must be retraced waits 2 frames between traces within 600 units of the eye, 16 beyond.
+- **Ground.** Rays leave the ground where they come out of it (front faces culled): the traced grid is coarser than the drawn ground, and the first hit along a graze shaded the ground behind it (**Observed** in save spotlight-cross, as dark arcs round each lamp).
+- **Penumbra.** The source radius comes from the reach (0.005 of it, 1 to 2.5 units; the LIGHT record has no size field, **Verified** in `fcs.def` and [lights](formats/lights.md)). A spiral finds the blockers, a second one filters, each lookup compared with the surface's plane at its own place. Coarse levels of nearest blockers were tried and dropped: they read a slope's own near edge as a blocker, and drew squares (**Observed**, spotlight-cross). Skin takes one filtered lookup.
+- **Cost (Observed, 2560×1440, RTX 4090, The Hub with Ultimate Cities, 123 lamps within 1500 units).** Frame GPU time with tiles against the per-pixel rays: 11.3 against 11.8 ms standing in the town, 15.7 against 14.6 ms in a night fight of 120 characters (the worst case measured; 0.5 M rays a frame for the characters).
+- **Unknown.** The lamps' traced bounces (`giLampVisibility`) still use their own rays.
+
