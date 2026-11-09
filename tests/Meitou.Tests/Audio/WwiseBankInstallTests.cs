@@ -88,7 +88,9 @@ public class WwiseBankInstallTests
         {
             var bank = Bank($"SFX_Amb_{biome}");
             var events = bank.Objects.OfType<WwiseEvent>().Select(e => e.Id).ToHashSet();
-            var expected = new HashSet<uint> { WwiseHash.Id($"Enter_{biome}_Day"), WwiseHash.Id($"Enter_{biome}_Night"), WwiseHash.Id($"Leave_{biome}") };
+            var expected = new HashSet<uint> { WwiseHash.Id($"Enter_{biome}_Day"), WwiseHash.Id($"Enter_{biome}_Night"),
+                WwiseHash.Id($"Leave_{biome}") };
+
             Assert.Equal(expected, events);
             foreach (var time in new[] { "Day", "Night" })
             {

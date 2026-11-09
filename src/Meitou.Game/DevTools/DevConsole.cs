@@ -20,7 +20,10 @@ public sealed record ConsoleCommand(string Name, string Usage, string Help, Acti
     /// <summary>
     /// The <c>--flags</c> the usage text names, in order (what Tab offers for a word starting with a dash, and what help lists).
     /// </summary>
-    public IReadOnlyList<string> Flags => System.Text.RegularExpressions.Regex.Matches(Usage, @"(?<![\w-])--[a-z][a-z0-9-]*").Select(m => m.Value).Distinct().ToList();
+    public IReadOnlyList<string> Flags => System.Text.RegularExpressions.Regex.Matches(Usage, @"(?<![\w-])--[a-z][a-z0-9-]*")
+        .Select(m => m.Value)
+        .Distinct()
+        .ToList();
 }
 
 /// <summary>
@@ -94,7 +97,11 @@ public sealed class DevConsole
 
     public void Error(string text) => Print(text, Kind.Error);
 
-    public void Clear() { _lines.Clear(); Scroll = 0; }
+    public void Clear()
+    {
+        _lines.Clear();
+        Scroll = 0;
+    }
 
     // ---- editing
 
@@ -131,7 +138,13 @@ public sealed class DevConsole
             _historyAt = _history.Count;
         }
         _historyAt += direction;
-        if (_historyAt >= _history.Count) { _historyAt = -1; SetInput(_draft); return; }
+        if (_historyAt >= _history.Count)
+        {
+            _historyAt = -1;
+            SetInput(_draft);
+            return;
+        }
+
         _historyAt = Math.Max(_historyAt, 0);
         SetInput(_history[_historyAt]);
     }
@@ -162,9 +175,20 @@ public sealed class DevConsole
         Print(line, Kind.Input);
         var tokens = Tokenize(line, out _);
         if (tokens.Count == 0) return;
-        if (!_commands.TryGetValue(tokens[0].Text, out var command)) { Error(UnknownCommand(tokens[0].Text)); return; }
-        try { command.Run([.. tokens.Skip(1).Select(t => t.Text)], this); }
-        catch (Exception e) { Error($"{command.Name} failed: {e.Message}"); }
+        if (!_commands.TryGetValue(tokens[0].Text, out var command))
+        {
+            Error(UnknownCommand(tokens[0].Text));
+            return;
+        }
+
+        try
+        {
+            command.Run([.. tokens.Skip(1).Select(t => t.Text)], this);
+        }
+        catch (Exception e)
+        {
+            Error($"{command.Name} failed: {e.Message}");
+        }
     }
 
     /// <summary>
@@ -173,7 +197,8 @@ public sealed class DevConsole
     string UnknownCommand(string typed)
     {
         string low = typed.ToLowerInvariant();
-        var close = _commands.Keys.Where(n => n.StartsWith(low, StringComparison.OrdinalIgnoreCase) || n.Contains(low, StringComparison.OrdinalIgnoreCase) || EditDistance(n, low) <= 2)
+        var close = _commands.Keys.Where(n => n.StartsWith(low, StringComparison.OrdinalIgnoreCase)
+            || n.Contains(low, StringComparison.OrdinalIgnoreCase) || EditDistance(n, low) <= 2)
             .OrderBy(n => EditDistance(n, low)).ThenBy(n => n, StringComparer.Ordinal).Take(5).ToList();
         return $"unknown command '{typed}'" + (close.Count > 0 ? "; did you mean: " + string.Join(", ", close) + "?" : " (help lists them)");
     }
@@ -213,10 +238,22 @@ public sealed class DevConsole
         for (int i = 0; i < text.Length; i++)
         {
             char c = text[i];
-            if (c == '"') { if (start < 0) start = i; quoted = !quoted; continue; }
+            if (c == '"')
+            {
+                if (start < 0) start = i;
+                quoted = !quoted;
+                continue;
+            }
+
             if (char.IsWhiteSpace(c) && !quoted)
             {
-                if (start >= 0) { list.Add((word.ToString(), start)); word.Clear(); start = -1; }
+                if (start >= 0)
+                {
+                    list.Add((word.ToString(), start));
+                    word.Clear();
+                    start = -1;
+                }
+
                 continue;
             }
             if (start < 0) start = i;
@@ -241,21 +278,29 @@ public sealed class DevConsole
         int index = tokens.Count - 1;
         var (typed, start) = tokens[index];
         IEnumerable<string> found;
-        if (index == 0) found = _commands.Keys.Where(k => k.StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal);
+        if (index == 0)
+            found = _commands.Keys.Where(k => k.StartsWith(typed, StringComparison.OrdinalIgnoreCase)).Order(StringComparer.Ordinal);
         else
         {
             var command = _commands.GetValueOrDefault(tokens[0].Text);
             CompletionArgs = [.. tokens.Skip(1).Take(index - 1).Select(t => t.Text)];
             string previous = index >= 2 ? tokens[index - 1].Text : "";
             if (command is null) found = [];
-            else if (typed.StartsWith('-')) found = command.Flags.Where(f => f.StartsWith(typed, StringComparison.OrdinalIgnoreCase));
-            else if (previous.StartsWith("--", StringComparison.Ordinal) && FlagValues?.Invoke(previous, typed) is { } values && values.Any()) found = values;
+            else if (typed.StartsWith('-'))
+                found = command.Flags.Where(f => f.StartsWith(typed, StringComparison.OrdinalIgnoreCase));
+            else if (previous.StartsWith("--", StringComparison.Ordinal) && FlagValues?.Invoke(previous, typed) is { } values && values.Any())
+                found = values;
             else found = command.Complete?.Invoke(index - 1, typed) ?? [];
             found = found.ToList();
             CompletionArgs = [];
         }
         var candidates = found.Distinct().Take(500).ToList();
-        if (candidates.Count == 0) { Print(typed.Length == 0 ? "no completions here" : $"no matches for '{typed}'"); return; }
+        if (candidates.Count == 0)
+        {
+            Print(typed.Length == 0 ? "no completions here" : $"no matches for '{typed}'");
+            return;
+        }
+
         string fill;
         if (candidates.Count == 1) fill = Quote(candidates[0], close: true) + " ";
         else

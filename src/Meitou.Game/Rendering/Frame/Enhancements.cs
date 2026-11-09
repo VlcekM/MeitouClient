@@ -90,6 +90,22 @@ public static class Enhancements
         Func<bool>? icons = null, Action<bool>? setIcons = null, Func<bool>? blood = null, Action<bool>? setBlood = null,
         Func<bool>? bloodSurfaces = null, Action<bool>? setBloodSurfaces = null, Func<bool>? tracers = null, Action<bool>? setTracers = null) =>
     [
+        .. PostSwitches(post, meitouHaze, setMeitouHaze),
+        .. ReachSwitches(meitouShadows, setMeitouShadows, meitouRange, setMeitouRange, impostors, setImpostors, meitouReach, setMeitouReach),
+        .. SceneSwitches(post, meitouWater, setMeitouWater, foliageLod, setFoliageLod, gi, setGi),
+        .. GradeSwitches(post),
+        .. NightSwitches(post, nightHaze, setNightHaze, planetshine, setPlanetshine, stars, setStars),
+        .. CloudSwitches(clouds, setClouds, cloudShadows, setCloudShadows, cloudFog, setCloudFog),
+        .. InteriorSwitches(interiorGi, setInteriorGi, characterLod, setCharacterLod, skin, setSkin, interiorLamps, setInteriorLamps, icons, setIcons),
+        .. SurfaceSwitches(blood, setBlood, bloodSurfaces, setBloodSurfaces),
+        .. EffectSwitches(post, tracers, setTracers),
+    ];
+
+    /// <summary>
+    /// The post-processing basics and the haze: ambient occlusion, dithering, haze strength, anti-aliasing.
+    /// </summary>
+    static Enhancement[] PostSwitches(PostOptions post, Func<bool> meitouHaze, Action<bool> setMeitouHaze) =>
+    [
         new("ao", "Ambient occlusion", "off", "SSAO",
             () => post.Ssao, v => post.Ssao = v, "the game ships SSAO but has it disabled"),
         new("dither", "Dithering", "off", "on",
@@ -105,6 +121,14 @@ public static class Enhancements
             },
             "the game uses FXAA; Meitou uses a temporal method (TAA, FSR or DLSS: the Tab panel chooses, FSR and DLSS need their libraries)",
             () => post.Upscale.Preferred.ToString().ToUpperInvariant()),
+    ];
+
+    /// <summary>
+    /// The shadows and how far things are drawn: shadows, foliage ranges, far impostors, draw distances.
+    /// </summary>
+    static Enhancement[] ReachSwitches(Func<bool> meitouShadows, Action<bool> setMeitouShadows, Func<bool> meitouRange, Action<bool> setMeitouRange,
+        Func<bool> impostors, Action<bool> setImpostors, Func<bool> meitouReach, Action<bool> setMeitouReach) =>
+    [
         new("shadows", "Shadows", "CSM", "soft, far terrain",
             meitouShadows, setMeitouShadows,
             "the game draws hard-edged cascades that end abruptly at the shadow range; Meitou fits them to the view, filters them softly "
@@ -126,6 +150,14 @@ public static class Enhancements
                 + $"Meitou draws objects to {MeitouObjectDistance:0}, "
                 + $"lets the terrain be coarser ({MeitouTerrainPixelError:0} px) and draws huge "
                 + $"landmarks (giant wrecks, skeletons, towers) out to {MeitouLandmarkDistance:0} (Tab sliders; the landmarks need Meitou at start)"),
+    ];
+
+    /// <summary>
+    /// Water, weather particles, foliage levels and indirect light.
+    /// </summary>
+    static Enhancement[] SceneSwitches(PostOptions post, Func<bool> meitouWater, Action<bool> setMeitouWater, Func<bool> foliageLod,
+        Action<bool> setFoliageLod, Func<bool>? gi, Action<bool>? setGi) =>
+    [
         new("water", "Water", "flat", "waves and surf",
             meitouWater, setMeitouWater,
             "the game's water is a flat plane with scrolled normal maps; Meitou adds wind-driven waves, breakers that roll in along the depth, "
@@ -146,6 +178,13 @@ public static class Enhancements
             "the game lights every surface's shadow side with one flat sky ambient per biome; "
                 + "Meitou traces rays from a grid of probes around the camera (needs a GPU with ray tracing; --no-gi leaves it out), "
                 + "so corners, interiors and the ground under overhangs darken and sunlit ground lights what faces it (docs/render-gi.md)"),
+    ];
+
+    /// <summary>
+    /// The picture's grading and the air: tone map, light shafts, heat haze.
+    /// </summary>
+    static Enhancement[] GradeSwitches(PostOptions post) =>
+    [
         new("tonemap", "Tone map and grade", "clip", "hybrid, graded",
             () => post.ToneMapping, v => post.ToneMapping = v,
             "the game has no tone curve (bright skies and sunlit sand clip flat at white) and no grading; "
@@ -160,6 +199,14 @@ public static class Enhancements
             () => post.MeitouHeatHaze, v => post.MeitouHeatHaze = v,
             "the game's heat haze shifts distant objects by several pixels in hot weather, which reads as blur; "
                 + "Meitou halves it (the Tab slider sets any strength)"),
+    ];
+
+    /// <summary>
+    /// The night: night air, planetshine, the night sky, night grading.
+    /// </summary>
+    static Enhancement[] NightSwitches(PostOptions post, Func<bool>? nightHaze, Action<bool>? setNightHaze, Func<bool>? planetshine,
+        Action<bool>? setPlanetshine, Func<bool>? stars, Action<bool>? setStars) =>
+    [
         new("night", "Night air", "black haze", "airglow",
             nightHaze ?? (() => false), setNightHaze ?? (_ => { }),
             "the game's haze takes the sky's sunlit colour, which is black at night, so everything a few thousand units away fades to black "
@@ -187,6 +234,14 @@ public static class Enhancements
             "the game has no grading, so night is the day's saturated browns and oranges, darkened; "
                 + "Meitou shifts dim colour towards the rods' blue-grey as the scene's adapted luminance falls (the Purkinje shift), "
                 + "keeping lamps, fires and the moon in colour (the Tab slider sets the strength)"),
+    ];
+
+    /// <summary>
+    /// The clouds, their shadows and the shadows' fade in fog.
+    /// </summary>
+    static Enhancement[] CloudSwitches(Func<bool>? clouds, Action<bool>? setClouds, Func<bool>? cloudShadows, Action<bool>? setCloudShadows,
+        Func<bool>? cloudFog, Action<bool>? setCloudFog) =>
+    [
         new("clouds", "Clouds", "flat", "volumetric",
             clouds ?? (() => false), setClouds ?? (_ => { }),
             "the game uses a flat cloud texture; "
@@ -204,6 +259,15 @@ public static class Enhancements
             "with Cloud shadows on, Meitou weakens them as the camera nears a placed fog volume and drops them inside one; "
                 + "otherwise the cloud shadows darken the already dim fog, "
                 + "and places like the swamp or the Deadlands get too dark (docs/render-clouds.md)"),
+    ];
+
+    /// <summary>
+    /// Interiors and characters: indoor GI, character levels, skin, interior lamps, item icons.
+    /// </summary>
+    static Enhancement[] InteriorSwitches(Func<bool>? interiorGi, Action<bool>? setInteriorGi, Func<bool>? characterLod, Action<bool>? setCharacterLod,
+        Func<bool>? skin, Action<bool>? setSkin, Func<bool>? interiorLamps, Action<bool>? setInteriorLamps, Func<bool>? icons,
+        Action<bool>? setIcons) =>
+    [
         new("interiorgi", "Indoor GI", "original ambient", "bounced light",
             interiorGi ?? (() => false), setInteriorGi ?? (_ => { }),
             "with Indirect light enabled, use bounced light indoors; turn this off to keep the original ambient on room surfaces, "
@@ -230,6 +294,13 @@ public static class Enhancements
             "the game draws an inventory item's icon from its mesh with one sample a pixel (jagged edges, shimmering fine detail) "
                 + "and shows the pictures it saved before; Meitou draws each one supersampled 4 x 4, as the enhanced portraits, "
                 + "and keeps its own pictures (docs/game/ui-screens.md \"Item icons\")"),
+    ];
+
+    /// <summary>
+    /// Blood, the ground relief and mesh welding.
+    /// </summary>
+    static Enhancement[] SurfaceSwitches(Func<bool>? blood, Action<bool>? setBlood, Func<bool>? bloodSurfaces, Action<bool>? setBloodSurfaces) =>
+    [
         new("blood", "Blood cells", "8 nearest", $"up to {TerrainDecalRenderer.MaxSlots}",
             blood ?? (() => false), setBlood ?? (_ => { }),
             $"the game draws the blood of only the 8 terrain cells (288 units square) nearest the camera, "
@@ -261,6 +332,13 @@ public static class Enhancements
                 + "so meshes keep about 60% fewer vertices (object meshes at The Hub take 50 MB of video memory instead of 98) "
                 + "and the bump lighting barely changes (tangents move 4° on average); applies to "
                 + "meshes loaded after the change (docs/render-objects.md)"),
+    ];
+
+    /// <summary>
+    /// The effects drawn with the particles: bolt tracers and fog.
+    /// </summary>
+    static Enhancement[] EffectSwitches(PostOptions post, Func<bool>? tracers, Action<bool>? setTracers) =>
+    [
         new("tracers", "Bolt tracers", "none", "streaks",
             tracers ?? (() => false), setTracers ?? (_ => { }),
             "the game draws a bolt in flight as its mesh alone, stretched a little with its speed, which is hard to follow at a distance; "
@@ -290,7 +368,12 @@ public static class Enhancements
     {
         foreach (var id in list.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
-            if (id == "all") { foreach (var e in switches) e.IsMeitou = meitou; continue; }
+            if (id == "all")
+            {
+                foreach (var e in switches) e.IsMeitou = meitou;
+                continue;
+            }
+
             var match = switches.FirstOrDefault(e => e.Id == id)
                 ?? throw new ArgumentException($"unknown feature '{id}' ({string.Join(", ", switches.Select(e => e.Id))} or all)");
             match.IsMeitou = meitou;
@@ -343,7 +426,12 @@ public sealed class MeitouToggle(IReadOnlyList<Enhancement> switches)
     /// </summary>
     public string Sweep()
     {
-        if (_sweep >= 0) { _sweep = -1; return "meitou    sweep stopped"; }
+        if (_sweep >= 0)
+        {
+            _sweep = -1;
+            return "meitou    sweep stopped";
+        }
+
         if (switches.Count == 0) return "meitou    no switches to sweep";
         (_sweep, _sweepNext) = (0, System.Diagnostics.Stopwatch.GetTimestamp());
         return $"meitou    sweep: {switches.Count} switches flip in turn, 1 s apart (Ctrl+F1 stops)";

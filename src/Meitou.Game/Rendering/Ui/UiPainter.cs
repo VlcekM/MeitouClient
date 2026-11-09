@@ -327,6 +327,7 @@ public sealed partial class UiPainter : IDisposable
         this._overlay = overlay;
         this._resources = resources;
         this._resolve = resolve;
+
         // Upload before rendering starts. Missing atlas files remain an explicit diagnostic.
         try
         {
@@ -545,6 +546,7 @@ public sealed partial class UiPainter : IDisposable
         if (_resources.Skins.TryGetValue(c.Skin, out var skin) && _textures.TryGetValue(skin.Texture, out var atlas))
         {
             var atlasMask = _masks.GetValueOrDefault(skin.Texture);
+
             // A toggled button (Checked) uses MyGUI's *_checked states, else looks pushed.
             bool on = c.Properties.GetValueOrDefault("Checked") == "true";
             string state = on ? widgetState + "_checked" : widgetState;
@@ -602,7 +604,8 @@ public sealed partial class UiPainter : IDisposable
     void PaintSkinPart((GpuTexture Texture, SampledTexture Sampled) atlas, OpacityMask? atlasMask, UiRect source, UiRect dest, UiRect clip,
         int width, int height, Vector4 tint)
     {
-        float x0 = Math.Max(0, dest.X), y0 = Math.Max(0, dest.Y), x1 = Math.Min(width, dest.X + dest.Width), y1 = Math.Min(height, dest.Y + dest.Height);
+        float x0 = Math.Max(0, dest.X), y0 = Math.Max(0, dest.Y);
+        float x1 = Math.Min(width, dest.X + dest.Width), y1 = Math.Min(height, dest.Y + dest.Height);
         if (x1 <= x0 || y1 <= y0 || dest.Width <= 0 || dest.Height <= 0) return;
 
         float tw = atlas.Texture.Desc.Width, th = atlas.Texture.Desc.Height;
@@ -617,43 +620,27 @@ public sealed partial class UiPainter : IDisposable
     /// <summary>
     /// The caption: its font and size, the edit caret and selection, then its lines.
     /// </summary>
-    void PaintCaption(UiControl c, UiRect b, UiRect clip, string widgetState, int width, int height, float minimumTextPixels, DebugOverlay.OverlayPass pass)
+    void PaintCaption(UiControl c, UiRect b, UiRect clip, string widgetState, int width, int height, float minimumTextPixels,
+        DebugOverlay.OverlayPass pass)
     {
         bool focused = c.Properties.GetValueOrDefault("Focused") == "true";
         if (focused) _paintVolatile = true;   // the caret blinks on real time
         if (c.Caption.Length == 0 && !focused) return;
-        // MyGUI shows a button caption only through a text part of its skin: a button skin of image parts alone (the map's centre button, "O") shows none.
-        if (c.Type == "Button" && _resources.Skins.TryGetValue(c.Skin, out var captionSkin) && !_resources.Templates.ContainsKey(c.Skin) && !captionSkin.Parts.Any(p => p.Type is "SimpleText" or "EditText")) return;
+        if (SkinShowsNoCaption(c)) return;
+
         var textArea = UiTextLayout.ContentRect(_resources, c);
         if (textArea.Width <= 0 || textArea.Height <= 0) return;
         var textClip = clip.Intersect(textArea);
         string fontName = c.Properties.GetValueOrDefault("FontName") ?? TemplateFont(c.Skin) ?? "Kenshi_StandardFont_Medium";
-        var font = fontName == "Meitou_TitleFont" ? _titleFont ?? _paintedFont ?? _overlay :
-            fontName.Contains("Painted", StringComparison.Ordinal) || fontName.Contains("Banner", StringComparison.Ordinal) ? _paintedFont ?? _standardFont ?? _overlay : _standardFont ?? _overlay;
+        var font = CaptionFont(fontName);
+
         // A toggled button's caption takes the skin's *_checked colour too (the editor's selected tab is brighter).
         string textState = c.Properties.GetValueOrDefault("Checked") == "true" ? widgetState + "_checked" : widgetState;
         var textColour = MyGuiColours.Text(_resources, c, textState, c.Enabled ? DebugOverlay.TextColour : new(0.45f, 0.43f, 0.38f, 1));
         textColour.W *= Alpha(c.Properties);
         font.Target = _overlay.Target;
         float scale = c.TextScale ?? (c.Skin.Length > 0 ? Math.Clamp(height / 1080f, 0.5f, 1.5f) : 1);
-        bool original = false;
-        // Settings request a font baked at its physical pixel size rather than scaling the 16px atlas.
-        if (int.TryParse(c.Properties.GetValueOrDefault("FontPixels"), out int pixels) && StandardSource() is { } standardFace)
-        {
-            pixels = Math.Clamp(Math.Max(pixels, (int)MathF.Round(minimumTextPixels)), 8, 96);
-            // An explicit pixel size is Meitou's own text in either mode: oversampled and freely placed.
-            font = UiFontFor("", standardFace.Spec, standardFace.Path, pixels * 64L, 72, false, false);
-            font.Target = _overlay.Target;
-            scale = 1;
-        }
-        else if (ResourceFont(fontName, c.TextScale ?? height / 1080f, minimumTextPixels) is { } resourceFont)
-        {
-            font = resourceFont;
-            font.Target = _overlay.Target;
-            scale = 1;
-            // MyGUI never scales text to its widget: a font resource keeps its size in the Faithful mode, overflowing the line box and clipped by the widget.
-            original = Mode == UiMode.Faithful;
-        }
+        bool original = SizeCaptionFont(c, fontName, height, minimumTextPixels, ref font, ref scale);
         if (minimumTextPixels > 0 || original)
         {
             // Short captions keep the main UI's readable size. Centre the line box over
@@ -669,56 +656,162 @@ public sealed partial class UiPainter : IDisposable
             font = large;
             font.Target = _overlay.Target;
         }
+
         var laid = LayOutText(c.Caption, font, textArea.Width, scale, c.Properties.GetValueOrDefault("WordWrap") == "true", original,
             focused, focused && c.Properties.GetValueOrDefault("Numeric") == "true");
-        var (text, runs, lines) = (laid.Text, laid.Runs, laid.Lines);
-        int cursor = 0;
         string align = c.Properties.GetValueOrDefault("TextAlign") ?? "Left VCenter";
+        float y = CaptionTop(c, textArea, font, scale, laid.Lines.Count, align);
+        var frame = new CaptionFrame(font, textArea, textClip, scale, textColour, width, height, pass);
+        if (focused && laid.Lines.Count > 1) y = PaintWrappedCaret(c, laid, frame, y);
+        else if (focused) PaintSelection(c, laid.Text, frame, y, align);
+        PaintCaptionLines(c, b, clip, laid, frame, y, align);
+        font.Flush(width, height, textClip, pass);
+    }
+
+    /// <summary>
+    /// What one caption is painted with: its font, text box and clip, scale and colour, and the overlay pass's viewport.
+    /// </summary>
+    readonly record struct CaptionFrame(DebugOverlay Font, UiRect TextArea, UiRect TextClip, float Scale, Vector4 TextColour, int Width,
+        int Height, DebugOverlay.OverlayPass Pass);
+
+    /// <summary>
+    /// MyGUI shows a button caption only through a text part of its skin: a button skin of image parts alone (the map's centre button, "O")
+    /// shows none.
+    /// </summary>
+    bool SkinShowsNoCaption(UiControl c) =>
+        c.Type == "Button" && _resources.Skins.TryGetValue(c.Skin, out var captionSkin) && !_resources.Templates.ContainsKey(c.Skin)
+        && !captionSkin.Parts.Any(p => p.Type is "SimpleText" or "EditText");
+
+    /// <summary>
+    /// The baked font a caption's font name draws with: the title font, the painted one (painted and banner names), else the standard one.
+    /// </summary>
+    DebugOverlay CaptionFont(string fontName)
+    {
+        if (fontName == "Meitou_TitleFont") return _titleFont ?? _paintedFont ?? _overlay;
+        bool painted = fontName.Contains("Painted", StringComparison.Ordinal) || fontName.Contains("Banner", StringComparison.Ordinal);
+        return painted ? _paintedFont ?? _standardFont ?? _overlay : _standardFont ?? _overlay;
+    }
+
+    /// <summary>
+    /// A caption with its own font size (<c>FontPixels</c>) or a font resource takes a font baked at that size (<paramref name="scale"/> 1).
+    /// True when the text keeps the resource font's size as MyGUI does (the Faithful mode).
+    /// </summary>
+    bool SizeCaptionFont(UiControl c, string fontName, int height, float minimumTextPixels, ref DebugOverlay font, ref float scale)
+    {
+        bool original = false;
+
+        // Settings request a font baked at its physical pixel size rather than scaling the 16px atlas.
+        if (int.TryParse(c.Properties.GetValueOrDefault("FontPixels"), out int pixels) && StandardSource() is { } standardFace)
+        {
+            pixels = Math.Clamp(Math.Max(pixels, (int)MathF.Round(minimumTextPixels)), 8, 96);
+
+            // An explicit pixel size is Meitou's own text in either mode: oversampled and freely placed.
+            font = UiFontFor("", standardFace.Spec, standardFace.Path, pixels * 64L, 72, false, false);
+            font.Target = _overlay.Target;
+            scale = 1;
+        }
+        else if (ResourceFont(fontName, c.TextScale ?? height / 1080f, minimumTextPixels) is { } resourceFont)
+        {
+            font = resourceFont;
+            font.Target = _overlay.Target;
+            scale = 1;
+
+            // MyGUI never scales text to its widget: a font resource keeps its size in the Faithful mode, overflowing the line box and clipped by
+            // the widget.
+            original = Mode == UiMode.Faithful;
+        }
+
+        return original;
+    }
+
+    /// <summary>
+    /// The first line's top: the text box aligned by <paramref name="align"/> (top, centre or bottom), scrolled by the box's bar.
+    /// </summary>
+    static float CaptionTop(UiControl c, UiRect textArea, DebugOverlay font, float scale, int lineCount, string align)
+    {
         // An EditBox scrolled by its bar (MyGuiPresentation: TextScroll pixels); the client clips the lines.
-        float scrolled = float.TryParse(c.Properties.GetValueOrDefault("TextScroll"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float textScroll) ? textScroll : 0;
-        float y = -scrolled + textArea.Y + (align.Contains("Bottom", StringComparison.Ordinal) ? Math.Max(0, textArea.Height - font.LineHeight * scale * lines.Count) : HasWord(align, "Center", "VCenter") ? Math.Max(0, (textArea.Height - font.LineHeight * scale * lines.Count) / 2) : 0);
-        if (focused && lines.Count > 1)
+        string? scroll = c.Properties.GetValueOrDefault("TextScroll");
+        float scrolled = float.TryParse(scroll, NumberStyles.Float, CultureInfo.InvariantCulture, out float textScroll) ? textScroll : 0;
+        return -scrolled + textArea.Y
+            + (align.Contains("Bottom", StringComparison.Ordinal) ? Math.Max(0, textArea.Height - font.LineHeight * scale * lineCount)
+                : HasWord(align, "Center", "VCenter") ? Math.Max(0, (textArea.Height - font.LineHeight * scale * lineCount) / 2)
+                : 0);
+    }
+
+    /// <summary>
+    /// A wrapped box being typed in: the caret on its own line, the text scrolled up to keep that line in view (no selection drawn). Returns
+    /// the first line's top after the scroll.
+    /// </summary>
+    float PaintWrappedCaret(UiControl c, TextLayout laid, CaptionFrame frame, float y)
+    {
+        var (text, lines) = (laid.Text, laid.Lines);
+        var (font, textArea, scale) = (frame.Font, frame.TextArea, frame.Scale);
+        int caret = int.TryParse(c.Properties.GetValueOrDefault("CaretIndex"), out int at) ? Math.Clamp(at, 0, text.Length) : 0;
+        var (caretLine, caretColumn) = CaretInLines(text, p => font.WrapText(p, textArea.Width, scale), caret);
+        caretLine = Math.Min(caretLine, lines.Count - 1);
+        caretColumn = Math.Min(caretColumn, lines[caretLine].Length);
+        float lineHeight = font.LineHeight * scale;
+        y -= Math.Max(0, (caretLine + 1) * lineHeight - textArea.Height);
+        if ((System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 2)) % 2 == 0)
         {
-            // A wrapped box being typed in: the caret on its own line, the text scrolled up to keep that line in view (no selection drawn).
-            int caret = int.TryParse(c.Properties.GetValueOrDefault("CaretIndex"), out int at) ? Math.Clamp(at, 0, text.Length) : 0;
-            var (caretLine, caretColumn) = CaretInLines(text, p => font.WrapText(p, textArea.Width, scale), caret);
-            caretLine = Math.Min(caretLine, lines.Count - 1);
-            caretColumn = Math.Min(caretColumn, lines[caretLine].Length);
-            float lineHeight = font.LineHeight * scale;
-            y -= Math.Max(0, (caretLine + 1) * lineHeight - textArea.Height);
-            if ((System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 2)) % 2 == 0)
-            {
-                float caretX = textArea.X + font.MeasureText(lines[caretLine][..caretColumn], scale), caretY = y + caretLine * lineHeight;
-                _overlay.Rect(caretX, caretY, caretX + 1, caretY + lineHeight, textColour);
-            }
-            _overlay.Flush(width, height, textClip, pass);
+            float caretX = textArea.X + font.MeasureText(lines[caretLine][..caretColumn], scale), caretY = y + caretLine * lineHeight;
+            _overlay.Rect(caretX, caretY, caretX + 1, caretY + lineHeight, frame.TextColour);
         }
-        else if (focused)
+
+        _overlay.Flush(frame.Width, frame.Height, frame.TextClip, frame.Pass);
+        return y;
+    }
+
+    /// <summary>
+    /// A one-line box being typed in: its selection and its blinking caret.
+    /// </summary>
+    void PaintSelection(UiControl c, string text, CaptionFrame frame, float y, string align)
+    {
+        var (font, textArea, scale) = (frame.Font, frame.TextArea, frame.Scale);
+        int Index(string key) => int.TryParse(c.Properties.GetValueOrDefault(key), out int at) ? Math.Clamp(at, 0, text.Length) : 0;
+        int selection = Index("SelectionStart"), length = Index("SelectionLength"), caret = Index("CaretIndex");
+        float textWidth = font.MeasureText(text, scale);
+        float origin = LineLeft(textArea, textWidth, align);
+        if (length > 0)
         {
-            int Index(string key) => int.TryParse(c.Properties.GetValueOrDefault(key), out int at) ? Math.Clamp(at, 0, text.Length) : 0;
-            int selection = Index("SelectionStart"), length = Index("SelectionLength"), caret = Index("CaretIndex");
-            float textWidth = font.MeasureText(text, scale);
-            float origin = textArea.X + (align.Contains("Right", StringComparison.Ordinal) ? textArea.Width - textWidth : HasWord(align, "Center", "HCenter") ? (textArea.Width - textWidth) / 2 : 0);
-            if (length > 0)
-            {
-                float start = origin + font.MeasureText(text[..selection], scale);
-                float end = origin + font.MeasureText(text[..Math.Min(selection + length, text.Length)], scale);
-                _overlay.Rect(start, y, end, y + font.LineHeight * scale, new(0.25f, 0.4f, 0.45f, 0.8f));
-            }
-            if ((System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 2)) % 2 == 0)
-            {
-                float caretX = origin + font.MeasureText(text[..caret], scale);
-                _overlay.Rect(caretX, y, caretX + 1, y + font.LineHeight * scale, textColour);
-            }
-            _overlay.Flush(width, height, textClip, pass);
+            float start = origin + font.MeasureText(text[..selection], scale);
+            float end = origin + font.MeasureText(text[..Math.Min(selection + length, text.Length)], scale);
+            _overlay.Rect(start, y, end, y + font.LineHeight * scale, new(0.25f, 0.4f, 0.45f, 0.8f));
         }
+
+        if ((System.Diagnostics.Stopwatch.GetTimestamp() / (System.Diagnostics.Stopwatch.Frequency / 2)) % 2 == 0)
+        {
+            float caretX = origin + font.MeasureText(text[..caret], scale);
+            _overlay.Rect(caretX, y, caretX + 1, y + font.LineHeight * scale, frame.TextColour);
+        }
+
+        _overlay.Flush(frame.Width, frame.Height, frame.TextClip, frame.Pass);
+    }
+
+    /// <summary>
+    /// A line's left edge in the text box, aligned by <paramref name="align"/> (left, centre or right).
+    /// </summary>
+    static float LineLeft(UiRect textArea, float textWidth, string align) =>
+        textArea.X + (align.Contains("Right", StringComparison.Ordinal) ? textArea.Width - textWidth
+            : HasWord(align, "Center", "HCenter") ? (textArea.Width - textWidth) / 2
+            : 0);
+
+    /// <summary>
+    /// The caption's lines, those in the clip drawn (shadowed when asked, in their colour runs); a one-line edit box's line is kept for the
+    /// text input.
+    /// </summary>
+    void PaintCaptionLines(UiControl c, UiRect b, UiRect clip, TextLayout laid, CaptionFrame frame, float y, string align)
+    {
+        var (text, runs, lines) = (laid.Text, laid.Runs, laid.Lines);
+        var (font, scale, textColour) = (frame.Font, frame.Scale, frame.TextColour);
+        int cursor = 0;
         for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
         {
             string line = lines[lineIndex];
             float textWidth = laid.Widths[lineIndex];
-            float x = textArea.X + (align.Contains("Right", StringComparison.Ordinal) ? textArea.Width - textWidth : HasWord(align, "Center", "HCenter") ? (textArea.Width - textWidth) / 2 : 0);
+            float x = LineLeft(frame.TextArea, textWidth, align);
             if (c.Type == "EditBox" && lines.Count == 1) _editBoxes.Add(new(clip.Intersect(b), font, scale, x, line));
-            if (new UiRect(x, y, textWidth, font.LineHeight * scale).Intersect(textClip).Width > 0)
+            if (new UiRect(x, y, textWidth, font.LineHeight * scale).Intersect(frame.TextClip).Width > 0)
             {
                 if (c.Properties.GetValueOrDefault("TextShadow") == "true") font.TextScaled(line, x + 1, y + 1, new(0, 0, 0, textColour.W), scale);
                 if (runs.Count == 0) font.TextScaled(line, x, y, textColour, scale);
@@ -727,13 +820,12 @@ public sealed partial class UiPainter : IDisposable
             else if (runs.Count > 0 && text.IndexOf(line, cursor, StringComparison.Ordinal) is >= 0 and int at) cursor = at + line.Length;
             y += font.LineHeight * scale;
         }
-        font.Flush(width, height, textClip, pass);
     }
 
     /// <summary>
-    /// <paramref name="caption"/> as drawn: its plain text and colour runs (MyGUI's inline tags; an edited box shows its text as typed), its lines (wrapped, or one per line
-    /// break and shortened with "..." to <paramref name="width"/>; a font resource's long line in the Faithful mode is cropped by the widget instead,
-    /// as MyGUI does) and their widths. Made once per caption, font, width and scale, not every frame.
+    /// <paramref name="caption"/> as drawn: its plain text and colour runs (MyGUI's inline tags; an edited box shows its text as typed), its lines
+    /// (wrapped, or one per line break and shortened with "..." to <paramref name="width"/>; a font resource's long line in the Faithful mode is
+    /// cropped by the widget instead, as MyGUI does) and their widths. Made once per caption, font, width and scale, not every frame.
     /// </summary>
     TextLayout LayOutText(string caption, DebugOverlay font, float width, float scale, bool wrap, bool original, bool focused, bool numeric)
     {
@@ -755,8 +847,11 @@ public sealed partial class UiPainter : IDisposable
     string? TemplateFont(string skin)
     {
         if (!_templateFonts.TryGetValue(skin, out var font))
+        {
             _templateFonts[skin] = font = _resources.Templates.TryGetValue(skin, out var template)
                 ? template.Descendants("Property").FirstOrDefault(p => (string?)p.Attribute("key") == "FontName")?.Attribute("value")?.Value : null;
+        }
+
         return font;
     }
 
@@ -770,10 +865,16 @@ public sealed partial class UiPainter : IDisposable
     /// </summary>
     void AddOpaque(OpacityMask mask, UiRect source, UiRect dest, UiRect clip, bool allowCore)
     {
-        if (mask.Covers(source)) { _opaqueRects.Add(dest.Intersect(clip)); return; }
+        if (mask.Covers(source))
+        {
+            _opaqueRects.Add(dest.Intersect(clip));
+            return;
+        }
+
         if (!allowCore || source.Width <= 0 || source.Height <= 0 || mask.Core(source) is not { } core) return;
         float fx = dest.Width / source.Width, fy = dest.Height / source.Height;
-        _opaqueRects.Add(new UiRect(dest.X + (core.X - source.X) * fx, dest.Y + (core.Y - source.Y) * fy, core.Width * fx, core.Height * fy).Intersect(clip));
+        _opaqueRects.Add(new UiRect(dest.X + (core.X - source.X) * fx, dest.Y + (core.Y - source.Y) * fy, core.Width * fx, core.Height * fy)
+            .Intersect(clip));
     }
 
     /// <summary>
@@ -788,12 +889,21 @@ public sealed partial class UiPainter : IDisposable
         var covered = new bool[(xs.Length - 1) * (ys.Length - 1)];
         foreach (var r in rects)
         {
-            int x0 = Array.BinarySearch(xs, r.X), x1 = Array.BinarySearch(xs, r.X + r.Width), y0 = Array.BinarySearch(ys, r.Y), y1 = Array.BinarySearch(ys, r.Y + r.Height);
-            for (int y = y0; y < y1; y++) for (int x = x0; x < x1; x++) covered[y * (xs.Length - 1) + x] = true;
+            int x0 = Array.BinarySearch(xs, r.X), x1 = Array.BinarySearch(xs, r.X + r.Width);
+            int y0 = Array.BinarySearch(ys, r.Y), y1 = Array.BinarySearch(ys, r.Y + r.Height);
+            for (int y = y0; y < y1; y++)
+            {
+                for (int x = x0; x < x1; x++) covered[y * (xs.Length - 1) + x] = true;
+            }
         }
+
         double area = 0;
-        for (int y = 0; y + 1 < ys.Length; y++) for (int x = 0; x + 1 < xs.Length; x++)
-            if (covered[y * (xs.Length - 1) + x]) area += (double)(xs[x + 1] - xs[x]) * (ys[y + 1] - ys[y]);
+        for (int y = 0; y + 1 < ys.Length; y++)
+        {
+            for (int x = 0; x + 1 < xs.Length; x++)
+                if (covered[y * (xs.Length - 1) + x]) area += (double)(xs[x + 1] - xs[x]) * (ys[y + 1] - ys[y]);
+        }
+
         return area;
     }
 
@@ -817,17 +927,34 @@ public sealed partial class UiPainter : IDisposable
                 if (pixels[i * 4 + 3] == 255) _bits[i >> 6] |= 1UL << (i & 63);
         }
 
+        /// <summary>
+        /// The texel rectangle <paramref name="source"/> covers, clamped to the texture: the key its answers are remembered by.
+        /// </summary>
+        (int X0, int Y0, int X1, int Y1) KeyOf(UiRect source) =>
+            (Math.Max(0, (int)MathF.Floor(source.X)), Math.Max(0, (int)MathF.Floor(source.Y)),
+                Math.Min(_width, (int)MathF.Ceiling(source.X + source.Width)), Math.Min(_height, (int)MathF.Ceiling(source.Y + source.Height)));
+
+        /// <summary>
+        /// Whether every texel of <paramref name="source"/> is opaque (false for an empty rectangle).
+        /// </summary>
         public bool Covers(UiRect source)
         {
-            (int X0, int Y0, int X1, int Y1) key = (Math.Max(0, (int)MathF.Floor(source.X)), Math.Max(0, (int)MathF.Floor(source.Y)), Math.Min(_width, (int)MathF.Ceiling(source.X + source.Width)), Math.Min(_height, (int)MathF.Ceiling(source.Y + source.Height)));
+            var key = KeyOf(source);
             if (_answers.TryGetValue(key, out bool known)) return known;
             bool opaque = key.X1 > key.X0 && key.Y1 > key.Y0;
             for (int y = key.Y0; opaque && y < key.Y1; y++)
+            {
                 for (int x = key.X0; x < key.X1; x++)
                 {
                     int i = y * _width + x;
-                    if ((_bits[i >> 6] & 1UL << (i & 63)) == 0) { opaque = false; break; }
+                    if ((_bits[i >> 6] & 1UL << (i & 63)) == 0)
+                    {
+                        opaque = false;
+                        break;
+                    }
                 }
+            }
+
             return _answers[key] = opaque;
         }
 
@@ -837,7 +964,7 @@ public sealed partial class UiPainter : IDisposable
         /// </summary>
         public UiRect? Core(UiRect source)
         {
-            (int X0, int Y0, int X1, int Y1) key = (Math.Max(0, (int)MathF.Floor(source.X)), Math.Max(0, (int)MathF.Floor(source.Y)), Math.Min(_width, (int)MathF.Ceiling(source.X + source.Width)), Math.Min(_height, (int)MathF.Ceiling(source.Y + source.Height)));
+            var key = KeyOf(source);
             if (_cores.TryGetValue(key, out var known)) return known;
             int w = key.X1 - key.X0, h = key.Y1 - key.Y0;
             UiRect? best = null;
@@ -861,12 +988,17 @@ public sealed partial class UiPainter : IDisposable
                         {
                             int top = heights[stack.Pop()], left = stack.Count > 0 ? stack.Peek() + 1 : 0;
                             long area = (long)top * (x - left);
-                            if (area > bestArea) { bestArea = area; best = new UiRect(key.X0 + left, key.Y0 + row - top + 1, x - left, top); }
+                            if (area > bestArea)
+                            {
+                                bestArea = area;
+                                best = new UiRect(key.X0 + left, key.Y0 + row - top + 1, x - left, top);
+                            }
                         }
                         stack.Push(x);
                     }
                 }
-                if (best is { } found) best = found.Width > 2 && found.Height > 2 ? new UiRect(found.X + 1, found.Y + 1, found.Width - 2, found.Height - 2) : null;
+                if (best is { } found)
+                    best = found.Width > 2 && found.Height > 2 ? new UiRect(found.X + 1, found.Y + 1, found.Width - 2, found.Height - 2) : null;
             }
             return _cores[key] = best;
         }
@@ -874,8 +1006,9 @@ public sealed partial class UiPainter : IDisposable
 
     #endregion
 
-    // A text's lines and its alignment words, read without the split, query and closure per control per frame they were (docs/bench.md "Play benchmark").
-    static readonly System.Buffers.SearchValues<char> LineEnds = System.Buffers.SearchValues.Create("\r\n\f\u0085\u2028\u2029");   // what ReplaceLineEndings breaks at
+    // A text's lines and its alignment words, read without the split, query and closure per control per frame they were (docs/bench.md
+    // "Play benchmark"). LineEnds: what ReplaceLineEndings breaks at.
+    static readonly System.Buffers.SearchValues<char> LineEnds = System.Buffers.SearchValues.Create("\r\n\f\u0085\u2028\u2029");
 
     static string[] FitLines(string text, bool original, DebugOverlay font, float width, float scale)
     {
@@ -889,7 +1022,8 @@ public sealed partial class UiPainter : IDisposable
     /// <paramref name="colour"/>, the alpha always <paramref name="colour"/>'s). <paramref name="cursor"/> is where the line is looked for in the
     /// text, then past it; a line not found there (shortened) starts at it.
     /// </summary>
-    static void DrawRuns(DebugOverlay font, string text, string line, ref int cursor, IReadOnlyList<TextColourRun> runs, float x, float y, Vector4 colour, float scale)
+    static void DrawRuns(DebugOverlay font, string text, string line, ref int cursor, IReadOnlyList<TextColourRun> runs, float x, float y,
+        Vector4 colour, float scale)
     {
         int at = text.IndexOf(line, cursor, StringComparison.Ordinal);
         if (at < 0) at = cursor;
@@ -919,7 +1053,13 @@ public sealed partial class UiPainter : IDisposable
         {
             string paragraph = paragraphs[p];
             var wrapped = wrap(paragraph);
-            if (caret > start + paragraph.Length && p < paragraphs.Length - 1) { line += wrapped.Count; start += paragraph.Length + 1; continue; }
+            if (caret > start + paragraph.Length && p < paragraphs.Length - 1)
+            {
+                line += wrapped.Count;
+                start += paragraph.Length + 1;
+                continue;
+            }
+
             int local = caret - start, at = 0;
             for (int l = 0; l < wrapped.Count; l++)
             {
@@ -947,15 +1087,21 @@ public sealed partial class UiPainter : IDisposable
         return false;
     }
 
-    static float Alpha(IReadOnlyDictionary<string, string> properties) => float.TryParse(properties.GetValueOrDefault("Alpha"), System.Globalization.NumberStyles.Float,
-        System.Globalization.CultureInfo.InvariantCulture, out float value) ? Math.Clamp(value, 0, 1) : 1;
+    static float Alpha(IReadOnlyDictionary<string, string> properties) =>
+        float.TryParse(properties.GetValueOrDefault("Alpha"), NumberStyles.Float, CultureInfo.InvariantCulture, out float value)
+            ? Math.Clamp(value, 0, 1)
+            : 1;
+
     static Vector4 Colour(string? value, Vector4 fallback)
     {
         if (value is null) return fallback;
         var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length is not (3 or 4)) return fallback;
         var numbers = new float[parts.Length];
-        for (int i = 0; i < parts.Length; i++) if (!float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out numbers[i])) return fallback;
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (!float.TryParse(parts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out numbers[i])) return fallback;
+        }
         return new(numbers[0], numbers[1], numbers[2], parts.Length == 4 ? numbers[3] : 1);
     }
 
@@ -969,11 +1115,20 @@ public sealed partial class UiPainter : IDisposable
         string name = IconTexture(path);
         if (_textures.ContainsKey(name)) return true;
         if (_requestedIcons.Add(name))
+        {
             Task.Run(() =>
             {
-                try { _decodedIcons.Enqueue((name, TextureLoader.LoadFile(path, allMips: false).Levels[0])); }
-                catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException) { _failedIcons.TryAdd(name, true); }
+                try
+                {
+                    _decodedIcons.Enqueue((name, TextureLoader.LoadFile(path, allMips: false).Levels[0]));
+                }
+                catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
+                {
+                    _failedIcons.TryAdd(name, true);
+                }
             });
+        }
+
         return false;
     }
 
@@ -987,7 +1142,8 @@ public sealed partial class UiPainter : IDisposable
     /// The <c>ImageTexture</c> name of the icon the renderer draws from an item's mesh (<see cref="RenderedIcons"/>), shown once it exists; flip it
     /// (<c>ImageFlipV</c>), as the renderer's targets are upside down.
     /// </summary>
-    public static string RenderedIconTexture(string record, string material, string colour = "") => RenderedIconPrefix + record + "|" + material + "|" + colour;
+    public static string RenderedIconTexture(string record, string material, string colour = "") =>
+        RenderedIconPrefix + record + "|" + material + "|" + colour;
     public const string RenderedIconPrefix = "meitou:icon:";
 
     /// <summary>
@@ -1052,7 +1208,14 @@ public sealed partial class UiPainter : IDisposable
             int best = 0;
             float distance = MathF.Abs(p.X - x);
             for (int k = 1; k <= text.Length; k++)
-                if (MathF.Abs(p.X - (x + font.MeasureText(text[..k], scale))) is var d && d < distance) { best = k; distance = d; }
+            {
+                if (MathF.Abs(p.X - (x + font.MeasureText(text[..k], scale))) is var d && d < distance)
+                {
+                    best = k;
+                    distance = d;
+                }
+            }
+
             return best;
         }
         return null;
@@ -1074,7 +1237,10 @@ public sealed partial class UiPainter : IDisposable
     public void DrawPointerBeside(string name, Vector2 leftMiddle, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
         if (Pointer(name) is { } pointer)
-            DrawPointerImage(pointer, new(MathF.Round(leftMiddle.X), MathF.Round(leftMiddle.Y - pointer.Height / 2), pointer.Width, pointer.Height), width, height, pass);
+        {
+            DrawPointerImage(pointer, new(MathF.Round(leftMiddle.X), MathF.Round(leftMiddle.Y - pointer.Height / 2), pointer.Width, pointer.Height),
+                width, height, pass);
+        }
     }
 
     MyGuiPointer? Pointer(string name)
@@ -1109,9 +1275,13 @@ public sealed partial class UiPainter : IDisposable
         {
             if (pointer is not null && _resolve(pointer.Image.Texture) is { } path) sheet = TextureLoader.LoadFile(path, allMips: false).Levels[0];
         }
-        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException) { }
+        catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)
+        {
+        }
+
         var made = pointer is null || sheet is null ? ((RgbaImage, int, int)?)null
-            : (Crop(sheet, pointer.Image.Source, (int)MathF.Round(pointer.Width), (int)MathF.Round(pointer.Height)), (int)MathF.Round(pointer.PointX), (int)MathF.Round(pointer.PointY));
+            : (Crop(sheet, pointer.Image.Source, (int)MathF.Round(pointer.Width), (int)MathF.Round(pointer.Height)), (int)MathF.Round(pointer.PointX),
+                (int)MathF.Round(pointer.PointY));
         return _pointerImages[name] = made;
     }
 
@@ -1136,7 +1306,9 @@ public sealed partial class UiPainter : IDisposable
     (GpuTexture Texture, SampledTexture Sampled) LoadTexture(string name)
     {
         if (_external.TryGetValue(name, out var given) || _textures.TryGetValue(name, out given)) return given;
-        if ((name.StartsWith(RenderedIconPrefix, StringComparison.Ordinal) || name.StartsWith(RenderedBuildingIconPrefix, StringComparison.Ordinal)) && RenderedIcons?.Invoke(name) is { } rendered) return rendered;
+        bool icon = name.StartsWith(RenderedIconPrefix, StringComparison.Ordinal)
+            || name.StartsWith(RenderedBuildingIconPrefix, StringComparison.Ordinal);
+        if (icon && RenderedIcons?.Invoke(name) is { } rendered) return rendered;
         string path = _resolve(name) ?? throw new FileNotFoundException($"MyGUI texture not found: {name}");
         if (_stored.Remove(name, out var reading) && reading.Result is { } dds) return UploadStored(name, dds);
         if (path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase) && ReadStoredTop(path) is { } top) return UploadStored(name, top);
@@ -1153,10 +1325,21 @@ public sealed partial class UiPainter : IDisposable
         try
         {
             using var file = File.OpenHandle(Content.GameFiles.Resolve(path));
-            return DdsReader.ReadTopSurface(file) is { Format: DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3, IsCubemap: false, IsVolume: false, ImageCount: 1, Width: > 0, Height: > 0 } dds ? dds : null;
+            return StoredS3tc(DdsReader.ReadTopSurface(file));
         }
-        catch (Exception) { return null; }
+        catch (Exception)
+        {
+            return null;
+        }
     }
+
+    /// <summary>
+    /// <paramref name="dds"/> when it is one plain 2D S3TC (BC1-BC3) surface, which is uploaded as stored; null otherwise.
+    /// </summary>
+    static DdsFile? StoredS3tc(DdsFile dds) =>
+        dds is { Format: DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3, IsCubemap: false, IsVolume: false, ImageCount: 1, Width: > 0, Height: > 0 }
+            ? dds
+            : null;
 
     /// <summary>
     /// Starts reading the S3TC (BC1-BC3) DDS files among the ImageBox textures <paramref name="names"/> on workers; the first <see cref="Draw"/> that
@@ -1167,13 +1350,30 @@ public sealed partial class UiPainter : IDisposable
     public void Prefetch(IEnumerable<string> names)
     {
         foreach (string name in names.Distinct(StringComparer.Ordinal))
+        {
             if (!name.EndsWith("GUI_Map.dds", StringComparison.OrdinalIgnoreCase)
-                && !_textures.ContainsKey(name) && !_external.ContainsKey(name) && !_stored.ContainsKey(name) && _resolve(name) is { } path && path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
-                _stored[name] = Task.Run(() =>
-                {
-                    try { return DdsReader.ReadFile(path) is { Format: DdsFormat.Bc1 or DdsFormat.Bc2 or DdsFormat.Bc3, IsCubemap: false, IsVolume: false, ImageCount: 1, Width: > 0, Height: > 0 } dds ? dds : null; }
-                    catch (Exception) { return null; }   // a file the reader cannot take is loaded as before, at first use (where its error shows)
-                });
+                && !_textures.ContainsKey(name) && !_external.ContainsKey(name) && !_stored.ContainsKey(name) && _resolve(name) is { } path
+                && path.EndsWith(".dds", StringComparison.OrdinalIgnoreCase))
+            {
+                _stored[name] = Task.Run(() => ReadStored(path));
+            }
+        }
+    }
+
+    /// <summary>
+    /// A prefetched file, when it is uploaded as stored (<see cref="StoredS3tc"/>).
+    /// </summary>
+    static DdsFile? ReadStored(string path)
+    {
+        try
+        {
+            return StoredS3tc(DdsReader.ReadFile(path));
+        }
+        catch (Exception)
+        {
+            // a file the reader cannot take is loaded as before, at first use (where its error shows)
+            return null;
+        }
     }
 
     readonly Dictionary<string, Task<DdsFile?>> _stored = new(StringComparer.Ordinal);
@@ -1198,15 +1398,16 @@ public sealed partial class UiPainter : IDisposable
         // A redrawn image replaces its texture (released once the frames in flight are done).
         if (_textures.Remove(name, out var old)) old.Texture.Dispose();
         using var upload = _overlay.Gpu.Uploads.Begin();
-        var texture = upload.Create(new TextureDesc(srgb ? InternalFormat.Srgb8Alpha8 : InternalFormat.Rgba8, image.Width, image.Height, Name: $"UI {name}"));
+        var desc = new TextureDesc(srgb ? InternalFormat.Srgb8Alpha8 : InternalFormat.Rgba8, image.Width, image.Height, Name: $"UI {name}");
+        var texture = upload.Create(desc);
         upload.Write(texture, 0, 0, new PixelRect(0, 0, (uint)image.Width, (uint)image.Height), image.Pixels);
         _masks[name] = new OpacityMask(image);
         _textureVersion++;
         return _textures[name] = (texture, Sampled(texture));
     }
 
-    SampledTexture Sampled(GpuTexture texture) => new(_overlay.Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), texture.View());
+    SampledTexture Sampled(GpuTexture texture) =>
+        new(_overlay.Gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)), texture.View());
 
     public void Dispose()
     {

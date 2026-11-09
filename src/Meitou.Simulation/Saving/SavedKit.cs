@@ -59,6 +59,7 @@ public static class SavedKit
 
             if (s.Contents is { } contents && item.Contents is { } bag)
                 Fill(bag, contents, factory, notes, "backpack_content");
+
             if (Fits(inventory, item)) inventory.Items.Add(item);
             else (rejected ??= []).Add(item);
         }
@@ -69,7 +70,9 @@ public static class SavedKit
         {
             string from = $"{item.Section} {item.X},{item.Y}";
             bool added = gridSection == "main" ? inventory.Add(item) : inventory.AddTo(gridSection, item);
-            notes?.Add(added ? $"item {item.Record} did not fit at {from}; auto-added at {item.Section} {item.X},{item.Y}" : $"item {item.Record} did not fit at {from} and found no room; left out");
+            notes?.Add(added
+                ? $"item {item.Record} did not fit at {from}; auto-added at {item.Section} {item.X},{item.Y}"
+                : $"item {item.Record} did not fit at {from} and found no room; left out");
         }
     }
 
@@ -99,8 +102,12 @@ public static class SavedKit
     {
         // A blueprint is saved as its look record with the RESEARCH as company and material (Verified, the owner's saves); the factory makes it from
         // the research.
-        var research = factory.Db.Find(s.CompanyId) is { Type: FcsRecordType.Research } c ? c : factory.Db.Find(s.MaterialId) is { Type: FcsRecordType.Research } m ? m : null;
-        if ((research is not null ? factory.Blueprint(research, s.Quantity, s.Quality) : factory.Create(s.BaseId, s.Quantity, s.Quality)) is not { } item)
+        var research = factory.Db.Find(s.CompanyId) is { Type: FcsRecordType.Research } c
+            ? c
+            : factory.Db.Find(s.MaterialId) is { Type: FcsRecordType.Research } m ? m : null;
+        if ((research is not null
+            ? factory.Blueprint(research, s.Quantity, s.Quality)
+            : factory.Create(s.BaseId, s.Quantity, s.Quality)) is not { } item)
             return null;
 
         item.Section = s.Section;
@@ -216,7 +223,9 @@ public static class SavedKit
         for (int k = 0; k < loadout.Limbs.Length; k++)
         {
             int state = SaveLimbs.StateOf(bits, k);
-            var prosthetic = state == 2 && fitted[k] is { } item && db.Find(item.BaseId) is { Type: FcsRecordType.LimbReplacement } record ? record : null;
+            var prosthetic = state == 2 && fitted[k] is { } item && db.Find(item.BaseId) is { Type: FcsRecordType.LimbReplacement } record
+                ? record
+                : null;
             loadout.Limbs[k] = state switch
             {
                 0 => null,
@@ -334,7 +343,8 @@ public static class SavedKit
                 loadout.Carried.Add(new LoadoutItem(record) { Colour = Find(s.ColourId) });
             else if (s.Section is "hip" or "back" && record.Type is FcsRecordType.Weapon or FcsRecordType.Crossbow)
             {
-                var weapon = new LoadoutWeapon(record) { Section = s.Section, Row = s.Y, Level = s.Level, Manufacturer = Find(s.CompanyId), Model = Find(s.MaterialId) };
+                var weapon = new LoadoutWeapon(record) { Section = s.Section, Row = s.Y, Level = s.Level, Manufacturer = Find(s.CompanyId),
+                    Model = Find(s.MaterialId) };
                 if (record.Type == FcsRecordType.Crossbow) loadout.Crossbow ??= weapon;
                 else loadout.Weapons.Add(weapon);
             }

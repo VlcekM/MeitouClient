@@ -117,7 +117,8 @@ public static class RangedFormulas
     /// The half-angle of the deviation cone in degrees (<c>FUN_14043a730</c>, the same <c>0.005 x (skill + perception)</c> as <c>FUN_140435160</c>
     /// and the turret tooltip, <b>Verified</b>): max(0, deviation x (1 - t)), t = 0.005 (skill + perception). 0 at skill + perception 200.
     /// </summary>
-    public static float Deviation(float deviationAtZero, float skill, float perception) => MathF.Max(0, Lerp(0.005f * (skill + perception), deviationAtZero, 0));
+    public static float Deviation(float deviationAtZero, float skill, float perception) =>
+        MathF.Max(0, Lerp(0.005f * (skill + perception), deviationAtZero, 0));
 
     /// <summary>
     /// The height factor (<c>FUN_140435f60</c>): f = (|dy| - 20) / 280 capped at 1 (not floored, so a small |dy| gives a small negative f); above the target

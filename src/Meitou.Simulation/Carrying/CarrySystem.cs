@@ -89,6 +89,11 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// moves as an item.
     /// </summary>
     internal PopulationData? Data { get; set; }
+
+    /// <summary>
+    /// The player characters a failed kidnap or knock-out engaged, and their defence as a decision source (<see cref="EngagedDefence.Engage"/>).
+    /// </summary>
+    readonly EngagedDefence _engaged = new();
     readonly BodyOptions _bodyOptions = options;
     readonly List<LootEntry> _loots = [];
 
@@ -277,42 +282,25 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
     /// </summary>
     static readonly object OpenInventory = new(), RescueButton = new();
 
+    /// <summary>
+    /// This tick's carry and loot commands (serial): lift, loot and open-loot orders to the nearest character that can run them, loot window
+    /// takes and puts, stealth knock-outs, put-downs and the rescue job.
+    /// </summary>
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
-        var table = world.Characters;
         foreach (var command in commands)
         {
             switch (command)
             {
                 case PickUpOrder order:
-                    {
-                        // The order's lift (225 Lifting/Snatching Order) may take a body another carries; a kidnap (246) may not. The nearest of the
-                        // characters that can lift it gets it.
-                        var lift = new OrderEntry(order.Kidnap ? TaskType.KidnapOrder : TaskType.LiftPersonPlayerOrder, this)
-                        {
-                            Target = order.Target
-                        };
-                        if (table.TryResolveNext(order.Target, out int body) && LiftOf(world, lift, body)
-                            && Nearest(table, Who(world, order.Carriers), body, s => PlayerOrders.CanRun(world, s, lift).CanRun) is int carrier)
-                            PlayerOrders.Give(world, carrier, lift, order.Queued);
-                        break;
-                    }
+                    GivePickUp(world, order);
+                    break;
                 case LootOrder loot:
-                    {
-                        var entry = new OrderEntry(TaskType.LootTarget, this) { Target = loot.Target };
-                        if (table.TryResolveNext(loot.Target, out int victim) && CanBeLooted(table.Cold(victim)!)
-                            && Nearest(table, Who(world, loot.Looters), victim, s => PlayerOrders.CanRun(world, s, entry).CanRun) is int looter)
-                            PlayerOrders.Give(world, looter, entry, loot.Queued);
-                        break;
-                    }
+                    GiveLoot(world, loot);
+                    break;
                 case OpenLootOrder open:
-                    {
-                        var entry = new OrderEntry(TaskType.LootTarget, this) { Target = open.Target, Detail = OpenInventory };
-                        if (table.TryResolveNext(open.Target, out int body2) && Openable(table, body2)
-                            && Nearest(table, Who(world, open.Looters), body2, s => PlayerOrders.CanRun(world, s, entry).CanRun) is int opener)
-                            PlayerOrders.Give(world, opener, entry, open.Queued);
-                        break;
-                    }
+                    GiveOpenLoot(world, open);
+                    break;
                 case TakeLootItem take:
                     TakeLoot(world, take);
                     break;
@@ -326,26 +314,93 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
                     BeginKnockOut(world, ko);
                     break;
                 case PutDownOrder put:
-                    foreach (var id in Who(world, put.Carriers))
-                        if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { Carrying.IsNone: false } c)
-                            PlayerOrders.Give(world, slot, new OrderEntry(TaskType.PutDownObject, this) { Target = c.Carrying }, put.Queued);
+                    GivePutDown(world, put);
                     break;
                 case RescueJobCommand job:
-                    foreach (var id in Who(world, job.Characters))
-                    {
-                        if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
-                        if (job.Job)
-                        {
-                            Production.PermaJobs.Give(cold, TaskType.FindAndRescueIfTheresBeds,
-                                Production.PermaJob.Untargeted(TaskType.FindAndRescueIfTheresBeds));
-                        }
-                        else
-                        {
-                            // the button: one look for a body
-                            PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = RescueButton }, job.Queued);
-                        }
-                    }
+                    GiveRescueJob(world, job);
                     break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="PickUpOrder"/>: the order's lift (225 Lifting/Snatching Order) may take a body another carries; a kidnap (246) may not. The
+    /// nearest of the characters that can lift it gets it.
+    /// </summary>
+    void GivePickUp(World world, PickUpOrder order)
+    {
+        var table = world.Characters;
+        var lift = new OrderEntry(order.Kidnap ? TaskType.KidnapOrder : TaskType.LiftPersonPlayerOrder, this)
+        {
+            Target = order.Target
+        };
+        if (table.TryResolveNext(order.Target, out int body) && LiftOf(world, lift, body)
+            && Nearest(table, Who(world, order.Carriers), body, s => PlayerOrders.CanRun(world, s, lift).CanRun) is int carrier)
+        {
+            PlayerOrders.Give(world, carrier, lift, order.Queued);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="LootOrder"/>: the nearest of the looters that can loot the body gets the loot.
+    /// </summary>
+    void GiveLoot(World world, LootOrder loot)
+    {
+        var table = world.Characters;
+        var entry = new OrderEntry(TaskType.LootTarget, this) { Target = loot.Target };
+        if (table.TryResolveNext(loot.Target, out int victim) && CanBeLooted(table.Cold(victim)!)
+            && Nearest(table, Who(world, loot.Looters), victim, s => PlayerOrders.CanRun(world, s, entry).CanRun) is int looter)
+        {
+            PlayerOrders.Give(world, looter, entry, loot.Queued);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="OpenLootOrder"/>: the nearest of the looters gets the loot that opens the body's inventory in a window.
+    /// </summary>
+    void GiveOpenLoot(World world, OpenLootOrder open)
+    {
+        var table = world.Characters;
+        var entry = new OrderEntry(TaskType.LootTarget, this) { Target = open.Target, Detail = OpenInventory };
+        if (table.TryResolveNext(open.Target, out int body2) && Openable(table, body2)
+            && Nearest(table, Who(world, open.Looters), body2, s => PlayerOrders.CanRun(world, s, entry).CanRun) is int opener)
+        {
+            PlayerOrders.Give(world, opener, entry, open.Queued);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="PutDownOrder"/>: each carrier of the order puts its body down.
+    /// </summary>
+    void GivePutDown(World world, PutDownOrder put)
+    {
+        var table = world.Characters;
+        foreach (var id in Who(world, put.Carriers))
+        {
+            if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { Carrying.IsNone: false } c)
+                PlayerOrders.Give(world, slot, new OrderEntry(TaskType.PutDownObject, this) { Target = c.Carrying }, put.Queued);
+        }
+    }
+
+    /// <summary>
+    /// <see cref="RescueJobCommand"/>: each player character gets the rescue job, or the Rescue button's one look for a body.
+    /// </summary>
+    void GiveRescueJob(World world, RescueJobCommand job)
+    {
+        var table = world.Characters;
+        foreach (var id in Who(world, job.Characters))
+        {
+            if (!table.TryResolveNext(id, out int slot) || table.Cold(slot) is not { IsPlayer: true } cold) continue;
+
+            if (job.Job)
+            {
+                Production.PermaJobs.Give(cold, TaskType.FindAndRescueIfTheresBeds,
+                    Production.PermaJob.Untargeted(TaskType.FindAndRescueIfTheresBeds));
+            }
+            else
+            {
+                // the button: one look for a body
+                PlayerOrders.Give(world, slot, new OrderEntry(TaskType.None, this) { Detail = RescueButton }, job.Queued);
             }
         }
     }
@@ -1411,7 +1466,7 @@ public sealed partial class CarrySystem(GameConstants constants, BodyOptions opt
         var jobs = new CarryJobs(this);
         decisions.RegisterJob(TaskType.FindAndRescueIfTheresBeds, jobs);
         decisions.RegisterJob(TaskType.LootAnimalsJob, jobs);
-        decisions.Register(new EngagedDefence(this));
+        decisions.Register(_engaged);
     }
 
     sealed class CarryJobs(CarrySystem owner) : IJobSource

@@ -62,8 +62,8 @@ public static class ResidentHomes
     /// <item>every free building left gets the <c>default resident</c> when it takes the template's <c>layout interior</c>.</item>
     /// </list>
     /// </summary>
-    public static List<(TownBuilding Building, SquadTemplate Template)> Assign(GameDatabase db, TownData town, FactionData? faction, IReadOnlyList<TownBuilding> buildings,
-        string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
+    public static List<(TownBuilding Building, SquadTemplate Template)> Assign(GameDatabase db, TownData town, FactionData? faction,
+        IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned = null)
     {
         var order = Order(buildings, playerFactionId, playerOwned);
         var entries = MakeEntries(db, Entries(town, faction));
@@ -80,7 +80,8 @@ public static class ResidentHomes
 
     static List<TownBuilding> Order(IReadOnlyList<TownBuilding> buildings, string? playerFactionId, IReadOnlySet<string>? playerOwned)
     {
-        bool Candidate(TownBuilding b) => b.CanHouse && (playerFactionId is null || b.OwnerFactionId != playerFactionId) && playerOwned?.Contains(b.Key) != true;
+        bool Candidate(TownBuilding b) =>
+            b.CanHouse && (playerFactionId is null || b.OwnerFactionId != playerFactionId) && playerOwned?.Contains(b.Key) != true;
         return [.. buildings.Where(Candidate).OrderBy(b => KeyHash(b.Key)).ThenBy(b => b.Key, StringComparer.Ordinal)];
     }
 
@@ -118,20 +119,25 @@ public static class ResidentHomes
         return entries;
     }
 
-    // The level data's homes of this priority's entries first (engine choice, see Assign).
-    static void KeepLevelHomes(List<Entry> entries, int priority, List<TownBuilding> order, HashSet<TownBuilding> taken, List<(TownBuilding, SquadTemplate)> housed)
+    /// <summary>
+    /// The level data's homes of this priority's entries first (engine choice, see Assign).
+    /// </summary>
+    static void KeepLevelHomes(List<Entry> entries, int priority, List<TownBuilding> order, HashSet<TownBuilding> taken,
+        List<(TownBuilding, SquadTemplate)> housed)
     {
         foreach (var b in order)
         {
             if (b.ResidentsTemplate.Length == 0 || taken.Contains(b)) continue;
-            if (entries.FirstOrDefault(e => e.Id == b.ResidentsTemplate && e.Count > 0 && e.Priority == priority) is not { } e || Weight(e, b) <= 0) continue;
+            if (entries.FirstOrDefault(e => e.Id == b.ResidentsTemplate && e.Count > 0 && e.Priority == priority) is not { } e || Weight(e, b) <= 0)
+                continue;
             e.Count--;
             taken.Add(b);
             housed.Add((b, e.Template));
         }
     }
 
-    static void HousePriority(List<Entry> entries, int priority, List<TownBuilding> order, HashSet<TownBuilding> taken, List<(TownBuilding, SquadTemplate)> housed)
+    static void HousePriority(List<Entry> entries, int priority, List<TownBuilding> order, HashSet<TownBuilding> taken,
+        List<(TownBuilding, SquadTemplate)> housed)
     {
         bool again;
         do
@@ -148,7 +154,8 @@ public static class ResidentHomes
         } while (again);
     }
 
-    static void HouseDefault(GameDatabase db, TownData town, FactionData? faction, List<TownBuilding> order, HashSet<TownBuilding> taken, List<(TownBuilding, SquadTemplate)> housed)
+    static void HouseDefault(GameDatabase db, TownData town, FactionData? faction, List<TownBuilding> order, HashSet<TownBuilding> taken,
+        List<(TownBuilding, SquadTemplate)> housed)
     {
         if (DefaultResident(town, faction) is not { } link || db.Find(link.Id) is not { } record || !IsTemplate(record)) return;
         var d = SquadTemplate.From(record);

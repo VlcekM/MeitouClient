@@ -67,7 +67,8 @@ public static class KenshiFontSize
             int record = 12 + 16 * i;
             if (record + 16 > ttf.Length) break;
             if (ttf[record] != tag[0] || ttf[record + 1] != tag[1] || ttf[record + 2] != tag[2] || ttf[record + 3] != tag[3]) continue;
-            long offset = BinaryPrimitives.ReadUInt32BigEndian(ttf[(record + 8)..]), length = BinaryPrimitives.ReadUInt32BigEndian(ttf[(record + 12)..]);
+            long offset = BinaryPrimitives.ReadUInt32BigEndian(ttf[(record + 8)..]);
+            long length = BinaryPrimitives.ReadUInt32BigEndian(ttf[(record + 12)..]);
             return offset + length <= ttf.Length ? ttf.Slice((int)offset, (int)length) : default;
         }
         return default;

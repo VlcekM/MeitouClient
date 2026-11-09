@@ -40,7 +40,8 @@ internal static class InteriorJoinSweep
     /// How many of the group's face centres lie in the site's hull (within 2 in plan, 20 in height).
     /// </summary>
     public static int Inside(OriginalInterior group, Site site) =>
-        Centres(group).Count(v => NavGeometry.InsideConvex(site.Hull.Polygon, new Vector2(v.X, v.Z), 2) && v.Y >= site.Hull.YMin - 20 && v.Y <= site.Hull.YMax + 20);
+        Centres(group).Count(v =>
+            NavGeometry.InsideConvex(site.Hull.Polygon, new Vector2(v.X, v.Z), 2) && v.Y >= site.Hull.YMin - 20 && v.Y <= site.Hull.YMax + 20);
 
     /// <summary>
     /// The site holding most of the group's face centres, or null when none holds any.

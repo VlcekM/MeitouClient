@@ -54,8 +54,13 @@ public sealed class FoliageWorld : IDisposable
     {
         var list = new List<FoliageTown>();
         foreach (var t in world.Towns())
+        {
             if (db.Find(t.TownId) is { } record && record.GetInt("type") != BuildingTowns.NestMarkerType)
-                list.Add(new FoliageTown(new Vector2(t.Position.X, t.Position.Z), record.GetFloat("no-foliage range", 2000), PlayerTowns.Contains(TownKey(t.Position.X, t.Position.Z))));
+            {
+                list.Add(new FoliageTown(new Vector2(t.Position.X, t.Position.Z), record.GetFloat("no-foliage range", 2000),
+                    PlayerTowns.Contains(TownKey(t.Position.X, t.Position.Z))));
+            }
+        }
         return list;
     }
 

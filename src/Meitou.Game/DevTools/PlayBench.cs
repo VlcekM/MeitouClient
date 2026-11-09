@@ -103,7 +103,12 @@ sealed class PlayBench(GameHost host)
         if (_benchScript is null)
         {
             var players = host.Session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).ToList();
-            if (host.Covered || host.TitleScreen.TitleVisible || players.Count == 0) { _benchReadyFor = 0; return true; }
+            if (host.Covered || host.TitleScreen.TitleVisible || players.Count == 0)
+            {
+                _benchReadyFor = 0;
+                return true;
+            }
+
             if ((_benchReadyFor += dt) < 1) return true;
             _benchLeader = (host.PlayerSquad is { Leader.IsNone: false } squad ? squad.Leader : players[0].Id);
             _benchOrigin = host.Session.Camera.Strategy.PivotXz;
@@ -114,15 +119,21 @@ sealed class PlayBench(GameHost host)
             {
                 var keep = only.Split(',');
                 _benchScript = [.. _benchScript.Where(s => keep.Contains(s.Name))];
-                if (_benchScript.Length == 0) { Console.WriteLine($"bench     no segment named {only}: nothing to run"); return false; }
+                if (_benchScript.Length == 0)
+                {
+                    Console.WriteLine($"bench     no segment named {only}: nothing to run");
+                    return false;
+                }
             }
             _benchGc = new BenchGcListener();
             _benchGcStart = _benchGc.NowMs;
             if (profiler is not null) profiler.OnGpuFrame = (tag, stages, total) =>
             {
-                if (tag >= 0 && tag < _benchFrames.Count) (_benchFrames[(int)tag].Gpu, _benchFrames[(int)tag].GpuTotal) = ([.. stages], total);
+                if (tag >= 0 && tag < _benchFrames.Count)
+                    (_benchFrames[(int)tag].Gpu, _benchFrames[(int)tag].GpuTotal) = ([.. stages], total);
             };
-            Console.WriteLine($"bench     the script starts: {_benchScript.Length} segments, {_benchScript.Sum(s => s.Seconds):0} s, leader {_benchLeader}, from {_benchOrigin.X:0}, {_benchOrigin.Y:0}");
+            Console.WriteLine($"bench     the script starts: {_benchScript.Length} segments, {_benchScript.Sum(s => s.Seconds):0} s, "
+                + $"leader {_benchLeader}, from {_benchOrigin.X:0}, {_benchOrigin.Y:0}");
             StartBenchSegment(0);
         }
         _benchClock += dt;
@@ -139,7 +150,8 @@ sealed class PlayBench(GameHost host)
             host.Player.ShowUiPanel(null);
         }
         _benchScript[_benchSegment].Frame?.Invoke(t, dt);
-        _benchCurrent = new BenchFrame { Segment = _benchSegment, T = _benchClock, FrameMs = dt * 1000, Characters = host.Session.CurrentSnapshot.Characters.Count, Far = host.Session.World.FarSkipped, StartMs = _benchGc?.NowMs ?? 0 };
+        _benchCurrent = new BenchFrame { Segment = _benchSegment, T = _benchClock, FrameMs = dt * 1000,
+            Characters = host.Session.CurrentSnapshot.Characters.Count, Far = host.Session.World.FarSkipped, StartMs = _benchGc?.NowMs ?? 0 };
         if (profiler is not null) profiler.Tag = _benchFrames.Count;
         host.Session.World.Profile.Clear();
         (host.Session.CameraMs, host.Session.HandlersMs) = (0, 0);
@@ -197,7 +209,8 @@ sealed class PlayBench(GameHost host)
         }
         (_benchGcAt, _benchAllocAt, _benchPauseAt) = (gc, alloc, pause);
         f.WorkingSetMb = Environment.WorkingSet / 1048576.0;
-        if (_benchFrames.Count % 30 == 0 && host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk) _benchVramMb = vk.Device.VideoMemory().Used / 1048576.0;
+        if (_benchFrames.Count % 30 == 0 && host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk)
+            _benchVramMb = vk.Device.VideoMemory().Used / 1048576.0;
         f.VramMb = _benchVramMb;
         _benchFrames.Add(f);
         _benchCurrent = null;
@@ -210,9 +223,15 @@ sealed class PlayBench(GameHost host)
     {
         var strategy = host.Session.Camera.Strategy;
         float yaw0 = strategy.Yaw, pitch0 = strategy.Pitch, distance0 = strategy.Distance;
-        Vector3 LeaderAt() => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == _benchLeader)?.Position ?? new Vector3(_benchOrigin.X, 0, _benchOrigin.Y);
+        Vector3 LeaderAt() => host.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == _benchLeader)?.Position
+            ?? new Vector3(_benchOrigin.X, 0, _benchOrigin.Y);
         void Look(Vector2 at, float yaw, float pitch, float distance) => strategy.Place(at, yaw, pitch, distance);
-        void OnLeader() { var p = LeaderAt(); Look(new Vector2(p.X, p.Z), strategy.Yaw, pitch0, distance0); }
+        void OnLeader()
+        {
+            var p = LeaderAt();
+            Look(new Vector2(p.X, p.Z), strategy.Yaw, pitch0, distance0);
+        }
+
         List<CharacterId> Squad() => [.. host.Session.CurrentSnapshot.Characters.Where(c => c.IsPlayer).Select(c => c.Id)];
         void Order(SimCommand command) => host.Session.World.Commands.Enqueue(command with { Tick = host.Session.World.Tick });
         // The nearest of what the script interacts with, said on the console (or that there is none within reach).
@@ -221,7 +240,8 @@ sealed class PlayBench(GameHost host)
             var leader = LeaderAt();
             var found = items.OrderBy(i => Vector3.DistanceSquared(at(i), leader)).FirstOrDefault();
             float d = found is null ? float.NaN : Vector3.Distance(at(found), leader);
-            Console.WriteLine(found is null || d > 1500 ? $"bench     no {what} within reach" : string.Create(CultureInfo.InvariantCulture, $"bench     {what} {d:0} away"));
+            Console.WriteLine(found is null || d > 1500 ? $"bench     no {what} within reach" : string.Create(CultureInfo.InvariantCulture,
+                $"bench     {what} {d:0} away"));
             return d <= 1500 ? found : null;
         }
         bool Alive(CharacterSnapshot c) => c.Body is not { Dead: true } and not { Unconscious: true };
@@ -251,13 +271,16 @@ sealed class PlayBench(GameHost host)
             new("return", 10, Begin: () => Look(_benchOrigin, yaw0, pitch0, distance0)),
             new("speed-x2", 10, (t, dt) => OnLeader(), Begin: () => host.Session.Simulation.SetSpeed(2)),
             new("speed-x5", 15, (t, dt) => OnLeader(), Begin: () => host.Session.Simulation.SetSpeed(5)),
-            new("talk", 10, Retry(() => host.Session.CurrentSnapshot.Conversation is not null, () => { if (talkee is not null) Order(new Simulation.Dialogue.TalkOrder(_benchLeader, talkee.Id) { Tick = 0 }); }), Begin: () =>
+            new("talk", 10, Retry(() => host.Session.CurrentSnapshot.Conversation is not null,
+                () => { if (talkee is not null) Order(new Simulation.Dialogue.TalkOrder(_benchLeader, talkee.Id) { Tick = 0 }); }), Begin: () =>
             {
                 host.Session.Simulation.SetSpeed(1);
-                talkee = Nearest("talker", host.Session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Alive(c) && host.Session.World.CanTalk(c.Id, _benchLeader)).ToList(), c => c.Position);
+                talkee = Nearest("talker", host.Session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Alive(c)
+                    && host.Session.World.CanTalk(c.Id, _benchLeader)).ToList(), c => c.Position);
                 if (talkee is not null) Order(new Simulation.Dialogue.TalkOrder(_benchLeader, talkee.Id) { Tick = 0 });
             }),
-            new("trade", 12, Retry(() => host.Session.CurrentSnapshot.Trade is not null, () => { if (trader is not null) Order(new Simulation.Trading.OpenTrade(_benchLeader, trader.Id) { Tick = 0 }); }), Begin: () =>
+            new("trade", 12, Retry(() => host.Session.CurrentSnapshot.Trade is not null,
+                () => { if (trader is not null) Order(new Simulation.Trading.OpenTrade(_benchLeader, trader.Id) { Tick = 0 }); }), Begin: () =>
             {
                 Order(new Simulation.Dialogue.EndConversation { Tick = 0 });
                 trader = Nearest("trader", host.Session.CurrentSnapshot.Characters.Where(c => c.IsTrader && Alive(c)).ToList(), c => c.Position);
@@ -267,32 +290,47 @@ sealed class PlayBench(GameHost host)
             {
                 Order(new Simulation.Trading.CloseTrade { Tick = 0 });
                 box = Nearest("container", host.Session.CurrentSnapshot.Containers.Where(c => !c.Locked).ToList(), c => c.Position);
-                if (box is not null) Order(new Simulation.Items.OpenContainerOrder([_benchLeader], box.Id) { Tick = 0 });
+                if (box is not null)
+                    Order(new Simulation.Items.OpenContainerOrder([_benchLeader], box.Id) { Tick = 0 });
             }),
             new("doors", 8, (t, dt) => OnLeader(), Begin: () =>
             {
                 Order(new Simulation.Items.CloseContainer { Tick = 0 });
                 var leader = LeaderAt();
                 var doors = host.Session.CurrentSnapshot.DoorPicks.OrderBy(d => Vector3.DistanceSquared(d.Position, leader)).Take(3).ToList();
-                Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"bench     doors: {doors.Count}, the nearest {(doors.Count > 0 ? Vector3.Distance(doors[0].Position, leader) : float.NaN):0} away"));
+                Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                    $"bench     doors: {doors.Count}, "
+                    + $"the nearest {(doors.Count > 0 ? Vector3.Distance(doors[0].Position, leader) : float.NaN):0} away"));
                 foreach (var door in doors) Order(new Simulation.Locks.DoorOrder([_benchLeader], door.Id) { Tick = 0 });
             }),
             new("pick-up", 8, (t, dt) => OnLeader(), Begin: () =>
             {
                 var leader = LeaderAt();
                 var items = host.Session.CurrentSnapshot.GroundItems;
-                if (items.Count == 0) { Console.WriteLine("bench     no ground item"); return; }
+                if (items.Count == 0)
+                {
+                    Console.WriteLine("bench     no ground item");
+                    return;
+                }
+
                 var item = items.MinBy(i => Vector3.DistanceSquared(i.Position, leader));
-                Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"bench     ground item {item.Name} {Vector3.Distance(item.Position, leader):0} away"));
+                Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                    $"bench     ground item {item.Name} {Vector3.Distance(item.Position, leader):0} away"));
                 Order(new Simulation.Items.PickUpItemOrder([_benchLeader], item.Id) { Tick = 0 });
             }),
-            // Path requests: every half second the squad, or each member apart, is sent 20 to 200 m away in a random direction (some places it cannot reach).
+            // Path requests: every half second the squad, or each member apart, is sent 20 to 200 m away in a random direction (some places it cannot
+            // reach).
             new("paths", 20, (t, dt) =>
             {
                 OnLeader();
                 if ((int)((t - dt) * 2) == (int)(t * 2)) return;
                 var at = LeaderAt();
-                Vector3 Somewhere() { double a = random.NextDouble() * 2 * Math.PI, r = 200 + random.NextDouble() * 1800; return at + new Vector3((float)(Math.Cos(a) * r), 0, (float)(Math.Sin(a) * r)); }
+                Vector3 Somewhere()
+                {
+                    double a = random.NextDouble() * 2 * Math.PI, r = 200 + random.NextDouble() * 1800;
+                    return at + new Vector3((float)(Math.Cos(a) * r), 0, (float)(Math.Sin(a) * r));
+                }
+
                 var squad = Squad();
                 if ((int)(t * 2) % 3 == 0) Order(new MoveOrder(squad, Somewhere()) { Tick = 0 });
                 else foreach (var id in squad) Order(new MoveOrder([id], Somewhere()) { Tick = 0 });
@@ -301,27 +339,40 @@ sealed class PlayBench(GameHost host)
             {
                 host.Session.Simulation.SetSpeed(1);
                 var at = LeaderAt();
-                host.Session.World.Commands.Enqueue(new MoveOrder(Squad(), at + new Vector3(_benchDirection.X * 600, 0, _benchDirection.Y * 600)) { Tick = host.Session.World.Tick });
+                host.Session.World.Commands.Enqueue(new MoveOrder(Squad(),
+                    at + new Vector3(_benchDirection.X * 600, 0, _benchDirection.Y * 600)) { Tick = host.Session.World.Tick });
             }),
             new("fight", 25, (t, dt) => OnLeader(), Begin: () =>
             {
                 var world = host.Session.World;
                 var at = LeaderAt();
-                if (host.DebugMenu.DebugRecord(host.GameOptions.SceneNpc, character: true) is not { } npc) { Console.WriteLine($"bench     no character record matches '{host.GameOptions.SceneNpc}': no fight"); return; }
+                if (host.DebugMenu.DebugRecord(host.GameOptions.SceneNpc, character: true) is not { } npc)
+                {
+                    Console.WriteLine($"bench     no character record matches '{host.GameOptions.SceneNpc}': no fight");
+                    return;
+                }
+
                 for (int k = 0; k < 6; k++)
-                    world.Commands.Enqueue(new DebugSpawn(npc.Id, new Vector2(at.X + 50 + 15 * (k % 3), at.Z - 20 + 20 * (k / 3))) { Tick = world.Tick });
+                {
+                    world.Commands.Enqueue(new DebugSpawn(npc.Id,
+                        new Vector2(at.X + 50 + 15 * (k % 3), at.Z - 20 + 20 * (k / 3))) { Tick = world.Tick });
+                }
                 Console.WriteLine($"bench     fight: six {npc.Name} spawned beside the squad");
             }),
             new("fight-on", 0.1, Begin: () =>
             {
                 var at = LeaderAt();
-                if (host.Session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Vector3.Distance(c.Position, at) < 150).OrderBy(c => Vector3.DistanceSquared(c.Position, at)).FirstOrDefault() is { } enemy)
+                if (host.Session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && Vector3.Distance(c.Position, at) < 150)
+                    .OrderBy(c => Vector3.DistanceSquared(c.Position, at))
+                    .FirstOrDefault() is { } enemy)
                     host.Session.World.Commands.Enqueue(new Simulation.Combat.AttackOrder(Squad(), enemy.Id) { Tick = host.Session.World.Tick });
             }),
-            new("loot", 8, Retry(() => !host.Session.CurrentSnapshot.OpenLoot.IsNone, () => { if (body is not null) Order(new Simulation.Carrying.OpenLootOrder([_benchLeader], body.Id) { Tick = 0 }); }), Begin: () =>
+            new("loot", 8, Retry(() => !host.Session.CurrentSnapshot.OpenLoot.IsNone,
+                () => { if (body is not null) Order(new Simulation.Carrying.OpenLootOrder([_benchLeader], body.Id) { Tick = 0 }); }), Begin: () =>
             {
                 body = Nearest("downed body", host.Session.CurrentSnapshot.Characters.Where(c => !c.IsPlayer && !Alive(c)).ToList(), c => c.Position);
-                if (body is not null) Order(new Simulation.Carrying.OpenLootOrder([_benchLeader], body.Id) { Tick = 0 });
+                if (body is not null)
+                    Order(new Simulation.Carrying.OpenLootOrder([_benchLeader], body.Id) { Tick = 0 });
             }),
             new("panels", 12, (t, dt) =>
             {
@@ -329,8 +380,14 @@ sealed class PlayBench(GameHost host)
                 if (panel != _benchPanel)
                 {
                     _benchPanel = panel;
-                    try { host.Player.ShowUiPanel(panel); }
-                    catch (InvalidOperationException e) { Console.WriteLine($"bench     panel {panel}: {e.Message}"); }
+                    try
+                    {
+                        host.Player.ShowUiPanel(panel);
+                    }
+                    catch (InvalidOperationException e)
+                    {
+                        Console.WriteLine($"bench     panel {panel}: {e.Message}");
+                    }
                 }
             }, Begin: () => _benchPanel = "-"),
             // The same panels again (what the first opening built is warm), with the limbs and the build menu.
@@ -340,18 +397,26 @@ sealed class PlayBench(GameHost host)
                 if (panel != _benchPanel)
                 {
                     _benchPanel = panel;
-                    try { host.Player.ShowUiPanel(panel); }
-                    catch (Exception e) when (e is InvalidOperationException or ArgumentException) { Console.WriteLine($"bench     panel {panel}: {e.Message}"); }
+                    try
+                    {
+                        host.Player.ShowUiPanel(panel);
+                    }
+                    catch (Exception e) when (e is InvalidOperationException or ArgumentException)
+                    {
+                        Console.WriteLine($"bench     panel {panel}: {e.Message}");
+                    }
                 }
             }, Begin: () => _benchPanel = "-"),
             // The far grazing view: the most terrain, foliage and objects in sight.
-            new("horizon", 12, (t, dt) => Look(_benchOrigin, yaw0 + (float)(t * 2 * Math.PI / 12), 0.12f, 900), Begin: () => host.Player.ShowUiPanel(null)),
+            new("horizon", 12, (t, dt) => Look(_benchOrigin, yaw0 + (float)(t * 2 * Math.PI / 12), 0.12f, 900),
+                Begin: () => host.Player.ShowUiPanel(null)),
             new("overview", 8, Begin: () =>
             {
                 host.Player.ShowUiPanel(null);
                 Look(_benchOrigin, yaw0, 1.2f, Data.World.KenshiCamera.MaxDistance);
             }),
-            // Every player character in turn, twice, 6 s each, as a double click on its portrait does (a character flight with "Character flights" on, else a cut).
+            // Every player character in turn, twice, 6 s each, as a double click on its portrait does (a character flight with "Character flights"
+            // on, else a cut).
             new("flights", 6 * 2 * Math.Max(1, host.Session.CurrentSnapshot.PlayerSquads.Sum(s => s.Members.Count)), (t, dt) =>
             {
                 var members = host.Session.CurrentSnapshot.PlayerSquads.SelectMany(s => s.Members).ToList();
@@ -378,7 +443,8 @@ sealed class PlayBench(GameHost host)
         var ci = CultureInfo.InvariantCulture;
         var stages = StageClock.Names;
         var csv = new StringBuilder();
-        csv.Append("frame,segment,t,frame_ms,update_ms,busy_ms,ticks,characters,far,gpu_total_ms,gc0,gc1,gc2,alloc_mb,gc_pause_ms,working_set_mb,vram_mb");
+        csv.Append("frame,segment,t,frame_ms,update_ms,busy_ms,ticks,characters,far,gpu_total_ms,gc0,gc1,gc2,alloc_mb,gc_pause_ms,working_set_mb,"
+            + "vram_mb");
         foreach (var s in BenchSections) csv.Append(",loop_").Append(s);
         csv.Append(",control_camera_ms,control_handlers_ms,top_system,top_system_ms,late_pipelines");
         foreach (var s in TickProfile.PhaseNames) csv.Append(",sim_").Append(s.Replace(' ', '-'));
@@ -388,12 +454,15 @@ sealed class PlayBench(GameHost host)
         for (int i = 0; i < _benchFrames.Count; i++)
         {
             var f = _benchFrames[i];
-            csv.Append(ci, $"{i},{_benchScript[f.Segment].Name},{f.T:0.000},{f.FrameMs:0.00},{f.UpdateMs:0.00},{f.Busy:0.00},{f.Ticks},{f.Characters},{f.Far},{f.GpuTotal:0.00},{f.Gc0},{f.Gc1},{f.Gc2},{f.AllocMb:0.00},{f.PauseMs:0.00},{f.WorkingSetMb:0},{(double.IsNaN(f.VramMb) ? "" : f.VramMb.ToString("0", ci))}");
+            csv.Append(ci, $"{i},{_benchScript[f.Segment].Name},{f.T:0.000},{f.FrameMs:0.00},{f.UpdateMs:0.00},{f.Busy:0.00},{f.Ticks},{f.Characters},"
+                + $"{f.Far},{f.GpuTotal:0.00},{f.Gc0},{f.Gc1},{f.Gc2},{f.AllocMb:0.00},{f.PauseMs:0.00},{f.WorkingSetMb:0},"
+                + $"{(double.IsNaN(f.VramMb) ? "" : f.VramMb.ToString("0", ci))}");
             foreach (var v in f.Sections) csv.Append(ci, $",{v:0.000}");
             csv.Append(ci, $",{f.CameraMs:0.000},{f.HandlersMs:0.000},{f.TopSystem},{f.TopSystemMs:0.000},{f.LatePipelines}");
             foreach (var v in f.Steps) csv.Append(ci, $",{v:0.000}");
             foreach (var v in f.Cpu) csv.Append(ci, $",{v:0.000}");
-            for (int s = 0; s < stages.Length; s++) csv.Append(ci, $",{(f.Gpu is { } g2 && s < g2.Length ? g2[s] : double.NaN):0.000}");
+            for (int s = 0; s < stages.Length; s++)
+                csv.Append(ci, $",{(f.Gpu is { } g2 && s < g2.Length ? g2[s] : double.NaN):0.000}");
             csv.AppendLine();
         }
         File.WriteAllText(Path.Combine(dir, "frames.csv"), csv.ToString());
@@ -415,14 +484,17 @@ sealed class PlayBench(GameHost host)
         foreach (var g2 in collections.GroupBy(c => c.Generation).OrderBy(g2 => g2.Key))
         {
             var p = g2.Select(c => c.PauseMs).Order().ToList();
-            sb.Append(ci, $"- gen{g2.Key}: {p.Count} collections, pause median {p[p.Count / 2]:0.0} ms, p95 {p[Math.Min(p.Count - 1, (int)(0.95 * p.Count))]:0.0}, max {p[^1]:0.0}, total {p.Sum():0} ms; reasons {string.Join(", ", g2.GroupBy(c => c.Reason).Select(r => $"{r.Key}x{r.Count()}"))}\n");
+            sb.Append(ci, $"- gen{g2.Key}: {p.Count} collections, pause median {p[p.Count / 2]:0.0} ms, "
+                + $"p95 {p[Math.Min(p.Count - 1, (int)(0.95 * p.Count))]:0.0}, max {p[^1]:0.0}, total {p.Sum():0} ms; "
+                + $"reasons {string.Join(", ", g2.GroupBy(c => c.Reason).Select(r => $"{r.Key}x{r.Count()}"))}\n");
         }
         // The longer pauses with the frame (and segment) they fell in: the last frame started before the pause.
         var starts = _benchFrames.Select(f => f.StartMs).ToArray();
         var longer = collections.Where(c => c.PauseMs >= 5).OrderByDescending(c => c.PauseMs).Take(30).ToList();
         if (longer.Count > 0)
         {
-            sb.Append("\nPauses of 5 ms or more, longest first (frame: the one running when it began):\n\n| frame | segment | gen | reason | pause ms |\n|---|---|---|---|---|\n");
+            sb.Append("\nPauses of 5 ms or more, longest first (frame: the one running when it began):\n\n"
+                + "| frame | segment | gen | reason | pause ms |\n|---|---|---|---|---|\n");
             foreach (var c in longer)
             {
                 int i = Array.BinarySearch(starts, c.AtMs);
@@ -432,10 +504,12 @@ sealed class PlayBench(GameHost host)
             }
         }
         long total = allocated.Values.Sum();
-        sb.Append(ci, $"\nAllocation samples: about {total / 1048576.0:0} MB over {seconds:0} s ({total / 1048576.0 / Math.Max(seconds, 1):0} MB/s). The 40 largest types:\n\n| type | MB | share |\n|---|---|---|\n");
+        sb.Append(ci, $"\nAllocation samples: about {total / 1048576.0:0} MB over {seconds:0} s ({total / 1048576.0 / Math.Max(seconds, 1):0} MB/s). "
+            + $"The 40 largest types:\n\n| type | MB | share |\n|---|---|---|\n");
         foreach (var (type, bytes) in allocated.OrderByDescending(kv => kv.Value).Take(40))
             sb.Append(ci, $"| `{type}` | {bytes / 1048576.0:0} | {100.0 * bytes / Math.Max(total, 1):0.0}% |\n");
-        sb.Append("\nGC reasons: 0 small allocation, 1 induced, 2 low memory, 3 empty, 4 large allocation, 5 out of space (small), 6 out of space (large), 7 induced not forced.\n");
+        sb.Append("\nGC reasons: 0 small allocation, 1 induced, 2 low memory, 3 empty, 4 large allocation, 5 out of space (small), "
+            + "6 out of space (large), 7 induced not forced.\n");
         return sb.ToString();
     }
 
@@ -443,12 +517,14 @@ sealed class PlayBench(GameHost host)
     {
         var ci = CultureInfo.InvariantCulture;
         var sb = new StringBuilder();
-        static double P(List<double> v, double q) { if (v.Count == 0) return 0; var s = v.Order().ToList(); return s[Math.Min(s.Count - 1, (int)(q * s.Count))]; }
         var stages = StageClock.Names;
         string device = host.Gpu.Sky.Gpu is Rendering.Gpu.GpuContext vk ? vk.Device.DeviceName : "Metal";
-        sb.Append(ci, $"# Play benchmark\n\n{_benchFrames.Count} frames, {sz.X}x{sz.Y}, {device}, upscaler {host.WorldOptions.Post.Upscale.Kind} at {host.WorldOptions.Post.Upscale.EffectiveScale:0.00}; frame limit and vsync off.\n\n");
-        if (host.Gpu.Shadow is { Meitou: true } shadowPass) sb.Append(ci, $"Shadows: {shadowPass.DescribeMeitou()}.\n\n");
-        sb.Append("| segment | frames | fps | frame ms p50 | p95 | p99 | max | update ms | ticks/frame | sim ms/tick | gpu ms | render cpu ms | alloc MB/s | gen2 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+        sb.Append(ci, $"# Play benchmark\n\n{_benchFrames.Count} frames, {sz.X}x{sz.Y}, {device}, upscaler {host.WorldOptions.Post.Upscale.Kind} "
+            + $"at {host.WorldOptions.Post.Upscale.EffectiveScale:0.00}; frame limit and vsync off.\n\n");
+        if (host.Gpu.Shadow is { Meitou: true } shadowPass)
+            sb.Append(ci, $"Shadows: {shadowPass.DescribeMeitou()}.\n\n");
+        sb.Append("| segment | frames | fps | frame ms p50 | p95 | p99 | max | update ms | ticks/frame | sim ms/tick | gpu ms | render cpu ms | "
+            + "alloc MB/s | gen2 |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
         for (int s = 0; s < _benchScript!.Length; s++)
         {
             var fs = _benchFrames.Where(f => f.Segment == s).ToList();
@@ -456,7 +532,11 @@ sealed class PlayBench(GameHost host)
             var ms = fs.Select(f => f.FrameMs).ToList();
             double seconds = ms.Sum() / 1000, ticks = fs.Sum(f => f.Ticks), sim = fs.Sum(f => f.Steps.Sum());
             var gpuMs = fs.Where(f => f.Gpu is not null).Select(f => f.GpuTotal).ToList();
-            sb.Append(ci, $"| {_benchScript[s].Name} | {fs.Count} | {fs.Count / seconds:0} | {P(ms, 0.5):0.0} | {P(ms, 0.95):0.0} | {P(ms, 0.99):0.0} | {ms.Max():0.0} | {fs.Average(f => f.UpdateMs):0.00} | {ticks / fs.Count:0.0} | {(ticks > 0 ? sim / ticks : 0):0.00} | {(gpuMs.Count > 0 ? gpuMs.Average() : 0):0.00} | {fs.Average(f => f.Cpu.Sum()):0.00} | {fs.Sum(f => f.AllocMb) / seconds:0} | {fs.Sum(f => f.Gc2)} |\n");
+            sb.Append(ci, $"| {_benchScript[s].Name} | {fs.Count} | {fs.Count / seconds:0} | {P(ms, 0.5):0.0} | {P(ms, 0.95):0.0} | "
+                + $"{P(ms, 0.99):0.0} | {ms.Max():0.0} | {fs.Average(f => f.UpdateMs):0.00} | {ticks / fs.Count:0.0} "
+                + $"| {(ticks > 0 ? sim / ticks : 0):0.00} | "
+                + $"{(gpuMs.Count > 0 ? gpuMs.Average() : 0):0.00} | {fs.Average(f => f.Cpu.Sum()):0.00} | {fs.Sum(f => f.AllocMb) / seconds:0} | "
+                + $"{fs.Sum(f => f.Gc2)} |\n");
         }
         // Per segment: the stages that cost most on each side, the world tick's steps, the systems.
         for (int s = 0; s < _benchScript.Length; s++)
@@ -465,7 +545,9 @@ sealed class PlayBench(GameHost host)
             if (fs.Count < 2) continue;
             sb.Append(ci, $"\n## {_benchScript[s].Name}\n\n");
             string Top(Func<BenchFrame, double[]?> pick, string[] names, int n) => string.Join(", ", Enumerable.Range(0, names.Length)
-                .Select(i => (Name: names[i], Ms: fs.Where(f => pick(f) is { } a && i < a.Length && double.IsFinite(a[i])).Select(f => pick(f)![i]).DefaultIfEmpty(0).Average()))
+                .Select(i => (Name: names[i], Ms: fs.Where(f => pick(f) is { } a && i < a.Length && double.IsFinite(a[i])).Select(f => pick(f)![i])
+                .DefaultIfEmpty(0)
+                .Average()))
                 .OrderByDescending(x => x.Ms).Take(n).Where(x => x.Ms >= 0.01).Select(x => string.Create(ci, $"{x.Name} {x.Ms:0.00}")));
             sb.Append("- game loop ms/frame: ").Append(Top(f => f.Sections, BenchSections, 9)).Append('\n');
             sb.Append("- render thread ms/frame: ").Append(Top(f => f.Cpu, stages, 8)).Append('\n');
@@ -476,28 +558,62 @@ sealed class PlayBench(GameHost host)
                 .Select(kv => string.Create(ci, $"{kv.Key.System} {kv.Value / frames:0.00}"));
             sb.Append("- systems ms/frame: ").Append(string.Join(", ", systems)).Append('\n');
         }
+        BenchStutters(sb, stages);
+        var last = _benchFrames.Count > 0 ? _benchFrames[^1] : null;
+        sb.Append(ci, $"\nCollections over the run: gen0 {_benchFrames.Sum(f => f.Gc0)}, gen1 {_benchFrames.Sum(f => f.Gc1)}, "
+            + $"gen2 {_benchFrames.Sum(f => f.Gc2)}, pauses {_benchFrames.Sum(f => f.PauseMs):0} ms; "
+            + $"allocated {_benchFrames.Sum(f => f.AllocMb):0} MB; "
+            + $"working set at the end {last?.WorkingSetMb:0} MB.\n");
+        var vram = _benchFrames.Where(f => !double.IsNaN(f.VramMb)).ToList();
+        if (vram.Count > 0)
+            sb.Append(ci, $"Video memory: peak {vram.Max(f => f.VramMb):0} MB, at the end {vram[^1].VramMb:0} MB.\n");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// The value at quantile <paramref name="q"/> of <paramref name="v"/> (0 when empty).
+    /// </summary>
+    static double P(List<double> v, double q)
+    {
+        if (v.Count == 0) return 0;
+        var s = v.Order().ToList();
+        return s[Math.Min(s.Count - 1, (int)(q * s.Count))];
+    }
+
+    /// <summary>
+    /// The summary's stutter table: the frames over twice their segment's median and 20 ms, the worst 40, with what was largest in them.
+    /// </summary>
+    void BenchStutters(StringBuilder sb, string[] stages)
+    {
+        var ci = CultureInfo.InvariantCulture;
         // Stutters: frames over twice their segment's median and 20 ms, the worst first, with what was largest in them.
-        sb.Append("\n## Stutters\n\nFrames over twice their segment's median frame time and over 20 ms, worst first: what the frame held most (render-thread stage, world tick, collections).\n\n");
-        var medians = Enumerable.Range(0, _benchScript.Length).Select(s => P(_benchFrames.Where(f => f.Segment == s).Select(f => f.FrameMs).ToList(), 0.5)).ToArray();
-        var hitches = _benchFrames.Select((f, i) => (f, i)).Where(x => x.f.FrameMs > Math.Max(20, 2 * medians[x.f.Segment])).OrderByDescending(x => x.f.FrameMs).ToList();
-        sb.Append(ci, $"{hitches.Count} frames; by segment: {string.Join(", ", hitches.GroupBy(h => _benchScript[h.f.Segment].Name).Select(g2 => $"{g2.Key} {g2.Count()}"))}.\n\n");
-        sb.Append("| frame | segment | t s | frame ms | largest loop sections | ticks | largest render stages | largest tick steps | gc |\n|---|---|---|---|---|---|---|---|---|\n");
+        sb.Append("\n## Stutters\n\nFrames over twice their segment's median frame time and over 20 ms, worst first: "
+            + "what the frame held most (render-thread stage, world tick, collections).\n\n");
+        var medians = Enumerable.Range(0, _benchScript!.Length)
+            .Select(s => P(_benchFrames.Where(f => f.Segment == s).Select(f => f.FrameMs).ToList(), 0.5))
+            .ToArray();
+        var hitches = _benchFrames.Select((f, i) => (f, i)).Where(x => x.f.FrameMs > Math.Max(20, 2 * medians[x.f.Segment]))
+            .OrderByDescending(x => x.f.FrameMs)
+            .ToList();
+        sb.Append(ci, $"{hitches.Count} frames; "
+            + $"by segment: {string.Join(", ", hitches.GroupBy(h => _benchScript[h.f.Segment].Name).Select(g2 => $"{g2.Key} {g2.Count()}"))}.\n\n");
+        sb.Append("| frame | segment | t s | frame ms | largest loop sections | ticks | largest render stages | largest tick steps | gc |\n"
+            + "|---|---|---|---|---|---|---|---|---|\n");
         foreach (var (f, i) in hitches.Take(40))
         {
-            string cpu = string.Join(", ", f.Cpu.Select((v, k) => (v, k)).OrderByDescending(x => x.v).Take(3).Select(x => string.Create(ci, $"{stages[x.k]} {x.v:0.0}")));
-            string sim = string.Join(", ", f.Steps.Select((v, k) => (v, k)).OrderByDescending(x => x.v).Take(2).Where(x => x.v > 0.1).Select(x => string.Create(ci, $"{TickProfile.PhaseNames[x.k]} {x.v:0.0}")));
+            string cpu = string.Join(", ", f.Cpu.Select((v, k) => (v, k)).OrderByDescending(x => x.v).Take(3)
+                .Select(x => string.Create(ci, $"{stages[x.k]} {x.v:0.0}")));
+            string sim = string.Join(", ", f.Steps.Select((v, k) => (v, k)).OrderByDescending(x => x.v).Take(2).Where(x => x.v > 0.1)
+                .Select(x => string.Create(ci, $"{TickProfile.PhaseNames[x.k]} {x.v:0.0}")));
             if (f.TopSystemMs > 0.1) sim += string.Create(ci, $" ({f.TopSystem} {f.TopSystemMs:0.0})");
             string gc = f.Gc0 + f.Gc1 + f.Gc2 == 0 ? "" : string.Create(ci, $"gen0 {f.Gc0}, gen1 {f.Gc1}, gen2 {f.Gc2}, pause {f.PauseMs:0.0} ms");
             // The frame's interval holds the previous frame's tail and this one's sections.
             var tail = i > 0 ? _benchFrames[i - 1].Sections[BenchTail] : 0;
-            string loop = string.Join(", ", f.Sections.Take(BenchTail).Select((v, k) => (v, k)).Append((tail, BenchTail)).OrderByDescending(x => x.Item1).Take(3)
+            string loop = string.Join(", ", f.Sections.Take(BenchTail).Select((v, k) => (v, k)).Append((tail, BenchTail))
+                .OrderByDescending(x => x.Item1)
+                .Take(3)
                 .Select(x => string.Create(ci, $"{BenchSections[x.Item2]} {x.Item1:0.0}")));
             sb.Append(ci, $"| {i} | {_benchScript[f.Segment].Name} | {f.T:0.0} | {f.FrameMs:0.0} | {loop} | {f.Ticks} | {cpu} | {sim} | {gc} |\n");
         }
-        var last = _benchFrames.Count > 0 ? _benchFrames[^1] : null;
-        sb.Append(ci, $"\nCollections over the run: gen0 {_benchFrames.Sum(f => f.Gc0)}, gen1 {_benchFrames.Sum(f => f.Gc1)}, gen2 {_benchFrames.Sum(f => f.Gc2)}, pauses {_benchFrames.Sum(f => f.PauseMs):0} ms; allocated {_benchFrames.Sum(f => f.AllocMb):0} MB; working set at the end {last?.WorkingSetMb:0} MB.\n");
-        var vram = _benchFrames.Where(f => !double.IsNaN(f.VramMb)).ToList();
-        if (vram.Count > 0) sb.Append(ci, $"Video memory: peak {vram.Max(f => f.VramMb):0} MB, at the end {vram[^1].VramMb:0} MB.\n");
-        return sb.ToString();
     }
 }

@@ -411,7 +411,7 @@ the large per-pixel differences left are the missing shadows and GI (steps 4 and
    `gpu.Device.Limits.MinUniformBufferOffsetAlignment` → the seam's device fact
    (`UniformBufferAlign` exists on `IGpuContext`). Keep the Vulkan parity byte-for-byte: the
    widening must not change the Vulkan path's code paths, only their parameter types.
-2. The game's Metal path (`GameHost.Metal.cs`): give the host pass a **depth attachment** (a
+2. The game's Metal path (`Host/MetalGameLoop.cs`): give the host pass a **depth attachment** (a
    per-slot depth texture at the backbuffer's size — the context owns it, resized with the
    backbuffer); the pass's state becomes `DrawState.Scene` (depth tested); the sky draws, then
    `terrain.Draw(viewProjection, eye, frustum, options, light)` with the light from
@@ -487,7 +487,7 @@ population and navmesh now run in the live loop); the world's lamps and room lig
 particles (the low-resolution targets are shared; the near-plane close pass is still Vulkan-only); the HUD and the faithful panels
 (inventory, stats, overview/map, menu), with portraits, item icons and the panels' own pointer/keyboard controls;
 the hover outline, move marker and navmesh debug overlay (Shift+F11).
-`GameHost.Metal.cs` is now a playable loop: WASD/arrows, Q/E, wheel and middle-drag
+`MetalGameLoop` (`Host/MetalGameLoop.cs`) is now a playable loop: WASD/arrows, Q/E, wheel and middle-drag
 move the strategy camera; edge scrolling, left click/box select, right-click move orders and the HUD keys work;
 F7 hides the interface, F8 saves a screenshot, Ctrl+/ writes one frame's Metal capture (`.gputrace`), F11 lists the frame, F12 the fps line, Alt+Enter is borderless.
 The shared settings menu is now wired on Metal too (F10; Display, Graphics, Interface, Controls, Advanced and Audio),
@@ -624,7 +624,7 @@ Keep `RecordsSecondaries` false: Metal records inline into one list.
    (`uFogVolumeData`, `uFogVolumeEye` and `uFogVolumeInfo` are published by `FogVolumes`). SSAO, FXAA, the heat haze
    and the light shafts (`LightShaftShaders` inject/integrate/scatter/apply) run there too. The shafts use the
    fragment integrate/scatter path; the compute scan is Vulkan-only. Still to do: the fog-rate target
-   (`PostProcess.FogRate`), which the shafts and the volumetric fog read. Metal has no fragment-shading-rate
+   (`FogRateImage`), which the shafts and the volumetric fog read. Metal has no fragment-shading-rate
    attachment, so the FogRate path stays Vulkan-only unless a non-VRS fallback is added.
 3. **The HiZ pyramid and the GPU culls** (`HizPyramid`, `FoliageGpuCull`, `FoliageGrassGpu`): `FoliageGpuCull`
    now works on Metal through `IGpuContext`, argument buffers and a separate pre-frame command buffer, and is live
@@ -805,7 +805,7 @@ default.
   also runs upstream's rotor pass, so wind generators and other `ROTATION_OUTPUT` parts turn on Metal.
 - **Play benchmark.** `--play-bench` is Vulkan-only: Metal rejects it with a message because the report's late-pipeline
   and display timings are Vulkan's.
-- **UI/input scope.** `GameHost.Metal` boots `PlayerInterface` for presentation (`LoadUi`, `ArrangeUi`, `Draw`),
+- **UI/input scope.** `MetalGameLoop` boots `PlayerInterface` for presentation (`LoadUi`, `ArrangeUi`, `Draw`),
   portraits, item icons and the map callbacks. It wires the panels' keyboard/pointer controls (I/C, M/T/Y, Esc,
   F7, F10 settings, hover/click/scroll), the strategy camera (WASD/arrows, Q/E, wheel, middle drag, edge scroll),
   selection/box select and right-click move orders. Title, new game, save/load, audio and the shared trade, dialogue,

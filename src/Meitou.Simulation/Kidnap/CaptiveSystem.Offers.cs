@@ -80,8 +80,11 @@ public sealed partial class CaptiveSystem
     {
         var table = world.Characters;
         foreach (var id in _ended)
+        {
             if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { Ai.Squad: { Ai: { } board } squad })
                 KeepOffers(world, squad, board, slot, world.Hour);
+        }
+
         _ended.Clear();
     }
 

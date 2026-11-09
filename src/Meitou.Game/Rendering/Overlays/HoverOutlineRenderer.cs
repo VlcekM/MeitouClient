@@ -109,8 +109,7 @@ public sealed class HoverOutlineRenderer
         GpuTexture sceneDepthTexture, int renderWidth, int renderHeight, float sceneNear, float sceneFar, Matrix4x4 viewProjection)
     {
         int outline = Math.Clamp((int)MathF.Round(2.5f * height / 1080f), 1, 6);
-        var nearest = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        var nearest = _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
         var viewport = new PixelViewport(0, 0, width, height, 0, 1);
         foreach (var hover in masks)
         {
@@ -152,6 +151,7 @@ public sealed class HoverOutlineRenderer
         {
             joined = false;
             for (int i = 0; i < rects.Count && !joined; i++)
+            {
                 for (int j = i + 1; j < rects.Count && !joined; j++)
                 {
                     var (a, b) = (rects[i], rects[j]);
@@ -163,6 +163,7 @@ public sealed class HoverOutlineRenderer
                     rects.RemoveAt(j);
                     joined = true;
                 }
+            }
         }
     }
 

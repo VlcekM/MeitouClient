@@ -79,7 +79,13 @@ public sealed partial class SaveFolder
     /// <summary>
     /// The names of the files in <c>platoon/</c>.
     /// </summary>
-    public IEnumerable<string> PlatoonFiles => Names.Where(n => n.StartsWith(PlatoonDirectory + "/", StringComparison.OrdinalIgnoreCase) && n.EndsWith(".platoon", StringComparison.OrdinalIgnoreCase));
+    public IEnumerable<string> PlatoonFiles => Names.Where(IsPlatoonFile);
+
+    /// <summary>
+    /// A name in <see cref="PlatoonDirectory"/> ending <c>.platoon</c>.
+    /// </summary>
+    static bool IsPlatoonFile(string n) =>
+        n.StartsWith(PlatoonDirectory + "/", StringComparison.OrdinalIgnoreCase) && n.EndsWith(".platoon", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The zones that have a file in <c>zone/</c> (the files, not the CAMERA list: they can differ, which the game warns about).

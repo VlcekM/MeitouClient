@@ -289,14 +289,16 @@ public static class TechniqueChooser
 
     static float ReactionWeight(CombatTechnique t, int category, bool prone, ReactionPool pool, int blowDirection)
     {
-        if (t.Disabled || t.IsStumbleDodge != (pool == ReactionPool.StumbleDodges) || !(t.IsBlock || t.IsDodge) || !Fits(t, category) || t.IsProne != prone)
+        if (t.Disabled || t.IsStumbleDodge != (pool == ReactionPool.StumbleDodges) || !(t.IsBlock || t.IsDodge)
+            || !Fits(t, category) || t.IsProne != prone)
             return 0;
 
         bool inPool = pool switch
         {
             ReactionPool.StumbleDodges => t.IsDodge,
             ReactionPool.Facing => t.IsBlock && !t.IsDodge && t.AttackDirection1 == blowDirection,
-            ReactionPool.WrongDirection => t.IsBlock && !t.IsDodge && t.AttackDirection1 != blowDirection && SameClass(t.AttackDirection1, blowDirection),
+            ReactionPool.WrongDirection =>
+                t.IsBlock && !t.IsDodge && t.AttackDirection1 != blowDirection && SameClass(t.AttackDirection1, blowDirection),
             _ => t.IsDodge,
         };
 

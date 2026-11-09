@@ -22,7 +22,8 @@ static class SolidHits
     /// <summary>
     /// The fraction of <paramref name="seg"/> from <paramref name="from"/> where it first meets the terrain or a building, -1 when it meets neither.
     /// </summary>
-    public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep, out bool building, bool roofs = false)
+    public static float Hit(IWalkability walk, IRagdollEnvironment? buildings, Vector3 from, Vector3 seg, float terrainStep,
+        out bool building, bool roofs = false)
     {
         float ground = Terrain(walk, from, seg, terrainStep);
         float wall = buildings is null ? -1 : Buildings(buildings, from, seg, ground < 0 ? 1 : ground, roofs);

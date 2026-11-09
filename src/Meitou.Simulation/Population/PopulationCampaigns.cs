@@ -835,6 +835,7 @@ public sealed partial class PopulationSystem : IStateHashed
         {
             if (p.Stored is { } stored && stored.Members.Any(m => m.Cold.RecordId == recordId && m.Cold.Medical is not { Dead: true }))
                 return p;
+
             if (p.Saved is { } saved && saved.Members.Any(m => !m.Dead && !m.Gone && m.Source.RecordId == recordId))
                 return p;
         }
@@ -848,8 +849,10 @@ public sealed partial class PopulationSystem : IStateHashed
     SquadTemplate? LeaderTemplate(string recordId)
     {
         foreach (var r in _data.Db.OfType(FcsRecordType.SquadTemplate).Concat(_data.Db.OfType(FcsRecordType.UniqueSquadTemplate)))
+        {
             if (r.GetReferences("leader") is { Count: > 0 } l && l[0].TargetStringId == recordId)
                 return SquadTemplate.From(r);
+        }
 
         return null;
     }
@@ -1347,14 +1350,19 @@ public sealed partial class PopulationSystem : IStateHashed
         {
             int carriers = 0;
             if (world.Platoons.Find(id) is { State: PlatoonState.Loaded } p && world.Squads.Find(p.SquadId) is { } squad)
+            {
                 foreach (var member in squad.Members)
+                {
                     if (table.TryResolveNext(member, out int slot))
                     {
                         var cold = table.Cold(slot)!;
+
                         // FUN_14028a4e0, first thing the package's update does: the victim-side mark that stops an Assault booking
                         cold.Ordered = true;
                         if (!cold.Carrying.IsNone) carriers++;
                     }
+                }
+            }
 
             if (carriers == 0)
             {
@@ -1497,9 +1505,11 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         var prev = world.Characters.Previous;
         for (int i = 0; i < prev.Length; i++)
+        {
             if (prev[i].Alive && world.Characters.Cold(i) is { IsPlayer: true }
                 && Vector3.DistanceSquared(prev[i].Position, at) <= range * range)
                 return true;
+        }
 
         return false;
     }
@@ -1507,9 +1517,11 @@ public sealed partial class PopulationSystem : IStateHashed
     bool AnyFighting(World world, CampaignInstance inst)
     {
         foreach (int id in inst.Platoons)
+        {
             if (world.Platoons.Find(id) is { State: PlatoonState.Loaded } p && world.Squads.Find(p.SquadId) is { } squad
                 && squad.Members.Any(m => world.Characters.TryResolveNext(m, out int s) && world.Characters.Cold(s) is { InCombat: true }))
                 return true;
+        }
 
         return false;
     }
@@ -1636,8 +1648,10 @@ public sealed partial class PopulationSystem : IStateHashed
     {
         int player = PlayerFactionOf(world);
         foreach (var m in _wars!)
+        {
             foreach (var a in m.Actives)
                 if (a.Phase != 2 && a.Enemy == player && CampaignOf(a.CampaignId) is { IsHostile: true }) return true;
+        }
 
         return false;
     }
@@ -1654,6 +1668,7 @@ public sealed partial class PopulationSystem : IStateHashed
     void MoveCampaigns(World world, float dt)
     {
         foreach (var m in _wars!)
+        {
             foreach (var inst in m.Actives)
             {
                 if (CampaignOf(inst.CampaignId) is not { } c || world.Platoons.Find(inst.Leader) is not { } leader) continue;
@@ -1684,6 +1699,7 @@ public sealed partial class PopulationSystem : IStateHashed
                     else p.Position += to / to.Length() * MathF.Min(speed * dt, d);
                 }
             }
+        }
     }
 
     /// <summary>
@@ -1987,12 +2003,16 @@ public sealed partial class PopulationSystem : IStateHashed
         HashWars(ref h);
         HashArtifacts(ref h);
         if (_prosperity is not null)
+        {
             for (int f = 0; f < _prosperity.Length; f++)
+            {
                 if (_prosperity[f] < _data.Factions[f].MaxProsperity)
                 {
                     h.Add(f);
                     h.Add(_prosperity[f]);
                 }
+            }
+        }
 
         foreach (var (site, kept) in _keptWild)
         {

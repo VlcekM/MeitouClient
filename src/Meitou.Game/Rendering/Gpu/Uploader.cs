@@ -21,7 +21,10 @@ public sealed unsafe class Uploader : IGpuUploads
         if (data.IsEmpty) return;
 
         if (target.UsedFrame == _ctx.Frame.Number)
-            throw new InvalidOperationException("the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+        {
+            throw new InvalidOperationException(
+                "the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+        }
 
         if (offset + (ulong)data.Length > target.Size) throw new ArgumentOutOfRangeException(nameof(data), "write past the end of the buffer");
 
@@ -43,7 +46,10 @@ public sealed unsafe class Uploader : IGpuUploads
         if (offsets.IsEmpty) return;
 
         if (target.UsedFrame == _ctx.Frame.Number)
-            throw new InvalidOperationException("the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+        {
+            throw new InvalidOperationException(
+                "the frame already drew from this buffer: per-frame data belongs in a Transient (docs/renderer-native.md 2.3)");
+        }
 
         if (data.Length != stride * offsets.Length) throw new ArgumentException("one record per offset", nameof(data));
 
@@ -58,7 +64,10 @@ public sealed unsafe class Uploader : IGpuUploads
 
         var cmd = Cmd;
         fixed (BufferCopy* p = copies)
-            _ctx.Device.Vk.CmdCopyBuffer(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.BufferAt(target.Handle.Index), (uint)copies.Length, p);
+        {
+            _ctx.Device.Vk.CmdCopyBuffer(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.BufferAt(target.Handle.Index),
+                (uint)copies.Length, p);
+        }
 
         TransferBarrier(cmd);
         _ctx.Frame.Stats.UploadBytes += data.Length;
@@ -81,7 +90,8 @@ public sealed unsafe class Uploader : IGpuUploads
             ImageExtent = new Extent3D(region.Width, region.Height, 1),
         };
         var cmd = Cmd;
-        _ctx.Device.Vk.CmdCopyBufferToImage(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.NativeImage(target), ImageLayout.General, 1, &copy);
+        _ctx.Device.Vk.CmdCopyBufferToImage(cmd, _ctx.Device.BufferAt(staging.Handle.Index), _ctx.Device.NativeImage(target), ImageLayout.General, 1,
+            &copy);
         TransferBarrier(cmd);
         _ctx.Frame.Stats.UploadBytes += data.Length;
         if (SpikeLog.Enabled) SpikeLog.Note("upload " + target.Desc.Name + (level > 0 ? " mip" : ""), data.Length);

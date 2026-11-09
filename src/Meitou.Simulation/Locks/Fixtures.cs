@@ -308,12 +308,14 @@ public sealed class Fixture
             if (AutoOpened) h.Add(LastPass);
             if (DoorProgress != 1) h.Add(DoorProgress);
         }
+
         h.Add(Occupant);
         if (Rack)
         {
             h.Add(RackTimer);
             h.Add(RackBusy);
         }
+
         Contents?.Hash(ref h);
     }
 }

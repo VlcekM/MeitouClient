@@ -92,11 +92,13 @@ sealed class TutorialPanel(PlayerInterface player)
             TutorialFlashes.Clear();
             return;
         }
+
         if (manager.Update(dt, () => TutorialPoll(false)) is { Count: > 0 } started)
         {
             foreach (int id in started) TutorialFlashes[id] = 1;
             player.InterfaceSounds.Sound("Thing_Complete");
         }
+
         foreach (int id in TutorialFlashes.Keys.ToArray())
             if ((TutorialFlashes[id] -= dt) <= 0) TutorialFlashes.Remove(id);
         if (TutorialShown is { } shown && !manager.Active.Contains(shown)) TutorialShown = null;
@@ -248,7 +250,8 @@ sealed class TutorialPanel(PlayerInterface player)
             || !player.Session.World.Player.Exists || player.CharacterEditor.EditorOpen)
             return;
 
-        float scale = player.Height / 1080f, lineHeight = MathF.Round(TutorialLineHeight * scale), width = MathF.Round(player.Width * TutorialListWidth);
+        float scale = player.Height / 1080f, lineHeight = MathF.Round(TutorialLineHeight * scale);
+        float width = MathF.Round(player.Width * TutorialListWidth);
         float y = player.Height * TutorialListHeight;
         var active = manager.Active;
         for (int k = active.Count - 1; k >= 0; k--)
@@ -276,6 +279,7 @@ sealed class TutorialPanel(PlayerInterface player)
                 else if (c.Name == "CloseButton") control = control with { Action = "meitou:tutorial", Argument = $"close:{id}" };
                 controls.Add(control);
             }
+
             if (TutorialFlashes.TryGetValue(id, out float alpha))
             {
                 var flashBounds = new UiRect(0, y, width, lineHeight);
@@ -283,6 +287,7 @@ sealed class TutorialPanel(PlayerInterface player)
                     new Vector4(1, 1, 1, alpha), Pickable: false));
             }
         }
+
         if (TutorialShown is not { } shown) return;
         var (title, pages) = TutorialCatalog.Items[shown];
         int page = Math.Clamp(manager.Pages[shown], 0, pages.Length - 1);
@@ -298,7 +303,13 @@ sealed class TutorialPanel(PlayerInterface player)
         if (page == 0) w.Disabled.Add("PrevTutorialButton");
         foreach (var c in MyGuiPresentation.Arrange(TutorialPanelLayout, player.Width, player.Height, w, player.UiResources.Layers))
         {
-            string? argument = c.Name switch { "NextTutorialButton" => "next", "PrevTutorialButton" => "prev", "DismissButton" => "dismiss", _ => null };
+            string? argument = c.Name switch
+            {
+                "NextTutorialButton" => "next",
+                "PrevTutorialButton" => "prev",
+                "DismissButton" => "dismiss",
+                _ => null,
+            };
             var control = c with { Name = c.Name.Length > 0 ? "tutorial-window-" + c.Name : c.Name };
             if (argument is not null) control = control with { Action = "meitou:tutorial", Argument = argument };
             else if (c.Action.StartsWith("mygui:close", StringComparison.Ordinal))
@@ -493,7 +504,8 @@ sealed class TutorialPanel(PlayerInterface player)
     {
         var snap = player.Session.CurrentSnapshot;
         int faction = player.Session.World.Player.Faction;
-        bool unsettled = false, aid = false, attack = false, ko = false, awake = false, sneak = false, hungry = false, playingDead = false, slave = false;
+        bool unsettled = false, aid = false, attack = false, ko = false, awake = false;
+        bool sneak = false, hungry = false, playingDead = false, slave = false;
         int pcs = 0;
         var pcIds = new List<CharacterId>();
         foreach (var c in snap.Characters)
@@ -523,6 +535,7 @@ sealed class TutorialPanel(PlayerInterface player)
             built |= site.Complete && m.Output is not null;
             crafting |= site.Complete && m.Craft is not null;
         }
+
         foreach (var m in snap.Machines)
             if (m.TechLevel > 0 && sites.TryGetValue(m.Site, out var bench) && bench.Complete) research = true;
         foreach (var site in sites.Values) unstarted |= !site.Complete && site.Progress == 0;

@@ -135,6 +135,7 @@ sealed class TitleMenu(PlayerInterface player)
             if (colour is not null) p["Colour"] = colour;
             return new(name, "ImageBox", at, "", "", "", true, p, Vector4.Zero, Pickable: false);
         }
+
         UiControl Text(string name, UiRect at, string text, float pixels, Vector4 colour, string align = "Left VCenter") =>
             new(name, "TextBox", at, text, "", "", true, new Dictionary<string, string> { ["TextAlign"] = align }, Vector4.Zero, colour,
                 Pickable: false, TextScale: pixels * s / 16);
@@ -165,6 +166,7 @@ sealed class TitleMenu(PlayerInterface player)
                 controls[i] = Hollow(c) with { Properties = new Dictionary<string, string>(c.Properties) { ["DefaultAction"] = "true" } };
                 continue;
             }
+
             if (Array.FindIndex(MenuButtons, m => m.Widget == c.Name) is not (>= 0 and var index)) continue;
             var (_, caption, icon) = MenuButtons[index];
             art.Add(Image("MeitouMenuPlate" + index, b, MenuPlate, colour: c.Enabled ? null : "0.7 0.7 0.7 1"));
@@ -258,6 +260,7 @@ sealed class TitleMenu(PlayerInterface player)
                             stack.Push((nx, ny));
                         }
                 }
+
                 blobs.Add((count, x0, y0, x1, y1));
             }
         if (blobs.Count == 0) return crop;
@@ -286,6 +289,7 @@ sealed class TitleMenu(PlayerInterface player)
 
             _continueInfo = (slot.Folder, slot.ModifiedUtc, info);
         }
+
         if (_continueInfo.Info is not { } i) return (slot.Name, "");
         var line = string.Join(" · ", new[] { slot.Name, $"Day {i.Day}", i.Area }.Where(p => !string.IsNullOrWhiteSpace(p)));
         string squad = string.Equals(i.Faction, slot.Name, StringComparison.OrdinalIgnoreCase) ? "" : i.Faction;

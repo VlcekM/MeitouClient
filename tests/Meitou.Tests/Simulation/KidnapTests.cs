@@ -385,6 +385,10 @@ public class KidnapInstallTests(ITestOutputHelper output)
     /// </summary>
     const float CageFloorRadius = 40;
 
+    /// <summary>
+    /// The Skin Bandits' small raid on an outpost of four player characters: the raiders lift the downed and cage them in their town, and a save
+    /// and a load keep them caged and kidnapped.
+    /// </summary>
     [Fact]
     public void A_cannibal_raid_lifts_downed_player_characters_and_cages_them_and_a_save_keeps_them_kidnapped()
     {
@@ -397,9 +401,9 @@ public class KidnapInstallTests(ITestOutputHelper output)
         var buildings = TownBuildings.Build(db, levels, new BuildingLayouts(db, levels.Interiors), (x, z) => map.HeightAt((float)x, (float)z));
         var data = PopulationData.Create(db, levels.Towns(), new GeneratedAppearances(db, install.Root), buildings: buildings);
 
-        // The terrain, with the floor the navmesh would give round each cage of the raiders' town: Skinhouse HQ's cages stand on upper floors, 87 to
-        // 95 above the
-        // ground, and a cage is reached only within 15 of its height (FixtureRegistry.AtCage). The heightmap's file reader is not thread-safe.
+        // The terrain, with the floor the navmesh would give round each cage of the raiders' town: Skinhouse HQ's cages stand on upper floors, 87
+        // to 95 above the ground, and a cage is reached only within 15 of its height (FixtureRegistry.AtCage). The heightmap's file reader is not
+        // thread-safe.
         var cageFloors = new List<Fixture>();
         var heightGate = new object();
         float Ground(float x, float z)
@@ -409,21 +413,8 @@ public class KidnapInstallTests(ITestOutputHelper output)
             lock (heightGate) return map.HeightAt(x, z);
         }
         var walk = new OpenGroundWalkability(Ground);
-        SimWorld NewWorld(PopulationSettings settings, out StandardSystemSet set)
-        {
-            set = StandardSystems.Build(data, walk, new StandardSystemOptions
-            {
-                Parts = StandardParts.Population | StandardParts.Player | StandardParts.Pursuit | StandardParts.Movement | StandardParts.Body
-                    | StandardParts.Combat | StandardParts.Retaliation
-                    | StandardParts.FirstAid | StandardParts.Aggro | StandardParts.Flee | StandardParts.Carry | StandardParts.Crime | StandardParts.Ai,
-                SynchronousPaths = true,
-                Population = settings,
-                Kidnap = new KidnapSettings { RecordLog = true },
-            });
-            return new SimWorld(new WorldSettings { Seed = 11, Threads = 2, PublishSnapshots = false }, walk, set.Systems);
-        }
 
-        using var world = NewWorld(new PopulationSettings { RaidFrequencyMult = 1000 }, out var set);
+        using var world = NewWorld(data, walk, new PopulationSettings { RaidFrequencyMult = 1000 }, out var set);
         var population = set.Population!;
         world.Player.Faction = data.PlayerFaction;
         int faction = Enumerable.Range(0, data.Factions.Count).First(f => data.Factions[f].Name == "Skin Bandits");
@@ -431,6 +422,54 @@ public class KidnapInstallTests(ITestOutputHelper output)
         Assert.Contains(data.Factions[faction].Campaigns, l => population.CampaignOf(l.Id)?.Name == "skin bandit standard raid small");
 
         // A town of theirs with cages, and an outpost 1500 east of it with four player characters.
+        var home = TownWithCages(world, data, faction);
+
+        Assert.NotNull(home);
+
+        cageFloors.AddRange(world.Fixtures.All.Where(x => x.Kind == FixtureKind.Cage && x.Site == home.Index));
+        var outpost = world.Buildings.AddTown(home.Position + new Vector3(1500, 0, 0), data.PlayerFaction);
+        world.RunTicks(15);
+        var war = population.Wars[faction];
+        foreach (var m in population.Wars) m.UpdateTime = m == war ? 0 : 1e9;
+        var heroes = SpawnHeroes(world, population, db, data, outpost);
+        var table = world.Characters;
+        foreach (var h in heroes) table.Cold(h.Slot)!.IsPlayer = true;
+
+        // The assault is won once nobody fights 0.2 h in, which the lifts themselves can bring about, so not every hero need be downed; the
+        // leader's captive goes to the campaign's home, which has no free cage. The carriers of the rest walk home and cage them.
+        for (int i = 0; i < 60 && Caged(world, heroes) < 2; i++) world.RunTicks(150);
+        output.WriteLine($"tick {world.Tick}: caged {Caged(world, heroes)}, lifted {set.Kidnap!.Log.Count(e => e.Kind == KidnapEventKind.Lifted)}");
+
+        Assert.True(set.Kidnap!.Log.Count(e => e.Kind == KidnapEventKind.Lifted && heroes.Contains(e.Victim)) >= 3);
+        Assert.True(Caged(world, heroes) >= 2);
+        Assert.All(heroes.Where(h => table.Cold(h.Slot)!.IsImprisoned), h => Assert.True(table.Cold(h.Slot)!.Kidnapped));
+
+        ASaveKeepsThemKidnapped(world, data, walk, levels, heroes);
+    }
+
+    /// <summary>
+    /// A world of the install's data with population, the player, fighting, first aid, aggro, flight, carrying, crime and AI, paths found at once
+    /// and the kidnap log recorded.
+    /// </summary>
+    static SimWorld NewWorld(PopulationData data, OpenGroundWalkability walk, PopulationSettings settings, out StandardSystemSet set)
+    {
+        set = StandardSystems.Build(data, walk, new StandardSystemOptions
+        {
+            Parts = StandardParts.Population | StandardParts.Player | StandardParts.Pursuit | StandardParts.Movement | StandardParts.Body
+                | StandardParts.Combat | StandardParts.Retaliation
+                | StandardParts.FirstAid | StandardParts.Aggro | StandardParts.Flee | StandardParts.Carry | StandardParts.Crime | StandardParts.Ai,
+            SynchronousPaths = true,
+            Population = settings,
+            Kidnap = new KidnapSettings { RecordLog = true },
+        });
+        return new SimWorld(new WorldSettings { Seed = 11, Threads = 2, PublishSnapshots = false }, walk, set.Systems);
+    }
+
+    /// <summary>
+    /// The faction's first town that has cages, its sites registered up to it.
+    /// </summary>
+    static TownSite TownWithCages(SimWorld world, PopulationData data, int faction)
+    {
         TownSite home = null!;
         foreach (var t in data.Sites.Where(s => data.SiteFactions[s.Index] == faction && s.Town.Type is not (TownType.NestMarker or TownType.Null)))
         {
@@ -441,50 +480,57 @@ public class KidnapInstallTests(ITestOutputHelper output)
                 break;
             }
         }
+        return home;
+    }
 
-        Assert.NotNull(home);
-
-        cageFloors.AddRange(world.Fixtures.All.Where(x => x.Kind == FixtureKind.Cage && x.Site == home.Index));
-        var outpost = world.Buildings.AddTown(home.Position + new Vector3(1500, 0, 0), data.PlayerFaction);
-        world.RunTicks(15);
-        var war = population.Wars[faction];
-        foreach (var m in population.Wars) m.UpdateTime = m == war ? 0 : 1e9;
+    /// <summary>
+    /// Four Greenlander player characters at the outpost, side by side.
+    /// </summary>
+    static List<CharacterId> SpawnHeroes(SimWorld world, PopulationSystem population, GameDatabase db, PopulationData data,
+            Meitou.Simulation.Construction.PlayerTown outpost)
+    {
         string human = db.OfType(FcsRecordType.Character).First(r => r.GetReferences("race").Any(x => x.Values.Value0 > 0
                 && db.Find(x.TargetStringId)?.Name == "Greenlander") && r.GetReferences("stats").Count > 0).StringId;
         var at = new Vector2(outpost.Position.X, outpost.Position.Z);
         var heroes = new List<CharacterId> { population.SpawnSandbox(world, human, at, player: true) };
-        for (int k = 1; k < 4; k++) heroes.Add(population.SpawnSandbox(world, human, at + new Vector2(30 * k, 20), player: true, variant: k,
-                faction: data.PlayerFaction));
-        var table = world.Characters;
-        foreach (var h in heroes) table.Cold(h.Slot)!.IsPlayer = true;
+        for (int k = 1; k < 4; k++)
+        {
+            heroes.Add(population.SpawnSandbox(world, human, at + new Vector2(30 * k, 20), player: true, variant: k,
+                    faction: data.PlayerFaction));
+        }
+        return heroes;
+    }
 
-        int Caged(SimWorld w,
-                IEnumerable<CharacterId> ids) => ids.Count(h => w.Characters.TryResolveNext(h, out int s) && w.Characters.Cold(s)!.IsImprisoned);
+    /// <summary>
+    /// How many of the characters are alive and imprisoned.
+    /// </summary>
+    static int Caged(SimWorld w, IEnumerable<CharacterId> ids) =>
+        ids.Count(h => w.Characters.TryResolveNext(h, out int s) && w.Characters.Cold(s)!.IsImprisoned);
 
-        // The assault is won once nobody fights 0.2 h in, which the lifts themselves can bring about, so not every hero need be downed; the leader's
-        // captive goes to the campaign's home, which has no free cage. The carriers of the rest walk home and cage them.
-        for (int i = 0; i < 60 && Caged(world, heroes) < 2; i++) world.RunTicks(150);
-        output.WriteLine($"tick {world.Tick}: caged {Caged(world, heroes)}, lifted {set.Kidnap!.Log.Count(e => e.Kind == KidnapEventKind.Lifted)}");
+    /// <summary>
+    /// How many saved characters carry the kidnapped flag.
+    /// </summary>
+    static int Flags(SaveGame g) => g.Platoons.SelectMany(p => p.Characters).Count(c => c.GameState?.Bools.ContainsKey(CrimeSave.KidnappedKey) == true);
 
-        Assert.True(set.Kidnap!.Log.Count(e => e.Kind == KidnapEventKind.Lifted && heroes.Contains(e.Victim)) >= 3);
-        Assert.True(Caged(world, heroes) >= 2);
-        Assert.All(heroes.Where(h => table.Cold(h.Slot)!.IsImprisoned), h => Assert.True(table.Cold(h.Slot)!.Kidnapped));
-
-        // A save and a load keep the cage state and the flag, and a second save writes the same.
+    /// <summary>
+    /// A save and a load keep the cage state and the flag, and a second save writes the same.
+    /// </summary>
+    static void ASaveKeepsThemKidnapped(SimWorld world, PopulationData data, OpenGroundWalkability walk, WorldLevelData levels,
+            List<CharacterId> heroes)
+    {
         var options = new SaveCaptureOptions { Placements = [.. levels.Towns()], Seed = 3 };
         var game = SaveCapture.Capture(world, data, new SaveClock(1, 13, 0), options: options);
-        using var back = NewWorld(new PopulationSettings(), out _);
+        using var back = NewWorld(data, walk, new PopulationSettings(), out _);
         SaveLoader.Load(back, game, data, new SaveLoadOptions { ApplyRelations = false });
         back.RunTicks(30);
-        var loaded = Enumerable.Range(0,
-                back.Characters.HighWater).Where(s => back.Characters.Next[s].Alive && back.Characters.Cold(s) is { IsPlayer: true,
-                IsImprisoned: true }).ToList();
+        var loaded = Enumerable.Range(0, back.Characters.HighWater)
+            .Where(s => back.Characters.Next[s].Alive && back.Characters.Cold(s) is { IsPlayer: true, IsImprisoned: true })
+            .ToList();
 
         Assert.Equal(Caged(world, heroes), loaded.Count);
         Assert.All(loaded, s => Assert.True(back.Characters.Cold(s)!.Kidnapped));
 
         var again = SaveCapture.Capture(back, data, new SaveClock(1, 13, 0), options: options);
-        int Flags(SaveGame g) => g.Platoons.SelectMany(p => p.Characters).Count(c => c.GameState?.Bools.ContainsKey(CrimeSave.KidnappedKey) == true);
 
         Assert.Equal(Flags(game), Flags(again));
         Assert.Equal(loaded.Count, Flags(game));

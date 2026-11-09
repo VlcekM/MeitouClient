@@ -20,7 +20,8 @@ public sealed partial class PopulationSystem
 
     /// <param name="NearY">The height of the spot inside a building it stands on (the floor under it is used); null: on the ground.</param>
     /// <param name="Home">The building its town gave it as its home; null: none.</param>
-    internal sealed record BuiltSquad(SquadPlan Plan, Vector2 Position, int Faction, List<BuiltMember> Members, float? NearY = null, TownBuilding? Home = null);
+    internal sealed record BuiltSquad(SquadPlan Plan, Vector2 Position, int Faction, List<BuiltMember> Members, float? NearY = null,
+        TownBuilding? Home = null);
 
     /// <param name="Homes">The town's buildings with the template housed in each (those whose template makes no squad too), for the artifacts.</param>
     sealed record BuiltTown(int Site, long LoadId, List<BuiltSquad> Squads, List<(TownBuilding Building, SquadTemplate Template)> Homes);
@@ -78,7 +79,8 @@ public sealed partial class PopulationSystem
             if (_data.Db.Find(barEntries[e].Id) is not { } record || !SquadFactory.IsTemplate(record)) continue;
 
             var template = SquadTemplate.From(record);
-            int n = BarCount(barEntries[e].V0, barEntries[e].V1, seed, Rng.Mix(SeedSalts.BarSquad ^ (ulong)site.Index << 40 ^ (ulong)e << 20 ^ 0xFFFFF));
+            int n = BarCount(barEntries[e].V0, barEntries[e].V1, seed,
+                Rng.Mix(SeedSalts.BarSquad ^ (ulong)site.Index << 40 ^ (ulong)e << 20 ^ 0xFFFFF));
             for (int k = 0; k < n; k++)
             {
                 ulong key = Rng.Mix(SeedSalts.BarSquad ^ (ulong)site.Index << 40 ^ (ulong)e << 20 ^ (uint)k);
@@ -165,7 +167,8 @@ public sealed partial class PopulationSystem
             if (_data.Appearances is { } source)   // an animal gets its species' shared look (GeneratedAppearances)
             {
                 look = source.Create(
-                    m.RecordId, townFaction?.Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.MemberLook + (ulong)n) & 0x7FFFFFFF), template.Id);
+                    m.RecordId, townFaction?.Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.MemberLook + (ulong)n) & 0x7FFFFFFF),
+                    template.Id);
             }
 
             members.Add(new BuiltMember(m, look));

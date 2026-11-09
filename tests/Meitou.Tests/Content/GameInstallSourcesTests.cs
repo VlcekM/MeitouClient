@@ -61,9 +61,11 @@ public sealed class GameInstallSourcesTests : IDisposable
         // The layout GOG's installer writes into system.reg (checked on a real Heroic prefix): doubled backslashes, lower-case value names, a Z: path.
         var windows = kenshi.Replace("/", "\\\\");
         File.WriteAllText(Path.Combine(prefix, "system.reg"), "WINE REGISTRY Version 2\n\n"
-            + "[Software\\\\Wow6432Node\\\\GOG.com\\\\Games\\\\1193046833] 1778854162\n#time=1dce4746dbb17ce\n\"gameID\"=\"1193046833\"\n\"gameName\"=\"Kenshi\"\n"
+            + "[Software\\\\Wow6432Node\\\\GOG.com\\\\Games\\\\1193046833] 1778854162\n#time=1dce4746dbb17ce\n"
+            + "\"gameID\"=\"1193046833\"\n\"gameName\"=\"Kenshi\"\n"
             + $"\"path\"=\"Z:{windows}\"\n\"workingDir\"=\"Z:{windows}\"\n\n"
-            + "[Software\\\\Wow6432Node\\\\GOG.com\\\\Games\\\\1351891846] 1778854162\n\"gameName\"=\"Jazz Jackrabbit 2\"\n\"path\"=\"Z:\\\\nowhere\\\\Jazz\"\n");
+            + "[Software\\\\Wow6432Node\\\\GOG.com\\\\Games\\\\1351891846] 1778854162\n\"gameName\"=\"Jazz Jackrabbit 2\"\n"
+            + "\"path\"=\"Z:\\\\nowhere\\\\Jazz\"\n");
         Assert.Equal([kenshi], GameInstallSources.WinePrefixInstalls(prefix).Distinct());
         Assert.Equal(Path.Combine("/", "mnt", "Games", "K"), GameInstallSources.ToUnixPath(prefix, @"Z:\mnt\Games\K\"));
         var bare = Path.Combine(_home, "bare");

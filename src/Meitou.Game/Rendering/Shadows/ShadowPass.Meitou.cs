@@ -236,7 +236,7 @@ public sealed unsafe partial class ShadowPass
             .Select(i => $"c{i} {RedrawReasons[i, 0]}/{RedrawReasons[i, 1]}/{RedrawReasons[i, 2]}/{RedrawReasons[i, 3]}");
         string reasons = string.Join(" ", reasonText);
         string terrain = $"terrain shadow rebuilt {_terrainMap?.Builds ?? 0} times (cpu {_terrainMap?.LastBuildCpuMs ?? 0:0.00} ms)";
-        string landmarks = $"landmark shadow map drawn {LandmarkDraws} times ({LandmarkCount} landmarks, {LandmarkTexel()})";
+        string landmarks = $"landmark shadow map drawn {_landmarks.Draws} times ({_landmarks.Count} landmarks, {_landmarks.Texel()})";
         string frames = $"drawn {draws} times in {MeitouFrames} frames " +
             $"(because the view left the box / the sun turned / the cadence / all at once: {reasons}); ";
         return frames +
@@ -244,11 +244,6 @@ public sealed unsafe partial class ShadowPass
             $"far cascades skipped for the camera's flight in {FlightFrames} frames; " +
             $"{terrain}; {landmarks}";
     }
-
-    /// <summary>
-    /// The landmark map's texel size in units for the log, or "off".
-    /// </summary>
-    string LandmarkTexel() => _landmarkBox is { } b ? $"{b.Texel:0} units per texel" : "off";
 
     #endregion
 
@@ -301,23 +296,10 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     public readonly record struct LandmarkCasters(LandmarkCollect Collect, CasterDraw Draw);
 
-    GpuTexture? _landmarkMap;
-    SampledTexture _landmarkSampled;
-    bool _landmarkPublished;
-    ShadowCascade? _landmarkBox;
-    long _landmarkKey;
-    Vector3 _landmarkSun;
-    readonly List<Vector4> _landmarkSpheres = [];
-
     /// <summary>
-    /// How often the landmark map was drawn, and the landmarks in it the last time (for the log).
+    /// The landmark shadow map: every landmark along the sun, fitted round them all.
     /// </summary>
-    public int LandmarkDraws { get; private set; }
-
-    /// <summary>
-    /// The landmarks in the landmark map the last time it was drawn (for the log).
-    /// </summary>
-    public int LandmarkCount { get; private set; }
+    readonly LandmarkShadowMap _landmarks;
 
     /// <summary>
     /// The landmark shadow map (docs/formats/shadows.md, "Landmark shadows"): every landmark drawn (resolved, within the landmark reach) into one
@@ -326,45 +308,15 @@ public sealed unsafe partial class ShadowPass
     /// </summary>
     void UpdateLandmarks(ShadowView view, Vector3 toSun, LandmarkCasters? landmarks)
     {
-        if (landmarks is not { } l)
-        {
-            _landmarkBox = null;
-            return;
-        }
+        if (_landmarks.Plan(toSun, landmarks, out long key) is not { } box) return;
 
-        long key = l.Collect(_landmarkSpheres);
-        if (_landmarkSpheres.Count == 0)
-        {
-            _landmarkBox = null;
-            return;
-        }
-
-        bool sameSun = Vector3.Dot(toSun, _landmarkSun) > MathF.Cos(TerrainShadowMap.RebuildAngle);
-        if (_landmarkBox is not null && key == _landmarkKey && sameSun) return;
-
-        var box = MeitouShadowFit.FitLandmarks(toSun, _landmarkSpheres, LandmarkMapSize)!;
-        EnsureLandmarkMap();
-        var host = BeginHost("landmark shadows", clear: true, _landmarkMap);
+        var map = _landmarks.EnsureMap();
+        var host = BeginHost("landmark shadows", clear: true, map);
         SetTile(0, 0, LandmarkMapSize);
         SetCasterBias(new Vector4(box.FixedBias, KenshiShadows.SlopeBias, KenshiShadows.MaxSlopeBias, 1f));
-        l.Draw(box, box.WorldToClip(), box.CullPlanes(), view.Eye);
+        landmarks!.Value.Draw(box, box.WorldToClip(), box.CullPlanes(), view.Eye);
         EndHost(host);
-        (_landmarkBox, _landmarkKey, _landmarkSun) = (box, key, toSun);
-        LandmarkDraws++;
-        LandmarkCount = _landmarkSpheres.Count;
-    }
-
-    /// <summary>
-    /// Makes the landmark map and its sampler on first use: a map of its own (4096², larger than a cascade layer), read through its own sampler.
-    /// </summary>
-    void EnsureLandmarkMap()
-    {
-        if (_landmarkMap is not null) return;
-
-        // A map of its own (4096², larger than a cascade layer), read through its own sampler (uShadowLandmark), not a layer of the cascade array.
-        _landmarkMap = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, LandmarkMapSize, LandmarkMapSize,
-            Use: TextureUse.Sampled | TextureUse.DepthTarget, Name: "landmark shadow map"));
-        _landmarkSampled = Sampled(_landmarkMap, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, compare: true);
+        _landmarks.Drawn(box, key, toSun);
     }
 
     #endregion
@@ -380,20 +332,7 @@ public sealed unsafe partial class ShadowPass
         if (_phases.Length != count) _phases = Phases(count);
         float near = MeitouShadowFit.QuantizedNear(view.Near);
         var splits = MeitouShadowFit.Splits(near, Math.Max(EffectiveRange, near * 4), count, view.Focus);
-
-        // (A range that varies from frame to frame, as the memory guard's or a fog clamp makes it, redraws them all only past RangeTolerance.)
-        // The splits move with the camera's near plane; a cascade drawn with other splits keeps its own slice (the receiver reads each one's) and is
-        // drawn again when the
-        // new slice no longer fits it (Covers below), so only a change of the range or of the number of cascades redraws them all.
-        bool splitsChanged = _storedSplits is null || _storedSplits.Length != splits.Length ||
-            Math.Abs(splits[^1] - _storedSplits[^1]) > RangeTolerance * _storedSplits[^1];
-        bool sunJumped = Vector3.Dot(toSun, _storedSun) < MathF.Cos(SunJump);
-        bool all = !_meitouValid || splitsChanged || _storedMapSize != Settings.MapSize || sunJumped;
-        if (_meitouValid && all)
-        {
-            if (splitsChanged) AllReasons[0]++;
-            if (sunJumped) AllReasons[1]++;
-        }
+        bool all = RedrawAll(splits, toSun);
 
         var gridAnchor = Anchor(view.Focus > 0 ? view.Eye + Vector3.Normalize(view.Forward) * view.Focus : view.Eye, toSun);
         int frame = _meitouFrame++;
@@ -401,23 +340,7 @@ public sealed unsafe partial class ShadowPass
         Span<bool> drawNow = stackalloc bool[ShadowSettings.MaxCascades];
         Span<bool> want = stackalloc bool[ShadowSettings.MaxCascades];
         Span<bool> mustDraw = stackalloc bool[ShadowSettings.MaxCascades];
-        for (int i = 0; i < count; i++)
-        {
-            // A cascade is drawn again when its slice no longer fits its box (the camera moved or turned), when the sun has turned further than
-            // its texels allow, and at the latest after its cadence (casters stream in and move; docs/formats/shadows.md "Cached far cascades").
-            bool due = frame % Cadence(i, count) == _phases[i];
-            bool stale = _stored[i] is not null && !all && !due;
-            bool uncovered = _stored[i] is not null
-                && !MeitouShadowFit.Covers(_stored[i]!, view, splits, SearchRadius(_stored[i]!) + 2 * _stored[i]!.Texel);
-            bool sunTurned = _stored[i] is not null && Vector3.Dot(toSun, _storedSunDir[i]) < MathF.Cos(SunTolerance(_stored[i]!));
-            // Stale: drawn before a flight, wherever its box is now.
-            want[i] = all || _stored[i] is null || due || uncovered || sunTurned || _owed[i] || this._stale[i];
-            mustDraw[i] = _stored[i] is null;
-            if (stale && uncovered) RedrawReasons[i, 0]++;
-            if (stale && !uncovered && sunTurned) RedrawReasons[i, 1]++;
-            if (due && !all) RedrawReasons[i, 2]++;
-            if (all) RedrawReasons[i, 3]++;
-        }
+        MarkWanted(view, toSun, splits, count, frame, all, want, mustDraw);
 
         // At most FarBudget far cascades are drawn per frame; the others wait (longest first) and are owed, forced after MaxWait frames. The far
         // cascades are the last three (the costly ones); the nearer ones are never deferred (ShadowSchedule.NearCascades).
@@ -428,33 +351,16 @@ public sealed unsafe partial class ShadowPass
         // ground the next frame, and the ones drawn before the flight shadow the ground kilometres back, so they are stale and not published until
         // drawn again, once the camera lands (uncovered, over the budget's frames).
         bool flying = CameraFlying;
-        if (flying)
-        {
-            FlightFrames++;
-            for (int i = nearCount; i < count; i++)
-            {
-                _stale[i] = true;
-                if (mustDraw[i]) continue;
-
-                drawNow[i] = false;
-                _waited[i] = 0;
-            }
-        }
+        if (flying) HoldFarCascades(drawNow, mustDraw, nearCount, count);
 
         for (int i = 0; i < count; i++) _owed[i] = want[i] && !drawNow[i] && !flying;
 
         _timer.Begin();
-        int drawn = 0;
-        for (int i = 0; i < count; i++)
-        {
-            if (drawNow[i] && MeitouShadowFit.Fit(view, toSun, Effective, splits, i, gridAnchor) is var fitted)
-                _casterViews[drawn++] = new CasterView(fitted, fitted.WorldToClip(), fitted.CullPlanes(), view.Eye);
-        }
-
+        int drawn = FitCascades(view, toSun, splits, gridAnchor, drawNow, count);
         prepare?.Invoke(_casterViews.AsSpan(0, drawn));
         DrawCascades(drawn, draw, toSun);
         Array.Clear(_casterViews);
-        bool blockers = ContactHardening && _filterQuality > 0 && UpdateBlockers(drawNow, count);
+        bool blockers = ContactHardening && _filterQuality > 0 && _blockers.Update(drawNow, count, _atlasSize, _atlasPlain);
         if (_coarse is not null)
         {
             _terrainMap ??= new TerrainShadowMap(Gpu, _coarse, _coarseSize);
@@ -475,6 +381,81 @@ public sealed unsafe partial class ShadowPass
         PublishFrame(view, toSun, blockers, count);
         CpuMs = watch.Elapsed.TotalMilliseconds;
         _cpuSamples.Add(CpuMs);
+    }
+
+    /// <summary>
+    /// Whether every cascade is drawn again this frame (the first frame, other splits or map size, a sun that jumped); counts the reason.
+    /// </summary>
+    bool RedrawAll(float[] splits, Vector3 toSun)
+    {
+        // (A range that varies from frame to frame, as the memory guard's or a fog clamp makes it, redraws them all only past RangeTolerance.)
+        // The splits move with the camera's near plane; a cascade drawn with other splits keeps its own slice (the receiver reads each one's) and is
+        // drawn again when the new slice no longer fits it (Covers below), so only a change of the range or of the number of cascades redraws them
+        // all.
+        bool splitsChanged = _storedSplits is null || _storedSplits.Length != splits.Length ||
+            Math.Abs(splits[^1] - _storedSplits[^1]) > RangeTolerance * _storedSplits[^1];
+        bool sunJumped = Vector3.Dot(toSun, _storedSun) < MathF.Cos(SunJump);
+        bool all = !_meitouValid || splitsChanged || _storedMapSize != Settings.MapSize || sunJumped;
+        if (_meitouValid && all)
+        {
+            if (splitsChanged) AllReasons[0]++;
+            if (sunJumped) AllReasons[1]++;
+        }
+        return all;
+    }
+
+    /// <summary>
+    /// Marks the cascades that want drawing this frame and the ones that must be (never drawn yet), and counts each redraw's reason.
+    /// </summary>
+    void MarkWanted(ShadowView view, Vector3 toSun, float[] splits, int count, int frame, bool all, Span<bool> want, Span<bool> mustDraw)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            // A cascade is drawn again when its slice no longer fits its box (the camera moved or turned), when the sun has turned further than
+            // its texels allow, and at the latest after its cadence (casters stream in and move; docs/formats/shadows.md "Cached far cascades").
+            bool due = frame % Cadence(i, count) == _phases[i];
+            bool stale = _stored[i] is not null && !all && !due;
+            bool uncovered = _stored[i] is not null
+                && !MeitouShadowFit.Covers(_stored[i]!, view, splits, SearchRadius(_stored[i]!) + 2 * _stored[i]!.Texel);
+            bool sunTurned = _stored[i] is not null && Vector3.Dot(toSun, _storedSunDir[i]) < MathF.Cos(SunTolerance(_stored[i]!));
+            // Stale: drawn before a flight, wherever its box is now.
+            want[i] = all || _stored[i] is null || due || uncovered || sunTurned || _owed[i] || this._stale[i];
+            mustDraw[i] = _stored[i] is null;
+            if (stale && uncovered) RedrawReasons[i, 0]++;
+            if (stale && !uncovered && sunTurned) RedrawReasons[i, 1]++;
+            if (due && !all) RedrawReasons[i, 2]++;
+            if (all) RedrawReasons[i, 3]++;
+        }
+    }
+
+    /// <summary>
+    /// During a camera flight: the far cascades marked stale and not drawn (unless never drawn at all), their wait reset.
+    /// </summary>
+    void HoldFarCascades(Span<bool> drawNow, Span<bool> mustDraw, int nearCount, int count)
+    {
+        FlightFrames++;
+        for (int i = nearCount; i < count; i++)
+        {
+            _stale[i] = true;
+            if (mustDraw[i]) continue;
+
+            drawNow[i] = false;
+            _waited[i] = 0;
+        }
+    }
+
+    /// <summary>
+    /// Fits each cascade drawn this frame into <see cref="_casterViews"/>; returns how many.
+    /// </summary>
+    int FitCascades(ShadowView view, Vector3 toSun, float[] splits, (double X, double Y, double Z) gridAnchor, Span<bool> drawNow, int count)
+    {
+        int drawn = 0;
+        for (int i = 0; i < count; i++)
+        {
+            if (drawNow[i] && MeitouShadowFit.Fit(view, toSun, Effective, splits, i, gridAnchor) is var fitted)
+                _casterViews[drawn++] = new CasterView(fitted, fitted.WorldToClip(), fitted.CullPlanes(), view.Eye);
+        }
+        return drawn;
     }
 
     /// <summary>
@@ -525,88 +506,6 @@ public sealed unsafe partial class ShadowPass
 
     #endregion
 
-    #region Blockers
-
-    GpuTexture? _blocker;
-    SampledTexture _blockerSampled;
-    bool _blockerPublished;
-    LegacyProgram? _blockerNative;
-    SamplerSlot _blockerAtlasSlot;
-    UniformHandle _blockerSizeHandle, _blockerLayerHandle;
-
-    /// <summary>
-    /// The blocker pass's state, as the GL version's was: no culling, depth or blending, every colour channel written.
-    /// </summary>
-    static readonly DrawState BlockerState = new(CullMode.None, FrontFaceDirection.Ccw, false, false, DepthFunction.Lequal, false, 0, 0,
-        BlendState.Off, ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A,
-        PolygonKind.Fill, false, false);
-
-    /// <summary>
-    /// The half-resolution blocker map (native; null until the first frame with contact hardening).
-    /// </summary>
-    public GpuTexture? BlockerMap => _blocker;
-
-    /// <summary>
-    /// Rebuilds the blocker map's layers of the cascades drawn this frame: one native segment with a rendering per layer (the layers not drawn keep
-    /// what they hold), the cascade array read raw through a plain sampler (no comparison), the fullscreen triangle.
-    /// </summary>
-    bool UpdateBlockers(ReadOnlySpan<bool> drawn, int count)
-    {
-        int size = _atlasSize / 2;
-        bool fresh = false;   // a new map: every layer
-        if (_blocker is null || _blocker.Desc.Width != size || _blocker.Desc.Layers != count)
-        {
-            _blocker?.Dispose();
-            _blocker = Gpu.CreateTexture(new TextureDesc(InternalFormat.R32F, size, size, Layers: count, Kind: TextureKind.Texture2DArray,
-                Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: "shadow blocker map"));
-            _blockerSampled = Sampled(_blocker, TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge);
-            _blockerPublished = false;
-            fresh = true;
-        }
-
-        if (_blockerNative is null)
-        {
-            // Native (docs/renderer-native.md 7.1, wave 3 agent B, step P): VkGl's SPIR-V and layout, made here once, never inside a draw.
-            var p = _blockerNative = LegacyProgram.Create(Gpu, ShadowShaders.FullscreenVertex, MeitouShadowShaders.BlockerFragment, "shadow blockers");
-            (_blockerAtlasSlot, _blockerSizeHandle, _blockerLayerHandle) = (p.Sampler("uAtlas"), p.Uniform("uAtlasSize"), p.Uniform("uLayer"));
-        }
-
-        RecordBlockers(drawn, count, fresh);
-        return true;
-    }
-
-    void RecordBlockers(ReadOnlySpan<bool> drawn, int count, bool fresh)
-    {
-        var p = _blockerNative!;
-        var map = _blocker!;
-        p.Set(_blockerSizeHandle, (float)_atlasSize);
-        var cmd = Gpu.BeginNative("shadow blockers");
-        var formats = new AttachmentFormats(map.Desc.Format, InternalFormat.None, 1);
-        int side = map.Desc.Width;
-        var whole = new PixelRect(0, 0, (uint)side, (uint)side);
-        var pipeline = Gpu.Pipelines.Get(BlockerState.Pipeline(p.Program, p.VertexLayout([]), PrimitiveType.Triangles, formats, "shadow blockers"));
-        for (int i = 0; i < count; i++)
-        {
-            if (!drawn[i] && !fresh) continue;
-
-            var target = new RenderTarget(map.Attachment(0, i), LoadOp.Load, default);
-            cmd.BeginRendering(new RenderingDesc(target, default, side, side));
-            BlockerState.Record(cmd, new PassTargets(target, default, formats, side, side, new PixelViewport(0, 0, side, side, 0, 1), whole));
-            cmd.BindPipeline(pipeline);
-
-            // Each layer is a new encoder: bind the atlas for it, not only once before the loop.
-            p.Bind(_blockerAtlasSlot, _atlasPlain);
-            p.Set(_blockerLayerHandle, i);
-            p.Flush(cmd);
-            cmd.Draw(3);
-            cmd.EndRendering();
-        }
-
-        Gpu.EndNative(cmd);
-    }
-
-    #endregion
-
     #region Publish
 
     /// <summary>
@@ -624,6 +523,16 @@ public sealed unsafe partial class ShadowPass
     TerrainShadowMap? _terrainMap;
     SampledTexture? _boundTerrain;   // the terrain shadow map the receivers sample, as the GL code bound it to its unit (kept while no new one is)
     readonly FrameBlock _meitouBlock;
+
+    /// <summary>
+    /// The blocker map of the contact-hardening search.
+    /// </summary>
+    readonly ShadowBlockerMap _blockers;
+
+    /// <summary>
+    /// The half-resolution blocker map (native; null until the first frame with contact hardening).
+    /// </summary>
+    public GpuTexture? BlockerMap => _blockers.Map;
 
     void PublishMeitou(ShadowView view, ShadowCascade[] cascades, Vector3 toSun, bool blockers)
     {
@@ -667,12 +576,12 @@ public sealed unsafe partial class ShadowPass
         }
 
         Put(ms, p + 12, new Vector4(blockers ? 1 : 0, range * 0.9f, FullFilterCascades, 0));
-        if (_landmarkBox is { } box)
+        if (_landmarks.Box is { } box)
         {
             // The landmark map: (p - origin) -> (u, v, depth); its filter radius (UV) and normal offset (world: one and a half texels).
             Put(ms, p + 16, ReceiverTile(box, origin));
             Put(ms, p + 32, new Vector4(box.FilterRadius, (float)(box.Texel * 1.5), 0, 1));
-            _landmarkPublished = true;
+            _landmarks.MarkPublished();
         }
 
         Upload(data);
@@ -680,17 +589,15 @@ public sealed unsafe partial class ShadowPass
 
         // The maps the receivers sample from now on (the GL code bound them to their units here; a unit kept what it held).
         if (terrain) _boundTerrain = _terrainMap!.Sampled;
-        if (blockers) _blockerPublished = true;
+        if (blockers) _blockers.MarkPublished();
     }
 
     void DisposeMeitou()
     {
         _terrainMap?.Dispose();
         _boundTerrain = null;
-        _blocker?.Dispose();
-        _blockerNative?.Dispose();
-        _landmarkPublished = false;
-        _landmarkMap?.Dispose();
+        _blockers.Dispose();
+        _landmarks.Dispose();
     }
 
     #endregion

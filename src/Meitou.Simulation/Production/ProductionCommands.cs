@@ -50,7 +50,8 @@ public sealed record MoveJob(CharacterId Character, int From, int To) : SimComma
 /// (<paramref name="X"/>, <paramref name="Y"/>), or with X below 0 where it first fits (stacks of it first, <see cref="Inventory.Add"/>). <paramref name="Count"/> above 0 moves at most that
 /// many units (a right click moves one), 0 the whole stack. The character must stand within <see cref="ProductionSettings.TransferReach"/> of the building.
 /// </summary>
-public sealed record PutInMachine(CharacterId Character, InventoryItemToken Item, string Site, int Slot, int X = 0, int Y = 0, int Count = 0) : SimCommand;
+public sealed record PutInMachine(CharacterId Character, InventoryItemToken Item, string Site, int Slot, int X = 0, int Y = 0,
+    int Count = 0) : SimCommand;
 
 /// <summary>
 /// A character takes from a machine: <paramref name="Slot"/> -2 the output's items, k the items of input k, -1 the storage item at <paramref name="Index"/>; into its inventory where they first

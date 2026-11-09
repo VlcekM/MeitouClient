@@ -82,7 +82,8 @@ public sealed partial class GlslProgramCompiler
     /// A GLSL 450 compute shader for Vulkan (strict rules: explicit sets and bindings, no loose uniforms; no interface location injection, no binding
     /// shift). Cached under <see cref="NativeCacheVersion"/>, so legacy entries are untouched.
     /// </summary>
-    public byte[] CompileCompute(string glsl, ShaderCompileOptions? options = null) => CompileNativeStage(glsl, ShaderKind.ComputeShader, "compute", options);
+    public byte[] CompileCompute(string glsl, ShaderCompileOptions? options = null) =>
+        CompileNativeStage(glsl, ShaderKind.ComputeShader, "compute", options);
 
     /// <summary>
     /// A GLSL 450 vertex or fragment shader of the native model (strict rules, explicit layout). Cached under <see cref="NativeCacheVersion"/>.
@@ -97,8 +98,8 @@ public sealed partial class GlslProgramCompiler
     /// </summary>
     public byte[] CompileNativeTessellation(string glsl, bool evaluation, ShaderCompileOptions? options = null)
     {
-        return CompileNativeStage(glsl, evaluation ? ShaderKind.TessEvaluationShader : ShaderKind.TessControlShader, evaluation ? "tess evaluation" : "tess control",
-            options);
+        return CompileNativeStage(glsl, evaluation ? ShaderKind.TessEvaluationShader : ShaderKind.TessControlShader,
+            evaluation ? "tess evaluation" : "tess control", options);
     }
 
     /// <summary>

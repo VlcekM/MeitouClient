@@ -43,6 +43,7 @@ public sealed partial class ProductionSystem
         string id = TownWorkId(building);
         if (world.Machines.Find(id) is { } known) return known;
         if (!_townWorkSites.TryGetValue(id, out var site))
+        {
             _townWorkSites[id] = site = new BuildSite
             {
                 Id = id,
@@ -54,9 +55,10 @@ public sealed partial class ProductionSystem
                 Complete = true,
                 Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitY, building.Yaw),
             };
+        }
+
         return Ensure(world, site);
     }
-
 
     /// <summary>
     /// State 66 <c>haveSomeResourcesFrom</c> (<c>FUN_140597530</c>, <b>Observed</b>): the character carries the machine's output item.
@@ -68,7 +70,8 @@ public sealed partial class ProductionSystem
     /// </summary>
     public static bool CarriesInputOf(CharacterCold cold, Machine m) => m.Inputs.Any(input => input.Rate > 0 && Carries(cold, input.Item));
 
-    static bool Carries(CharacterCold cold, string item) => cold.Inventory is { } inv && (inv.All().Any(i => i.Record == item) || inv.Backpack?.Contents?.All().Any(i => i.Record == item) == true);
+    static bool Carries(CharacterCold cold, string item) =>
+        cold.Inventory is { } inv && (inv.All().Any(i => i.Record == item) || inv.Backpack?.Contents?.All().Any(i => i.Record == item) == true);
 
     /// <summary>
     /// The finder of row 94 (<c>FUN_14059d9b0</c>, scored by <c>FUN_14059d000</c>, <b>Verified</b>): for each item type the target machine's inputs take, in list order, the nearest other machine whose output holds that item and
@@ -83,12 +86,16 @@ public sealed partial class ProductionSystem
             float bestD = float.MaxValue;
             foreach (var b in candidates)
             {
-                if (TownWorkOf(world, b) is not { Output: { Count: > 0 } o } other || ReferenceEquals(other, target) || o.Recipe.Item != input.Item) continue;
+                if (TownWorkOf(world, b) is not { Output: { Count: > 0 } o } other || ReferenceEquals(other, target) || o.Recipe.Item != input.Item)
+                    continue;
+
                 float d = Vector3.DistanceSquared(new Vector3(from.X, 0, from.Z), new Vector3(b.Position.X, 0, b.Position.Z));
                 if (d < bestD) (best, bestD) = (b, d);
             }
+
             if (best is not null) return best;
         }
+
         return null;
     }
 
@@ -113,8 +120,10 @@ public sealed partial class ProductionSystem
                 moved = true;
             }
         }
+
         if (moved) world.Machines.Touch();
     }
+
     /// <summary>
     /// The machine a town building has made, null before a worker came.
     /// </summary>
@@ -130,7 +139,10 @@ public sealed partial class ProductionSystem
         var table = world.Characters;
         for (int i = 0; i < table.HighWater; i++)
         {
-            if (!table.Next[i].Alive || table.Cold(i) is not { Ai: { WorkOperate: not null } or { CollectFrom: not null } or { FillTo: not null } } cold) continue;
+            if (!table.Next[i].Alive
+                || table.Cold(i) is not { Ai: { WorkOperate: not null } or { CollectFrom: not null } or { FillTo: not null } } cold)
+                continue;
+
             ref var n = ref table.Next[i];
             var mind = cold.Ai!;
             var building = mind.WorkOperate ?? mind.CollectFrom ?? mind.FillTo!;
@@ -173,6 +185,7 @@ public sealed partial class ProductionSystem
             output.Count--;
             moved = true;
         }
+
         if (!moved) return;
         if (m.Status == 1) m.Status = 2;
         world.Machines.Touch();

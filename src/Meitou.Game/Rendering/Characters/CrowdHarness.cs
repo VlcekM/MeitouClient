@@ -71,8 +71,11 @@ internal sealed class CrowdHarness
         var failures = 0;
         Parallel.For(0, n, i =>
         {
-            try { appearances[i] = CharacterAppearance.Build(db, install.Root, picks[i].StringId, new CharacterOptions { Seed = 100003 + i,
-                Faction = faction?.StringId }); }
+            try
+            {
+                appearances[i] = CharacterAppearance.Build(db, install.Root, picks[i].StringId,
+                    new CharacterOptions { Seed = 100003 + i, Faction = faction?.StringId });
+            }
             catch (Exception e) when (e is KeyNotFoundException or InvalidOperationException or IOException or ArgumentException)
             {
                 Interlocked.Increment(ref failures);
@@ -81,7 +84,8 @@ internal sealed class CrowdHarness
         });
         var good = Enumerable.Range(0, n).Where(i => appearances[i] is not null).ToArray();
         var rosterSize = good.Length;
-        Console.WriteLine($"crowd     {rosterSize} characters from {records.Count} records of {(faction is null ? "any squad" : $"'{faction.Name}'")} ({failures} failed), generated in {watch.ElapsedMilliseconds} ms");
+        Console.WriteLine($"crowd     {rosterSize} characters from {records.Count} records of " +
+            $"{(faction is null ? "any squad" : $"'{faction.Name}'")} ({failures} failed), generated in {watch.ElapsedMilliseconds} ms");
 
         var centre = scene.Focus;
         var positions = new Vector3[rosterSize];
@@ -105,7 +109,9 @@ internal sealed class CrowdHarness
         var harness = new CrowdHarness(chosen, positions, yaws, phases, poseLists,
                 interactive ? () => (float)clock.Elapsed.TotalSeconds : () => fixedTime);
         var renderer = new CharacterRenderer(context, install, db, assets) { Source = harness.Fill, LoadBudget = interactive ? 4 : 0 };
-        renderer.SettleFirst = !interactive;   // a still waits for everything at its first frame, once the camera is known (the textures' mip streaming needs it)
+
+        // A still waits for everything at its first frame, once the camera is known (the textures' mip streaming needs it).
+        renderer.SettleFirst = !interactive;
         return renderer;
     }
 
@@ -126,9 +132,14 @@ internal sealed class CrowdHarness
         }
         else templates = db.OfType(FcsRecordType.SquadTemplate);
         foreach (var template in templates)
+        {
             foreach (var r in template.GetReferences("choosefrom list"))
+            {
                 if (db.Find(r.TargetStringId) is { Type: FcsRecordType.Character } character)
                     result.Add((character, Math.Max(r.Values.Value0, 1)));
+            }
+        }
+
         return (result, faction);
     }
 }

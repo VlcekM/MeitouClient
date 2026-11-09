@@ -50,6 +50,7 @@ public sealed unsafe class LegacyProgram : IDisposable
     readonly ulong _uniformAlign;              // the default blocks' slice alignment (the device limit, at least 16)
     readonly List<(string Name, UniformLookup? Vertex, UniformLookup? Fragment)> _uniforms = [];
     readonly Dictionary<string, int> _uniformIndex = [];
+
     // Set 0, in VkGl's order: every non-default uniform block of the vertex stage, then of the fragment stage; then every sampler of both.
     readonly (uint Binding, int Size, string Name)[] _blocks;
     readonly (uint Binding, SamplerInfo Info, string Name)[] _samplers;

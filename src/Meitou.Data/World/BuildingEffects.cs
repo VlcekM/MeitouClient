@@ -12,7 +12,8 @@ public static class BuildingEffects
     /// <summary>
     /// The effects of every placed building of the world that is neither destroyed nor switched off.
     /// </summary>
-    public static List<PlacedEffect> ForWorld(GameDatabase db, WorldLevelData levels, Func<double, double, float> terrainHeight, BuildingLayouts? layouts = null)
+    public static List<PlacedEffect> ForWorld(GameDatabase db, WorldLevelData levels, Func<double, double, float> terrainHeight,
+        BuildingLayouts? layouts = null)
     {
         var result = new List<PlacedEffect>();
         foreach (var b in levels.Buildings())
@@ -31,7 +32,8 @@ public static class BuildingEffects
         var b = building.Placement;
         var state = b.StateId is not null && levels.Zones.TryGetValue(b.Zone, out var zoneDb) ? zoneDb.Find(b.StateId) : null;
         if (state is not null && !state.GetBool("power on", true)) return result;
-        WorldObjectLayout.Building(db, building.Record, b.InstanceId, building.Position, b.Rotation, new BuildingState { Identity = b.Key }, null, result);
+        WorldObjectLayout.Building(db, building.Record, b.InstanceId, building.Position, b.Rotation,
+            new BuildingState { Identity = b.Key }, null, result);
         var name = b.LayoutName(state, exterior: true);
         if (layouts is null || name.Length == 0 || layouts.Find(building.Record, name, exterior: true) is not { } layout) return result;
         foreach (var item in layouts.Items(layout, b))

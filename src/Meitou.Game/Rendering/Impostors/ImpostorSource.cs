@@ -87,7 +87,8 @@ public sealed class ImpostorSource
     /// the mesh and its scales, no textures of its own (the material is the biome's). <see cref="Ineligible"/> still says no for the tools, which
     /// have no terrain to bake with.
     /// </summary>
-    public static ImpostorSource? ForRock(FoliageMesh mesh, AssetLocator assets, int rockBiome, string rockMaterial) => From(mesh, assets, rockBiome, rockMaterial);
+    public static ImpostorSource? ForRock(FoliageMesh mesh, AssetLocator assets, int rockBiome, string rockMaterial) =>
+        From(mesh, assets, rockBiome, rockMaterial);
 
     static ImpostorSource? From(FoliageMesh mesh, AssetLocator assets, int rockBiome, string? rockMaterial)
     {
@@ -145,7 +146,8 @@ public sealed class ImpostorSource
 
                 var info = new FileInfo(path);
                 string full = Path.GetFullPath(path).ToLowerInvariant();
-                sb.Append(CultureInfo.InvariantCulture, $"{full}|{(info.Exists ? info.Length : -1)}|{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}\n");
+                sb.Append(CultureInfo.InvariantCulture, $"{full}|{(info.Exists ? info.Length : -1)}|" +
+                    $"{(info.Exists ? info.LastWriteTimeUtc.Ticks : 0)}\n");
             }
 
             File(MeshPath);
@@ -153,7 +155,8 @@ public sealed class ImpostorSource
             foreach (var t in TexturePaths) File(t);
 
             sb.Append(Main.Describe()).Append('\n').Append(Leaves?.Describe() ?? "-").Append('\n');
-            sb.Append(CultureInfo.InvariantCulture, $"{MaxScale:R}|{MeanScale:R}|grid {ImpostorClass.DefaultGrid} magnify {ImpostorClass.Magnification:R} bias 1");
+            sb.Append(CultureInfo.InvariantCulture,
+                $"{MaxScale:R}|{MeanScale:R}|grid {ImpostorClass.DefaultGrid} magnify {ImpostorClass.Magnification:R} bias 1");
 
             // Appended only for rocks: the tree atlases' keys (and so their cache files) stay what they were.
             if (IsRock) sb.Append(CultureInfo.InvariantCulture, $"\nrock {RockBakerVersion} {RockMaterial}\nrock frame {ImpostorClass.RockMaxFrame}");

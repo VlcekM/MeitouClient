@@ -221,7 +221,8 @@ public sealed class SimulationClock
         }
 
         long droppedBefore = _steps.DroppedTicks;
-        int run = _steps.Advance(Math.Min(realSeconds, MaxFrameSeconds) * _speed, (int)Math.Min(Math.Ceiling(_maxTicksPerFrame * _speed), int.MaxValue));
+        int run = _steps.Advance(Math.Min(realSeconds, MaxFrameSeconds) * _speed,
+            (int)Math.Min(Math.Ceiling(_maxTicksPerFrame * _speed), int.MaxValue));
         long dropped = _steps.DroppedTicks - droppedBefore;
         AchievedSpeed = AchievedSpeedOver(_speed, run, dropped);
         return run;

@@ -10,8 +10,8 @@ namespace Meitou.Tests.Bodies;
 static class BodyFixtures
 {
     /// <summary>
-    /// The CONSTANTS values of the base game (docs/game/character-stats.md "CONSTANTS used by this subsystem", loader scalings applied). The editor defaults
-    /// that <see cref="GameConstants.Default"/> carries differ from these, so formula tests use this record.
+    /// The CONSTANTS values of the base game (docs/game/character-stats.md "CONSTANTS used by this subsystem", loader scalings applied). The editor
+    /// defaults that <see cref="GameConstants.Default"/> carries differ from these, so formula tests use this record.
     /// </summary>
     public static GameConstants BaseGame { get; } = GameConstants.Default with
     {
@@ -108,8 +108,9 @@ static class BodyFixtures
         StatMultipliers = RaceData.BuildStatMap([4, 12, 13], [0]),
         Anatomy =
         [
-            new AnatomyEntry(RightLeg, 80, 100), new AnatomyEntry(LeftArm, 80, 100), new AnatomyEntry(LeftLeg, 80, 100), new AnatomyEntry(Head, 80, 100),
-            new AnatomyEntry(Stomach, 140, 100), new AnatomyEntry(RightArm, 40, 100), new AnatomyEntry(Chest, 140, 100),
+            new AnatomyEntry(RightLeg, 80, 100), new AnatomyEntry(LeftArm, 80, 100), new AnatomyEntry(LeftLeg, 80, 100),
+            new AnatomyEntry(Head, 80, 100), new AnatomyEntry(Stomach, 140, 100), new AnatomyEntry(RightArm, 40, 100),
+            new AnatomyEntry(Chest, 140, 100),
         ],
     };
 

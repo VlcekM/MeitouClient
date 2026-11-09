@@ -166,7 +166,10 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
             DstStageMask = Silk.NET.Vulkan.PipelineStageFlags2.AllCommandsBit,
             DstAccessMask = Silk.NET.Vulkan.AccessFlags2.ShaderReadBit | Silk.NET.Vulkan.AccessFlags2.TransferReadBit,
         };
-        var dep = new Silk.NET.Vulkan.DependencyInfo { SType = Silk.NET.Vulkan.StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &b };
+        var dep = new Silk.NET.Vulkan.DependencyInfo
+        {
+            SType = Silk.NET.Vulkan.StructureType.DependencyInfo, MemoryBarrierCount = 1, PMemoryBarriers = &b,
+        };
         _ctx.Device.Vk.CmdPipelineBarrier2(list.Handle, &dep);
     }
 
@@ -220,8 +223,8 @@ public sealed unsafe class DlssFrameGeneration : IFrameGenerator
         PresentedPerRendered = state.NumFramesActuallyPresented;
         if (state.Status == _lastStatus) return;
         _lastStatus = state.Status;
-        Console.WriteLine($"frame generation  DLSS state: {StatusText(state.Status)}; up to {state.NumFramesToGenerateMax} generated per rendered frame, "
-            + $"{state.EstimatedVramUsageInBytes / (1 << 20)} MB, smallest side {state.MinWidthOrHeight}");
+        Console.WriteLine($"frame generation  DLSS state: {StatusText(state.Status)}; up to {state.NumFramesToGenerateMax} generated per "
+            + $"rendered frame, {state.EstimatedVramUsageInBytes / (1 << 20)} MB, smallest side {state.MinWidthOrHeight}");
     }
 
     static string StatusText(uint status)

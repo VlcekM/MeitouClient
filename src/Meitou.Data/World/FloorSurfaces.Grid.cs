@@ -104,7 +104,8 @@ public sealed partial class FloorSurfaces
             var lo = new Vector2(MathF.Min(a.X, MathF.Min(b.X, c.X)), MathF.Min(a.Z, MathF.Min(b.Z, c.Z)));
             var hi = new Vector2(MathF.Max(a.X, MathF.Max(b.X, c.X)), MathF.Max(a.Z, MathF.Max(b.Z, c.Z)));
             float pad = 1e-3f * MathF.Max(hi.X - lo.X, hi.Y - lo.Y) + 1e-2f;
-            return (Cell(lo.X - pad, _min.X, _perX, _nx), Cell(hi.X + pad, _min.X, _perX, _nx), Cell(lo.Y - pad, _min.Y, _perZ, _nz), Cell(hi.Y + pad, _min.Y, _perZ, _nz));
+            return (Cell(lo.X - pad, _min.X, _perX, _nx), Cell(hi.X + pad, _min.X, _perX, _nx),
+                Cell(lo.Y - pad, _min.Y, _perZ, _nz), Cell(hi.Y + pad, _min.Y, _perZ, _nz));
         }
     }
 }

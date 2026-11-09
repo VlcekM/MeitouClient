@@ -24,7 +24,8 @@ public sealed partial class MovementSystem
         if ((n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0 || n.PathCursor >= cold.Path.Length)
             return;
 
-        int end = Math.Max(ReachEnd(n.Position, cold.Path, n.PathCursor), zones is null ? -1 : LastCrossing(n.Position, cold.Path, n.PathCursor, zones));
+        int end = Math.Max(ReachEnd(n.Position, cold.Path, n.PathCursor),
+            zones is null ? -1 : LastCrossing(n.Position, cold.Path, n.PathCursor, zones));
 
         cold.SplicePath = cold.Path;
         cold.SpliceEnd = end;

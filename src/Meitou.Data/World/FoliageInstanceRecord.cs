@@ -50,6 +50,7 @@ public struct FoliageInstanceRecord
         d[12] = r.Sphere.X; d[13] = r.Sphere.Y; d[14] = r.Sphere.Z; d[15] = r.Sphere.W;
         d[16] = r.Ground.W;
         static int Bits(float f) => BitConverter.SingleToInt32Bits(f);
-        return Bits(t.M14) == 0 && Bits(t.M24) == 0 && Bits(t.M34) == 0 && t.M44 == 1f && Bits(r.Ground.X) == Bits(t.M41) && Bits(r.Ground.Y) == Bits(t.M43);
+        return Bits(t.M14) == 0 && Bits(t.M24) == 0 && Bits(t.M34) == 0 && t.M44 == 1f
+            && Bits(r.Ground.X) == Bits(t.M41) && Bits(r.Ground.Y) == Bits(t.M43);
     }
 }

@@ -1,112 +1,19 @@
-using System.Numerics;
-using Meitou.Game.Host.Input;
-
 namespace Meitou.Game.Settings;
 
 /// <summary>
-/// The Look and Quality rows above the Graphics tabs, and the dialog that names a new look preset (Save as).
+/// The Look and Quality rows above the Graphics tabs; Save as opens the <see cref="PresetNamingDialog"/>.
 /// </summary>
 sealed class LookBar(SettingsMenu menu)
 {
+    /// <summary>
+    /// For the screenshot scenes: the look drop-down opened.
+    /// </summary>
     internal void ShowcaseOpenLooks() => menu.OpenChoice(menu.LookPresets.LookChoice, menu.Canvas.R(474, 99, 200, 28));
 
-    internal void ShowcaseNaming() => BeginNaming();
-
-    #region Naming
-
-    internal bool Naming;
-    string _nameText = "";
-
-    internal bool NameKey(Key key)
-    {
-        if (key == Key.Escape) Naming = false;
-        else if (key == Key.Enter) FinishNaming();
-        else if (key == Key.Backspace && _nameText.Length > 0) _nameText = _nameText[..^1];
-        return true;
-    }
-
-    internal void NameText(char value)
-    {
-        if (char.IsControl(value)) return;
-        if (_nameText.Length >= global::Meitou.Settings.LookPresetFile.MaxNameLength) return;
-        if (Path.GetInvalidFileNameChars().Contains(value)) return;
-
-        _nameText += value;
-    }
-
-    internal void DrawNameDialog()
-    {
-        menu.Hits.Clear();
-        menu.Canvas.Rect(menu.Bounds, new(8 / 255f, 6 / 255f, 5 / 255f, 0.8f));
-        menu.Canvas.Surface(menu.Canvas.R(290, 230, 540, 236), "window");
-        menu.Canvas.Text("Save as a new preset", menu.Canvas.R(316, 244, 488, 30), 20, SettingsCanvas.LightInk);
-        menu.Canvas.Text("Name", menu.Canvas.R(316, 282, 488, 18), 12, SettingsCanvas.MainInk);
-        var box = menu.Canvas.R(316, 302, 488, 32);
-        menu.Canvas.Rect(box, new(0.06f, 0.05f, 0.04f, 0.95f));
-        menu.Canvas.Rect(box with { Y = box.Y + box.Height - menu.Scale, Height = menu.Scale }, SettingsCanvas.Brass with { W = 0.6f });
-        var editAt = box with { X = box.X + 8 * menu.Scale, Width = box.Width - 16 * menu.Scale };
-        menu.Controls.Add(new("settings-name", "EditBox", editAt, _nameText, "", "", true,
-            new Dictionary<string, string>
-            {
-                ["Focused"] = "true",
-                ["TextAlign"] = "Left VCenter",
-                ["FontPixels"] = ((int)MathF.Round(15 * menu.Scale)).ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["CaretIndex"] = _nameText.Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["SelectionStart"] = "0",
-                ["SelectionLength"] = "0",
-            }, Vector4.Zero, SettingsCanvas.LightInk, Pickable: false));
-        menu.Canvas.Text(LookSummary(), menu.Canvas.R(316, 342, 488, 40), 12, SettingsCanvas.MutedInk, "Left Top", wrap: true);
-        menu.Canvas.Button("Cancel", menu.Canvas.R(500, 418, 138, 32), () => Naming = false);
-        menu.Canvas.Button("Save preset", menu.Canvas.R(650, 418, 154, 32), FinishNaming, primary: true);
-    }
-
-    void BeginNaming()
-    {
-        Naming = true;
-        _nameText = menu.LookPresets.FreeName("My look");
-        menu.ActiveChoice = null;
-        menu.Focus = -1;
-    }
-
-    void FinishNaming()
-    {
-        string name = _nameText.Trim();
-        if (name.Length == 0)
-        {
-            menu.Notice = "Type a name, or press Esc to cancel.";
-            return;
-        }
-
-        if (IsBuiltInName(name))
-        {
-            menu.Notice = $"{name} is a built-in preset: choose another name.";
-            return;
-        }
-
-        Naming = false;
-        if (menu.LookPresets.SaveLook(name) is { } saved) menu.Notice = $"Saved as {saved.Name}.";
-    }
-
     /// <summary>
-    /// Whether a name is Meitou's look or one of the example looks (case ignored).
+    /// For the screenshot scenes: the naming dialog opened.
     /// </summary>
-    static bool IsBuiltInName(string name) =>
-        name.Equals(LookPresets.MeitouLook.Name, StringComparison.OrdinalIgnoreCase)
-        || LookPresets.ExampleLooks.Any(l => l.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>
-    /// The line naming the active look and how many of its settings were changed.
-    /// </summary>
-    string LookSummary()
-    {
-        int changes = menu.LookPresets.LookChanges().Count;
-        string suffix = changes > 0 ? $" with {changes} change{(changes == 1 ? "" : "s")}" : "";
-        return $"Your look as it is now: {menu.LookPresets.ActiveLook.Name}{suffix}. What it does not set keeps following Meitou.";
-    }
-
-    #endregion
-
-    #region Look bar
+    internal void ShowcaseNaming() => menu.PresetNaming.Begin();
 
     /// <summary>
     /// The Look and Quality rows above the Graphics tabs.
@@ -205,7 +112,7 @@ sealed class LookBar(SettingsMenu menu)
             });
         }
 
-        menu.Canvas.Button("Save as", menu.Canvas.R(x, 100, 72, 26), BeginNaming);
+        menu.Canvas.Button("Save as", menu.Canvas.R(x, 100, 72, 26), menu.PresetNaming.Begin);
         menu.Canvas.Button("Share", menu.Canvas.R(x + 78, 100, 70, 26), () =>
         {
             menu.Player.ClipboardWrite?.Invoke(LookPresets.ShareCode(look));
@@ -225,6 +132,4 @@ sealed class LookBar(SettingsMenu menu)
         string cut = menu.LookPresets.LowCutList();
         if (cut.Length > 0) menu.Canvas.Text(Loc.Tr("Low holds off: {1}.", cut), menu.Canvas.R(474, 134, 626, 30), 12, SettingsCanvas.Brass);
     }
-
-    #endregion
 }

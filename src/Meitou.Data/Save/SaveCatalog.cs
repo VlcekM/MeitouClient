@@ -14,7 +14,9 @@ public static class SaveCatalog
             name.Any(c => char.IsControl(c) || "<>:\"/\\|?*".Contains(c)) || name is "." or "..")
             throw new ArgumentException("Use a name of 1-80 characters without path separators or trailing dots/spaces.", nameof(name));
         string stem = name.Split('.')[0].ToUpperInvariant();
-        if (stem is "CON" or "PRN" or "AUX" or "NUL" || stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal)) && stem[3] is >= '0' and <= '9')
+        if (stem is "CON" or "PRN" or "AUX" or "NUL"
+            || stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) || stem.StartsWith("LPT", StringComparison.Ordinal))
+            && stem[3] is >= '0' and <= '9')
             throw new ArgumentException("That name is reserved by the operating system.", nameof(name));
         return name;
     }

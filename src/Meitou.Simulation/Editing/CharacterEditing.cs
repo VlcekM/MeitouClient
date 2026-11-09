@@ -10,8 +10,8 @@ using Meitou.Simulation.Saving;
 namespace Meitou.Simulation.Editing;
 
 /// <summary>
-/// Why the character editor is open (docs/characters.md "Character editor"): the new game's characters, a plastic surgeon, or a recruit
-/// (DA_JOIN_SQUAD_WITH_EDIT; free, race and gender kept as at a surgeon).
+/// Why the character editor is open (docs/characters.md "Character editor"): making the start's characters, or a plastic surgeon's work. The
+/// editor's use: the new game's characters, a plastic surgeon, or a recruit (DA_JOIN_SQUAD_WITH_EDIT; free, race and gender kept as at a surgeon).
 /// </summary>
 public enum EditKind : byte
 {
@@ -139,7 +139,7 @@ public static class CharacterEditing
                 return false;
             }
 
-            bool playable = CharacterDraft.PlayableRaces(data.Db, world.Player.CreationRaces)
+            bool playable = PlayableRaces.Of(data.Db, world.Player.CreationRaces)
                 .Any(g => g.Races.Any(r => r.StringId == proposedRace.StringId));
             if (!playable && !sameRace)
             {

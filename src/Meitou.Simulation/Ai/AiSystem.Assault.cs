@@ -27,6 +27,7 @@ public sealed partial class AiSystem
     {
         if (!world.Characters.TryResolveNext(speaker, out int s) || world.Characters.Cold(s)?.Ai is not { } mind)
             return false;
+
         if (world.Characters.Cold(s)!.Faction == world.Player.Faction) return true;   // the player's faction's speaker gets no order
         mind.ForcedAssault = target;
         Interlocked.Exchange(ref _forcedAssaults, 1);
@@ -74,6 +75,7 @@ public sealed partial class AiSystem
             if (c.SlaveState != 1 && (c.Faction == me.Faction
                 || Relations.Contains(c.Faction) && Relations.Contains(me.Faction) && Relations.IsAlly(me.Faction, c.Faction)))
                 continue;
+
             if (PursuitSystem.PathImpossible(me, m, world.Tick)) continue;
 
             var candidate = new TargetCandidate

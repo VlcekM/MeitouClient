@@ -72,7 +72,8 @@ public sealed partial class World
         if (Characters.Phase != TablePhase.Outside || !Characters.TryResolveNext(lead, out int l) || !Characters.TryResolveNext(target, out int t))
             return null;
 
-        if (SystemOf<PopulationSystem>()?.Data is not { } data || SystemOf<Dialogue.DialogueSystem>() is not { } dialogue || Characters.Cold(t) is not { } tc)
+        if (SystemOf<PopulationSystem>()?.Data is not { } data || SystemOf<Dialogue.DialogueSystem>() is not { } dialogue
+            || Characters.Cold(t) is not { } tc)
             return null;
 
         var town = Ai.AiSystem.TownAt(data, this, Characters.Next[t].Position);

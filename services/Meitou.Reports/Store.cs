@@ -130,8 +130,10 @@ sealed class Store(NpgsqlDataSource db)
         var list = new List<RowSummary>();
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
+        {
             list.Add(new(r.GetString(0), (int)r.GetInt64(1), (int)r.GetInt64(2), r.GetBoolean(3), r.GetString(4), r.GetString(5),
-                    r.GetFieldValue<DateTimeOffset>(6)));
+                r.GetFieldValue<DateTimeOffset>(6)));
+        }
         return list;
     }
 
@@ -147,9 +149,11 @@ sealed class Store(NpgsqlDataSource db)
         var list = new List<Report>();
         await using var r = await cmd.ExecuteReaderAsync();
         while (await r.ReadAsync())
+        {
             list.Add(new(r.GetInt64(0), r.GetFieldValue<DateTimeOffset>(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5),
-                r.IsDBNull(6) ? null : r.GetBoolean(6), r.IsDBNull(7) ? null
-                        : r.GetString(7), r.GetString(8), r.GetString(9), r.GetBoolean(10), r.GetBoolean(11)));
+                r.IsDBNull(6) ? null : r.GetBoolean(6), r.IsDBNull(7) ? null : r.GetString(7), r.GetString(8), r.GetString(9),
+                r.GetBoolean(10), r.GetBoolean(11)));
+        }
         return list;
     }
 

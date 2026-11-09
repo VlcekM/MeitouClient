@@ -40,38 +40,31 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Applies one resolved blow effect: the outcome against the defender's reaction (a miss, a block or a dodge ends there), then the hit's damage,
-    /// medical events, reactions, sounds and records.
+    /// Applies one combat effect: a shot, a finished reload, the buildings a zone reached, mass-combat XP, or a blow (<see cref="ApplyBlow"/>).
     /// </summary>
     public void Apply(World world, in Effect e)
     {
-        if (e.Kind == FireEffect)
-        {
-            ApplyFire(world, e);
-            return;
-        }
+        if (e.Kind == FireEffect) ApplyFire(world, e);
+        else if (e.Kind == ReloadEffect) ApplyReload(world, e);
+        else if (e.Kind == ZoneBuildingsEffect) ApplyZoneBuildings(world, e);
+        else if (e.Kind == MassCombatEffect) ApplyMassCombat(world, e);
+        else if (e.Kind == BlowEffect) ApplyBlow(world, e);
+    }
 
-        if (e.Kind == ReloadEffect)
-        {
-            ApplyReload(world, e);
-            return;
-        }
+    /// <summary>
+    /// The mass-combat XP of the character the effect names (<see cref="MassCombatEffect"/>).
+    /// </summary>
+    void ApplyMassCombat(World world, in Effect e)
+    {
+        if (world.Characters.Cold(e.Target) is { Stats: { } asked }) _xp.MassCombat(asked);
+    }
 
-        if (e.Kind == ZoneBuildingsEffect)
-        {
-            ApplyZoneBuildings(world, e);
-            return;
-        }
-
-        if (e.Kind == MassCombatEffect)
-        {
-            if (world.Characters.Cold(e.Target) is { Stats: { } asked }) _xp.MassCombat(asked);
-
-            return;
-        }
-
-        if (e.Kind != BlowEffect) return;
-
+    /// <summary>
+    /// Applies one blow (<see cref="BlowEffect"/>): the outcome against the defender's reaction (a miss, a block or a dodge ends there), else the
+    /// hit (<see cref="LandBlow"/>).
+    /// </summary>
+    void ApplyBlow(World world, in Effect e)
+    {
         var table = world.Characters;
         int a = e.Source, d = e.Target, blow = e.Arg, seq = (int)e.Amount, now = (int)world.Tick;
         ref var aSlot = ref _write[a];
@@ -91,7 +84,8 @@ public sealed partial class CombatSystem
 
         var tech = _techniques[(int)e.Position.X];
         var prev = table.Previous;
-        int direction = HitOutcomes.Facing(tech.DirectionOf(blow), HitOutcomes.Behind(table.Previous[a].Position, table.Previous[d].Position, table.Previous[d].Yaw));
+        int direction = HitOutcomes.Facing(tech.DirectionOf(blow),
+            HitOutcomes.Behind(table.Previous[a].Position, table.Previous[d].Position, table.Previous[d].Yaw));
 
         // The defender was in the attack zone when the blow arrived (Strike); its own block or dodge decides the outcome.
         CombatTechnique? reaction = dSlot.ReactTech >= 0 && !dSlot.Down && now >= dSlot.StunUntil ? _techniques[dSlot.ReactTech] : null;
@@ -104,7 +98,8 @@ public sealed partial class CombatSystem
         // A blow that lands or is blocked takes the defender off the attacker's list of fighters it lets close in (attackImpactCheck →
         // CombatClass::removeAttackerH on the attacker's own list, docs/game/combat.md "Attack slots and circling"): a defender fighting the attacker
         // asks again before its next swing.
-        if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && dSlot.TargetSlot == a && dSlot.TargetGeneration == prev[a].Generation) dSlot.Engaged = false;
+        if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && dSlot.TargetSlot == a && dSlot.TargetGeneration == prev[a].Generation)
+            dSlot.Engaged = false;
 
         switch (outcome)
         {
@@ -112,55 +107,74 @@ public sealed partial class CombatSystem
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
             case BlowOutcome.Blocked:
-                aSlot.Parried++;
-                dSlot.Blocks++;
-                GainCombatXp(ac, dc, XpEvent.GlancingHit, XpEvent.Defended);
-
-                // A dodge technique that counts as a block (the base game's "Dodge back" rows are flagged both) is silent: it looks like a dodge, and
-                // the block impact sounds like a hit.
-                bool parry = IsParry(ac, dc, tech, blow);
-                if (!_techniques[dSlot.ReactTech].IsDodge) Sound(world, SoundKind.Blocked, d, a, prev[d].Position, unarmed: !parry, robot: false);
-
-                // A parry throws sparks at the parrying weapon (FUN_1404394f0, IsParry); a fist blow of a plain hand-to-hand impact does not.
-                if (!_techniques[dSlot.ReactTech].IsDodge && parry) world.BlockSparks?.Enqueue(Id(world, d));
-                if (live) Stop(ref aSlot, tech, blow);
-
-                Punch(world, a, ac, dc, tech, blow, 5);
-                Record(now, a, d, blow, outcome, -1, default, false, false);
+                ApplyBlocked(world, a, d, blow, ac, dc, tech, live, now);
                 return;
             case BlowOutcome.Dodged:
                 aSlot.Evaded++;
                 dSlot.Dodges++;
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, null);
                 var dodgeStats = dc.Stats;
-                _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge, 0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
+                _xp.PerEvent(dodgeStats, dc.Race, StatsEnumerated.Dodge,
+                    0.25f * _xp.SkillDifferenceFactor(dodgeStats[StatsEnumerated.Dodge], Eff(ac, StatsEnumerated.MeleeAttack)));
                 Punch(world, a, ac, dc, tech, blow, 0);
                 Record(now, a, d, blow, outcome, -1, default, false, false);
                 return;
         }
 
-        // A hit.
-        var fighter = ac.Fighter;
-        var target = dc.Fighter;
+        LandBlow(world, e, ref aSlot, ref dSlot, ac, dc, tech, direction);
+    }
+
+    /// <summary>
+    /// A blocked blow: the parry and block counts and XP, the block's sound and sparks (a dodge that counts as a block is silent), the swing stopped
+    /// while it is still the one, the puncher's own limb.
+    /// </summary>
+    void ApplyBlocked(World world, int a, int d, int blow, CharacterCold ac, CharacterCold dc, CombatTechnique tech, bool live, int now)
+    {
+        var prev = world.Characters.Previous;
+        ref var aSlot = ref _write[a];
+        ref var dSlot = ref _write[d];
+        aSlot.Parried++;
+        dSlot.Blocks++;
+        GainCombatXp(ac, dc, XpEvent.GlancingHit, XpEvent.Defended);
+
+        // A dodge technique that counts as a block (the base game's "Dodge back" rows are flagged both) is silent: it looks like a dodge, and
+        // the block impact sounds like a hit.
+        bool parry = IsParry(ac, dc, tech, blow);
+        if (!_techniques[dSlot.ReactTech].IsDodge) Sound(world, SoundKind.Blocked, d, a, prev[d].Position, unarmed: !parry, robot: false);
+
+        // A parry throws sparks at the parrying weapon (FUN_1404394f0, IsParry); a fist blow of a plain hand-to-hand impact does not.
+        if (!_techniques[dSlot.ReactTech].IsDodge && parry) world.BlockSparks?.Enqueue(Id(world, d));
+        if (live) Stop(ref aSlot, tech, blow);
+
+        Punch(world, a, ac, dc, tech, blow, 5);
+        Record(now, a, d, blow, BlowOutcome.Blocked, -1, default, false, false);
+    }
+
+    /// <summary>
+    /// A blow that hits (<see cref="ApplyBlow"/> checked both fighters, their stats, bodies and races): the packet through armour and the body, the
+    /// medical events, the defender down or staggered, XP, sounds, blood, the knock-down, crimes and relations, the record and the hit observers.
+    /// </summary>
+    void LandBlow(World world, in Effect e, ref CombatSlot aSlot, ref CombatSlot dSlot, CharacterCold ac, CharacterCold dc, CombatTechnique tech,
+        int direction)
+    {
+        var table = world.Characters;
+        var prev = table.Previous;
+        int a = e.Source, d = e.Target, blow = e.Arg, seq = (int)e.Amount, now = (int)world.Tick;
+        var fighter = ac.Fighter!;
+        var target = dc.Fighter!;
         float toughness = Eff(dc, StatsEnumerated.Toughness);
-        TargetKind kind = dc.Race.IsRobot ? TargetKind.Robot : target.IsAnimal ? TargetKind.Animal : TargetKind.Human;
-        float skill = Eff(ac, fighter.WeaponSkill);
-        float dex = Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult;
-        float str = Eff(ac, StatsEnumerated.Strength);
-        var packet = fighter.Unarmed
-            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind,
-                dc.Race.StringId, fighter.DamageOutput, _combat)
-            : DamageFormulas.Packet(skill, dex, str, fighter.Weapon!, kind, dc.Race.StringId, fighter.DamageOutput, _combat);
-        packet = Powered(packet, tech, blow);
+        var packet = BlowPacket(world, a, ac, dc, fighter, target, tech, blow);
 
         var ctx = MakeContext(world, d, dc);
         var events = _hitEvents;   // Apply is serial, so one list serves every hit
         events.Clear();
         var cover = new CoverRoll(world.Seed, Rng.Key(table.IdOf(d)), a, seq, blow);
+        var medical = dc.Medical!;
         bool observe = world.WantsCombatHits;
-        bool wasAlive = observe && !dc.Medical.Dead, wasIncapacitated = observe && dc.Medical.Incapacitated;
+        bool wasAlive = observe && !medical.Dead, wasIncapacitated = observe && medical.Incapacitated;
         bool intended = observe && d == aSlot.TargetSlot && prev[d].Generation == aSlot.TargetGeneration;
-        var (part, damage, absorbed) = HitResolver.LandDetailed(dc.Medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, _combat, events);
+        var (part, damage, absorbed) =
+            HitResolver.LandDetailed(medical, ctx, packet, target.Armour, cover, toughness, tech.LowStrike, direction == 6, _combat, events);
         FloatHit(world, d, dc, ac.IsPlayer, part, damage, absorbed);
         aSlot.Landed++;
         dSlot.Taken++;
@@ -172,6 +186,54 @@ public sealed partial class CombatSystem
         // From behind (docs/animation.md "Hit reactions"): the attacker is more than 90 degrees off the defender's heading (yaw 0 along +Z, towards +X).
         var toAttacker = new Vector2(prev[a].Position.X - prev[d].Position.X, prev[a].Position.Z - prev[d].Position.Z);
         dSlot.HitBehind = toAttacker.X * MathF.Sin(prev[d].Yaw) + toAttacker.Y * MathF.Cos(prev[d].Yaw) < 0;
+        var (knockout, death) = HitEvents(world, d, dc, medical, dc.Race!, events);
+        if (ShackledKnockOut(world, a, seq, blow, d, dc, medical, ctx)) knockout = true;
+
+        BlowReaction(world, ref dSlot, d, dc, medical, damage, toughness, now, CombatRolls.BlowCounter(a, seq, blow, 0));
+        GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
+        Punch(world, a, ac, dc, tech, blow, 2);
+        Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: dSlot.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race!.IsRobot);
+        Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce);
+        if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce, part);
+        if (death && world.Luckyren) dc.Burst = -new Vector2(toAttacker.X, toAttacker.Y);
+        if (medical.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);
+
+        BlowConsequences(world, a, d, ac, dc, medical, death);
+        Record(now, a, d, blow, BlowOutcome.Hit, part, damage, knockout, death);
+        if (observe && part >= 0)
+        {
+            world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Melee, table.IdOf(a), table.IdOf(d), seq, blow, part,
+                damage, absorbed, prev[d].Position, new(-toAttacker.X, 0, -toAttacker.Y), prev[d].Yaw,
+                direction, tech.LowStrike, intended, wasAlive, wasIncapacitated));
+        }
+    }
+
+    /// <summary>
+    /// A blow's damage packet: the fist packet of one fighting unarmed or the weapon's, against the defender's kind (robot, animal or human) and
+    /// race, times the impact point's power (<see cref="Powered"/>).
+    /// </summary>
+    DamagePacket BlowPacket(World world, int a, CharacterCold ac, CharacterCold dc, Fighter fighter, Fighter target, CombatTechnique tech, int blow)
+    {
+        var race = dc.Race!;
+        TargetKind kind = race.IsRobot ? TargetKind.Robot : target.IsAnimal ? TargetKind.Animal : TargetKind.Human;
+        float skill = Eff(ac, fighter.WeaponSkill);
+        float dex = Eff(ac, StatsEnumerated.Dexterity) * fighter.DexterityMult;
+        float str = Eff(ac, StatsEnumerated.Strength);
+        var packet = fighter.Unarmed
+            ? DamageFormulas.UnarmedPacket(UnarmedRating(world, a, ac, fighter), Eff(ac, StatsEnumerated.Toughness), str, fighter.FistsItem, kind,
+                race.StringId, fighter.DamageOutput, _combat)
+            : DamageFormulas.Packet(skill, dex, str, fighter.Weapon!, kind, race.StringId, fighter.DamageOutput, _combat);
+
+        return Powered(packet, tech, blow);
+    }
+
+    /// <summary>
+    /// The medical events of a landed blow or bolt: knock-out and limb-loss toughness XP, the look's lost head or limb and the victim's lost-limb
+    /// line. Returns whether it was knocked out and whether it died.
+    /// </summary>
+    (bool Knockout, bool Death) HitEvents(World world, int v, CharacterCold dc, MedicalState medical, RaceData race, List<MedicalEvent> events)
+    {
+        var table = world.Characters;
         bool knockout = false, death = false;
         foreach (var ev in events)
         {
@@ -179,21 +241,22 @@ public sealed partial class CombatSystem
             {
                 case MedicalEventKind.KnockedOut:
                     knockout = true;
-                    _xp.ToughnessFromKnockOut(dc.Stats, dc.Race);
+                    if (dc.Stats is { } ko) _xp.ToughnessFromKnockOut(ko, race);
                     break;
                 case MedicalEventKind.Died:
                     death = true;
                     break;
                 case MedicalEventKind.Decapitated:
                     // the look loses its head (nothing drops)
-                    table.LimbsChanged.Enqueue((d, -1));
+                    table.LimbsChanged.Enqueue((v, -1));
                     break;
                 case MedicalEventKind.PartSevered:
-                    _xp.ToughnessFromLimbLoss(dc.Stats, dc.Race);
-                    table.LimbsChanged.Enqueue((d, dc.Medical.Parts[ev.Part].Template.LimbSlot));
+                    if (dc.Stats is { } st) _xp.ToughnessFromLimbLoss(st, race);
+                    table.LimbsChanged.Enqueue((v, medical.Parts[ev.Part].Template.LimbSlot));
 
                     // LOST_LEG / LOST_ARM
-                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(d), CharacterId.None, dc.Medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71)
+                    world.Defer(new Dialogue.DialogueEvent(table.IdOf(v), CharacterId.None,
+                        medical.Parts[ev.Part].Template.LimbSlot is 2 or 3 ? 70 : 71)
                     {
                         Tick = world.Tick + 1,
                     });
@@ -201,16 +264,32 @@ public sealed partial class CombatSystem
             }
         }
 
-        // A shackled defender is knocked out instead of staggered a quarter of the time (Character::_startStumble: MedicalSystem::knockout with
-        // factor 0.002, the floor of 3 s).
-        if (!dc.Medical.Incapacitated && Meitou.Simulation.Locks.LockSystem.WornShackles(dc) is not null
-            && CombatRolls.Float(world.Seed, Rng.Key(table.IdOf(d)), CombatRoll.Shackled, CombatRolls.BlowCounter(a, seq, blow, 0)) < ShackledKnockout)
-        {
-            dc.Medical.KnockOut(dc.Medical.PutDownKoSeconds(ctx, 0.002f));
-            knockout = true;
-        }
+        return (knockout, death);
+    }
 
-        if (dc.Medical.Incapacitated)
+    /// <summary>
+    /// A shackled defender is knocked out instead of staggered a quarter of the time (<c>Character::_startStumble</c>: <c>MedicalSystem::knockout</c>
+    /// with factor 0.002, the floor of 3 s). True when it was.
+    /// </summary>
+    static bool ShackledKnockOut(World world, int a, int seq, int blow, int d, CharacterCold dc, MedicalState medical, in MedicalContext ctx)
+    {
+        var table = world.Characters;
+        bool knockedOut = !medical.Incapacitated && Meitou.Simulation.Locks.LockSystem.WornShackles(dc) is not null
+            && CombatRolls.Float(world.Seed, Rng.Key(table.IdOf(d)), CombatRoll.Shackled,
+                CombatRolls.BlowCounter(a, seq, blow, 0)) < ShackledKnockout;
+        if (!knockedOut) return false;
+
+        medical.KnockOut(medical.PutDownKoSeconds(ctx, 0.002f));
+        return true;
+    }
+
+    /// <summary>
+    /// The defender's reaction to a hit: down (its swing and reaction cut off), else a stagger, heavy past the stumble threshold.
+    /// </summary>
+    void BlowReaction(World world, ref CombatSlot dSlot, int d, CharacterCold dc, MedicalState medical, in HitDamage damage, float toughness, int now,
+        ulong counter)
+    {
+        if (medical.Incapacitated)
         {
             dSlot.Down = true;
             dSlot.AttackTech = -1;
@@ -219,39 +298,31 @@ public sealed partial class CombatSystem
             dSlot.ReactTech = -1;
         }
         else
-            Stagger(world, ref dSlot, d, dc, damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat), now,
-                CombatRolls.BlowCounter(a, seq, blow, 0));
+        {
+            bool heavy = damage.Cut + damage.Blunt + damage.Pierce + damage.ExtraStun > DamageFormulas.StumbleThreshold(toughness, _combat);
+            Stagger(world, ref dSlot, d, dc, heavy, now, counter);
+        }
+    }
 
-        GainCombatXp(ac, dc, XpEvent.HitDealt, XpEvent.HitTaken, packet.Cut + packet.Blunt + packet.Pierce + packet.Stun);
-        Punch(world, a, ac, dc, tech, blow, 2);
-        Sound(world, SoundKind.Hit, d, a, prev[d].Position, heavy: dSlot.HitHeavy, unarmed: fighter.Unarmed, robot: ac.Race.IsRobot);
-        Splash(world, d, dc, -new Vector2(toAttacker.X, toAttacker.Y), damage.Cut + damage.Blunt + damage.Pierce);
-        if (knockout || death) Knockdown(world, d, dc, -toAttacker, damage.Cut + damage.Blunt + damage.Pierce, part);
-        if (death && world.Luckyren) dc.Burst = -new Vector2(toAttacker.X, toAttacker.Y);
-        if (dc.Medical.Incapacitated) Sound(world, SoundKind.Down, d, a, prev[d].Position, fatal: death);
-
-        // The police-hit rule first (the game's hit outcome runs before the damage), then the victim's faction's relation events
-        // (docs/game/factions-squads-towns.md 3.5).
+    /// <summary>
+    /// What a hit means beyond the fighters: the police-hit rule first (the game's hit outcome runs before the damage), then the victim's alarm and
+    /// replan and its faction's relation events (docs/game/factions-squads-towns.md 3.5), and a unique's death.
+    /// </summary>
+    void BlowConsequences(World world, int a, int d, CharacterCold ac, CharacterCold dc, MedicalState medical, bool death)
+    {
+        var table = world.Characters;
         Crimes?.Hit(world, a, d);
-        if (!dc.Medical.Incapacitated)
+        if (!medical.Incapacitated)
         {
             // the victim senses its attacker, with the alarm flag (FUN_140999f00)
             world.SystemOf<AggroSystem>()?.Alarm(world, table.IdOf(d), table.IdOf(a));
             HitReplan(dc, world.Tick);
         }
 
-        Deeds?.Blow(world, a, d, dc.Medical.Incapacitated, death);
+        Deeds?.Blow(world, a, d, medical.Incapacitated, death);
 
         // A unique killed: dead in the registry, with the player flag when the killer is the player's (the body pass would mark it dead without).
         if (death && world.Uniques.RecordOf(world.Characters.IdOf(d)) is { } unique) world.Uniques.Died(unique, ac.IsPlayer, dc.Faction);
-
-        Record(now, a, d, blow, outcome, part, damage, knockout, death);
-        if (observe && part >= 0)
-        {
-            world.ObserveCombatHit(new CombatHit(world.Tick, CombatHitSource.Melee, table.IdOf(a), table.IdOf(d), seq, blow, part,
-                damage, absorbed, prev[d].Position, new(-toAttacker.X, 0, -toAttacker.Y), prev[d].Yaw,
-                direction, tech.LowStrike, intended, wasAlive, wasIncapacitated));
-        }
     }
 
     /// <summary>
@@ -293,7 +364,8 @@ public sealed partial class CombatSystem
     /// </summary>
     readonly struct CoverRoll(ulong seed, ulong defenderKey, int attacker, int attackSeq, int blow) : ICoverRoll
     {
-        public float Roll(int piece) => CombatRolls.Float(seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(attacker, attackSeq, blow, piece));
+        public float Roll(int piece) =>
+            CombatRolls.Float(seed, defenderKey, CombatRoll.Cover, CombatRolls.BlowCounter(attacker, attackSeq, blow, piece));
     }
 
     /// <summary>
@@ -305,7 +377,8 @@ public sealed partial class CombatSystem
 
         var id = world.Characters.IdOf(d);
         bool tagged = Memory is { } memory && world.Player.Squad >= 0;
-        queue.Enqueue(Floater.Hit(id, world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer, dc.Medical!.Parts[part].Template.Name, damage, absorbed)
+        queue.Enqueue(Floater.Hit(id, world.Characters.Previous[d].Position, dc.IsPlayer, sourceIsPlayer,
+            dc.Medical!.Parts[part].Template.Name, damage, absorbed)
             with
         {
             TargetTempEnemy = tagged && Memory!.HasShort(world, world.Player.Squad, id, Dialogue.MemoryTag.TempEnemy),
@@ -444,7 +517,8 @@ public sealed partial class CombatSystem
         var df = defender.Fighter!;
         float aStrength = StrengthFactor(attacker, af);
         var attackerWeapon = af.Unarmed ? StatsEnumerated.None : af.Weapon!.Skill;
-        _xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, attackerWeapon, Eff(defender, StatsEnumerated.MeleeDefence), aStrength);
+        _xp.Combat(attacker.Stats!, attacker.Race!, attackerEvent, af.Unarmed, attackerWeapon,
+            Eff(defender, StatsEnumerated.MeleeDefence), aStrength);
         if (defenderEvent is { } ev)
         {
             float dStrength = StrengthFactor(defender, df);
@@ -456,7 +530,8 @@ public sealed partial class CombatSystem
 
     float StrengthFactor(CharacterCold c, Fighter f) => f.Unarmed
         ? 1 - f.EncumbranceFactor
-        : _xp.WeaponWeightStrengthFactor(f.Weapon!.Stats.Weight, c.Stats![StatsEnumerated.Strength], c.Medical!.StatMultiplier(StatsEnumerated.Strength));
+        : _xp.WeaponWeightStrengthFactor(f.Weapon!.Stats.Weight, c.Stats![StatsEnumerated.Strength],
+            c.Medical!.StatMultiplier(StatsEnumerated.Strength));
 
     #endregion
 }

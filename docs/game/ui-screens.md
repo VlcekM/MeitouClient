@@ -107,7 +107,7 @@ against French 1440-line screenshots. Every caption the code sets is the catalog
   loads the save named by `continue=` (`FUN_140914c40`) and shows only when that save's `quick.save` exists ([save.md](../formats/save.md#where-saves-live)); Meitou loads the newest save by time: the same save, because every save request (the Save window, quicksave, and the autosave through `FUN_14047b920`, all kind 1) writes `continue=`, so it names the last save written (**Verified** `FUN_14047c310`, `FUN_14047be70`); it differs only when files are touched outside the game or another install wrote a newer save. Version text: the literal "Kenshi 1.0.68 - x64 (Newland)" (Meitou: "Meitou - Faithful UI").
 - **Escape on the title** (**Verified**, key handler `FUN_14082b010`, key code 1, when no message box or edit box takes it): `FUN_140914a90` closes the start, load and import windows
   and the save-progress window; only when it closed none of them is the quit flag set (the same flag the Exit button sets, no confirmation). Hiding the credits panel
-  (done last in that function) is not counted, so Escape with only the credits showing hides them and quits. Meitou: `PlayerInterface.UiKey`, with the title the only open screen; with a window
+  (done last in that function) is not counted, so Escape with only the credits showing hides them and quits. Meitou: `PlayerInterface.EscapeKey`, with the title the only open screen; with a window
   open the generic Escape closes it.
 - **Deleting a save** (`LoadSaveWindow::keyPressed` `FUN_14047fd00`, **Verified**): Delete or Backspace with a save selected in the load, save or import window (the handler `FUN_14047fd00` is installed by the shared base constructor `FUN_140480100` and tests no window; it fires only while the list has key focus); the save in use gets "Delete Save" / "This save
   file is currently in use and cannot be deleted" (OK); any other a Yes/No "Are you sure you want to delete this save game?" whose yes runs `deleteSelectedSave`. No button. Saving asks "Overwrite save {1}?" only on a byte-exact name match (`FUN_14047d830`, no case folding; **Verified**), so on a case-insensitive file system a differently-cased name saves into the existing folder unasked. Meitou: "in use" is the save the running game was loaded from or last written to (quicksaves and autosaves included).
@@ -556,7 +556,7 @@ also finds `MessagesTextBox`). The tag replaces the `Kenshi_EditBoxStandardText`
 character, test `FUN_1407916d0`), the conversation window's NPC line (`140674170`, ML_NORMAL), the player's chosen reply (`140683df0`, the player character's name or
 "Player", ML_PLAYER) and each MessageRoller message (`140724a20`, empty owner, ML_SYSTEM). **Unknown**: whether a system line closes its `[`.
 
-Meitou: `World.Said` from `DialogueSystem` (bubble lines, conversation lines, replies) → `MessageRoller.LogMessage`, each line tagged with its colour (ML_NORMAL is
+Meitou: `World.Said` from `DialogueSystem` (bubble lines, conversation lines, replies) → `DialogueLog.LogMessage`, each line tagged with its colour (ML_NORMAL is
 the kit's Main colour in the Meitou mode, for its dark panel); notices log as ML_SYSTEM without the `[`. The newest 200 lines are kept; not saved (the original's saving of
 the log is **Unknown**).
 
@@ -1108,7 +1108,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     Taking from a non-player CAMPING building (`building category`) is not stealing.
   - Drawing: the held item like an inventory cell at pointer + grab offset, its source cell empty. One `WhiteSkin` rectangle on layer `Info`, alpha 0.5, the footprint's size at the snapped
     cell, shown only when the section takes the item and the footprint fits (what is under it is ignored: swaps are legal); no red or green.
-  - Meitou (`InventoryWindows`, `Items/HeldItems.cs`): the held item is world state (`PlayerState.Held`, commands `LiftItem`, `PlaceHeld`, `GiveHeld`, `DropHeld`,
+  - Meitou (`InventoryWindows`, `Player/HeldItems.cs`): the held item is world state (`PlayerState.Held`, commands `LiftItem`, `PlaceHeld`, `GiveHeld`, `DropHeld`,
     `ReturnHeld`; [simulation](../simulation.md#items-and-eating)). Engine choices: the release places only after the pointer moved at least 5 px since the press (a click keeps the item for the
     next press); right click or Escape puts it back; a stock item goes into a player character's window and such a window's own items onto the stock, the trade passing to that character within 1000 ([simulation](../simulation.md#trade)); give range 1000 (60 for an item out of
     a non-player window) from the window's owner; let go over a squad bar portrait, it is given to that member (same range and room rules; its own portrait puts it back). Race limits: `ItemInstance.WearableBy` (an animal only with its race listed). Not built: section item-count caps (no section is known to set one, above), "That's not for sale." (no trader character window),
@@ -1194,7 +1194,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     - Meitou: `PlayerInterface.InventoryRightClick` buys or sells one unit (Shift all); a bought weapon goes into a free `back` then `hip` cell and armour into its empty slot
       (`InventoryCommands.TryEquip`), the rest of the stack and everything else into the first free cell; a stolen item a non-fence shop may catch asks the prompt above (`TradeItemView.FenceOdds`).
       Window to window (loot, container, storage) the units go by `InventoryCommands.MoveInto` (the open bag window first, then slots, then the main grid). Own windows only: `ReadMapItem`, else
-      `QuickMoveItem` (money, equip / take off, prosthetic onto its stump, main grid to the open bag and back, a blueprint read: [blueprints](buildings-production.md#blueprints)). Owner tag: `HeldItems.MarkFor` clears `StolenFrom` when the item goes to a member of that faction; marking it is the theft rules above.
+      `QuickMoveItem` (money, equip / take off, prosthetic onto its stump, main grid to the open bag and back, a blueprint read: [blueprints](buildings-production.md#blueprints)). Owner tag: `HeldItemTheft.MarkFor` clears `StolenFrom` when the item goes to a member of that faction; marking it is the theft rules above.
   - Reference screenshot (**Observed**, 2026-10-17, from a video): `Money:` label left and `c.442,269` right in the money box, stock icons at their footprints with plain counts bottom
     right, a vertical scrollbar, no other panels; the HUD stays. The character panel reads `Disguise: None`. Its text boxes and empty cells are dark, where the install's skins draw parchment; the cause (a UI mod or setting) is **Unknown**.
 - **Character trading window** (`CharacterTradingWindow` `FUN_14072a880`, rows `FUN_14072a070`; DA 41 / 42 / 43 / 48, [economy 12](economy.md#12-slaves-prisoners-animals); code

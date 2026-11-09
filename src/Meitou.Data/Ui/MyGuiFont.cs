@@ -104,27 +104,39 @@ public sealed record MyGuiTrueTypeFont(string Source, float Size, float Resoluti
     public static MyGuiTrueTypeFont? Read(XElement resource)
     {
         if ((string?)resource.Attribute("type") != "ResourceTrueTypeFont") return null;
-        string? Property(string key) => resource.Elements("Property").FirstOrDefault(p => (string?)p.Attribute("key") == key)?.Attribute("value")?.Value;
-        float Number(string key, float fallback) => float.TryParse(Property(key), NumberStyles.Float, CultureInfo.InvariantCulture, out float n) && float.IsFinite(n) ? n : fallback;
-        int Integer(string key, int fallback) => int.TryParse(Property(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : fallback;
+        string? Property(string key) =>
+            resource.Elements("Property").FirstOrDefault(p => (string?)p.Attribute("key") == key)?.Attribute("value")?.Value;
+        float Number(string key, float fallback) =>
+            float.TryParse(Property(key), NumberStyles.Float, CultureInfo.InvariantCulture, out float n) && float.IsFinite(n) ? n : fallback;
+        int Integer(string key, int fallback) =>
+            int.TryParse(Property(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) ? n : fallback;
         if (Property("Source") is not { Length: > 0 } source) return null;
 
         var include = new List<(int First, int Last)>();
         var hide = new List<(int First, int Last)>();
         foreach (var codes in resource.Elements("Codes"))
+        {
             foreach (var code in codes.Elements("Code"))
             {
                 if (Range((string?)code.Attribute("range")) is { } add) include.Add(add);
                 if (Range((string?)code.Attribute("hide")) is { } remove) hide.Add(remove);
             }
+        }
         // No range at all: the Basic Multilingual Plane, before the exclusions.
         if (include.Count == 0) include.Add((0, 0xFFFF));
 
         string? hinting = Property("Hinting");
         return new MyGuiTrueTypeFont(source, Number("Size", 0), Number("Resolution", DefaultResolution),
             Property("Antialias") is { } aa && (aa.Equals("true", StringComparison.OrdinalIgnoreCase) || aa == "1"),
-            hinting switch { "force_auto" => MyGuiHinting.ForceAuto, "disable_auto" => MyGuiHinting.DisableAuto, "disable_all" => MyGuiHinting.DisableAll, _ => MyGuiHinting.UseNative },
-            Number("TabWidth", 0), Integer("OffsetHeight", 0), Integer("SubstituteCode", -1), Integer("Distance", -1), new MyGuiCodeRanges(include, hide));
+            hinting switch
+            {
+                "force_auto" => MyGuiHinting.ForceAuto,
+                "disable_auto" => MyGuiHinting.DisableAuto,
+                "disable_all" => MyGuiHinting.DisableAll,
+                _ => MyGuiHinting.UseNative
+            },
+            Number("TabWidth", 0), Integer("OffsetHeight", 0), Integer("SubstituteCode", -1), Integer("Distance", -1),
+            new MyGuiCodeRanges(include, hide));
     }
 
     /// <summary>

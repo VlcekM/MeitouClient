@@ -39,7 +39,8 @@ static partial class WikiExport
     {
         var rows = new List<Row>();
         var unlocks = new Dictionary<string, List<UnlockedBy>>(StringComparer.Ordinal);
-        var leadsTo = new Dictionary<string, List<string>>(StringComparer.Ordinal);   // research id -> names of research that list it as a requirement
+        // research id -> names of research that list it as a requirement
+        var leadsTo = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var all = db.OfType(FcsRecordType.Research)
             .Where(r => r.Name.Length > 0)
             .OrderBy(r => r.Name, StringComparer.Ordinal)
@@ -48,11 +49,13 @@ static partial class WikiExport
         foreach (var r in all)
         {
             foreach (var field in ResearchData.UnlockFields)
+            {
                 foreach (var l in r.GetReferences(field))
                 {
                     if (!unlocks.TryGetValue(l.TargetStringId, out var list)) unlocks[l.TargetStringId] = list = [];
                     list.Add(new UnlockedBy(r.Name, r.StringId, l.Values.Value0));
                 }
+            }
             foreach (var req in r.GetReferences("requirements"))
             {
                 if (!leadsTo.TryGetValue(req.TargetStringId, out var l)) leadsTo[req.TargetStringId] = l = [];
@@ -84,6 +87,7 @@ static partial class WikiExport
             }
             var unlockRows = new List<object?>();
             foreach (var field in ResearchData.UnlockFields)
+            {
                 foreach (var l in r.GetReferences(field))
                 {
                     if (db.Find(l.TargetStringId) is not { } target) continue;
@@ -94,6 +98,7 @@ static partial class WikiExport
                         ["repetition"] = l.Values.Value0,
                     });
                 }
+            }
             var improves = Names(db, r.GetReferences("improve buildings").Select(l => l.TargetStringId));
             var data = new SortedDictionary<string, object?>
             {
@@ -112,18 +117,24 @@ static partial class WikiExport
                 ["leadsTo"] = leadsTo.GetValueOrDefault(r.StringId)?.Distinct().Take(20).ToList() ?? [],
                 ["record"] = r.StringId,
             };
-            if (!s_factsOnly && r.GetString("description") is { Length: > 0 } rdesc) data["description"] = Trim(rdesc, 300);
+            if (!s_factsOnly && r.GetString("description") is { Length: > 0 } rdesc)
+                data["description"] = Trim(rdesc, 300);
             if (improves.Count > 0)
             {
                 data["improves"] = improves;
-                if (r.GetFloat("production mult", 1) != 1) data["productionMult"] = Round(r.GetFloat("production mult", 1));
+                if (r.GetFloat("production mult", 1) != 1)
+                    data["productionMult"] = Round(r.GetFloat("production mult", 1));
                 if (r.GetInt("power increase") != 0) data["powerIncrease"] = r.GetInt("power increase");
-                if (r.GetInt("power capacity increase") != 0) data["capacityIncrease"] = r.GetInt("power capacity increase");
+                if (r.GetInt("power capacity increase") != 0)
+                    data["capacityIncrease"] = r.GetInt("power capacity increase");
             }
             string desc = s_factsOnly ? "" : r.GetString("description");
-            string needs = cost.Count == 0 ? "no items" : string.Join(", ", cost.OfType<SortedDictionary<string, object?>>().Select(c => $"{c["count"]} {c["item"]}"));
+            string needs = cost.Count == 0 ? "no items" : string.Join(", ", cost.OfType<SortedDictionary<string, object?>>()
+                .Select(c => $"{c["count"]} {c["item"]}"));
             rows.Add(new Row(id(r.Name, r.StringId), r.Name, "research", null, null, null, null, "Observed",
-                $"Research ({r.GetString("category")}), {r.GetInt("time")} base hours, costs {needs}." + (requires.Count > 0 ? " Needs " + string.Join(", ", requires.OfType<SortedDictionary<string, object?>>().Select(q => (string)q["name"]!)) + "." : "") + (desc.Length > 0 ? " " + Trim(desc, 240) : ""),
+                $"Research ({r.GetString("category")}), {r.GetInt("time")} base hours, costs {needs}."
+                + (requires.Count > 0 ? " Needs " + string.Join(", ", requires.OfType<SortedDictionary<string, object?>>()
+                .Select(q => (string)q["name"]!)) + "." : "") + (desc.Length > 0 ? " " + Trim(desc, 240) : ""),
                 r.StringId, data));
         }
         return (rows, unlocks);
@@ -250,11 +261,13 @@ static partial class WikiExport
         // their level numbers).
         var makers = new Dictionary<string, List<GameRecord>>(StringComparer.Ordinal);
         foreach (var m in db.OfType(FcsRecordType.WeaponManufacturer))
+        {
             foreach (var t in m.GetReferences("weapon types"))
             {
                 if (!makers.TryGetValue(t.TargetStringId, out var l)) makers[t.TargetStringId] = l = [];
                 l.Add(m);
             }
+        }
         object? Blueprint(string recordId)
         {
             if (!unlocks.TryGetValue(recordId, out var l)) return null;
@@ -300,7 +313,12 @@ static partial class WikiExport
                 data["materialCost"] = record.GetInt("material cost");
                 if (w.MinCutDamageMult != 1) data["minCutMult"] = Round(w.MinCutDamageMult);
                 if (w.RaceDamage.Count > 0)
-                    data["raceDamagePct"] = w.RaceDamage.Select(kv => (object?)new SortedDictionary<string, object?> { ["race"] = db.Find(kv.Key)?.Name ?? kv.Key, ["pct"] = kv.Value }).ToList();
+                {
+                    data["raceDamagePct"] = w.RaceDamage
+                        .Select(kv => (object?)new SortedDictionary<string, object?> { ["race"] = db.Find(kv.Key)?.Name
+                        ?? kv.Key, ["pct"] = kv.Value })
+                        .ToList();
+                }
                 var made = makers.GetValueOrDefault(record.StringId) ?? [];
                 var grades = new SortedDictionary<string, int>(StringComparer.Ordinal);
                 var makerRows = new List<object?>();
@@ -327,7 +345,9 @@ static partial class WikiExport
                     .Select(kv => (object?)new SortedDictionary<string, object?> { ["model"] = kv.Key, ["level"] = kv.Value })
                     .ToList();
                 Put(data, "blueprint", Blueprint(record.StringId));
-                summary = $"{cls} weapon, cut x{Round(w.CutDamageMultiplier)}, blunt x{Round(w.BluntDamageMultiplier)}, {(w.CanBlock ? "can block" : "cannot block")}, value {record.GetInt("value")}, weight {Num(record, "weight kg") ?? 0} kg.";
+                summary = $"{cls} weapon, cut x{Round(w.CutDamageMultiplier)}, blunt "
+                    + $"x{Round(w.BluntDamageMultiplier)}, {(w.CanBlock ? "can block" : "cannot block")}, value {record.GetInt("value")}, "
+                    + $"weight {Num(record, "weight kg") ?? 0} kg.";
             }
             else if (record.Type == FcsRecordType.Crossbow)
             {
@@ -348,7 +368,8 @@ static partial class WikiExport
                         ["count"] = r.Values.Value0 })
                     .ToList();
                 Put(data, "blueprint", Blueprint(record.StringId));
-                summary = $"Crossbow, damage {Num(record, "pierce damage min 0")} to {Num(record, "pierce damage max 0")} at the lowest grade ({Num(record, "pierce damage min 1")} to {Num(record, "pierce damage max 1")} at the highest), range {Num(record, "range")}.";
+                summary = $"Crossbow, damage {Num(record, "pierce damage min 0")} to {Num(record, "pierce damage max 0")} at the lowest grade "
+                    + $"({Num(record, "pierce damage min 1")} to {Num(record, "pierce damage max 1")} at the highest), range {Num(record, "range")}.";
             }
             else if (record.Type == FcsRecordType.Armour)
             {
@@ -366,13 +387,20 @@ static partial class WikiExport
                 data["coverage"] = a.Coverage.Select(c => (object?)new SortedDictionary<string, object?> { ["part"] = db.Find(c.PartStringId)?.Name
                     ?? c.PartStringId, ["pct"] = c.Percent }).ToList();
                 var mods = new SortedDictionary<string, object?>();
-                void Mult(string key, float v) { if (v != 1) mods[key] = Round(v); }
+                void Mult(string key, float v)
+                {
+                    if (v != 1) mods[key] = Round(v);
+                }
+
                 Mult("dodge", a.DodgeMult);
                 Mult("dexterity", a.DexterityMult);
-                Mult("damageOutput", a.DamageOutputMult); Mult("athletics", a.AthleticsMult); Mult("combatSpeed", a.CombatSpeedMult);
+                Mult("damageOutput", a.DamageOutputMult);
+                Mult("athletics", a.AthleticsMult);
+                Mult("combatSpeed", a.CombatSpeedMult);
                 Mult("stealth", a.StealthMult);
                 Mult("rangedSkill", a.RangedSkillMult);
-                Mult("assassination", a.AssassinationMult); Mult("fistInjury", a.FistInjuryMult);
+                Mult("assassination", a.AssassinationMult);
+                Mult("fistInjury", a.FistInjuryMult);
                 if (a.UnarmedBonus != 0) mods["unarmedBonus"] = a.UnarmedBonus;
                 if (a.PerceptionBonus != 0) mods["perceptionBonus"] = a.PerceptionBonus;
                 if (a.CombatAttackBonus != 0) mods["combatAttackBonus"] = a.CombatAttackBonus;
@@ -382,13 +410,15 @@ static partial class WikiExport
                 if (a.WeatherProtectionAmount != 0) mods["weatherProtection"] = Round(a.WeatherProtectionAmount);
                 data["modifiers"] = mods;
                 Put(data, "blueprint", Blueprint(record.StringId));
-                summary = $"{a.Class} {a.Material} armour ({ArmourSlotName(a.Slot)}), cut +{Round(a.CutDefBonus)}, blunt +{Round(a.BluntDefBonus)}, value {record.GetInt("value")}, weight {Num(record, "weight kg") ?? 0} kg.";
+                summary = $"{a.Class} {a.Material} armour ({ArmourSlotName(a.Slot)}), cut +{Round(a.CutDefBonus)}, blunt +{Round(a.BluntDefBonus)}, "
+                    + $"value {record.GetInt("value")}, weight {Num(record, "weight kg") ?? 0} kg.";
             }
             else if (record.Type is FcsRecordType.Container or FcsRecordType.LimbReplacement)
             {
                 kind = record.Type == FcsRecordType.Container ? "backpack" : "limb";
                 Put(data, "blueprint", Blueprint(record.StringId));
-                summary = $"{(kind == "limb" ? "Robotic limb" : "Backpack")}, value {record.GetInt("value")}, weight {Num(record, "weight kg") ?? 0} kg.";
+                summary = $"{(kind == "limb" ? "Robotic limb" : "Backpack")}, value {record.GetInt("value")}, "
+                    + $"weight {Num(record, "weight kg") ?? 0} kg.";
             }
             else
             {
@@ -432,16 +462,28 @@ static partial class WikiExport
         Func<string, string, string> id)
     {
         WeatherAreas? areas = null;
-        try { areas = WeatherAreas.Load(install); } catch (Exception ex) when (ex is IOException or FormatException or UnauthorizedAccessException) { Console.Error.WriteLine("wiki-export: no areas map, biomes unplaced: " + ex.Message); }
+        try
+        {
+            areas = WeatherAreas.Load(install);
+        }
+        catch (Exception ex) when (ex is IOException or FormatException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine("wiki-export: no areas map, biomes unplaced: " + ex.Message);
+        }
+
         var map = BiomeMap.Create(db, areas);
         var cellsOf = new Dictionary<int, List<string>>();
         for (int cz = 0; cz < WeatherAreas.Cells; cz++)
+        {
             for (int cx = 0; cx < WeatherAreas.Cells; cx++)
+            {
                 if (map.GroupOf(cx, cz) is var g and >= 0)
                 {
                     if (!cellsOf.TryGetValue(g, out var l)) cellsOf[g] = l = [];
                     l.Add($"{cx}-{cz}");
                 }
+            }
+        }
         var townsInCell = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var pt in placed)
         {
@@ -467,11 +509,13 @@ static partial class WikiExport
         }
         var townsOf = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var pt in placed)
+        {
             foreach (var l in pt.Town.Residents.Concat(pt.Town.BarSquads).Concat(pt.Town.RoamingSquads))
             {
                 if (!townsOf.TryGetValue(l.Id, out var n)) townsOf[l.Id] = n = [];
                 if (!n.Contains(pt.Town.Name)) n.Add(pt.Town.Name);
             }
+        }
 
         object? SquadRow(RecordLink link, double share)
         {
@@ -544,9 +588,12 @@ static partial class WikiExport
                 ["record"] = group.Id,
             };
             if (cells.Count == 0 && group.HomelessSpawns.Count == 0 && group.Nests.Count == 0) continue;
-            string where = cells.Count == 0 ? "No zone cell is painted with this group in the areas map." : $"Covers {cells.Count} zone cell(s) and {towns.Count} placed town(s).";
+            string where = cells.Count == 0
+                ? "No zone cell is painted with this group in the areas map."
+                : $"Covers {cells.Count} zone cell(s) and {towns.Count} placed town(s).";
             rows.Add(new Row(id(group.Name + " biome", group.Id), group.Name, "biome", null, null, null, null, "Observed",
-                $"Biome group {group.Name}: {where} Homeless squads per loaded sector {Round(group.HomelessSpawnAmount)} (times the population setting); {squadRows.Count} squad template(s) can spawn, {group.NumNests} nest(s).", group.Id, data));
+                $"Biome group {group.Name}: {where} Homeless squads per loaded sector {Round(group.HomelessSpawnAmount)} "
+                + $"(times the population setting); {squadRows.Count} squad template(s) can spawn, {group.NumNests} nest(s).", group.Id, data));
         }
         return new SpawnIndex(rows, biomesOf, nestsOf, townsOf, map);
     }
@@ -560,11 +607,13 @@ static partial class WikiExport
     {
         var withAnimal = new Dictionary<string, List<(SquadTemplate T, RecordLink L)>>(StringComparer.Ordinal);
         foreach (var t in templates.Values)
+        {
             foreach (var l in t.Animals.Concat(t.Animals2))
             {
                 if (!withAnimal.TryGetValue(l.Id, out var list)) withAnimal[l.Id] = list = [];
                 list.Add((t, l));
             }
+        }
         var rows = new List<Row>();
         foreach (var record in db.OfType(FcsRecordType.AnimalCharacter).Where(r => r.Name.Length > 0).OrderBy(r => r.Name, StringComparer.Ordinal)
                 .ThenBy(r => r.StringId, StringComparer.Ordinal))
@@ -595,7 +644,8 @@ static partial class WikiExport
                     ["buyValue"] = race.GetInt("buy value"),
                     ["anatomy"] = race.GetReferences("combat anatomy")
                         .Where(x => db.Find(x.TargetStringId) is not null)
-                        .Select(x => (object?)new SortedDictionary<string, object?> { ["part"] = db.Find(x.TargetStringId)!.Name, ["hp"] = x.Values.Value0 })
+                        .Select(x => (object?)new SortedDictionary<string, object?> { ["part"] = db.Find(x.TargetStringId)!.Name,
+                        ["hp"] = x.Values.Value0 })
                         .ToList(),
                 };
                 data["race"] = r;
@@ -632,14 +682,17 @@ static partial class WikiExport
                     ["animalMult"] = Round(w.AnimalDamageMult),
                 };
             }
-            if (record.GetReferences("weapon level") is { Count: > 0 } lv) data["weaponLevel"] = FactionNameOf(db, lv[0].TargetStringId);
+            if (record.GetReferences("weapon level") is { Count: > 0 } lv)
+                data["weaponLevel"] = FactionNameOf(db, lv[0].TargetStringId);
             data["deathItems"] = record.GetReferences("death items").Where(x => x.Values.Value0 > 0 && db.Find(x.TargetStringId) is not null)
                 .Select(x => (object?)new SortedDictionary<string, object?> { ["item"] = db.Find(x.TargetStringId)!.Name,
                     ["count"] = x.Values.Value0 }).ToList();
             int chance = record.GetInt("bounty chance"), amount = record.GetInt("bounty amount");
             if (chance > 0 && amount > 0)
+            {
                 data["bounty"] = new SortedDictionary<string, object?> { ["chancePct"] = chance, ["amount"] = amount,
                     ["amountMax"] = amount + Math.Max(0, record.GetInt("bounty amount fuzz")) };
+            }
 
             var uses = withAnimal.GetValueOrDefault(record.StringId) ?? [];
             var squadRows = new List<object?>();
@@ -649,10 +702,17 @@ static partial class WikiExport
             var seenBiome = new HashSet<string>(StringComparer.Ordinal);
             foreach (var (t, l) in uses.OrderBy(u => u.T.Name, StringComparer.Ordinal))
             {
-                squadRows.Add(new SortedDictionary<string, object?> { ["squad"] = t.Name, ["count"] = l.V0 == l.V1 || l.V1 == 0 ? l.V0.ToString(CultureInfo.InvariantCulture) : $"{l.V0}-{l.V1}", ["record"] = t.Id });
+                squadRows.Add(new SortedDictionary<string, object?>
+                {
+                    ["squad"] = t.Name,
+                    ["count"] = l.V0 == l.V1 || l.V1 == 0 ? l.V0.ToString(CultureInfo.InvariantCulture) : $"{l.V0}-{l.V1}",
+                    ["record"] = t.Id,
+                });
                 foreach (var (biome, share) in spawn.BiomesOf.GetValueOrDefault(t.Id) ?? [])
+                {
                     if (seenBiome.Add(biome + "|" + t.Name))
                         biomes.Add(new SortedDictionary<string, object?> { ["biome"] = biome, ["sharePct"] = share, ["squad"] = t.Name });
+                }
                 foreach (var n in spawn.NestsOf.GetValueOrDefault(t.Id) ?? []) nests.Add(n);
                 foreach (var n in spawn.TownsOf.GetValueOrDefault(t.Id) ?? []) towns.Add(n);
             }
@@ -664,11 +724,15 @@ static partial class WikiExport
                 ["towns"] = towns.Take(20).ToList(),
             };
             string faction = record.GetReferences("faction") is { Count: > 0 } fl ? FactionNameOf(db, fl[0].TargetStringId) : "";
-            if (faction.Length == 0) faction = uses.Select(u => FactionNameOf(db, u.T.Faction)).FirstOrDefault(n => n.Length > 0) ?? "";
-            string where = biomes.Count + nests.Count + towns.Count == 0 ? "No squad that spawns on its own (biome, nest or town list) uses it." : $"Spawns through {squadRows.Count} squad template(s): {biomes.Count} biome entries, {nests.Count} nest(s), {towns.Count} town(s).";
+            if (faction.Length == 0)
+                faction = uses.Select(u => FactionNameOf(db, u.T.Faction)).FirstOrDefault(n => n.Length > 0) ?? "";
+            string where = biomes.Count + nests.Count + towns.Count == 0
+                ? "No squad that spawns on its own (biome, nest or town list) uses it."
+                : $"Spawns through {squadRows.Count} squad template(s): {biomes.Count} biome entries, {nests.Count} nest(s), {towns.Count} town(s).";
             rows.Add(new Row(id(record.Name, record.StringId), record.Name, "animal-type", faction.Length == 0 ? null : faction, null, null, null,
                 "Observed",
-                $"Animal{(race is null ? "" : ", race " + race.Name)}, combat stats {record.GetInt("combat stats")}, animal strength {record.GetInt("animal strength")}, {Round(record.GetFloat("HP mult", 1))}x health. {where}",
+                $"Animal{(race is null ? "" : ", race " + race.Name)}, combat stats {record.GetInt("combat stats")}, "
+                + $"animal strength {record.GetInt("animal strength")}, {Round(record.GetFloat("HP mult", 1))}x health. {where}",
                 record.StringId, data));
         }
         return rows;

@@ -104,8 +104,8 @@ public sealed class PhysicsFile
             r.Vector(); r.Vector(); r.Vector(); r.Vector();   // the bone's binding pose: only the attachment loader reads it
             r.Byte();
         }
-        var actor = new PhysicsBodyActor(name, position, isStatic, mass, density, linearDamping, angularDamping, useCentreOfMass ? centreOfMass : null, noGravity,
-            bone is { Length: > 0 } ? bone : null);
+        var actor = new PhysicsBodyActor(name, position, isStatic, mass, density, linearDamping, angularDamping,
+            useCentreOfMass ? centreOfMass : null, noGravity, bone is { Length: > 0 } ? bone : null);
         for (int i = 0; i < shapes; i++) actor.Shapes.Add(ReadShape(ref r, v));
         for (int i = 0; i < points; i++) ReadPoint(ref r);
         r.Skip(lights, 0x7c);
@@ -199,8 +199,8 @@ public sealed class PhysicsFile
 /// An actor: one rigid body (none when <see cref="Static"/>), at <see cref="Position"/> in model space with no rotation of its own. In a ragdoll the name is the bone's and
 /// the position the bone's binding position. <see cref="AngularDamping"/> is the value the game uses (the file stores a tenth of it).
 /// </summary>
-public sealed record PhysicsBodyActor(string Name, Vector3 Position, bool Static, float Mass, float Density, float LinearDamping, float AngularDamping, Vector3? CentreOfMass,
-    bool NoGravity, string? Bone)
+public sealed record PhysicsBodyActor(string Name, Vector3 Position, bool Static, float Mass, float Density, float LinearDamping, float AngularDamping,
+    Vector3? CentreOfMass, bool NoGravity, string? Bone)
 {
     public List<PhysicsShape> Shapes { get; } = [];
 }
@@ -208,7 +208,8 @@ public sealed record PhysicsBodyActor(string Name, Vector3 Position, bool Static
 /// <summary>
 /// A collision shape in model space: its centre and rotation, and its size as <see cref="PhysicsShapeType"/> reads it.
 /// </summary>
-public sealed record PhysicsShape(PhysicsShapeType Type, Vector3 Position, Quaternion Rotation, Vector3 Size, float Mass, float Density, float SkinWidth, string CookedFile, bool Convex);
+public sealed record PhysicsShape(PhysicsShapeType Type, Vector3 Position, Quaternion Rotation, Vector3 Size, float Mass, float Density,
+    float SkinWidth, string CookedFile, bool Convex);
 
 /// <summary>
 /// A joint spring: target (degrees for a revolute joint), spring and damper.
@@ -220,5 +221,5 @@ public readonly record struct PhysicsSpring(float Target, float Spring, float Da
 /// Revolute: rotation about <see cref="Axis"/> from <see cref="Low"/> to <see cref="High"/> degrees. Spherical: twist about <see cref="Axis"/> from <see cref="Low"/> to
 /// <see cref="High"/>, swing up to <see cref="Swing"/> degrees. The limits apply only when <see cref="LimitsOn"/>.
 /// </summary>
-public sealed record PhysicsJoint(PhysicsJointType Type, int Actor0, int Actor1, Vector3 Anchor, Vector3 Normal, Vector3 Axis, bool LimitsOn, float Low, float High, float Swing,
-    bool Collide, PhysicsSpring? Spring1, PhysicsSpring? Spring2, PhysicsSpring? Spring3);
+public sealed record PhysicsJoint(PhysicsJointType Type, int Actor0, int Actor1, Vector3 Anchor, Vector3 Normal, Vector3 Axis, bool LimitsOn, float Low,
+    float High, float Swing, bool Collide, PhysicsSpring? Spring1, PhysicsSpring? Spring2, PhysicsSpring? Spring3);

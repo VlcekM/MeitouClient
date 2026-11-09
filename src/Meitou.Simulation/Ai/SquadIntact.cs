@@ -71,6 +71,7 @@ static class SquadIntact
                 && !(relations.Contains(c.Faction) && relations.Contains(carrier.Faction) && relations.IsAlly(c.Faction, carrier.Faction)))
                 return true;
         }
+
         return false;
     }
 

@@ -5,8 +5,9 @@ using Meitou.Data.World;
 namespace Meitou.Tests;
 
 /// <summary>
-/// The Kenshi install and the game data the install tests share, each loaded once on first use (loading a database takes seconds). Two load orders:
-/// the base game alone, and the install's own (the base game plus the enabled mods, which is what the game runs). Nothing here may be mutated by a test.
+/// The Kenshi install and the game data the install tests share, each loaded once on first use (loading a database takes seconds). Two load
+/// orders: the base game alone, and the install's own (the base game plus the enabled mods, which is what the game runs). Nothing here may be
+/// mutated by a test.
 /// </summary>
 static class InstallData
 {

@@ -128,99 +128,15 @@ public sealed class OgreScriptCompiler
         }
     }
 
+    /// <summary>
+    /// Turns <paramref name="node"/> into AST and adds it to <paramref name="current"/> (a property's values, an object's children) or to
+    /// <paramref name="top"/>.
+    /// </summary>
     void Visit(OgreConcreteNode node, OgreScriptNode? current, List<OgreScriptNode> top)
     {
-        OgreScriptNode? created = null;
-
-        if (node.Type == OgreConcreteNodeType.Import && current is null)
-        {
-            if (node.Children.Count > 2)
-            {
-                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
-                return;
-            }
-            if (node.Children.Count < 2)
-            {
-                AddError(OgreScriptError.StringExpected, node.File, node.Line);
-                return;
-            }
-            created = new OgreScriptImport(node.Children[0].Token, node.Children[1].Token) { File = node.File, Line = node.Line };
-        }
-        else if (node.Type == OgreConcreteNodeType.VariableAssign)
-        {
-            if (node.Children.Count > 2)
-            {
-                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
-                return;
-            }
-            if (node.Children.Count < 2)
-            {
-                AddError(OgreScriptError.StringExpected, node.File, node.Line);
-                return;
-            }
-            if (node.Children[0].Type != OgreConcreteNodeType.Variable)
-            {
-                AddError(OgreScriptError.VariableExpected, node.Children[0].File, node.Children[0].Line);
-                return;
-            }
-            string name = node.Children[0].Token, value = node.Children[1].Token;
-            if (current is OgreScriptObject obj) obj.Variables[name] = value;
-            else _env.TryAdd(name, value); // std::map::insert: the first top-level set wins
-        }
-        else if (node.Type == OgreConcreteNodeType.Variable)
-        {
-            if (node.Children.Count > 0)
-            {
-                AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
-                return;
-            }
-            created = new OgreScriptVariableAccess(node.Token) { File = node.File, Line = node.Line, Parent = current };
-        }
-        else if (node.Children.Count > 0)
-        {
-            var last = node.Children[^1];
-            var beforeLast = node.Children.Count >= 2 ? node.Children[^2] : null;
-            if (last.Type == OgreConcreteNodeType.RightBrace && beforeLast?.Type == OgreConcreteNodeType.LeftBrace)
-            {
-                var parts = new List<OgreConcreteNode>();
-                bool isAbstract = node.Token == "abstract";
-                if (!isAbstract) parts.Add(node);
-                parts.AddRange(node.Children);
-
-                int i = 0;
-                var obj = new OgreScriptObject(parts[i++].Token) { File = node.File, Line = node.Line, Parent = current, IsAbstract = isAbstract };
-                if (i < parts.Count && parts[i].Type is OgreConcreteNodeType.Word or OgreConcreteNodeType.Quote &&
-                    !IsNameExcluded(obj.Class, current))
-                    obj.Name = parts[i++].Token;
-                for (; i < parts.Count && parts[i].Type is not (OgreConcreteNodeType.Colon or OgreConcreteNodeType.LeftBrace); i++)
-                {
-                    OgreScriptNode value = parts[i].Type == OgreConcreteNodeType.Variable
-                        ? new OgreScriptVariableAccess(parts[i].Token)
-                        : new OgreScriptAtom(parts[i].Token);
-                    value.File = parts[i].File;
-                    value.Line = parts[i].Line;
-                    value.Parent = obj;
-                    obj.Values.Add(value);
-                }
-                if (i < parts.Count && parts[i].Type == OgreConcreteNodeType.Colon)
-                    obj.Bases.AddRange(parts[i].Children.Select(c => c.Token));
-
-                foreach (var child in beforeLast.Children) Visit(child, obj, top);
-                created = obj;
-            }
-            else
-            {
-                var prop = new OgreScriptProperty(node.Token) { File = node.File, Line = node.Line, Parent = current };
-                foreach (var child in node.Children) Visit(child, prop, top);
-                created = prop;
-            }
-        }
-        else
-        {
-            created = new OgreScriptAtom(node.Token) { File = node.File, Line = node.Line, Parent = current };
-        }
-
+        var created = Create(node, current, top);
         if (created is null) return;
+
         switch (current)
         {
             case OgreScriptProperty p:
@@ -233,6 +149,126 @@ public sealed class OgreScriptCompiler
                 top.Add(created);
                 break;
         }
+    }
+
+    /// <summary>
+    /// The AST node of a concrete node, its children visited; null when it makes none (an error, or a variable assignment).
+    /// </summary>
+    OgreScriptNode? Create(OgreConcreteNode node, OgreScriptNode? current, List<OgreScriptNode> top)
+    {
+        if (node.Type == OgreConcreteNodeType.Import && current is null) return CreateImport(node);
+        if (node.Type == OgreConcreteNodeType.VariableAssign)
+        {
+            AssignVariable(node, current);
+            return null;
+        }
+        if (node.Type == OgreConcreteNodeType.Variable) return CreateVariableAccess(node, current);
+        if (node.Children.Count > 0) return CreateObjectOrProperty(node, current, top);
+
+        return new OgreScriptAtom(node.Token) { File = node.File, Line = node.Line, Parent = current };
+    }
+
+    /// <summary>
+    /// An <c>import</c> at the top level: its target and source, or null with an error when it has not exactly two.
+    /// </summary>
+    OgreScriptNode? CreateImport(OgreConcreteNode node)
+    {
+        if (node.Children.Count > 2)
+        {
+            AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+            return null;
+        }
+        if (node.Children.Count < 2)
+        {
+            AddError(OgreScriptError.StringExpected, node.File, node.Line);
+            return null;
+        }
+        return new OgreScriptImport(node.Children[0].Token, node.Children[1].Token) { File = node.File, Line = node.Line };
+    }
+
+    /// <summary>
+    /// A <c>set $name value</c>: stored on the enclosing object, or in the file's environment at the top level.
+    /// </summary>
+    void AssignVariable(OgreConcreteNode node, OgreScriptNode? current)
+    {
+        if (node.Children.Count > 2)
+        {
+            AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+            return;
+        }
+        if (node.Children.Count < 2)
+        {
+            AddError(OgreScriptError.StringExpected, node.File, node.Line);
+            return;
+        }
+        if (node.Children[0].Type != OgreConcreteNodeType.Variable)
+        {
+            AddError(OgreScriptError.VariableExpected, node.Children[0].File, node.Children[0].Line);
+            return;
+        }
+        string name = node.Children[0].Token, value = node.Children[1].Token;
+        if (current is OgreScriptObject obj) obj.Variables[name] = value;
+        else _env.TryAdd(name, value); // std::map::insert: the first top-level set wins
+    }
+
+    /// <summary>
+    /// A <c>$variable</c> access, or null with an error when it has children.
+    /// </summary>
+    OgreScriptNode? CreateVariableAccess(OgreConcreteNode node, OgreScriptNode? current)
+    {
+        if (node.Children.Count > 0)
+        {
+            AddError(OgreScriptError.FewerParametersExpected, node.File, node.Line);
+            return null;
+        }
+        return new OgreScriptVariableAccess(node.Token) { File = node.File, Line = node.Line, Parent = current };
+    }
+
+    /// <summary>
+    /// A node with children: an object when they end in a <c>{ }</c> block, else a property whose children are its values.
+    /// </summary>
+    OgreScriptNode CreateObjectOrProperty(OgreConcreteNode node, OgreScriptNode? current, List<OgreScriptNode> top)
+    {
+        var last = node.Children[^1];
+        var beforeLast = node.Children.Count >= 2 ? node.Children[^2] : null;
+        if (last.Type == OgreConcreteNodeType.RightBrace && beforeLast?.Type == OgreConcreteNodeType.LeftBrace)
+            return CreateObject(node, beforeLast, current, top);
+
+        var prop = new OgreScriptProperty(node.Token) { File = node.File, Line = node.Line, Parent = current };
+        foreach (var child in node.Children) Visit(child, prop, top);
+        return prop;
+    }
+
+    /// <summary>
+    /// An object: its class (the node's word, or the first child after <c>abstract</c>), name, values and bases, then its block's children.
+    /// </summary>
+    OgreScriptObject CreateObject(OgreConcreteNode node, OgreConcreteNode block, OgreScriptNode? current, List<OgreScriptNode> top)
+    {
+        var parts = new List<OgreConcreteNode>();
+        bool isAbstract = node.Token == "abstract";
+        if (!isAbstract) parts.Add(node);
+        parts.AddRange(node.Children);
+
+        int i = 0;
+        var obj = new OgreScriptObject(parts[i++].Token) { File = node.File, Line = node.Line, Parent = current, IsAbstract = isAbstract };
+        if (i < parts.Count && parts[i].Type is OgreConcreteNodeType.Word or OgreConcreteNodeType.Quote &&
+            !IsNameExcluded(obj.Class, current))
+            obj.Name = parts[i++].Token;
+        for (; i < parts.Count && parts[i].Type is not (OgreConcreteNodeType.Colon or OgreConcreteNodeType.LeftBrace); i++)
+        {
+            OgreScriptNode value = parts[i].Type == OgreConcreteNodeType.Variable
+                ? new OgreScriptVariableAccess(parts[i].Token)
+                : new OgreScriptAtom(parts[i].Token);
+            value.File = parts[i].File;
+            value.Line = parts[i].Line;
+            value.Parent = obj;
+            obj.Values.Add(value);
+        }
+        if (i < parts.Count && parts[i].Type == OgreConcreteNodeType.Colon)
+            obj.Bases.AddRange(parts[i].Children.Select(c => c.Token));
+
+        foreach (var child in block.Children) Visit(child, obj, top);
+        return obj;
     }
 
     /// <summary>

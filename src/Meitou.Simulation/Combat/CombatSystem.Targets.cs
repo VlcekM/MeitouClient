@@ -240,7 +240,8 @@ public sealed partial class CombatSystem
 
         ref readonly var o = ref _read[c];
         bool downed = tc.Medical is { Crawling: true } || o.AttackTech >= 0;
-        if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, downed, o.TargetSlot >= 0)) return;
+        if (q.Hold && !Orders.HoldPost(prev[i].Position, q.HoldPoint, prev[c].Position, prev[c].Velocity, prev[c].Yaw, downed, o.TargetSlot >= 0))
+            return;
 
         int attackers = AttackerCount(world, c) + (q.Pending is { } pending ? pending.GetValueOrDefault(c) : 0);
         float dx = prev[c].Position.X - prev[i].Position.X;

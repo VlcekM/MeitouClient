@@ -88,6 +88,7 @@ public static unsafe class MslTranslator
             // Every descriptor set is an argument buffer in this mode: each takes its stage's flattened set index (the vertex stage's
             // above the vertex buffers), the table's the fixed free one.
             if (argumentBufferSet is { } table)
+            {
                 msl = ArgumentBuffer.Replace(msl, m =>
                 {
                     uint set = uint.Parse(m.Groups[2].Value);
@@ -98,6 +99,7 @@ public static unsafe class MslTranslator
                         : set;
                     return $"constant {m.Groups[1].Value} [[buffer({index})]]";
                 });
+            }
 
             // This spirv-cross has no binding option for push constants: the block comes out at [[buffer(0)]] — the stage's
             // low indices belong to the flattened resources and the vertex buffers (MetalShaders's numbers), the top index

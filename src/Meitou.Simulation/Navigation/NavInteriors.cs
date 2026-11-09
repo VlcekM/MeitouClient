@@ -227,23 +227,95 @@ internal static class NavInteriors
         Action<string>? log,
         float hullDistance)
     {
-        bool Free(int p, int e) => neighbours[p][e] < 0 && !NavGeometry.HasLink(CollectionsMarshal.AsSpan(links[p]), e);
+        var join = new InteriorJoin(v, polygons, neighbours, areas, kept, links, exteriorCount, first, log);
         for (int door = 0; door < doorIds.Count; door++)
         {
             var inside = Enumerable.Range(first, count).Where(p => areas[p] == NavArea.Door && doorOf[p] == door).ToList();
             if (inside.Count == 0) continue;
 
             var outside = Enumerable.Range(0, exteriorCount).Where(p => kept[p] && areas[p] == NavArea.Door && doorOf[p] == door).ToList();
+            join.JoinDoor(inside, outside, doorIds[door]);
+        }
 
+        // A doorless interior (an open doorway): the hull cuts the exterior and the interior along the same line, so their edges meet there.
+        if (doorless) join.JoinDoorless(count, name, hullDistance);
+    }
+
+    /// <summary>
+    /// The joining of one interior (polygons from <paramref name="first"/> on) to the exterior's first <paramref name="exteriorCount"/> polygons of the
+    /// combined mesh: the open edges of both sides that face each other get links.
+    /// </summary>
+    sealed class InteriorJoin(
+        List<Vector3> v,
+        List<int[]> polygons,
+        List<int[]> neighbours,
+        List<byte> areas,
+        List<bool> kept,
+        List<List<int>?> links,
+        int exteriorCount,
+        int first,
+        Action<string>? log)
+    {
+        /// <summary>
+        /// Links the interior's polygons of one door to the exterior: to the exterior's polygons of the same door, else along the hull's edge round
+        /// the doorway, else from the door's approach.
+        /// </summary>
+        public void JoinDoor(List<int> inside, List<int> outside, string doorId)
+        {
             // An edge that faces several polygons links to all of them, so which edges are open is decided before any link is added.
             var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            if (Link(openInside, OpenEdges(outside), doorIds[door]) > 0) continue;
+            if (Link(openInside, OpenEdges(outside), doorId) > 0) return;
 
             // A door leaf set back inside the interior hull paints nothing outside it (the exterior is carved to the hull): the doorway's interior
             // polygons meet the exterior's ground along the hull's edge (Observed: the L-House 13-rebirth-INGAME, zone 18.35).
+            var (lo, hi) = Bounds(inside);
+            lo -= new Vector2(JoinDistance);
+            hi += new Vector2(JoinDistance);
+            var near = Near(lo, hi);
+            if (Link(openInside, OpenEdges(near), $"{doorId} (doorway edge)") > 0) return;
+
+            // A raised sill reached by steps that cross the hull: the steps' upper part is the interior's (joined to the door polygons), the lower
+            // part the exterior's, and the two meet on the hull's edge below the door (Observed: 29- and 27-rebirth-INGAME, zone 18.35). So the
+            // interior polygons connected to the door within the approach box are joined too.
+            lo -= new Vector2(ApproachReach);
+            hi += new Vector2(ApproachReach);
+            var approach = Approach(inside, lo, hi);
+            var openApproach = approach.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
+            near = Near(lo, hi);
+            if (Link(openApproach, OpenEdges(near), $"{doorId} (approach)") == 0)
+            {
+                log?.Invoke($"    door {doorId} joins nothing: {inside.Count} interior door polygons ({openInside.Count} open edges), " +
+                    $"{outside.Count} exterior door polygons, {near.Count} kept exterior polygons in the approach box");
+            }
+        }
+
+        /// <summary>
+        /// Links a doorless interior's <paramref name="count"/> polygons to the exterior along its hull, within <paramref name="hullDistance"/>.
+        /// </summary>
+        public void JoinDoorless(int count, string name, float hullDistance)
+        {
+            var inside = Enumerable.Range(first, count).Where(p => areas[p] != NavArea.Null).ToList();
+            var (lo, hi) = Bounds(inside);
+            lo -= new Vector2(JoinDistance);
+            hi += new Vector2(JoinDistance);
+            var near = Near(lo, hi);
+            var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
+            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", hullDistance);
+        }
+
+        /// <summary>
+        /// Whether polygon <paramref name="p"/>'s edge <paramref name="e"/> has neither a neighbour nor a link.
+        /// </summary>
+        bool Free(int p, int e) => neighbours[p][e] < 0 && !NavGeometry.HasLink(CollectionsMarshal.AsSpan(links[p]), e);
+
+        /// <summary>
+        /// The plan bounds of the vertices of <paramref name="polys"/>.
+        /// </summary>
+        (Vector2 Lo, Vector2 Hi) Bounds(List<int> polys)
+        {
             var lo = new Vector2(float.MaxValue);
             var hi = new Vector2(float.MinValue);
-            foreach (int p in inside)
+            foreach (int p in polys)
             {
                 foreach (int i in polygons[p])
                 {
@@ -252,19 +324,25 @@ internal static class NavInteriors
                 }
             }
 
-            lo -= new Vector2(JoinDistance);
-            hi += new Vector2(JoinDistance);
-            var near = Enumerable.Range(0, exteriorCount)
-                .Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y))
-                .ToList();
-            if (Link(openInside, OpenEdges(near), $"{doorIds[door]} (doorway edge)") > 0) continue;
+            return (lo, hi);
+        }
 
-            // A raised sill reached by steps that cross the hull: the steps' upper part is the interior's (joined to the door polygons), the lower part the
-            // exterior's, and the two meet on the hull's edge below the door (Observed: 29- and 27-rebirth-INGAME, zone 18.35). So the interior polygons
-            // connected to the door within the approach box are joined too.
-            lo -= new Vector2(ApproachReach);
-            hi += new Vector2(ApproachReach);
-            bool InBox(int p) => polygons[p].All(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y);
+        /// <summary>
+        /// The kept exterior polygons with a vertex in the plan box [<paramref name="lo"/>, <paramref name="hi"/>].
+        /// </summary>
+        List<int> Near(Vector2 lo, Vector2 hi)
+        {
+            return Enumerable.Range(0, exteriorCount)
+                .Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => InPlan(v[i], lo, hi)))
+                .ToList();
+        }
+
+        /// <summary>
+        /// The door's polygons and the polygons connected to them that lie wholly within the plan box [<paramref name="lo"/>, <paramref name="hi"/>].
+        /// </summary>
+        HashSet<int> Approach(List<int> inside, Vector2 lo, Vector2 hi)
+        {
+            bool InBox(int p) => polygons[p].All(i => InPlan(v[i], lo, hi));
             var approach = new HashSet<int>(inside);
             var queue = new Queue<int>(inside);
             while (queue.Count > 0)
@@ -275,43 +353,23 @@ internal static class NavInteriors
                 }
             }
 
-            var openApproach = approach.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            near = [.. Enumerable.Range(0, exteriorCount)
-                .Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y))];
-            if (Link(openApproach, OpenEdges(near), $"{doorIds[door]} (approach)") == 0)
-            {
-                log?.Invoke($"    door {doorIds[door]} joins nothing: {inside.Count} interior door polygons ({openInside.Count} open edges), " +
-                    $"{outside.Count} exterior door polygons, {near.Count} kept exterior polygons in the approach box");
-            }
+            return approach;
         }
 
-        // A doorless interior (an open doorway): the hull cuts the exterior and the interior along the same line, so their edges meet there.
-        if (doorless)
-        {
-            var lo = new Vector2(float.MaxValue);
-            var hi = new Vector2(float.MinValue);
-            var inside = Enumerable.Range(first, count).Where(p => areas[p] != NavArea.Null).ToList();
-            foreach (int p in inside)
-            {
-                foreach (int i in polygons[p])
-                {
-                    lo = Vector2.Min(lo, new(v[i].X, v[i].Z));
-                    hi = Vector2.Max(hi, new(v[i].X, v[i].Z));
-                }
-            }
+        /// <summary>
+        /// Whether <paramref name="p"/> lies in the plan box [<paramref name="lo"/>, <paramref name="hi"/>].
+        /// </summary>
+        static bool InPlan(Vector3 p, Vector2 lo, Vector2 hi) => p.X >= lo.X && p.X <= hi.X && p.Z >= lo.Y && p.Z <= hi.Y;
 
-            lo -= new Vector2(JoinDistance);
-            hi += new Vector2(JoinDistance);
-            var near = Enumerable.Range(0, exteriorCount)
-                .Where(q => kept[q] && areas[q] != NavArea.Null && polygons[q].Any(i => v[i].X >= lo.X && v[i].X <= hi.X && v[i].Z >= lo.Y && v[i].Z <= hi.Y))
-                .ToList();
-            var openInside = inside.SelectMany(p => Enumerable.Range(0, polygons[p].Length).Where(e => Free(p, e)).Select(e => (p, e))).ToList();
-            Link(openInside, OpenEdges(near), $"{name} (doorless hull edge)", hullDistance);
-        }
-
+        /// <summary>
+        /// The free edges of <paramref name="outside"/>'s polygons.
+        /// </summary>
         List<(int, int)> OpenEdges(IEnumerable<int> outside) =>
             [.. outside.SelectMany(q => Enumerable.Range(0, polygons[q].Length).Where(f => Free(q, f)).Select(f => (q, f)))];
 
+        /// <summary>
+        /// Links every pair of an inside and an outside edge that face each other within <paramref name="distance"/>; returns the links made.
+        /// </summary>
         int Link(List<(int, int)> openInside, List<(int, int)> openOutside, string kind, float distance = JoinDistance)
         {
             int joined = 0;

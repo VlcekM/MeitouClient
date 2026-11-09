@@ -19,7 +19,8 @@ public sealed partial class PopulationSystem
     public CharacterAppearance? SandboxLook(ulong seed, string recordId, bool player, int variant, int faction)
     {
         ulong key = Rng.Mix(SeedSalts.PlayerStart ^ Rng.StableHash(recordId) ^ (player ? 1UL : 2UL) ^ ((ulong)variant << 8));
-        return _data.Appearances?.Create(recordId, _data.Factions[faction].Id, (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF));
+        return _data.Appearances?.Create(recordId, _data.Factions[faction].Id,
+            (int)(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.PlayerLook) & 0x7FFFFFFF));
     }
 
     /// <summary>
@@ -100,7 +101,8 @@ public sealed partial class PopulationSystem
         }
 
         var template = new SquadTemplate { Id = "sandbox " + recordId, Name = _data.Db.Find(recordId)?.Name ?? recordId };
-        var squad = SpawnSquad(world, new BuiltSquad(new SquadPlan(template, members, [], []), at, chosen, [.. built]), null, 100, idle: true, yaw: yaw);
+        var squad = SpawnSquad(world, new BuiltSquad(new SquadPlan(template, members, [], []), at, chosen, [.. built]), null, 100, idle: true,
+            yaw: yaw);
         return squad.Members;
     }
 }

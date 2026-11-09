@@ -14,8 +14,15 @@ public class UiRenderingTests
     public void TopLeftClippingCutsTheCorrectPixelsInTheRenderersBottomLeftTarget()
     {
         VulkanDevice? device;
-        try { device = VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { device = null; }
+        try
+        {
+            device = VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true });
+        }
+        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException
+            or Silk.NET.Core.Loader.SymbolLoadingException)
+        {
+            device = null;
+        }
         using var owned = device;
         Assert.SkipWhen(device is null, "No Vulkan 1.3 device");
         using (var gpu = new GpuContext(device!))

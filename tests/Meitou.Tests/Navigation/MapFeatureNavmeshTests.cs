@@ -25,7 +25,8 @@ public class MapFeatureNavmeshTests
         lock (Gate)
         {
             if (Built.TryGetValue(zone, out var b)) return b;
-            using var gatherer = new ZoneGeometryGatherer(install, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!, new CollisionCache(install));
+            using var gatherer = new ZoneGeometryGatherer(install, InstallData.FullLoadOrder!, InstallData.LevelsWithInteriors!,
+                new CollisionCache(install));
             var settings = new NavBuildSettings();
             var g = gatherer.Gather(zone);
             return Built[zone] = (g, ZoneKeptClosure.ResolveAlone(NavMeshPipeline.BuildZone(gatherer, g, settings, out _), settings));

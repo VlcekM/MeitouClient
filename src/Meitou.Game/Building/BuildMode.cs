@@ -74,7 +74,8 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     internal static readonly string[] BuildHiddenHud =
     [
-        "InformationPanel", "MedicalPanel", "SquadPanel", "OrdersPanel", "FloorPanel", "ShortcutsPanel", "SpeedButtonsPanel", "TimeMoneyPanel", "BuildPanel",
+        "InformationPanel", "MedicalPanel", "SquadPanel", "OrdersPanel", "FloorPanel", "ShortcutsPanel", "SpeedButtonsPanel", "TimeMoneyPanel",
+        "BuildPanel",
     ];
 
     /// <summary>
@@ -960,50 +961,65 @@ sealed class BuildMode(PlayerInterface player)
         if (own && (site.Destroyed || site.Complete && site.NeedsWork)) verbs.Add(("Repair", () => OrderConstruction(site, selection)));
         else if (!site.Complete && !site.Destroyed) verbs.Add(("Build", () => OrderConstruction(site, selection)));
         player.Production.AddMachineVerb(verbs, site, selection);
-        if (site.Complete && player.Production.Machine(site.Id) is { } machine)
-        {
-            if (machine.IsStorage)
-                // Order 124: one haul trip, with Shift the Hauling to job (FUN_1407fa650).
-                verbs.Add(("Auto-Haul", () => player.Say(player.SlowModifier
-                    ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.OperateStorage, site.Id)
-                        { Tick = player.Session.World.Tick }
-                    : new Simulation.Production.OperateOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
-
-            // With Shift the dispatch turns Inventory (26) on a storage into Hauling to (124) and Man Turret (146) into Turret guard (234)
-            // (FUN_1407fa650, docs/game/ui-input.md "Click").
-            if (machine.IsStorage)
-            {
-                verbs.Add(("Inventory", () =>
-                {
-                    if (player.SlowModifier)
-                        player.Say(new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.OperateStorage, site.Id)
-                            { Tick = player.Session.World.Tick });
-                    else
-                        OpenStorage(site);
-                }));
-            }
-            else if (machine.Function == MachineData.ItemFurnaceFunction) verbs.Add(("Inventory", () => OpenStorage(site)));
-
-            // A corpse machine (function 11) offers Corpse Disposal (136): with Shift the Corpse disposal job (137 and its finder 138), else the
-            // carried corpses go in.
-            if (own && machine.Function == TownBuildings.CorpseDisposalFunction)
-                verbs.Add(("Corpse Disposal", () => player.Say(player.SlowModifier
-                    ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.FeedCorpseIntoMachine, site.Id)
-                        { Tick = player.Session.World.Tick }
-                    : new Simulation.Production.DisposeCorpseOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
-            if (machine.Function == ObjectRanges.TurretFunction)
-                verbs.Add(("Man Turret", () => player.Say(player.SlowModifier
-                    ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.UseTurret, site.Id)
-                        { Tick = player.Session.World.Tick }
-                    : new Simulation.Production.UseTurretOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
-        }
+        if (site.Complete && player.Production.Machine(site.Id) is { } machine) AddMachineVerbs(verbs, site, selection, machine, own);
 
         if (own && site.LevelPlacement is null)
             verbs.Add(("Dismantle", () => player.Say(new DismantleOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
         if (site.LevelPlacement is null && !site.Complete && site.Progress <= 0 && site.Materials.All(m => m.Delivered <= 0))
             verbs.Add(("Cancel Construction", () => player.Say(new CancelSite(site.Id) { Tick = player.Session.World.Tick })));
-        // A finished building's doors: the door panel's open/close and lock buttons, for all its doors at once
-        // (docs/simulation.md "Cages, beds and locks").
+        AddDoorVerbs(verbs, site);
+        return verbs;
+    }
+
+    /// <summary>
+    /// A finished machine's verbs: a storage's Auto-Haul and Inventory, a furnace's Inventory, a corpse machine's Corpse Disposal, a turret's Man
+    /// Turret.
+    /// </summary>
+    void AddMachineVerbs(List<(string, Action)> verbs, BuildingSnapshot site, IReadOnlyList<CharacterId> selection,
+        Simulation.Production.MachineSnapshot machine, bool own)
+    {
+        if (machine.IsStorage)
+            // Order 124: one haul trip, with Shift the Hauling to job (FUN_1407fa650).
+            verbs.Add(("Auto-Haul", () => player.Say(player.SlowModifier
+                ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.OperateStorage, site.Id)
+                    { Tick = player.Session.World.Tick }
+                : new Simulation.Production.OperateOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
+
+        // With Shift the dispatch turns Inventory (26) on a storage into Hauling to (124) and Man Turret (146) into Turret guard (234)
+        // (FUN_1407fa650, docs/game/ui-input.md "Click").
+        if (machine.IsStorage)
+        {
+            verbs.Add(("Inventory", () =>
+            {
+                if (player.SlowModifier)
+                    player.Say(new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.OperateStorage, site.Id)
+                        { Tick = player.Session.World.Tick });
+                else
+                    OpenStorage(site);
+            }));
+        }
+        else if (machine.Function == MachineData.ItemFurnaceFunction) verbs.Add(("Inventory", () => OpenStorage(site)));
+
+        // A corpse machine (function 11) offers Corpse Disposal (136): with Shift the Corpse disposal job (137 and its finder 138), else the
+        // carried corpses go in.
+        if (own && machine.Function == TownBuildings.CorpseDisposalFunction)
+            verbs.Add(("Corpse Disposal", () => player.Say(player.SlowModifier
+                ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.FeedCorpseIntoMachine, site.Id)
+                    { Tick = player.Session.World.Tick }
+                : new Simulation.Production.DisposeCorpseOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
+        if (machine.Function == ObjectRanges.TurretFunction)
+            verbs.Add(("Man Turret", () => player.Say(player.SlowModifier
+                ? (SimCommand)new Simulation.Production.AddJob(selection, Data.Gameplay.Ai.TaskType.UseTurret, site.Id)
+                    { Tick = player.Session.World.Tick }
+                : new Simulation.Production.UseTurretOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
+    }
+
+    /// <summary>
+    /// A finished building's doors: the door panel's open/close and lock buttons, for all its doors at once (docs/simulation.md "Cages, beds and
+    /// locks").
+    /// </summary>
+    void AddDoorVerbs(List<(string, Action)> verbs, BuildingSnapshot site)
+    {
         var doors = player.Session.CurrentSnapshot.Doors.Where(d => d.Key.Building == site.Id).Select(d => d.Value).ToList();
         if (site.Complete && doors.Count > 0)
         {
@@ -1019,7 +1035,6 @@ sealed class BuildMode(PlayerInterface player)
             }
             ));
         }
-        return verbs;
     }
 
     void OrderConstruction(BuildingSnapshot site, IReadOnlyList<CharacterId> selection)

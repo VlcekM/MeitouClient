@@ -91,6 +91,9 @@ public class HouseRepairUiTests
             ui.MouseUp(MouseButton.Right, point, shift);
             Assert.Equal(house.Key, Assert.Single(world.Commands.TakeDue(long.MaxValue).OfType<BuildOrder>()).Site);
         }
-        finally { ui.DisposeUi(); }
+        finally
+        {
+            ui.DisposeUi();
+        }
     }
 }

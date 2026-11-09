@@ -158,7 +158,7 @@ public sealed class FeedSystem(ItemFactory items, FeedSettings? settings = null)
     static void FetchFood(World world, int slot, CharacterCold cold, GroundItem food)
     {
         cold.PickingUpItem = food.Id;
-        if (Vector3.Distance(world.Characters.Next[slot].Position, food.Position) > PlayerSystem.PickUpReach)
+        if (Vector3.Distance(world.Characters.Next[slot].Position, food.Position) > PickUps.PickUpReach)
             TaskStart.Walk(world, slot, food.Position, SpeedMode.Run, Data.Gameplay.Ai.TaskType.EatFoodOnGround, TaskSource.Goal);
     }
 

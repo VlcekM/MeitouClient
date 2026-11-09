@@ -71,7 +71,8 @@ public class FogCullTests
                     var d = to / dist;
                     foreach (float length in new[] { dist, far, dist * 1.7f, MathF.Min(far, dist + 12345) })
                     {
-                        if (length < dist) continue;   // fragments are at or behind the box point (the sky at the far clip, water and terrain behind it)
+                        // Fragments are at or behind the box point (the sky at the far clip, water and terrain behind it).
+                        if (length < dist) continue;
                         float alpha = Alpha(f, eye, d, MathF.Min(length, far));
                         Assert.True(alpha >= 0.9998f - 1e-4f, $"alpha {alpha} eye {eye} box {min} {max} p {p} length {length} far {far}");
                     }

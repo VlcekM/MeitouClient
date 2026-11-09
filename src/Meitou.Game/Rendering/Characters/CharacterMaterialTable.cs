@@ -70,11 +70,13 @@ internal sealed class CharacterMaterialTable : IDisposable
     public void Sweep(long before)
     {
         for (int s = 0; s < _used; s++)
+        {
             if (_owners[s] is { } m && m.SlotUsed < before)
             {
                 m.Slot = -1;
                 Retire(s);
             }
+        }
     }
 
     int Reserve()

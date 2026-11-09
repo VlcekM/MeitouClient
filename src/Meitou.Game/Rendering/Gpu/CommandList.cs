@@ -41,13 +41,11 @@ public sealed unsafe class CommandList : IGpuCommandList
     readonly KhrPushDescriptor? _push;
     readonly ExtDebugUtils? _debug;
     readonly Dictionary<string, nint> _labels = [];
-    Pipeline _lastPipeline;
-    PipelineBindPoint _lastPoint;
-    GpuBufferBinding _lastIndex;
-    IndexKind _lastIndexType;
-    readonly Buffer[] _lastVertex = new Buffer[32];
-    readonly ulong[] _lastVertexOffset = new ulong[32];
-    uint _vertexValid;   // bit per binding whose last* entry is known
+
+    /// <summary>
+    /// What this list last bound (the redundancy filter for the pipeline and the vertex and index buffers).
+    /// </summary>
+    readonly BoundState _bound = new();
 
     // The per-draw and per-segment commands, called through the device's own entry points (vkGetDeviceProcAddr: the driver's, or the top
     // layer's when validation is on) instead of Silk.NET's per-call vtable lookup and cast (docs/renderer-native.md 9: ~0.02 us a draw).
@@ -126,9 +124,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// </summary>
     public void Invalidate()
     {
-        _lastPipeline = default;
-        _lastIndex = default;
-        _vertexValid = 0;
+        _bound.Forget();
         BoundProgram = null;
         Epoch++;
     }
@@ -194,9 +190,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         stats?.Rendering(this, before: true);
         _vk.CmdBeginRendering(Handle, &info);
         stats?.Rendering(this, before: false);
-        _lastPipeline = default;
-        _lastIndex = default;
-        _vertexValid = 0;
+        _bound.Forget();
     }
 
     public void EndRendering()
@@ -262,8 +256,11 @@ public sealed unsafe class CommandList : IGpuCommandList
         if (colour)
             attachments[n++] = new ClearAttachment(ImageAspectFlags.ColorBit, 0, new ClearValue(colourValue.Vk));
         if (depth)
+        {
             attachments[n++] = new ClearAttachment(ImageAspectFlags.DepthBit, 0, new ClearValue(depthStencil: new ClearDepthStencilValue(depthValue,
                     0)));
+        }
+
         if (n == 0) return;
         var area = new ClearRect(GlConventions.VkRect(rect), 0, 1);
         _vk.CmdClearAttachments(Handle, n, attachments, 1, &area);
@@ -283,9 +280,9 @@ public sealed unsafe class CommandList : IGpuCommandList
     {
         if (PipelineSubstitute is { } substitute) pipeline = substitute(pipeline);
         var handle = _ctx.Pipelines.Handle(in pipeline);
-        if (handle.Handle == _lastPipeline.Handle && _lastPoint == PipelineBindPoint.Graphics) return;
+        if (handle.Handle == _bound.Pipeline.Handle && _bound.Point == PipelineBindPoint.Graphics) return;
         _cmdBindPipeline(Handle, PipelineBindPoint.Graphics, handle);
-        (_lastPipeline, _lastPoint) = (handle, PipelineBindPoint.Graphics);
+        (_bound.Pipeline, _bound.Point) = (handle, PipelineBindPoint.Graphics);
         Stats.PipelinesBound++;
     }
 
@@ -337,46 +334,19 @@ public sealed unsafe class CommandList : IGpuCommandList
         int n = bindings.Length;
         var buffers = stackalloc Buffer[n];
         var offsets = stackalloc ulong[n];
-        if (first + (uint)n <= 32)
-        {
-            // One pass: compare with what is bound and gather the arguments; record only when a binding differs or is not known.
-            uint mask = (n == 32 ? uint.MaxValue : (1u << n) - 1) << (int)first;
-            bool same = (_vertexValid & mask) == mask;
-            for (int i = 0; i < n; i++)
-            {
-                ref readonly var bb = ref bindings[i];
-                buffers[i] = _device.BufferAt(bb.Buffer.Index);
-                offsets[i] = bb.Offset;
-                uint b = first + (uint)i;
-                if (_lastVertex[b].Handle != buffers[i].Handle || _lastVertexOffset[b] != bb.Offset)
-                {
-                    same = false;
-                    _lastVertex[b] = buffers[i];
-                    _lastVertexOffset[b] = bb.Offset;
-                }
-            }
-            if (same) return;
-            _vertexValid |= mask;
-        }
-        else
-            for (int i = 0; i < n; i++)
-            {
-                buffers[i] = _device.BufferAt(bindings[i].Buffer.Index);
-                offsets[i] = bindings[i].Offset;
-                uint b = first + (uint)i;
-                if (b < 32) { _lastVertex[b] = buffers[i]; _lastVertexOffset[b] = offsets[i]; _vertexValid |= 1u << (int)b; }
-            }
+        if (_bound.SameVertexBuffers(_device, first, bindings, buffers, offsets)) return;
+
         _cmdBindVertexBuffers(Handle, first, (uint)n, buffers, offsets);
     }
 
     public void BindIndexBuffer(GpuBufferBinding binding, IndexKind type)
     {
         var buffer = _device.BufferAt(binding.Buffer.Index);
-        if (binding.Buffer.Index == _lastIndex.Buffer.Index && binding.Offset == _lastIndex.Offset
-            && type == _lastIndexType && _lastIndex.Buffer.Index != 0)
+        if (binding.Buffer.Index == _bound.Index.Buffer.Index && binding.Offset == _bound.Index.Offset
+            && type == _bound.IndexType && _bound.Index.Buffer.Index != 0)
             return;
         _cmdBindIndexBuffer(Handle, buffer, binding.Offset, GlConventions.VkIndexKind(type));
-        (_lastIndex, _lastIndexType) = (binding, type);
+        (_bound.Index, _bound.IndexType) = (binding, type);
     }
 
     /// <summary>
@@ -389,8 +359,10 @@ public sealed unsafe class CommandList : IGpuCommandList
         for (int i = 0; i < sets.Length; i++) resolved[i] = _device.SetAt(sets[i].Index);
         fixed (DescriptorSet* ps = resolved)
         fixed (uint* po = dynamicOffsets)
+        {
             _cmdBindDescriptorSets(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, first, (uint)sets.Length, ps,
                     (uint)dynamicOffsets.Length, po);
+        }
     }
 
     static PipelineBindPoint VkBindPoint(GpuBindPoint point) =>
@@ -454,6 +426,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         }
         var vp = _ctx.Shaders.Backend(program);
         var point = vp.ComputeCode is not null ? PipelineBindPoint.Compute : PipelineBindPoint.Graphics;
+
         // Pushed only into a layout made for it (a set too large for the device's push limit, or not per draw, is not one).
         if (_push is not null && _ctx.Shaders.Pushes(vp, set))
         {
@@ -461,6 +434,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             Stats.DescriptorPushes++;
             return;
         }
+
         // Otherwise the set is written and bound (the frame's pools free it when the slot comes round). Bound by its own handle, not
         // through the device's set table: a set per draw would grow the table every frame. Safe on a recording job's thread.
         var allocated = _ctx.Frame.AllocateSetAnyThread(vp.SetLayouts[set]);
@@ -538,9 +512,9 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void BindPipeline(GpuComputePipeline pipeline)
     {
         var handle = _ctx.Pipelines.Handle(in pipeline);
-        if (handle.Handle == _lastPipeline.Handle && _lastPoint == PipelineBindPoint.Compute) return;
+        if (handle.Handle == _bound.Pipeline.Handle && _bound.Point == PipelineBindPoint.Compute) return;
         _vk.CmdBindPipeline(Handle, PipelineBindPoint.Compute, handle);
-        (_lastPipeline, _lastPoint) = (handle, PipelineBindPoint.Compute);
+        (_bound.Pipeline, _bound.Point) = (handle, PipelineBindPoint.Compute);
         Stats.PipelinesBound++;
     }
 
@@ -799,6 +773,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     public void Timestamp(IGpuTimestamps arena, in QuerySlot slot, GpuStage stage = GpuStage.All)
     {
         if (!slot.IsValid || arena is not QueryArena pools) return;
+
         // A timestamp names one stage: a single shader stage as itself, any combination (GpuStage.All, the default) as all commands.
         var vkStage = stage switch
         {

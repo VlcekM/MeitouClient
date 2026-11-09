@@ -194,7 +194,8 @@ sealed class FactionWindow(PlayerInterface player)
     internal void BindFactionTab(UiBindings b)
     {
         string name = player.FactionName?.Invoke(player.Session.World.Player.Faction) ?? "Nameless";
-        if (player.FaithfulScreens.Focus is not { Screen: "overview", Widget: FactionNameBox }) player.FaithfulScreens.SetText("overview", FactionNameBox, name);
+        if (player.FaithfulScreens.Focus is not { Screen: "overview", Widget: FactionNameBox })
+            player.FaithfulScreens.SetText("overview", FactionNameBox, name);
         b.Text[FactionNameBox] = name;
     }
 

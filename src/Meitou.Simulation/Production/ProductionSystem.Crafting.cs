@@ -33,7 +33,8 @@ public sealed partial class ProductionSystem
     /// Whether the player can queue an option now: its record (and a weapon's model) unlocked, and its level within the bench's tech level.
     /// </summary>
     public bool CanCraft(World world, CraftBench bench, CraftOption option) =>
-        Unlocked(world, option.Kind, option.Item) && (option.Model is null || Unlocked(world, CraftKind.Weapon, option.Model)) && option.Level <= bench.TechLevel;
+        Unlocked(world, option.Kind, option.Item) && (option.Model is null || Unlocked(world, CraftKind.Weapon, option.Model))
+            && option.Level <= bench.TechLevel;
 
     CraftRecipe RecipeOf(Machine m, CraftOption option) => m.Data.Craft!.Recipe(_db, _constants, option, m.Data.Inputs);
 
@@ -79,10 +80,13 @@ public sealed partial class ProductionSystem
                 slot.Level = 0;
             }
         }
+
         Apply(m, state, job);
         for (int k = 0; k < job.Recipe.Inputs.Count && k < m.Inputs.Length; k++)
+        {
             if (state.Partial.Remove(m.Inputs[k].Item, out float level)) m.Inputs[k].Level = level;
             else m.Inputs[k].Level = 0;
+        }
     }
 
     /// <summary>
@@ -129,12 +133,14 @@ public sealed partial class ProductionSystem
             m.Status = 0;
             return false;
         }
+
         var job = state.Queue[0];
         if (Held(state, job.Option) >= job.Option.Store)
         {
             m.Status = 1;
             return false;
         }
+
         Bind(world, m, state, job);
         if (job.Critical == 2)
         {
@@ -142,7 +148,9 @@ public sealed partial class ProductionSystem
             float roll = Rng.Float(Rng.Hash(world.Seed, Rng.StableHash(m.Site), RngPurpose.Craft, (ulong)(uint)state.Rolls++));
             job.Critical = (byte)(roll < chance ? 1 : 0);
         }
-        float amount = m.Data.Rate * WorkFactor(world, m) * s * Settings.ProductionOption * _constants.ProductionSpeed * dt / MathF.Max(1e-3f, job.Seconds);
+
+        float amount = m.Data.Rate * WorkFactor(world, m) * s * Settings.ProductionOption * _constants.ProductionSpeed * dt
+            / MathF.Max(1e-3f, job.Seconds);
         foreach (var input in m.Inputs)
             if (input.Rate > 0 && input.Level + input.Count < input.Rate * amount) amount = (input.Level + input.Count) / input.Rate;
         amount = MathF.Min(amount, 1 - job.Progress);
@@ -151,6 +159,7 @@ public sealed partial class ProductionSystem
             m.Status = 0;
             return false;
         }
+
         m.Status = 2;
         foreach (var input in m.Inputs)
         {
@@ -159,6 +168,7 @@ public sealed partial class ProductionSystem
             while (input.Level < need && input.Count > 0) { input.Count--; input.Level += 1; }
             input.Level = MathF.Max(0, input.Level - need);
         }
+
         job.Progress += amount;
         if (job.Progress >= 0.999f) Finish(world, m, state, job, skill);
         return true;
@@ -178,7 +188,8 @@ public sealed partial class ProductionSystem
         switch (option.Kind)
         {
             case CraftKind.Armour:
-                made = _items.Create(option.Item, 1, Math.Min(CraftBench.ArmourQuality(skill, critical), bench.TechLevel));   // the factory gives an armour piece its level from that quality
+                // the factory gives an armour piece its level from that quality
+                made = _items.Create(option.Item, 1, Math.Min(CraftBench.ArmourQuality(skill, critical), bench.TechLevel));
                 break;
             case CraftKind.Robotics or CraftKind.Crossbow:
                 made = _items.Create(option.Item, 1);
@@ -193,18 +204,23 @@ public sealed partial class ProductionSystem
                     made.MaterialId = model.Model ?? "";
                     made.CompanyId = CraftBench.PlayerWeapons;
                 }
+
                 break;
             default:
                 made = _items.Create(option.Item, 1);
                 break;
         }
+
         state.Queue.RemoveAt(0);
         if (made is not null)
         {
             made.Section = "out";
-            if (state.Done.FirstOrDefault(d => d.Record == made.Record && d.Quality == made.Quality && d.MaterialId == made.MaterialId && d.Quantity < d.StackLimit) is { } stack) stack.Quantity++;
+            if (state.Done.FirstOrDefault(d => d.Record == made.Record && d.Quality == made.Quality && d.MaterialId == made.MaterialId
+                && d.Quantity < d.StackLimit) is { } stack)
+                stack.Quantity++;
             else state.Done.Add(made);
         }
+
         if (state.Repeat) state.Queue.Add(new CraftJob(RecipeOf(m, option)));
         world.Machines.Touch();
     }
@@ -214,8 +230,11 @@ public sealed partial class ProductionSystem
     /// the skill (else its lowest).
     /// </summary>
     static CraftOption WeaponModel(CraftBench bench, CraftOption option, float skill, bool critical) =>
-        skill >= option.Level || critical ? option
-            : bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item && o.Level <= skill).OrderByDescending(o => o.Level).FirstOrDefault()
+        skill >= option.Level || critical
+            ? option
+            : bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item && o.Level <= skill)
+                .OrderByDescending(o => o.Level)
+                .FirstOrDefault()
                 ?? bench.Options.Where(o => o.Kind == CraftKind.Weapon && o.Item == option.Item).OrderBy(o => o.Level).First();
 
     IReadOnlyDictionary<string, CraftSmithView>? _publishedSmiths;
@@ -235,8 +254,11 @@ public sealed partial class ProductionSystem
             if (m.Craft is not { } state || m.Data.Craft is not { } bench || m.Data.Stat <= 0 || !world.Characters.IsAlive(m.Smith)
                 || world.Characters.Cold(m.Smith.Slot) is not { Stats: { } stats, Medical: { } medical } cold) continue;
             var (level, penalty) = World.EffectiveSkill(cold, medical, stats, (StatsEnumerated)m.Data.Stat);
+
             // FUN_1402b5900 reads the first queued craft whichever one is hovered.
-            int critical = state.Queue.Count == 0 ? 0 : Math.Clamp((int)(CraftBench.CriticalChance(level, m.Data.Stat, state.Queue[0].Option.Level) * 100), 0, 100);
+            int critical = state.Queue.Count == 0
+                ? 0
+                : Math.Clamp((int)(CraftBench.CriticalChance(level, m.Data.Stat, state.Queue[0].Option.Level) * 100), 0, 100);
             var entries = new List<CraftPrediction>(state.Queue.Count);
             foreach (var job in state.Queue)
             {
@@ -262,8 +284,10 @@ public sealed partial class ProductionSystem
                         break;
                 }
             }
+
             map[m.Site] = new CraftSmithView(cold.Name, (int)level, penalty, entries);
         }
+
         return _publishedSmiths = map;
     }
 
@@ -295,7 +319,8 @@ public sealed partial class ProductionSystem
         return [.. bench.Options.Select(o =>
         {
             var recipe = RecipeOf(m, o);
-            return new CraftOptionView(o.Key, recipe.Name, o.Kind, o.Level, recipe.Hours, [.. recipe.Inputs.Select(i => (_items.Info(i.Item)?.Name ?? i.Item, i.PerItem))], CanCraft(world, bench, o));
+            return new CraftOptionView(o.Key, recipe.Name, o.Kind, o.Level, recipe.Hours,
+                [.. recipe.Inputs.Select(i => (_items.Info(i.Item)?.Name ?? i.Item, i.PerItem))], CanCraft(world, bench, o));
         })];
     }
 
@@ -326,6 +351,7 @@ public sealed partial class ProductionSystem
             world.Machines.Touch();
             return;
         }
+
         state.Done.RemoveAt(index);
         if (!root.Add(item) && item.Quantity > 0) state.Done.Insert(index, item);
         world.Machines.Touch();

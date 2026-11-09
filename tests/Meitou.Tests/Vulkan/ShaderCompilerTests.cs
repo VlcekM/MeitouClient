@@ -25,10 +25,10 @@ public class ShaderCompilerTests
     /// </summary>
     public static IEnumerable<(string Name, string Vertex, string Fragment)> Pairs()
     {
-        foreach (var f in new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.SsaoApply),
-                nameof(PostProcessShaders.Composite),
-                     nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt), nameof(PostProcessShaders.Fxaa), nameof(PostProcessShaders.HeatHaze) })
-            yield return ("post " + f, PostProcessShaders.Vertex, Private(typeof(PostProcessShaders), f));
+        var postShaders = new[] { nameof(PostProcessShaders.Ssao), nameof(PostProcessShaders.SsaoBlur), nameof(PostProcessShaders.SsaoApply),
+            nameof(PostProcessShaders.Composite), nameof(PostProcessShaders.Luminance), nameof(PostProcessShaders.Adapt),
+            nameof(PostProcessShaders.Fxaa), nameof(PostProcessShaders.HeatHaze) };
+        foreach (var f in postShaders) yield return ("post " + f, PostProcessShaders.Vertex, Private(typeof(PostProcessShaders), f));
         yield return ("cloud march", PostProcessShaders.Vertex, VolumetricCloudShaders.March);
         yield return ("cloud history", PostProcessShaders.Vertex, VolumetricCloudShaders.Resolve);
         yield return ("cloud shadow map", PostProcessShaders.Vertex, VolumetricCloudShaders.Shadow);

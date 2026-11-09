@@ -1,5 +1,4 @@
 using System.Numerics;
-using Meitou.Data.Fcs;
 
 namespace Meitou.Data.World;
 
@@ -16,7 +15,7 @@ public sealed record SkyClock(float LatitudeDegrees, float Sunrise, float Sunset
 
     public static SkyClock FromDatabase(GameDatabase db)
     {
-        var c = db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault();
+        var c = Gameplay.ConstantsRecord.Find(db);
         if (c is null) return Fallback;
         float rise = c.GetFloat("sunrise", 6), set = c.GetFloat("sunset", 20);
         if (set <= rise) (rise, set) = (Fallback.Sunrise, Fallback.Sunset);
@@ -207,7 +206,8 @@ public static class SkyXModel
         var sum = InScatter(ray, far, sun, out float thickness);
         // SkyX takes the cosine with the vector from the dome point towards the eye.
         float cos = -Vector3.Dot(sun, ray);
-        var c = (sum * SkyAtmosphere.InverseWaveLength4 * (SkyAtmosphere.KrESun * RayleighPhase(cos)) + sum * (SkyAtmosphere.KmESun * MiePhase(cos))) * SkyAtmosphere.Exposure;
+        var c = (sum * SkyAtmosphere.InverseWaveLength4 * (SkyAtmosphere.KrESun * RayleighPhase(cos)) + sum * (SkyAtmosphere.KmESun * MiePhase(cos)))
+            * SkyAtmosphere.Exposure;
         float night = Math.Clamp(1 - MathF.Max(c.X, MathF.Max(c.Y, c.Z)) * 10, 0, 1);
         if (skydome) night *= 1 - Math.Clamp(thickness * SkyAtmosphere.Kr4Pi, 0, 1);
         float glow = (2 - 0.75f * Math.Clamp(-sun.Y, 0, 1)) * MathF.Pow(1 - d.Y, 3);

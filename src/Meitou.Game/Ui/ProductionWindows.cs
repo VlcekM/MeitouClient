@@ -33,7 +33,8 @@ sealed class ProductionWindows(PlayerInterface player)
 
     internal string? ResearchCategory, ResearchFocus;
 
-    internal MachineSnapshot? Machine(string? site) => site is null ? null : player.Session.CurrentSnapshot.Machines.FirstOrDefault(m => m.Site == site);
+    internal MachineSnapshot? Machine(string? site) =>
+        site is null ? null : player.Session.CurrentSnapshot.Machines.FirstOrDefault(m => m.Site == site);
 
     /// <summary>
     /// The storage window's layout pixels above its grid (caption and item heading) and in all around it, with the two-line Max Capacity text below
@@ -41,7 +42,10 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     const float StorageAbove = 86, StorageChrome = 150;
 
-    internal static string MachineScreen(MachineSnapshot m) => m.Storage is null || m.Inputs.Count > 0 || m.Output is not null ? "building" : m.IsStorage && !m.IsContainer && m.TechLevel == 0 ? "storage" : "bench";
+    internal static string MachineScreen(MachineSnapshot m) =>
+        m.Storage is null || m.Inputs.Count > 0 || m.Output is not null ? "building"
+        : m.IsStorage && !m.IsContainer && m.TechLevel == 0 ? "storage"
+        : "bench";
 
     /// <summary>
     /// Opens the selected machine's window and closes it when the selection moves on.
@@ -53,7 +57,7 @@ sealed class ProductionWindows(PlayerInterface player)
         var focus = player.BuildingSelection.BuildingFocus();
 
         // A rock's natural site is no registry building: its machine, once mined, is enough.
-        var m = focus?.SiteId is { } id && (ProductionSystem.IsNatural(id) || player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { Complete: true }) ? Machine(id) : null;
+        var m = SiteMachine(focus?.SiteId);
         if (m is not null && m.Inputs.Count == 0 && m.Output is null && m.Storage is null && m.Craft is null) m = null;
 
         // An open container takes the window.
@@ -96,62 +100,113 @@ sealed class ProductionWindows(PlayerInterface player)
         player.InventoryLayout.PlaceMachineWindow(screen);
     }
 
+    /// <summary>
+    /// The machine of a focused site: a natural site's (a rock's, once mined, is no registry building) or a complete building's; null for any other.
+    /// </summary>
+    MachineSnapshot? SiteMachine(string? site)
+    {
+        if (site is not { } id) return null;
+
+        bool built = ProductionSystem.IsNatural(id) || player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == id) is { Complete: true };
+        return built ? Machine(id) : null;
+    }
+
+    /// <summary>
+    /// Binds the shown machine's window: the storage window, a research bench's or the generic building window with its inputs and output.
+    /// </summary>
     internal void BindMachineScreen(string id, UiBindings b)
     {
         var m = Machine(ShownMachine);
 
         if (id == "storage")
         {
-            // The original's generic container window: caption STORAGE, the limited item as heading, and Max Capacity (red "(Full)" once the stack is
-            // full).
-            b.Text["Root"] = "STORAGE";
-            b.Text["TypeText"] = m?.StorageLimitName ?? "";
-
-            if (m is { StorageCapacity: > 0 } cap)
-            {
-                bool full = m.Storage?.Items.FirstOrDefault()?.Quantity >= cap.StorageCapacity;
-                b.Text["CapacityText"] = $"Max Capacity: {cap.StorageCapacity.ToString("N0", CultureInfo.InvariantCulture)}" + (full ? " (Full)" : "");
-
-                // The original paints the whole line red once the stack is full (the exact red is Unknown; read off its screenshot).
-                if (full)
-                    b.Properties["CapacityText"] = new Dictionary<string, string> { ["TextColour"] = "0.91 0.25 0.25" };
-            }
-            else b.Hidden.Add("CapacityText");
-
-            b.Disabled.Remove("ArrangeButton");
-            b.Hidden.Add("ArrangeButton");
-
-            if (m?.Storage is { } sg)
-            {
-                b.Positions["Root"] = new(0, 0, sg.Width * player.InventoryCell + 40 * player.InventoryScale,
-                    Math.Min(player.Height * 0.8f, sg.Height * player.InventoryCell + StorageChrome * player.InventoryScale));
-            }
-
-            b.TemplateScale = player.InventoryScale;
+            BindStorageScreen(m, b);
             return;
         }
 
-        b.Text["Root"] = (m is { IsContainer: true } ? player.Build.Services?.ItemName(m.Record) ?? "CONTAINER" : player.BuildingSelection.Selected?.Name ?? "BUILDING").ToUpperInvariant();
+        string caption = m is { IsContainer: true }
+            ? player.Build.Services?.ItemName(m.Record) ?? "CONTAINER"
+            : player.BuildingSelection.Selected?.Name ?? "BUILDING";
+        b.Text["Root"] = caption.ToUpperInvariant();
 
         if (id == "bench")
         {
-            b.Disabled.Remove("ResearchButton");
-            b.Actions["ResearchButton"] = "ResearchButton";
-            if (m is not { TechLevel: > 0 }) b.Hidden.Add("ResearchButton");
-
-            b.Disabled.Remove("ArrangeButton");
-            b.Hidden.Add("ArrangeButton");
-
-            if (m?.Storage is { } grid)
-            {
-                b.Positions["Root"] = new(0, 0, grid.Width * player.InventoryCell + 40 * player.InventoryScale,
-                    Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + 108 * player.InventoryScale));
-            }
-
-            b.TemplateScale = player.InventoryScale;
+            BindBenchScreen(m, b);
             return;
         }
 
+        BindCraftingRow(m, b);
+        b.TemplateScale = player.InventoryScale;
+
+        // The layout's OutputText is an editable EditBox; it is a status line, so read-only here: a click or Tab gave it the keys and typing went
+        // into it (#383).
+        b.Properties["OutputText"] = new Dictionary<string, string> { ["ReadOnly"] = "true" };
+        if (m is null) return;
+
+        BindInputs(m, b);
+        BindOutput(m, b);
+        BindColumnTitles(m, b);
+    }
+
+    /// <summary>
+    /// The original's generic container window: caption STORAGE, the limited item as heading, and Max Capacity (red "(Full)" once the stack is
+    /// full).
+    /// </summary>
+    void BindStorageScreen(MachineSnapshot? m, UiBindings b)
+    {
+        b.Text["Root"] = "STORAGE";
+        b.Text["TypeText"] = m?.StorageLimitName ?? "";
+
+        if (m is { StorageCapacity: > 0 } cap)
+        {
+            bool full = m.Storage?.Items.FirstOrDefault()?.Quantity >= cap.StorageCapacity;
+            string capacity = cap.StorageCapacity.ToString("N0", CultureInfo.InvariantCulture);
+            b.Text["CapacityText"] = $"Max Capacity: {capacity}" + (full ? " (Full)" : "");
+
+            // The original paints the whole line red once the stack is full (the exact red is Unknown; read off its screenshot).
+            if (full)
+                b.Properties["CapacityText"] = new Dictionary<string, string> { ["TextColour"] = "0.91 0.25 0.25" };
+        }
+        else b.Hidden.Add("CapacityText");
+
+        b.Disabled.Remove("ArrangeButton");
+        b.Hidden.Add("ArrangeButton");
+
+        if (m?.Storage is { } sg)
+        {
+            b.Positions["Root"] = new(0, 0, sg.Width * player.InventoryCell + 40 * player.InventoryScale,
+                Math.Min(player.Height * 0.8f, sg.Height * player.InventoryCell + StorageChrome * player.InventoryScale));
+        }
+
+        b.TemplateScale = player.InventoryScale;
+    }
+
+    /// <summary>
+    /// A research bench's window: the RESEARCH button (hidden below tech level 1) and the window sized around its storage grid.
+    /// </summary>
+    void BindBenchScreen(MachineSnapshot? m, UiBindings b)
+    {
+        b.Disabled.Remove("ResearchButton");
+        b.Actions["ResearchButton"] = "ResearchButton";
+        if (m is not { TechLevel: > 0 }) b.Hidden.Add("ResearchButton");
+
+        b.Disabled.Remove("ArrangeButton");
+        b.Hidden.Add("ArrangeButton");
+
+        if (m?.Storage is { } grid)
+        {
+            b.Positions["Root"] = new(0, 0, grid.Width * player.InventoryCell + 40 * player.InventoryScale,
+                Math.Min(player.Height * 0.8f, grid.Height * player.InventoryCell + 108 * player.InventoryScale));
+        }
+
+        b.TemplateScale = player.InventoryScale;
+    }
+
+    /// <summary>
+    /// A crafting bench's row (the current entry's name and the queue button); hidden for any other machine.
+    /// </summary>
+    static void BindCraftingRow(MachineSnapshot? m, UiBindings b)
+    {
         if (m?.Craft is { } craft)
         {
             // CraftingBuilding::updateInventoryWindow: the current entry's name in #afa68b (an empty name with nothing current).
@@ -160,35 +215,20 @@ sealed class ProductionWindows(PlayerInterface player)
             b.Actions["QueueButton"] = "QueueButton";
         }
         else b.Hidden.Add("CraftingPanel");
+    }
 
-        b.TemplateScale = player.InventoryScale;
-
-        // The layout's OutputText is an editable EditBox; it is a status line, so read-only here: a click or Tab gave it the keys and typing went
-        // into it (#383).
-        b.Properties["OutputText"] = new Dictionary<string, string> { ["ReadOnly"] = "true" };
-        if (m is null) return;
-
+    /// <summary>
+    /// The building window's two input panels: a furnace's grid, an input's name, status and bar, or the panel hidden.
+    /// </summary>
+    void BindInputs(MachineSnapshot m, UiBindings b)
+    {
         for (int k = 0; k < 2; k++)
         {
             string n = (k + 1).ToString(CultureInfo.InvariantCulture);
 
             if (k == 0 && FurnaceGrid(m) is { } fg)
             {
-                // A furnace's one input is its 12 x 7 grid (FurnaceBuilding::setupFromData), drawn in in1 by AddMachineContent; its label, status and
-                // bar are an engine choice (left empty).
-                b.Text["Input1Text"] = "";
-                b.Text["Input1StatusText"] = "";
-                b.Hidden.Add("Input1ProgressBar");
-
-                // Widen and deepen the window to hold the grid, measured off the last frame's slot (the original's sizing is Unknown).
-                if (player.FaithfulScreens.LastFrame.FirstOrDefault(f => f.Id == "building")?.Controls is { } last && last.FirstOrDefault(c => c.Type == "Window") is { } win
-                    && last.FirstOrDefault(c => c.Name == "in1") is { } in1)
-                {
-                    b.Positions["Root"] = new(0, 0, Math.Max(win.Bounds.Width,
-                        in1.Bounds.X - win.Bounds.X + fg.Width * player.InventoryCell + 20 * player.InventoryScale),
-                        Math.Max(win.Bounds.Height, in1.Bounds.Y - win.Bounds.Y + fg.Height * player.InventoryCell + 60 * player.InventoryScale));
-                }
-
+                BindFurnaceInput(fg, b);
                 continue;
             }
 
@@ -208,14 +248,47 @@ sealed class ProductionWindows(PlayerInterface player)
                 bool empty = input.Count <= 0 && input.Fill <= 0;
                 b.Text[$"Input{n}StatusText"] = empty ? "#afa68b" + Loc.Tr("Empty!") : HudPanels.TipGood + Loc.Tr("OK");
             }
-            else b.Text[$"Input{n}StatusText"] = $"{input.Count.ToString(CultureInfo.InvariantCulture)}/{input.Capacity.ToString(CultureInfo.InvariantCulture)}";
+            else
+            {
+                b.Text[$"Input{n}StatusText"] =
+                    $"{input.Count.ToString(CultureInfo.InvariantCulture)}/{input.Capacity.ToString(CultureInfo.InvariantCulture)}";
+            }
 
             b.Progress[$"Input{n}ProgressBar"] = input.Fill;
         }
+    }
 
+    /// <summary>
+    /// A furnace's one input is its 12 x 7 grid (FurnaceBuilding::setupFromData), drawn in in1 by AddMachineContent; its label, status and bar are
+    /// an engine choice (left empty).
+    /// </summary>
+    void BindFurnaceInput(InventoryView fg, UiBindings b)
+    {
+        b.Text["Input1Text"] = "";
+        b.Text["Input1StatusText"] = "";
+        b.Hidden.Add("Input1ProgressBar");
+
+        // Widen and deepen the window to hold the grid, measured off the last frame's slot (the original's sizing is Unknown).
+        if (player.FaithfulScreens.LastFrame.FirstOrDefault(f => f.Id == "building")?.Controls is { } last
+            && last.FirstOrDefault(c => c.Type == "Window") is { } win
+            && last.FirstOrDefault(c => c.Name == "in1") is { } in1)
+        {
+            b.Positions["Root"] = new(0, 0, Math.Max(win.Bounds.Width,
+                in1.Bounds.X - win.Bounds.X + fg.Width * player.InventoryCell + 20 * player.InventoryScale),
+                Math.Max(win.Bounds.Height, in1.Bounds.Y - win.Bounds.Y + fg.Height * player.InventoryCell + 60 * player.InventoryScale));
+        }
+    }
+
+    /// <summary>
+    /// The building window's output: its stock and bar (a farm's ripeness), a bench's current craft, or the column hidden.
+    /// </summary>
+    static void BindOutput(MachineSnapshot m, UiBindings b)
+    {
         if (m.Output is { } output)
         {
-            b.Text["OutputText"] = $"{output.Name}\n{output.Count.ToString(CultureInfo.InvariantCulture)}/{output.Capacity.ToString(CultureInfo.InvariantCulture)}";
+            string count = output.Count.ToString(CultureInfo.InvariantCulture);
+            string capacity = output.Capacity.ToString(CultureInfo.InvariantCulture);
+            b.Text["OutputText"] = $"{output.Name}\n{count}/{capacity}";
             b.Progress["OutputProgressBar"] = m.Farm is { } farm ? farm.Ripeness : output.Fill;
         }
         else if (m.Craft is { } done)
@@ -226,9 +299,14 @@ sealed class ProductionWindows(PlayerInterface player)
             b.Progress["OutputProgressBar"] = current?.Progress ?? 0;
         }
         else b.Hidden.Add("OutputColumn");
+    }
 
-        // BuildInventoryLayout's constructor (FUN_140155f90) sets both column titles: "Input" / "Inputs" by the number of inputs (hidden at 0) and
-        // "Output", over the layout's INPUTS / OUTPUT.
+    /// <summary>
+    /// BuildInventoryLayout's constructor (FUN_140155f90) sets both column titles: "Input" / "Inputs" by the number of inputs (hidden at 0) and
+    /// "Output", over the layout's INPUTS / OUTPUT.
+    /// </summary>
+    void BindColumnTitles(MachineSnapshot m, UiBindings b)
+    {
         int inputCount = FurnaceGrid(m) is not null ? 1 : m.Inputs.Count;
         if (inputCount > 0) b.Text["InputTitleText"] = Loc.Plural("Input", "Inputs", inputCount);
 
@@ -293,105 +371,138 @@ sealed class ProductionWindows(PlayerInterface player)
         controls.Add(new($"{name}-ghost", "ImageBox", area, "", "", "", true, image, Vector4.Zero, Pickable: false, Clip: clip));
     }
 
+    /// <summary>
+    /// Adds the shown machine's item cells: a bench's or storage's grid, or the building window's input, furnace and output slots.
+    /// </summary>
     internal void AddMachineContent(string id, List<UiControl> controls)
     {
         if (Machine(ShownMachine) is not { } m) return;
 
         if (id is "bench" or "storage")
         {
-            if (m.Storage is not { } grid) return;
-            if (id == "storage")
-                player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
-            else player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height);
-            if (controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
+            AddStorageGrid(id, controls, m);
+            return;
+        }
 
-            var area = slot.Bounds;
+        for (int k = 0; k < Math.Min(2, m.Inputs.Count); k++) AddSlot(controls, m, $"in{k + 1}", $"Input{k + 1}ProgressBar", m.Inputs[k], 10 + k);
 
-            foreach (var item in grid.Items)
+        if (FurnaceGrid(m) is { } fg && m.Furnace is { } burn) AddFurnaceGrid(controls, m, fg, burn);
+
+        AddOutputSlot(controls, m);
+    }
+
+    /// <summary>
+    /// A bench's or storage's grid and its items, placed in the window's <c>backpack_content</c>.
+    /// </summary>
+    void AddStorageGrid(string id, List<UiControl> controls, MachineSnapshot m)
+    {
+        if (m.Storage is not { } grid) return;
+        if (id == "storage")
+            player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height, StorageAbove, StorageChrome - StorageAbove - 6);
+        else player.InventoryLayout.ArrangeContainerGrid(id, controls, grid.Width, grid.Height);
+        if (controls.FirstOrDefault(c => c.Name == "backpack_content") is not { } slot) return;
+
+        var area = slot.Bounds;
+
+        foreach (var item in grid.Items)
+        {
+            if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 1000 + item.Index)) continue;
+
+            player.ItemCells.AddItemCell(controls, $"machine-item-{item.Index}",
+                new(area.X + item.X * area.Width / grid.Width, area.Y + item.Y * area.Height / grid.Height, item.Width * area.Width / grid.Width,
+                    item.Height * area.Height / grid.Height),
+                item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
+                slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour);
+        }
+    }
+
+    /// <summary>
+    /// One input or output section, sized to its item's footprint, with its item (or a bench's faded ghost of the expected item).
+    /// </summary>
+    void AddSlot(List<UiControl> controls, MachineSnapshot m, string name, string bar, MachineSlotView view, int code)
+    {
+        int index = controls.FindIndex(c => c.Name == name);
+        if (index < 0) return;
+
+        // The original makes the section the recipe item's footprint (a box of building material is 6 x 3 cells); the grid keeps the layout's top
+        // and takes the progress bar's horizontal centre (the layout slot is not centred in its column), so it stays under its label and bar. A
+        // grid wider than the bar keeps the slot's left edge, so it overflows only to the right as before rather than into the column on its
+        // left.
+        var slot = controls[index];
+        var barRoot = controls.FirstOrDefault(c => c.Name == bar);
+        float width = view.Width * player.InventoryCell;
+        var column = barRoot?.Bounds ?? slot.Bounds;
+        float x = width <= column.Width ? column.X + (column.Width - width) / 2 : slot.Bounds.X;
+        var b = slot.Bounds with { X = x, Width = width, Height = view.Height * player.InventoryCell };
+
+        // The grid and a moved bar may leave their content panel, so they clip to the window instead.
+        var clip = controls.FirstOrDefault(c => c.Type == "Window")?.Bounds ?? slot.Clip;
+        controls[index] = slot with
+        {
+            Bounds = b,
+            Clip = clip,
+            Properties = new Dictionary<string, string>(slot.Properties)
+            {
+                ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"),
+                ["State"] = "normal",
+            },
+        };
+
+        // Engine choice: a grid taller than the room above the progress bar pushes the bar down under it.
+        if (barRoot is { } root && b.Y + b.Height + 4 * player.InventoryScale - root.Bounds.Y is var dy and > 0)
+        {
+            for (int i = 0; i < controls.Count; i++)
+            {
+                if (controls[i].Name == bar || controls[i].Name == bar + "@track"
+                    || controls[i].Properties.GetValueOrDefault("TemplateOwner") == bar)
+                {
+                    controls[i] = controls[i] with { Bounds = controls[i].Bounds with { Y = controls[i].Bounds.Y + dy }, Clip = clip };
+                }
+            }
+        }
+
+        if (view.Count <= 0 && m.Craft is not null)
+            AddItemGhost(controls, $"machine-{name}", b, view.Item, "", clip);
+        if (view.Count <= 0 || player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), code)) return;
+
+        player.ItemCells.AddItemCell(controls, $"machine-{name}", b, view.Item, "", view.Name, view.Count, null, "MachineItem", code, clip);
+    }
+
+    /// <summary>
+    /// A furnace's input grid and its items.
+    /// </summary>
+    void AddFurnaceGrid(List<UiControl> controls, MachineSnapshot m, InventoryView fg, FurnaceView burn)
+    {
+        // The furnace's grid in in1, its items the storage's (picked up as storage items); disabled while it burns
+        // (InventorySection::setEnabled(!active)).
+        AddSlot(controls, m, "in1", "Input1ProgressBar", new MachineSlotView("", "", 0, 0, 0, fg.Width, fg.Height), -1);
+        int gi = controls.FindIndex(c => c.Name == "in1");
+
+        if (gi >= 0)
+        {
+            var g = controls[gi];
+            if (burn.Burning)
+                controls[gi] = g with { Properties = new Dictionary<string, string>(g.Properties) { ["State"] = "disabled" } };
+
+            foreach (var item in fg.Items)
             {
                 if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 1000 + item.Index)) continue;
 
                 player.ItemCells.AddItemCell(controls, $"machine-item-{item.Index}",
-                    new(area.X + item.X * area.Width / grid.Width, area.Y + item.Y * area.Height / grid.Height, item.Width * area.Width / grid.Width,
-                        item.Height * area.Height / grid.Height),
+                    new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCell, item.Width * player.InventoryCell,
+                        item.Height * player.InventoryCell),
                     item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
-                    slot.Bounds.Intersect(slot.Clip ?? slot.Bounds), charge: item.Charge, colour: item.Colour);
-            }
-
-            return;
-        }
-
-        void Slot(string name, string bar, MachineSlotView view, int code)
-        {
-            int index = controls.FindIndex(c => c.Name == name);
-            if (index < 0) return;
-
-            // The original makes the section the recipe item's footprint (a box of building material is 6 x 3 cells); the grid keeps the layout's top
-            // and takes the progress bar's horizontal centre (the layout slot is not centred in its column), so it stays under its label and bar. A
-            // grid wider than the bar keeps the slot's left edge, so it overflows only to the right as before rather than into the column on its
-            // left.
-            var slot = controls[index];
-            var barRoot = controls.FirstOrDefault(c => c.Name == bar);
-            float width = view.Width * player.InventoryCell;
-            var column = barRoot?.Bounds ?? slot.Bounds;
-            float x = width <= column.Width ? column.X + (column.Width - width) / 2 : slot.Bounds.X;
-            var b = slot.Bounds with { X = x, Width = width, Height = view.Height * player.InventoryCell };
-
-            // The grid and a moved bar may leave their content panel, so they clip to the window instead.
-            var clip = controls.FirstOrDefault(c => c.Type == "Window")?.Bounds ?? slot.Clip;
-            controls[index] = slot with
-            {
-                Bounds = b,
-                Clip = clip,
-                Properties = new Dictionary<string, string>(slot.Properties) { ["TileSize"] = FormattableString.Invariant($"{player.InventoryCell} {player.InventoryCell}"), ["State"] = "normal" },
-            };
-
-            // Engine choice: a grid taller than the room above the progress bar pushes the bar down under it.
-            if (barRoot is { } root && b.Y + b.Height + 4 * player.InventoryScale - root.Bounds.Y is var dy and > 0)
-            {
-                for (int i = 0; i < controls.Count; i++)
-                {
-                    if (controls[i].Name == bar || controls[i].Name == bar + "@track" || controls[i].Properties.GetValueOrDefault("TemplateOwner") == bar)
-                        controls[i] = controls[i] with { Bounds = controls[i].Bounds with { Y = controls[i].Bounds.Y + dy }, Clip = clip };
-                }
-            }
-
-            if (view.Count <= 0 && m.Craft is not null)
-                AddItemGhost(controls, $"machine-{name}", b, view.Item, "", clip);
-            if (view.Count <= 0 || player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), code)) return;
-
-            player.ItemCells.AddItemCell(controls, $"machine-{name}", b, view.Item, "", view.Name, view.Count, null, "MachineItem", code, clip);
-        }
-
-        for (int k = 0; k < Math.Min(2, m.Inputs.Count); k++) Slot($"in{k + 1}", $"Input{k + 1}ProgressBar", m.Inputs[k], 10 + k);
-
-        if (FurnaceGrid(m) is { } fg && m.Furnace is { } burn)
-        {
-            // The furnace's grid in in1, its items the storage's (picked up as storage items); disabled while it burns
-            // (InventorySection::setEnabled(!active)).
-            Slot("in1", "Input1ProgressBar", new MachineSlotView("", "", 0, 0, 0, fg.Width, fg.Height), -1);
-            int gi = controls.FindIndex(c => c.Name == "in1");
-
-            if (gi >= 0)
-            {
-                var g = controls[gi];
-                if (burn.Burning)
-                    controls[gi] = g with { Properties = new Dictionary<string, string>(g.Properties) { ["State"] = "disabled" } };
-
-                foreach (var item in fg.Items)
-                {
-                    if (player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 1000 + item.Index)) continue;
-
-                    player.ItemCells.AddItemCell(controls, $"machine-item-{item.Index}",
-                        new(g.Bounds.X + item.X * player.InventoryCell, g.Bounds.Y + item.Y * player.InventoryCell, item.Width * player.InventoryCell,
-                            item.Height * player.InventoryCell),
-                        item.Record, item.Material, item.Name, item.Quantity, TooltipRuntime.ItemTip.Of(item), "MachineItem", 1000 + item.Index,
-                        g.Clip, charge: item.Charge, colour: item.Colour);
-                }
+                    g.Clip, charge: item.Charge, colour: item.Colour);
             }
         }
+    }
 
-        if (m.Output is { } output) Slot("out", "OutputProgressBar", output, 8);
+    /// <summary>
+    /// The output section: the machine's output slot, a bench's finished craft, or the current craft's item faded in the empty output.
+    /// </summary>
+    void AddOutputSlot(List<UiControl> controls, MachineSnapshot m)
+    {
+        if (m.Output is { } output) AddSlot(controls, m, "out", "OutputProgressBar", output, 8);
         else if (m.Craft is { Done: [var made, ..] } && controls.FirstOrDefault(c => c.Name == "out") is { } outSlot
             && !player.InventoryWindows.Lifted(ItemOwner.AtSite(m.Site), 8))
         {
@@ -437,7 +548,8 @@ sealed class ProductionWindows(PlayerInterface player)
                 : new OperateOrder(selection, site.Id) { Tick = player.Session.World.Tick })));
         }
         else if (site.Complete
-            && Machine(site.Id) is { Operable: true } or { Function: Data.World.TownBuildings.ChairFunction or Data.World.TownBuildings.ThroneFunction })
+            && Machine(site.Id) is { Operable: true }
+                or { Function: Data.World.TownBuildings.ChairFunction or Data.World.TownBuildings.ThroneFunction })
         {
             verbs.Add(("Use", () => player.Say(player.SlowModifier
                 ? (SimCommand)new AddJob(selection, Data.Gameplay.Ai.TaskType.OperateMachinery, site.Id) { Tick = player.Session.World.Tick }
@@ -504,7 +616,9 @@ sealed class ProductionWindows(PlayerInterface player)
         if (max <= 0)
             return new("Workers:", "-", PlayerInterface.MainColour, Tooltip: "This machine is fully automatic.");
 
-        string? tip = operators == max ? Loc.Tr("The machine is fully staffed.") : operators < max ? TooltipRuntime.TitleTag + Loc.Tr("The machine is under-staffed.") : null;
+        string? tip = operators == max ? Loc.Tr("The machine is fully staffed.")
+            : operators < max ? TooltipRuntime.TitleTag + Loc.Tr("The machine is under-staffed.")
+            : null;
         return new("Workers:", $"{operators.ToString(CultureInfo.InvariantCulture)}/{max.ToString(CultureInfo.InvariantCulture)}",
             PlayerInterface.MainColour, operators == 0 ? PlayerInterface.BadColour : null, tip);
     }
@@ -529,7 +643,16 @@ sealed class ProductionWindows(PlayerInterface player)
         // Bad when the yield is under 1.
         var head = e.Rain is { } rain ? [(Loc.Tr("Rain strength:"), (rain > 0 ? TooltipRuntime.MainTag : BadTag) + Pc((int)(rain * 100)))]
             : new List<(string, string)> { (Loc.Tr("Max possible efficiency:"), TooltipRuntime.MainTag + Pc((int)(e.Rate * 100))) };
-        string? under = resource switch { 1 => "Iron under ground:", 2 => "Stone under ground:", 3 => "Copper under ground:", 4 => "Carbon under ground:", 5 => "Water under ground:", 6 => "Ground Fertility:", _ => null };
+        string? under = resource switch
+        {
+            1 => "Iron under ground:",
+            2 => "Stone under ground:",
+            3 => "Copper under ground:",
+            4 => "Carbon under ground:",
+            5 => "Water under ground:",
+            6 => "Ground Fertility:",
+            _ => null,
+        };
 
         if (under is not null)
         {
@@ -556,7 +679,8 @@ sealed class ProductionWindows(PlayerInterface player)
     /// crop is ready to harvest.", then the common line.
     /// </summary>
     static PlayerInterface.HudLine FarmWorkersLine(MachineSnapshot m, EfficiencyView e) => m.Farm is { Growth: < 1 }
-        ? new("Workers:", "-", PlayerInterface.MainColour, Tooltip: "No workers required until the crop is ready to harvest.") : WorkersLine(e.Operators, e.MaxOperators);
+        ? new("Workers:", "-", PlayerInterface.MainColour, Tooltip: "No workers required until the crop is ready to harvest.")
+        : WorkersLine(e.Operators, e.MaxOperators);
 
     /// <summary>
     /// A hydroponic farm's one Efficiency line (FarmBuilding slot 154, <c>FUN_1400e2d50</c>; other farms draw none): int(max x health x power x 100),
@@ -613,21 +737,24 @@ sealed class ProductionWindows(PlayerInterface player)
         stats.Add(new("Damage:", I(damage), PlayerInterface.MainColour,
             TooltipRows: [(Loc.Tr("Default damage:"), I(d)), .. shared, wall, height, (Loc.Tr("Total damage:"), I(damage))]));
         stats.Add(new("Deviation:", R(deviation) + "*", PlayerInterface.MainColour,
-            TooltipRows: [(Loc.Tr("Base Accuracy Deviation:"), g.Deviation.ToString("F1", CultureInfo.InvariantCulture) + "*"), (Loc.Tr("User Skill:"), I(g.UserSkill * 100)),
+            TooltipRows: [(Loc.Tr("Base Accuracy Deviation:"), g.Deviation.ToString("F1", CultureInfo.InvariantCulture) + "*"),
+                (Loc.Tr("User Skill:"), I(g.UserSkill * 100)),
                 (Loc.Tr("User Accuracy Deviation:"), deviation.ToString("F1", CultureInfo.InvariantCulture) + "*"),
                 (Loc.Tr("The amount of accuracy error, in degrees. Higher numbers are poor, 0 is perfect accuracy."), "")]));
         stats.Add(new("Range:", Metres(Round(range * 0.1f)), PlayerInterface.MainColour,
-            TooltipRows: [(Loc.Tr("Default range:"), Metres((int)(g.Range * 0.1f))), .. shared, wall, height, (Loc.Tr("Total range:"), Metres((int)(range * 0.1f)))]));
+            TooltipRows: [(Loc.Tr("Default range:"), Metres((int)(g.Range * 0.1f))), .. shared, wall, height,
+                (Loc.Tr("Total range:"), Metres((int)(range * 0.1f)))]));
         stats.Add(new("Aim speed:", R(p * g.AimSpeed * mount) + "x", PlayerInterface.MainColour,
-            TooltipRows: [(Loc.Tr("Default aim speed:"), I(g.AimSpeed) + "x"), .. shared, wall, (Loc.Tr("Total speed:"), (p * g.AimSpeed).ToString("F2", CultureInfo.InvariantCulture) + "x")]));
+            TooltipRows: [(Loc.Tr("Default aim speed:"), I(g.AimSpeed) + "x"), .. shared, wall,
+                (Loc.Tr("Total speed:"), (p * g.AimSpeed).ToString("F2", CultureInfo.InvariantCulture) + "x")]));
     }
 
     /// <summary>
     /// The Workers and Efficiency lines of a machine's class (slot 40, docs/game/ui-screens.md "Selected building"): Stats 1 (section 6) gets them in
     /// <paramref name="stats"/>, Stats 2 (section 7, only a turret's) in <paramref name="extended"/>. <paramref name="active"/> is slot 164.
     /// </summary>
-    static void AddClassLines(MachineSnapshot m, EfficiencyView e, int resource, List<PlayerInterface.HudLine> stats, List<PlayerInterface.HudLine> extended, bool active,
-        Simulation.Combat.TurretPanelView? gun = null)
+    static void AddClassLines(MachineSnapshot m, EfficiencyView e, int resource, List<PlayerInterface.HudLine> stats,
+        List<PlayerInterface.HudLine> extended, bool active, Simulation.Combat.TurretPanelView? gun = null)
     {
         switch (m.Panel)
         {
@@ -663,30 +790,66 @@ sealed class ProductionWindows(PlayerInterface player)
     /// The stats lines of a selected machine: the farm's crop and growth, the output's progress, then (section 6: slots 155, 154, 153) Workers and
     /// Efficiency per <see cref="AddEfficiencyLines"/>, the power lines, and the bench's tech level.
     /// </summary>
-    internal void AddMachineLines(MachineSnapshot m, List<PlayerInterface.HudLine> stats, List<PlayerInterface.HudLine> extended, ref string status, ref bool bad, RichnessView? rich = null,
-        Simulation.Combat.TurretPanelView? gun = null, bool own = false)
+    internal void AddMachineLines(MachineSnapshot m, List<PlayerInterface.HudLine> stats, List<PlayerInterface.HudLine> extended, ref string status,
+        ref bool bad, RichnessView? rich = null, Simulation.Combat.TurretPanelView? gun = null, bool own = false)
     {
-        string N(int v) => v.ToString(CultureInfo.InvariantCulture);
+        AddOutputLines(m, stats, ref status, ref bad, rich);
 
-        string P(float v) => ((int)(Math.Clamp(v, 0, 1) * 100)).ToString(CultureInfo.InvariantCulture) + "%";
+        // RainCollectorBuilding slot 114 (FUN_140301410): unless the output is full, Collecting while it rains, else Not Raining.
+        if (m.Efficiency is { Rain: { } rain } && m.Status != 1)
+            (status, bad) = rain > 0 ? ("Collecting", false) : ("Not Raining", true);
+        if (m.Efficiency is { } e) AddClassLines(m, e, rich?.Resource ?? 0, stats, extended, e.Active, gun);
 
+        // Power, in the original's words where it has them (GeneratorBuilding vfunc_114, vfunc_153); "No power" and "Low power" are Meitou's.
+        if (m.Power is { } pw) AddPowerLines(m, pw, stats, ref status, ref bad);
+
+        // getGUIPower section 6 on the player's machine with a power figure: a consumer's Battery toggle, then Power (FUN_140307bf0).
+        if (own && m.Power is { } toggled) AddPowerToggles(m, toggled, stats);
+
+        if (m.TechLevel > 0) stats.Add(new("Tech level:", Whole(m.TechLevel), PlayerInterface.MainColour));
+
+        // FurnaceBuilding::getGUIData section 0xf (FUN_14030b750): Total Metals (one decimal, Good from 1), then the Active button with its warning.
+        if (m.Furnace is { } furnace) AddFurnaceLines(furnace, stats, own);
+    }
+
+    /// <summary>
+    /// A whole number as the stats lines print it (invariant).
+    /// </summary>
+    static string Whole(int v) => v.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// A fraction as a whole percentage, clamped to 0..1 first.
+    /// </summary>
+    static string Percent(float v) => ((int)(Math.Clamp(v, 0, 1) * 100)).ToString(CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>
+    /// The status word and the lines of a machine's product: a mine's or rock's status, a farm's growth, or the output's stock.
+    /// </summary>
+    static void AddOutputLines(MachineSnapshot m, List<PlayerInterface.HudLine> stats, ref string status, ref bool bad, RichnessView? rich)
+    {
         // A mine or rock: the ProductionBuilding status word, and no Output line (the original has none).
         if (m.Farm is null && rich is not null && m.Efficiency is { } mine)
             (status, bad) = ProductionStatus(m.Status, mine, m.InputsEmpty);
         else if (m.Farm is { } f)
         {
-            status = f.Status switch { FarmStatus.NoWater => "No water", FarmStatus.OutputFull => "Output full", FarmStatus.Harvest => "Ready to harvest", _ => "Growing" };
+            status = f.Status switch
+            {
+                FarmStatus.NoWater => "No water",
+                FarmStatus.OutputFull => "Output full",
+                FarmStatus.Harvest => "Ready to harvest",
+                _ => "Growing",
+            };
             bad = f.Status is FarmStatus.NoWater or FarmStatus.OutputFull;
-            stats.Add(new("Growth:", P(MathF.Min(f.Growth, 1)), PlayerInterface.MainColour));
+            stats.Add(new("Growth:", Percent(MathF.Min(f.Growth, 1)), PlayerInterface.MainColour));
 
             if (f.Growth >= 1)
             {
-                stats.Add(new("Ripeness:", P(f.Ripeness), PlayerInterface.MainColour,
+                stats.Add(new("Ripeness:", Percent(f.Ripeness), PlayerInterface.MainColour,
                     f.Growth >= 2 ? PlayerInterface.BadColour : PlayerInterface.GoodColour));
             }
 
             if (f.Death > 0)
-                stats.Add(new("Dying:", P(f.Death), PlayerInterface.MainColour, PlayerInterface.BadColour));
+                stats.Add(new("Dying:", Percent(f.Death), PlayerInterface.MainColour, PlayerInterface.BadColour));
         }
         else if (m.Output is { } o)
         {
@@ -699,83 +862,88 @@ sealed class ProductionWindows(PlayerInterface player)
                 bad = m.Status == 1;
             }
 
-            stats.Add(new("Output:", $"{o.Name} {N(o.Count)}/{N(o.Capacity)}", PlayerInterface.MainColour));
+            stats.Add(new("Output:", $"{o.Name} {Whole(o.Count)}/{Whole(o.Capacity)}", PlayerInterface.MainColour));
+        }
+    }
+
+    /// <summary>
+    /// A powered machine's status word (a generator's or battery's) and its power line: a battery's charge, the wind speed, a generator's output
+    /// and fuel use, or a consumer's granted power.
+    /// </summary>
+    static void AddPowerLines(MachineSnapshot m, PowerView pw, List<PlayerInterface.HudLine> stats, ref string status, ref bool bad)
+    {
+        static string F(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+
+        if (m.Wind is not null || pw.Kind is PowerKind.Generator or PowerKind.Battery)
+        {
+            // The production chain (FUN_140300090) as far as a finished generator reaches it: Switched off (power on clear), No workers, else
+            // Working; then the class's own word.
+            bool on = m.Wind?.PowerOn ?? pw.PowerOn;
+            (status, bad) = GeneratorWord(m) ?? (!on
+                ? ("Switched off", true)
+                : m.Efficiency is { MaxOperators: > 0, Operators: 0 } ? ("No workers", true) : ("Working", false));
         }
 
-        // RainCollectorBuilding slot 114 (FUN_140301410): unless the output is full, Collecting while it rains, else Not Raining.
-        if (m.Efficiency is { Rain: { } rain } && m.Status != 1)
-            (status, bad) = rain > 0 ? ("Collecting", false) : ("Not Raining", true);
-        if (m.Efficiency is { } e) AddClassLines(m, e, rich?.Resource ?? 0, stats, extended, e.Active, gun);
-
-        // Power, in the original's words where it has them (GeneratorBuilding vfunc_114, vfunc_153); "No power" and "Low power" are Meitou's.
-        if (m.Power is { } pw)
+        if (pw.Kind == PowerKind.Battery)
+            stats.Add(new("Charge:", Percent(pw.Store > 0 ? pw.Charge / pw.Store : 0), PlayerInterface.MainColour));
+        // getGUIPower section 6: the wind speed at the building.
+        else if (m.Wind is { } wind)
         {
-            string F(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);
-
-            if (m.Wind is not null || pw.Kind is PowerKind.Generator or PowerKind.Battery)
-            {
-                // The production chain (FUN_140300090) as far as a finished generator reaches it: Switched off (power on clear), No workers, else
-                // Working; then the class's own word.
-                bool on = m.Wind?.PowerOn ?? pw.PowerOn;
-                (status, bad) = GeneratorWord(m) ?? (!on ? ("Switched off", true) : m.Efficiency is { MaxOperators: > 0, Operators: 0 } ? ("No workers", true) : ("Working", false));
-            }
-
-            if (pw.Kind == PowerKind.Battery)
-                stats.Add(new("Charge:", P(pw.Store > 0 ? pw.Charge / pw.Store : 0), PlayerInterface.MainColour));
-            // getGUIPower section 6: the wind speed at the building.
-            else if (m.Wind is { } wind)
-            {
-                stats.Add(new("Wind Speed", Loc.Tr("{1,num=fix,p=1} mph", wind.Speed * MphPerUnit), PlayerInterface.MainColour,
-                    Tooltip: "The current wind speed"));
-            }
-            else if (pw.Kind == PowerKind.Generator)
-            {
-                stats.Add(new("Power:", F(pw.Demand), PlayerInterface.MainColour));
-                if (m.Inputs.Count > 0) stats.Add(new("Fuel Consumption", P(pw.Usage), PlayerInterface.MainColour));
-            }
-            else if (pw.Demand > 0)
-            {
-                if (pw.Granted < pw.Demand)
-                {
-                    status = pw.Granted <= 0 ? "No power" : "Low power";
-                    bad = true;
-                }
-
-                stats.Add(new("Power:", $"{F(pw.Granted)}/{F(pw.Demand)}", PlayerInterface.MainColour,
-                    pw.Granted < pw.Demand ? PlayerInterface.BadColour : null));
-            }
+            stats.Add(new("Wind Speed", Loc.Tr("{1,num=fix,p=1} mph", wind.Speed * MphPerUnit), PlayerInterface.MainColour,
+                Tooltip: "The current wind speed"));
         }
-
-        // getGUIPower section 6 on the player's machine with a power figure: a consumer's Battery toggle, then Power (FUN_140307bf0).
-        if (own && m.Power is { } toggled)
+        else if (pw.Kind == PowerKind.Generator)
         {
-            if (toggled.Kind == PowerKind.Consumer)
+            stats.Add(new("Power:", F(pw.Demand), PlayerInterface.MainColour));
+            if (m.Inputs.Count > 0) stats.Add(new("Fuel Consumption", Percent(pw.Usage), PlayerInterface.MainColour));
+        }
+        else if (pw.Demand > 0)
+        {
+            if (pw.Granted < pw.Demand)
             {
-                stats.Add(new("Battery", toggled.GetsBattery ? "On" : "Off", PlayerInterface.MainColour, toggled.GetsBattery ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour, Loc.Tr(toggled.GetsBattery
+                status = pw.Granted <= 0 ? "No power" : "Low power";
+                bad = true;
+            }
+
+            stats.Add(new("Power:", $"{F(pw.Granted)}/{F(pw.Demand)}", PlayerInterface.MainColour,
+                pw.Granted < pw.Demand ? PlayerInterface.BadColour : null));
+        }
+    }
+
+    /// <summary>
+    /// The player's machine's power buttons: a consumer's Battery toggle, then Power.
+    /// </summary>
+    static void AddPowerToggles(MachineSnapshot m, PowerView toggled, List<PlayerInterface.HudLine> stats)
+    {
+        if (toggled.Kind == PowerKind.Consumer)
+        {
+            stats.Add(new("Battery", toggled.GetsBattery ? "On" : "Off", PlayerInterface.MainColour,
+                toggled.GetsBattery ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour,
+                Loc.Tr(toggled.GetsBattery
                     ? "This machine will run off of battery power if the main generators should run low or break down."
                     : "This machine will NOT run off of battery power if the main generators should run low or break down."),
-                    "meitou:machine-battery", ButtonWidth: 0.3f));
-            }
-
-            bool on = m.Wind?.PowerOn ?? toggled.PowerOn;
-            stats.Add(new("Power", on ? "On" : "Off", PlayerInterface.MainColour, on ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour, Loc.Tr(on ? "This machine is switched On" : "This machine is switched Off"),
-                "meitou:machine-power", ButtonWidth: 0.3f));
+                "meitou:machine-battery", ButtonWidth: 0.3f));
         }
 
-        if (m.TechLevel > 0) stats.Add(new("Tech level:", N(m.TechLevel), PlayerInterface.MainColour));
+        bool on = m.Wind?.PowerOn ?? toggled.PowerOn;
+        stats.Add(new("Power", on ? "On" : "Off", PlayerInterface.MainColour, on ? PlayerInterface.GoodColour : PlayerInterface.BadBrightColour,
+            Loc.Tr(on ? "This machine is switched On" : "This machine is switched Off"), "meitou:machine-power", ButtonWidth: 0.3f));
+    }
 
-        // FurnaceBuilding::getGUIData section 0xf (FUN_14030b750): Total Metals (one decimal, Good from 1), then the Active button with its warning.
-        if (m.Furnace is { } furnace)
+    /// <summary>
+    /// A furnace's Total Metals line and, on the player's furnace, its Active button.
+    /// </summary>
+    static void AddFurnaceLines(FurnaceView furnace, List<PlayerInterface.HudLine> stats, bool own)
+    {
+        stats.Add(new("Total Metals:", ((int)(furnace.Metal * 10) / 10f).ToString("0.#", CultureInfo.InvariantCulture),
+            PlayerInterface.MainColour, furnace.Metal >= 1 ? PlayerInterface.GoodColour : PlayerInterface.BadColour));
+
+        if (own)
         {
-            stats.Add(new("Total Metals:", ((int)(furnace.Metal * 10) / 10f).ToString("0.#", CultureInfo.InvariantCulture),
-                PlayerInterface.MainColour, furnace.Metal >= 1 ? PlayerInterface.GoodColour : PlayerInterface.BadColour));
-
-            if (own)
-            {
-                stats.Add(new("Active:", furnace.Burning ? "ON" : "OFF", PlayerInterface.MainColour, furnace.Burning ? PlayerInterface.GoodColour : PlayerInterface.MainColour,
-                    Loc.Tr("Warning:") + " " + Loc.Tr("Switching on will incinerate the entire inventory!"), "meitou:machine-incinerate",
-                    ButtonWidth: 0.4f));
-            }
+            stats.Add(new("Active:", furnace.Burning ? "ON" : "OFF", PlayerInterface.MainColour,
+                furnace.Burning ? PlayerInterface.GoodColour : PlayerInterface.MainColour,
+                Loc.Tr("Warning:") + " " + Loc.Tr("Switching on will incinerate the entire inventory!"), "meitou:machine-incinerate",
+                ButtonWidth: 0.4f));
         }
     }
 
@@ -814,7 +982,10 @@ sealed class ProductionWindows(PlayerInterface player)
         b.Lists["ResearchTypeList"] = [.. categories.Select(c => new UiListItem(c, c))];
         b.SelectedItems["ResearchTypeList"] = ResearchCategory is null ? -1 : categories.IndexOf(ResearchCategory);
         if (research.BenchLevel <= 0)
-            b.Text["ResearchBenchMessage"] = Loc.Tr("You currently have no research facilities. Build a research bench and assign someone to work there.");
+        {
+            b.Text["ResearchBenchMessage"] =
+                Loc.Tr("You currently have no research facilities. Build a research bench and assign someone to work there.");
+        }
         else b.Hidden.Add("ResearchBenchMessage");
 
         IndentLabel(b, "lbResearchDescription");
@@ -897,8 +1068,8 @@ sealed class ProductionWindows(PlayerInterface player)
                 var r = rows[i];
                 float top = area.Y + i * pitch + 0.15f * unit - _researchScroll, height = 0.97f * unit;
                 var colour = MyGuiColours.Parse(r.BenchTooLow || !r.Affordable ? PlayerInterface.BadColour : PlayerInterface.MainColour, ink);
-                controls.Add(new($"research-row-{i}", "Button", new(area.X + 0.01f * w, top, 0.98f * w, height), "", "research-queue:" + r.Id, "Kenshi_Button1Skin", true,
-                    new Dictionary<string, string>(), Vector4.Zero, Pickable: true, Clip: clip));
+                controls.Add(new($"research-row-{i}", "Button", new(area.X + 0.01f * w, top, 0.98f * w, height), "", "research-queue:" + r.Id,
+                    "Kenshi_Button1Skin", true, new Dictionary<string, string>(), Vector4.Zero, Pickable: true, Clip: clip));
 
                 if (r.Progress > 0)
                 {
@@ -910,8 +1081,10 @@ sealed class ProductionWindows(PlayerInterface player)
                 var label = new UiRect(area.X + 0.03f * w, top, 0.94f * w, height);
                 controls.Add(new($"research-row-{i}-name", "TextBox", label, r.Name, "", "", true, face, Vector4.Zero, TextColour: colour,
                     Pickable: false, Clip: clip));
-                controls.Add(new($"research-row-{i}-time", "TextBox", label, ResearchTime(r.Hours, r.Progress, research.Rate, false), "", "", true,
-                    new Dictionary<string, string>(face) { ["TextAlign"] = "Right VCenter" }, Vector4.Zero, TextColour: colour, Pickable: false, Clip: clip));
+                string time = ResearchTime(r.Hours, r.Progress, research.Rate, false);
+                controls.Add(new($"research-row-{i}-time", "TextBox", label, time, "", "", true,
+                    new Dictionary<string, string>(face) { ["TextAlign"] = "Right VCenter" }, Vector4.Zero, TextColour: colour, Pickable: false,
+                    Clip: clip));
             }
         }
 
@@ -921,13 +1094,12 @@ sealed class ProductionWindows(PlayerInterface player)
             {
                 var (qid, name, progress) = research.Queue[i];
                 controls.Add(new($"research-queue-{i}", "Button", new(queue.Bounds.X + 6, queue.Bounds.Y + i * line, queue.Bounds.Width - 12, line),
-                    $"{name}  {(int)(progress * 100)}%", "research-cancel:" + qid, "", true, face, Vector4.Zero, TextColour: i == 0 ? new(0.66f, 0.72f, 0.45f, 1) : ink,
-                    HoverColour: new(1, 0.4f, 0.3f, 1), Pickable: true, Clip: queue.Bounds));
+                    $"{name}  {(int)(progress * 100)}%", "research-cancel:" + qid, "", true, face, Vector4.Zero,
+                    TextColour: i == 0 ? new(0.66f, 0.72f, 0.45f, 1) : ink, HoverColour: new(1, 0.4f, 0.3f, 1), Pickable: true, Clip: queue.Bounds));
             }
         }
 
-        var hovered = controls.LastOrDefault(c => c.Name.StartsWith("research-row-", StringComparison.Ordinal) && c.Action.Length > 0 && c.Bounds.Contains(player.Mouse.X, player.Mouse.Y)
-            && c.Clip?.Contains(player.Mouse.X, player.Mouse.Y) != false)?.Action;
+        var hovered = controls.LastOrDefault(IsHoveredResearchRow)?.Action;
         string? focus = hovered is { Length: > 15 } h ? h[15..] : ResearchFocus;
         if (focus is null || research.Available.FirstOrDefault(r => r.Id == focus) is not { Id: not null } option)
             return;
@@ -937,10 +1109,23 @@ sealed class ProductionWindows(PlayerInterface player)
         if (option.Description.Length > 0 && controls.FirstOrDefault(c => c.Name == "ResearchDescriptionPanel2") is { } text)
         {
             controls.Add(new("research-description", "EditBox", text.Bounds, option.Description, "", "", true,
-                new Dictionary<string, string> { ["FontName"] = "Kenshi_StandardFont_Medium", ["WordWrap"] = "true", ["MultiLine"] = "true", ["Static"] = "true", ["TextAlign"] = "Left Top" },
+                new Dictionary<string, string>
+                {
+                    ["FontName"] = "Kenshi_StandardFont_Medium",
+                    ["WordWrap"] = "true",
+                    ["MultiLine"] = "true",
+                    ["Static"] = "true",
+                    ["TextAlign"] = "Left Top",
+                },
                 Vector4.Zero, TextColour: ink, Pickable: false, Clip: text.Bounds));
         }
     }
+
+    /// <summary>
+    /// A blueprint row with an action under the pointer, inside its clip.
+    /// </summary>
+    bool IsHoveredResearchRow(UiControl c) => c.Name.StartsWith("research-row-", StringComparison.Ordinal) && c.Action.Length > 0
+        && c.Bounds.Contains(player.Mouse.X, player.Mouse.Y) && c.Clip?.Contains(player.Mouse.X, player.Mouse.Y) != false;
 
     /// <summary>
     /// How far the blueprint rows are scrolled, their pitch and the panel they scroll in (the DatapanelGUI's own ScrollView in the original).
@@ -979,8 +1164,11 @@ sealed class ProductionWindows(PlayerInterface player)
     /// The DESCRIPTION captions over the research and crafting panels sit at the tab's left edge in the layout; Meitou insets them 8 px at 1080 lines
     /// to line up with the panel's text (engine choice: the base game draws them flush with the frame).
     /// </summary>
-    void IndentLabel(UiBindings b, string name) =>
-        b.Properties[name] = new Dictionary<string, string> { ["TextAlign"] = "Left VCenter", ["TextPadding"] = $"{(8 * player.Height / 1080f).ToString(CultureInfo.InvariantCulture)} 0 0 0" };
+    void IndentLabel(UiBindings b, string name) => b.Properties[name] = new Dictionary<string, string>
+    {
+        ["TextAlign"] = "Left VCenter",
+        ["TextPadding"] = $"{(8 * player.Height / 1080f).ToString(CultureInfo.InvariantCulture)} 0 0 0",
+    };
 
     /// <summary>
     /// The description's lines (<c>FUN_140495e00</c>): the name in Title with "lvl {n}"; "ETA:" in Title with the time left; "Needs research bench
@@ -1001,7 +1189,9 @@ sealed class ProductionWindows(PlayerInterface player)
         else foreach (var (item, count, held) in option.Cost) lines.Add(new(Loc.Tr("Cost:"),
             $"{item} x{count.ToString(CultureInfo.InvariantCulture)}", null, held ? PlayerInterface.GoodColour : PlayerInterface.BadColour));
 
-        static string Requirement((string Name, bool Finished, bool Queued) r) => PlayerInterface.Tag(r.Finished ? PlayerInterface.GreyColour : r.Queued ? PlayerInterface.GoodColour : PlayerInterface.BadColour) + r.Name.Replace("#", "##", StringComparison.Ordinal);
+        static string Requirement((string Name, bool Finished, bool Queued) r) =>
+            PlayerInterface.Tag(r.Finished ? PlayerInterface.GreyColour : r.Queued ? PlayerInterface.GoodColour : PlayerInterface.BadColour)
+            + r.Name.Replace("#", "##", StringComparison.Ordinal);
 
         var required = option.Requirements;
         lines.Add(new(Loc.Tr("Requirements:"), required.Count == 0 ? "-" : Requirement(required[0]) + (required.Count > 1 ? ", " : "")));
@@ -1044,7 +1234,11 @@ sealed class ProductionWindows(PlayerInterface player)
         b.SelectedItems["CraftingStationsList"] = stations.FindIndex(s => s.Site == _craftStation);
         bool repeat = stations.FirstOrDefault(s => s.Site == _craftStation)?.Craft?.Repeat == true;
         b.Actions["QueueRepeat"] = "QueueRepeat";
-        b.Properties["QueueRepeat"] = new Dictionary<string, string> { ["Checked"] = repeat ? "true" : "false", ["StateSelected"] = repeat ? "true" : "false" };
+        b.Properties["QueueRepeat"] = new Dictionary<string, string>
+        {
+            ["Checked"] = repeat ? "true" : "false",
+            ["StateSelected"] = repeat ? "true" : "false",
+        };
         IndentLabel(b, "lbCraftingDescription");
     }
 
@@ -1053,7 +1247,9 @@ sealed class ProductionWindows(PlayerInterface player)
         if (e.Widget == "CraftingStationsList" && e.Action == "select")
         {
             var stations = CraftStations();
-            _craftStation = stations.FirstOrDefault(s => s.Site == e.Text)?.Site ?? stations.FirstOrDefault(s => StationName(s) == e.Text)?.Site ?? _craftStation;
+            _craftStation = stations.FirstOrDefault(s => s.Site == e.Text)?.Site
+                ?? stations.FirstOrDefault(s => StationName(s) == e.Text)?.Site
+                ?? _craftStation;
         }
         else if (e.Widget == "QueueRepeat" && _craftStation is not null && Machine(_craftStation)?.Craft is { } craft)
             player.Say(new RepeatCrafts(_craftStation, !craft.Repeat) { Tick = player.Session.World.Tick });
@@ -1064,7 +1260,10 @@ sealed class ProductionWindows(PlayerInterface player)
         }
         else if (e.Action.StartsWith("craft-focus:", StringComparison.Ordinal)) _craftFocus = e.Action[12..];
         else if (e.Action.StartsWith("craft-cancel:", StringComparison.Ordinal) && _craftStation is not null)
-            player.Say(new CancelCraft(_craftStation, int.Parse(e.Action.AsSpan(13), CultureInfo.InvariantCulture)) { Tick = player.Session.World.Tick });
+        {
+            int cancelled = int.Parse(e.Action.AsSpan(13), CultureInfo.InvariantCulture);
+            player.Say(new CancelCraft(_craftStation, cancelled) { Tick = player.Session.World.Tick });
+        }
     }
 
     /// <summary>
@@ -1090,9 +1289,10 @@ sealed class ProductionWindows(PlayerInterface player)
             for (int i = 0; i < rows.Count; i++)
             {
                 var o = rows[i];
-                controls.Add(new($"craft-row-{i}", "Button", new(panel.Bounds.X + 6, panel.Bounds.Y + i * line, panel.Bounds.Width - 12, line), o.Name,
-                    o.Unlocked ? "craft-queue:" + o.Key : "craft-focus:" + o.Key, "", true, face, Vector4.Zero,
-                    TextColour: o.Unlocked ? ink : new Vector4(0.75f, 0.35f, 0.3f, 1), HoverColour: new(0, 1, 0, 1), Pickable: true, Clip: panel.Bounds));
+                controls.Add(new($"craft-row-{i}", "Button", new(panel.Bounds.X + 6, panel.Bounds.Y + i * line, panel.Bounds.Width - 12, line),
+                    o.Name, o.Unlocked ? "craft-queue:" + o.Key : "craft-focus:" + o.Key, "", true, face, Vector4.Zero,
+                    TextColour: o.Unlocked ? ink : new Vector4(0.75f, 0.35f, 0.3f, 1), HoverColour: new(0, 1, 0, 1), Pickable: true,
+                    Clip: panel.Bounds));
             }
         }
 
@@ -1108,14 +1308,15 @@ sealed class ProductionWindows(PlayerInterface player)
         }
 
         // A queued craft under the pointer has its own description (the CraftQueue box's tooltip, FUN_1402be650 -> FUN_1402bcf60).
-        if (controls.LastOrDefault(c => c.Name.StartsWith("craft-queue-", StringComparison.Ordinal) && c.Bounds.Contains(player.Mouse.X, player.Mouse.Y)) is { } over
-            && int.TryParse(over.Name.AsSpan(12), NumberStyles.None, CultureInfo.InvariantCulture, out int hoveredIndex) && hoveredIndex < craft.Queue.Count)
+        if (controls.LastOrDefault(IsHoveredCraftQueue) is { } over
+            && int.TryParse(over.Name.AsSpan(12), NumberStyles.None, CultureInfo.InvariantCulture, out int hoveredIndex)
+            && hoveredIndex < craft.Queue.Count)
         {
             QueueDescription(controls, _craftStation, craft, hoveredIndex, options);
             return;
         }
 
-        string? hovered = controls.LastOrDefault(c => c.Name.StartsWith("craft-row-", StringComparison.Ordinal) && c.Bounds.Contains(player.Mouse.X, player.Mouse.Y))?.Action;
+        string? hovered = controls.LastOrDefault(IsHoveredCraftRow)?.Action;
         string? focus = hovered is { } h ? h[(h.IndexOf(':') + 1)..] : _craftFocus;
         if (focus is null || options.FirstOrDefault(o => o.Key == focus) is not { } option) return;
 
@@ -1126,11 +1327,24 @@ sealed class ProductionWindows(PlayerInterface player)
         };
         if (option.Level > 0)
             lines.Add(new("Level:", option.Level.ToString(CultureInfo.InvariantCulture), PlayerInterface.MainColour));
-        foreach (var (item, per) in option.Inputs) lines.Add(new(item, per.ToString("0.##", CultureInfo.InvariantCulture), PlayerInterface.MainColour));
+        foreach (var (item, per) in option.Inputs)
+            lines.Add(new(item, per.ToString("0.##", CultureInfo.InvariantCulture), PlayerInterface.MainColour));
         if (!option.Unlocked) lines.Add(new("Needs research", "", PlayerInterface.BadColour));
 
         DatapanelLines(controls, "QueueDescriptionPanel1", lines);
     }
+
+    /// <summary>
+    /// A queued craft's row under the pointer.
+    /// </summary>
+    bool IsHoveredCraftQueue(UiControl c) =>
+        c.Name.StartsWith("craft-queue-", StringComparison.Ordinal) && c.Bounds.Contains(player.Mouse.X, player.Mouse.Y);
+
+    /// <summary>
+    /// A craft option's row under the pointer.
+    /// </summary>
+    bool IsHoveredCraftRow(UiControl c) =>
+        c.Name.StartsWith("craft-row-", StringComparison.Ordinal) && c.Bounds.Contains(player.Mouse.X, player.Mouse.Y);
 
     /// <summary>
     /// The description of a queued craft (<c>FUN_1402bcf60</c>, into <c>QueueDescriptionPanel2</c>; <b>Verified</b>): <c>State:</c> "In
@@ -1164,7 +1378,10 @@ sealed class ProductionWindows(PlayerInterface player)
 
         if (player.Session.CurrentSnapshot.Smiths.GetValueOrDefault(site) is { } smith)
         {
-            string penalty = smith.Penalty == 0 ? "" : PlayerInterface.Tag(PlayerInterface.BadColour) + " (" + Loc.Format("{1,num=fix,p=0}", -smith.Penalty) + ")" + PlayerInterface.Tag(MyGuiColours.InkText);
+            string penalty = smith.Penalty == 0
+                ? ""
+                : PlayerInterface.Tag(PlayerInterface.BadColour) + " (" + Loc.Format("{1,num=fix,p=0}", -smith.Penalty) + ")"
+                    + PlayerInterface.Tag(MyGuiColours.InkText);
             rows.Add(new(Loc.Tr("-Current Smith:"), smith.Name.Replace("#", "##", StringComparison.Ordinal) + Loc.Tr(" (skill: {1,num}{2})",
                 smith.Skill, penalty)));
 
@@ -1183,7 +1400,8 @@ sealed class ProductionWindows(PlayerInterface player)
                 {
                     int grade = Simulation.Combat.ArmourTooltip.GradeOf(guess.Quality);
                     rows.Add(new(Loc.Tr("-Predicted Result:"),
-                        PlayerInterface.Tag(TooltipRuntime.TipColour(TooltipRuntime.GradeTone(grade), false)) + Loc.Tr(Simulation.Combat.ArmourTooltip.GradeNames[grade])));
+                        PlayerInterface.Tag(TooltipRuntime.TipColour(TooltipRuntime.GradeTone(grade), false))
+                            + Loc.Tr(Simulation.Combat.ArmourTooltip.GradeNames[grade])));
                 }
 
                 if (guess.Critical >= 0)

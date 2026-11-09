@@ -93,8 +93,14 @@ static class ImpostorApp
         var frames = new Frames(display);
         var cache = new ImpostorCache();
         Console.WriteLine($"cache     {cache.Root}");
-        try { return o.BakeAll ? BakeAll(frames, catalog, assets, cache, o) : Preview(frames, catalog, assets, cache, o); }
-        finally { frames.Flush(); }
+        try
+        {
+            return o.BakeAll ? BakeAll(frames, catalog, assets, cache, o) : Preview(frames, catalog, assets, cache, o);
+        }
+        finally
+        {
+            frames.Flush();
+        }
     }
 
     /// <summary>
@@ -173,7 +179,8 @@ static class ImpostorApp
     static int BakeAll(Frames frames, FoliageCatalog catalog, AssetLocator assets, ImpostorCache cache, Options o)
     {
         var (sources, ineligible, missing) = CollectSources(catalog, assets);
-        Console.WriteLine($"sources   {sources.Count} distinct (mesh, material, scale); {ineligible} records TERRAIN/EMISSIVE, {missing} without a mesh file");
+        Console.WriteLine($"sources   {sources.Count} distinct (mesh, material, scale); "
+            + $"{ineligible} records TERRAIN/EMISSIVE, {missing} without a mesh file");
         // Decode on the worker threads, bake in order on this one.
         var decoded = sources.Select(s => Task.Run(() => ImpostorMeshes.Load(s.Source))).ToList();
         frames.Open();
@@ -203,7 +210,11 @@ static class ImpostorApp
             var (atlas, hit) = Obtain(frames, baker, cache, source, meshes, size, o);
             double ms = one.Elapsed.TotalMilliseconds;
             if (hit) hits++;
-            else { baked++; bakeMs += ms; }
+            else
+            {
+                baked++;
+                bakeMs += ms;
+            }
             long file = File.Exists(cache.PathFor(source)) ? new FileInfo(cache.PathFor(source)).Length : 0;
             gpuBytes += atlas.Bytes;
             fileBytes += file;
@@ -212,12 +223,16 @@ static class ImpostorApp
             var t = baker.LastTimes;
             string steps = hit
                 ? ""
-                : string.Create(CultureInfo.InvariantCulture, $" (upload {t.Upload:0}, render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})");
+                : string.Create(CultureInfo.InvariantCulture, $" (upload {t.Upload:0}, "
+                + $"render {t.Render:0}, filter {t.Filter:0}, encode {t.Encode:0})");
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"{(hit ? "cached" : "baked "),-7} {size.Name,-6} r {worldRadius,6:0} {atlas.AtlasPixels,5}² {atlas.Bytes / 1048576.0,6:0.0} MB GPU {file / 1048576.0,6:0.0} MB file {ms,7:0} ms{steps}  {source.Name}"));
+                $"{(hit ? "cached" : "baked "),-7} {size.Name,-6} r {worldRadius,6:0} {atlas.AtlasPixels,5}² "
+                    + $"{atlas.Bytes / 1048576.0,6:0.0} MB GPU {file / 1048576.0,6:0.0} MB file {ms,7:0} ms{steps}  {source.Name}"));
         }
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"total     {baked} baked in {bakeMs / 1000:0.0} s, {hits} from the cache, {small} too small; {gpuBytes / 1048576.0:0} MB on the GPU if all resident, {fileBytes / 1048576.0:0} MB on disk; wall {total.Elapsed.TotalSeconds:0.0} s"));
+            $"total     {baked} baked in {bakeMs / 1000:0.0} s, {hits} from the cache, {small} too small; "
+                + $"{gpuBytes / 1048576.0:0} MB on the GPU if all resident, {fileBytes / 1048576.0:0} MB on disk; "
+                + $"wall {total.Elapsed.TotalSeconds:0.0} s"));
         foreach (var (name, (count, bytes)) in byClass) Console.WriteLine($"class     {name}: {count} atlases, {bytes / 1048576.0:0} MB");
         foreach (var m in baker.Messages.Distinct().Take(20)) Console.WriteLine($"warning   {m}");
         return 0;
@@ -241,7 +256,8 @@ static class ImpostorApp
             return 1;
         }
 
-        if (ImpostorSource.Ineligible(mesh) is { } why) Console.WriteLine($"note      {mesh.Name}: {why}; previewed anyway");
+        if (ImpostorSource.Ineligible(mesh) is { } why)
+            Console.WriteLine($"note      {mesh.Name}: {why}; previewed anyway");
         var source = ImpostorSource.From(mesh, assets);
         var meshes = source is null ? null : ImpostorMeshes.Load(source);
         if (source is null || meshes is null)
@@ -287,7 +303,8 @@ static class ImpostorApp
         preview.SetMesh(source, meshes);
         preview.SetAtlas(atlas);
         WriteSheets(frames, preview, meshes, atlas, stem);
-        float scale = size.Transition(worldRadius, ImpostorClass.ReferenceDistance) / ImpostorClass.ReferenceDistance;   // the small class is seen from nearer
+        // The small class is seen from nearer.
+        float scale = size.Transition(worldRadius, ImpostorClass.ReferenceDistance) / ImpostorClass.ReferenceDistance;
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
             $"scale     transition {size.Transition(worldRadius, ImpostorClass.ReferenceDistance):0} units, pictures scaled by {scale:0.###}"));
         var sun = Vector3.Normalize(new Vector3(0.45f, 0.8f, 0.4f));
@@ -316,12 +333,14 @@ static class ImpostorApp
             int px = atlas.AtlasPixels;
             var rgba = ImpostorEncoder.Decode(texture.Encoding, texture.Levels[0].ToArray(), px);
             if (map == ImpostorMap.Albedo)   // coverage shown over a grey background
+            {
                 for (int i = 0; i < rgba.Length; i += 4)
                 {
                     float a = rgba[i + 3] / 255f;
                     for (int c = 0; c < 3; c++) rgba[i + c] = (byte)(rgba[i + c] * a + 96 * (1 - a));
                     rgba[i + 3] = 255;
                 }
+            }
 
             PngWriter.Write($"{stem}-atlas-{map.ToString().ToLowerInvariant()}.png", px, px, Flip(rgba, px, px));
         }
@@ -426,6 +445,7 @@ static class ImpostorApp
         Offscreen(frames, w, h, path, (cmd, formats) =>
         {
             for (int row = 0; row < rows; row++)
+            {
                 for (int col = 0; col < columns; col++)
                 {
                     var dir = direction(row, col);
@@ -442,6 +462,7 @@ static class ImpostorApp
                     preview.DrawImpostors(cmd, formats, new PixelViewport((col * 2 + 1) * cell, y, cell, cell, 0, 1), view * projection, eye,
                             cameraUp, sun, one, coverage: false);
                 }
+            }
         });
     }
 

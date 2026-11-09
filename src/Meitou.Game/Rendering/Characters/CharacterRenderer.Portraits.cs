@@ -48,6 +48,7 @@ internal sealed unsafe partial class CharacterRenderer
     int _portraitLive = -1;
     GpuTexture? _portraitColour, _portraitDepth;
     SampledTexture? _portraitSampled;
+
     // The enhanced portraits (Look): each drawn into this half-float square, then resolved into its cell of the atlas above.
     GpuTexture? _portraitHdr, _portraitHdrDepth;
     SampledTexture _portraitHdrSampled;
@@ -66,8 +67,8 @@ internal sealed unsafe partial class CharacterRenderer
                     Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "portraits"));
                 _portraitDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h, Use: TextureUse.DepthTarget,
                     Name: "portraits depth"));
-                _portraitSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-                    TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), _portraitColour.View());
+                _portraitSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
+                    _portraitColour.View());
                 _cleared = false;
                 _portraitShown.Clear();
             }
@@ -110,11 +111,14 @@ internal sealed unsafe partial class CharacterRenderer
         for (int i = 0; i < _liveCount; i++) _liveByKey[_live[i].Key] = i;
         bool any = !_cleared;
         foreach (var request in PortraitRequests)
+        {
             if (Due(request, out _))
             {
                 any = true;
                 break;
             }
+        }
+
         if (!any) return;
 
         if (!_cleared) ClearPortraitAtlas(atlas);
@@ -146,8 +150,11 @@ internal sealed unsafe partial class CharacterRenderer
     {
         var supersampled = _look with { Supersample = PortraitSupersample };
         if (_portraitHdr is null)
+        {
             (_portraitHdr, _portraitHdrDepth, _portraitHdrSampled) = PreviewResolve.Targets(Gpu, PortraitCell, PortraitCell, supersampled,
                     "portrait hdr");
+        }
+
         _preview ??= new PreviewResolve(Gpu);
 
         foreach (var request in PortraitRequests)
@@ -222,10 +229,18 @@ internal sealed unsafe partial class CharacterRenderer
         (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (0, _attachCount, false, false);
         _portraitLive = index;
 
-        // The shader's plain model (fixed lights: a portrait is a still and does not follow the sky), unclamped either way; enhanced, the resolve finishes it.
-        try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light }, eye, []); }
-        finally { _portraitLive = -1; (_bones, _previousBones) = (liveBones, livePrevious); (l.BoneBase, l.AttachBase, l.WeaponDrawn,
-            l.RangedDrawn) = (boneBase, attachBase, weapon, ranged); }
+        // The shader's plain model (fixed lights: a portrait is a still and does not follow the sky), unclamped either way; enhanced, the resolve
+        // finishes it.
+        try
+        {
+            DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light }, eye, []);
+        }
+        finally
+        {
+            _portraitLive = -1;
+            (_bones, _previousBones) = (liveBones, livePrevious);
+            (l.BoneBase, l.AttachBase, l.WeaponDrawn, l.RangedDrawn) = (boneBase, attachBase, weapon, ranged);
+        }
     }
 
     void DisposePortraitHdr()
@@ -249,12 +264,15 @@ internal sealed unsafe partial class CharacterRenderer
             shown.Serial != request.Serial || shown.Asset != l.Asset || shown.Radius != l.Radius) return true;
         int texture = 0;
         foreach (var part in l.Asset.Parts)
+        {
             foreach (var t in part.Material.Tex)
             {
                 if (texture >= shown.Textures.Length || shown.Textures[texture] != (t?.Native, t?.Swizzled ?? false))
                     return true;
                 texture++;
             }
+        }
+
         return texture != shown.Textures.Length;
     }
 
@@ -277,11 +295,17 @@ internal sealed unsafe partial class CharacterRenderer
         {
             scratch.Pose(asset.Shape, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_portraitLayers), _portraitBones);
             foreach (var part in asset.Parts)
+            {
                 if (part.AttachIndex >= 0)
                     _portraitAttach[part.AttachIndex] = scratch.TagTransform(part.Bone, part.Offset);
+            }
+
             return asset.HeadBone >= 0 ? scratch.BoneTransform(asset.HeadBone).Translation : new Vector3(0, asset.Height * 0.85f, 0);
         }
-        finally { rig.Return(scratch); }
+        finally
+        {
+            rig.Return(scratch);
+        }
     }
 
     /// <summary>

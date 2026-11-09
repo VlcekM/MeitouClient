@@ -53,7 +53,8 @@ public static partial class NestFurniture
         return layout;
     }
 
-    static void Buildings(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, string idPrefix, List<NestPiece> pieces)
+    static void Buildings(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ref RandomStream rolls, string idPrefix,
+        List<NestPiece> pieces)
     {
         if (nest.NumCentrepoints <= 0 || nest.DebrisBuilding.Count == 0) return;
 
@@ -89,7 +90,8 @@ public static partial class NestFurniture
         float maxSlope = record.GetFloat("max slope");
         for (int i = 0; i < count; i++)
         {
-            var p = Spaced(new Vector2(centre.X, centre.Z) + Direction(ref rolls) * Between(ref rolls, entry.V1, entry.V2), batch, PieceSpacing, PiecePush);
+            var p = Spaced(new Vector2(centre.X, centre.Z) + Direction(ref rolls) * Between(ref rolls, entry.V1, entry.V2), batch, PieceSpacing,
+                PiecePush);
             float yaw = rolls.NextFloat() * MathF.Tau;
             if (!walk.TryStand(p.X, p.Y, centre.Y, out float y) || MathF.Abs(y - centre.Y) > NavReach) continue;
 

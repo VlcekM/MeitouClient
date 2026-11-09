@@ -630,7 +630,8 @@ static partial class TerrainShaders
 
         """;
 
-    public static readonly string Fragment = "#version 330 core\n#extension GL_ARB_derivative_control : require\n" + VariantDefaults + HeightFunctions + ReliefDepth + AtmosphereShaders.Functions + """
+    public static readonly string Fragment = "#version 330 core\n#extension GL_ARB_derivative_control : require\n" + VariantDefaults + HeightFunctions
+        + ReliefDepth + AtmosphereShaders.Functions + """
 
         in vec3 vWorld;
         in vec3 vNormal;
@@ -1421,7 +1422,8 @@ static partial class TerrainShaders
         if (at < 0)
             throw new InvalidOperationException("TerrainShaders.Fragment no longer starts with the wireframe line.");
         return !fade ? f : f.Insert(at,
-            "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
+            "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) " +
+            ">= vFade) discard;\n            ");
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----
@@ -1630,8 +1632,10 @@ static partial class TerrainShaders
             throw new InvalidOperationException("TerrainShaders.Native: the native prelude no longer ends with the gl_VertexID define.");
         text = text.Insert(at + preludeEnd.Length, ConstantsBlock);
         if (text.Contains(DerivativeControl, StringComparison.Ordinal))
+        {
             text = text.Replace(DerivativeControl, "", StringComparison.Ordinal).Replace("#version 450\n", "#version 450\n" + DerivativeControl,
                     StringComparison.Ordinal);
+        }
         return text;
     }
 
@@ -1676,7 +1680,11 @@ static partial class TerrainShaders
         static string Patch(string text, string from, string to)
         {
             int at = text.IndexOf(from, StringComparison.Ordinal);
-            if (at < 0) throw new InvalidOperationException($"TerrainShaders.RockBakeFragmentNative: '{from}' not found in the terrain fragment shader; update the patch.");
+            if (at < 0)
+            {
+                throw new InvalidOperationException($"TerrainShaders.RockBakeFragmentNative: '{from}' not found in the terrain fragment shader; " +
+                    "update the patch.");
+            }
             return text.Remove(at, from.Length).Insert(at, to);
         }
         string f = MeshFragment;
@@ -1709,8 +1717,11 @@ static partial class TerrainShaders
     public static string PatchVertexTessNative() => Native(PatchVertexTess);
     public static string PatchControlNative() => Native(PatchControl);
     public static string PatchEvaluationNative() => Native(PatchEvaluation);
-    public static string FragmentNative(bool interiorCut = false, bool march = true, bool? normalMaps = null, int? reliefQuality = null) =>
-        Gi.GiResolveShaders.WithAlbedo(Variant(Native(Baked(interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march))), normalMaps, reliefQuality));
+    public static string FragmentNative(bool interiorCut = false, bool march = true, bool? normalMaps = null, int? reliefQuality = null)
+    {
+        string marched = interiorCut ? InteriorMaskRenderer.WithCut(Marched(Fragment, march)) : Marched(Fragment, march);
+        return Gi.GiResolveShaders.WithAlbedo(Variant(Native(Baked(marched)), normalMaps, reliefQuality));
+    }
 
     static string Baked(string fragment) => fragment.Insert(fragment.IndexOf('\n') + 1, "#define TERRAIN_BAKED\n");
 
@@ -1784,7 +1795,11 @@ static partial class TerrainShaders
         static string Patch(string text, string from, string to)
         {
             int at = text.IndexOf(from, StringComparison.Ordinal);
-            if (at < 0) throw new InvalidOperationException($"TerrainShaders.MaterialBakeFragmentNative: '{from}' not found in the terrain fragment shader; update the patch.");
+            if (at < 0)
+            {
+                throw new InvalidOperationException($"TerrainShaders.MaterialBakeFragmentNative: '{from}' not found in the terrain fragment shader; " +
+                    "update the patch.");
+            }
             return text.Remove(at, from.Length).Insert(at, to);
         }
         string f = Marched(Fragment, false);

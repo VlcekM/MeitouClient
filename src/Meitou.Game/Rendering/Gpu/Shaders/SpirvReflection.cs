@@ -215,7 +215,10 @@ public static class SpirvReflection
 
         inputs.Sort((a, b) => a.Location.CompareTo(b.Location));
         outputs.Sort((a, b) => a.Location.CompareTo(b.Location));
-        return new ShaderReflection { Blocks = blocks, Samplers = samplers, StorageImages = storageImages, Inputs = inputs, Outputs = outputs, Inactive = inactive };
+        return new ShaderReflection
+        {
+            Blocks = blocks, Samplers = samplers, StorageImages = storageImages, Inputs = inputs, Outputs = outputs, Inactive = inactive,
+        };
     }
 
     /// <summary>
@@ -239,7 +242,9 @@ public static class SpirvReflection
         }
 
         bool bufferBlock = m.Decorations.TryGetValue(structId, out var sd) && sd.ContainsKey(DecBufferBlock);
-        var kind = storage == ScPushConstant ? BlockKind.PushConstant : storage == ScStorageBuffer || bufferBlock ? BlockKind.StorageBuffer : BlockKind.Uniform;
+        var kind = storage == ScPushConstant ? BlockKind.PushConstant
+            : storage == ScStorageBuffer || bufferBlock ? BlockKind.StorageBuffer
+            : BlockKind.Uniform;
         if (kind == BlockKind.Uniform) size = (size + 15) & ~15;
 
         blocks.Add(new UniformBlockInfo
@@ -277,7 +282,8 @@ public static class SpirvReflection
         // a storage image
         if (m.Types.GetValueOrDefault(t) is Image { Usage: 2 } && len == 0)
         {
-            if (m.Used.Contains(id)) storageImages.Add(new StorageImageInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding)));
+            if (m.Used.Contains(id))
+                storageImages.Add(new StorageImageInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding)));
             else inactive.Add(name);
             return;
         }
@@ -290,9 +296,16 @@ public static class SpirvReflection
             return;
         }
 
-        var dim = img.Dim switch { 0 => SamplerDimension.Dim1D, 1 => SamplerDimension.Dim2D, 2 => SamplerDimension.Dim3D, 3 => SamplerDimension.Cube, _ => SamplerDimension.Other };
-        samplers.Add(new SamplerInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding), dim, img.Arrayed, img.Ms,
-            img.Depth == 1, ScalarOf(m, img.Sampled), len));
+        var dim = img.Dim switch
+        {
+            0 => SamplerDimension.Dim1D,
+            1 => SamplerDimension.Dim2D,
+            2 => SamplerDimension.Dim3D,
+            3 => SamplerDimension.Cube,
+            _ => SamplerDimension.Other,
+        };
+        samplers.Add(new SamplerInfo(name, (int)dec.GetValueOrDefault(DecDescriptorSet), (int)dec.GetValueOrDefault(DecBinding), dim, img.Arrayed,
+            img.Ms, img.Depth == 1, ScalarOf(m, img.Sampled), len));
     }
 
     /// <summary>

@@ -18,21 +18,18 @@ public sealed class FrameProfiler : IDisposable
     public enum Mode { Off, Gpu, Cpu }
 
     public const int History = 300;
-    const int Slots = 4, MaxStamps = 128, MaxPre = 96, Stages = 28;
+    internal const int Slots = 4, MaxStamps = 128, MaxPre = 96, Stages = 28;
 
     // Series: the stages by StageClock index, then the GPU time outside the stamped stages (uploads, overlay), then the total.
-    const int Other = Stages, Total = Stages + 1, Series = Stages + 2;
-
-    // The legend's open groups and upd-chars's parts; each row drawn last (its top and what a click on it opens: a group, PartsRow or nothing, -1),
-    // the legend's box, a closed group's summed series on the side shown, and the series plotted.
-    const int PartsRow = -2, SimRow = -3;
+    internal const int Other = Stages, Total = Stages + 1, Series = Stages + 2;
 
     // The panel's margin round it and its padding.
-    const float Margin = 16, Pad = 12;
+    const float Margin = 16;
+    internal const float Pad = 12;
 
     // The legend's top rows: a stage of its own, or a group of stages (shown as their sum) that a click on its row opens. The GPU's submit span
     // is the window copy/tail; driver-wait is CPU only.
-    static readonly (string Name, int[] Stages)[] Groups =
+    internal static readonly (string Name, int[] Stages)[] Groups =
     [
         ("sim", [StageClock.Sim]),
         ("update", [StageClock.Host, StageClock.Blood, StageClock.Birds, 0, 1, 2, StageClock.UpdChars, 3]),
@@ -44,9 +41,9 @@ public sealed class FrameProfiler : IDisposable
         ("other", [Other]), ("total", [Total]),
     ];
 
-    static readonly int[] Order = Groups.SelectMany(g => g.Stages).ToArray();
+    internal static readonly int[] Order = Groups.SelectMany(g => g.Stages).ToArray();
 
-    static readonly Vector4[] Colours =
+    internal static readonly Vector4[] Colours =
     [
         new(0.55f, 0.75f, 1.00f, 1), new(0.35f, 0.55f, 0.95f, 1), new(0.60f, 0.45f, 0.95f, 1), new(0.95f, 0.85f, 0.35f, 1),
         new(0.25f, 0.80f, 0.85f, 1), new(0.95f, 0.55f, 0.85f, 1), new(0.65f, 0.65f, 0.65f, 1), new(0.95f, 0.55f, 0.25f, 1),
@@ -62,14 +59,7 @@ public sealed class FrameProfiler : IDisposable
     ];
 
     static readonly Vector4 FrameColour = new(1.00f, 0.55f, 0.10f, 1);
-    static readonly Vector4 DimColour = new(0.7f, 0.7f, 0.68f, 1);
-
-    static readonly Vector4[] PieColours =
-    [
-        new(0.35f, 0.60f, 1.00f, 1), new(0.95f, 0.55f, 0.25f, 1), new(0.40f, 0.85f, 0.40f, 1), new(0.95f, 0.35f, 0.35f, 1),
-        new(0.65f, 0.45f, 0.95f, 1), new(0.95f, 0.85f, 0.35f, 1), new(0.25f, 0.80f, 0.85f, 1), new(0.95f, 0.55f, 0.85f, 1),
-        new(0.55f, 0.55f, 0.55f, 1), new(0.35f, 0.35f, 0.40f, 1), new(0.20f, 0.20f, 0.22f, 1),
-    ];
+    internal static readonly Vector4 DimColour = new(0.7f, 0.7f, 0.68f, 1);
 
     #endregion
 
@@ -121,6 +111,8 @@ public sealed class FrameProfiler : IDisposable
     {
         this._gpuFrameMs = gpuFrameMs;
         _native = gpu;
+        _vramPanel = new VramPanel(gpu);
+        _spikes = new SpikeRun(gpu);
         GpuContext.ProfilePreFrame = true;
         _recordStamp = cmd => cmd.Timestamp(_native.Frame.Timestamps, _pendingStamp);
     }
@@ -189,12 +181,13 @@ public sealed class FrameProfiler : IDisposable
         _submitted[_slot] = StageClock.SubmissionStarted;
         _pending[_slot] = _stampCount[_slot] > 1;
         StampsLastFrame = _stampCount[_slot] + _preCount[_slot];
+
         // Complete when the context has ended the frame already (else the total falls back to gpuFrameMs).
         _slotWhole[_slot] = _native.CurrentFrameStamps;
         _slotPreEnd[_slot] = _native.LastFrameStamps.PreEnd;
         double sum = RecordCpuStages();
         _frameTime[_cpuHead] = (float)_frameMs;
-        if (SpikeLog.Enabled) RecordSpikeCpu(sum);
+        if (SpikeLog.Enabled) _spikes.RecordCpu(_slot, sum, _cpu[Total], _cpuCount);
         _cpuHead = (_cpuHead + 1) % History;
         _cpuCount = Math.Min(_cpuCount + 1, History);
     }
@@ -221,23 +214,6 @@ public sealed class FrameProfiler : IDisposable
         return sum;
     }
 
-    /// <summary>
-    /// --log-spikes: keeps the frame's number, its render-thread stages and its notes until its GPU times arrive.
-    /// </summary>
-    void RecordSpikeCpu(double sum)
-    {
-        _slotFrame[_slot] = ++_frameCounter;
-        _slotStamps[_slot] = _native.LastFrameStamps;
-        _slotCpuTotal[_slot] = sum;
-        _slotCpuMedian[_slot] = CpuMedian();
-        string stages = StageList(StageClock.Ms, 0.5);
-        string ui = PartList("ui", StageClock.UiPartNames, StageClock.UiPartMs);
-        string updChars = PartList("upd-chars", StageClock.PartNames, StageClock.PartMs);
-        _slotCpu[_slot] = stages + ui + updChars;
-        long uploaded = _native.Frame.Stats.UploadBytes;
-        _slotNotes[_slot] = (uploaded > 0 ? $"uploads total {uploaded / 1048576.0:0.00} MB; " : "") + SpikeLog.TakeFrame();
-    }
-
     #endregion
 
     #region GPU stamps
@@ -259,8 +235,14 @@ public sealed class FrameProfiler : IDisposable
 
     // Series of the frame being read (Collect), and the stamp slots of each frame in flight.
     readonly double[] _gpuFrame = new double[Series];
+
     // Each profiled frame's own first and last stamps (its GPU total).
     readonly (QuerySlot Begin, QuerySlot End)[] _slotWhole = new (QuerySlot, QuerySlot)[Slots];
+
+    /// <summary>
+    /// Per slot the frame's <see cref="Tag"/>, handed back with its GPU times (<see cref="OnGpuFrame"/>).
+    /// </summary>
+    readonly long[] _slotTag = new long[Slots];
 
     /// <summary>
     /// A stamp in the pre-frame command buffer <paramref name="cmd"/>, called at the edges of the work that buffer holds: the time since the buffer's
@@ -342,8 +324,8 @@ public sealed class FrameProfiler : IDisposable
         double own = arena.TryRead(whole.Begin, out ulong wb) && arena.TryRead(whole.End, out ulong we) && we >= wb ? (we - wb) / 1e6 : 0;
         double total = own > 0 ? Math.Max(own, sum) : _gpuFrameMs?.Invoke() is > 0 and var t ? Math.Max(t, sum) : sum;
         PublishGpuFrame(s, total, sum);
-        if (SpikeLog.Enabled && _slotFrame[s] > SpikeLog.SkipFrames) RecordRunGpu(total, sum);
-        if (SpikeLog.Enabled && _slotNotes[s] is { } notes) ReportSpike(s, total, sum, notes);
+        if (SpikeLog.Enabled && _spikes.FrameOf(s) > SpikeLog.SkipFrames) _spikes.RecordRunGpu(_gpuFrame, total, sum);
+        if (SpikeLog.Enabled && _spikes.NotesOf(s) is { } notes) _spikes.ReportSpike(s, total, sum, notes, _gpuFrame, _gpu[Total], _gpuCount);
         _gpuHead = (_gpuHead + 1) % History;
         _gpuCount = Math.Min(_gpuCount + 1, History);
         _pending[s] = false;
@@ -398,11 +380,15 @@ public sealed class FrameProfiler : IDisposable
 
     // The render thread's ms per part of upd-chars (StageClock.PartNames), listed under it in the legend, not plotted.
     readonly float[][] _parts = StageClock.PartNames.Select(_ => new float[History]).ToArray();
-    readonly bool[] _groupOpen = new bool[Groups.Length];
-    bool _partsOpen, _simOpen;
-    readonly List<(float Top, int Opens)> _rows = [];
-    (float X0, float Y0, float X1, float Y1, float LineHeight) _legendBox;
-    readonly float[][] _groupSeries = Groups.Select(_ => new float[History]).ToArray();
+
+    /// <summary>
+    /// The legend at the right, its open rows and where it was drawn (<see cref="ProfilerLegend"/>).
+    /// </summary>
+    readonly ProfilerLegend _legend = new();
+
+    /// <summary>
+    /// The series plotted: the legend's rows', then the whole frame's.
+    /// </summary>
     readonly List<(float[] Series, Vector4 Colour, float Thickness, int Head, int Count)> _plotted = [];
     int _cpuHead, _cpuCount, _gpuHead, _gpuCount;
 
@@ -424,29 +410,16 @@ public sealed class FrameProfiler : IDisposable
     /// <summary>
     /// Reads every GPU timing that is ready now (after the last frame of a run has been waited for).
     /// </summary>
-    public void Flush() { for (int s = 0; s < Slots; s++) Collect(s); }
+    public void Flush()
+    {
+        for (int s = 0; s < Slots; s++) Collect(s);
+    }
 
     /// <summary>
     /// A left click at <paramref name="at"/> (framebuffer pixels): on a legend row marked + or - it opens or closes that row. True when it was on the
     /// legend (the caller drops it).
     /// </summary>
-    public bool Click(Vector2 at)
-    {
-        var (bx0, by0, bx1, by1, lh) = _legendBox;
-        if (Showing == Mode.Off || at.X < bx0 || at.X > bx1 || at.Y < by0 || at.Y > by1) return false;
-
-        foreach (var (top, opens) in _rows)
-        {
-            if (at.Y < top || at.Y >= top + lh) continue;
-
-            if (opens >= 0) _groupOpen[opens] = !_groupOpen[opens];
-            else if (opens == PartsRow) _partsOpen = !_partsOpen;
-            else if (opens == SimRow) _simOpen = !_simOpen;
-            break;
-        }
-
-        return true;
-    }
+    public bool Click(Vector2 at) => Showing != Mode.Off && _legend.Click(at);
 
     static float[][] NewHistory()
     {
@@ -455,16 +428,16 @@ public sealed class FrameProfiler : IDisposable
         return h;
     }
 
-    static bool OnCpu(int series) => series != Other && !StageClock.GpuOnly(series);
+    internal static bool OnCpu(int series) => series != Other && !StageClock.GpuOnly(series);
 
-    static bool OnGpu(int series) => !StageClock.CpuOnly(series);
+    internal static bool OnGpu(int series) => !StageClock.CpuOnly(series);
 
-    static string Label(int series) => series switch { Other => "other", Total => "total", _ => StageClock.Names[series] };
+    internal static string Label(int series) => series switch { Other => "other", Total => "total", _ => StageClock.Names[series] };
 
     /// <summary>
     /// Mean of the last <paramref name="frames"/> entries of a series.
     /// </summary>
-    static double Mean(float[] series, int head, int count, int frames)
+    internal static double Mean(float[] series, int head, int count, int frames)
     {
         frames = Math.Min(frames, count);
         if (frames == 0) return 0;
@@ -509,11 +482,11 @@ public sealed class FrameProfiler : IDisposable
 
         bool showGpu = Showing == Mode.Gpu;
         const int meanFrames = 30;
-        if (_simOpen) SimRows(meanFrames);
+        if (_legend.SimOpen) SimRows(meanFrames);
 
         var panel = DrawPanel(overlay, width, height, showGpu);
         DrawHeader(overlay, showGpu, panel.X0, panel.Y0);
-        DrawLegend(overlay, showGpu, panel.X1, panel.Y0, meanFrames);
+        _legend.Draw(overlay, showGpu, panel.X1, panel.Y0, meanFrames, Timings(), _plotted);
         DrawPlot(overlay, width, height, panel.X0, panel.Y0, panel.Y1);
     }
 
@@ -522,20 +495,7 @@ public sealed class FrameProfiler : IDisposable
     /// </summary>
     (float X0, float Y0, float X1, float Y1) DrawPanel(DebugOverlay overlay, int width, int height, bool showGpu)
     {
-        int rowCount = 0;
-        for (int gi = 0; gi < Groups.Length; gi++)
-        {
-            var stages = Groups[gi].Stages;
-            if (stages.Length > 1) rowCount++;
-            if (stages.Length == 1 || _groupOpen[gi])
-                foreach (int s in stages)
-                {
-                    rowCount += 1;
-                    if (s == StageClock.UpdChars && _partsOpen) rowCount += _parts.Length;
-                    if (s == StageClock.Sim && _simOpen) rowCount += _simRows.Count + 2;
-                }
-        }
-
+        int rowCount = _legend.RowCount(_parts.Length, _simRows.Count);
         float lh = overlay.LineHeight;
         float panelH = (rowCount + 2.5f) * lh + 2 * Pad;
         float x0 = Margin, x1 = width - Margin, y1 = height - Margin, y0 = Math.Max(y1 - panelH, Margin);
@@ -549,12 +509,13 @@ public sealed class FrameProfiler : IDisposable
     void DrawHeader(DebugOverlay overlay, bool showGpu, float x0, float y0)
     {
         float cw = overlay.CharWidth;
-        RefreshVram();
+        _vramPanel.Refresh();
+        var (vram, ram) = (_vramPanel.Vram, _vramPanel.Ram);
 
         // The process's RAM: its working set (all it holds in physical memory) and the managed heap within it.
         string header = string.Create(CultureInfo.InvariantCulture,
-            $"{(showGpu ? "gpu" : "cpu")}   vram {_vram.Used / 1073741824.0:0.00} of {_vram.Budget / 1073741824.0:0.0} GB   " +
-            $"ram {_ram.WorkingSet / 1073741824.0:0.00} GB (managed {_ram.Managed / 1073741824.0:0.00})   ");
+            $"{(showGpu ? "gpu" : "cpu")}   vram {vram.Used / 1073741824.0:0.00} of {vram.Budget / 1073741824.0:0.0} GB   " +
+            $"ram {ram.WorkingSet / 1073741824.0:0.00} GB (managed {ram.Managed / 1073741824.0:0.00})   ");
         overlay.Text(header, x0 + Pad, y0 + Pad, DebugOverlay.TextColour);
 
         // The whole frame (FrameColour line): mean of the last frames, frames a second and the longest kept.
@@ -565,124 +526,23 @@ public sealed class FrameProfiler : IDisposable
     }
 
     /// <summary>
-    /// The legend at the right: swatch, row, mean of the last frames on the CPU and the GPU. A row marked + opens (a click), - closes; a closed group
-    /// shows its stages' sum and is plotted as one line, an open one plots each stage.
+    /// What the legend reads this frame: both histories, upd-chars's parts and the sim rows.
     /// </summary>
-    void DrawLegend(DebugOverlay overlay, bool showGpu, float x1, float y0, int meanFrames)
+    LegendTimings Timings() => new()
     {
-        const float swatch = 10;
-        float lh = overlay.LineHeight, cw = overlay.CharWidth;
-        var hist = showGpu ? _gpu : _cpu;
-        int head = showGpu ? _gpuHead : _cpuHead, count = showGpu ? _gpuCount : _cpuCount;
-        float legendW = swatch + 6 + (16 + 10 + 10) * cw;
-        float lx = x1 - Pad - legendW, ly = y0 + Pad + 1.5f * lh;
-        var dim = DimColour;
-        overlay.Text($"{"",-16}{"cpu",10}{"gpu",10}", lx + swatch + 6, ly, dim);
-        _rows.Clear();
-        _plotted.Clear();
-        string Ms(bool shown, double ms) => shown ? ms.ToString("0.00", CultureInfo.InvariantCulture) : "-";
-        float NextRow(int opens)
-        {
-            float top = ly + (_rows.Count + 1) * lh;
-            _rows.Add((top, opens));
-            return top;
-        }
-
-        bool Plots(int s) => showGpu ? OnGpu(s) : OnCpu(s);
-        void StageRow(int s, string indent)
-        {
-            bool expands = s == StageClock.UpdChars || s == StageClock.Sim && _simNames.Length > 0;
-            bool open = s == StageClock.Sim ? _simOpen : _partsOpen;
-            float top = NextRow(!expands ? -1 : s == StageClock.Sim ? SimRow : PartsRow);
-            overlay.Rect(lx, top + 4, lx + swatch, top + 4 + swatch, Colours[s]);
-            if (Plots(s)) _plotted.Add((hist[s], Colours[s], s == Total ? 2f : 1.5f, head, count));
-            string label = indent + (expands ? open ? "- " : "+ " : "  ") + Label(s);
-            string cpu = Ms(OnCpu(s), Mean(_cpu[s], _cpuHead, _cpuCount, meanFrames));
-            string gpu = Ms(_gpuCount > 0 && OnGpu(s), Mean(_gpu[s], _gpuHead, _gpuCount, meanFrames));
-            overlay.Text($"{label,-16}{cpu,10}{gpu,10}", lx + swatch + 6, top, DebugOverlay.TextColour);
-            if (!expands || !open) return;
-
-            if (s == StageClock.Sim)
-            {
-                // The world ticks a frame ran and the mean tick, then the phases, the time outside the ticks and the costliest systems.
-                double ticks = Mean(_simTicks, _cpuHead, _cpuCount, meanFrames), inTicks = 0;
-                for (int p = 0; p < _simPhases - 1; p++) inTicks += _simRows[p].Ms;
-                string ticksText = string.Create(CultureInfo.InvariantCulture,
-                    $"{indent}    {ticks:0.0} ticks, {(ticks > 0 ? inTicks / ticks : 0):0.00} ms each");
-                overlay.Text(ticksText, lx + swatch + 6, NextRow(-1), dim);
-                overlay.Text($"{indent}    {_simPaths} paths waiting", lx + swatch + 6, NextRow(-1), dim);
-                foreach (var (name, ms) in _simRows)
-                {
-                    string row = indent + "    " + name;
-                    overlay.Text($"{(row.Length > 16 ? row[..16] : row),-16}{Ms(true, ms),10}{"",10}", lx + swatch + 6, NextRow(-1), dim);
-                }
-
-                return;
-            }
-
-            // Its parts, render thread only (the GPU work they record is in the passes that run it); not plotted.
-            for (int p = 0; p < _parts.Length; p++)
-            {
-                string partName = indent + "    " + StageClock.PartNames[p];
-                string partMs = Ms(true, Mean(_parts[p], _cpuHead, _cpuCount, meanFrames));
-                overlay.Text($"{partName,-16}{partMs,10}{"",10}", lx + swatch + 6, NextRow(-1), dim);
-            }
-        }
-
-        for (int gi = 0; gi < Groups.Length; gi++)
-        {
-            var (name, stages) = Groups[gi];
-            if (stages.Length == 1)
-            {
-                StageRow(stages[0], "");
-                continue;
-            }
-
-            double c = 0, g = 0;
-            bool anyCpu = false, anyGpu = false;
-            foreach (int s in stages)
-            {
-                if (OnCpu(s))
-                {
-                    c += Mean(_cpu[s], _cpuHead, _cpuCount, meanFrames);
-                    anyCpu = true;
-                }
-
-                if (OnGpu(s))
-                {
-                    g += Mean(_gpu[s], _gpuHead, _gpuCount, meanFrames);
-                    anyGpu = true;
-                }
-            }
-
-            float top = NextRow(gi);
-            bool open = _groupOpen[gi], shown = showGpu ? anyGpu : anyCpu;
-            var sum = _groupSeries[gi];
-            Array.Clear(sum);
-            foreach (int s in stages)
-            {
-                if (Plots(s))
-                {
-                    for (int i = 0; i < History; i++) sum[i] += hist[s][i];
-                }
-            }
-
-            if (!open)
-            {
-                overlay.Rect(lx, top + 4, lx + swatch, top + 4 + swatch, Colours[stages[0]]);
-                if (shown) _plotted.Add((sum, Colours[stages[0]], 1.5f, head, count));
-            }
-
-            overlay.Text($"{(open ? "- " : "+ ") + name,-16}{Ms(anyCpu, c),10}{Ms(_gpuCount > 0 && anyGpu, g),10}",
-                lx + swatch + 6, top, DebugOverlay.TextColour);
-            if (open)
-            {
-                foreach (int s in stages) StageRow(s, "  ");
-            }
-        }
-
-        _legendBox = (lx, ly, x1 - Pad, ly + (_rows.Count + 1) * lh, lh);
-    }
+        Cpu = _cpu,
+        CpuHead = _cpuHead,
+        CpuCount = _cpuCount,
+        Gpu = _gpu,
+        GpuHead = _gpuHead,
+        GpuCount = _gpuCount,
+        Parts = _parts,
+        SimTicks = _simTicks,
+        SimRows = _simRows,
+        SimPhases = _simPhases,
+        SimPaths = _simPaths,
+        SimExpands = _simNames.Length > 0,
+    };
 
     /// <summary>
     /// The plot: y from 0 to a round number above the largest value shown, with labelled grid lines; ends the overlay's batch.
@@ -690,7 +550,7 @@ public sealed class FrameProfiler : IDisposable
     void DrawPlot(DebugOverlay overlay, int width, int height, float x0, float y0, float y1)
     {
         float cw = overlay.CharWidth, lh = overlay.LineHeight;
-        float lx = _legendBox.X0;
+        float lx = _legend.Left;
 
         // The whole frame, on both charts (the render thread's history: a GPU chart's newest frames are a few behind it).
         _plotted.Add((_frameTime, FrameColour, 2f, _cpuHead, _cpuCount));
@@ -802,249 +662,34 @@ public sealed class FrameProfiler : IDisposable
 
     #region VRAM
 
-    List<(string Name, ulong Bytes)> _vramSlices = [];
-    (ulong Used, ulong Budget) _vram;
-    int _vramAge;
-    (long WorkingSet, long Managed) _ram;
+    /// <summary>
+    /// The VRAM pie, the header's figures and the VRAM dump (<see cref="VramPanel"/>).
+    /// </summary>
+    readonly VramPanel _vramPanel;
 
     /// <summary>
     /// The VRAM pie at the top right is shown (Shift+F12 in the game), with the profiler chart or without it.
     /// </summary>
-    public bool ShowVram { get; set; }
+    public bool ShowVram { get => _vramPanel.Show; set => _vramPanel.Show = value; }
 
     /// <summary>
-    /// Writes what is in video memory now to <paramref name="path"/> (Ctrl+Shift+F12 in the game): the driver's usage and budget, the room in our
-    /// blocks, the owners, then every resource and block (<see cref="GpuAllocator.WriteReport"/>). What the driver counts beyond our blocks
-    /// (swapchain, DLSS, its own) is only a total here: a RenderDoc or Nsight capture lists it.
+    /// Writes what is in video memory now to <paramref name="path"/> (Ctrl+Shift+F12 in the game; <see cref="VramPanel.Dump"/>).
     /// </summary>
-    public void DumpVram(string path, Action<TextWriter>? more = null)
-    {
-        var alloc = _native.Device.Allocator;
-        var (used, budget) = _native.Device.VideoMemory();
-        var (empty, spare, scattered, partBlocks) = alloc.Slack();
-        ulong blocks = alloc.TotalAllocatedBytes;
-        using var w = new StreamWriter(path);
-        w.WriteLine($"VRAM dump {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        w.WriteLine($"driver: used {used / 1048576.0:0.0} MB of budget {budget / 1048576.0:0.0} MB " +
-            $"(memory budget extension: {_native.Device.HasMemoryBudget})");
-        var heaps = _native.Device.Heaps();
-        for (int i = 0; i < heaps.Count; i++)
-            w.WriteLine($"  heap {i}: {heaps[i].Size / 1048576.0:0} MB, ours {heaps[i].Usage / 1048576.0:0.0} MB " +
-                $"of budget {heaps[i].Budget / 1048576.0:0.0} MB ({heaps[i].Flags})");
-        ulong local = (ulong)alloc.Breakdown().Sum(o => (double)o.DeviceLocal) + empty + spare + scattered;
-        string ours = $"ours: {blocks / 1048576.0:0.0} MB in {alloc.BlockCount} blocks ({local / 1048576.0:0.0} MB device-local), " +
-            $"{alloc.TotalUsedBytes / 1048576.0:0.0} MB used by {alloc.AllocationCount} allocations; ";
-        w.WriteLine(ours + $"driver and others {(used > local ? used - local : 0) / 1048576.0:0.0} MB");
-        w.WriteLine($"room in device-local blocks: empty {empty / 1048576.0:0.0} MB, spare {spare / 1048576.0:0.0} MB, " +
-            $"scattered {scattered / 1048576.0:0.0} MB in {partBlocks} blocks");
-        w.WriteLine();
-        w.WriteLine("owners (MB, device-local MB, count):");
-        foreach (var o in alloc.Breakdown()) w.WriteLine($"{o.Bytes / 1048576.0,10:0.0}  {o.DeviceLocal / 1048576.0,10:0.0}  {o.Count,6}  {o.Name}");
-        w.WriteLine();
-        more?.Invoke(w);
-        alloc.WriteReport(w);
-    }
+    public void DumpVram(string path, Action<TextWriter>? more = null) => _vramPanel.Dump(path, more);
 
     /// <summary>
     /// The VRAM pie at the top right, while <see cref="ShowVram"/>.
     /// </summary>
-    public void DrawVram(DebugOverlay overlay, int width, int height)
-    {
-        if (!ShowVram || width <= 0 || height <= 0) return;
-
-        RefreshVram();
-        DrawVramPie(overlay, width);
-        overlay.Flush(width, height);
-    }
-
-    // VRAM (a driver call) and RAM are read every 30 frames, for the chart's header and the pie; only while either is shown.
-    void RefreshVram()
-    {
-        if (_vramAge-- <= 0)
-        {
-            _vram = _native.Device.VideoMemory();
-            _vramSlices = VramSlices();
-            _ram = (Environment.WorkingSet, GC.GetTotalMemory(false));
-            _vramAge = 30;
-        }
-    }
-
-    /// <summary>
-    /// The VRAM by owner: the eight largest device-local owners of <see cref="GpuAllocator.Breakdown"/>, the rest of ours, the unused room in our
-    /// blocks, and what the driver counts beyond our blocks (its own allocations, swapchain, other APIs' resources such as DLSS's).
-    /// </summary>
-    List<(string Name, ulong Bytes)> VramSlices()
-    {
-        var alloc = _native.Device.Allocator;
-        var owners = alloc.Breakdown().Where(o => o.DeviceLocal > 0).OrderByDescending(o => o.DeviceLocal).ToList();
-        var slices = owners.Take(8).Select(o => (o.Name, o.DeviceLocal)).ToList();
-        ulong ours = (ulong)owners.Sum(o => (double)o.DeviceLocal), shown = (ulong)slices.Sum(s => (double)s.DeviceLocal);
-        if (ours > shown) slices.Add(("other of ours", ours - shown));
-
-        // Device-local blocks only: the host-visible ones (staging, constants) are system memory, not in the driver's VRAM figure.
-        var (empty, spare, scattered, _) = alloc.Slack();
-        ulong free = empty + spare + scattered, blocks = ours + free;
-        if (free > 0) slices.Add(("free in our blocks", free));
-        if (_vram.Used > blocks) slices.Add(("driver and others", _vram.Used - blocks));
-        return slices;
-    }
-
-    void DrawVramPie(DebugOverlay overlay, int width)
-    {
-        if (_vramSlices.Count == 0) return;
-
-        double total = _vramSlices.Sum(s => (double)s.Bytes);
-        if (total <= 0) return;
-
-        const float margin = 16, pad = 12, radius = 70;
-        float lh = overlay.LineHeight, cw = overlay.CharWidth;
-        float legendW = 2 * cw + 30 * cw;
-        float panelW = pad * 3 + 2 * radius + legendW, panelH = Math.Max(2 * radius, (_vramSlices.Count + 1.5f) * lh) + 2 * pad;
-        float x1 = width - margin, x0 = x1 - panelW, y0 = margin;
-        overlay.Rect(x0, y0, x1, y0 + panelH, DebugOverlay.PanelColour);
-        var centre = new Vector2(x0 + pad + radius, y0 + pad + Math.Max(radius, (panelH - 2 * pad) / 2));
-        double angle = -Math.PI / 2;
-        float lx = x0 + pad * 2 + 2 * radius, ly = y0 + pad;
-        overlay.Text($"VRAM {_vram.Used / 1073741824.0:0.00} of {_vram.Budget / 1073741824.0:0.0} GB", lx, ly, DebugOverlay.TextColour);
-        for (int i = 0; i < _vramSlices.Count; i++)
-        {
-            var (name, bytes) = _vramSlices[i];
-            var colour = PieColours[Math.Min(i, PieColours.Length - 1)];
-            double sweep = bytes / total * Math.Tau;
-            int steps = Math.Max(1, (int)Math.Ceiling(sweep / (Math.Tau / 96)));
-            for (int k = 0; k < steps; k++)
-            {
-                double a0 = angle + sweep * k / steps, a1 = angle + sweep * (k + 1) / steps;
-                overlay.Triangle(centre, centre + radius * new Vector2((float)Math.Cos(a0), (float)Math.Sin(a0)),
-                    centre + radius * new Vector2((float)Math.Cos(a1), (float)Math.Sin(a1)), colour);
-            }
-
-            angle += sweep;
-            float top = ly + (i + 1.5f) * lh;
-            overlay.Rect(lx, top + 4, lx + 10, top + 14, colour);
-            string label = name.Length > 20 ? name[..20] : name;
-            overlay.Text($"{label,-20}{bytes / 1048576.0,7:0} MB", lx + 2 * cw, top, DebugOverlay.TextColour);
-        }
-    }
+    public void DrawVram(DebugOverlay overlay, int width, int height) => _vramPanel.Draw(overlay, width, height);
 
     #endregion
 
     #region Spike log
 
-    // --log-spikes (SpikeLog): per slot the frame number, its notes and its render-thread stages, kept until the GPU times arrive.
-    readonly long[] _slotFrame = new long[Slots];
-    readonly string?[] _slotNotes = new string?[Slots], _slotCpu = new string?[Slots];
-    readonly double[] _slotCpuTotal = new double[Slots], _slotCpuMedian = new double[Slots];
-    readonly (QuerySlot Begin, QuerySlot PreEnd)[] _slotStamps = new (QuerySlot, QuerySlot)[Slots];
-    long _frameCounter;
-    readonly long[] _slotTag = new long[Slots];
-    readonly List<double> _medianScratch = new(History);
-    readonly List<float>[] _runGpu = Enumerable.Range(0, Series).Select(_ => new List<float>()).ToArray();
-
     /// <summary>
-    /// The render thread's median frame total over the history (0 before 30 frames), the frame just kept included.
+    /// --log-spikes: the frames' CPU side until their GPU times arrive, the spike reports and the run's summary (<see cref="SpikeRun"/>).
     /// </summary>
-    double CpuMedian()
-    {
-        int have = Math.Min(_cpuCount + 1, History);
-        if (have < 30) return 0;
-
-        _medianScratch.Clear();
-        for (int i = 0; i < have; i++) _medianScratch.Add(_cpu[Total][i]);
-        _medianScratch.Sort();
-        return _medianScratch[have / 2];
-    }
-
-    /// <summary>
-    /// Adds the frame's stage times to the run's samples (after the skipped frames) for the end-of-run summary.
-    /// </summary>
-    void RecordRunGpu(double total, double sum)
-    {
-        for (int k = 0; k < Stages; k++) _runGpu[k].Add((float)_gpuFrame[k]);
-        _runGpu[Stages].Add((float)(total - sum));
-        _runGpu[Stages + 1].Add((float)total);
-        SpikeLog.OnSummary ??= PrintRunSummary;
-    }
-
-    /// <summary>
-    /// Reports a spiked frame with its CPU and GPU stages and its notes.
-    /// </summary>
-    void ReportSpike(int s, double total, double sum, string notes)
-    {
-        _medianScratch.Clear();
-        int have = Math.Min(_gpuCount + 1, History);
-        for (int i = 0; i < have; i++) _medianScratch.Add(_gpu[Total][i]);
-        _medianScratch.Sort();
-        double median = have >= 30 ? _medianScratch[have / 2] : 0;
-        string pre = PreFrameText(s);
-        string gpuStages = StageList(_gpuFrame, 0.3) + (total - sum >= 0.3 ? $", other {total - sum:0.0}" : "");
-        SpikeLog.Report(_slotFrame[s], total, median, pre + gpuStages, _slotCpu[s] ?? "", notes, _slotCpuTotal[s], _slotCpuMedian[s]);
-        _slotNotes[s] = null;
-    }
-
-    /// <summary>
-    /// The pre-frame buffer's time for slot <paramref name="s"/> as its log text ("pre-frame x, "), or empty when it has no stamps.
-    /// </summary>
-    string PreFrameText(int s)
-    {
-        var arena = _native.Frame.Timestamps;
-        double pre = -1;
-        if (arena.TryRead(_slotStamps[s].Begin, out ulong pb) && arena.TryRead(_slotStamps[s].PreEnd, out ulong pe) && pe >= pb)
-            pre = (pe - pb) / 1e6;
-
-        return pre >= 0 ? $"pre-frame {pre:0.0}, " : "";
-    }
-
-    /// <summary>
-    /// --log-spikes: per stage over the run (after the skipped frames), the GPU time's mean without the frames over 2.5 x the median (the shared
-    /// card's outliers), the median, p95 and max.
-    /// </summary>
-    void PrintRunSummary()
-    {
-        var total = _runGpu[Total];
-        if (total.Count < 10) return;
-
-        var sortedTotal = total.OrderBy(v => v).ToArray();
-        float median = sortedTotal[sortedTotal.Length / 2];
-        var keep = Enumerable.Range(0, total.Count).Where(i => total[i] <= 2.5f * median).ToArray();
-        string dropped = string.Create(CultureInfo.InvariantCulture, $"{total.Count - keep.Length} over 2.5 x the median {median:0.00} ms");
-        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"gpu-run   {total.Count} frames, {dropped} left out of the trimmed mean; per stage ms: trimmed mean / p50 / p95 / max"));
-        foreach (int s in Order)
-        {
-            var v = _runGpu[s];
-            if (v.Count == 0) continue;
-
-            var sorted = v.OrderBy(x => x).ToArray();
-            double mean = keep.Length == 0 ? 0 : keep.Average(i => v[i]);
-            string stats = string.Create(CultureInfo.InvariantCulture,
-                $"{mean,6:0.00} {sorted[sorted.Length / 2],6:0.00} {sorted[(int)(sorted.Length * 0.95)],6:0.00} {sorted[^1],7:0.00}");
-            Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"gpu-run     {Label(s),-12} {stats}"));
-        }
-    }
-
-    // A stage's parts of 1 ms or more, for the spike log: "; ui: hud 25.0, composite 3.1".
-    static string PartList(string stage, string[] names, double[] ms)
-    {
-        var parts = new List<string>();
-        for (int k = 0; k < names.Length; k++)
-        {
-            if (ms[k] >= 1) parts.Add(string.Create(CultureInfo.InvariantCulture, $"{names[k]} {ms[k]:0.0}"));
-        }
-
-        return parts.Count == 0 ? "" : $"; {stage}: {string.Join(", ", parts)}";
-    }
-
-    static string StageList(double[] ms, double least)
-    {
-        var parts = new List<string>();
-        for (int k = 0; k < Stages; k++)
-        {
-            if (ms[k] >= least) parts.Add(string.Create(CultureInfo.InvariantCulture, $"{Label(k)} {ms[k]:0.0}"));
-        }
-
-        return string.Join(", ", parts);
-    }
+    readonly SpikeRun _spikes;
 
     #endregion
 

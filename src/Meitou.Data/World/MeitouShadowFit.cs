@@ -154,7 +154,8 @@ public static class MeitouShadowFit
     /// The Hub, 51000 units out, a time-lapse frame's 0.006 degrees slid it 5.6 units, three texels of the first cascade, and every
     /// shadow edge flickered); through a point near the camera the slide is that distance from the anchor instead.
     /// </summary>
-    public static ShadowCascade Fit(ShadowView view, Vector3 toSun, ShadowSettings settings, float[] splits, int i, (double X, double Y, double Z) anchor = default)
+    public static ShadowCascade Fit(ShadowView view, Vector3 toSun, ShadowSettings settings, float[] splits, int i,
+        (double X, double Y, double Z) anchor = default)
     {
         var rotation = ShadowCascades.LightRotation(toSun);
         double ox = rotation.M11 * anchor.X + rotation.M21 * anchor.Y + rotation.M31 * anchor.Z,
@@ -170,7 +171,8 @@ public static class MeitouShadowFit
         // Light space: z grows away from the sun, so the box's centre sits sunward of the sphere's by half the extra reach.
         double zCentre = cz - SunwardReach * radius * 0.5;
         // Snapped on the grid through the anchor's light-space position (o): light space minus o is a whole number of texels at every texel corner.
-        var translation = (Math.Floor((-cx + ox) / texel) * texel - ox, Math.Floor((-cy + oy) / texel) * texel - oy, Math.Floor((-zCentre + oz) / step) * step - oz);
+        var translation = (Math.Floor((-cx + ox) / texel) * texel - ox, Math.Floor((-cy + oy) / texel) * texel - oy,
+            Math.Floor((-zCentre + oz) / step) * step - oz);
         return new ShadowCascade
         {
             Index = i,
@@ -181,7 +183,8 @@ public static class MeitouShadowFit
             Translation = translation,
             Extent = (size, size, depth),
             Texel = texel,
-            FixedBias = (float)Math.Max(FixedTexels * 2 * texel / depth, KenshiShadows.MinFixedBias * 0.25),   // clip z is -1..1: world units x 2 / depth
+            // clip z is -1..1: world units x 2 / depth
+            FixedBias = (float)Math.Max(FixedTexels * 2 * texel / depth, KenshiShadows.MinFixedBias * 0.25),
             MaxSlopeBias = (float)(MaxTexels * 2 * texel / depth),
             FilterRadius = (float)(1.5 / tile),
             Tile = new Vector4(0, 0, 1, 1),   // the whole of its layer (i) of the cascade array
@@ -218,7 +221,8 @@ public static class MeitouShadowFit
             double x = rotation.M11 * (double)s.X + rotation.M21 * (double)s.Y + rotation.M31 * (double)s.Z;
             double y = rotation.M12 * (double)s.X + rotation.M22 * (double)s.Y + rotation.M32 * (double)s.Z;
             double z = rotation.M13 * (double)s.X + rotation.M23 * (double)s.Y + rotation.M33 * (double)s.Z;
-            (x0, x1, y0, y1, z0, z1) = (Math.Min(x0, x - s.W), Math.Max(x1, x + s.W), Math.Min(y0, y - s.W), Math.Max(y1, y + s.W), Math.Min(z0, z - s.W), Math.Max(z1, z + s.W));
+            (x0, x1, y0, y1, z0, z1) = (Math.Min(x0, x - s.W), Math.Max(x1, x + s.W), Math.Min(y0, y - s.W), Math.Max(y1, y + s.W),
+                Math.Min(z0, z - s.W), Math.Max(z1, z + s.W));
         }
         double size = Math.Max(Math.Max(x1 - x0, y1 - y0), 1) * 1.02, texel = size / mapSize;
         double depth = Math.Max(z1 - z0, 1) * 1.02;

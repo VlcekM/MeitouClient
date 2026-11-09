@@ -207,8 +207,6 @@ sealed class BuildingSelection(PlayerInterface player)
         var state = new List<PlayerInterface.HudLine>();
         var stats = new List<PlayerInterface.HudLine>();
         var extended = new List<PlayerInterface.HudLine>();
-        string status = "Normal";
-        bool bad = false;
         bool own = focus.SiteId is not null;
         bool playerSite = focus.SiteId is { } siteId && !Simulation.Production.ProductionSystem.IsNatural(siteId);
         var site = player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == focus.Instance);
@@ -216,6 +214,33 @@ sealed class BuildingSelection(PlayerInterface player)
         // (the original's slot 79: the owner is the player's faction).
         var detail = player.Session.CurrentSnapshot.InspectedBuilding is { } d && d.Instance == focus.Instance ? d : null;
         bool mine = playerSite || detail is { Owned: true };
+        var inspected = AddStateLines(focus, site, detail, own, playerSite, state, stats);
+
+        // Slot 114 asks slot 97 (broken, +0x3b6) before completion: a machine being dismantled reads Broken, not Under construction.
+        // A generator's own word still comes after.
+        var unfinished = site is { Complete: false } && own ? player.Production.Machine(focus.SiteId) : null;
+        var (status, bad) = SiteStatus(site, unfinished);
+        if (unfinished is not null && ProductionWindows.GeneratorWord(unfinished) is { } word)
+        {
+            (status, bad) = word;
+        }
+        else
+        {
+            AddWorkLines(focus, detail, own, mine, stats, extended, ref status, ref bad);
+        }
+
+        AddPublicLines(focus, site, detail, mine, playerSite, stats);
+        var header = HeaderLine(focus, detail, own, playerSite, mine, inspected);
+        return (header, [.. state], [.. stats], status, bad, [.. extended]);
+    }
+
+    /// <summary>
+    /// The building's state lines (Type, Town, a turret's heights, a bed's cost, the upgrades and construction buttons of the player's site) and a
+    /// bed's healing line; returns the inspected richness of the building, if any.
+    /// </summary>
+    Simulation.Production.RichnessView? AddStateLines(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site,
+        Simulation.Locks.BuildingDetail? detail, bool own, bool playerSite, List<PlayerInterface.HudLine> state, List<PlayerInterface.HudLine> stats)
+    {
         if (focus.Type is { Length: > 0 } type) state.Add(new("Type:", type));
         var inspected = player.Session.CurrentSnapshot.InspectedRichness is { } ir && ir.Instance == focus.Instance
             ? ir : (Simulation.Production.RichnessView?)null;
@@ -236,10 +261,17 @@ sealed class BuildingSelection(PlayerInterface player)
         // The construction buttons (Building slot 117, FUN_1402fea10): Dismantle in BadBright, and while unfinished PAUSE CONSTRUCTION,
         // captioned [PAUSED] in #777777 while paused.
         if (playerSite && site is { LevelPlacement: null }) AddConstructionButtons(site, state);
+        return inspected;
+    }
 
-        // Slot 114 asks slot 97 (broken, +0x3b6) before completion: a machine being dismantled reads Broken, not Under construction.
-        // A generator's own word still comes after.
-        var unfinished = site is { Complete: false } && own ? player.Production.Machine(focus.SiteId) : null;
+    /// <summary>
+    /// The medical header's status word of a site: Broken (destroyed, or an unfinished machine that is broken), the construction state while
+    /// unfinished, else Normal.
+    /// </summary>
+    static (string Status, bool Bad) SiteStatus(Simulation.Construction.BuildingSnapshot? site, Simulation.Production.MachineSnapshot? unfinished)
+    {
+        string status = "Normal";
+        bool bad = false;
         if (site is { Destroyed: true } || unfinished is { Broken: true })
         {
             status = "Broken";
@@ -250,45 +282,55 @@ sealed class BuildingSelection(PlayerInterface player)
             status = site.Dismantling ? "Being dismantled" : site.Paused ? "Paused" : "Under construction";
             bad = true;
         }
+        return (status, bad);
+    }
 
-        if (unfinished is not null && ProductionWindows.GeneratorWord(unfinished) is { } word)
+    /// <summary>
+    /// The stats lines of what the building does: its first door, a rock's richness, a machine's lines (or an unmined rock's), which may change
+    /// the status word.
+    /// </summary>
+    void AddWorkLines(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail, bool own, bool mine, List<PlayerInterface.HudLine> stats,
+        List<PlayerInterface.HudLine> extended, ref string status, ref bool bad)
+    {
+        if (FirstDoor(focus) is { } door)
         {
-            (status, bad) = word;
-        }
-        else
-        {
-            if (FirstDoor(focus) is { } door)
+            // DoorStuff slot 40 (FUN_140304120): the value in the exe's green #a8b774, BadBright for a broken door, a closed locked one and
+            // Locked; on the player's own door full-row buttons (width 1.0: the key is not shown, as the owner's screenshots show).
+            if (door.Broken)
             {
-                // DoorStuff slot 40 (FUN_140304120): the value in the exe's green #a8b774, BadBright for a broken door, a closed locked one and
-                // Locked; on the player's own door full-row buttons (width 1.0: the key is not shown, as the owner's screenshots show).
-                if (door.Broken)
-                {
-                    status = "Broken";
-                    bad = true;
-                }
-
-                AddDoorLines(door, mine, stats);
+                status = "Broken";
+                bad = true;
             }
 
-            var rich = player.Session.CurrentSnapshot.InspectedRichness is { } r && r.Instance == focus.Instance
-                ? r : (Simulation.Production.RichnessView?)null;
-            if (rich is { } richness) ProductionWindows.AddRichnessLine(richness, stats);
-
-            if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine)
-            {
-                Simulation.Combat.TurretPanelView? turretPanel =
-                    player.Session.CurrentSnapshot.InspectedTurret is { } tp && tp.Instance == focus.Instance ? tp : null;
-                player.Production.AddMachineLines(machine, stats, extended, ref status, ref bad, rich, turretPanel, mine);
-            }
-            else if (rich is { Efficiency: { } e } unmined)
-            {
-                // A rock nobody has mined yet has no machine; the original shows its lines all the same.
-                (status, bad) = ProductionWindows.ProductionStatus(0, e);
-                stats.Add(ProductionWindows.WorkersLine(e.Operators, e.MaxOperators));
-                ProductionWindows.AddEfficiencyLines(e, unmined.Resource, stats);
-            }
+            AddDoorLines(door, mine, stats);
         }
 
+        var rich = player.Session.CurrentSnapshot.InspectedRichness is { } r && r.Instance == focus.Instance
+            ? r : (Simulation.Production.RichnessView?)null;
+        if (rich is { } richness) ProductionWindows.AddRichnessLine(richness, stats);
+
+        if (detail?.Bed is null && own && player.Production.Machine(focus.SiteId) is { } machine)
+        {
+            Simulation.Combat.TurretPanelView? turretPanel =
+                player.Session.CurrentSnapshot.InspectedTurret is { } tp && tp.Instance == focus.Instance ? tp : null;
+            player.Production.AddMachineLines(machine, stats, extended, ref status, ref bad, rich, turretPanel, mine);
+        }
+        else if (rich is { Efficiency: { } e } unmined)
+        {
+            // A rock nobody has mined yet has no machine; the original shows its lines all the same.
+            (status, bad) = ProductionWindows.ProductionStatus(0, e);
+            stats.Add(ProductionWindows.WorkersLine(e.Operators, e.MaxOperators));
+            ProductionWindows.AddEfficiencyLines(e, unmined.Resource, stats);
+        }
+    }
+
+    /// <summary>
+    /// The Open to public line (a toggle on the player's town building with an interior, a caption on another faction's public one) and the
+    /// For sale button.
+    /// </summary>
+    void AddPublicLines(SelectedBuilding focus, Simulation.Construction.BuildingSnapshot? site, Simulation.Locks.BuildingDetail? detail, bool mine,
+        bool playerSite, List<PlayerInterface.HudLine> stats)
+    {
         // Not on a player-built site under construction; an owned town house has it while being repaired too.
         if (mine && site is not { LevelPlacement: null, Complete: false }
             && (playerSite ? site?.TownName : focus.Town) is { Length: > 0 }
@@ -312,7 +354,14 @@ sealed class BuildingSelection(PlayerInterface player)
             stats.Add(new("For sale:", Loc.Tr("c.{1,num}", price), PlayerInterface.GoodColour, PlayerInterface.GoodColour,
                 Action: "meitou:building-buy", ButtonWidth: 0.4f));
         }
+    }
 
+    /// <summary>
+    /// The name bar: the building's (or bed's) name and its owner, the player's faction for the player's own building.
+    /// </summary>
+    PlayerInterface.HudLine HeaderLine(SelectedBuilding focus, Simulation.Locks.BuildingDetail? detail, bool own, bool playerSite, bool mine,
+        Simulation.Production.RichnessView? inspected)
+    {
         // A rock (slot 113): the player's faction once a player character has worked it, else its owner nofac's name ("No Faction"; its town
         // NO_TOWN is explored, not secret).
         string? owner = focus.Owner;
@@ -324,8 +373,7 @@ sealed class BuildingSelection(PlayerInterface player)
 
         var name = detail?.Bed?.Name ?? focus.Name;
         var value = mine ? player.FactionName?.Invoke(player.Session.World.Player.Faction) ?? "" : owner ?? "";
-        var header = new PlayerInterface.HudLine(name, value, PlayerInterface.TitleColour, PlayerInterface.TitleColour);
-        return (header, [.. state], [.. stats], status, bad, [.. extended]);
+        return new PlayerInterface.HudLine(name, value, PlayerInterface.TitleColour, PlayerInterface.TitleColour);
     }
 
     /// <summary>

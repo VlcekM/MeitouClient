@@ -43,14 +43,16 @@ public static class FoliageGrassField
     /// for a lower density setting are exactly the first ones of a higher setting's, and a page generated at the highest
     /// setting can show any lower one by drawing a prefix (<see cref="PrefixCount"/>).
     /// </summary>
-    public static float[] BladesWithPrefixes(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes, float densitySetting = 1) =>
+    public static float[] BladesWithPrefixes(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes,
+        float densitySetting = 1) =>
         Generate(patch, ground, x0, z0, size, out prefixes, densitySetting) is { } blades ? [.. blades] : [];
 
     /// <summary>
     /// <see cref="BladesWithPrefixes"/> into an array rented from <see cref="System.Buffers.ArrayPool{T}.Shared"/> (empty, not rented, without blades): its first
     /// <paramref name="floats"/> hold the blades. The caller returns it.
     /// </summary>
-    public static float[] RentBladesWithPrefixes(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes, out int floats, float densitySetting = 1)
+    public static float[] RentBladesWithPrefixes(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes,
+        out int floats, float densitySetting = 1)
     {
         var blades = Generate(patch, ground, x0, z0, size, out prefixes, densitySetting);
         floats = blades?.Count ?? 0;
@@ -60,8 +62,11 @@ public static class FoliageGrassField
         return rented;
     }
 
-    // The blades into this thread's scratch list (valid until its next call); null when the page can have none.
-    static List<float>? Generate(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes, float densitySetting)
+    /// <summary>
+    /// The blades into this thread's scratch list (valid until its next call); null when the page can have none.
+    /// </summary>
+    static List<float>? Generate(FoliageGrassPatch patch, FoliageGround ground, float x0, float z0, float size, out int[] prefixes,
+        float densitySetting)
     {
         var grass = patch.Grass;
         prefixes = new int[PrefixSteps + 1];
@@ -70,7 +75,8 @@ public static class FoliageGrassField
         // Where the patch's density is 0 throughout the page every candidate is dropped (it keeps a blade only for a random number below the density), so none is drawn:
         // most pages of a zone's patches, and most of a town's loading-screen grass time.
         if (!AnyDensity(patch, x0, z0, size)) return null;
-        uint seed = FoliageNoise.Hash((int)MathF.Floor(x0), (int)MathF.Floor(z0)) ^ (uint)FoliageRandom.LeadingInteger(grass.StringId) * 2654435761u ^ (uint)patch.Channel;
+        uint seed = FoliageNoise.Hash((int)MathF.Floor(x0), (int)MathF.Floor(z0)) ^ (uint)FoliageRandom.LeadingInteger(grass.StringId) * 2654435761u
+            ^ (uint)patch.Channel;
         var rng = s_random ??= new FoliageRandom(seed);
         rng.Seed(seed);
         bool limits = grass.MinAltitude != 0 || grass.MaxAltitude != 0;
@@ -118,8 +124,10 @@ public static class FoliageGrassField
         const int n = FoliageGround.Size;
         if (x0 + size < patch.X0 || x0 > patch.X1 || z0 + size < patch.Z0 || z0 > patch.Z1) return false;
         float su = (n - 1) / (patch.X1 - patch.X0), sv = (n - 1) / (patch.Z1 - patch.Z0);
-        int i0 = Math.Clamp((int)MathF.Floor((x0 - patch.X0) * su) - 1, 0, n - 1), i1 = Math.Clamp((int)MathF.Floor((x0 + size - patch.X0) * su) + 2, 0, n - 1);
-        int j0 = Math.Clamp((int)MathF.Floor((z0 - patch.Z0) * sv) - 1, 0, n - 1), j1 = Math.Clamp((int)MathF.Floor((z0 + size - patch.Z0) * sv) + 2, 0, n - 1);
+        int i0 = Math.Clamp((int)MathF.Floor((x0 - patch.X0) * su) - 1, 0, n - 1);
+        int i1 = Math.Clamp((int)MathF.Floor((x0 + size - patch.X0) * su) + 2, 0, n - 1);
+        int j0 = Math.Clamp((int)MathF.Floor((z0 - patch.Z0) * sv) - 1, 0, n - 1);
+        int j1 = Math.Clamp((int)MathF.Floor((z0 + size - patch.Z0) * sv) + 2, 0, n - 1);
         var d = patch.Density;
         for (int j = j0; j <= j1; j++)
             for (int i = i0; i <= i1; i++)

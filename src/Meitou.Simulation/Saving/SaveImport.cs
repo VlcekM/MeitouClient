@@ -183,7 +183,8 @@ public static class SaveImport
     {
         // The player's squads, in the order of their squad index, renumbered from 0 (the original erases the index and the list order gives it).
         var keep = game.Platoons
-            .Where(p => p.FactionId == playerId && p.IsLoaded && p.Name != SquadManagement.DeadSquadName && p.Record.Name != SquadManagement.DeadSquadName)
+            .Where(p => p.FactionId == playerId && p.IsLoaded && p.Name != SquadManagement.DeadSquadName
+                && p.Record.Name != SquadManagement.DeadSquadName)
             .OrderBy(p => p.Record.Ints.GetValueOrDefault("squad index"))
             .ToList();
 
@@ -350,7 +351,8 @@ public static class SaveImport
     {
         foreach (var key in r.Bools.Keys.Where(k => !KnowledgeBools.Contains(k)).ToList()) r.Bools.Remove(key);
         foreach (var key in r.Floats.Keys.ToList()) r.Floats.Remove(key);
-        foreach (var key in r.Ints.Keys.Where(k => !k.StartsWith("hand", StringComparison.Ordinal) && !k.StartsWith("zz", StringComparison.Ordinal)).ToList())
+        foreach (var key in r.Ints.Keys.Where(k => !k.StartsWith("hand", StringComparison.Ordinal)
+            && !k.StartsWith("zz", StringComparison.Ordinal)).ToList())
             r.Ints.Remove(key);
 
         bool keepReplacement = (options & ImportOptions.DeadNpcs) != 0;
@@ -371,7 +373,8 @@ public static class SaveImport
     /// </summary>
     static List<FcsRecord> TooCloseTowns(SaveGame game, string playerId, List<FcsRecord> dropped, PopulationData data)
     {
-        var sites = data.Sites.Where(s => s.InstanceId.Length > 0).GroupBy(s => s.InstanceId).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        var sites = data.Sites.Where(s => s.InstanceId.Length > 0).GroupBy(s => s.InstanceId).ToDictionary(g => g.Key, g => g.First(),
+            StringComparer.Ordinal);
         var mine = game.Towns
             .Where(t => !t.IsNest && t.FactionId == playerId && !dropped.Contains(t.Record) && sites.ContainsKey(t.Instance))
             .Select(t => (t.Record, Site: sites[t.Instance]))

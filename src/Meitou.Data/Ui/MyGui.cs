@@ -185,7 +185,16 @@ public static class MyGuiReader
 
     internal static string Attribute(XElement e, string name) => (string?)e.Attribute(name) ?? "";
     static Dictionary<string, string> Values(XElement e, string kind) => e.Elements(kind)
-        .Aggregate(new Dictionary<string, string>(StringComparer.Ordinal), (map, p) => { map[Attribute(p, "key")] = Attribute(p, "value"); return map; });
+        .Aggregate(new Dictionary<string, string>(StringComparer.Ordinal), AddValue);
+
+    /// <summary>
+    /// Adds a <c>key</c> / <c>value</c> element to <paramref name="map"/>.
+    /// </summary>
+    static Dictionary<string, string> AddValue(Dictionary<string, string> map, XElement p)
+    {
+        map[Attribute(p, "key")] = Attribute(p, "value");
+        return map;
+    }
     static IReadOnlyDictionary<string, string> SkinStateValues(XElement state)
     {
         var values = Values(state, "Property");

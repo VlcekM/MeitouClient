@@ -99,7 +99,9 @@ public sealed class LauncherConfig
             if (File.Exists(FilePath))
                 return JsonSerializer.Deserialize(File.ReadAllText(FilePath), LauncherJson.Default.LauncherConfig) ?? new();
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+        }
         return new();
     }
 
@@ -131,5 +133,5 @@ public sealed class PresetMod
 /// </summary>
 [System.Text.Json.Serialization.JsonSourceGenerationOptions(WriteIndented = true)]
 [System.Text.Json.Serialization.JsonSerializable(typeof(LauncherConfig))]
-[System.Text.Json.Serialization.JsonSerializable(typeof(Releases.Cache))]
+[System.Text.Json.Serialization.JsonSerializable(typeof(ReleaseCache.Cache))]
 sealed partial class LauncherJson : System.Text.Json.Serialization.JsonSerializerContext;

@@ -60,7 +60,8 @@ public sealed record DebugGuard(bool On, float Radius = 30, bool Animals = false
 /// <see cref="Squad"/>) takes <see cref="Damage"/> cut damage falling off linearly with the distance (to 0.35 at the radius edge), is knocked out,
 /// and is thrown away from the centre with <see cref="Force"/> world units/s (also falling off), by the combat system's knock-down push.
 /// </summary>
-public sealed record DebugExplode(Vector2 At, float Radius = 40, float Force = 100, float Damage = 40, bool Squad = false, string On = "", int Level = ExplodeLevels.Normal) : DebugCommand;
+public sealed record DebugExplode(Vector2 At, float Radius = 40, float Force = 100, float Damage = 40, bool Squad = false, string On = "",
+    int Level = ExplodeLevels.Normal) : DebugCommand;
 
 /// <summary>
 /// The explosion's five strength levels (<c>explode --level</c>, F10 "Explosion level"): radius m / force / damage per level; the level only sets
@@ -89,7 +90,13 @@ public static class ExplodeLevels
     public static bool TryParse(string word, out int level)
     {
         level = 0;
-        if (int.TryParse(word, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int n) && n is >= 1 and <= 5) { level = n; return true; }
+        if (int.TryParse(word, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int n)
+            && n is >= 1 and <= 5)
+        {
+            level = n;
+            return true;
+        }
+
         int at = Array.FindIndex(Names, name => name.Equals(word, StringComparison.OrdinalIgnoreCase));
         level = at + 1;
         return at >= 0;
@@ -143,7 +150,8 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
     /// The record types whose items have a quality (grade): armour's is <see cref="Items.ItemInstance.Quality"/>, the others' the
     /// <see cref="Items.ItemInstance.Level"/> their stats read. A weapon gets the model of <see cref="Grade"/> instead, so its name shows the grade.
     /// </summary>
-    public static readonly FcsRecordType[] QualityTypes = [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Crossbow, FcsRecordType.LimbReplacement];
+    public static readonly FcsRecordType[] QualityTypes = [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Crossbow,
+        FcsRecordType.LimbReplacement];
 
     /// <summary>
     /// The <c>PLAYER_WEAPONS</c> model a weapon of <paramref name="quality"/> gets: the highest level at or below it, else the lowest (null without
@@ -163,7 +171,8 @@ public sealed record DebugGiveItem(CharacterId Character, string Record, int Qua
     /// The record types an item can be made from.
     /// </summary>
     public static readonly FcsRecordType[] ItemTypes =
-        [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Item, FcsRecordType.Container, FcsRecordType.Blueprint, FcsRecordType.MapItem, FcsRecordType.Crossbow, FcsRecordType.LimbReplacement];
+        [FcsRecordType.Weapon, FcsRecordType.Armour, FcsRecordType.Item, FcsRecordType.Container, FcsRecordType.Blueprint, FcsRecordType.MapItem,
+            FcsRecordType.Crossbow, FcsRecordType.LimbReplacement];
 }
 
 /// <summary>
@@ -215,7 +224,7 @@ public sealed record DebugSpawn(string Record, Vector2 At) : DebugCommand;
 
 /// <summary>
 /// A building placed in the level editor (docs/game/level-editor.md "Simulation side"): <see cref="Building"/>, made by the host as the boot pass
-/// makes a level building (<see cref="TownBuildings.Builder"/>), joins the building list of the town with placement id <see cref="Town"/> and is
+/// makes a level building (<see cref="TownBuildingBuilder"/>), joins the building list of the town with placement id <see cref="Town"/> and is
 /// registered as a loaded one (<see cref="TownEdits.Place"/>).
 /// </summary>
 public sealed record DebugPlaceBuilding(string Town, TownBuilding Building) : DebugCommand;
@@ -281,7 +290,8 @@ static class DebugCheats
     /// <summary>
     /// The god mode's heal of one living player character, also the guard's: parts, limbs, blood, wounds, knock-out, hunger.
     /// </summary>
-    static void HealPlayer(World world, PopulationData? data, CharacterAssembly? assembly, CharacterTable table, int slot, CharacterCold cold, MedicalState medical)
+    static void HealPlayer(World world, PopulationData? data, CharacterAssembly? assembly, CharacterTable table, int slot, CharacterCold cold,
+        MedicalState medical)
     {
         var id = table.IdOf(slot);
         if (data is not null && Body(world, data, id) is ({ } body, var ctx))
@@ -289,6 +299,7 @@ static class DebugCheats
             if (body.RestoreLimbs()) assembly?.RefreshEquipment(cold);
             body.Heal(ctx);
         }
+
         medical.Hunger = MedicalState.MaxHunger;
     }
 
@@ -322,15 +333,18 @@ static class DebugCheats
                 if (cold.Medical is { Dead: false } medical) HealPlayer(world, data, assembly, table, s, cold, medical);
                 continue;
             }
+
             bool animal = CharacterFacts.Animal(cold);
             if (!DebugKillArea.Hits(false, cold.Faction, player.Faction, animal, cold.Medical is { Dead: true }, player.GuardAnimals)) continue;
             float dx = table.Next[s].Position.X - centre.X, dz = table.Next[s].Position.Z - centre.Z;
             if (dx * dx + dz * dz > r2) continue;
             bool fightsPlayer = cold.InCombat && combat?.StateOf(table.IdOf(s)) is { TargetSlot: >= 0 and var fought } fight
-                && fought < table.HighWater && table.Next[fought].Alive && table.Next[fought].Generation == fight.TargetGeneration && table.Cold(fought) is { IsPlayer: true };
+                && fought < table.HighWater && table.Next[fought].Alive && table.Next[fought].Generation == fight.TargetGeneration
+                && table.Cold(fought) is { IsPlayer: true };
             if (!CharacterFacts.HostileToPlayer(data.Relations, player.Faction, cold.Faction, fightsPlayer)) continue;
             victims.Add(table.IdOf(s));
         }
+
         if (victims.Count > 0) Kill(world, data, victims);
     }
 
@@ -340,15 +354,23 @@ static class DebugCheats
     static bool Hurt(World world, PopulationData data, CharacterId id, float cut, string? partId)
     {
         var table = world.Characters;
-        if (Body(world, data, id) is not ({ } medical, var ctx) || DamagePart(medical, ctx, partId) is not (var part and >= 0) || !table.TryResolveNext(id, out int slot)) return false;
+        if (Body(world, data, id) is not ({ } medical, var ctx) || DamagePart(medical, ctx, partId) is not (var part and >= 0)
+            || !table.TryResolveNext(id, out int slot))
+            return false;
+
         var events = new List<MedicalEvent>();
         medical.ApplyHit(part, new HitDamage(cut, 0, 0), ctx, events);
         foreach (var e in events)
         {
-            if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut) { TaskStart.Stand(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
+            if (e.Kind is MedicalEventKind.Died or MedicalEventKind.KnockedOut)
+            {
+                TaskStart.Stand(table, slot);
+                table.Next[slot].Velocity = Vector3.Zero;
+            }
             else if (e.Kind == MedicalEventKind.PartSevered) table.LimbsChanged.Enqueue((slot, medical.Parts[e.Part].Template.LimbSlot));
             else if (e.Kind == MedicalEventKind.Decapitated) table.LimbsChanged.Enqueue((slot, -1));
         }
+
         return true;
     }
 
@@ -370,7 +392,11 @@ static class DebugCheats
 
     static void Explode(World world, PopulationData data, DebugExplode blast)
     {
-        if (!float.IsFinite(blast.Radius) || !float.IsFinite(blast.Force) || !float.IsFinite(blast.Damage) || !float.IsFinite(blast.At.X) || !float.IsFinite(blast.At.Y)) return;   // non-finite input would poison positions and health: no-op
+        // non-finite input would poison positions and health: no-op
+        if (!float.IsFinite(blast.Radius) || !float.IsFinite(blast.Force) || !float.IsFinite(blast.Damage) || !float.IsFinite(blast.At.X)
+            || !float.IsFinite(blast.At.Y))
+            return;
+
         var table = world.Characters;
         var combat = world.SystemOf<Combat.CombatSystem>();
         float radius = MathF.Max(blast.Radius, 0.01f);
@@ -387,12 +413,15 @@ static class DebugCheats
                 if (Vector2.Distance(new Vector2(table.Next[s].Position.X, table.Next[s].Position.Z), blast.At) <= radius) squadNear++;
                 continue;
             }
+
             var offset = new Vector2(table.Next[s].Position.X - blast.At.X, table.Next[s].Position.Z - blast.At.Y);
             float d = offset.Length();
             if (d < nearest) (nearest, nearestY) = (d, table.Next[s].Position.Y);
             if (d > radius) continue;
-            targets.Add((table.IdOf(s), s, 1 - (1 - ExplodeEdgeFalloff) * d / radius, d > 1e-3f ? offset / d : new Vector2(1, 0), cold.Medical.Dead, d / radius));
+            targets.Add((table.IdOf(s), s, 1 - (1 - ExplodeEdgeFalloff) * d / radius, d > 1e-3f ? offset / d : new Vector2(1, 0), cold.Medical.Dead,
+                d / radius));
         }
+
         var bands = new int[3];
         foreach (var (id, slot, falloff, away, wasDead, share) in targets)
         {
@@ -408,17 +437,37 @@ static class DebugCheats
                     medical.KnockOut(ExplodeKnockOutSeconds, events);
                     if (events.Count > 0) { TaskStart.Stand(table, slot); table.Next[slot].Velocity = Vector3.Zero; }
                 }
+
                 if (medical.Dead) killed++; else if (medical.Incapacitated) knocked++;
             }
+
             // Everyone down (just now, before, or dead) is thrown, ragdolled or not (CombatSystem.Blast).
             if (combat is not null && combat.Blast(cold, away, MathF.Max(blast.Force * falloff, MathF.Min(blast.Force, ExplodeMinThrow)))) thrown++;
         }
-        string where = $"{blast.At.X:0},{blast.At.Y:0}{(blast.On.Length > 0 ? $" (on {blast.On})" : "")} r={radius:0.#}, {ExplodeLevels.Label(blast.Level)}";
+
+        string where = $"{blast.At.X:0},{blast.At.Y:0}{(blast.On.Length > 0 ? $" (on {blast.On})" : "")} r={radius:0.#}, "
+            + $"{ExplodeLevels.Label(blast.Level)}";
         if (hit == 0 && thrown == 0)
-            world.Post(squadNear > 0 ? $"Explode at {where}: nobody to hit; only your own squad ({squadNear}) is in range (--squad includes it)"
-                : $"Explode at {where}: nobody in range{(nearest < float.MaxValue ? $" (nearest living character {nearest:0} m away)" : "")}; --squad includes your own");
-        else world.Post($"Explode at {where}: {hit} hit ({bands[0]} within r/3, {bands[1]} within 2r/3, {bands[2]} outer), {knocked} knocked out, {thrown} thrown, {killed} killed.");
-        // A visible mark at the centre: a ring of blood splashes (display only; needs the Blood setting on).
+        {
+            world.Post(squadNear > 0
+                ? $"Explode at {where}: nobody to hit; only your own squad ({squadNear}) is in range (--squad includes it)"
+                : $"Explode at {where}: nobody in range{(nearest < float.MaxValue ? $" (nearest living character {nearest:0} m away)" : "")}; "
+                    + "--squad includes your own");
+        }
+        else
+        {
+            world.Post($"Explode at {where}: {hit} hit ({bands[0]} within r/3, {bands[1]} within 2r/3, {bands[2]} outer), {knocked} knocked out, "
+                + $"{thrown} thrown, {killed} killed.");
+        }
+
+        MarkCentre(world, blast, nearest, nearestY);
+    }
+
+    /// <summary>
+    /// A visible mark at the blast's centre: a ring of blood splashes (display only; needs the Blood setting on), on the nearest character's height.
+    /// </summary>
+    static void MarkCentre(World world, DebugExplode blast, float nearest, float nearestY)
+    {
         if (world.BloodMarks is { } marks)
         {
             var centre = new Vector3(blast.At.X, nearest < float.MaxValue ? nearestY : 0, blast.At.Y);
@@ -443,6 +492,9 @@ static class DebugCheats
         }
     }
 
+    /// <summary>
+    /// Carries out one debug command; one that needs the population data does nothing without it.
+    /// </summary>
     public static void Apply(World world, PopulationData? data, CharacterAssembly? assembly, DebugCommand command)
     {
         var table = world.Characters;
@@ -467,24 +519,10 @@ static class DebugCheats
                 world.Player.Money = Math.Max(0, world.Player.Money + money.Delta);
                 break;
             case DebugTeleport teleport:
-                int k = 0;
-                foreach (var id in teleport.Characters)
-                {
-                    if (!table.TryResolveNext(id, out int slot)) continue;
-                    float x = teleport.Target.X + 10 * k++, z = teleport.Target.Z;
-                    TaskStart.Stand(table, slot);
-                    table.Next[slot].Position = new Vector3(x, world.Walkability.GroundHeight(x, z, teleport.Target.Y), z);
-                    table.Next[slot].Velocity = Vector3.Zero;
-                }
+                Teleport(world, teleport);
                 break;
             case DebugHeal heal when data is not null:
-                foreach (var id in heal.Characters)
-                    if (Body(world, data, id) is ({ } medical, var ctx))
-                    {
-                        // The look and kit follow the limbs (boots, two-handed holds), as after a prosthetic is fitted.
-                        if (heal.Limbs && medical.RestoreLimbs() && table.TryResolveNext(id, out int healed)) assembly?.RefreshEquipment(table.Cold(healed)!);
-                        medical.Heal(ctx);
-                    }
+                Heal(world, data, assembly, heal);
                 break;
             case DebugGodmode god:
                 world.Player.Godmode = god.On;
@@ -494,9 +532,7 @@ static class DebugCheats
                 (world.Player.Guard, world.Player.GuardRadius, world.Player.GuardAnimals) = (guard.On, guard.Radius, guard.Animals);
                 break;
             case DebugMaxSkills max:
-                foreach (var id in max.Characters)
-                    if (table.TryResolveNext(id, out int skilled) && table.Cold(skilled)?.Stats is { } stats)
-                        for (var s = StatsEnumerated.None + 1; s < StatsEnumerated.End; s++) stats[s] = 100;
+                MaxSkills(world, max);
                 break;
             case DebugDamage damage when data is not null:
                 foreach (var id in damage.Characters) Hurt(world, data, id, damage.Cut, damage.Part);
@@ -517,18 +553,10 @@ static class DebugCheats
                 Kill(world, data, kill.Characters);
                 break;
             case DebugKnockOut knock:
-                var knocks = new List<MedicalEvent>();
-                foreach (var id in knock.Characters)
-                {
-                    if (!table.TryResolveNext(id, out int down) || table.Cold(down)?.Medical is not { } m) continue;
-                    knocks.Clear();
-                    m.KnockOut(knock.Seconds, knocks);
-                    if (knocks.Count > 0) { TaskStart.Stand(table, down); table.Next[down].Velocity = Vector3.Zero; }
-                }
+                KnockOut(world, knock);
                 break;
             case DebugWake wake:
-                foreach (var id in wake.Characters)
-                    if (table.TryResolveNext(id, out int up) && table.Cold(up)?.Medical is { } sleeper && sleeper.WakeUp()) table.Next[up].Velocity = Vector3.Zero;
+                Wake(world, wake);
                 break;
             case DebugSay say:
                 if (table.TryResolveNext(say.Speaker, out _)) world.Bark(say.Speaker, say.Text);
@@ -537,53 +565,207 @@ static class DebugCheats
                 world.Post($"Research unlocked: {world.Research.CompleteAll(data.Db)} finished.");
                 break;
             case DebugStripItems strip:
-                if (!table.TryResolveNext(strip.Character, out int stripped) || table.Cold(stripped)?.Inventory is not { } carried) break;
-                int gone = carried.Items.RemoveAll(i => strip.BackpackOnly ? i.Section == "backpack_attach" : !Items.InventoryCommands.IsLimbSection(i.Section) && !i.LockedOn);
-                assembly?.RefreshEquipment(table.Cold(stripped)!);
-                world.Post(strip.BackpackOnly ? (gone > 0 ? "Backpack removed and destroyed with its contents (nothing dropped)." : "No backpack worn.") : $"Inventory cleared: {gone} items destroyed (nothing dropped).");
+                Strip(world, assembly, strip);
                 break;
             case DebugGiveItem give when data is not null:
-                if (!table.TryResolveNext(give.Character, out int owner) || table.Cold(owner)?.Inventory is not { } inventory) break;
-                if (data.Items.Create(give.Record, give.Quantity) is not { } item) { world.Post($"No item record {give.Record}."); break; }
-                if (item.Type == FcsRecordType.Armour) (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
-                else if (item.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
-                    (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
-                else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
-                var wearer = table.Cold(owner);
-                if (give.Equip && item.Type == FcsRecordType.Container && item.Contents is not null)
-                {
-                    // A backpack: worn in the attach slot when it is free (strip or `unequip backpack` first); never put into the grids or dropped.
-                    if (inventory.Backpack is not null) { world.Post($"{item.Name} not worn: a backpack is already worn (remove it first); nothing dropped."); break; }
-                    (item.Section, item.X, item.Y) = ("backpack_attach", 0, 0);
-                    inventory.Items.Add(item.WithQuantity(1));
-                    assembly?.RefreshEquipment(wearer!);
-                    break;
-                }
-                bool worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
-                if (!worn && give.Equip && item.Type is FcsRecordType.Armour or FcsRecordType.Item && Items.InventoryCommands.IsEquipmentSection(item.EquipmentSection)
-                    && item.EquipmentSection is not ("back" or "hip" or "backpack_attach") && inventory.Items.Find(i => i.Section == item.EquipmentSection) is { } displaced)
-                {
-                    // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids; with no room nothing
-                    // changes and nothing is dropped.
-                    if (!inventory.HasRoomFor(displaced)) { world.Post($"{item.Name} not worn: the worn {displaced.Name} has no room in the grids (strip the inventory first); nothing dropped."); break; }
-                    inventory.Items.Remove(displaced);
-                    worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
-                    if (!worn) inventory.Items.Add(displaced);
-                    else if (!inventory.Add(displaced)) world.Post($"{displaced.Name} came off and did not fit the inventory; destroyed (nothing dropped).");
-                }
-                if (worn)
-                {
-                    // One unit is worn when its slot is free (as the trade window's right click); the rest of a stack goes to the grids.
-                    assembly?.RefreshEquipment(table.Cold(owner)!);
-                    if (item.Quantity == 1) break;
-                    item = item.WithQuantity(item.Quantity - 1);
-                }
-                if (inventory.Add(item)) break;
-                if (give.Equip) { world.Post($"{item.Quantity} x {item.Name} did not fit; not given (nothing dropped)."); break; }
-                world.GroundItems.Drop(item, table.Next[owner].Position, 0);
-                world.Post($"{item.Quantity} x {item.Name} did not fit; dropped on the ground.");
+                Give(world, data, assembly, give);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Puts the characters at the target, standing, 10 apart along x, on the ground there.
+    /// </summary>
+    static void Teleport(World world, DebugTeleport teleport)
+    {
+        var table = world.Characters;
+        int k = 0;
+        foreach (var id in teleport.Characters)
+        {
+            if (!table.TryResolveNext(id, out int slot)) continue;
+            float x = teleport.Target.X + 10 * k++, z = teleport.Target.Z;
+            TaskStart.Stand(table, slot);
+            table.Next[slot].Position = new Vector3(x, world.Walkability.GroundHeight(x, z, teleport.Target.Y), z);
+            table.Next[slot].Velocity = Vector3.Zero;
+        }
+    }
+
+    /// <summary>
+    /// Heals the characters (their limbs too when asked).
+    /// </summary>
+    static void Heal(World world, PopulationData data, CharacterAssembly? assembly, DebugHeal heal)
+    {
+        var table = world.Characters;
+        foreach (var id in heal.Characters)
+        {
+            if (Body(world, data, id) is ({ } medical, var ctx))
+            {
+                // The look and kit follow the limbs (boots, two-handed holds), as after a prosthetic is fitted.
+                if (heal.Limbs && medical.RestoreLimbs() && table.TryResolveNext(id, out int healed))
+                    assembly?.RefreshEquipment(table.Cold(healed)!);
+
+                medical.Heal(ctx);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sets every stat of the characters to 100.
+    /// </summary>
+    static void MaxSkills(World world, DebugMaxSkills max)
+    {
+        var table = world.Characters;
+        foreach (var id in max.Characters)
+        {
+            if (table.TryResolveNext(id, out int skilled) && table.Cold(skilled)?.Stats is { } stats)
+                for (var s = StatsEnumerated.None + 1; s < StatsEnumerated.End; s++) stats[s] = 100;
+        }
+    }
+
+    /// <summary>
+    /// Knocks the characters out for the given seconds; one that goes down stands still.
+    /// </summary>
+    static void KnockOut(World world, DebugKnockOut knock)
+    {
+        var table = world.Characters;
+        var knocks = new List<MedicalEvent>();
+        foreach (var id in knock.Characters)
+        {
+            if (!table.TryResolveNext(id, out int down) || table.Cold(down)?.Medical is not { } m) continue;
+            knocks.Clear();
+            m.KnockOut(knock.Seconds, knocks);
+            if (knocks.Count > 0) { TaskStart.Stand(table, down); table.Next[down].Velocity = Vector3.Zero; }
+        }
+    }
+
+    /// <summary>
+    /// Wakes the characters up.
+    /// </summary>
+    static void Wake(World world, DebugWake wake)
+    {
+        var table = world.Characters;
+        foreach (var id in wake.Characters)
+        {
+            if (table.TryResolveNext(id, out int up) && table.Cold(up)?.Medical is { } sleeper && sleeper.WakeUp())
+                table.Next[up].Velocity = Vector3.Zero;
+        }
+    }
+
+    /// <summary>
+    /// Destroys the character's backpack, or everything it carries but its limbs and locked-on items; nothing is dropped.
+    /// </summary>
+    static void Strip(World world, CharacterAssembly? assembly, DebugStripItems strip)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(strip.Character, out int stripped) || table.Cold(stripped)?.Inventory is not { } carried) return;
+        int gone = carried.Items.RemoveAll(i => strip.BackpackOnly
+            ? i.Section == "backpack_attach"
+            : !Items.InventoryCommands.IsLimbSection(i.Section) && !i.LockedOn);
+        assembly?.RefreshEquipment(table.Cold(stripped)!);
+        world.Post(strip.BackpackOnly
+            ? (gone > 0 ? "Backpack removed and destroyed with its contents (nothing dropped)." : "No backpack worn.")
+            : $"Inventory cleared: {gone} items destroyed (nothing dropped).");
+    }
+
+    /// <summary>
+    /// Gives the character an item at the given quality, worn when asked and its slot allows; the rest goes to the grids, else the ground.
+    /// </summary>
+    static void Give(World world, PopulationData data, CharacterAssembly? assembly, DebugGiveItem give)
+    {
+        var table = world.Characters;
+        if (!table.TryResolveNext(give.Character, out int owner) || table.Cold(owner)?.Inventory is not { } inventory) return;
+        if (data.Items.Create(give.Record, give.Quantity) is not { } item)
+        {
+            world.Post($"No item record {give.Record}.");
+            return;
+        }
+
+        SetQuality(data, give, item);
+        var wearer = table.Cold(owner);
+        if (give.Equip && item.Type == FcsRecordType.Container && item.Contents is not null)
+        {
+            WearBackpack(world, assembly, inventory, item, wearer);
+            return;
+        }
+
+        bool worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
+        if (!worn && give.Equip && item.Type is FcsRecordType.Armour or FcsRecordType.Item
+            && Items.InventoryCommands.IsEquipmentSection(item.EquipmentSection)
+            && item.EquipmentSection is not ("back" or "hip" or "backpack_attach")
+            && inventory.Items.Find(i => i.Section == item.EquipmentSection) is { } displaced)
+        {
+            // The slot is taken: take the worn item off, wear the new one, give the old one a place in the grids; with no room nothing
+            // changes and nothing is dropped.
+            if (!inventory.HasRoomFor(displaced))
+            {
+                world.Post($"{item.Name} not worn: the worn {displaced.Name} has no room in the grids (strip the inventory first); "
+                    + "nothing dropped.");
+                return;
+            }
+
+            worn = SwapWorn(world, inventory, item, displaced, wearer);
+        }
+
+        if (worn)
+        {
+            // One unit is worn when its slot is free (as the trade window's right click); the rest of a stack goes to the grids.
+            assembly?.RefreshEquipment(table.Cold(owner)!);
+            if (item.Quantity == 1) return;
+            item = item.WithQuantity(item.Quantity - 1);
+        }
+
+        if (inventory.Add(item)) return;
+        if (give.Equip)
+        {
+            world.Post($"{item.Quantity} x {item.Name} did not fit; not given (nothing dropped).");
+            return;
+        }
+
+        world.GroundItems.Drop(item, table.Next[owner].Position, 0);
+        world.Post($"{item.Quantity} x {item.Name} did not fit; dropped on the ground.");
+    }
+
+    /// <summary>
+    /// The given quality: an armour's quality and level, a weapon's grade (model and level), another graded item's level.
+    /// </summary>
+    static void SetQuality(PopulationData data, DebugGiveItem give, Items.ItemInstance item)
+    {
+        if (item.Type == FcsRecordType.Armour)
+            (item.Quality, item.Level) = (Math.Clamp(give.Quality, 0, 100), Math.Clamp(give.Quality, 0, 100));
+        else if (item.Type == FcsRecordType.Weapon && DebugGiveItem.Grade(data.Db, give.Quality) is { } grade)
+            (item.CompanyId, item.MaterialId, item.Level) = (CraftBench.PlayerWeapons, grade.Model, grade.Level);
+        else if (DebugGiveItem.QualityTypes.Contains(item.Type)) item.Level = Math.Clamp(give.Quality, 0, 100);
+    }
+
+    /// <summary>
+    /// A backpack: worn in the attach slot when it is free (strip or `unequip backpack` first); never put into the grids or dropped.
+    /// </summary>
+    static void WearBackpack(World world, CharacterAssembly? assembly, Items.Inventory inventory, Items.ItemInstance item, CharacterCold? wearer)
+    {
+        if (inventory.Backpack is not null)
+        {
+            world.Post($"{item.Name} not worn: a backpack is already worn (remove it first); nothing dropped.");
+            return;
+        }
+
+        (item.Section, item.X, item.Y) = ("backpack_attach", 0, 0);
+        inventory.Items.Add(item.WithQuantity(1));
+        assembly?.RefreshEquipment(wearer!);
+    }
+
+    /// <summary>
+    /// Takes the worn item off its slot and wears the new one; the old one goes back when the new one does not fit, else to the grids (destroyed
+    /// when it does not fit them). Returns whether the new one is worn.
+    /// </summary>
+    static bool SwapWorn(World world, Items.Inventory inventory, Items.ItemInstance item, Items.ItemInstance displaced, CharacterCold? wearer)
+    {
+        inventory.Items.Remove(displaced);
+        bool worn = Items.InventoryCommands.TryEquip(inventory, item.WithQuantity(1), wearer);
+        if (!worn) inventory.Items.Add(displaced);
+        else if (!inventory.Add(displaced))
+            world.Post($"{displaced.Name} came off and did not fit the inventory; destroyed (nothing dropped).");
+
+        return worn;
     }
 
     /// <summary>
@@ -602,10 +784,12 @@ static class DebugCheats
                 ledger.Remove(e);
                 removed++;
             }
+
             if (ledger.Count > 0) continue;
             c.Bounties = null;
             c.RecentlyWanted = 0;
         }
+
         return removed;
     }
 
@@ -621,6 +805,7 @@ static class DebugCheats
                 if (table.TryResolveNext(id, out int slot) && table.Cold(slot) is { } c) yield return c;
             yield break;
         }
+
         for (int s = 0; s < table.HighWater; s++)
             if (table.Next[s].Alive && table.Cold(s) is { IsPlayer: true } c) yield return c;
     }

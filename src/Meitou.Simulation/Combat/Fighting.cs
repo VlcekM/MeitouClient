@@ -39,6 +39,11 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     /// </summary>
     const int SlotsPerJob = 32;
 
+    /// <summary>
+    /// The movement flags of a path held or asked for.
+    /// </summary>
+    const ushort PathFlags = (ushort)MoveFlags.AnyPath;
+
     #region Pursuit
 
     public void Schedule(World world)
@@ -56,6 +61,10 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         });
     }
 
+    /// <summary>
+    /// One character's pursuit step: off the attack task (or bashing a door) its path chase ends; with a living target it chases it
+    /// (<see cref="Chase"/>).
+    /// </summary>
     void Pursue(World world, CharacterTable table, int i, float dt)
     {
         var next = table.Next;
@@ -75,7 +84,17 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         int t = st.TargetSlot;
         if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration) return;
 
-        const ushort path = (ushort)MoveFlags.AnyPath;
+        Chase(world, table, i, ref n, st, t, dt);
+    }
+
+    /// <summary>
+    /// Fighter <paramref name="i"/> after its living target <paramref name="t"/>: runs or keeps to its footwork, faces the target, leads a fleeing
+    /// one, is steered in its footwork, stands to fight in reach, mid-swing, staggered or holding, gives up a path that ends short, else asks a new
+    /// path when the old one is stale.
+    /// </summary>
+    void Chase(World world, CharacterTable table, int i, ref CharacterHot n, in CombatSlot st, int t, float dt)
+    {
+        var next = table.Next;
         var d = next[t].Position - n.Position;
         var cold = table.Cold(i)!;
         var tc = table.Cold(t);
@@ -83,17 +102,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         // the longest gap a swing starts at (3D, CombatTuning.Gap); a path ending within it still brings it to a swing
         float endReach = st.Reach > 0 ? st.Reach : CombatTuning.StandGap(st.Reach, cold.Fighter?.WeaponLength ?? 0, false);
         NotePathFailure(world, i, cold, new CharacterId(t, next[t].Generation), endReach);
-        float gap = MathF.Sqrt(d.X * d.X + d.Z * d.Z) - CombatTuning.Footprint(cold) - CombatTuning.Footprint(tc);
-
-        // It runs at the target out of the combat stance from RunGap, back to its footwork under FootworkGap, and after a target that keeps moving away at any gap.
         var tv = next[t].Velocity;
-        bool away = tc is { InCombat: false } && tv.X * tv.X + tv.Z * tv.Z > CombatTuning.FleeingSpeed * CombatTuning.FleeingSpeed;
-        cold.TargetFleeingTime = away ? cold.TargetFleeingTime + dt : 0;
-        if (gap > CombatTuning.RunGap) cold.CombatRunning = true;
-        else if (gap < CombatTuning.FootworkGap) cold.CombatRunning = false;
-
-        bool fleeing = cold.TargetFleeingTime >= CombatTuning.FleeingSeconds;
-        if (fleeing) cold.CombatRunning = true;
+        bool fleeing = UpdateRunning(cold, tc, d, tv, dt);
 
         // In its footwork it faces its target whichever way its path takes it, and side-steps (docs/animation.md "Side steps"; MovementSystem).
         if (!cold.CombatRunning) cold.FaceSlot = t;
@@ -106,32 +116,15 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         var da = aim - n.Position;
         float aimGap = MathF.Sqrt(da.X * da.X + da.Z * da.Z) - CombatTuning.Footprint(cold) - CombatTuning.Footprint(tc);
 
-        // After a fleeing target it aims ahead of it (CombatTuning.LeadBase), so a faster chaser runs past; the lead follows the target's velocity,
-        // so it swings round when the target turns. Engine rules: the lead and the run past hold only while the chaser is behind the nearer of the
-        // lead and aim points; once level with it it turns on the target and stops with the aim point within reach, so the runner comes into its
-        // swing. A path's goal is reached and stopped at, and a fighter's speed ramps up again slowly, so the goal is put RepathSeconds of the
-        // runner's way past the lead (the lead moves that far before the next path). Bodies are solid here (the original's chaser runs through its
-        // runner), so the goal is also put PassWidth beside the runner's track, on the chaser's side (by slot when dead behind), for the chaser to
-        // pass the runner rather than push it along.
+        // After a fleeing target it aims ahead of it, and runs past it while behind (Lead).
         var goal = new Vector2(next[t].Position.X, next[t].Position.Z);
-        float lead = fleeing && cold.Fighter is not null && cold.Stats is not null && cold.Medical is not null
-            ? (1 - combat.AttackRate(world, i, cold)) * CombatTuning.LeadSlope + CombatTuning.LeadBase
-            : 0;
+        float lead = Lead(world, i, cold, fleeing);
         var level = next[t].Position + tv * MathF.Min(lead, CombatTuning.AimLeadSeconds) - n.Position;
         bool behind = lead > 0 && tv.X * level.X + tv.Z * level.Z > 0;
 
         // A crossbowman walks only while closing in (out of range or the line of fire blocked); aiming and reloading it stands.
         bool shooting = st.Ranged && st.RangedState != (byte)RangedStates.Closing;
-
-        // On Hold it walks only to a target within the post test's reach of the hold point (80, 140 when the target is in a fight and heads for it;
-        // Orders.HoldFar), else it stands (engine reading).
-        bool holding = false;
-        if (Orders.Holding(cold))
-        {
-            bool targetFights = combat.StateOf(new CharacterId(t, next[t].Generation)).TargetSlot >= 0;
-            float far = Orders.HoldFar(n.Position, next[t].Position, next[t].Yaw, targetFights);
-            holding = Vector3.DistanceSquared(Orders.HoldPointOf(cold, n.Position), next[t].Position) > far * far;
-        }
+        bool holding = HoldsBack(cold, n.Position, next, t);
 
         // In its footwork with a clear line to the target, the fight steering moves it (docs/game/combat.md "Fight steering"): its state sets the band, no paths.
         if (Steer(world, i, ref n, cold, st, t, holding)) return;
@@ -142,12 +135,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         if (st.Down || st.AttackTech >= 0 || st.ReactTech >= 0 || world.Tick < st.StunUntil || shooting || inReach || holding)
         {
             // In reach, mid-swing or staggered (the hit reaction carries it), or holding position: stand and fight.
-            if ((n.Flags & path) != 0)
-            {
-                n.Flags = (ushort)(n.Flags & ~path);
-                n.PathCursor = 0;
-                table.Cold(i)!.PathRequest = 0;
-            }
+            if ((n.Flags & PathFlags) != 0) DropPath(ref n, cold);
 
             return;
         }
@@ -155,17 +143,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         // A path that ends short of the target is no path to it (the walkability answers an unreachable goal with the way to the reachable point
         // nearest it, an engine choice): the way the original's chase reports it, the target goes into the path failures and the fighter stands to be
         // given another (FUN_14060d6a0 -> FUN_140796ed0, docs/game/combat.md "Target score").
-        if (!behind && (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) == 0 && (n.Flags & (ushort)MoveFlags.HasPath) != 0
-            && cold.Path.Length > 0 && cold.PursuitGoal.X == n.Goal.X && cold.PursuitGoal.Z == n.Goal.Y && EndsShort(cold.Path[^1], cold.PursuitGoal, cold, tc, endReach))
-        {
-            cold.PathFailed = true;
-            NotePathFailure(world, i, cold, new CharacterId(t, next[t].Generation), endReach);
-            n.Flags = (ushort)(n.Flags & ~path);
-            n.PathCursor = 0;
-            cold.PathRequest = 0;
-            n.TaskTime = RepathSeconds;
-            return;
-        }
+        if (!behind && GaveUpShortPath(world, i, ref n, cold, tc, new CharacterId(t, next[t].Generation), endReach)) return;
 
         if ((n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0 || n.TaskTime > 0) return;
 
@@ -175,11 +153,101 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         bool stale = (n.Flags & (ushort)MoveFlags.HasPath) == 0 || Vector2.DistanceSquared(goal, n.Goal) > RepathDistance * RepathDistance;
         if (!stale) return;
 
+        AskPath(ref n, cold, goal, next[t].Position.Y);
+    }
+
+    /// <summary>
+    /// Whether the chaser runs (<see cref="CharacterCold.CombatRunning"/>): at the target out of the combat stance from RunGap, back to its footwork
+    /// under FootworkGap, and after a target that keeps moving away (faster than FleeingSpeed, out of a fight) for FleeingSeconds at any gap.
+    /// Returns whether the target counts as fleeing.
+    /// </summary>
+    static bool UpdateRunning(CharacterCold cold, CharacterCold? tc, Vector3 d, Vector3 tv, float dt)
+    {
+        float gap = MathF.Sqrt(d.X * d.X + d.Z * d.Z) - CombatTuning.Footprint(cold) - CombatTuning.Footprint(tc);
+        bool away = tc is { InCombat: false } && tv.X * tv.X + tv.Z * tv.Z > CombatTuning.FleeingSpeed * CombatTuning.FleeingSpeed;
+        cold.TargetFleeingTime = away ? cold.TargetFleeingTime + dt : 0;
+        if (gap > CombatTuning.RunGap) cold.CombatRunning = true;
+        else if (gap < CombatTuning.FootworkGap) cold.CombatRunning = false;
+
+        bool fleeing = cold.TargetFleeingTime >= CombatTuning.FleeingSeconds;
+        if (fleeing) cold.CombatRunning = true;
+
+        return fleeing;
+    }
+
+    /// <summary>
+    /// How far ahead of the target the chaser aims (seconds of the target's way, 0 unless it flees). After a fleeing target it aims ahead of it
+    /// (<see cref="CombatTuning.LeadBase"/>), so a faster chaser runs past; the lead follows the target's velocity, so it swings round when the
+    /// target turns. Engine rules: the lead and the run past hold only while the chaser is behind the nearer of the lead and aim points; once
+    /// level with it it turns on the target and stops with the aim point within reach, so the runner comes into its swing. A path's goal is reached
+    /// and stopped at, and a fighter's speed ramps up again slowly, so the goal is put RepathSeconds of the runner's way past the lead (the lead
+    /// moves that far before the next path). Bodies are solid here (the original's chaser runs through its runner), so the goal is also put
+    /// PassWidth beside the runner's track, on the chaser's side (by slot when dead behind), for the chaser to pass the runner rather than push it
+    /// along (<see cref="PassPoint"/>).
+    /// </summary>
+    float Lead(World world, int i, CharacterCold cold, bool fleeing) =>
+        fleeing && cold.Fighter is not null && cold.Stats is not null && cold.Medical is not null
+            ? (1 - combat.AttackRate(world, i, cold)) * CombatTuning.LeadSlope + CombatTuning.LeadBase
+            : 0;
+
+    /// <summary>
+    /// On Hold it walks only to a target within the post test's reach of the hold point (80, 140 when the target is in a fight and heads for it;
+    /// Orders.HoldFar), else it stands (engine reading). True when it holds back from target <paramref name="t"/>.
+    /// </summary>
+    bool HoldsBack(CharacterCold cold, Vector3 here, Span<CharacterHot> next, int t)
+    {
+        if (!Orders.Holding(cold)) return false;
+
+        bool targetFights = combat.StateOf(new CharacterId(t, next[t].Generation)).TargetSlot >= 0;
+        float far = Orders.HoldFar(here, next[t].Position, next[t].Yaw, targetFights);
+
+        return Vector3.DistanceSquared(Orders.HoldPointOf(cold, here), next[t].Position) > far * far;
+    }
+
+    /// <summary>
+    /// Whether the path the chaser holds, its request answered, was asked for the target's present place and ends short of a swing
+    /// (<see cref="EndsShort"/>).
+    /// </summary>
+    static bool PathEndsShort(in CharacterHot n, CharacterCold cold, CharacterCold? tc, float endReach) =>
+        (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) == 0 && (n.Flags & (ushort)MoveFlags.HasPath) != 0
+        && cold.Path.Length > 0 && cold.PursuitGoal.X == n.Goal.X && cold.PursuitGoal.Z == n.Goal.Y
+        && EndsShort(cold.Path[^1], cold.PursuitGoal, cold, tc, endReach);
+
+    /// <summary>
+    /// A path held that ends short of <paramref name="target"/> (<see cref="PathEndsShort"/>) is dropped and noted as a path failure, the next
+    /// request <see cref="RepathSeconds"/> away. True when it was.
+    /// </summary>
+    static bool GaveUpShortPath(World world, int i, ref CharacterHot n, CharacterCold cold, CharacterCold? tc, CharacterId target, float endReach)
+    {
+        if (!PathEndsShort(n, cold, tc, endReach)) return false;
+
+        cold.PathFailed = true;
+        NotePathFailure(world, i, cold, target, endReach);
+        DropPath(ref n, cold);
+        n.TaskTime = RepathSeconds;
+        return true;
+    }
+
+    /// <summary>
+    /// Drops the fighter's path: no path flags, the cursor back to the start, no request.
+    /// </summary>
+    static void DropPath(ref CharacterHot n, CharacterCold cold)
+    {
+        n.Flags = (ushort)(n.Flags & ~PathFlags);
+        n.PathCursor = 0;
+        cold.PathRequest = 0;
+    }
+
+    /// <summary>
+    /// Asks a new path to <paramref name="goal"/> on the floor at <paramref name="targetHeight"/>; the next comes RepathSeconds later at the earliest.
+    /// </summary>
+    static void AskPath(ref CharacterHot n, CharacterCold cold, Vector2 goal, float targetHeight)
+    {
         n.Goal = goal;
 
         // the floor the target stands on (a target upstairs is walked to up the stairs, not to the ground below it)
-        (cold.GoalHeight, cold.GoalHeightAt) = (next[t].Position.Y, goal);
-        cold.PursuitGoal = new Vector3(goal.X, next[t].Position.Y, goal.Y);
+        (cold.GoalHeight, cold.GoalHeightAt) = (targetHeight, goal);
+        cold.PursuitGoal = new Vector3(goal.X, targetHeight, goal.Y);
         n.Mode = SpeedMode.Free;
         n.Flags |= (ushort)MoveFlags.NeedPath;
         n.TaskTime = RepathSeconds;
@@ -230,7 +298,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         if (chasing || world.Tick >= steer.LineTick || steer.Target != band)
         {
             bool clear = combat.SteersAt(world, i, t);
-            if (!clear && !chasing) steer.PathUntil = Orders.Holding(cold) ? 0 : world.Tick + (long)MathF.Ceiling(PathChaseSeconds / world.TickSeconds);
+            if (!clear && !chasing)
+                steer.PathUntil = Orders.Holding(cold) ? 0 : world.Tick + (long)MathF.Ceiling(PathChaseSeconds / world.TickSeconds);
 
             steer.LineClear = clear;
             steer.LineTick = world.Tick + (long)MathF.Ceiling(RepathSeconds / world.TickSeconds);
@@ -259,12 +328,7 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
             : (around * 0.25f + CombatTuning.CircleNear, 3 * around + CombatTuning.CircleFar, false, 200f);
         (steer.Min, steer.Max) = CombatSteering.Band(near, far, r * (cold.Medical?.ScaleK ?? 1));
         (steer.PowerThrough, steer.Limit, steer.Target) = (through, limit, band);
-        if ((n.Flags & (ushort)MoveFlags.AnyPath) != 0)
-        {
-            n.Flags = (ushort)(n.Flags & ~(ushort)MoveFlags.AnyPath);
-            n.PathCursor = 0;
-            cold.PathRequest = 0;
-        }
+        if ((n.Flags & PathFlags) != 0) DropPath(ref n, cold);
 
         if (world.Tick < st.StunUntil) return true;
 
@@ -296,7 +360,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     static int BandTarget(World world, in CombatSlot st, int t)
     {
         int followed = st.ReactedSlot;
-        if (st.ReactTech < 0 || st.Picked || (uint)followed >= (uint)world.Characters.Previous.Length || !world.Characters.Previous[followed].Alive) return t;
+        if (st.ReactTech < 0 || st.Picked || (uint)followed >= (uint)world.Characters.Previous.Length || !world.Characters.Previous[followed].Alive)
+            return t;
 
         return followed;
     }
@@ -481,7 +546,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
         // Passive zeroes it even in a fight (FUN_140599b90, Verified).
         public float Desire(World world, int slot) =>
-            (world.Characters.Cold(slot)!.Orders & CharacterOrders.Passive) != 0 ? 0 : owner.ProtectDesire(world, slot) is var score && score > 0 ? score : 0.7f;
+            (world.Characters.Cold(slot)!.Orders & CharacterOrders.Passive) != 0
+                ? 0 : owner.ProtectDesire(world, slot) is var score && score > 0 ? score : 0.7f;
 
         public DecisionCheck CanRun(World world, int slot)
         {
@@ -537,7 +603,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             return table.Cold(other)!.Faction == cold.Faction ? v : help ? v * v : 0;
         }
 
-        var scan = ScanAllies(world, slot, combat, aggro, senses, SenseTag.Ko | SenseTag.Imprisoned, () => SlaveHelpAllowed(world, cold, world.Characters.Previous[slot].Position), Weigh);
+        var scan = ScanAllies(world, slot, combat, aggro, senses, SenseTag.Ko | SenseTag.Imprisoned,
+            () => SlaveHelpAllowed(world, cold, world.Characters.Previous[slot].Position), Weigh);
         (ally, first) = (scan.Best, scan.First);
 
         return scan.Best < 0 ? 0 : Math.Min(scan.Value, CombatSystem.ProtectCap);
@@ -675,7 +742,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             var table = world.Characters;
             var cold = table.Cold(slot)!;
             var task = (CharacterTask)table.Next[slot].Task;
-            if (task == CharacterTask.Attack && cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf } run && run.Runs(task)) return DecisionCheck.Runs;
+            if (task == CharacterTask.Attack && cold.Running is { Row: Data.Gameplay.Ai.TaskType.AttackAttackersOf } run && run.Runs(task))
+                return DecisionCheck.Runs;
             if (cold is not { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true })
                 return DecisionCheck.No("cannot fight");
 
@@ -727,7 +795,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         for (int a = 0; a < table.HighWater; a++)
         {
             _justAlerted[a] = false;
-            int t = next[a].Alive && next[a].Task == (byte)CharacterTask.Attack ? combat.StateOf(new CharacterId(a, next[a].Generation)).TargetSlot : -1;
+            int t = next[a].Alive && next[a].Task == (byte)CharacterTask.Attack
+                ? combat.StateOf(new CharacterId(a, next[a].Generation)).TargetSlot : -1;
             if (t < 0 || t >= table.HighWater)
             {
                 _alertSlot[a] = -1;
@@ -797,7 +866,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         var attacker = new CharacterId(a, next[a].Generation);
         var st = combat.StateOf(attacker);
         int t = st.TargetSlot;
-        if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration || table.Cold(a) is not { Medical.Incapacitated: false })
+        if (t < 0 || t >= table.HighWater || !next[t].Alive || next[t].Generation != st.TargetGeneration
+            || table.Cold(a) is not { Medical.Incapacitated: false })
             return;
 
         // An attacker its target was not alerted to (the wall and floor filter) is left alone until a blow lands.
@@ -830,7 +900,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         {
             int ds = defenders[k].Slot;
             if (table.Cold(ds) is { } dc && Orders.Holding(dc)
-                && !Orders.HoldPost(next[ds].Position, Orders.HoldPointOf(dc, next[ds].Position), from, next[a].Velocity, next[a].Yaw, attackerCrawls, true))
+                && !Orders.HoldPost(next[ds].Position, Orders.HoldPointOf(dc, next[ds].Position), from, next[a].Velocity,
+                    next[a].Yaw, attackerCrawls, true))
                 defenders.RemoveAt(k);
         }
 
@@ -921,8 +992,13 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
 
         foreach (int s in guards)
         {
-            if (!next[s].Alive || s == attacker || table.Cold(s) is not { } c || c.FollowOrder != target || table.Cold(attacker)?.Faction == c.Faction) continue;
-            if (next[s].Task != (byte)CharacterTask.Follow || c.Running is not { } run || !Production.PermaJobs.Follows(run.Row) || !run.Runs(CharacterTask.Follow)
+            if (!next[s].Alive || s == attacker || table.Cold(s) is not { } c || c.FollowOrder != target
+                || table.Cold(attacker)?.Faction == c.Faction)
+            {
+                continue;
+            }
+            if (next[s].Task != (byte)CharacterTask.Follow || c.Running is not { } run || !Production.PermaJobs.Follows(run.Row)
+                || !run.Runs(CharacterTask.Follow)
                 || !Helps(table, s, taken))
                 continue;
 
@@ -973,7 +1049,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// Able, not Passive, not sneaking outside a fight (<c>scoreProtectAllies</c>'s zero), for anyone.
     /// </summary>
     static bool Helps(CharacterTable table, int slot, HashSet<int> taken) =>
-        Able(table, slot, taken, out var cold, out _) && (cold.Orders & CharacterOrders.Passive) == 0 && ((cold.Orders & CharacterOrders.Sneak) == 0 || cold.InCombat);
+        Able(table, slot, taken, out var cold, out _) && (cold.Orders & CharacterOrders.Passive) == 0
+            && ((cold.Orders & CharacterOrders.Sneak) == 0 || cold.InCombat);
 
     static bool Able(CharacterTable table, int slot, HashSet<int> taken, out CharacterCold cold, out byte task)
     {
@@ -998,10 +1075,12 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     bool SlaveHelpAllowed(World world, CharacterCold helper, Vector3 at) => SlaveHelpAllowed(world, Towns, combat.Relations, helper, at);
 
     /// <inheritdoc cref="SlaveHelpAllowed(World, CharacterCold, Vector3)"/>
-    internal static bool SlaveHelpAllowed(World world, PopulationData? towns, Data.Gameplay.FactionRelations? factions, CharacterCold helper, Vector3 at)
+    internal static bool SlaveHelpAllowed(World world, PopulationData? towns, Data.Gameplay.FactionRelations? factions,
+        CharacterCold helper, Vector3 at)
     {
         if (towns is not { } data || factions is not { } relations) return true;
-        if (relations.Contains(helper.Faction) && relations.Factions[helper.Faction].FundamentalType == Data.Gameplay.FundamentalType.Bandit) return true;
+        if (relations.Contains(helper.Faction) && relations.Factions[helper.Faction].FundamentalType == Data.Gameplay.FundamentalType.Bandit)
+            return true;
 
         var town = AiSystem.TownAt(data, world, at);
         if (town.Site < 0) return true;

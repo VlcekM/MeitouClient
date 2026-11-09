@@ -123,7 +123,8 @@ public sealed partial class PopulationSystem
         float radius = site.Town.SizeRadius * site.Town.TownRadiusMult;
         bool resume = ResidentSchedule && stored.Pinned && world.GameHours - stored.StoredHours >= ScheduleAfterHours;
         var squad = SpawnKept(
-            world, stored, p.TemplateId, p.Faction, p.Origin, p.Id, p.Position, new Vector2(site.Position.X, site.Position.Z), Math.Max(radius * 0.8f, 40), p.Size);
+            world, stored, p.TemplateId, p.Faction, p.Origin, p.Id, p.Position, new Vector2(site.Position.X, site.Position.Z),
+            Math.Max(radius * 0.8f, 40), p.Size);
         if (squad is not null) squad.Resume = resume;
         return squad;
     }

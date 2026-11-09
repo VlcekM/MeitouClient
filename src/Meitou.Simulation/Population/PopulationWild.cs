@@ -18,7 +18,8 @@ public enum WildKind : byte { Sector, Nest }
 /// town-list entry of a nest that came from a save (its one spot is the saved position). <see cref="Key"/> keys a nest's squads: its layout roll's, or for a saved nest no roll
 /// gives, its entry's (so a nest makes the same squads whatever its index).
 /// </summary>
-public sealed record WildSite(int Index, WildKind Kind, ZoneCoordinate Zone, int Group, TownData? Nest, int Faction, IReadOnlyList<Vector2> Spots, string? SaveInstance = null, ulong Key = 0);
+public sealed record WildSite(int Index, WildKind Kind, ZoneCoordinate Zone, int Group, TownData? Nest, int Faction, IReadOnlyList<Vector2> Spots,
+    string? SaveInstance = null, ulong Key = 0);
 
 /// <summary>
 /// The wild population (docs/game/factions-squads-towns.md 6.2, 6.3): homeless squads of the area sectors and the animals (and camps) of the nests. Runs
@@ -79,7 +80,8 @@ public sealed partial class PopulationSystem
     /// A wild site's squads, built. <paramref name="Rolls"/>: the nest rolls used (the next top-up's keys follow them); <paramref name="Exhausted"/>: a nest roll found no entry that fits or
     /// weighs anything; <paramref name="Layout"/>: what a loading nest scatters (<see cref="NestFurniture"/>).
     /// </summary>
-    sealed record BuiltWild(int Site, long LoadId, Vector2 Centre, List<BuiltSquad> Squads, int Rolls = 0, bool Exhausted = false, bool TopUp = false, NestLayout? Layout = null);
+    sealed record BuiltWild(int Site, long LoadId, Vector2 Centre, List<BuiltSquad> Squads, int Rolls = 0, bool Exhausted = false, bool TopUp = false,
+        NestLayout? Layout = null);
 
     /// <summary>
     /// What a nest build may make: members up to <paramref name="Cap"/> with <paramref name="Members"/> there already, <paramref name="Counts"/>
@@ -140,6 +142,7 @@ public sealed partial class PopulationSystem
             if (!_wildByZone.TryGetValue(site.Zone, out var list)) _wildByZone[site.Zone] = list = [];
             list.Add(site.Index);
         }
+
         if (saved is not null) BindSavedWild(world, saved);
     }
 
@@ -156,27 +159,34 @@ public sealed partial class PopulationSystem
             if (site.SaveInstance is { } instance) byInstance.TryAdd(instance, site.Index);
             if (site.Kind == WildKind.Sector) sectorOf.TryAdd(site.Zone, site.Index);
         }
+
         foreach (var sp in saved.Platoons)
         {
             if (sp.Wild is not { } kind) continue;
             if (kind == WildKind.Nest) sp.WildSite = sp.Nest is { } n && byInstance.TryGetValue(n.Instance, out int s) ? s : -1;
             else sp.WildSite = sectorOf.TryGetValue(WorldLayout.ZoneOf(sp.Source.Position.X, sp.Source.Position.Z), out int s) ? s : -1;
         }
+
         foreach (var nest in saved.Nests)
         {
             var state = nest.State;
-            var flags = (state.Bools.GetValueOrDefault("discovered") ? TownKnowledge.Discovered : 0) | (state.Bools.GetValueOrDefault("explored") ? TownKnowledge.Explored : 0)
+            var flags = (state.Bools.GetValueOrDefault("discovered") ? TownKnowledge.Discovered : 0)
+                | (state.Bools.GetValueOrDefault("explored") ? TownKnowledge.Explored : 0)
                 | (state.Bools.GetValueOrDefault("recently discovered") ? TownKnowledge.Recent : 0);
             if (flags == 0 || !byInstance.TryGetValue(nest.Instance, out int site) || _wildSites[site].Nest is not { } town) continue;
             var faction = _wildSites[site].Faction >= 0 ? _data.Factions[_wildSites[site].Faction] : null;
-            world.Player.KnowCamp(new CampView(site, town.Id, town.Name, faction?.Id ?? town.Faction ?? "", faction?.NotReal ?? false, nest.Position, flags), flags);
+            world.Player.KnowCamp(new CampView(site, town.Id, town.Name, faction?.Id ?? town.Faction ?? "", faction?.NotReal ?? false, nest.Position,
+                flags), flags);
         }
+
         foreach (var nest in saved.Nests)
+        {
             if (byInstance.TryGetValue(nest.Instance, out int site))
             {
                 _nestSaveIds[site] = (nest.Instance, nest.Handle);
                 NestPools(world, _wildSites[site]);   // a save's nest grows from now on, visited or not (rolled ones exist once they load)
             }
+        }
     }
 
     /// <summary>
@@ -203,6 +213,7 @@ public sealed partial class PopulationSystem
             members += k.Stored.Members.Count;
             hold.Templates[k.TemplateId] = hold.Templates.GetValueOrDefault(k.TemplateId) + 1;
         }
+
         if (world.Saved is null) return hold is null ? null : hold with { Squads = squads, Members = members };
         foreach (var p in world.Platoons.All)
         {
@@ -218,6 +229,7 @@ public sealed partial class PopulationSystem
             members += alive;
             hold.Templates[p.TemplateId] = hold.Templates.GetValueOrDefault(p.TemplateId) + 1;
         }
+
         return hold is null ? null : hold with { Squads = squads, Members = members };
     }
 
@@ -225,60 +237,152 @@ public sealed partial class PopulationSystem
     /// The sectors (every in-map zone whose group has homeless spawns), then the nests of every group in record order: the <paramref name="saved"/> nests in it (a save's),
     /// then rolled ones up to the group's count.
     /// </summary>
-    public static List<WildSite> BuildWildSites(PopulationData data, PopulationSettings settings, BiomeMap biomes, ulong seed, IReadOnlyList<Saving.SavedNest>? saved = null, IWorldStates? states = null)
+    public static List<WildSite> BuildWildSites(PopulationData data, PopulationSettings settings, BiomeMap biomes, ulong seed,
+        IReadOnlyList<Saving.SavedNest>? saved = null, IWorldStates? states = null)
     {
         states ??= data.States;
-        var sites = new List<WildSite>();
-        var groups = biomes.Groups;
-        var cellsOf = new List<(int X, int Z)>[groups.Count];
-        for (int g = 0; g < groups.Count; g++) cellsOf[g] = [];
-        for (int z = 0; z < WeatherAreas.Cells; z++)
-            for (int x = 0; x < WeatherAreas.Cells; x++)
-            {
-                int g = biomes.GroupOf(x, z);
-                if (g < 0) continue;
-                cellsOf[g].Add((x, z));
-                if (groups[g].HomelessSpawnAmount > 0 && groups[g].HomelessSpawns.Count > 0)
-                    sites.Add(new WildSite(sites.Count, WildKind.Sector, new ZoneCoordinate(x, z), g, null, -1, []));
-            }
+        var builder = new WildSiteBuilder(data, settings, biomes, seed, states);
+        builder.AddSectors();
+        builder.NoteSaved(saved);
+        for (int g = 0; g < biomes.Groups.Count; g++) builder.AddNests(g);
+        builder.AddUngrouped();
+        return builder.Sites;
+    }
 
-        bool Gated(string townId) => data.Db.Find(townId) is not { } r || r.GetReferences("world state").Any(w => !IWorldStates.Passes(states, data.Db, w.TargetStringId, w.Values.Value0));
-        // A save's nests, by the group of the cell they stand in (-1: outside every group; they are kept all the same).
-        var savedOf = new Dictionary<int, List<Saving.SavedNest>>();
-        foreach (var n in saved ?? [])
+    /// <summary>
+    /// Builds the wild sites of one world: its sectors, the save's nests and the rolled ones, in <see cref="BuildWildSites"/>'s order.
+    /// </summary>
+    sealed class WildSiteBuilder
+    {
+        /// <summary>
+        /// The population data.
+        /// </summary>
+        readonly PopulationData _data;
+
+        /// <summary>
+        /// The population settings (the nest multiplier).
+        /// </summary>
+        readonly PopulationSettings _settings;
+
+        /// <summary>
+        /// The biome map.
+        /// </summary>
+        readonly BiomeMap _biomes;
+
+        /// <summary>
+        /// The world seed.
+        /// </summary>
+        readonly ulong _seed;
+
+        /// <summary>
+        /// The world states gating towns.
+        /// </summary>
+        readonly IWorldStates _states;
+
+        /// <summary>
+        /// The biome groups.
+        /// </summary>
+        readonly IReadOnlyList<BiomeGroupData> _groups;
+
+        /// <summary>
+        /// Each group's cells.
+        /// </summary>
+        readonly List<(int X, int Z)>[] _cellsOf;
+
+        /// <summary>
+        /// A save's nests by the group of the cell they stand in.
+        /// </summary>
+        readonly Dictionary<int, List<Saving.SavedNest>> _savedOf = new();
+
+        /// <summary>
+        /// The site index of each saved nest added, until a roll takes it over.
+        /// </summary>
+        readonly Dictionary<Saving.SavedNest, int> _savedSite = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// The sites built so far.
+        /// </summary>
+        readonly List<WildSite> _sites = new();
+
+        /// <summary>
+        /// The sites, in the order built.
+        /// </summary>
+        public List<WildSite> Sites => _sites;
+
+        /// <summary>
+        /// Takes the world's data; the groups' cell lists start empty.
+        /// </summary>
+        public WildSiteBuilder(PopulationData data, PopulationSettings settings, BiomeMap biomes, ulong seed, IWorldStates states)
         {
-            if (data.Db.Find(n.TownId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town }) continue;
-            var (cx, cz) = WeatherAreas.CellOf(n.Position.X, n.Position.Z);
-            int g = biomes.GroupOf(cx, cz);
-            if (!savedOf.TryGetValue(g, out var list)) savedOf[g] = list = [];
-            list.Add(n);
+            (_data, _settings, _biomes, _seed, _states) = (data, settings, biomes, seed, states);
+            _groups = _biomes.Groups;
+            _cellsOf = new List<(int X, int Z)>[_groups.Count];
+            for (int g = 0; g < _groups.Count; g++) _cellsOf[g] = [];
         }
-        var savedSite = new Dictionary<Saving.SavedNest, int>(ReferenceEqualityComparer.Instance);
-        void AddSaved(Saving.SavedNest n, int g)
+
+        /// <summary>
+        /// Every in-map zone whose group has homeless spawns is a sector; each group's cells are noted.
+        /// </summary>
+        public void AddSectors()
         {
-            savedSite[n] = sites.Count;
-            var town = TownData.From(data.Db.Find(n.TownId)!);
-            int faction = town.Faction is { } f ? data.FactionIndex(f) : -1;
-            sites.Add(new WildSite(sites.Count, WildKind.Nest, WorldLayout.ZoneOf(n.Position.X, n.Position.Z), g, town, faction, [new Vector2(n.Position.X, n.Position.Z)], n.Instance,
-                Rng.Mix(SeedSalts.NestLayout ^ Rng.StableHash(n.Instance))));
+            for (int z = 0; z < WeatherAreas.Cells; z++)
+            {
+                for (int x = 0; x < WeatherAreas.Cells; x++)
+                {
+                    int g = _biomes.GroupOf(x, z);
+                    if (g < 0) continue;
+                    _cellsOf[g].Add((x, z));
+                    if (_groups[g].HomelessSpawnAmount > 0 && _groups[g].HomelessSpawns.Count > 0)
+                        _sites.Add(new WildSite(_sites.Count, WildKind.Sector, new ZoneCoordinate(x, z), g, null, -1, []));
+                }
+            }
         }
-        for (int g = 0; g < groups.Count; g++)
+
+        /// <summary>
+        /// Files a save's nests by the group of the cell they stand in (-1: outside every group; they are kept all the same).
+        /// </summary>
+        public void NoteSaved(IReadOnlyList<Saving.SavedNest>? saved)
         {
-            var group = groups[g];
-            var mine = savedOf.GetValueOrDefault(g) ?? [];
+            foreach (var n in saved ?? [])
+            {
+                if (_data.Db.Find(n.TownId) is not { Type: Meitou.Data.Fcs.FcsRecordType.Town }) continue;
+                var (cx, cz) = WeatherAreas.CellOf(n.Position.X, n.Position.Z);
+                int g = _biomes.GroupOf(cx, cz);
+                if (!_savedOf.TryGetValue(g, out var list)) _savedOf[g] = list = [];
+                list.Add(n);
+            }
+        }
+
+        /// <summary>
+        /// The saved nests outside every group.
+        /// </summary>
+        public void AddUngrouped()
+        {
+            foreach (var n in _savedOf.GetValueOrDefault(-1) ?? []) AddSaved(n, -1);
+        }
+
+        /// <summary>
+        /// The nests of a group: the saved ones in it, then rolled ones up to its count.
+        /// </summary>
+        public void AddNests(int g)
+        {
+            var group = _groups[g];
+            var mine = _savedOf.GetValueOrDefault(g) ?? [];
             foreach (var n in mine) AddSaved(n, g);
-            int count = (int)MathF.Round(group.NumNests * settings.NestsMultiplier);
-            if (count <= 0 || group.Nests.Count == 0 || cellsOf[g].Count == 0) continue;
+            int count = (int)MathF.Round(group.NumNests * _settings.NestsMultiplier);
+            if (count <= 0 || group.Nests.Count == 0 || _cellsOf[g].Count == 0) return;
             ulong groupKey = Rng.Mix(SeedSalts.NestLayout ^ Rng.StableHash(group.Id));
             List<TownSite>? markers = null;
             if (group.NestsAtFixedMarkersOnly)
             {
-                markers = [.. data.Sites.Where(s => s.Town.Type == TownType.NestMarker
-                    && WeatherAreas.CellOf(s.Position.X, s.Position.Z) is var (cx, cz) && biomes.GroupOf(cx, cz) == g)];
+                markers = [.. _data.Sites.Where(s => s.Town.Type == TownType.NestMarker
+                    && WeatherAreas.CellOf(s.Position.X, s.Position.Z) is var (cx, cz) && _biomes.GroupOf(cx, cz) == g)];
                 // A marker within 2500 (3D) of its nearest town (by XZ) is never used (FUN_1408f6350).
-                markers.RemoveAll(m => NearestTown(data, new Vector2(m.Position.X, m.Position.Z), out _) is { } town && Vector3.DistanceSquared(m.Position, town.Position) < MarkerTownGap * MarkerTownGap);
+                markers.RemoveAll(m => NearestTown(_data, new Vector2(m.Position.X, m.Position.Z), out _) is { } town
+                    && Vector3.DistanceSquared(m.Position, town.Position) < MarkerTownGap * MarkerTownGap);
                 count = Math.Min(count, markers.Count);
             }
+
             // The roll runs in a fixed order as for a world without a save and leaves out each roll whose nest the save holds (a saved nest stands at one of its spots,
             // or its marker: a Meitou save writes a rolled nest at the spot it loaded at), until the group has its count. A save holds only the nests made so far
             // (docs/formats/save.md "Nests"), so whichever of them it holds, the others come out as before: a left-out roll takes no room, a held one is never rolled
@@ -286,45 +390,75 @@ public sealed partial class PopulationSystem
             int room = count - mine.Count;
             for (int i = 0; i < count && room > 0; i++)
             {
-                ulong key = Rng.Mix(groupKey ^ (ulong)i << 16);
-                ulong pick = 0, place = SeedSalts.NestPlace;
-                ulong Pick() => Rng.Hash(seed, key, RngPurpose.Spawn, pick++);
-                ulong Place() => Rng.Hash(seed, key, RngPurpose.Spawn, place++);
-                var spots = new List<Vector2>();
-                if (markers is not null)
-                {
-                    // A seeded draw without repeats: marker i of a shuffled order.
-                    int m = i + Rng.Int(Place(), markers.Count - i);
-                    (markers[i], markers[m]) = (markers[m], markers[i]);
-                    spots.Add(new Vector2(markers[i].Position.X, markers[i].Position.Z));
-                }
-                else
-                {
-                    var (cx, cz) = cellsOf[g][Rng.Int(Place(), cellsOf[g].Count)];
-                    var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(cx, cz);
-                    for (int t = 0; t < 16 && spots.Count < 8; t++)
-                    {
-                        var p = new Vector2(minX + Rng.Float(Place()) * (maxX - minX), minZ + Rng.Float(Place()) * (maxZ - minZ));
-                        if (!NearTown(data, p, 2)) spots.Add(p);
-                    }
-                    if (spots.Count == 0) continue;
-                }
-                float near = markers is not null ? 100 : 1;
-                if (mine.FirstOrDefault(n => spots.Any(s => Vector2.DistanceSquared(s, new Vector2(n.Position.X, n.Position.Z)) < near * near)) is { } held)
-                {
-                    if (savedSite.Remove(held, out int at)) sites[at] = sites[at] with { Key = key };
-                    continue;
-                }
-                if (SquadFactory.WeightedPick(group.Nests, Gated, Pick) is not { } townId || data.Db.Find(townId) is not { } record) continue;
-                var town = TownData.From(record);
-                var zone = WorldLayout.ZoneOf(spots[0].X, spots[0].Y);
-                int faction = town.Faction is { } f ? data.FactionIndex(f) : -1;
-                sites.Add(new WildSite(sites.Count, WildKind.Nest, zone, g, town, faction, spots, Key: key));
-                room--;
+                if (RollNest(g, group, mine, markers, groupKey, i)) room--;
             }
         }
-        foreach (var n in savedOf.GetValueOrDefault(-1) ?? []) AddSaved(n, -1);
-        return sites;
+
+        /// <summary>
+        /// One roll of a group's nest: its spots (a marker, else up to 8 in a random cell), then a saved nest there takes it over, else a town is
+        /// picked.
+        /// </summary>
+        bool RollNest(int g, BiomeGroupData group, List<Saving.SavedNest> mine, List<TownSite>? markers, ulong groupKey, int i)
+        {
+            ulong key = Rng.Mix(groupKey ^ (ulong)i << 16);
+            ulong pick = 0, place = SeedSalts.NestPlace;
+            ulong Pick() => Rng.Hash(_seed, key, RngPurpose.Spawn, pick++);
+            ulong Place() => Rng.Hash(_seed, key, RngPurpose.Spawn, place++);
+            var spots = new List<Vector2>();
+            if (markers is not null)
+            {
+                // A seeded draw without repeats: marker i of a shuffled order.
+                int m = i + Rng.Int(Place(), markers.Count - i);
+                (markers[i], markers[m]) = (markers[m], markers[i]);
+                spots.Add(new Vector2(markers[i].Position.X, markers[i].Position.Z));
+            }
+            else
+            {
+                var (cx, cz) = _cellsOf[g][Rng.Int(Place(), _cellsOf[g].Count)];
+                var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(cx, cz);
+                for (int t = 0; t < 16 && spots.Count < 8; t++)
+                {
+                    var p = new Vector2(minX + Rng.Float(Place()) * (maxX - minX), minZ + Rng.Float(Place()) * (maxZ - minZ));
+                    if (!NearTown(_data, p, 2)) spots.Add(p);
+                }
+
+                if (spots.Count == 0) return false;
+            }
+
+            float near = markers is not null ? 100 : 1;
+            if (mine.FirstOrDefault(n => spots.Any(s => Vector2.DistanceSquared(s, new Vector2(n.Position.X, n.Position.Z)) < near * near))
+                is { } held)
+            {
+                if (_savedSite.Remove(held, out int at)) _sites[at] = _sites[at] with { Key = key };
+                return false;
+            }
+
+            if (SquadFactory.WeightedPick(group.Nests, Gated, Pick) is not { } townId || _data.Db.Find(townId) is not { } record) return false;
+            var town = TownData.From(record);
+            var zone = WorldLayout.ZoneOf(spots[0].X, spots[0].Y);
+            int faction = town.Faction is { } f ? _data.FactionIndex(f) : -1;
+            _sites.Add(new WildSite(_sites.Count, WildKind.Nest, zone, g, town, faction, spots, Key: key));
+            return true;
+        }
+
+        /// <summary>
+        /// A saved nest added as a site of the group.
+        /// </summary>
+        void AddSaved(Saving.SavedNest n, int g)
+        {
+            _savedSite[n] = _sites.Count;
+            var town = TownData.From(_data.Db.Find(n.TownId)!);
+            int faction = town.Faction is { } f ? _data.FactionIndex(f) : -1;
+            _sites.Add(new WildSite(_sites.Count, WildKind.Nest, WorldLayout.ZoneOf(n.Position.X, n.Position.Z), g, town, faction,
+                [new Vector2(n.Position.X, n.Position.Z)], n.Instance,
+                Rng.Mix(SeedSalts.NestLayout ^ Rng.StableHash(n.Instance))));
+        }
+
+        /// <summary>
+        /// Whether a town is left out by a world state it needs.
+        /// </summary>
+        bool Gated(string townId) => _data.Db.Find(townId) is not { } r
+            || r.GetReferences("world state").Any(w => !IWorldStates.Passes(_states, _data.Db, w.TargetStringId, w.Values.Value0));
     }
 
     /// <summary>
@@ -338,6 +472,7 @@ public sealed partial class PopulationSystem
             float r = Math.Max(s.Town.SizeRadius * s.Town.TownRadiusMult, 100) * share;
             if (Vector2.DistanceSquared(p, new Vector2(s.Position.X, s.Position.Z)) < r * r) return true;
         }
+
         return false;
     }
 
@@ -357,6 +492,7 @@ public sealed partial class PopulationSystem
             if (state.Status == SiteStatus.Unloaded) LoadWild(world, _wildSites[i], state);
             else state.UnloadAtTick = -1;
         }
+
         _wildBuffer.Clear();
         _wildBuffer.AddRange(_wildLoaded);
         foreach (int i in _wildBuffer)
@@ -373,6 +509,7 @@ public sealed partial class PopulationSystem
                     KeepOccupiers(world, i, state);
                     PayNestDespawn(world, _wildSites[i], state);
                 }
+
                 Drop(world, state);
                 FoldCamp(world, i);
                 _wildLoaded.Remove(i);
@@ -390,12 +527,14 @@ public sealed partial class PopulationSystem
         foreach (int id in state.Squads)
         {
             if (world.Squads.Find(id) is not { } squad) continue;
-            var stored = new StoredSquad { Name = squad.Name, Shop = squad.Shop, NextHomeFillTick = squad.NextHomeFillTick, Package = squad.Ai?.Current?.Id, Ai = Saving.AiSave.Of(squad.Ai) ?? squad.SavedAi, Memory = Memory?.Take(squad.Id) };
+            var stored = new StoredSquad { Name = squad.Name, Shop = squad.Shop, NextHomeFillTick = squad.NextHomeFillTick,
+                Package = squad.Ai?.Current?.Id, Ai = Saving.AiSave.Of(squad.Ai) ?? squad.SavedAi, Memory = Memory?.Take(squad.Id) };
             Store(world, squad, stored);
             world.Squads.Remove(id);
             if (stored.Members.Count == 0) continue;
             (kept ??= []).Add(new KeptWild(stored, squad.TemplateId, squad.Faction, squad.Money, squad.SpawnSize, squad.HomeCentre, squad.HomeRadius));
         }
+
         if (kept is not null) _keptWild[site] = kept;
     }
 
@@ -440,7 +579,9 @@ public sealed partial class PopulationSystem
         foreach (var k in kept)
         {
             if (OffscreenHealing) RecoverStored(world, k.Stored);
-            if (SpawnKept(world, k.Stored, k.TemplateId, k.Faction, -1, -1, k.Stored.Anchor, k.Centre, k.Radius, k.SpawnSize) is not { } squad) continue;
+            if (SpawnKept(world, k.Stored, k.TemplateId, k.Faction, -1, -1, k.Stored.Anchor, k.Centre, k.Radius, k.SpawnSize) is not { } squad)
+                continue;
+
             squad.Money = k.Money;
             state.Squads.Add(squad.Id);
             if (_wildSites![site].Kind == WildKind.Nest) _nestSquads[squad.Id] = _wildSites[site].Nest!;
@@ -470,10 +611,12 @@ public sealed partial class PopulationSystem
             else _work.Add(() => _builtWild.Enqueue(BuildNest(site, loadId, seed, walk, players, budget)));
             return;
         }
+
         int room = IslandRoom(world);
         int held = hold?.Squads ?? 0;
         int share = HomelessCount(_data.Biomes!.Groups[site.Group], _settings.PopulationMultiplier);
         state.Planned = Math.Max(0, Math.Min(share, held + room) - held);
+
         if (_work is null) SpawnWild(world, BuildSector(site, loadId, seed, walk, players, hold, room: room));
         else _work.Add(() => _builtWild.Enqueue(BuildSector(site, loadId, seed, walk, players, hold, room: room)));
     }
@@ -503,7 +646,11 @@ public sealed partial class PopulationSystem
         var list = new List<Vector2>();
         var table = world.Characters;
         for (int i = 0; i < table.Previous.Length; i++)
-            if (table.Previous[i].Alive && table.Cold(i) is { IsPlayer: true }) list.Add(new Vector2(table.Previous[i].Position.X, table.Previous[i].Position.Z));
+        {
+            if (table.Previous[i].Alive && table.Cold(i) is { IsPlayer: true })
+                list.Add(new Vector2(table.Previous[i].Position.X, table.Previous[i].Position.Z));
+        }
+
         return [.. list];
     }
 
@@ -531,6 +678,7 @@ public sealed partial class PopulationSystem
                 if (!BeginWild(world, b)) continue;
                 _spawningWild = (b, 0);
             }
+
             var (build, next) = _spawningWild.Value;
             if (_wildStates[build.Site].LoadId != build.LoadId) { _spawningWild = null; continue; }   // unloaded meanwhile
             if (next >= build.Squads.Count) { EndWild(world, build); _spawningWild = null; continue; }   // nothing (more) to make costs no frame
@@ -577,7 +725,11 @@ public sealed partial class PopulationSystem
         }
         else squad.HomeRadius = _settings.HomelessHomeRadius;
         state.Squads.Add(squad.Id);
-        if (_wildLog.Count < 256) _wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : _data.Biomes!.Groups[site.Group].Name, squad.Name, squad.Members.Count));
+        if (_wildLog.Count < 256)
+        {
+            _wildLog.Add(new WildSpawn(world.Tick, site.Kind, site.Kind == WildKind.Nest ? site.Nest!.Name : _data.Biomes!.Groups[site.Group].Name,
+                squad.Name, squad.Members.Count));
+        }
     }
 
     void EndWild(World world, BuiltWild b)
@@ -615,6 +767,7 @@ public sealed partial class PopulationSystem
         float k = sum / target;
         for (int i = 0; i < entries.Count; i++)
             w[i] = entries[i].V0 > 0 && usable(entries[i].Id) ? MathF.Max(0, entries[i].V0 - k * counts[i]) : 0;
+
         return w;
     }
 
@@ -634,11 +787,13 @@ public sealed partial class PopulationSystem
             last = i;
             if ((pick -= weights[i]) < 0) return i;
         }
+
         return last;
     }
 
     bool TemplateUsable(string id) =>
-        _data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r) && SquadTemplate.From(r).WorldState.All(w => IWorldStates.Passes(States, _data.Db, w.Id, w.V0));
+        _data.Db.Find(id) is { } r && SquadFactory.IsTemplate(r)
+            && SquadTemplate.From(r).WorldState.All(w => IWorldStates.Passes(States, _data.Db, w.Id, w.V0));
 
     /// <summary>
     /// A sector's squads as it loads, or with <paramref name="topUp"/> ≥ 0 the one squad of the area tick's refill number <paramref name="topUp"/>
@@ -651,6 +806,7 @@ public sealed partial class PopulationSystem
         var group = _data.Biomes!.Groups[site.Group];
         var (minX, minZ, maxX, maxZ) = WeatherAreas.CellRect(site.Zone.X, site.Zone.Y);
         var centre = new Vector2((minX + maxX) / 2, (minZ + maxZ) / 2);
+
         // A sector whose nearest town is the player's makes nothing (6.2).
         if (NearestTown(centre, out _) is { } nearest && _data.PlayerFaction >= 0 && _data.SiteFactions[nearest.Index] == _data.PlayerFaction)
             return new BuiltWild(site.Index, loadId, centre, squads, TopUp: topUp >= 0);
@@ -658,13 +814,17 @@ public sealed partial class PopulationSystem
         // pool within its free budget (docs/game/factions-squads-towns.md "Homeless squads"), which Meitou leaves to the nest's own site.
         if (OwnNest(site, centre) is { RoamingSquads.Count: > 0 })
             return new BuiltWild(site.Index, loadId, centre, squads, TopUp: topUp >= 0);
+
         int n = HomelessCount(group, _settings.PopulationMultiplier);
         var counts = new int[group.HomelessSpawns.Count];
+
         // The save's homeless squads standing in this sector are of its count (and of their entry's).
         for (int i = 0; hold is not null && i < counts.Length; i++) counts[i] = hold.Templates.GetValueOrDefault(group.HomelessSpawns[i].Id);
         int first = hold?.Squads ?? 0;
+
         // At load no more than the island has room for (IslandRoom).
         if (topUp < 0 && room < n - first) n = first + Math.Max(0, room);
+
         // A refill's key follows the load's (n of them) and the refills before it.
         if (topUp >= 0) (first, n) = (n + topUp, n + topUp + 1);
         for (int s = first; s < n; s++)
@@ -679,7 +839,10 @@ public sealed partial class PopulationSystem
             if (PlaceInSector(minX, minZ, maxX, maxZ, faction, seed, key, walk, players) is not { } spot) continue;
             if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot) is { } one) squads.Add(one);
         }
-        return topUp >= 0 ? new BuiltWild(site.Index, loadId, centre, squads, Rolls: 1, TopUp: true) : new BuiltWild(site.Index, loadId, centre, squads);
+
+        return topUp >= 0
+            ? new BuiltWild(site.Index, loadId, centre, squads, Rolls: 1, TopUp: true)
+            : new BuiltWild(site.Index, loadId, centre, squads);
     }
 
     /// <summary>
@@ -719,6 +882,7 @@ public sealed partial class PopulationSystem
             float d = Vector2.Distance(p, new Vector2(s.Position.X, s.Position.Z));
             if (d < distance) (best, distance) = (s, d);
         }
+
         return best;
     }
 
@@ -738,12 +902,14 @@ public sealed partial class PopulationSystem
                 if (s.Town.Type is TownType.NestMarker or TownType.PointOfInterest or TownType.Null) continue;
                 if (_data.SiteFactions[s.Index] != faction) p = PushOut(p, s, 1);
             }
+
             bool tooClose = false;
             foreach (var at in players)
                 if (Vector2.DistanceSquared(at, p) < _settings.HomelessPlayerDistance * _settings.HomelessPlayerDistance) { tooClose = true; break; }
             if (tooClose || !walk.IsWalkable(p.X, p.Y)) continue;
             return p;
         }
+
         return null;
     }
 
@@ -763,10 +929,15 @@ public sealed partial class PopulationSystem
         var nest = site.Nest!;
         Vector2? centre = budget.Centre;
         if (centre is null)
+        {
             foreach (var s in site.Spots)
                 if (walk.IsWalkable(s.X, s.Y)) { centre = s; break; }
+        }
+
         bool topUp = budget.Centre is not null;
-        if (centre is not { } c) return new BuiltWild(site.Index, loadId, site.Spots[0], squads, TopUp: topUp);   // no walkable spot: the nest is dormant this load
+
+        // no walkable spot: the nest is dormant this load
+        if (centre is not { } c) return new BuiltWild(site.Index, loadId, site.Spots[0], squads, TopUp: topUp);
         int cap = budget.Cap;
         var entries = nest.RoamingSquads;
         var counts = (int[])budget.Counts.Clone();
@@ -774,6 +945,7 @@ public sealed partial class PopulationSystem
         for (int i = 0; i < entries.Count; i++)
             if (entries[i].V0 > 0 && TemplateUsable(entries[i].Id)) templates[i] = SquadTemplate.From(_data.Db.Find(entries[i].Id)!);
         float radius = NestRadius(nest);
+
         // The members already of its pool (the save's squads, or the nest's in the world) count against the cap, their templates against the weights.
         int members = budget.Members;
         var weights = new float[entries.Count];
@@ -784,8 +956,11 @@ public sealed partial class PopulationSystem
             // An entry fits the free room, or any size does while the pool is empty and more than 4 are free (FUN_1408f7e80).
             int free = cap - members;
             for (int i = 0; i < entries.Count; i++)
+            {
                 weights[i] = templates[i] is { } t && (SquadFactory.ExpectedSize(t, _settings.SquadSizeMultiplier) <= free || members == 0 && free > 4)
                     ? MathF.Max(0, entries[i].V0 - counts[i]) : 0;
+            }
+
             ulong key = Rng.Mix(Rng.Mix(SeedSalts.NestSquad ^ site.Key) ^ (uint)(budget.First + s));
             rolls++;
             int e = Pick(weights, Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.NestPick));
@@ -794,6 +969,7 @@ public sealed partial class PopulationSystem
                 exhausted = true;
                 break;
             }
+
             if (!budget.Place) break;
             counts[e]++;
             var template = templates[e]!;
@@ -807,12 +983,15 @@ public sealed partial class PopulationSystem
                     if (Vector2.DistanceSquared(at, p) < _settings.NestPlayerDistance * _settings.NestPlayerDistance) { tooClose = true; break; }
                 if (!tooClose && walk.IsWalkable(p.X, p.Y)) spot = p;
             }
+
             if (spot is null) continue;
             if (BuildOne(template, faction, faction >= 0 ? _data.Factions[faction] : null, key, seed, spot.Value) is not { } one) continue;
             squads.Add(one);
             members += one.Plan.TotalMembers;
         }
-        var layout = topUp ? null : NestFurniture.Scatter(_data.Db, nest, c, walk, seed, $"nest{(int)c.X},{(int)c.Y}:");   // keyed by place: a save names its cages
+
+        // keyed by place: a save names its cages
+        var layout = topUp ? null : NestFurniture.Scatter(_data.Db, nest, c, walk, seed, $"nest{(int)c.X},{(int)c.Y}:");
         return new BuiltWild(site.Index, loadId, c, squads, rolls, exhausted, topUp, layout);
     }
 }

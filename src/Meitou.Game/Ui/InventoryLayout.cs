@@ -43,7 +43,9 @@ sealed class InventoryLayout(PlayerInterface player)
     Dictionary<string, UiRect> WindowRoots()
     {
         var roots = new Dictionary<string, UiRect>(StringComparer.Ordinal);
-        foreach (var f in player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen, player.ScreenRouter.AddFaithfulContent))
+        var frames = player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen,
+            player.ScreenRouter.AddFaithfulContent);
+        foreach (var f in frames)
         {
             if (f.Controls.FirstOrDefault(c => c.Type == "Window") is { } window) roots[f.Id] = window.Bounds;
         }
@@ -77,7 +79,8 @@ sealed class InventoryLayout(PlayerInterface player)
         foreach (string screen in row)
         {
             var r = roots[screen];
-            player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + new Vector2(x - r.X, (screen == "limbs" ? margin : y) - r.Y));
+            var move = new Vector2(x - r.X, (screen == "limbs" ? margin : y) - r.Y);
+            player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + move);
             x += r.Width + gap;
         }
     }
@@ -105,7 +108,8 @@ sealed class InventoryLayout(PlayerInterface player)
         {
             foreach (string screen in new[] { "inventory", "bag" })
             {
-                if (player.FaithfulScreens.IsOpen(screen)) player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + new Vector2(-x, 0));
+                if (player.FaithfulScreens.IsOpen(screen))
+                    player.FaithfulScreens.SetOffset(screen, player.FaithfulScreens.GetOffset(screen) + new Vector2(-x, 0));
             }
 
             x = 0;
@@ -123,7 +127,8 @@ sealed class InventoryLayout(PlayerInterface player)
         var roots = WindowRoots();
         if (!roots.TryGetValue(id, out var window)) return;
 
-        player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + new Vector2(-window.X, (player.Height - window.Height) / 2 - window.Y));
+        var move = new Vector2(-window.X, (player.Height - window.Height) / 2 - window.Y);
+        player.FaithfulScreens.SetOffset(id, player.FaithfulScreens.GetOffset(id) + move);
         float left = new[] { "bag", "inventory" }.Where(roots.ContainsKey).Select(s => roots[s].X).DefaultIfEmpty(float.MaxValue).Min();
         float push = window.Width + 6 * player.InventoryScale - left;
         if (push <= 0) return;
@@ -318,8 +323,8 @@ sealed class InventoryLayout(PlayerInterface player)
             lines.Add(new(Loc.Tr("Slave of:"), slave.Owner, ValueColour: PlayerInterface.BadColour, Tooltip: Loc.Tr("The faction that owns you.")));
 
         string? looksColour = slave.Looks > 0.1f ? PlayerInterface.BadColour : null;
-        string looksTip = Loc.Tr("How much you look like an escaped slave. Based on how you are dressed/undressed. Wearing shackles and rags is a big giveaway. "
-            + "Try to avoid hanging around too long near people who may recognise you.");
+        string looksTip = Loc.Tr("How much you look like an escaped slave. Based on how you are dressed/undressed. "
+            + "Wearing shackles and rags is a big giveaway. Try to avoid hanging around too long near people who may recognise you.");
         lines.Add(new(Loc.Tr("Looks like slave:"), Loc.Tr("{1,num}%", (int)(slave.Looks * 100)), ValueColour: looksColour, Tooltip: looksTip));
         return lines;
     }

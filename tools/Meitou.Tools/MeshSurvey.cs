@@ -55,7 +55,8 @@ static class MeshSurvey
 
         Console.WriteLine($"{files.Count} meshes, {failures.Count} failed");
         foreach (var (k, v) in versions) Console.WriteLine($"  {k}: {v}");
-        Console.WriteLine($"  {submeshes} submeshes, {vertices} vertices, {indices} indices; {skinned} skinned, {withLod} with LOD, {shared} with shared vertices");
+        Console.WriteLine($"  {submeshes} submeshes, {vertices} vertices, {indices} indices; "
+            + $"{skinned} skinned, {withLod} with LOD, {shared} with shared vertices");
         Console.WriteLine($"  vertex buffers with a position outside the mesh bounds: {outOfBounds}; meshes without bounds: {noBounds}");
         Console.WriteLine("  skipped chunks: " + string.Join(", ", skipped.Select(kv => $"{kv.Key} x{kv.Value}")));
         Console.WriteLine("  vertex elements:");
@@ -71,6 +72,7 @@ static class MeshSurvey
     {
         int count = 0;
         foreach (var vd in mesh.SubMeshes.Select(s => s.VertexData).OfType<OgreVertexData>())
+        {
             foreach (var p in vd.ReadPositions() ?? [])
             {
                 var tol = 1e-3f * (1 + (b.Max - b.Min).Length());
@@ -81,6 +83,7 @@ static class MeshSurvey
                     break;
                 }
             }
+        }
 
         return count;
     }

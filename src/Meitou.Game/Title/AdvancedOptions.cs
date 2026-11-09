@@ -60,7 +60,8 @@ sealed class AdvancedOptions(PlayerInterface player)
         float x = Math.Min(player.Width * (player.TitleOpen || id == "import" ? 0.5f : 0.6f), player.Width - width);
         float y = Math.Min(player.Height * 0.05f, Math.Max(0, player.Height - mainHeight - extra));
 
-        // Meitou: centred across, the window with its options panel centred down (the menu stack is on the left, so the original's spot reads off-centre).
+        // Meitou: centred across, the window with its options panel centred down (the menu stack is on the left, so the original's spot reads
+        // off-centre).
         if (player.UiMode == UiMode.Meitou)
         {
             x = (player.Width - width) / 2;

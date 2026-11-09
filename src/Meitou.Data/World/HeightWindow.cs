@@ -54,7 +54,8 @@ public sealed class HeightWindow
         if (u < 0 || v < 0 || u > Columns - 1 || v > Rows - 1) return false;
         int i = Math.Min((int)u, Columns - 2), j = Math.Min((int)v, Rows - 2);
         double fu = u - i, fv = v - j;
-        height = (float)(Height(i, j) * (1 - fu) * (1 - fv) + Height(i + 1, j) * fu * (1 - fv) + Height(i, j + 1) * (1 - fu) * fv + Height(i + 1, j + 1) * fu * fv);
+        height = (float)(Height(i, j) * (1 - fu) * (1 - fv) + Height(i + 1, j) * fu * (1 - fv) + Height(i, j + 1) * (1 - fu) * fv
+            + Height(i + 1, j + 1) * fu * fv);
         return true;
     }
 

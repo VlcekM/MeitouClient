@@ -120,7 +120,7 @@ Traced 2026-10-17 from the last part of the camera update (`FUN_1406b0140`, with
   `interior integrity`, `Enter_Building`, or `Enter_Building_Big` when `cavernous`; all on object 100. The events also flip the reverbs ([below](#reverb-and-aux-buses)).
 - **Data** (base game records, Verified). 603 BUILDINGs; 58 have an interior-mask hull, 38 of those an ambience (Metal 6, Stone 20, Wicker 4, Wood 8) and 20 none; 25 more have an ambience but no hull and never
   sound. Integrity is 100 for most (50 and 70 for some, 0 and 1 for ruins); `cavernous` is set on 17 Metal and 2 Stone buildings. 13 gateways have a hull, none an ambience.
-- **Meitou** (`InteriorSounds`; `GameSound`). `WorldObjectRenderer.InteriorUnder(x, z)` finds the loaded building whose hull footprint (`InteriorVolume.ContainsGround`) holds the pivot, highest first; the
+- **Meitou** (`InteriorSounds`; `WorldAudio`). `WorldObjectRenderer.InteriorUnder(x, z)` finds the loaded building whose hull footprint (`InteriorVolume.ContainsGround`) holds the pivot, highest first; the
   volume carries `Ambience`, `Integrity` and `Cavernous` from its record. Gateways keep a hull for this test only (`InteriorVolume.IsGateway`, `ZoneObjects.GateHulls`: `FUN_140551b20` builds the interior object of any building with an `interior` list, no gateway test, **Verified**; they are no room for roof hiding, sight or the view). Differences: destroyed buildings have no volume (the exe's hull would still be hit), and the hull is the convex footprint of the
   mask's collision, and a hull whose top lies below the terrain at the pivot's X/Z still counts (the exe's ray hits the terrain first; `ContainsGround` ignores terrain). Rendered (`audio render … Indoors:<name> Building_Integrity=100 Enter_Building`, `Camera_Zoom` 50): about −84 (Wood), −78 (Metal), −84 (Stone), −87 (Wicker) dBFS; integrity 0 is 4 dB louder than 100
   (**Observed**; it fades in over 1 s and `Leave_Building` ends it in 1 to 2 s).
@@ -172,7 +172,7 @@ power, `FUN_140258260` destroys), the building set-up `FUN_14055c240`, its loade
   `SetPosition`: the character's object is placed right after) and runs the range test. Base data: the two robot spiders (`Robot Spider Worker`, `Robot Guard Spider`) have `Iron_Spider` (cutoff 50, range 500; `intensity` 0, so the object hears the global `Intensity`).
   A corpse gets a sound too (**Observed**, `CharacterHuman::vfunc_29` `1405ccd90`): AMBIENT_SOUND `Corpse Flies` (`95425-sfx.mod`, emitter `Corpse_Flies`, cutoff 50, `intensity` 1) and the `Fly-Particle` effect (`55393-Newwworld.mod`), made once the body has lain more than 4 of the game's time units
   (`FUN_14066cc00`, hours) in an active zone and removed with the effect; **not done in Meitou**.
-- **Meitou** (`WorldEmitters`, `BuildingEmitters`, `WorldObjects.Emitters`; `GameSound`). Every emitter gets its own object (ids from 2³²) and the same rules; the roll is a stable hash of the placement (the exe
+- **Meitou** (`WorldEmitters`, `BuildingEmitters`, `WorldObjects.Emitters`; `WorldAudio`). Every emitter gets its own object (ids from 2³²) and the same rules; the roll is a stable hash of the placement (the exe
   uses `rand()`); the level's buildings with a destroyed or incomplete state get none, a player-built building gets its emitter when its site is complete. The level's emitters are read once for the whole world
   (a worker task, about 0.2 s) and culled by distance, where the exe makes and tears them down with the zone. They also cover the furniture of each building's interior and exterior layout (`WorldObjects.Emitters`
   mirrors the placement of `Lay`; **Observed**: the exe's furniture path was not traced, layout objects are ordinary BUILDING records with `sounds`). The base level then has 1,252 emitters: 534 from buildings and
@@ -180,7 +180,7 @@ power, `FUN_140258260` destroys), the building set-up `FUN_14055c240`, its loade
   94 `Battery_Bank`, 44 `Water_Well`, 36 `Electronics_Bench`, 32 `Research_bench`, 28 `Windmill_Small`, 17 `Auto_Mine`, 14 `Medical_Bench`, 14 `Stone_Processor`, 12 `BioFuel`, 8 `Rum_Still`, 4 `Silo_Grind`, 3 `Furnace`)
   and are driven as [below](#machine-sounds-meitou). Rendered: `Fire` at `Intensity` 10 is −58, −66, −81 dBFS and silent at 50, 200, 400 and 600 units from the listener
   (**Observed**); in the game, with the sound eye moved 84 units from two campfires both started and at 904 units both stopped (a temporary log line).
-  **Effects** (`EffectRecord.Sound`, `GameSound`): each live effect unit of a group whose EFFECT has a `sound` (the weather's and the placers' groups) gets an emitter `effect/N` at the unit's position, moved to it each frame (`WorldEmitters.Move`) and
+  **Effects** (`EffectRecord.Sound`, `WorldAudio`): each live effect unit of a group whose EFFECT has a `sound` (the weather's and the placers' groups) gets an emitter `effect/N` at the unit's position, moved to it each frame (`WorldEmitters.Move`) and
   removed when the unit is done. The sky beams (`beam1` in the weather, `SkyBeam`, `venge beam`) therefore play `Sun_Beams` within 3000 units. **Robot spiders** (`CharacterSounds`, `CharacterSoundProfile.Ambient`): the profile's race `ambient sound` starts when a
   living character is within its range of the eye (the character's own object, the current position) and stops when it is out of range or down; the call frequency of `uses_ambient_sound` being Unknown, the emitter is simply kept as long as the rule holds. Corpse flies: an emitter per corpse with flies (`CorpseFlies`). Not done: FOLIAGE_MESH and MAP_FEATURES emitters.
 
@@ -228,7 +228,7 @@ the counter to 8; the counter counts down every frame and posts `Turret_Mvt_Stop
 The turning parts are the BUILDING_PART records with `rotation function` 5 (ROTATION_TARGET): in order, each takes the aim point in its own frame and turns by its error (yaw part, `rotation axis` Y: `atan2(x, z)`; pitch part: `atan2(-y, √(x²+z²))`) limited to
 ± the turning speed × frame time (efficiency × `aim speed` × (1 + 0.01 × damage), [combat](game/combat.md#turrets)). A shot posts `Attack` on the building's object with the `Weapons` switch `Turret`. **Unknown:** the
 idle behaviour of a manned turret without a target. **Meitou:** the simulation fires turrets and publishes who mans which turret and its aim point (`CharacterSnapshot.Turret`, outside the hash).
-`GameSound` keeps a display-only copy of each manned turret's parts within 4000 units, turned toward that aim point by the rule above in game time at efficiency 1 (`TurretSounds`, `TurretRig`),
+`TurretAudio` keeps a display-only copy of each manned turret's parts within 4000 units, turned toward that aim point by the rule above in game time at efficiency 1 (`TurretSounds`, `TurretRig`),
 and posts the two events on an object of its own at the turret (a start beyond 3000 units from the eye is dropped; **engine choice**). The gun mesh turns with the simulation's angles ([render-objects](render-objects.md#turrets)). A shot
 (`SoundKind.TurretShot`) posts `Attack` with `Weapons` = `Turret` on a pooled object at the muzzle (**engine choice**).
 To hear it: a town under attack whose guards man their turrets, or a player character sent to a turret with an enemy in range.
@@ -307,12 +307,12 @@ through one helper (`FUN_1405c9a70(char, event, maxSqDist)`): **dropped when the
   dust only where the slot's min speed is 0 (**Observed**). **Not in Meitou**, for footsteps or farms: `ParticleRenderer.Burst` can fire a system, but how a one-shot EFFECT instance
   maps onto it, the `+0x1a9` flag and the v0 slot shift are **Unknown**.
 
-Meitou (`CharacterSounds`, `AnimationSoundEvents`, `GroundSurfaces` in `Meitou.Game.Audio`; `GameSound`): characters within 1100 units of the eye get an object (dropped past 1400, or when they leave the snapshot);
+Meitou (`CharacterSounds`, `AnimationSoundEvents`, `GroundSurfaces` in `Meitou.Game.Audio`; `CharacterAudio`): characters within 1100 units of the eye get an object (dropped past 1400, or when they leave the snapshot);
 the host hands each character's place, facing, speed (horizontal distance between the last two snapshots over the tick) and animation layers (`AnimationLayer.Length` and `.Definition`, added to the snapshot) every frame.
 Combat facts come from `World.Sounds`, a display-only queue the host sets while audio runs (blocks, hits, shots, bolt hits and sticks, characters going down, fighters taking up a fight); nothing in the simulation reads it, so
 it is outside the state hash. Overlay tiles for the ground load on a worker (6 kept).
 
-Building floors in Meitou (`BuildingFloors` in `Meitou.Game.Rendering.Objects`, `FloorSurfaces.HighestBelow`, `CharacterSounds.Floor`, `GameSound`; display only, nothing reaches the simulation). For a moving character within the
+Building floors in Meitou (`BuildingFloors` in `Meitou.Game.Rendering.Objects`, `FloorSurfaces.HighestBelow`, `CharacterSounds.Floor`, `CharacterAudio`; display only, nothing reaches the simulation). For a moving character within the
 surface limit (120,000 squared; the exe has none for buildings, but footsteps sound only within 200 units), asked again after it moved a unit: the placed, undestroyed BUILDINGs of the zones within 400 units (X/Z of the building's
 position) are listed on a worker; a building's floor collision (`FloorSurfaces.For`: ordinary and stairs parts, groups 9..12 and 15..18) is made on a worker when a character first comes within 400 units. The highest floor
 triangle under the feet and at most 20 above them is the hit, taken when within 4 units below the feet (engine choice: the sim stands on the navigation mesh); the highest across buildings wins. The character is "in a
@@ -321,7 +321,7 @@ building" when the renderer's indoor hull test (`InteriorAt`, margin 2) holds, e
 a floor, and terrain showing through holes in an indoor floor falls to the overlay (the exe's indoor ray has no terrain bit); walkable foliage outdoors uses the overlay (the exe leaves the switch unchanged); a building
 whose floor lies farther than 400 units from its position is missed at that distance; the first steps near a building not yet loaded use the overlay.
 
-Task sounds in Meitou (`CharacterLoop`, `CharacterSounds.Job` / `.Carried`; `GameSound`). The snapshot carries the movement task, whether a lock is being picked and whether the character is in a bed (read-only, outside the hash):
+Task sounds in Meitou (`CharacterLoop`, `CharacterSounds.Job` / `.Carried`; `CharacterAudio`). The snapshot carries the movement task, whether a lock is being picked and whether the character is in a bed (read-only, outside the hash):
 `Task.Build` is the `Character_Build_Loop_Start` / `_Stop` loop, `Task.Treat` the `Character_Medic_*` loop, a lock being picked or shackles being picked or cut (`WorkingShackles`; not while walking to it) the `Character_Unlock` loop (a change of job stops the old loop first, with `Character_Unlock_Fail`, the exe's bare Stop; a character that gets its object mid-job starts it
 then; **engine choice**: an interrupted cut is stopped too). Breaking shackles has no loop, as in the exe. One-shots: `Character_Loot` when `Task.Loot` starts; `Character_Bed` (`Bed` = `Get_In` / `Get_Out`) when the bed state changes; `Character_Pick_Up_Person` when a body is lifted and `Character_Drop_Person` when a put-down order sets it down (both on the carried person, with
 its `Armor_Worn`; a drop by knock-out or ragdoll is silent, as in the exe); from `World.Sounds`: `Character_Consume` (`Consume` = `Eat`, 200 units) when `FeedSystem` feeds, `Character_Unlock_Success` when a pick works, a character is freed from shackles (picked, cut or broken) or a warden unlocks a door or cage, `Character_Lock` when a
@@ -370,7 +370,7 @@ and MAP_ITEM by `inventory sound` (`Backpack`, `Building_Material`, `Fabric`, `F
 `Armor_Plating`, `Blueprints`, `Meat`); LIMB_REPLACEMENT `Robotic_Component`. The `Notifications` bank also has `Raid` and `Under_Attack` and three unresolved values the exe never passes. **Unknown:** the MyGUI events behind
 Hover and Slider; whether the editor's speed reset posts `Game_Speed_Normal`; what Wwise does for a NULL switch value.
 
-Meitou (`UiSounds` in `Meitou.Game.Audio`, `InterfaceSounds`, `GameSound`): the host plays what `PlayerInterface.UiSound` receives. Hooks: `ExecuteUiAction` (HUD actions), `FaithfulAction` (the original screens' widgets),
+Meitou (`UiSounds` in `Meitou.Game.Audio`, `InterfaceSounds`, `UiAudio`): the host plays what `PlayerInterface.UiSound` receives. Hooks: `ExecuteUiAction` (HUD actions), `FaithfulAction` (the original screens' widgets),
 the commands `Say` sends (orders, item moves, trades, dialogue choices; `AddJob` and the Shift Medic / Rescue commands as `Permanent_Job`), and a poll in `Draw` for windows opening and closing, the title button under the pointer, the speed keys (F2 to F4, when the clock moves to a new speed without a button), a building of the player's finishing
 (`Building_Complete`) and a research finished or a building unlocked by a blueprint (`Thing_Complete`, one a frame; the sim also queues `DismantleDone` for a finished dismantle and `BountyPaid` for a reward, played as `Thing_Complete` / `Bounty_Fulfilled`).
 The prospecting, research tab and biome sounds are posted where the exe posts them: the HUD's Prospect action when it gives the task (`Prospect_Click`), the results window opening (`Prospect_Results`, in the poll), a type list pick in the overview (`Research_Tab`),
@@ -554,7 +554,7 @@ why there is none: the host then runs silently. The `--quit-after` log's `audio`
 main theme or the remembered biome music, seconds until the timer next posts it, music voices (`AudioSystem.StatsLine`; paused shows). Both hosts feed
 `AudioSystem.Update` each frame (region under the pivot, weather, hour, sunrise and sunset, eye height).
 
-- **Viewer** (`WorldApp.Audio.cs`): pivot = the camera's target, eye = its position, the viewer's hour; no title screen, so no main theme.
+- **Viewer** (`InteractiveSession.UpdateAudio`): pivot = the camera's target, eye = its position, the viewer's hour; no title screen, so no main theme.
 - **Game** (`GameSound`): the audio is made on a worker while the window and the world load. Pivot = `camera.Target` and eye =
   `camera.Eye` (the strategy or free camera as drawn), hour, sunrise and sunset from the game clock (`session.Clock`), region and weather from the
   weather scheduler (`gpu.Weather`). Each frame it also sets the listener from the camera (`camera.Forward` and the true up) and `SetPaused(session.Simulation.IsPaused)`
@@ -569,12 +569,12 @@ main theme or the remembered biome music, seconds until the timer next posts it,
     title and start no theme. Importing is not offered by the game's menu.
   - **Return to the main menu** (Meitou's choice: the original has no such path): the ambience is ended (`AmbienceDirector.Silence`: `Leave_<biome>`,
     rain and wind end) and `StartMainTheme` runs again, so the menu sounds as at start-up; the next game's first update re-enters its biome.
-  - **World sounds** (`GameSound`, each frame after the ambience): the building under the pivot (`InteriorSounds`, [Interiors](#interiors)) and the building emitters (`WorldEmitters`,
+  - **World sounds** (`WorldAudio`, each frame after the ambience): the building under the pivot (`InteriorSounds`, [Interiors](#interiors)) and the building emitters (`WorldEmitters`,
     [Point emitters](#point-emitters)) with the eye as the distance origin. The level's emitters are read once on a worker (`WorldObjects.Emitters`), a player-built site's when it completes. The main menu ends the
     interior ambience and stops the emitters. It also adds the effect emitters (sky beams) and the turrets' movement sounds ([Other world-side events](#other-world-side-events)); robot spiders are in `CharacterSounds`. The console prints the number of emitters read; the end-of-run line `audio     world:` shows indoors or outdoors, emitters playing of
     all, and the nearest one's name and distance.
-  - **Characters and interface.** `UpdateAudio` also calls `UpdateCharacterAudio` (`GameSound`, [Characters](#characters-footsteps-combat-voices)); the interface sounds are on from `AttachAudio`, also on the
-    title screen (`GameSound`). `VO_Bank` loads with the first character. The `--quit-after` log shows `characters: N characters, N footsteps, N swings, N impacts, N voices, N interface sounds`.
+  - **Characters and interface.** `UpdateAudio` also calls `CharacterAudio.Update` (`GameSound.Characters`, [Characters](#characters-footsteps-combat-voices)); the interface sounds are on from `AttachAudio`, also on the
+    title screen (`UiAudio`). `VO_Bank` loads with the first character. The `--quit-after` log shows `characters: N characters, N footsteps, N swings, N impacts, N voices, N interface sounds`.
   - Not in screenshots, the headless paths or tests: only the interactive run creates the audio.
 
 ## Tools

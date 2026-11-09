@@ -21,7 +21,8 @@ static class SettingHints
         "Grading" => "Apply the scene's colour and contrast adjustments.",
         "Texture quality" => "Texture resolution; terrain changes need a restart.",
         "Anisotropic filtering" => "Keep textures sharp when viewed at an angle.",
-        "Metal upscaling" => "The preset sets the render scale; MetalFX temporal is the default and spatial is an alternative. Native is the fallback when MetalFX is unavailable.",
+        "Metal upscaling" => "The preset sets the render scale; MetalFX temporal is the default and spatial is an alternative. Native is the "
+            + "fallback when MetalFX is unavailable.",
         "Render scale" => "Internal rendering resolution relative to the window.",
         "Upscaler sharpness" => "Sharpen the image after resolution reconstruction.",
         "DLSS preset" => "Which DLSS model runs. Default picks one per render scale; L and M ghost less than K, L at the highest cost.",
@@ -81,7 +82,8 @@ static class SettingHints
         "Draw distances" => "Use extended object and landmark visibility ranges.",
         "Water" => "Add animated waves and shoreline surf.",
         "Weather particles" => "Render weather at an adaptive lower resolution.",
-        "Fog" => "Fade dust and fog sprites where they meet the ground and walls, light them by the sun and its shadows, and fog them like the land around them. Off keeps them hard-edged and flat.",
+        "Fog" => "Fade dust and fog sprites where they meet the ground and walls, light them by the sun and its shadows, and fog them like the land "
+            + "around them. Off keeps them hard-edged and flat.",
         "Foliage levels" => "Use generated simpler meshes for distant foliage.",
         "Indirect light" => "Use light probes for bounced and ambient lighting.",
         "Indoor GI" => "Bounced light indoors too.",
@@ -154,7 +156,8 @@ static class SettingHints
         InputAction.ToggleHelp => "Open the Tutorials window, or close it.",
         InputAction.ChangeSquad => "Show the next squad in the squad bar.",
         InputAction.SelectAll => "Select the whole squad (Shift adds it to the selection).",
-        >= InputAction.SelectMember1 and <= InputAction.SelectMember10 => "Select this member of the squad bar (Shift adds them to the selection; press twice to centre on them).",
+        >= InputAction.SelectMember1 and <= InputAction.SelectMember10 => "Select this member of the squad bar (Shift adds them to the selection; "
+            + "press twice to centre on them).",
         InputAction.NextCharacter => "Select the next member of the character's squad.",
         InputAction.PreviousCharacter => "Select the previous member of the character's squad.",
         InputAction.FocusCharacter => "Centre the camera on the selected character.",

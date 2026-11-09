@@ -50,6 +50,20 @@ sealed class InterfaceSounds(PlayerInterface player)
         if (UiSound is null) return;
 
         var open = player.FaithfulScreens.OpenScreens;
+        SoundClosedScreens(open);
+        SoundOpenedScreens(open);
+        SoundOverviewTab();
+        SoundTitleHover();
+        SoundSpeedKeys();
+        SoundFinishedResearch();
+        SoundFinishedBuildings();
+    }
+
+    /// <summary>
+    /// The windows closed since the last frame: the inventory, stats, map and research windows' close sounds, the Esc menu's click.
+    /// </summary>
+    void SoundClosedScreens(IReadOnlyList<string> open)
+    {
         foreach (string id in SoundScreens.ToArray())
         {
             if (open.Contains(id)) continue;
@@ -67,7 +81,13 @@ sealed class InterfaceSounds(PlayerInterface player)
                 case "menu": Sound("General_Click"); break;
             }
         }
+    }
 
+    /// <summary>
+    /// The windows opened since the last frame: the inventory and stats windows' open sounds, the build window's button, the Esc menu's click.
+    /// </summary>
+    void SoundOpenedScreens(IReadOnlyList<string> open)
+    {
         foreach (string id in open)
         {
             if (!SoundScreens.Add(id)) continue;
@@ -83,31 +103,48 @@ sealed class InterfaceSounds(PlayerInterface player)
                     break;
             }
         }
+    }
 
-        if (SoundScreens.Contains("overview"))
+    /// <summary>
+    /// The overview's tabs (14049bf90): the map and research tabs have their own sounds, the others are tabs.
+    /// </summary>
+    void SoundOverviewTab()
+    {
+        if (!SoundScreens.Contains("overview")) return;
+
+        int tab = player.FaithfulScreens.GetTab("overview", "TabsMain");
+        if (tab != _soundOverviewTab)
         {
-            // The overview's tabs (14049bf90): the map and research tabs have their own sounds, the others are tabs.
-            int tab = player.FaithfulScreens.GetTab("overview", "TabsMain");
-            if (tab != _soundOverviewTab)
-            {
-                _soundOverviewTab = tab;
-                Sound(tab == 0 ? "Map_Open" : tab == 2 ? "Tech_Open" : "Tab");
-            }
+            _soundOverviewTab = tab;
+            Sound(tab == 0 ? "Map_Open" : tab == 2 ? "Tech_Open" : "Tab");
         }
+    }
 
-        // The title buttons: a sound when the pointer enters one (the title screen's constructor binds only these seven).
+    /// <summary>
+    /// The title buttons: a sound when the pointer enters one (the title screen's constructor binds only these seven).
+    /// </summary>
+    void SoundTitleHover()
+    {
         string? hover = null;
         if (player.FaithfulScreens.IsOpen("title")
             && player.FaithfulScreens.HitTest(player.Mouse) is { Screen: "title", Control: { Type: "Button", Enabled: true } button })
+        {
             hover = button.Name;
+        }
+
         if (hover != _soundHover)
         {
             _soundHover = hover;
             if (hover is not null) Sound("Hover");
         }
+    }
 
-        // The speed keys (F2 to F4) change the clock without a button: the same sound when the speed moves to a new running one (the buttons did it
-        // already).
+    /// <summary>
+    /// The speed keys (F2 to F4) change the clock without a button: the same sound when the speed moves to a new running one (the buttons did it
+    /// already).
+    /// </summary>
+    void SoundSpeedKeys()
+    {
         double speedNow = player.Session.Simulation.Speed;
         if (speedNow > 0 && speedNow != _soundSpeed && !_speedSounded && (speedNow == 1 || speedNow == 2 || speedNow == 5))
         {
@@ -117,15 +154,25 @@ sealed class InterfaceSounds(PlayerInterface player)
 
         if (speedNow > 0) _soundSpeed = speedNow;
         _speedSounded = false;
+    }
 
-        // A research finished (also one that unlocks nothing) or a blueprint read: "Research complete" (140834550). The first look only takes the
-        // baseline.
+    /// <summary>
+    /// A research finished (also one that unlocks nothing) or a blueprint read: "Research complete" (140834550). The first look only takes the
+    /// baseline.
+    /// </summary>
+    void SoundFinishedResearch()
+    {
         if (!ReferenceEquals(_soundWorld, player.Session.World)) _soundUnlocked = -1;
         int unlocked = player.Session.CurrentSnapshot.UnlockedBuildings.Count + player.Session.CurrentSnapshot.Research.Finished;
         if (_soundUnlocked >= 0 && unlocked > _soundUnlocked) Sound("Notifications", "Notifications", "Thing_Complete");
         _soundUnlocked = unlocked;
+    }
 
-        // A building of the player's finishing: the notification (140559110). The first look only takes the baseline.
+    /// <summary>
+    /// A building of the player's finishing: the notification (140559110). The first look only takes the baseline.
+    /// </summary>
+    void SoundFinishedBuildings()
+    {
         var snapshot = player.Session.CurrentSnapshot;
         if (!ReferenceEquals(_soundWorld, player.Session.World))
         {
@@ -213,7 +260,8 @@ sealed class InterfaceSounds(PlayerInterface player)
             case "title" or "menu" or "new-game" or "save" or "load" or "message" or "file": Sound("General_Click"); break;
             case "inventory" or "bag" or "trader": if (e.Widget == "ArrangeButton") Sound("General_Click"); break;
 
-            // A pick in the research type list (FUN_14049b5e0): Research_Tabs is set to the item's text, the category; the same row again is no change.
+            // A pick in the research type list (FUN_14049b5e0): Research_Tabs is set to the item's text, the category; the same row again is no
+            // change.
             case "overview":
                 if (e is { Widget: "ResearchTypeList", Action: "select" } && e.Text != player.Production.ResearchCategory)
                     Sound("Research_Tab", "Research_Tabs", e.Text);
@@ -230,8 +278,11 @@ sealed class InterfaceSounds(PlayerInterface player)
                     if (e.Widget != _lastSliderSound) Sound("Slider");
                     _lastSliderSound = e.Widget;
                 }
-                else if (e.Action == "step" || e.Widget.EndsWith("Button", StringComparison.Ordinal) || e.Widget.EndsWith("Arrow", StringComparison.Ordinal))
+                else if (e.Action == "step" || e.Widget.EndsWith("Button", StringComparison.Ordinal)
+                    || e.Widget.EndsWith("Arrow", StringComparison.Ordinal))
+                {
                     Sound("General_Click");
+                }
                 break;
         }
 
@@ -264,7 +315,9 @@ sealed class InterfaceSounds(PlayerInterface player)
 
             // The sound the exe posts after giving the selection a job (FUN_1407f5a90).
             case Simulation.Production.AddJob or Simulation.Production.AddOrderJob: Sound("Permanent_Job"); return;
-            case Simulation.FirstAid.MedicJobCommand { Job: true } or Simulation.Carrying.RescueJobCommand { Job: true }: Sound("Permanent_Job"); return;
+            case Simulation.FirstAid.MedicJobCommand { Job: true } or Simulation.Carrying.RescueJobCommand { Job: true }:
+                Sound("Permanent_Job");
+                return;
         }
 
         string name = command.GetType().Name;

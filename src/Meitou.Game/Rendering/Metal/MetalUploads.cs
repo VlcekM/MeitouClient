@@ -67,7 +67,8 @@ public sealed class MetalUploads : IGpuUploads
             ulong bytesPerRow = (ulong)(((region.Width + block - 1) / block) * texel);
             ulong blockRows = (ulong)((region.Height + block - 1) / block);
             ulong bytesPerImage = bytesPerRow * blockRows;
-            if ((ulong)data.Length < bytesPerImage) throw new ArgumentException($"the upload has {data.Length} bytes, the region needs {bytesPerImage}");
+            if ((ulong)data.Length < bytesPerImage)
+                throw new ArgumentException($"the upload has {data.Length} bytes, the region needs {bytesPerImage}");
 
             // Metal's blit reads a source row from its start, then writes it at the destination origin. Repack a sub-rectangle
             // into full-width rows with the tile at offset zero; adding region.X to the source as well would shift it twice.
@@ -81,7 +82,8 @@ public sealed class MetalUploads : IGpuUploads
                 ulong neededImage = neededRow * blockRows;
                 var staged = Reserve(checked((int)neededImage), out ulong stagedOffset);
                 var dst = (byte*)staged.Contents + stagedOffset;
-                if (staged.Contents == IntPtr.Zero || dst is null) throw new InvalidOperationException($"no staging for {desc.Name} L{level}: {neededImage} bytes");
+                if (staged.Contents == IntPtr.Zero || dst is null)
+                    throw new InvalidOperationException($"no staging for {desc.Name} L{level}: {neededImage} bytes");
                 new Span<byte>(dst, (int)neededImage).Clear();
                 fixed (byte* src = data)
                 {

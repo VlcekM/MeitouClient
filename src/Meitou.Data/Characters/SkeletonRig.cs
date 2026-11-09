@@ -320,6 +320,17 @@ public sealed class PoseScratch
     public void PoseDerived(BodyShapeData? shape, ReadOnlySpan<ActiveLayer> layers, BonePose? overrides = null)
     {
         int count = _rig.BoneCount;
+        BindLocal(count);
+        float movement = shape?.MovementScale ?? 1;
+        BlendLayers(layers, count, movement);
+        Derive(shape, overrides);
+    }
+
+    /// <summary>
+    /// Starts every bone's local transform at its binding one.
+    /// </summary>
+    void BindLocal(int count)
+    {
         for (int h = 0; h < count; h++)
         {
             var b = _rig.ByHandle[h];
@@ -327,8 +338,13 @@ public sealed class PoseScratch
             _rot[h] = b?.Orientation ?? Quaternion.Identity;
             _scale[h] = b?.Scale ?? Vector3.One;
         }
-        float movement = shape?.MovementScale ?? 1;
+    }
 
+    /// <summary>
+    /// Adds the layers' weighted keys to the local transforms: the layers without override bones first, then those with.
+    /// </summary>
+    void BlendLayers(ReadOnlySpan<ActiveLayer> layers, int count, float movement)
+    {
         // Cumulative blending (Kenshi sets it on every character's skeleton): each layer adds its weighted keys; the simulation keeps each body
         // half's weights at a total of 1 (AnimationSystem.Publish), and the posture libraries add on top.
         for (int pass = 0; pass < 2; pass++)
@@ -339,30 +355,51 @@ public sealed class PoseScratch
                 if ((layer.Def.Override.Length > 0) != overridePass) continue;
                 float w = Math.Max(layer.Weight, 0);
                 if (w <= 0) continue;
-                if (overridePass)
-                    foreach (int h in layer.Def.Override)
-                    {
-                        // Kenshi's override bones: pull the accumulated rotation back toward the binding one by the weight
-                        // (fully at 0.99 and above) before adding this animation's rotation.
-                        if (h >= count || _rig.ByHandle[h] is not { } b) continue;
-                        _rot[h] = w >= 0.99f ? b.Orientation : Nlerp(_rot[h], b.Orientation, w);
-                    }
-                var clip = layer.Def.Clip;
-                var excluded = layer.Def.Excluded;
-                float time = clip.Length > 0 ? ((layer.Time % clip.Length) + clip.Length) % clip.Length : 0;
-                for (int h = 0; h < count; h++)
-                {
-                    var track = clip.Tracks[h];
-                    if (track is null || excluded is not null && excluded[h]) continue;
-                    Sample(track, time, out var t, out var r, out var s);
-                    if (h == layer.Def.RootMotionBone) t = new Vector3(0, t.Y, 0);
-                    _pos[h] += t * (w * movement);
-                    _rot[h] = Quaternion.Normalize(_rot[h] * Nlerp(Quaternion.Identity, r, w));   // Node::rotate, local space
-                    if (s != Vector3.One) _scale[h] *= Vector3.One + (s - Vector3.One) * w;
-                }
+                if (overridePass) PullOverrideBones(layer.Def, w, count);
+                AddLayer(layer, w, count, movement);
             }
         }
+    }
 
+    /// <summary>
+    /// Pulls the accumulated rotations of the layer's override bones back toward their binding ones by <paramref name="w"/>.
+    /// </summary>
+    void PullOverrideBones(LayerDef def, float w, int count)
+    {
+        foreach (int h in def.Override)
+        {
+            // Kenshi's override bones: pull the accumulated rotation back toward the binding one by the weight
+            // (fully at 0.99 and above) before adding this animation's rotation.
+            if (h >= count || _rig.ByHandle[h] is not { } b) continue;
+            _rot[h] = w >= 0.99f ? b.Orientation : Nlerp(_rot[h], b.Orientation, w);
+        }
+    }
+
+    /// <summary>
+    /// Adds one layer's keys at its time, weighted by <paramref name="w"/>, to the local transforms of the bones it does not exclude.
+    /// </summary>
+    void AddLayer(in ActiveLayer layer, float w, int count, float movement)
+    {
+        var clip = layer.Def.Clip;
+        var excluded = layer.Def.Excluded;
+        float time = clip.Length > 0 ? ((layer.Time % clip.Length) + clip.Length) % clip.Length : 0;
+        for (int h = 0; h < count; h++)
+        {
+            var track = clip.Tracks[h];
+            if (track is null || excluded is not null && excluded[h]) continue;
+            Sample(track, time, out var t, out var r, out var s);
+            if (h == layer.Def.RootMotionBone) t = new Vector3(0, t.Y, 0);
+            _pos[h] += t * (w * movement);
+            _rot[h] = Quaternion.Normalize(_rot[h] * Nlerp(Quaternion.Identity, r, w));   // Node::rotate, local space
+            if (s != Vector3.One) _scale[h] *= Vector3.One + (s - Vector3.One) * w;
+        }
+    }
+
+    /// <summary>
+    /// The derived (model-space) transforms from the local ones, parents first, with the body shape's sizes; then the overrides.
+    /// </summary>
+    void Derive(BodyShapeData? shape, BonePose? overrides)
+    {
         var boneSize = shape?.BoneSize;
         var positionalSize = shape?.PositionalSize;
         foreach (int h in _rig.Order)
@@ -374,7 +411,6 @@ public sealed class PoseScratch
                 DerivedPosition[h] = _pos[h];
                 DerivedRotation[h] = _rot[h];
                 DerivedScale[h] = size * _scale[h];
-                
             }
             else
             {
@@ -386,17 +422,23 @@ public sealed class PoseScratch
                 DerivedPosition[h] = Vector3.Transform(_pos[h] * positional * DerivedScale[parent].Y,
                         DerivedRotation[parent]) + DerivedPosition[parent];
             }
-            if (overrides is not null && h < overrides.Set.Length && overrides.Set[h])
-            {
-                // A ragdoll's body sets its bone's rotation (and a root bone's position) in model space, as Kenshi writes a simulated body's
-                // orientation into its manually controlled bone (docs/game/ragdolls.md, "Per frame"); the weight blends from the animated pose (the
-                // 0.75 s of getting up).
-                float w = overrides.Weight;
-                DerivedRotation[h] = w >= 1 ? overrides.Rotation[h] : Nlerp(DerivedRotation[h], overrides.Rotation[h], w);
-                if (parent < 0)
-                    DerivedPosition[h] = Vector3.Lerp(DerivedPosition[h], overrides.Position[h], Math.Clamp(w, 0, 1));
-            }
+
+            if (overrides is not null && h < overrides.Set.Length && overrides.Set[h]) ApplyOverride(overrides, h, parent);
         }
+    }
+
+    /// <summary>
+    /// Blends bone <paramref name="h"/>'s derived rotation (and a root bone's position) to the override's.
+    /// </summary>
+    void ApplyOverride(BonePose overrides, int h, int parent)
+    {
+        // A ragdoll's body sets its bone's rotation (and a root bone's position) in model space, as Kenshi writes a simulated body's
+        // orientation into its manually controlled bone (docs/game/ragdolls.md, "Per frame"); the weight blends from the animated pose (the
+        // 0.75 s of getting up).
+        float w = overrides.Weight;
+        DerivedRotation[h] = w >= 1 ? overrides.Rotation[h] : Nlerp(DerivedRotation[h], overrides.Rotation[h], w);
+        if (parent < 0)
+            DerivedPosition[h] = Vector3.Lerp(DerivedPosition[h], overrides.Position[h], Math.Clamp(w, 0, 1));
     }
 
     /// <summary>

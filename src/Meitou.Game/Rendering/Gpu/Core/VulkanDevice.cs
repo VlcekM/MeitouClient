@@ -51,7 +51,7 @@ public sealed unsafe class VulkanDevice : IDisposable
         Vk = Vk.GetApi();
     }
 
-    // ---- public state --------------------------------------------------------------------------------------
+    #region Public state
 
     public Vk Vk { get; }
     public Instance Instance { get; private set; }
@@ -213,7 +213,8 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// not a walk over every view). The cache is read without the lock: every draw asks for its views, and a lock there was contended by the
     /// streaming threads' table adds (6% of the render thread's samples on the hub view).
     /// </summary>
-    readonly ConcurrentDictionary<(int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle), int> _viewCache = [];
+    readonly ConcurrentDictionary<(int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle), int> _viewCache =
+        [];
     readonly Dictionary<int, (int Texture, int BaseLevel, int Levels, int BaseLayer, int Layers, GpuViewType Type, int Swizzle)> _viewKeys = [];
     readonly Dictionary<int, List<int>> _textureViews = [];
 
@@ -222,7 +223,8 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// </summary>
     public unsafe GpuView View(GpuTexture texture, int baseLevel, int levels, int baseLayer, int layers, GpuViewType type, GpuSwizzle swizzle)
     {
-        var key = (texture.Index, baseLevel, levels, baseLayer, layers, type, (int)swizzle.R | (int)swizzle.G << 4 | (int)swizzle.B << 8 | (int)swizzle.A << 12);
+        var key = (texture.Index, baseLevel, levels, baseLayer, layers, type,
+            (int)swizzle.R | (int)swizzle.G << 4 | (int)swizzle.B << 8 | (int)swizzle.A << 12);
         if (_viewCache.TryGetValue(key, out var index)) return new GpuView(index);
 
         lock (_tableGate)
@@ -236,7 +238,8 @@ public sealed unsafe class VulkanDevice : IDisposable
                 ViewType = VkViewType(type),
                 Format = GlConventions.VkFormat(texture.Desc.Format),
                 Components = VkSwizzle(swizzle),
-                SubresourceRange = new ImageSubresourceRange(GlConventions.VkAspect(texture.Desc), (uint)baseLevel, (uint)levels, (uint)baseLayer, (uint)layers),
+                SubresourceRange = new ImageSubresourceRange(GlConventions.VkAspect(texture.Desc), (uint)baseLevel, (uint)levels, (uint)baseLayer,
+                    (uint)layers),
             };
             VulkanException.Check(Vk.CreateImageView(Device, &info, null, out var view), "vkCreateImageView");
             _viewTable.Add(view);
@@ -473,7 +476,10 @@ public sealed unsafe class VulkanDevice : IDisposable
     public (ulong Used, ulong Budget) VideoMemory()
     {
         var budget = new PhysicalDeviceMemoryBudgetPropertiesEXT { SType = StructureType.PhysicalDeviceMemoryBudgetPropertiesExt };
-        var props = new PhysicalDeviceMemoryProperties2 { SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null };
+        var props = new PhysicalDeviceMemoryProperties2
+        {
+            SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null,
+        };
         Vk.GetPhysicalDeviceMemoryProperties2(PhysicalDevice, &props);
         ulong used = 0, total = 0;
 
@@ -495,7 +501,10 @@ public sealed unsafe class VulkanDevice : IDisposable
     public List<(MemoryHeapFlags Flags, ulong Size, ulong Usage, ulong Budget)> Heaps()
     {
         var budget = new PhysicalDeviceMemoryBudgetPropertiesEXT { SType = StructureType.PhysicalDeviceMemoryBudgetPropertiesExt };
-        var props = new PhysicalDeviceMemoryProperties2 { SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null };
+        var props = new PhysicalDeviceMemoryProperties2
+        {
+            SType = StructureType.PhysicalDeviceMemoryProperties2, PNext = HasMemoryBudget ? &budget : null,
+        };
         Vk.GetPhysicalDeviceMemoryProperties2(PhysicalDevice, &props);
         var heaps = new List<(MemoryHeapFlags, ulong, ulong, ulong)>();
 
@@ -526,7 +535,8 @@ public sealed unsafe class VulkanDevice : IDisposable
     /// <c>MEITOU_VRAM_BUDGET_MB</c> makes <see cref="VideoMemory"/> report at most that budget (a card with less memory, for testing the
     /// memory-pressure guard, <c>VramGuard</c>, and the viewer's watch on a bigger one).
     /// </summary>
-    static readonly ulong BudgetOverride = ulong.TryParse(Environment.GetEnvironmentVariable("MEITOU_VRAM_BUDGET_MB"), out var mb) && mb > 0 ? mb << 20 : ulong.MaxValue;
+    static readonly ulong BudgetOverride =
+        ulong.TryParse(Environment.GetEnvironmentVariable("MEITOU_VRAM_BUDGET_MB"), out var mb) && mb > 0 ? mb << 20 : ulong.MaxValue;
 
     /// <summary>
     /// One line per feature, for logs and test output.
@@ -535,21 +545,35 @@ public sealed unsafe class VulkanDevice : IDisposable
     {
         var sb = new StringBuilder();
         var v = Properties.ApiVersion;
-        sb.AppendLine($"Device: {DeviceName}, Vulkan {v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}, type {Properties.DeviceType}, validation {(ValidationEnabled ? SyncValidationEnabled ? "on (sync)" : _options.GpuValidation ? "on (gpu)" : "on" : "off")}");
-        sb.AppendLine($"Queues: graphics family {GraphicsFamily}, transfer family {TransferFamily}{(HasDedicatedTransfer ? " (dedicated)" : " (shared with graphics)")}");
-        sb.AppendLine($"dynamicRendering={HasDynamicRendering} synchronization2={HasSynchronization2} timelineSemaphore={HasTimelineSemaphore} extendedDynamicState={HasExtendedDynamicState}");
-        sb.AppendLine($"extendedDynamicState2={HasExtendedDynamicState2} (logicOp={HasExtendedDynamicState2LogicOp}, patchControlPoints={HasExtendedDynamicState2PatchControlPoints})");
-        sb.AppendLine($"fillModeNonSolid={FillModeNonSolid} depthClamp={DepthClamp} samplerAnisotropy={SamplerAnisotropy} tessellationShader={HasTessellation} textureCompressionBC={TextureCompressionBc} independentBlend={IndependentBlend} imageCubeArray={ImageCubeArray}");
-        sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
-        sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) vertexInputDynamicState={HasVertexInputDynamicState} swapchain={HasSwapchain}");
+        sb.AppendLine($"Device: {DeviceName}, Vulkan {v >> 22}.{(v >> 12) & 0x3FF}.{v & 0xFFF}, type {Properties.DeviceType}, " +
+            $"validation {(ValidationEnabled ? SyncValidationEnabled ? "on (sync)" : _options.GpuValidation ? "on (gpu)" : "on" : "off")}");
+        sb.AppendLine($"Queues: graphics family {GraphicsFamily}, transfer family {TransferFamily}" +
+            $"{(HasDedicatedTransfer ? " (dedicated)" : " (shared with graphics)")}");
+        sb.AppendLine($"dynamicRendering={HasDynamicRendering} synchronization2={HasSynchronization2} timelineSemaphore={HasTimelineSemaphore} " +
+            $"extendedDynamicState={HasExtendedDynamicState}");
+        sb.AppendLine($"extendedDynamicState2={HasExtendedDynamicState2} (logicOp={HasExtendedDynamicState2LogicOp}, " +
+            $"patchControlPoints={HasExtendedDynamicState2PatchControlPoints})");
+        sb.AppendLine($"fillModeNonSolid={FillModeNonSolid} depthClamp={DepthClamp} samplerAnisotropy={SamplerAnisotropy} " +
+            $"tessellationShader={HasTessellation} textureCompressionBC={TextureCompressionBc} independentBlend={IndependentBlend} " +
+            $"imageCubeArray={ImageCubeArray}");
+        sb.AppendLine($"bindless={HasBindless} multiDrawIndirect={MultiDrawIndirect} drawIndirectFirstInstance={DrawIndirectFirstInstance} " +
+            $"drawIndirectCount={DrawIndirectCount} shaderDrawParameters={ShaderDrawParameters}");
+        sb.AppendLine($"pushDescriptor={HasPushDescriptor} (max {MaxPushDescriptors}) vertexInputDynamicState={HasVertexInputDynamicState} " +
+            $"swapchain={HasSwapchain}");
         sb.AppendLine($"rayQuery={HasRayQuery} bufferDeviceAddress={HasBufferDeviceAddress}");
-        sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate {MaxShadingRate}x{MaxShadingRate}, forced to 1x1 by depth writes {ShadingRateForcedByDepthWrite})");
-        sb.AppendLine($"extendedDynamicState3={HasExtendedDynamicState3} (colorBlendEnable={Eds3ColorBlendEnable} colorWriteMask={Eds3ColorWriteMask} alphaToCoverage={Eds3AlphaToCoverageEnable} polygonMode={Eds3PolygonMode} depthClamp={Eds3DepthClampEnable})");
-        sb.Append($"Limits: minUniformBufferOffsetAlignment={Limits.MinUniformBufferOffsetAlignment} timestampPeriod={Limits.TimestampPeriod}ns bufferImageGranularity={Limits.BufferImageGranularity}");
+        sb.AppendLine($"fragmentShadingRate={HasFragmentShadingRate} (attachment texel {ShadingRateTexel}, largest square rate " +
+            $"{MaxShadingRate}x{MaxShadingRate}, forced to 1x1 by depth writes {ShadingRateForcedByDepthWrite})");
+        sb.AppendLine($"extendedDynamicState3={HasExtendedDynamicState3} (colorBlendEnable={Eds3ColorBlendEnable} " +
+            $"colorWriteMask={Eds3ColorWriteMask} alphaToCoverage={Eds3AlphaToCoverageEnable} polygonMode={Eds3PolygonMode} " +
+            $"depthClamp={Eds3DepthClampEnable})");
+        sb.Append($"Limits: minUniformBufferOffsetAlignment={Limits.MinUniformBufferOffsetAlignment} timestampPeriod={Limits.TimestampPeriod}ns " +
+            $"bufferImageGranularity={Limits.BufferImageGranularity}");
         return sb.ToString();
     }
 
-    // ---- creation ------------------------------------------------------------------------------------------
+    #endregion
+
+    #region Creation
 
     /// <summary>
     /// Creates the device. Throws <see cref="VulkanException"/> when no suitable Vulkan 1.3 device exists.
@@ -570,7 +594,10 @@ public sealed unsafe class VulkanDevice : IDisposable
             if (!NativeLibrary.TryLoad("libvulkan.1.dylib", out _))
             {
                 throw new InvalidOperationException(
-                    $"the Vulkan loader (libvulkan.1.dylib) is not findable on this macOS: DYLD_LIBRARY_PATH='{Environment.GetEnvironmentVariable("DYLD_LIBRARY_PATH")}' - the variable is absent from the launch environment, or a restricted launcher stripped it (nohup does); export DYLD_LIBRARY_PATH=/opt/homebrew/lib and launch plainly (a script, a shell function or 'cmd &', not 'nohup cmd &')");
+                    $"the Vulkan loader (libvulkan.1.dylib) is not findable on this macOS: " +
+                    $"DYLD_LIBRARY_PATH='{Environment.GetEnvironmentVariable("DYLD_LIBRARY_PATH")}' - the variable is absent from the launch " +
+                    $"environment, or a restricted launcher stripped it (nohup does); export DYLD_LIBRARY_PATH=/opt/homebrew/lib and launch " +
+                    $"plainly (a script, a shell function or 'cmd &', not 'nohup cmd &')");
             }
         }
 
@@ -674,6 +701,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
+    /// <summary>
+    /// The instance, with the validation layer and debug utils where available, and the validation messenger.
+    /// </summary>
     void CreateInstance()
     {
         bool wantValidation = _options.Validation ?? true;
@@ -691,6 +721,25 @@ public sealed unsafe class VulkanDevice : IDisposable
         bool layerSettings = ValidationEnabled && (_options.SyncValidation || _options.GpuValidation)
             && InstanceExtensionAvailable("VK_EXT_layer_settings", ValidationLayer);
 
+        // macOS: the loader hides portability drivers (MoltenVK) from instances that do not opt in
+        // (VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR).
+        bool portability = OperatingSystem.IsMacOS();
+        var extNames = InstanceExtensionNames(debugExt, layerSettings, portability);
+        CreateVkInstance(extNames, layerSettings, portability);
+
+        if (debugExt)
+        {
+            Vk.TryGetInstanceExtension(Instance, out _debugUtils);
+        }
+
+        if (ValidationEnabled) CreateDebugMessenger();
+    }
+
+    /// <summary>
+    /// The instance extensions to enable: debug utils, layer settings, the caller's, the surface's and (macOS) portability enumeration.
+    /// </summary>
+    List<string> InstanceExtensionNames(bool debugExt, bool layerSettings, bool portability)
+    {
         var extNames = new List<string>();
 
         if (debugExt)
@@ -719,15 +768,19 @@ public sealed unsafe class VulkanDevice : IDisposable
             extNames.Add("VK_KHR_surface");
         }
 
-        // macOS: the loader hides portability drivers (MoltenVK) from instances that do not opt in
-        // (VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR).
-        bool portability = OperatingSystem.IsMacOS();
-
         if (portability && !extNames.Contains("VK_KHR_portability_enumeration"))
         {
             extNames.Add("VK_KHR_portability_enumeration");
         }
 
+        return extNames;
+    }
+
+    /// <summary>
+    /// Creates the Vulkan 1.3 instance with <paramref name="extNames"/>, the validation layer when enabled and its settings.
+    /// </summary>
+    void CreateVkInstance(List<string> extNames, bool layerSettings, bool portability)
+    {
         var appName = (byte*)SilkMarshal.StringToPtr("Meitou");
         var layerPtrs = ValidationEnabled ? (byte**)SilkMarshal.StringArrayToPtr(new[] { ValidationLayer }) : null;
         var extPtrs = (byte**)SilkMarshal.StringArrayToPtr(extNames.ToArray());
@@ -755,12 +808,26 @@ public sealed unsafe class VulkanDevice : IDisposable
             if (layerSettings)
             {
                 if (_options.SyncValidation)
-                    settings[settingCount++] = new LayerSettingEXT { PLayerName = layerName, PSettingName = syncName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
+                {
+                    settings[settingCount++] = new LayerSettingEXT
+                    {
+                        PLayerName = layerName, PSettingName = syncName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on,
+                    };
+                }
+
                 if (_options.GpuValidation)
-                    settings[settingCount++] = new LayerSettingEXT { PLayerName = layerName, PSettingName = gpuName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
+                {
+                    settings[settingCount++] = new LayerSettingEXT
+                    {
+                        PLayerName = layerName, PSettingName = gpuName, Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on,
+                    };
+                }
             }
 
-            var layerInfo = new LayerSettingsCreateInfoEXT { SType = StructureType.LayerSettingsCreateInfoExt, SettingCount = settingCount, PSettings = settings };
+            var layerInfo = new LayerSettingsCreateInfoEXT
+            {
+                SType = StructureType.LayerSettingsCreateInfoExt, SettingCount = settingCount, PSettings = settings,
+            };
             var ci = new InstanceCreateInfo
             {
                 SType = StructureType.InstanceCreateInfo,
@@ -790,26 +857,25 @@ public sealed unsafe class VulkanDevice : IDisposable
 
             SilkMarshal.Free((nint)extPtrs);
         }
+    }
 
-        if (debugExt)
+    /// <summary>
+    /// The validation messenger: warnings and errors reach <see cref="DebugCallback"/>.
+    /// </summary>
+    void CreateDebugMessenger()
+    {
+        _selfHandle = GCHandle.Alloc(this);
+        _callbackDelegate = DebugCallback;
+        var mi = new DebugUtilsMessengerCreateInfoEXT
         {
-            Vk.TryGetInstanceExtension(Instance, out _debugUtils);
-        }
-
-        if (ValidationEnabled)
-        {
-            _selfHandle = GCHandle.Alloc(this);
-            _callbackDelegate = DebugCallback;
-            var mi = new DebugUtilsMessengerCreateInfoEXT
-            {
-                SType = StructureType.DebugUtilsMessengerCreateInfoExt,
-                MessageSeverity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt,
-                MessageType = DebugUtilsMessageTypeFlagsEXT.GeneralBitExt | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt,
-                PfnUserCallback = new PfnDebugUtilsMessengerCallbackEXT(_callbackDelegate),
-                PUserData = (void*)GCHandle.ToIntPtr(_selfHandle),
-            };
-            VulkanException.Check(_debugUtils!.CreateDebugUtilsMessenger(Instance, in mi, null, out _messenger), "vkCreateDebugUtilsMessengerEXT");
-        }
+            SType = StructureType.DebugUtilsMessengerCreateInfoExt,
+            MessageSeverity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt,
+            MessageType = DebugUtilsMessageTypeFlagsEXT.GeneralBitExt | DebugUtilsMessageTypeFlagsEXT.ValidationBitExt
+                | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt,
+            PfnUserCallback = new PfnDebugUtilsMessengerCallbackEXT(_callbackDelegate),
+            PUserData = (void*)GCHandle.ToIntPtr(_selfHandle),
+        };
+        VulkanException.Check(_debugUtils!.CreateDebugUtilsMessenger(Instance, in mi, null, out _messenger), "vkCreateDebugUtilsMessengerEXT");
     }
 
     static uint DebugCallback(DebugUtilsMessageSeverityFlagsEXT severity, DebugUtilsMessageTypeFlagsEXT type,
@@ -1015,6 +1081,10 @@ public sealed unsafe class VulkanDevice : IDisposable
 
     bool Wants12(string feature) => _options.Features12?.Contains(feature) == true;
 
+    /// <summary>
+    /// The logical device on <see cref="PhysicalDevice"/>: what it has is queried in one feature chain, only what the renderer uses is enabled, then
+    /// its queues and the limits read once it exists. The feature structs stay locals of this method: the chain points at them.
+    /// </summary>
     void CreateLogicalDevice()
     {
         var pd = PhysicalDevice;
@@ -1051,10 +1121,7 @@ public sealed unsafe class VulkanDevice : IDisposable
 
         void Link<T>(ref T s, bool use) where T : unmanaged
         {
-            if (!use)
-            {
-                return;
-            }
+            if (!use) return;
 
             // Every feature struct starts with sType, pNext; write pNext in place.
             fixed (T* p = &s)
@@ -1081,6 +1148,84 @@ public sealed unsafe class VulkanDevice : IDisposable
         Vk.GetPhysicalDeviceFeatures2(pd, &f2);
         var core = f2.Features;
 
+        ReadFeatures(in v13, in v12, in v11, in eds2, in eds3, in vid, in bary, in accel, in rayQuery, in core, extEds2, extEds3, extVid, extPush,
+            extBary, extRay);
+        extVrs = extVrs && vrs.AttachmentFragmentShadingRate && ShadingRateAttachmentFormatOk(pd, Format.R8Uint);
+
+        // Turn off everything we did not ask for (the queried structs become the create structs).
+        EnableVersionFeatures(ref v13, ref v12, ref v11);
+        EnableExtensionFeatures(ref eds2, ref eds3, ref vid, ref bary, ref accel, ref rayQuery, ref vrs, extVrs);
+        f2.Features = EnabledCoreFeatures(in core);
+        var names = DeviceExtensionNames(have, extEds2, extEds3, extVid, extPush, extBary, extVrs, extPresentId);
+        var fams = PickQueueFamilies(pd);
+        f2.PNext = chain;
+        uint graphicsQueues = CreateDevice(pd, &f2, names, fams);
+        GetQueues(graphicsQueues);
+        QueryDeviceProperties(pd, extVrs);
+        if (ValidationEnabled) NameDeviceObjects();
+    }
+
+    /// <summary>
+    /// Creates <see cref="Device"/> with the enabled features <paramref name="f2"/> (its chain still on the caller's stack), the extensions
+    /// <paramref name="names"/>, the graphics queues and the dedicated transfer queue; returns the graphics queue count.
+    /// </summary>
+    uint CreateDevice(PhysicalDevice pd, PhysicalDeviceFeatures2* f2, List<string> names, QueueFamilyProperties[] fams)
+    {
+        float prio = 1f;
+
+        // 1 + the extra queues the family offers (priorities all 1).
+        uint graphicsQueues = 1 + (uint)Math.Min(Math.Max(_options.ExtraGraphicsQueues, 0), (int)fams[GraphicsFamily].QueueCount - 1);
+        var prios = stackalloc float[(int)graphicsQueues];
+        for (int i = 0; i < graphicsQueues; i++) prios[i] = 1f;
+
+        var qcis = stackalloc DeviceQueueCreateInfo[2];
+        uint qn = 0;
+        qcis[qn++] = new DeviceQueueCreateInfo
+        {
+            SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = GraphicsFamily, QueueCount = graphicsQueues, PQueuePriorities = prios,
+        };
+
+        if (HasDedicatedTransfer)
+        {
+            qcis[qn++] = new DeviceQueueCreateInfo
+            {
+                SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = TransferFamily, QueueCount = 1, PQueuePriorities = &prio,
+            };
+        }
+
+        var extPtrs = (byte**)SilkMarshal.StringArrayToPtr(names.ToArray());
+
+        try
+        {
+            var dci = new DeviceCreateInfo
+            {
+                SType = StructureType.DeviceCreateInfo,
+                PNext = f2,
+                QueueCreateInfoCount = qn,
+                PQueueCreateInfos = qcis,
+                EnabledExtensionCount = (uint)names.Count,
+                PpEnabledExtensionNames = extPtrs,
+            };
+            VulkanException.Check(Vk.CreateDevice(pd, in dci, null, out var device), "vkCreateDevice");
+            Device = device;
+        }
+        finally
+        {
+            SilkMarshal.Free((nint)extPtrs);
+        }
+
+        return graphicsQueues;
+    }
+
+    /// <summary>
+    /// What the device has, from the queried features and the extensions it lists (true = enabled on the device).
+    /// </summary>
+    void ReadFeatures(in PhysicalDeviceVulkan13Features v13, in PhysicalDeviceVulkan12Features v12, in PhysicalDeviceVulkan11Features v11,
+        in PhysicalDeviceExtendedDynamicState2FeaturesEXT eds2, in PhysicalDeviceExtendedDynamicState3FeaturesEXT eds3,
+        in PhysicalDeviceVertexInputDynamicStateFeaturesEXT vid, in PhysicalDeviceFragmentShaderBarycentricFeaturesKHR bary,
+        in PhysicalDeviceAccelerationStructureFeaturesKHR accel, in PhysicalDeviceRayQueryFeaturesKHR rayQuery, in PhysicalDeviceFeatures core,
+        bool extEds2, bool extEds3, bool extVid, bool extPush, bool extBary, bool extRay)
+    {
         HasDynamicRendering = v13.DynamicRendering;
         HasSynchronization2 = v13.Synchronization2;
         HasTimelineSemaphore = v12.TimelineSemaphore;
@@ -1108,15 +1253,20 @@ public sealed unsafe class VulkanDevice : IDisposable
         HasExtendedDynamicState3 = Eds3ColorBlendEnable && Eds3ColorWriteMask && Eds3AlphaToCoverageEnable && Eds3PolygonMode && Eds3DepthClampEnable;
         HasVertexInputDynamicState = extVid && vid.VertexInputDynamicState;
         HasSwapchain = Surface.Handle != 0;
-        extVrs = extVrs && vrs.AttachmentFragmentShadingRate && ShadingRateAttachmentFormatOk(pd, Format.R8Uint);
-        HasBindless = v12.DescriptorIndexing && v12.RuntimeDescriptorArray && v12.DescriptorBindingPartiallyBound && v12.DescriptorBindingVariableDescriptorCount &&
-            v12.DescriptorBindingSampledImageUpdateAfterBind && v12.DescriptorBindingUpdateUnusedWhilePending && v12.ShaderSampledImageArrayNonUniformIndexing;
+        HasBindless = v12.DescriptorIndexing && v12.RuntimeDescriptorArray && v12.DescriptorBindingPartiallyBound
+            && v12.DescriptorBindingVariableDescriptorCount && v12.DescriptorBindingSampledImageUpdateAfterBind
+            && v12.DescriptorBindingUpdateUnusedWhilePending && v12.ShaderSampledImageArrayNonUniformIndexing;
         MultiDrawIndirect = core.MultiDrawIndirect;
         DrawIndirectFirstInstance = core.DrawIndirectFirstInstance;
         DrawIndirectCount = v12.DrawIndirectCount;
         ShaderDrawParameters = v11.ShaderDrawParameters;
+    }
 
-        // Turn off everything we did not ask for (the queried struct becomes the create struct).
+    /// <summary>
+    /// Turns off every Vulkan 1.1 to 1.3 feature not asked for: the queried structs become the create structs, in place (their chain stays).
+    /// </summary>
+    void EnableVersionFeatures(ref PhysicalDeviceVulkan13Features v13, ref PhysicalDeviceVulkan12Features v12, ref PhysicalDeviceVulkan11Features v11)
+    {
         v13 = new PhysicalDeviceVulkan13Features
         {
             SType = StructureType.PhysicalDeviceVulkan13Features,
@@ -1157,7 +1307,16 @@ public sealed unsafe class VulkanDevice : IDisposable
             UniformAndStorageBuffer16BitAccess = v11.UniformAndStorageBuffer16BitAccess,
             ShaderDrawParameters = ShaderDrawParameters,
         };
+    }
 
+    /// <summary>
+    /// The extension feature structs as create structs, each with only what the device gets enabled.
+    /// </summary>
+    void EnableExtensionFeatures(ref PhysicalDeviceExtendedDynamicState2FeaturesEXT eds2, ref PhysicalDeviceExtendedDynamicState3FeaturesEXT eds3,
+        ref PhysicalDeviceVertexInputDynamicStateFeaturesEXT vid, ref PhysicalDeviceFragmentShaderBarycentricFeaturesKHR bary,
+        ref PhysicalDeviceAccelerationStructureFeaturesKHR accel, ref PhysicalDeviceRayQueryFeaturesKHR rayQuery,
+        ref PhysicalDeviceFragmentShadingRateFeaturesKHR vrs, bool extVrs)
+    {
         // The Link() calls stored pointers to the old locations, which are the same variables: still valid.
         eds2 = new PhysicalDeviceExtendedDynamicState2FeaturesEXT
         {
@@ -1207,24 +1366,35 @@ public sealed unsafe class VulkanDevice : IDisposable
             PNext = vrs.PNext,
             AttachmentFragmentShadingRate = extVrs,
         };
-        f2.Features = new PhysicalDeviceFeatures
-        {
-            PipelineStatisticsQuery = HasPipelineStatistics,
-            FillModeNonSolid = FillModeNonSolid,
-            DepthClamp = DepthClamp,
-            SamplerAnisotropy = SamplerAnisotropy,
-            TessellationShader = HasTessellation,
-            TextureCompressionBC = TextureCompressionBc,
-            IndependentBlend = IndependentBlend,
-            ImageCubeArray = ImageCubeArray,
-            ShaderStorageImageReadWithoutFormat = core.ShaderStorageImageReadWithoutFormat,
-            ShaderStorageImageWriteWithoutFormat = core.ShaderStorageImageWriteWithoutFormat,
-            ShaderStorageImageExtendedFormats = HasRayQuery && core.ShaderStorageImageExtendedFormats,   // the probe GI's rg16f distance atlas
-            ShaderInt16 = core.ShaderInt16,
-            MultiDrawIndirect = MultiDrawIndirect,
-            DrawIndirectFirstInstance = DrawIndirectFirstInstance,
-        };
+    }
 
+    /// <summary>
+    /// The core features to enable, from the queried <paramref name="core"/>.
+    /// </summary>
+    PhysicalDeviceFeatures EnabledCoreFeatures(in PhysicalDeviceFeatures core) => new()
+    {
+        PipelineStatisticsQuery = HasPipelineStatistics,
+        FillModeNonSolid = FillModeNonSolid,
+        DepthClamp = DepthClamp,
+        SamplerAnisotropy = SamplerAnisotropy,
+        TessellationShader = HasTessellation,
+        TextureCompressionBC = TextureCompressionBc,
+        IndependentBlend = IndependentBlend,
+        ImageCubeArray = ImageCubeArray,
+        ShaderStorageImageReadWithoutFormat = core.ShaderStorageImageReadWithoutFormat,
+        ShaderStorageImageWriteWithoutFormat = core.ShaderStorageImageWriteWithoutFormat,
+        ShaderStorageImageExtendedFormats = HasRayQuery && core.ShaderStorageImageExtendedFormats,   // the probe GI's rg16f distance atlas
+        ShaderInt16 = core.ShaderInt16,
+        MultiDrawIndirect = MultiDrawIndirect,
+        DrawIndirectFirstInstance = DrawIndirectFirstInstance,
+    };
+
+    /// <summary>
+    /// The device extensions to enable (and whether the memory budget extension is among them).
+    /// </summary>
+    List<string> DeviceExtensionNames(HashSet<string> have, bool extEds2, bool extEds3, bool extVid, bool extPush, bool extBary, bool extVrs,
+        bool extPresentId)
+    {
         var names = new List<string>();
         if (HasSwapchain) names.Add("VK_KHR_swapchain");
         if (extEds2) names.Add("VK_EXT_extended_dynamic_state2");
@@ -1253,7 +1423,14 @@ public sealed unsafe class VulkanDevice : IDisposable
                 names.Add(e);
         }
 
-        // Queues
+        return names;
+    }
+
+    /// <summary>
+    /// The graphics family and a transfer-only family when the device has one (else transfers share the graphics family); returns the families.
+    /// </summary>
+    QueueFamilyProperties[] PickQueueFamilies(PhysicalDevice pd)
+    {
         var fams = QueueFamilies(pd);
         GraphicsFamily = (uint)FindGraphicsFamily(pd);
         TransferFamily = GraphicsFamily;
@@ -1270,44 +1447,14 @@ public sealed unsafe class VulkanDevice : IDisposable
             }
         }
 
-        float prio = 1f;
+        return fams;
+    }
 
-        // 1 + the extra queues the family offers (priorities all 1).
-        uint graphicsQueues = 1 + (uint)Math.Min(Math.Max(_options.ExtraGraphicsQueues, 0), (int)fams[GraphicsFamily].QueueCount - 1);
-        var prios = stackalloc float[(int)graphicsQueues];
-        for (int i = 0; i < graphicsQueues; i++) prios[i] = 1f;
-
-        var qcis = stackalloc DeviceQueueCreateInfo[2];
-        uint qn = 0;
-        qcis[qn++] = new DeviceQueueCreateInfo { SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = GraphicsFamily, QueueCount = graphicsQueues, PQueuePriorities = prios };
-
-        if (HasDedicatedTransfer)
-        {
-            qcis[qn++] = new DeviceQueueCreateInfo { SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = TransferFamily, QueueCount = 1, PQueuePriorities = &prio };
-        }
-
-        var extPtrs = (byte**)SilkMarshal.StringArrayToPtr(names.ToArray());
-
-        try
-        {
-            f2.PNext = chain;
-            var dci = new DeviceCreateInfo
-            {
-                SType = StructureType.DeviceCreateInfo,
-                PNext = &f2,
-                QueueCreateInfoCount = qn,
-                PQueueCreateInfos = qcis,
-                EnabledExtensionCount = (uint)names.Count,
-                PpEnabledExtensionNames = extPtrs,
-            };
-            VulkanException.Check(Vk.CreateDevice(pd, in dci, null, out var device), "vkCreateDevice");
-            Device = device;
-        }
-        finally
-        {
-            SilkMarshal.Free((nint)extPtrs);
-        }
-
+    /// <summary>
+    /// The device's queues: the graphics queue, the extra graphics queues and the transfer queue (the graphics queue without a family of its own).
+    /// </summary>
+    void GetQueues(uint graphicsQueues)
+    {
         Vk.GetDeviceQueue(Device, GraphicsFamily, 0, out var gq);
         GraphicsQueue = gq;
 
@@ -1331,7 +1478,13 @@ public sealed unsafe class VulkanDevice : IDisposable
         {
             TransferQueue = gq;
         }
+    }
 
+    /// <summary>
+    /// The limits read once the device exists: shading rates, push descriptors and acceleration structures.
+    /// </summary>
+    void QueryDeviceProperties(PhysicalDevice pd, bool extVrs)
+    {
         // Unusable (no attachment feature, no R8_UINT attachment, no listed rate): the extension is not enabled and the feature stays off.
         if (extVrs) QueryShadingRate(pd);
 
@@ -1357,25 +1510,33 @@ public sealed unsafe class VulkanDevice : IDisposable
                 throw new VulkanException("VK_KHR_acceleration_structure was enabled but its entry points did not load");
 
             AccelerationStructures = accelerationStructures;
-            var asProps = new PhysicalDeviceAccelerationStructurePropertiesKHR { SType = StructureType.PhysicalDeviceAccelerationStructurePropertiesKhr };
+            var asProps = new PhysicalDeviceAccelerationStructurePropertiesKHR
+            {
+                SType = StructureType.PhysicalDeviceAccelerationStructurePropertiesKhr,
+            };
             var p2 = new PhysicalDeviceProperties2 { SType = StructureType.PhysicalDeviceProperties2, PNext = &asProps };
             Vk.GetPhysicalDeviceProperties2(pd, &p2);
             ScratchAlignment = Math.Max(asProps.MinAccelerationStructureScratchOffsetAlignment, 1);
         }
+    }
 
-        if (ValidationEnabled)
+    /// <summary>
+    /// Names the device and its queues for validation messages and capture tools.
+    /// </summary>
+    void NameDeviceObjects()
+    {
+        SetName(ObjectType.Device, (ulong)Device.Handle, "Meitou device");
+        SetName(ObjectType.Queue, (ulong)GraphicsQueue.Handle, "graphics queue");
+
+        if (HasDedicatedTransfer)
         {
-            SetName(ObjectType.Device, (ulong)Device.Handle, "Meitou device");
-            SetName(ObjectType.Queue, (ulong)GraphicsQueue.Handle, "graphics queue");
-
-            if (HasDedicatedTransfer)
-            {
-                SetName(ObjectType.Queue, (ulong)TransferQueue.Handle, "transfer queue");
-            }
+            SetName(ObjectType.Queue, (ulong)TransferQueue.Handle, "transfer queue");
         }
     }
 
-    // ---- fragment shading rate ----
+    #endregion
+
+    #region Fragment shading rate
 
     bool ShadingRateAttachmentFormatOk(PhysicalDevice pd, Format format)
     {
@@ -1431,7 +1592,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         (ShadingRateTexel, MaxShadingRate, HasFragmentShadingRate) = (texel, largest, true);
     }
 
-    // ---- pipeline cache ------------------------------------------------------------------------------------
+    #endregion
+
+    #region Pipeline cache
 
     void CreatePipelineCache()
     {
@@ -1531,7 +1694,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
-    // ---- helpers -------------------------------------------------------------------------------------------
+    #endregion
+
+    #region Helpers
 
     /// <summary>
     /// Names an object for validation messages and capture tools (no-op without validation).
@@ -1651,7 +1816,9 @@ public sealed unsafe class VulkanDevice : IDisposable
         }
     }
 
-    // ---- teardown ------------------------------------------------------------------------------------------
+    #endregion
+
+    #region Teardown
 
     public void Dispose()
     {
@@ -1711,4 +1878,6 @@ public sealed unsafe class VulkanDevice : IDisposable
 
         Vk.Dispose();
     }
+
+    #endregion
 }

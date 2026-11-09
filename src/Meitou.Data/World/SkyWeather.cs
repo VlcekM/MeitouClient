@@ -9,7 +9,8 @@ namespace Meitou.Data.World;
 /// strength before the weather strength and the sun factor: <see cref="World.HeatHaze"/>, docs/formats/weather.md). Rain,
 /// wetness, dust and wind fields are not read here.
 /// </summary>
-public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool FogEnabled, Vector3 FogColour, float FogMin, float FogMax, float CloudDensity, float HeatHaze = 0)
+public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool FogEnabled, Vector3 FogColour, float FogMin, float FogMax,
+    float CloudDensity, float HeatHaze = 0)
 {
     /// <summary>
     /// The base game's "Default" weather: clear, no fog, no clouds, white multipliers.
@@ -44,5 +45,5 @@ public sealed record SkyWeather(string Name, Vector3 SkyColourMultiplier, bool F
     /// (docs/formats/lighting.md).
     /// </summary>
     public static float NightDarkness(GameDatabase db) =>
-        (db.OfType(FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(FcsRecordType.Constants).FirstOrDefault())?.GetFloat("night darkness", 0.5f) ?? 0.5f;
+        Gameplay.ConstantsRecord.Find(db)?.GetFloat("night darkness", 0.5f) ?? 0.5f;
 }

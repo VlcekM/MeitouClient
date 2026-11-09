@@ -139,7 +139,11 @@ public sealed unsafe partial class WorldObjectRenderer
         var boxes = new List<(Vector3, Vector3, Matrix4x4)>(entry.Base.Length);
         for (int i = 0; i < entry.Base.Length; i++)
             if (entry.Instances![i].Gpu is { } gpu && gpu.Max.X >= gpu.Min.X) boxes.Add((gpu.Min, gpu.Max, entry.Base[i].Transform));
-        if (BuildingIconStyle.Matrices(boxes) is not { } camera) { entry.Failed = true; return; }
+        if (BuildingIconStyle.Matrices(boxes) is not { } camera)
+        {
+            entry.Failed = true;
+            return;
+        }
         (entry.Model, entry.View, entry.Projection) = camera;
         var place = entry.Model * Matrix4x4.CreateTranslation(entry.Anchor);
         for (int i = 0; i < entry.Base.Length; i++)
@@ -157,8 +161,10 @@ public sealed unsafe partial class WorldObjectRenderer
         const int size = BuildingIconStyle.Size;
         if (entry.Colour is null)
         {
-            entry.Colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size, size, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"building icon {entry.Record}"));
-            entry.Depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, size, size, Use: TextureUse.DepthTarget, Name: $"building icon depth {entry.Record}"));
+            entry.Colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size, size,
+                Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"building icon {entry.Record}"));
+            entry.Depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, size, size, Use: TextureUse.DepthTarget,
+                Name: $"building icon depth {entry.Record}"));
             entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
                 TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false,
                         0)), entry.Colour.View());

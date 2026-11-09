@@ -60,7 +60,13 @@ sealed class AgentChannel(GameHost host)
     /// </summary>
     sealed record ControlSnap(string Screens, string Screen, string Page, bool Loaded, string Mode, int Selected);
     sealed record ControlWait(string Id, string Key, string Value, long Deadline, long Started, double TimeoutSeconds);
-    sealed class ControlSettle(string id, string text, string? data, ControlSnap before) { public string Id = id, Text = text; public string? Data = data; public ControlSnap Before = before; public int Frames = 4; }
+    sealed class ControlSettle(string id, string text, string? data, ControlSnap before)
+    {
+        public string Id = id, Text = text;
+        public string? Data = data;
+        public ControlSnap Before = before;
+        public int Frames = 4;
+    }
 
     internal void InitControl()
     {
@@ -79,22 +85,35 @@ sealed class AgentChannel(GameHost host)
         if (ExecPending is { } exec && SetupSettled())
         {
             ExecPending = null;
-            foreach (string part in exec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) _execQueue.Enqueue(part);
+            foreach (string part in exec.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                _execQueue.Enqueue(part);
         }
         PumpExec();
-        if (host.GameOptions.ShotAfter is { } shotDelay && !_autoShotTimer && !_autoShotAsked && ExecPending is null && _execQueue.Count == 0 && _execWaitingFor is null && ControlExitCode == 0 && SetupSettled())
+        if (host.GameOptions.ShotAfter is { } shotDelay && !_autoShotTimer && !_autoShotAsked && ExecPending is null && _execQueue.Count == 0
+            && _execWaitingFor is null && ControlExitCode == 0 && SetupSettled())
         {
             _autoShotTimer = true;
             _shotDueAt = Stopwatch.GetTimestamp() + (long)(shotDelay * Stopwatch.Frequency);
         }
-        if (ControlExitCode != 0 && host.GameOptions.ShotAfter is not null) host.DevConsoleHost.ControlQuit = true;   // a failed setup ends a screenshot run at once
+        // a failed setup ends a screenshot run at once
+        if (ControlExitCode != 0 && host.GameOptions.ShotAfter is not null) host.DevConsoleHost.ControlQuit = true;
         if (_autoShotTimer && Stopwatch.GetTimestamp() >= _shotDueAt)
         {
             _autoShotTimer = false;
             _autoShotAsked = true;
-            string path = Path.GetFullPath(host.GameOptions.ShotOut ?? Path.Combine(ControlDir ?? Directory.GetCurrentDirectory(), ControlDir is null ? "meitou-shot.png" : "shot.png"));
-            try { Directory.CreateDirectory(Path.GetDirectoryName(path)!); }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Console.WriteLine($"setup     screenshot failed: {e.Message}"); ControlExitCode = 4; host.DevConsoleHost.ControlQuit = true; }
+            string path = Path.GetFullPath(host.GameOptions.ShotOut
+                ?? Path.Combine(ControlDir ?? Directory.GetCurrentDirectory(), ControlDir is null ? "meitou-shot.png" : "shot.png"));
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Console.WriteLine($"setup     screenshot failed: {e.Message}");
+                ControlExitCode = 4;
+                host.DevConsoleHost.ControlQuit = true;
+            }
+
             if (!host.DevConsoleHost.ControlQuit)
             {
                 ShotPath = path;
@@ -108,7 +127,8 @@ sealed class AgentChannel(GameHost host)
             var st = _controlSettles[i];
             if (--st.Frames > 0) continue;
             _controlSettles.RemoveAt(i);
-            ControlWrite(st.Id, true, st.Text, st.Data, ControlSnapshot() is var after && (after.Screens != st.Before.Screens || after.Page != st.Before.Page));
+            ControlWrite(st.Id, true, st.Text, st.Data, ControlSnapshot() is var after
+                && (after.Screens != st.Before.Screens || after.Page != st.Before.Page));
         }
         if (Stopwatch.GetTimestamp() < _nextControlPoll) return;
         _nextControlPoll = Stopwatch.GetTimestamp() + Stopwatch.Frequency / 4;
@@ -121,7 +141,12 @@ sealed class AgentChannel(GameHost host)
             lines = File.ReadAllLines(file);
             File.Delete(file);
         }
-        catch (IOException e) { Console.WriteLine($"control   cannot read {file}: {e.Message}"); return; }
+        catch (IOException e)
+        {
+            Console.WriteLine($"control   cannot read {file}: {e.Message}");
+            return;
+        }
+
         foreach (string line in lines.Select(l => l.Trim()).Where(l => l.Length > 0))
         {
             int space = line.IndexOf(' ');
@@ -146,10 +171,22 @@ sealed class AgentChannel(GameHost host)
             bool ok = RunControlLine("exec", part);
             if (ok && ControlReplyDeferred)
             {
-                if (ControlDir is null) { Console.WriteLine($"setup     '{part}' answers later and needs --control-dir to be waited on"); ok = false; }
-                else { _execWaitingFor = part; return; }
+                if (ControlDir is null)
+                {
+                    Console.WriteLine($"setup     '{part}' answers later and needs --control-dir to be waited on");
+                    ok = false;
+                }
+                else
+                {
+                    _execWaitingFor = part;
+                    return;
+                }
             }
-            if (!ok) { ExecFailed(part); return; }
+            if (!ok)
+            {
+                ExecFailed(part);
+                return;
+            }
         }
     }
 
@@ -167,7 +204,12 @@ sealed class AgentChannel(GameHost host)
     /// </summary>
     bool SetupSettled()
     {
-        if (host.Covered || host.Player.TitleOpen) { _setupLoadedAt = 0; return false; }
+        if (host.Covered || host.Player.TitleOpen)
+        {
+            _setupLoadedAt = 0;
+            return false;
+        }
+
         if (_setupLoadedAt == 0) _setupLoadedAt = Stopwatch.GetTimestamp();
         if (!host.Session.Simulation.IsPaused && host.Session.ShownTick < 1) return false;
         return host.Session.World.Player.Selection.Any() || Stopwatch.GetElapsedTime(_setupLoadedAt).TotalSeconds >= 3;
@@ -185,13 +227,27 @@ sealed class AgentChannel(GameHost host)
         ControlReplyDeferred = false;
         var before = ControlSnapshot();
         host.DevConsoleHost.DevConsole.Tap = (text, kind) => { output.Add(text); failed |= kind == DevConsole.Kind.Error; };
-        try { host.DevConsoleHost.DevConsole.Execute(command); }
-        finally { host.DevConsoleHost.DevConsole.Tap = null; }
+        try
+        {
+            host.DevConsoleHost.DevConsole.Execute(command);
+        }
+        finally
+        {
+            host.DevConsoleHost.DevConsole.Tap = null;
+        }
+
         string result = string.Join(" | ", output);
         if (failed) Console.WriteLine($"control   {id} {command}: {result}");
         if (!failed && ShotWaitId == id && ShotPath is not null) return true;   // the screenshot's frame writes this one
-        if (ControlReplyDeferred) { ControlData = null; return !failed; }   // wait-for answers later
-        if (!failed && ControlDir is not null && (command.StartsWith("ui-click", StringComparison.Ordinal) || command.StartsWith("ui-open", StringComparison.Ordinal)))
+        // wait-for answers later
+        if (ControlReplyDeferred)
+        {
+            ControlData = null;
+            return !failed;
+        }
+
+        if (!failed && ControlDir is not null && (command.StartsWith("ui-click", StringComparison.Ordinal)
+            || command.StartsWith("ui-open", StringComparison.Ordinal)))
             _controlSettles.Add(new ControlSettle(id, result, ControlData, before));   // reply after a few frames with "changed"
         else ControlWrite(id, !failed, result, ControlData);
         ControlData = null;
@@ -220,7 +276,8 @@ sealed class AgentChannel(GameHost host)
     ControlSnap ControlSnapshot()
     {
         bool loaded = !host.Covered && !host.Player.TitleOpen;
-        return new ControlSnap(string.Join(',', ControlScreenSet()), ControlScreen(), SettingsPanel is { Visible: true } p ? p.PageName : "", loaded, host.Player.UiMode.ToString(), loaded ? host.Session.World.Player.Selection.Count() : 0);
+        return new ControlSnap(string.Join(',', ControlScreenSet()), ControlScreen(), SettingsPanel is { Visible: true } p ? p.PageName : "", loaded,
+            host.Player.UiMode.ToString(), loaded ? host.Session.World.Player.Selection.Count() : 0);
     }
 
     /// <summary>
@@ -230,11 +287,23 @@ sealed class AgentChannel(GameHost host)
     {
         host.AgentWorld.ControlCameraTick();
         var now = ControlSnapshot();
-        if (now.Loaded) { host.Player.AgentOrders.ControlKills(); host.Player.AgentOrders.ControlCombatSample(); host.AgentPlay.ControlSpawnPoll(); host.AgentPlay.ControlMoveWaitPoll(); }
+        if (now.Loaded)
+        {
+            host.Player.AgentOrders.Kills.ControlKills();
+            host.Player.AgentOrders.Combat.ControlCombatSample();
+            host.AgentPlay.ControlSpawnPoll();
+            host.AgentPlay.ControlMoveWaitPoll();
+        }
+
         if (_lastSnap is { } old && ControlEvents && old != now)
         {
-            if (old.Screens != now.Screens) ControlEvent("screen", w => { w.WriteString("screen", now.Screen); w.WriteStartArray("screens"); foreach (string s in ControlScreenSet()) w.WriteStringValue(s); w.WriteEndArray(); });
-            if (old.Page != now.Page) ControlEvent("settings-page", w => w.WriteString("page", now.Page.Length > 0 ? now.Page : null));
+            if (old.Screens != now.Screens)
+            {
+                ControlEvent("screen", w => { w.WriteString("screen",
+                    now.Screen); w.WriteStartArray("screens"); foreach (string s in ControlScreenSet()) w.WriteStringValue(s); w.WriteEndArray(); });
+            }
+            if (old.Page != now.Page)
+                ControlEvent("settings-page", w => w.WriteString("page", now.Page.Length > 0 ? now.Page : null));
             if (old.Loaded != now.Loaded) ControlEvent("loaded", w => w.WriteBoolean("loaded", now.Loaded));
             if (old.Mode != now.Mode) ControlEvent("mode", w => w.WriteString("mode", now.Mode));
             if (old.Selected != now.Selected) ControlEvent("selection", w => w.WriteNumber("selected", now.Selected));
@@ -243,8 +312,16 @@ sealed class AgentChannel(GameHost host)
         for (int i = _controlWaits.Count - 1; i >= 0; i--)
         {
             var wt = _controlWaits[i];
-            if (WaitHolds(wt.Key, wt.Value, now)) { _controlWaits.RemoveAt(i); WaitReply(wt, true); }
-            else if (Stopwatch.GetTimestamp() >= wt.Deadline) { _controlWaits.RemoveAt(i); WaitReply(wt, false); }
+            if (WaitHolds(wt.Key, wt.Value, now))
+            {
+                _controlWaits.RemoveAt(i);
+                WaitReply(wt, true);
+            }
+            else if (Stopwatch.GetTimestamp() >= wt.Deadline)
+            {
+                _controlWaits.RemoveAt(i);
+                WaitReply(wt, false);
+            }
         }
     }
 
@@ -262,15 +339,23 @@ sealed class AgentChannel(GameHost host)
             w.WriteEndObject();
             w.WriteEndObject();
         }
-        try { File.AppendAllText(Path.Combine(ControlDir!, "out"), System.Text.Encoding.UTF8.GetString(stream.ToArray()) + "\n"); }
-        catch (IOException e) { Console.WriteLine($"control   cannot write out: {e.Message}"); }
+        try
+        {
+            File.AppendAllText(Path.Combine(ControlDir!, "out"), System.Text.Encoding.UTF8.GetString(stream.ToArray()) + "\n");
+        }
+        catch (IOException e)
+        {
+            Console.WriteLine($"control   cannot write out: {e.Message}");
+        }
     }
 
     bool WaitHolds(string key, string value, ControlSnap now)
     {
         switch (key)
         {
-            case "screen": return now.Screen.Equals(value, StringComparison.OrdinalIgnoreCase) || ControlScreenSet().Any(s => s.Equals(value, StringComparison.OrdinalIgnoreCase));
+            case "screen":
+                return now.Screen.Equals(value, StringComparison.OrdinalIgnoreCase) || ControlScreenSet()
+                    .Any(s => s.Equals(value, StringComparison.OrdinalIgnoreCase));
             case "settings-page": return now.Page.Equals(value, StringComparison.OrdinalIgnoreCase);
             case "loaded": return now.Loaded == !value.Equals("false", StringComparison.OrdinalIgnoreCase);
             case "mode": return now.Mode.Equals(value, StringComparison.OrdinalIgnoreCase);
@@ -283,7 +368,8 @@ sealed class AgentChannel(GameHost host)
     void WaitReply(ControlWait wt, bool ok)
     {
         double ms = Math.Round(Stopwatch.GetElapsedTime(wt.Started).TotalMilliseconds);
-        string data = JsonSerializer.Serialize(new Dictionary<string, object> { ["key"] = wt.Key, ["value"] = wt.Value, ["waitedMs"] = ms, ["clock"] = "real" });
+        string data = JsonSerializer.Serialize(new Dictionary<string, object> { ["key"] = wt.Key, ["value"] = wt.Value,
+            ["waitedMs"] = ms, ["clock"] = "real" });
         ControlWrite(wt.Id, ok, ok ? "" : "timeout", data);
     }
 
@@ -294,7 +380,8 @@ sealed class AgentChannel(GameHost host)
     {
         if (id == "exec" && _execWaitingFor is { } waited)   // the deferred reply of a setup command
         {
-            if (ok && dataJson is not null && dataJson.Contains("\"result\":\"", StringComparison.Ordinal) && !dataJson.Contains("\"result\":\"arrived\"", StringComparison.Ordinal))
+            if (ok && dataJson is not null && dataJson.Contains("\"result\":\"", StringComparison.Ordinal)
+                && !dataJson.Contains("\"result\":\"arrived\"", StringComparison.Ordinal))
             { ok = false; text = $"waited move did not arrive: {dataJson}"; }   // a waited move that ended stuck, timed out or lost the walker
             if (!ok) Console.WriteLine($"setup     '{waited}': {text}");
             _execWaitingFor = null;
@@ -305,17 +392,34 @@ sealed class AgentChannel(GameHost host)
         using (var w = new Utf8JsonWriter(stream))
         {
             w.WriteStartObject();
-            if (long.TryParse(id, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long n)) w.WriteNumber("id", n);
+            if (long.TryParse(id, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long n))
+                w.WriteNumber("id", n);
             else w.WriteString("id", id);
             w.WriteBoolean("ok", ok);
             if (!ok) w.WriteString("error", text);
-            if (dataJson is not null) { w.WritePropertyName("data"); w.WriteRawValue(dataJson); }
-            else if (ok) { w.WriteStartObject("data"); w.WriteString("text", text); w.WriteEndObject(); }
+            if (dataJson is not null)
+            {
+                w.WritePropertyName("data");
+                w.WriteRawValue(dataJson);
+            }
+            else if (ok)
+            {
+                w.WriteStartObject("data");
+                w.WriteString("text", text);
+                w.WriteEndObject();
+            }
+
             if (changed is { } ch) w.WriteBoolean("changed", ch);
             w.WriteEndObject();
         }
-        try { File.AppendAllText(Path.Combine(ControlDir, "out"), System.Text.Encoding.UTF8.GetString(stream.ToArray()) + "\n"); }
-        catch (IOException e) { Console.WriteLine($"control   cannot write out: {e.Message}"); }
+        try
+        {
+            File.AppendAllText(Path.Combine(ControlDir, "out"), System.Text.Encoding.UTF8.GetString(stream.ToArray()) + "\n");
+        }
+        catch (IOException e)
+        {
+            Console.WriteLine($"control   cannot write out: {e.Message}");
+        }
     }
 
     /// <summary>
@@ -344,10 +448,20 @@ sealed class AgentChannel(GameHost host)
     /// </summary>
     internal void ControlShotFailed(string why, string? id = null)
     {
-        if (id is null) { id = ShotWaitId; host.ScreenshotRequested = false; }
+        if (id is null)
+        {
+            id = ShotWaitId;
+            host.ScreenshotRequested = false;
+        }
+
         ShotPath = ShotWaitId = null;
         Console.WriteLine($"setup     screenshot failed: {why}");
-        if (_autoShotAsked) { ControlExitCode = 4; host.DevConsoleHost.ControlQuit = true; }
+        if (_autoShotAsked)
+        {
+            ControlExitCode = 4;
+            host.DevConsoleHost.ControlQuit = true;
+        }
+
         if (id is not null) ControlWrite(id, false, $"screenshot failed: {why}");
     }
 
@@ -379,7 +493,8 @@ sealed class AgentChannel(GameHost host)
             if (!host.Covered && !host.Player.TitleOpen) WriteWorldState(w);
             w.WriteBoolean("paused", host.Session.Simulation.IsPaused);
             w.WriteNumber("speed", host.Session.Simulation.Speed);
-            w.WriteString("save", string.IsNullOrEmpty(host.Saves.ReadingFolder) ? null : Path.GetFileName(host.Saves.ReadingFolder.TrimEnd('/', '\\')));
+            w.WriteString("save", string.IsNullOrEmpty(host.Saves.ReadingFolder) ? null : Path.GetFileName(host.Saves.ReadingFolder.TrimEnd('/',
+                '\\')));
             w.WriteEndObject();
         }
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
@@ -409,108 +524,238 @@ sealed class AgentChannel(GameHost host)
         w.WriteEndObject();
     }
 
+    /// <summary>
+    /// Registers the agent control channel's commands (state, screenshot, quit, mouse, click, events, wait-for, ui-*, clipboard) after the
+    /// world layer's.
+    /// </summary>
     internal void RegisterControlCommands()
     {
         host.AgentWorld.RegisterControlWorldCommands();
         var c = host.DevConsoleHost.DevConsole;
-        void Add(string name, string usage, string help, Action<IReadOnlyList<string>, DevConsole> run, Func<int, string, IEnumerable<string>>? complete = null) =>
+        void Add(string name, string usage, string help, Action<IReadOnlyList<string>, DevConsole> run,
+            Func<int, string, IEnumerable<string>>? complete = null) =>
             c.Register(new ConsoleCommand(name, usage, help, run) { Complete = complete });
 
-        Add("state", "state", "one line of JSON: screen, open settings page, player position, loaded save", (_, con) => { string json = ControlState(); PrintData(con, json); });
+        Add("state", "state", "one line of JSON: screen, open settings page, player position, loaded save",
+            (_, con) => { string json = ControlState(); PrintData(con, json); });
 
-        Add("screenshot", "screenshot <png path>", "save the next frame (interface included, no debug overlays or pointer) to the file", (args, con) =>
+        Add("screenshot", "screenshot <png path>", "save the next frame (interface included, no debug overlays or pointer) "
+            + "to the file", ControlScreenshot);
+
+        Add("quit", "quit", "end the interactive loop and exit cleanly (as closing the window does)",
+            (_, con) => { host.DevConsoleHost.ControlQuit = true; con.Print("quitting"); });
+
+        Add("mouse", "mouse <x> <y>", "headless runs only: put the pointer at screen pixel x y (hover, tooltips and picking follow it; "
+            + "a window's real pointer is not moved)", ControlMouse);
+
+        Add("click", "click <x> <y> [--button left|right] [--double]", "press and release a pointer button at screen pixel x y through the game's "
+            + "own input path (widgets, world picking, build-mode placement behave as for a user click); windowed and headless; "
+            + "played over the next frames, the reply says it was queued (the window's real pointer is not moved)", ControlClick);
+
+        Add("events", "events on|off", "switch the event lines in out on or off (default on)", ControlEventsCommand);
+
+        Add("wait-for", "wait-for <key>=<value> [timeout=<s>]", "reply when the condition holds (keys: screen, settings-page, loaded, widget, "
+            + "no-widget, mode, camera-settled, selected=<n>, pos-near=<x>,<z>,<r>[,<id>]) or with error timeout after timeout real seconds "
+            + "(default 10)", ControlWaitFor);
+
+        Add("ui-tree", "ui-tree", "list the clickable widgets of the top screen: index, label, x y w h in screen pixels",
+            (_, con) => ControlUiTree(con));
+
+        Add("ui-click", "ui-click <label|index> | ui-click [--id <widgetId>] [--label <text>] [--screen <name>] [--index <n>]",
+            "press a widget by label (exact, else unique part), ui-tree index, or selectors that must all match (ambiguity is an "
+            + "error)", ControlUiClickCommand);
+
+        Add("ui-set", "ui-set <label|index> <0..1> | ui-set [--id ..] [--label ..] [--screen ..] [--index ..] <0..1>",
+            "move a settings slider to a position on its track (0 left, 1 right)", (args, con) => ControlUiSet(args, con));
+
+        Add("clipboard", "clipboard", "print the game's clipboard text as a JSON string (null when it holds none)",
+            (_, con) => { string json = JsonSerializer.Serialize(host.Player.ClipboardRead?.Invoke()); PrintData(con, json); });
+
+        Add("ui-open", "ui-open settings[:<page>]", "open the settings window, on a page (" + string.Join(", ", SettingsMenu.PageNames) + ")",
+            ControlUiOpen, (i, typed) => i == 0 ? SettingsMenu.PageNames.Select(p => "settings:"
+            + p).Where(p => p.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) : []);
+    }
+
+    /// <summary>
+    /// The <c>screenshot</c> command (usage and help at its registration in <see cref="RegisterControlCommands"/>).
+    /// </summary>
+    void ControlScreenshot(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (args.Count != 1)
         {
-            if (args.Count != 1) { con.Error("usage: screenshot <png path>"); return; }
-            string path = Path.GetFullPath(args[0]);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            ShotPath = path;
-            host.ScreenshotRequested = true;
-            ShotWaitId = CurrentControlId;
-            con.Print($"queued {path}");
-        });
+            con.Error("usage: screenshot <png path>");
+            return;
+        }
 
-        Add("quit", "quit", "end the interactive loop and exit cleanly (as closing the window does)", (_, con) => { host.DevConsoleHost.ControlQuit = true; con.Print("quitting"); });
+        string path = Path.GetFullPath(args[0]);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        ShotPath = path;
+        host.ScreenshotRequested = true;
+        ShotWaitId = CurrentControlId;
+        con.Print($"queued {path}");
+    }
 
-        Add("mouse", "mouse <x> <y>", "headless runs only: put the pointer at screen pixel x y (hover, tooltips and picking follow it; a window's real pointer is not moved)", (args, con) =>
+    /// <summary>
+    /// The <c>mouse</c> command (usage and help at its registration in <see cref="RegisterControlCommands"/>).
+    /// </summary>
+    void ControlMouse(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (!host.WorldOptions.Headless)
         {
-            if (!host.WorldOptions.Headless) { con.Error("mouse: only with --headless (use the real pointer otherwise)"); return; }
-            if (args.Count != 2 || !float.TryParse(args[0], System.Globalization.CultureInfo.InvariantCulture, out float x) || !float.TryParse(args[1], System.Globalization.CultureInfo.InvariantCulture, out float y)) { con.Error("usage: mouse <x> <y>"); return; }
-            host.DevConsoleHost.HeadlessMouse = new System.Numerics.Vector2(x, y);
-            con.Print($"pointer {x:0} {y:0}");
-        });
+            con.Error("mouse: only with --headless (use the real pointer otherwise)");
+            return;
+        }
 
-        Add("click", "click <x> <y> [--button left|right] [--double]", "press and release a pointer button at screen pixel x y through the game's own input path (widgets, world picking, build-mode placement behave as for a user click); windowed and headless; played over the next frames, the reply says it was queued (the window's real pointer is not moved)", (args, con) =>
+        if (args.Count != 2 || !float.TryParse(args[0], System.Globalization.CultureInfo.InvariantCulture, out float x)
+            || !float.TryParse(args[1], System.Globalization.CultureInfo.InvariantCulture, out float y))
         {
-            bool right = false, dbl = false;
-            var pos = new List<string>();
-            for (int i = 0; i < args.Count; i++)
+            con.Error("usage: mouse <x> <y>");
+            return;
+        }
+
+        host.DevConsoleHost.HeadlessMouse = new System.Numerics.Vector2(x, y);
+        con.Print($"pointer {x:0} {y:0}");
+    }
+
+    /// <summary>
+    /// The <c>click</c> command (usage and help at its registration in <see cref="RegisterControlCommands"/>).
+    /// </summary>
+    void ControlClick(IReadOnlyList<string> args, DevConsole con)
+    {
+        bool right = false, dbl = false;
+        var pos = new List<string>();
+        for (int i = 0; i < args.Count; i++)
+        {
+            if (args[i] == "--double") dbl = true;
+            else if (args[i] == "--button" && i + 1 < args.Count && args[i + 1] is "left" or "right")
+                right = args[++i] == "right";
+            else pos.Add(args[i]);
+        }
+        if (pos.Count != 2 || !float.TryParse(pos[0], System.Globalization.CultureInfo.InvariantCulture, out float x)
+            || !float.TryParse(pos[1], System.Globalization.CultureInfo.InvariantCulture, out float y))
+        {
+            con.Error("usage: click <x> <y> [--button left|right] [--double]");
+            return;
+        }
+
+        var at = new System.Numerics.Vector2(x, y);
+        host.DevConsoleHost.PointerSteps.Enqueue(('m', right, at));
+        host.DevConsoleHost.PointerSteps.Enqueue(('i', right, at));
+        for (int n = 0; n < (dbl ? 2 : 1); n++)
+        {
+            host.DevConsoleHost.PointerSteps.Enqueue(('d', right, at));
+            host.DevConsoleHost.PointerSteps.Enqueue(('u', right, at));
+        }
+
+        con.Print($"queued {(right ? "right" : "left")}{(dbl ? " double" : "")} click at {x:0} {y:0}");
+    }
+
+    /// <summary>
+    /// The <c>events</c> command (usage and help at its registration in <see cref="RegisterControlCommands"/>).
+    /// </summary>
+    void ControlEventsCommand(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (args.Count != 1 || args[0] is not ("on" or "off"))
+        {
+            con.Error("usage: events on|off");
+            return;
+        }
+
+        ControlEvents = args[0] == "on";
+        con.Print($"events {args[0]}");
+    }
+
+    /// <summary>
+    /// The <c>wait-for</c> command (usage and help at its registration in <see cref="RegisterControlCommands"/>).
+    /// </summary>
+    void ControlWaitFor(IReadOnlyList<string> args, DevConsole con)
+    {
+        double seconds = 10;
+        var rest = args.ToList();
+        if (rest.Count > 1 && rest[^1].StartsWith("timeout=", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!double.TryParse(rest[^1][8..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture,
+                out seconds) || seconds < 0)
             {
-                if (args[i] == "--double") dbl = true;
-                else if (args[i] == "--button" && i + 1 < args.Count && args[i + 1] is "left" or "right") right = args[++i] == "right";
-                else pos.Add(args[i]);
-            }
-            if (pos.Count != 2 || !float.TryParse(pos[0], System.Globalization.CultureInfo.InvariantCulture, out float x) || !float.TryParse(pos[1], System.Globalization.CultureInfo.InvariantCulture, out float y)) { con.Error("usage: click <x> <y> [--button left|right] [--double]"); return; }
-            var at = new System.Numerics.Vector2(x, y);
-            host.DevConsoleHost.PointerSteps.Enqueue(('m', right, at));
-            host.DevConsoleHost.PointerSteps.Enqueue(('i', right, at));
-            for (int n = 0; n < (dbl ? 2 : 1); n++) { host.DevConsoleHost.PointerSteps.Enqueue(('d', right, at)); host.DevConsoleHost.PointerSteps.Enqueue(('u', right, at)); }
-            con.Print($"queued {(right ? "right" : "left")}{(dbl ? " double" : "")} click at {x:0} {y:0}");
-        });
-
-        Add("events", "events on|off", "switch the event lines in out on or off (default on)", (args, con) =>
-        {
-            if (args.Count != 1 || args[0] is not ("on" or "off")) { con.Error("usage: events on|off"); return; }
-            ControlEvents = args[0] == "on";
-            con.Print($"events {args[0]}");
-        });
-
-        Add("wait-for", "wait-for <key>=<value> [timeout=<s>]", "reply when the condition holds (keys: screen, settings-page, loaded, widget, no-widget, mode, camera-settled, selected=<n>, pos-near=<x>,<z>,<r>[,<id>]) or with error timeout after timeout real seconds (default 10)", (args, con) =>
-        {
-            double seconds = 10;
-            var rest = args.ToList();
-            if (rest.Count > 1 && rest[^1].StartsWith("timeout=", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!double.TryParse(rest[^1][8..], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out seconds) || seconds < 0) { con.Error("wait-for: bad timeout"); return; }
-                rest.RemoveAt(rest.Count - 1);
-            }
-            string cond = string.Join(' ', rest);
-            int eq = cond.IndexOf('=');
-            string key = (eq < 0 ? cond : cond[..eq]).Trim().ToLowerInvariant(), value = eq < 0 ? "true" : cond[(eq + 1)..].Trim();
-            if (key is not ("screen" or "settings-page" or "loaded" or "widget" or "no-widget" or "mode" or "camera-settled" or "selected" or "pos-near") || (value.Length == 0)) { con.Error("usage: wait-for <screen|settings-page|loaded|widget|no-widget|mode|camera-settled|selected|pos-near>=<value> [timeout=<s>]  (pos-near=<x>,<z>,<r>[,<id>])"); return; }
-            var wt = new ControlWait(CurrentControlId ?? "0", key, value, Stopwatch.GetTimestamp() + (long)(seconds * Stopwatch.Frequency), Stopwatch.GetTimestamp(), seconds);
-            if (WaitHolds(key, value, ControlSnapshot())) { ControlData = JsonSerializer.Serialize(new Dictionary<string, object> { ["key"] = key, ["value"] = value, ["waitedMs"] = 0, ["clock"] = "real" }); con.Print($"{key}={value} already holds"); return; }
-            _controlWaits.Add(wt);
-            ControlReplyDeferred = true;
-            con.Print($"waiting for {key}={value}");
-        });
-
-        Add("ui-tree", "ui-tree", "list the clickable widgets of the top screen: index, label, x y w h in screen pixels", (_, con) => ControlUiTree(con));
-
-        Add("ui-click", "ui-click <label|index> | ui-click [--id <widgetId>] [--label <text>] [--screen <name>] [--index <n>]", "press a widget by label (exact, else unique part), ui-tree index, or selectors that must all match (ambiguity is an error)", (args, con) =>
-        {
-            if (args.Count == 0) { con.Error("usage: ui-click <label|index> | ui-click --id <id> --label <text> --screen <name> --index <n>"); return; }
-            ControlUiClick(args, con);
-        });
-
-        Add("ui-set", "ui-set <label|index> <0..1> | ui-set [--id ..] [--label ..] [--screen ..] [--index ..] <0..1>", "move a settings slider to a position on its track (0 left, 1 right)", (args, con) => ControlUiSet(args, con));
-
-        Add("clipboard", "clipboard", "print the game's clipboard text as a JSON string (null when it holds none)", (_, con) => { string json = JsonSerializer.Serialize(host.Player.ClipboardRead?.Invoke()); PrintData(con, json); });
-
-        Add("ui-open", "ui-open settings[:<page>]", "open the settings window, on a page (" + string.Join(", ", SettingsMenu.PageNames) + ")", (args, con) =>
-        {
-            if (args.Count != 1) { con.Error("usage: ui-open settings[:<page>]"); return; }
-            string[] parts = args[0].Split(':', 2);
-            if (!parts[0].Equals("settings", StringComparison.OrdinalIgnoreCase))
-            {
-                if (parts.Length == 1 && host.Player.OpenFaithfulScreen(parts[0])) con.Print($"{parts[0]} open");
-                else con.Error($"ui-open: unknown window '{parts[0]}' (settings, or a screen id such as menu, load, save)");
+                con.Error("wait-for: bad timeout");
                 return;
             }
-            if (SettingsPanel is not { } panel) { con.Error("ui-open: this mode has no settings window"); return; }
-            if (parts.Length == 2 && !panel.TryOpenPage(parts[1])) { con.Error($"ui-open: unknown settings page '{parts[1]}' (known: {string.Join(", ", SettingsMenu.PageNames)})"); return; }
-            panel.Visible = true;
-            con.Print($"settings open on {panel.PageName}");
-        }, (i, typed) => i == 0 ? SettingsMenu.PageNames.Select(p => "settings:" + p).Where(p => p.StartsWith(typed, StringComparison.OrdinalIgnoreCase)) : []);
+
+            rest.RemoveAt(rest.Count - 1);
+        }
+        string cond = string.Join(' ', rest);
+        int eq = cond.IndexOf('=');
+        string key = (eq < 0 ? cond : cond[..eq]).Trim().ToLowerInvariant(), value = eq < 0 ? "true" : cond[(eq + 1)..].Trim();
+        if (key is not ("screen" or "settings-page" or "loaded" or "widget" or "no-widget" or "mode" or "camera-settled" or "selected" or "pos-near")
+            || (value.Length == 0))
+        {
+            con.Error("usage: wait-for <screen|settings-page|loaded|widget|no-widget|mode|camera-settled|selected|pos-near>=<value> [timeout=<s>]  "
+                + "(pos-near=<x>,<z>,<r>[,<id>])");
+            return;
+        }
+
+        var wt = new ControlWait(CurrentControlId ?? "0", key, value, Stopwatch.GetTimestamp() + (long)(seconds * Stopwatch.Frequency),
+            Stopwatch.GetTimestamp(), seconds);
+        if (WaitHolds(key, value, ControlSnapshot()))
+        {
+            ControlData = JsonSerializer.Serialize(new Dictionary<string, object> { ["key"] = key, ["value"] = value,
+                ["waitedMs"] = 0, ["clock"] = "real" });
+            con.Print($"{key}={value} already holds");
+            return;
+        }
+
+        _controlWaits.Add(wt);
+        ControlReplyDeferred = true;
+        con.Print($"waiting for {key}={value}");
+    }
+
+    /// <summary>
+    /// The <c>ui-click</c> command (usage and help at its registration in <see cref="RegisterControlCommands"/>).
+    /// </summary>
+    void ControlUiClickCommand(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (args.Count == 0)
+        {
+            con.Error("usage: ui-click <label|index> | ui-click --id <id> --label <text> --screen <name> --index <n>");
+            return;
+        }
+
+        ControlUiClick(args, con);
+    }
+
+    /// <summary>
+    /// The <c>ui-open</c> command (usage and help at its registration in <see cref="RegisterControlCommands"/>).
+    /// </summary>
+    void ControlUiOpen(IReadOnlyList<string> args, DevConsole con)
+    {
+        if (args.Count != 1)
+        {
+            con.Error("usage: ui-open settings[:<page>]");
+            return;
+        }
+
+        string[] parts = args[0].Split(':', 2);
+        if (!parts[0].Equals("settings", StringComparison.OrdinalIgnoreCase))
+        {
+            if (parts.Length == 1 && host.Player.OpenFaithfulScreen(parts[0])) con.Print($"{parts[0]} open");
+            else
+                con.Error($"ui-open: unknown window '{parts[0]}' (settings, or a screen id such as menu, load, save)");
+            return;
+        }
+        if (SettingsPanel is not { } panel)
+        {
+            con.Error("ui-open: this mode has no settings window");
+            return;
+        }
+
+        if (parts.Length == 2 && !panel.TryOpenPage(parts[1]))
+        {
+            con.Error($"ui-open: unknown settings page '{parts[1]}' (known: {string.Join(", ", SettingsMenu.PageNames)})");
+            return;
+        }
+
+        panel.Visible = true;
+        con.Print($"settings open on {panel.PageName}");
     }
 
     /// <summary>
@@ -526,19 +771,31 @@ sealed class AgentChannel(GameHost host)
     {
         var list = new List<ControlWidget>();
         if (SettingsPanel is { Visible: true } panel)
+        {
             foreach (var (label, b, activate) in panel.Clickables)
                 list.Add(new(label, b.X, b.Y, b.Width, b.Height, "settings:" + panel.PageName + "/" + label, "settings", activate));
+        }
         if (SettingsPanel is { Visible: true } open)
+        {
             foreach (var (slider, b) in open.SliderHits)
-                list.Add(new(slider.Label, b.X, b.Y, b.Width, b.Height, "settings:" + open.PageName + "/" + slider.Label, "settings", () => { }, slider));
+            {
+                list.Add(new(slider.Label, b.X, b.Y, b.Width, b.Height, "settings:" + open.PageName + "/" + slider.Label,
+                    "settings", () => { }, slider));
+            }
+        }
         else
+        {
             foreach (var (screen, c) in host.Player.UiClickables())
             {
-                string label = (c.Caption.Length > 0 ? c.Caption : c.Properties.GetValueOrDefault(UiTooltips.Text, "").Length > 0 ? c.Properties[UiTooltips.Text] : c.Name).ReplaceLineEndings(" ").Trim();
+                string label = (c.Caption.Length > 0 ? c.Caption
+                    : c.Properties.GetValueOrDefault(UiTooltips.Text, "").Length > 0 ? c.Properties[UiTooltips.Text]
+                    : c.Name).ReplaceLineEndings(" ").Trim();
                 if (label.Length > 48) label = label[..48].TrimEnd() + "...";   // a long tooltip stays a usable label
                 var centre = new System.Numerics.Vector2(c.Bounds.X + c.Bounds.Width / 2, c.Bounds.Y + c.Bounds.Height / 2);
-                list.Add(new(label, c.Bounds.X, c.Bounds.Y, c.Bounds.Width, c.Bounds.Height, $"{screen}/{c.Name}", screen, () => host.Player.UiClickAt(centre)));
+                list.Add(new(label, c.Bounds.X, c.Bounds.Y, c.Bounds.Width, c.Bounds.Height, $"{screen}/{c.Name}", screen,
+                    () => host.Player.UiClickAt(centre)));
             }
+        }
         return list;
     }
 
@@ -579,7 +836,9 @@ sealed class AgentChannel(GameHost host)
         for (int i = 0; i < widgets.Count; i++)
         {
             var w = widgets[i];
-            con.Print(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{i} {w.Label} {MathF.Round(w.X)} {MathF.Round(w.Y)} {MathF.Round(w.W)} {MathF.Round(w.H)} [{w.Id}]{(w.Slider is { } sl ? $" [slider] {sl.Fraction:0.###} ({sl.Display})" : "")}"));
+            con.Print(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{i} {w.Label} {MathF.Round(w.X)} {MathF.Round(w.Y)} {MathF.Round(w.W)} {MathF.Round(w.H)} [{w.Id}]"
+                + $"{(w.Slider is { } sl ? $" [slider] {sl.Fraction:0.###} ({sl.Display})" : "")}"));
         }
         if (widgets.Count == 0) con.Print("(no clickable widgets)");
     }
@@ -598,8 +857,14 @@ sealed class AgentChannel(GameHost host)
             if (a is "--id" or "--label" or "--screen" or "--index")
             {
                 var value = new List<string>();
-                while (i + 1 < args.Count && !args[i + 1].StartsWith("--", StringComparison.Ordinal)) value.Add(args[++i]);
-                if (value.Count == 0) { con.Error($"{cmd}: {a} needs a value"); return null; }
+                while (i + 1 < args.Count && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                    value.Add(args[++i]);
+                if (value.Count == 0)
+                {
+                    con.Error($"{cmd}: {a} needs a value");
+                    return null;
+                }
+
                 flags[a] = string.Join(' ', value);
             }
             else rest.Add(a);
@@ -616,19 +881,30 @@ sealed class AgentChannel(GameHost host)
         if (ControlSelector(cmd, args, con) is not var (flags, target)) return null;
         var widgets = ControlWidgets();
         var pool = widgets.Select((x, i) => (Index: i, Widget: x)).ToList();
-        if (flags.TryGetValue("--id", out string? id)) pool = pool.Where(p => p.Widget.Id.Equals(id, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (flags.TryGetValue("--label", out string? label)) pool = pool.Where(p => p.Widget.Label.Equals(label, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (flags.TryGetValue("--screen", out string? screen)) pool = pool.Where(p => p.Widget.Screen.Equals(screen, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (flags.TryGetValue("--id", out string? id))
+            pool = pool.Where(p => p.Widget.Id.Equals(id, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (flags.TryGetValue("--label", out string? label))
+            pool = pool.Where(p => p.Widget.Label.Equals(label, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (flags.TryGetValue("--screen", out string? screen))
+            pool = pool.Where(p => p.Widget.Screen.Equals(screen, StringComparison.OrdinalIgnoreCase)).ToList();
         if (flags.TryGetValue("--index", out string? idx))
         {
-            if (!int.TryParse(idx, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int n)) { con.Error($"{cmd}: --index needs a number"); return null; }
+            if (!int.TryParse(idx, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int n))
+            {
+                con.Error($"{cmd}: --index needs a number");
+                return null;
+            }
+
             pool = pool.Where(p => p.Index == n).ToList();
         }
         if (target.Length > 0)
         {
             var hit = pool.Where(p => p.Widget.Label.Equals(target, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (hit.Count == 0 && int.TryParse(target, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int index)) hit = pool.Where(p => p.Index == index).ToList();
-            if (hit.Count == 0) hit = pool.Where(p => p.Widget.Label.Contains(target, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (hit.Count == 0 && int.TryParse(target, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out int index))
+                hit = pool.Where(p => p.Index == index).ToList();
+            if (hit.Count == 0)
+                hit = pool.Where(p => p.Widget.Label.Contains(target, StringComparison.OrdinalIgnoreCase)).ToList();
             pool = hit;
         }
         string wanted = string.Join(' ', args);
@@ -650,16 +926,32 @@ sealed class AgentChannel(GameHost host)
     void ControlUiClick(IReadOnlyList<string> args, DevConsole con)
     {
         if (ControlFind("ui-click", args, con) is not { } w) return;
-        if (w.Slider is not null) { con.Error($"ui-click: '{w.Label}' is a slider, use ui-set"); return; }
+        if (w.Slider is not null)
+        {
+            con.Error($"ui-click: '{w.Label}' is a slider, use ui-set");
+            return;
+        }
+
         w.Click();
         con.Print($"clicked {w.Label}");
     }
 
     void ControlUiSet(IReadOnlyList<string> args, DevConsole con)
     {
-        if (args.Count < 2 || !float.TryParse(args[^1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float t)) { con.Error("usage: ui-set <label|index> <0..1> (or selectors, then the number)"); return; }
+        if (args.Count < 2 || !float.TryParse(args[^1], System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out float t))
+        {
+            con.Error("usage: ui-set <label|index> <0..1> (or selectors, then the number)");
+            return;
+        }
+
         if (ControlFind("ui-set", args.Take(args.Count - 1).ToList(), con) is not { } w) return;
-        if (w.Slider is not { } slider) { con.Error($"ui-set: '{w.Label}' is not a slider"); return; }
+        if (w.Slider is not { } slider)
+        {
+            con.Error($"ui-set: '{w.Label}' is not a slider");
+            return;
+        }
+
         slider.SetFraction(t);
         con.Print($"{w.Label} = {slider.Display}");
     }

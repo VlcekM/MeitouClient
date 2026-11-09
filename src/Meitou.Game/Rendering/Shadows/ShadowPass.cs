@@ -71,6 +71,8 @@ public sealed unsafe partial class ShadowPass : IDisposable
         _receiver = new FrameBlock(gpu, ReceiverBytes);
         _casterBias = new FrameBlock(gpu, 16);
         _meitouBlock = new FrameBlock(gpu, MeitouShadowShaders.BlockBytes);
+        _blockers = new ShadowBlockerMap(gpu);
+        _landmarks = new LandmarkShadowMap(gpu);
         _timer = new PassTimer(gpu);
         LoadNoise(assets);
         PublishGlobals();
@@ -249,14 +251,19 @@ public sealed unsafe partial class ShadowPass : IDisposable
         g.Publish(ShadowShaders.ReceiverBlock, _receiver.Binding);
         g.Publish(ShadowShaders.CasterBlock, _casterBias.Binding);
         g.Publish("uShadowMap", () => _atlasPublished ? _atlasShadow : default);
-        g.Publish("uShadowNoise", () => { UploadNoise(); return _noiseSampled; });   // a segment being prepared: a frame is open
+        // a segment being prepared: a frame is open
+        g.Publish("uShadowNoise", () =>
+        {
+            UploadNoise();
+            return _noiseSampled;
+        });
         g.Publish(MeitouShadowShaders.Block, _meitouBlock.Binding);
 
         // The terrain shadow map with its own sampler (linear, clamped; TerrainShadowMap).
         g.Publish("uShadowTerrain", () => _boundTerrain ?? default);
-        g.Publish("uShadowBlocker", () => _blockerPublished ? _blockerSampled : default);
+        g.Publish("uShadowBlocker", () => _blockers.Published);
         // The landmark shadow map (comparison, linear, clamped).
-        g.Publish("uShadowLandmark", () => _landmarkPublished ? _landmarkSampled : default);
+        g.Publish("uShadowLandmark", () => _landmarks.Published);
     }
 
     /// <summary>
@@ -264,7 +271,14 @@ public sealed unsafe partial class ShadowPass : IDisposable
     /// mipmapped, so the LOD bias never applies; wrap R is GL's default.
     /// </summary>
     SampledTexture Sampled(GpuTexture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, bool compare = false) =>
-        new(Gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, compare, DepthFunction.Lequal, false, 1, false, 0)),
+        Sampled(Gpu, t, min, mag, wrap, compare);
+
+    /// <summary>
+    /// <see cref="Sampled(GpuTexture, TextureMinFilter, TextureMagFilter, TextureWrapMode, bool)"/> on <paramref name="gpu"/>.
+    /// </summary>
+    internal static SampledTexture Sampled(IGpuContext gpu, GpuTexture t, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap,
+        bool compare = false) =>
+        new(gpu.Samplers.Get(SamplerDesc.FromGl(min, mag, wrap, wrap, TextureWrapMode.Repeat, compare, DepthFunction.Lequal, false, 1, false, 0)),
             t.View());
 
     /// <summary>

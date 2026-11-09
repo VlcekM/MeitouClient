@@ -45,7 +45,6 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
 
     public void Inputs(World world, IReadOnlyList<SimCommand> commands)
     {
-        var table = world.Characters;
         foreach (var command in commands)
         {
             switch (command)
@@ -54,39 +53,10 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     world.Fixtures.Buy(world, buy);
                     break;
                 case PickLockOrder pick:
-                    {
-                        Fixture? cage;
-                        if (pick.Cage is not null) cage = world.Fixtures.Find(pick.Cage) is { Kind: FixtureKind.Cage } empty ? empty : null;
-                        else cage = table.TryResolveNext(pick.Prisoner, out int p) && table.Cold(p) is { IsImprisoned: true, InWhat: { } where }
-                                ? world.Fixtures.Find(where) : null;
-                        if (cage is null) break;
-                        foreach (var id in Who(world, pick.Characters))
-                        {
-                            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c
-                                    || !c.CarriedBy.IsNone)
-                                continue;
-                            if (c.IsImprisoned && c.InWhat != cage.Id) continue;   // a prisoner reaches only its own cage
-                                                                                   // One picker per order (the nearest is not looked for: the first
-                                                                                   // listed whose repertoire has row 76); a prisoner picks where it
-                                                                                   // stands.
-                            if (StartWork(world, s, c.IsImprisoned ? CharacterTask.Idle : CharacterTask.GoTo, TaskType.PickLock, cage.Id,
-                                    queued: pick.Queued))
-                                break;
-                        }
-                        break;
-                    }
+                    PickLockInput(world, pick);
+                    break;
                 case GetOutOrder getOut:
-                    foreach (var id in Who(world, getOut.Characters))
-                    {
-                        if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsImprisoned: true, Medical.Incapacitated: false } c)
-                            continue;
-                        if (world.Fixtures.GetOut(world, id, Crimes))
-                        {
-                            c.PickingLock = null;
-                            if (c.IsPlayer) world.Post(Loc.Tr("{1} got out of the cage", c.Name));
-                        }
-                        else if (c.IsPlayer) world.Post("It's locked.");
-                    }
+                    GetOutInput(world, getOut);
                     break;
                 case ShackleOrder shackles:
                     ShackleInput(world, shackles);
@@ -120,6 +90,61 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
     }
 
     /// <summary>
+    /// A pick-lock order: the first character listed that can reach the cage (its own, for a prisoner) picks its lock.
+    /// </summary>
+    void PickLockInput(World world, PickLockOrder pick)
+    {
+        var table = world.Characters;
+        Fixture? cage;
+        if (pick.Cage is not null)
+        {
+            cage = world.Fixtures.Find(pick.Cage) is { Kind: FixtureKind.Cage } empty ? empty : null;
+        }
+        else
+        {
+            cage = table.TryResolveNext(pick.Prisoner, out int p) && table.Cold(p) is { IsImprisoned: true, InWhat: { } where }
+                ? world.Fixtures.Find(where)
+                : null;
+        }
+
+        if (cage is null) return;
+        foreach (var id in Who(world, pick.Characters))
+        {
+            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsPlayer: true, Medical.Incapacitated: false } c
+                    || !c.CarriedBy.IsNone)
+                continue;
+
+            if (c.IsImprisoned && c.InWhat != cage.Id) continue;   // a prisoner reaches only its own cage
+
+            // One picker per order (the nearest is not looked for: the first listed whose repertoire has row 76); a prisoner picks
+            // where it stands.
+            if (StartWork(world, s, c.IsImprisoned ? CharacterTask.Idle : CharacterTask.GoTo, TaskType.PickLock, cage.Id,
+                    queued: pick.Queued))
+                break;
+        }
+    }
+
+    /// <summary>
+    /// A get-out order: each prisoner listed leaves its cage when it is unlocked.
+    /// </summary>
+    void GetOutInput(World world, GetOutOrder getOut)
+    {
+        var table = world.Characters;
+        foreach (var id in Who(world, getOut.Characters))
+        {
+            if (!table.TryResolveNext(id, out int s) || table.Cold(s) is not { IsImprisoned: true, Medical.Incapacitated: false } c)
+                continue;
+
+            if (world.Fixtures.GetOut(world, id, Crimes))
+            {
+                c.PickingLock = null;
+                if (c.IsPlayer) world.Post(Loc.Tr("{1} got out of the cage", c.Name));
+            }
+            else if (c.IsPlayer) world.Post("It's locked.");
+        }
+    }
+
+    /// <summary>
     /// The play speed of the picking clip: the lerp 0.55 to 2.0 over 0.01 x skill (<c>FUN_140015b63</c>, Verified literals).
     /// </summary>
     internal static float PickPlayRate(float skill) => 0.55f + (2.0f - 0.55f) * (skill * 0.01f);
@@ -146,6 +171,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                 c.PickingLock = null;
                 continue;
             }
+
             if (!c.IsImprisoned)
             {
                 var (at, reach) = WorkSpot(world, f, new Vector2(next[s].Position.X, next[s].Position.Z));
@@ -156,15 +182,18 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     if (Redirected(next[s], at, reach)) c.PickingLock = null;
                     continue;
                 }
+
                 if (next[s].Task == (byte)CharacterTask.GoTo) AtWork(world, s);
             }
+
             if (c.StaggeredUntil > world.Tick) continue;   // a stagger interrupts the picking
             c.PickWork = (world.Tick, f.Clips.Lockpick, PickPlayRate(Lockpicking.Skill(c)));
             switch (Picking.Step(world, s, f, world.TickSeconds, Crimes))
             {
-                case PickOutcome.Open: c.PickingLock = null;
-                world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
-                break;
+                case PickOutcome.Open:
+                    c.PickingLock = null;
+                    world.EmitSound(SoundKind.Unlocked, s, next[s].Position);
+                    break;
                 case PickOutcome.Success:
                     c.PickingLock = null;
                     world.Fixtures.Touch(f);
@@ -174,6 +203,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     // Task_PickLock: the freed character to the picker.
                     if (f.Occupant is { IsNone: false } held && held != table.IdOf(s))
                         world.Defer(new Dialogue.DialogueEvent(held, table.IdOf(s), UnlockMyCageOrShackles) { Tick = world.Tick + 1 });
+
                     break;
                 case PickOutcome.Failed:
                     PickFloater(world, s, false);
@@ -181,6 +211,7 @@ public sealed partial class LockSystem(GameConstants constants, BodyOptions opti
                     // A failed roll: the captive says event 14.
                     if (f.Occupant is { IsNone: false } caged && caged != table.IdOf(s))
                         world.Defer(new Dialogue.DialogueEvent(caged, table.IdOf(s), UnlockMyCageAttempt) { Tick = world.Tick + 1 });
+
                     break;
                 case PickOutcome.NotAllowed:
                     c.PickingLock = null;

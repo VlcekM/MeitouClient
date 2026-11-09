@@ -29,7 +29,8 @@ sealed class QualityTiers(SettingsMenu menu)
         new(WorldFrame.ObjectDistanceSlider, WorldOptions.LowEndObjectDistance, 0.6f, 2, Mode: "Draw distances", LowFixed: true),
 
         // --low-end's landmarks follow its object distance, at the Meitou defaults' ratio; Faithful has none.
-        new(WorldFrame.LandmarkDistanceSlider, WorldOptions.LowEndObjectDistance / Enhancements.MeitouObjectDistance, 0.6f, 1.5f, Mode: "Draw distances"),
+        new(WorldFrame.LandmarkDistanceSlider, WorldOptions.LowEndObjectDistance / Enhancements.MeitouObjectDistance, 0.6f, 1.5f,
+            Mode: "Draw distances"),
         new(WorldFrame.DistantTownsSlider, float.NaN, 6, float.NaN),
         new(WorldFrame.ObjectLodSlider, WorldOptions.LowEndObjectLod, 0.6f, 2),
         new(WorldFrame.TerrainErrorSlider, float.NaN, 1.5f, 0.6f, Mode: "Draw distances"),
@@ -67,7 +68,8 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal sealed record PresetToggle(string Label, bool Low, bool Medium, bool Ultra);
 
-    // Costs (docs/render-terrain.md "Ground relief", RTX 4090): refinement +0.38 ms. Parallax and displacement are effects (Faithful / Meitou switches), not tiers.
+    // Costs (docs/render-terrain.md "Ground relief", RTX 4090): refinement +0.38 ms. Parallax and displacement are effects (Faithful / Meitou
+    // switches), not tiers.
     internal static readonly PresetToggle[] PresetToggles =
     [
         new(WorldFrame.FifthCascadeSwitch, false, false, true),
@@ -314,7 +316,8 @@ sealed class QualityTiers(SettingsMenu menu)
         if (preset == LowPreset)
         {
             // --low-end's switches outside the look (anti-aliasing), then no anti-aliasing at all (not even FXAA) at its render scale.
-            var lowOff = menu.Values.Toggles.Where(t => t.Remaster && LowOffSwitches.Contains(t.Label) && !LookPresets.IsLook(t.Label, true) && t.Get());
+            var lowOff = menu.Values.Toggles
+                .Where(t => t.Remaster && LowOffSwitches.Contains(t.Label) && !LookPresets.IsLook(t.Label, true) && t.Get());
             foreach (var toggle in lowOff) toggle.Set(false);
 
             if (menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.UpscalerSliders[0]) is { } antiAliasing) antiAliasing.Set(0);

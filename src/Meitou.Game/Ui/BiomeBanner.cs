@@ -25,13 +25,45 @@ sealed class BiomeBanner(PlayerInterface player)
     /// </summary>
     public Func<float, float, (string Id, string Name)?>? RegionAt { get; set; }
 
+    /// <summary>
+    /// The world the banner follows; another one only takes the group under the pivot.
+    /// </summary>
     object? _biomeWorld;
+
+    /// <summary>
+    /// The string id of the BIOME_GROUP tracked; null before the first.
+    /// </summary>
     string? _biomeGroup;
+
+    /// <summary>
+    /// The name the banner shows.
+    /// </summary>
     string _biomeName = "";
+
+    /// <summary>
+    /// The seconds the banner still holds, the seconds until another may start, and its alpha.
+    /// </summary>
     float _biomeHold, _biomeCooldown, _biomeAlpha;
+
+    /// <summary>
+    /// Whether the banner shows.
+    /// </summary>
     internal bool BiomeShown;
+
+    /// <summary>
+    /// The timestamp of the last poll; 0 before the first.
+    /// </summary>
     long _biomeAt;
+
+    /// <summary>
+    /// A loaded save's cooldown, taken when the new world is first polled.
+    /// </summary>
     float _pendingBiomeCooldown;
+
+    /// <summary>
+    /// The squad's banter on arriving in the group whose banner hid.
+    /// </summary>
+    readonly ArrivalBanter _arrival = new(player);
 
     /// <summary>
     /// Once a frame: the banner's timers, its fade and the group it tracks. A new world only takes the group under the pivot (the original does so
@@ -73,12 +105,12 @@ sealed class BiomeBanner(PlayerInterface player)
 
                 // On hiding the game tests the group's `arrival dialog`: squad banter (PlayerInterface::triggerAreaArrivalDialogue).
                 // It reads the group under the pivot this frame (FUN_1408015d0 gets the current holder), not the stored one.
-                TryArrival(here.Id);
+                _arrival.TryArrival(here.Id);
             }
         }
 
         if (!blocked) _biomeGroup = here.Id;
-        RetryArrival(here.Id);
+        _arrival.RetryArrival(here.Id);
     }
 
     /// <summary>
@@ -99,45 +131,6 @@ sealed class BiomeBanner(PlayerInterface player)
         // The layout lets the mouse through only the panel (NeedMouse is not inherited): its two lines would otherwise take clicks.
         foreach (string line in new[] { "BiomeNameTopLine", "BiomeNameBottomLine" })
             b.Properties[line] = new Dictionary<string, string> { ["NeedMouse"] = "false" };
-    }
-
-    #endregion
-
-    #region Arrival banter
-
-    /// <summary>
-    /// Between banter tries: the real time between them (<c>DAT_14167fad4</c>).
-    /// </summary>
-    const double ArrivalRetrySeconds = 10;
-
-    /// <summary>
-    /// The group whose arrival banter is still being tried (<c>DAT_142132c70</c>), the try's serial and when it was last made (wall clock).
-    /// </summary>
-    string? _arrivalGroup;
-    int _arrivalSerial;
-    long _arrivalAt;
-
-    /// <summary>
-    /// Stores the group with the time and makes the first try (<c>FUN_1408015d0</c>).
-    /// </summary>
-    void TryArrival(string group)
-    {
-        _arrivalGroup = group;
-        _arrivalAt = Stopwatch.GetTimestamp();
-        player.Say(new Simulation.Dialogue.AreaArrival(group, ++_arrivalSerial) { Tick = player.Session.World.Tick });
-    }
-
-    /// <summary>
-    /// Every frame (<c>FUN_140801540</c>): the stored group is dropped when the group under the pivot is another, or when the last try's result says
-    /// to forget it; else after more than 10 s of real time since the last try the banter is tried again.
-    /// </summary>
-    void RetryArrival(string here)
-    {
-        if (_arrivalGroup is not { } group) return;
-
-        bool? forget = player.Session.World.ArrivalForget(_arrivalSerial);
-        if (here != group || forget == true) _arrivalGroup = null;
-        else if (forget == false && Stopwatch.GetElapsedTime(_arrivalAt).TotalSeconds > ArrivalRetrySeconds) TryArrival(group);
     }
 
     #endregion

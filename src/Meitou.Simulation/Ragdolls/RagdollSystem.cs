@@ -148,6 +148,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     public int MovingWhole { get; private set; }
     public int MovingLimbs { get; private set; }
     public int Tiles => _physics.TileCount;
+
     // Real seconds of physics owed since the last step (SlowWorld); not saved or hashed.
     float _physicsDue;
     /// <summary>
@@ -221,8 +222,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         if (string.IsNullOrEmpty(name) || self._rigs.Find(name) is not { } path) return null;
         return self._physicsFiles.GetOrAdd(path, static p => new(() =>
         {
-            try { return PhysicsFile.ReadFile(p); }
-            catch (Exception e) when (e is FormatException or IOException) { return null; }
+            try
+            {
+                return PhysicsFile.ReadFile(p);
+            }
+            catch (Exception e) when (e is FormatException or IOException)
+            {
+                return null;
+            }
         })).Value is { } file ? (file, path) : null;
     }), this).Value;
 
@@ -247,8 +254,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     Vector3[]? Hull(string cooked)
     {
         if (_rigs.Find(cooked) is not { } path) return null;
-        try { return CookedMeshReader.ReadConvex(File.ReadAllBytes(path)).Vertices; }
-        catch (Exception e) when (e is FormatException or IOException or InvalidDataException) { return null; }
+        try
+        {
+            return CookedMeshReader.ReadConvex(File.ReadAllBytes(path)).Vertices;
+        }
+        catch (Exception e) when (e is FormatException or IOException or InvalidDataException)
+        {
+            return null;
+        }
     }
 
     // ---- the tick ----
@@ -269,15 +282,24 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         bool carried = !cold.CarriedBy.IsNone;
         if (cold.Medical is { Incapacitated: true }) return carried ? RagdollPart.CarryMode : RagdollPart.Whole;
         if (carried) return RagdollPart.CarryMode;
+
         // A human's collapsed limbs, not a robotic one (animals have none).
         if (cold.Fighter is { IsAnimal: true } || cold.Medical is not { } medical || cold.Race is not { } race) return RagdollPart.None;
         var parts = RagdollPart.None;
+
         // A leg goes by the crawl's own test (the tick keeps its bits on while the character crawls), an arm by h - s + rig < 0.
         foreach (var p in medical.PartSpan)
-            if (p.Template.Collapses && (p.IsLeg ? p.LegDown(medical.LegKoPoint) : p.IsDown) && !p.IsRobotic(race)) parts |= (RagdollPart)p.Template.CollapsePart & RagdollPart.Limbs;
+        {
+            if (p.Template.Collapses && (p.IsLeg ? p.LegDown(medical.LegKoPoint) : p.IsDown) && !p.IsRobotic(race))
+                parts |= (RagdollPart)p.Template.CollapsePart & RagdollPart.Limbs;
+        }
+
         return parts;
     }
 
+    /// <summary>
+    /// The tick's ragdolls: the gone ones destroyed, then the masks, builds and pins, the physics step, and the poses back and published.
+    /// </summary>
     public void SlowWorld(World world)
     {
         _animations ??= world.Systems.OfType<IAnimationSource>().FirstOrDefault();
@@ -294,97 +316,190 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         // 1. Masks, building and pinning.
         var next = table.Next;
         int tilesLeft = TileBudget, startsLeft = StartBudget;
-        for (int i = 0; i < next.Length; i++)
-        {
-            if (!next[i].Alive || table.Cold(i) is not { } cold) continue;
-            // The far cadence (World.Steps): a far character skipped this tick is left as it is, unless its ragdoll is moving (its pins follow the animation every physics step).
-            if (!world.Steps(i) && !(_ragdolls.TryGetValue(table.IdOf(i), out var moving) && !moving.Frozen && moving.Mask != RagdollPart.None)) continue;
-            cold.CarryAttach = cold.CarriedBy.IsNone ? null : AttachOf(table, cold);
-            var id = table.IdOf(i);
-            _ragdolls.TryGetValue(id, out var r);
-            // The look's ragdoll file asked only of a character that wants one (two cache lookups per standing character every tick were most of this loop in a big battle).
-            var wanted = cold.Appearance is null ? RagdollPart.None : Wanted(cold);
-            if (wanted != RagdollPart.None && (wanted & ~RagdollPart.Limbs) == 0 && world.ViewPosition is { } eye)
-            {
-                float reach = r is { Mask: not RagdollPart.None } ? LimbReach * 1.1f : LimbReach;
-                if (Vector3.DistanceSquared(next[i].Position, eye) > reach * reach) wanted = RagdollPart.None;
-            }
-            if (wanted != RagdollPart.None && !HasRagdoll(cold)) wanted = RagdollPart.None;
-            if (r is null && wanted == RagdollPart.None) { Slide(ref next[i], cold, env, dt); continue; }
-            float scale = ScaleOf(cold);
-            // A whole body about to fall needs the ground under it and costs a build (TileBudget, StartBudget: past them it starts next tick, its blow and saved pose kept); a frozen
-            // saved one needs none, and a get-up, a limb's dangle or a lift never waits.
-            bool falls = (wanted & RagdollPart.Whole) != 0 && (wanted & RagdollPart.CarryMode) == 0;
-            bool fell = r is not null && (r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0;
-            bool starts = falls && !fell && cold.Save?.Ragdoll is not { Frozen: true };
-            if (starts)
-            {
-                if (startsLeft <= 0) continue;
-                if (!_physics.Covered(next[i].Position, TileReach * scale))
-                {
-                    if (tilesLeft <= 0) continue;
-                    _physics.Cover(next[i].Position, TileReach * scale, env, tick, ref tilesLeft);
-                    if (!_physics.Covered(next[i].Position, TileReach * scale)) continue;
-                }
-                startsLeft--;
-            }
-            // Meitou (BodyOptions.AdvancedRagdolls): a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down (CombatSystem.Knockdown), else as it moved last tick.
-            bool advanced = _options is { AdvancedRagdolls: true };
-            var blow = !advanced ? default : cold.Blow ?? new RagdollBlow(table.Previous[i].Velocity, Vector3.Zero, null);
-            cold.Blow = null;
-            // A ragdoll a save holds (Saving.RagdollSave): taken the first time the character is seen, used when it starts as a whole body.
-            SavedRagdoll? restore = null;
-            if (cold.Save is { Ragdoll: { } saved })
-            {
-                cold.Save.Ragdoll = null;
-                if (r is null && (wanted & RagdollPart.Whole) != 0) restore = saved;
-            }
-            if (r is null)
-            {
-                var setup = _rigs.For(cold.Appearance!)!;
-                if (DefinitionOf(cold.Appearance!, setup.Rig, scale) is not { } definition) continue;
-                r = new Ragdoll { Id = id, Definition = definition, Setup = setup, Scale = scale, CarryBone = CarryBoneOf(cold.Appearance!, setup.Rig) };
-                r.Pose = new RigidTransform[definition.Bodies.Length];
-                _ragdolls[id] = r;
-                _order.Add(id);
-            }
-            var placement = Placement(r, cold, next[i]);
-            RigidTransform[]? animated = null;
-            if (wanted != r.Mask)
-            {
-                // Getting up: the whole body leaves the ragdoll and blends back into the animation, facing from the root to the head (not when it is
-                // laid in a bed or a cage, which places it).
-                if ((r.Mask & RagdollPart.Whole) != 0 && (wanted & RagdollPart.Whole) == 0 && (wanted & RagdollPart.CarryMode) == 0 && cold.InSomething == Locks.HeldState.None)
-                    StartGetUp(world, r, ref next[i]);
-                // A body let go of falls from where it hung: the carried pose re-placed upright at its new position would hang its trunk
-                // through the floor (#327).
-                bool letGo = (r.Mask & RagdollPart.CarryMode) != 0 && (wanted & RagdollPart.CarryMode) == 0;
-                animated = Animated(r, cold, letGo && r.HungIn is { } hung ? hung : placement);
-                bool restored = restore is not null && Fits(r, restore, next[i].Position);
-                Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : blow, advanced, world.Seed);
-                if (restored)
-                {
-                    r.Age = restore!.Age;
-                    if (restore.Frozen) Freeze(r);
-                    next[i].Position = r.Definition.RootAt(r.Pose);   // a frozen one is never read back
-                }
-            }
-            if (r.Mask == RagdollPart.None) continue;
-            r.HungIn = (r.Mask & RagdollPart.CarryMode) != 0 ? placement : null;
-            if (cold.Launch is { } launch)
-            {
-                cold.Launch = null;
-                if ((r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0) Launch(r, launch, advanced, world.Seed);
-            }
-            if (!r.Frozen && ToneOf(cold, r.Mask, advanced) is var tone && tone != r.Tone) SetTone(r, tone);
-            if (!r.Frozen && r.Dynamic.Any(d => !d)) Pin(r, animated ?? Animated(r, cold, placement), dt);
-            if (!r.Frozen) _physics.Cover(r.Definition.RootAt(r.Pose), TileReach * r.Scale, env, tick, ref tilesLeft);
-        }
+        for (int i = 0; i < next.Length; i++) SetUp(world, i, env, dt, tick, ref tilesLeft, ref startsLeft);
 
         world.Profile.Part("rag setup");   // F12: the masks, the builds, the pins and the ground tiles
+
         // 2. The step.
+        Step(world, dt, stepDt);
+        world.Profile.Part("rag step");
+
+        // 3. Poses back, the whole body's position, freezing, publishing.
+        PosesBack(world, env, dt);
+        _order.RemoveAll(id => !_ragdolls.ContainsKey(id));
+        world.Profile.Part("rag back");
+        _physics.Sweep(tick);
+        world.Profile.Part("rag sweep");
+    }
+
+    /// <summary>
+    /// Step 1 for one character: its mask, the build of a new ragdoll (within the tick's budgets), and its pins.
+    /// </summary>
+    void SetUp(World world, int i, IRagdollEnvironment env, float dt, long tick, ref int tilesLeft, ref int startsLeft)
+    {
+        var table = world.Characters;
+        var next = table.Next;
+        if (!next[i].Alive || table.Cold(i) is not { } cold) return;
+
+        // The far cadence (World.Steps): a far character skipped this tick is left as it is, unless its ragdoll is moving (its pins follow the
+        // animation every physics step).
+        if (!world.Steps(i) && !(_ragdolls.TryGetValue(table.IdOf(i), out var moving) && !moving.Frozen && moving.Mask != RagdollPart.None))
+            return;
+
+        cold.CarryAttach = cold.CarriedBy.IsNone ? null : AttachOf(table, cold);
+        var id = table.IdOf(i);
+        _ragdolls.TryGetValue(id, out var r);
+        var wanted = WantedNear(world, i, cold, r);
+        if (r is null && wanted == RagdollPart.None)
+        {
+            Slide(ref next[i], cold, env, dt);
+            return;
+        }
+
+        float scale = ScaleOf(cold);
+        if (!Budgeted(next[i].Position, cold, r, wanted, scale, env, tick, ref tilesLeft, ref startsLeft)) return;
+
+        // Meitou (BodyOptions.AdvancedRagdolls): a new whole-body ragdoll goes on as the character moved, pushed by the blow that put it down
+        // (CombatSystem.Knockdown), else as it moved last tick.
+        bool advanced = _options is { AdvancedRagdolls: true };
+        var blow = !advanced ? default : cold.Blow ?? new RagdollBlow(table.Previous[i].Velocity, Vector3.Zero, null);
+        cold.Blow = null;
+        var restore = TakeSaved(cold, r, wanted);
+        r ??= NewRagdoll(id, cold, scale);
+        if (r is null) return;
+
+        var placement = Placement(r, cold, next[i]);
+        var animated = wanted != r.Mask ? Remask(world, r, cold, ref next[i], wanted, placement, restore, blow, advanced) : null;
+        if (r.Mask == RagdollPart.None) return;
+
+        r.HungIn = (r.Mask & RagdollPart.CarryMode) != 0 ? placement : null;
+        if (cold.Launch is { } launch)
+        {
+            cold.Launch = null;
+            if ((r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0) Launch(r, launch, advanced, world.Seed);
+        }
+
+        if (!r.Frozen && ToneOf(cold, r.Mask, advanced) is var tone && tone != r.Tone) SetTone(r, tone);
+        if (!r.Frozen && r.Dynamic.Any(d => !d)) Pin(r, animated ?? Animated(r, cold, placement), dt);
+        if (!r.Frozen) _physics.Cover(r.Definition.RootAt(r.Pose), TileReach * r.Scale, env, tick, ref tilesLeft);
+    }
+
+    /// <summary>
+    /// The parts a character wants ragdolled now: none past the limb reach from the eye for limbs only, none without a ragdoll file.
+    /// </summary>
+    RagdollPart WantedNear(World world, int i, CharacterCold cold, Ragdoll? r)
+    {
+        var next = world.Characters.Next;
+
+        // The look's ragdoll file asked only of a character that wants one (two cache lookups per standing character every tick were most of this
+        // loop in a big battle).
+        var wanted = cold.Appearance is null ? RagdollPart.None : Wanted(cold);
+        if (wanted != RagdollPart.None && (wanted & ~RagdollPart.Limbs) == 0 && world.ViewPosition is { } eye)
+        {
+            float reach = r is { Mask: not RagdollPart.None } ? LimbReach * 1.1f : LimbReach;
+            if (Vector3.DistanceSquared(next[i].Position, eye) > reach * reach) wanted = RagdollPart.None;
+        }
+
+        if (wanted != RagdollPart.None && !HasRagdoll(cold)) wanted = RagdollPart.None;
+
+        return wanted;
+    }
+
+    /// <summary>
+    /// Whether a ragdoll may start or change now: a whole body about to fall takes one of the tick's builds and the ground under it; false holds it
+    /// to a later tick.
+    /// </summary>
+    bool Budgeted(Vector3 at, CharacterCold cold, Ragdoll? r, RagdollPart wanted, float scale, IRagdollEnvironment env, long tick,
+        ref int tilesLeft, ref int startsLeft)
+    {
+        // A whole body about to fall needs the ground under it and costs a build (TileBudget, StartBudget: past them it starts next tick, its blow
+        // and saved pose kept); a frozen saved one needs none, and a get-up, a limb's dangle or a lift never waits.
+        bool falls = (wanted & RagdollPart.Whole) != 0 && (wanted & RagdollPart.CarryMode) == 0;
+        bool fell = r is not null && (r.Mask & RagdollPart.Whole) != 0 && (r.Mask & RagdollPart.CarryMode) == 0;
+        bool starts = falls && !fell && cold.Save?.Ragdoll is not { Frozen: true };
+        if (starts)
+        {
+            if (startsLeft <= 0) return false;
+            if (!_physics.Covered(at, TileReach * scale))
+            {
+                if (tilesLeft <= 0) return false;
+                _physics.Cover(at, TileReach * scale, env, tick, ref tilesLeft);
+                if (!_physics.Covered(at, TileReach * scale)) return false;
+            }
+
+            startsLeft--;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// The ragdoll a save holds for the character (Saving.RagdollSave), taken the first time it is seen; kept to restore only when it starts as a
+    /// whole body.
+    /// </summary>
+    static SavedRagdoll? TakeSaved(CharacterCold cold, Ragdoll? r, RagdollPart wanted)
+    {
+        SavedRagdoll? restore = null;
+        if (cold.Save is { Ragdoll: { } saved })
+        {
+            cold.Save.Ragdoll = null;
+            if (r is null && (wanted & RagdollPart.Whole) != 0) restore = saved;
+        }
+
+        return restore;
+    }
+
+    /// <summary>
+    /// A new ragdoll for the character, registered; null when its look has no ragdoll definition.
+    /// </summary>
+    Ragdoll? NewRagdoll(CharacterId id, CharacterCold cold, float scale)
+    {
+        var setup = _rigs.For(cold.Appearance!)!;
+        if (DefinitionOf(cold.Appearance!, setup.Rig, scale) is not { } definition) return null;
+        var r = new Ragdoll { Id = id, Definition = definition, Setup = setup, Scale = scale,
+            CarryBone = CarryBoneOf(cold.Appearance!, setup.Rig) };
+        r.Pose = new RigidTransform[definition.Bodies.Length];
+        _ragdolls[id] = r;
+        _order.Add(id);
+
+        return r;
+    }
+
+    /// <summary>
+    /// A mask change: the get-up, the let-go, the rebuild (from a saved pose when one fits); returns the animated pose it used.
+    /// </summary>
+    RigidTransform[] Remask(World world, Ragdoll r, CharacterCold cold, ref CharacterHot hot, RagdollPart wanted, Matrix4x4 placement,
+        SavedRagdoll? restore, RagdollBlow blow, bool advanced)
+    {
+        // Getting up: the whole body leaves the ragdoll and blends back into the animation, facing from the root to the head (not when it is
+        // laid in a bed or a cage, which places it).
+        if ((r.Mask & RagdollPart.Whole) != 0 && (wanted & RagdollPart.Whole) == 0 && (wanted & RagdollPart.CarryMode) == 0
+            && cold.InSomething == Locks.HeldState.None)
+            StartGetUp(world, r, ref hot);
+        // A body let go of falls from where it hung: the carried pose re-placed upright at its new position would hang its trunk
+        // through the floor (#327).
+        bool letGo = (r.Mask & RagdollPart.CarryMode) != 0 && (wanted & RagdollPart.CarryMode) == 0;
+        var animated = Animated(r, cold, letGo && r.HungIn is { } hung ? hung : placement);
+        bool restored = restore is not null && Fits(r, restore, hot.Position);
+        Rebuild(r, wanted, restored ? restore!.Pose : animated, restored ? default : blow, advanced, world.Seed);
+        if (restored)
+        {
+            r.Age = restore!.Age;
+            if (restore.Frozen) Freeze(r);
+            hot.Position = r.Definition.RootAt(r.Pose);   // a frozen one is never read back
+        }
+
+        return animated;
+    }
+
+    /// <summary>
+    /// Step 2: counts the moving ragdolls and steps the physics when a step is due.
+    /// </summary>
+    void Step(World world, float dt, float stepDt)
+    {
         (Moving, MovingCarried, MovingWhole, MovingLimbs) = (0, 0, 0, 0);
         foreach (var id in _order)
+        {
             if (_ragdolls[id] is { Frozen: false, Mask: not RagdollPart.None and var mask })
             {
                 Moving++;
@@ -392,8 +507,11 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 else if ((mask & RagdollPart.Whole) != 0) MovingWhole++;
                 else MovingLimbs++;
             }
+        }
+
         // The physics on the world's thread count (its own workers: the world's pool is idle in this serial phase).
         if (Moving > 0 && _threads is null && world.Settings.Threads > 1) _threads = new BepuUtilities.ThreadDispatcher(world.Settings.Threads);
+
         // Meitou: the real time steps up until it makes a step of 1x (every tick at 1x, every 5th at 5x), so the physics costs per real second what it does at 1x whatever the speed;
         // a step costs about the same however short (Observed: 0.5 ms a tick for a few ragdolls at 1x and at 5x).
         _physicsDue = Moving > 0 ? _physicsDue + stepDt : 0;
@@ -403,9 +521,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             _physics.Step(_physicsDue, _physics.Simulation.Bodies.ActiveSet.Count >= ThreadedBodies ? _threads : null);
             _physicsDue = 0;
         }
-        world.Profile.Part("rag step");
+    }
 
-        // 3. Poses back, the whole body's position, freezing, publishing.
+    /// <summary>
+    /// Step 3: the poses back, the whole body's position, freezing and publishing.
+    /// </summary>
+    void PosesBack(World world, IRagdollEnvironment env, float dt)
+    {
+        var table = world.Characters;
         foreach (var id in _order)
         {
             var r = _ragdolls[id];
@@ -416,12 +539,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             {
                 Surface(r, env);
                 ReadBack(r);
+
                 // In water the freeze timer runs at half speed (with the buoyancy, Buoy).
                 r.Age += Afloat(world, r) ? dt * 0.5f : dt;
                 if ((r.Mask & RagdollPart.Whole) != 0)
                 {
                     var root = r.Definition.RootAt(r.Pose);
                     float ground = env.GroundHeight(root.X, root.Z, root.Y);
+
                     // A root far under the ground is lifted back onto it (FUN_1407d4470: more than 200 below), and frozen.
                     if (root.Y < ground - 200) { Shift(r, new Vector3(0, ground + 2 - root.Y, 0)); Freeze(r); }
                     // At once when the terrain tile under it is not loaded (FUN_1405b8180 -> FUN_1407d1f70): a zone outside the active set, or off the grid.
@@ -432,15 +557,13 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                     if (cold.CarriedBy.IsNone) StandOn(cold, ground);
                 }
             }
+
             if (r.BlendLeft > 0) r.BlendLeft = MathF.Max(0, r.BlendLeft - dt);
             if (r.Mask == RagdollPart.None && r.BlendLeft <= 0) { Destroy(r); continue; }
             var placement = Placement(r, cold, hot);
-            if (!r.Frozen || r.BlendLeft > 0 || r.Published is null || placement != r.PublishedIn) (r.Published, r.PublishedIn) = (Build(r, placement), placement);
+            if (!r.Frozen || r.BlendLeft > 0 || r.Published is null || placement != r.PublishedIn)
+                (r.Published, r.PublishedIn) = (Build(r, placement), placement);
         }
-        _order.RemoveAll(id => !_ragdolls.ContainsKey(id));
-        world.Profile.Part("rag back");
-        _physics.Sweep(tick);
-        world.Profile.Part("rag sweep");
     }
 
     /// <summary>
@@ -472,7 +595,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     /// </summary>
     CarryAttach? AttachOf(CharacterTable table, CharacterCold cold)
     {
-        if (!table.TryResolveNext(cold.CarriedBy, out int slot) || table.Cold(slot) is not { Appearance: { } look } carrier || _rigs.For(look) is not { } setup) return null;
+        if (!table.TryResolveNext(cold.CarriedBy, out int slot) || table.Cold(slot) is not { Appearance: { } look } carrier
+            || _rigs.For(look) is not { } setup)
+            return null;
+
         if (setup.Rig.Handle(CarrySystem.AttachBone) is not int bone) return null;
         var scratch = setup.Rig.Rent();
         try
@@ -481,9 +607,13 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             var at = scratch.DerivedPosition[bone] - new Vector3(0, setup.GroundOffset, 0);
             if (cold.Appearance is { } body && _rigs.For(body) is { Animal: true } animal)
                 return AnimalAttach(cold, body, animal, at, Quaternion.Normalize(scratch.DerivedRotation[bone] * setup.Rig.BindRotationInverse[bone]));
+
             return CarryPose.Attach(at, scratch.DerivedRotation[bone], CarryPose.Height01(cold.Appearance));
         }
-        finally { setup.Rig.Return(scratch); }
+        finally
+        {
+            setup.Rig.Return(scratch);
+        }
     }
 
     /// <summary>
@@ -499,6 +629,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         try
         {
             PoseDerived(scratch, setup, cold);
+
             // The pin places the actor, which has no rotation of its own; the body is its shape, at the shape's pose on it.
             var bind = definition.Bodies[b].Bind;
             var onActor = new RigidTransform(bind.Position - definition.Bodies[b].Actor, bind.Rotation);
@@ -508,7 +639,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             var turn = Quaternion.Normalize(target.Rotation * Quaternion.Inverse(body.Rotation));
             return new CarryAttach(target.Position - Vector3.Transform(body.Position, turn), turn);
         }
-        finally { setup.Rig.Return(scratch); }
+        finally
+        {
+            setup.Rig.Return(scratch);
+        }
     }
 
     /// <summary>
@@ -523,8 +657,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     {
         var layers = new List<ActiveLayer>();
         if (cold.Animation is { } animation && _animations is not null)
+        {
             foreach (var layer in _animations.Publish(animation, []))
-                if (setup.Rig.Layer(_rigs.Database, layer.Name, setup.Animal) is { } def) layers.Add(new ActiveLayer(def, MathF.Max(layer.Time, 0), layer.Weight));
+            {
+                if (setup.Rig.Layer(_rigs.Database, layer.Name, setup.Animal) is { } def)
+                    layers.Add(new ActiveLayer(def, MathF.Max(layer.Time, 0), layer.Weight));
+            }
+        }
+
         foreach (var (def, time) in setup.Fixed) layers.Add(new ActiveLayer(def, time, 1));
         scratch.PoseDerived(setup.Shape, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(layers));
     }
@@ -567,12 +707,17 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             for (int b = 0; b < bodies.Length; b++)
             {
                 int h = bodies[b].Bone;
-                var bone = new RigidTransform(Vector3.Transform(scratch.DerivedPosition[h], placement), Quaternion.Normalize(turn * scratch.DerivedRotation[h]));
+                var bone = new RigidTransform(Vector3.Transform(scratch.DerivedPosition[h], placement),
+                    Quaternion.Normalize(turn * scratch.DerivedRotation[h]));
                 poses[b] = bodies[b].BoneInBody.Inverse().Then(bone);
             }
+
             return poses;
         }
-        finally { rig.Return(scratch); }
+        finally
+        {
+            rig.Return(scratch);
+        }
     }
 
     /// <summary>
@@ -587,6 +732,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (r.Setup.Animal) return body.Bone != r.CarryBone;
             return n is "Bip01 L Forearm" or "Bip01 R Forearm" or "Bip01 Head";
         }
+
         return (mask & RagdollPart.LeftArm) != 0 && n is "Bip01 L UpperArm" or "Bip01 L Forearm"
             || (mask & RagdollPart.RightArm) != 0 && n is "Bip01 R UpperArm" or "Bip01 R Forearm"
             || (mask & RagdollPart.LeftLeg) != 0 && n is "Bip01 L Thigh" or "Bip01 L Calf"
@@ -607,6 +753,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         var velocities = new BodyVelocity[bodies.Length];
         var had = new bool[bodies.Length];
         for (int b = 0; b < r.Bodies.Length; b++)
+        {
             if (r.Bodies[b] is { } handle)
             {
                 var body = _physics.Simulation.Bodies.GetBodyReference(handle);
@@ -614,6 +761,8 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 velocities[b] = body.Velocity;
                 had[b] = r.Dynamic[b];
             }
+        }
+
         Clear(r);
         r.Mask = mask;
         r.Frozen = false;
@@ -628,6 +777,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         foreach (var j in r.Definition.Joints)
             if (dynamic[j.A] || dynamic[j.B]) needed[j.A] = needed[j.B] = true;
         var kinds = Shapes(r.Definition);
+
         // A whole body that starts in the ground (a foot on a slope: the animated pose is not clipped to the terrain) is lifted out of it as one, as the game snaps a new
         // ragdoll up to the terrain: the ground is a one-sided mesh, and a body that starts behind it has nothing to land on.
         float lift = (mask & RagdollPart.Whole) != 0 && !had.Contains(true) ? OutOfGround(_environment, animated, dynamic) : 0;
@@ -651,6 +801,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                 : BodyDescription.CreateKinematic(rigid, collidable, activity);
             r.Bodies[b] = _physics.AddBody(description, new BodyTag { Ragdoll = r.Tag, Index = b, Joined = r.Definition.Joined[b] });
         }
+
         foreach (var j in r.Definition.Joints)
             if (dynamic[j.A] || dynamic[j.B]) AddJoint(r, j);
     }
@@ -670,6 +821,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             float ground = env.GroundHeight(p.X, p.Z, p.Y);
             if (p.Y < ground) lift = MathF.Max(lift, ground + 0.25f - p.Y);
         }
+
         return lift <= MaxLift ? lift : 0;
     }
 
@@ -684,10 +836,14 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         float Inertia(int body, Vector3 axis)
         {
             var inverse = shapes[body].Inertia.InverseInertiaTensor;
-            float along = inverse.XX * axis.X * axis.X + inverse.YY * axis.Y * axis.Y + inverse.ZZ * axis.Z * axis.Z + 2 * (inverse.YX * axis.X * axis.Y + inverse.ZX * axis.X * axis.Z + inverse.ZY * axis.Y * axis.Z);
+            float along = inverse.XX * axis.X * axis.X + inverse.YY * axis.Y * axis.Y + inverse.ZZ * axis.Z * axis.Z
+                + 2 * (inverse.YX * axis.X * axis.Y + inverse.ZX * axis.X * axis.Z + inverse.ZY * axis.Y * axis.Z);
             return along > 1e-9f ? 1 / along : 1;
         }
-        float inertia = r.Dynamic[j.A] && r.Dynamic[j.B] ? 1 / (1 / Inertia(j.A, j.AxisA) + 1 / Inertia(j.B, j.AxisB)) : r.Dynamic[j.A] ? Inertia(j.A, j.AxisA) : Inertia(j.B, j.AxisB);
+
+        float inertia = r.Dynamic[j.A] && r.Dynamic[j.B]
+            ? 1 / (1 / Inertia(j.A, j.AxisA) + 1 / Inertia(j.B, j.AxisB))
+            : r.Dynamic[j.A] ? Inertia(j.A, j.AxisA) : Inertia(j.B, j.AxisB);
         float omega = MathF.Sqrt(j.SpringStiffness / inertia);
         float ratio = j.SpringDamper / (2 * MathF.Sqrt(j.SpringStiffness * inertia));
         return new TwistServo
@@ -709,34 +865,53 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         switch (j.Type)
         {
             case PhysicsJointType.Revolute:
-                r.Joints.Add(solver.Add(a, b, new Hinge { LocalOffsetA = j.OffsetA, LocalHingeAxisA = j.AxisA, LocalOffsetB = j.OffsetB, LocalHingeAxisB = j.AxisB, SpringSettings = spring }));
+                r.Joints.Add(solver.Add(a, b,
+                    new Hinge { LocalOffsetA = j.OffsetA, LocalHingeAxisA = j.AxisA, LocalOffsetB = j.OffsetB, LocalHingeAxisB = j.AxisB,
+                        SpringSettings = spring }));
                 if (j.Limits)
-                    r.Joints.Add(solver.Add(a, b, new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low, MaximumAngle = j.High, SpringSettings = spring }));
+                {
+                    r.Joints.Add(solver.Add(a, b,
+                        new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low, MaximumAngle = j.High,
+                            SpringSettings = spring }));
+                }
+
                 if (j.SpringStiffness > 0) r.Joints.Add(solver.Add(a, b, HingeSpring(r, j)));
                 if (j.Limits && r.Soft)
                 {
                     float band = SoftBand * (j.High - j.Low);
-                    r.Joints.Add(solver.Add(a, b, new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low + band, MaximumAngle = j.High - band, SpringSettings = SoftLimit }));
+                    r.Joints.Add(solver.Add(a, b,
+                        new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low + band, MaximumAngle = j.High - band,
+                            SpringSettings = SoftLimit }));
                 }
+
                 break;
             case PhysicsJointType.Spherical:
                 r.Joints.Add(solver.Add(a, b, new BallSocket { LocalOffsetA = j.OffsetA, LocalOffsetB = j.OffsetB, SpringSettings = spring }));
                 if (j.Limits)
                 {
-                    r.Joints.Add(solver.Add(a, b, new SwingLimit { AxisLocalA = j.AxisA, AxisLocalB = j.AxisB, MaximumSwingAngle = j.Swing, SpringSettings = spring }));
-                    r.Joints.Add(solver.Add(a, b, new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low, MaximumAngle = j.High, SpringSettings = spring }));
+                    r.Joints.Add(solver.Add(a, b,
+                        new SwingLimit { AxisLocalA = j.AxisA, AxisLocalB = j.AxisB, MaximumSwingAngle = j.Swing, SpringSettings = spring }));
+                    r.Joints.Add(solver.Add(a, b,
+                        new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low, MaximumAngle = j.High,
+                            SpringSettings = spring }));
                     if (r.Soft)
                     {
                         float band = SoftBand * (j.High - j.Low);
-                        r.Joints.Add(solver.Add(a, b, new SwingLimit { AxisLocalA = j.AxisA, AxisLocalB = j.AxisB, MaximumSwingAngle = j.Swing * (1 - SoftBand), SpringSettings = SoftLimit }));
-                        r.Joints.Add(solver.Add(a, b, new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low + band, MaximumAngle = j.High - band, SpringSettings = SoftLimit }));
+                        r.Joints.Add(solver.Add(a, b,
+                            new SwingLimit { AxisLocalA = j.AxisA, AxisLocalB = j.AxisB, MaximumSwingAngle = j.Swing * (1 - SoftBand),
+                                SpringSettings = SoftLimit }));
+                        r.Joints.Add(solver.Add(a, b,
+                            new TwistLimit { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, MinimumAngle = j.Low + band,
+                                MaximumAngle = j.High - band, SpringSettings = SoftLimit }));
                     }
                 }
+
                 break;
             default:
                 var (ra, rb) = (r.Definition.Bodies[j.A].Bind, r.Definition.Bodies[j.B].Bind);
                 var relative = rb.Then(ra.Inverse());
-                r.Joints.Add(solver.Add(a, b, new Weld { LocalOffset = relative.Position, LocalOrientation = relative.Rotation, SpringSettings = spring }));
+                r.Joints.Add(solver.Add(a, b,
+                    new Weld { LocalOffset = relative.Position, LocalOrientation = relative.Rotation, SpringSettings = spring }));
                 break;
         }
     }
@@ -769,6 +944,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
                     break;
             }
         }
+
         return _shapes[definition] = made;
     }
 
@@ -827,7 +1003,9 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (j.Type is not (PhysicsJointType.Revolute or PhysicsJointType.Spherical) || j.SpringStiffness > 0) continue;
             if (r.Bodies[j.A] is not { } a || r.Bodies[j.B] is not { } b || !r.Dynamic[j.A] && !r.Dynamic[j.B]) continue;
             float target = j.Type == PhysicsJointType.Revolute && j.Limits ? Math.Clamp(RelaxedShare * (j.Low + j.High) / 2, j.Low, j.High) : 0;
-            r.Relax.Add(_physics.Simulation.Solver.Add(a, b, new TwistServo { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, TargetAngle = target, SpringSettings = spring, ServoSettings = servo }));
+            r.Relax.Add(_physics.Simulation.Solver.Add(a, b,
+                new TwistServo { LocalBasisA = j.BasisA, LocalBasisB = j.BasisB, TargetAngle = target, SpringSettings = spring,
+                    ServoSettings = servo }));
         }
     }
 
@@ -844,6 +1022,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             float share = b == struck.Body ? struck.Gain : PushSpread;
             linear += start.Push * (share - 1);
         }
+
         return new BodyVelocity(linear, Spin(r, r.Definition.Bodies[b].Name, b, start.Push, seed));
     }
 
@@ -875,6 +1054,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         if (side == 0 || flat.LengthSquared() < 1e-6f) return Vector3.Zero;
         float roll = 0.6f + 0.8f * Rng.Float(Rng.Hash(seed, Rng.Key(r.Id), RngPurpose.RagdollSpin, (ulong)b));
         float speed = MathF.Min(flat.Length() * SpinPerPush, MaxPushSpin) * roll;
+
         // A limb hanging down from its joint swings its far end along d when it turns about d x up.
         return Vector3.Normalize(Vector3.Cross(flat, Vector3.UnitY)) * (side * speed);
     }
@@ -889,15 +1069,19 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             if (r.Bodies[b] is not { } handle || r.Dynamic[b]) continue;
             var body = _physics.Simulation.Bodies.GetBodyReference(handle);
             var target = animated[b];
+
             // The original sets the pose and zeroes both velocities (FUN_1407d1550 -> FUN_1401a9ea0 / FUN_1401a9f00): the joints see only the position jump.
             body.Pose = new RigidPose(target.Position, target.Rotation);
             body.Velocity = default;
             if (!body.Awake) body.Awake = true;
         }
+
         // Partial ragdolls are woken every frame (FUN_1407d3c00, wake 20).
         for (int b = 0; b < r.Bodies.Length; b++)
+        {
             if (r.Bodies[b] is { } handle && r.Dynamic[b] && _physics.Simulation.Bodies.GetBodyReference(handle) is { Awake: false } sleeping)
                 sleeping.Awake = true;
+        }
     }
 
     /// <summary>
@@ -925,11 +1109,13 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
     void ReadBack(Ragdoll r)
     {
         for (int b = 0; b < r.Bodies.Length; b++)
+        {
             if (r.Bodies[b] is { } handle)
             {
                 var pose = _physics.Simulation.Bodies.GetBodyReference(handle).Pose;
                 r.Pose[b] = new RigidTransform(pose.Position, pose.Orientation);
             }
+        }
     }
 
     float StillShare(Ragdoll r)
@@ -942,6 +1128,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             var v = _physics.Simulation.Bodies.GetBodyReference(handle).Velocity;
             if (v.Linear.LengthSquared() < StillLinear && v.Angular.LengthSquared() < StillAngular) still++;
         }
+
         return count == 0 ? 1 : still / (float)count;
     }
 
@@ -986,8 +1173,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         if (cold.Launch is { } launch)
         {
             cold.Launch = null;
-            if (cold.InSomething == Locks.HeldState.None && cold.CarriedBy.IsNone && cold.Medical is { Incapacitated: true }) cold.Slide = new Vector3(launch.X, 0, launch.Z);
+            if (cold.InSomething == Locks.HeldState.None && cold.CarriedBy.IsNone && cold.Medical is { Incapacitated: true })
+                cold.Slide = new Vector3(launch.X, 0, launch.Z);
         }
+
         var v = cold.Slide;
         if (v == default) return;
         var at = hot.Position + v * dt;
@@ -1014,6 +1203,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             body.Velocity.Angular += add.Angular;
             body.Awake = true;
         }
+
         r.Age = 0;
     }
 
@@ -1027,24 +1217,30 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
         r.Joints.Clear();
         SetTone(r, Tone.None);
         for (int b = 0; b < r.Bodies.Length; b++)
+        {
             if (r.Bodies[b] is { } handle)
             {
                 var body = _physics.Simulation.Bodies.GetBodyReference(handle);
                 body.Velocity = default;
                 if (r.Dynamic[b]) body.BecomeKinematic();
             }
+        }
+
         r.Frozen = true;
     }
 
     void Shift(Ragdoll r, Vector3 by)
     {
         for (int b = 0; b < r.Bodies.Length; b++)
+        {
             if (r.Bodies[b] is { } handle)
             {
                 var body = _physics.Simulation.Bodies.GetBodyReference(handle);
                 body.Pose.Position += by;
                 body.Velocity = default;
             }
+        }
+
         ReadBack(r);
     }
 
@@ -1061,6 +1257,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             var toward = r.Pose[hb].Position - root;
             if (toward.X * toward.X + toward.Z * toward.Z > 1e-4f) hot.Yaw = MathF.Atan2(toward.X, toward.Z);
         }
+
         var walk = world.Walkability;
         if (walk.IsWalkable(root.X, root.Z, root.Y)) hot.Position = new Vector3(root.X, walk.GroundHeight(root.X, root.Z, root.Y), root.Z);
         r.BlendLeft = GetUpBlend;
@@ -1088,6 +1285,7 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             pose.Rotation[h] = Quaternion.Normalize(unturn * bone.Rotation);
             pose.Position[h] = Vector3.Transform(bone.Position, toModel);
         }
+
         return pose;
     }
 
@@ -1123,7 +1321,10 @@ public sealed class RagdollSystem : ITickSystem, IStateHashed, IRagdollState, IR
             foreach (var p in r.Pose)
             {
                 hasher.Add(p.Position);
-                hasher.Add(p.Rotation.X); hasher.Add(p.Rotation.Y); hasher.Add(p.Rotation.Z); hasher.Add(p.Rotation.W);
+                hasher.Add(p.Rotation.X);
+                hasher.Add(p.Rotation.Y);
+                hasher.Add(p.Rotation.Z);
+                hasher.Add(p.Rotation.W);
             }
         }
     }

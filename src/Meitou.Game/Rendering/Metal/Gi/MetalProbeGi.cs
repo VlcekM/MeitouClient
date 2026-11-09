@@ -68,10 +68,8 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         _irradianceImage = ctx.TextureAt(_irradiance);
         _distanceImage = ctx.TextureAt(_distance);
         _baseImage = ctx.TextureAt(_bases);
-        _linear = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
-        _nearest = ctx.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        _linear = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear));
+        _nearest = ctx.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Nearest, TextureMagFilter.Nearest));
         for (int i = 0; i < _constantsBuffers.Length; i++)
             _constantsBuffers[i] = ctx.Device.NewBuffer((ulong)Marshal.SizeOf<ProbeConstants>(), MTLResourceOptions.ResourceStorageModeShared);
 
@@ -395,6 +393,9 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         return true;
     }
 
+    /// <summary>
+    /// Rebuilds the top level: the terrain, then the nearest objects.
+    /// </summary>
     void RebuildTlas(Vector3 eye, WorldObjectRenderer? objects)
     {
         var blas = new List<MTLAccelerationStructure> { _terrain!.Blas };
@@ -403,37 +404,52 @@ internal sealed unsafe class MetalProbeGi : IProbeGi
         WriteInstance(0, Matrix4x4.Identity, 5, 0);
         count++;
 
-        if (objects is not null)
-        {
-            var candidates = new List<(ObjectStreamer.Instance Instance, float Distance)>();
-            foreach (var inst in objects.RayInstances(eye, ObjectRange))
-                if (inst.Gpu is not null) candidates.Add((inst, Vector3.Distance(inst.Centre, eye)));
-
-            candidates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
-
-            foreach (var (inst, _) in candidates)
-            {
-                if (count > MaxObjects) break;
-
-                var entry = FindBlas(inst.Gpu!);
-                if (entry is null) continue;
-
-                int index = blas.FindIndex(a => a.NativePtr == entry.Blas.NativePtr);
-
-                if (index < 0)
-                {
-                    index = blas.Count;
-                    blas.Add(entry.Blas);
-                }
-
-                WriteInstance(count, inst.Transform, 5, index);
-                infos.Add(new Vector4(0.40f, 0.38f, 0.35f, 1f));
-                count++;
-            }
-        }
-
+        if (objects is not null) count = AddObjectInstances(eye, objects, blas, infos, count);
         if (count == 0) return;
 
+        BuildTlas(blas, infos, count);
+    }
+
+    /// <summary>
+    /// The object instances within <see cref="ObjectRange"/> of the eye, nearest first, up to <see cref="MaxObjects"/>: each written after the
+    /// <paramref name="count"/> so far, its mesh's bottom level added to <paramref name="blas"/> once; returns the new count.
+    /// </summary>
+    int AddObjectInstances(Vector3 eye, WorldObjectRenderer objects, List<MTLAccelerationStructure> blas, List<Vector4> infos, int count)
+    {
+        var candidates = new List<(ObjectStreamer.Instance Instance, float Distance)>();
+        foreach (var inst in objects.RayInstances(eye, ObjectRange))
+            if (inst.Gpu is not null) candidates.Add((inst, Vector3.Distance(inst.Centre, eye)));
+
+        candidates.Sort((a, b) => a.Distance.CompareTo(b.Distance));
+
+        foreach (var (inst, _) in candidates)
+        {
+            if (count > MaxObjects) break;
+
+            var entry = FindBlas(inst.Gpu!);
+            if (entry is null) continue;
+
+            int index = blas.FindIndex(a => a.NativePtr == entry.Blas.NativePtr);
+
+            if (index < 0)
+            {
+                index = blas.Count;
+                blas.Add(entry.Blas);
+            }
+
+            WriteInstance(count, inst.Transform, 5, index);
+            infos.Add(new Vector4(0.40f, 0.38f, 0.35f, 1f));
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// The top level over the <paramref name="count"/> instances written, with their surface infos; the old one goes after the frames in flight.
+    /// </summary>
+    void BuildTlas(List<MTLAccelerationStructure> blas, List<Vector4> infos, int count)
+    {
         var instBuffer = _ctx.Device.NewBuffer((ulong)(64 * count), MTLResourceOptions.ResourceStorageModeShared);
         Marshal.Copy(_instanceBytes, 0, instBuffer.Contents, count * 64);
         var infoFloats = new float[count * 4];

@@ -198,8 +198,8 @@ public class TaskStartTests
     /// The converted order starts given to a fighting character, by name, with the act-out each starts (M3b and M3c add theirs).
     /// </summary>
     public static string[] Orders => ["move", "follow", "bodyguard", "stop", "first aid", "splint", "rest", "medic", "pick up", "kidnap", "loot",
-            "open inventory", "stealth ko", "put down",
-        "operate", "prospect", "build", "dismantle", "use bed", "put in bed", "pick lock", "set free", "get in cage", "force lock", "pick up item", "put in cage", "attack"];
+        "open inventory", "stealth ko", "put down", "operate", "prospect", "build", "dismantle", "use bed", "put in bed", "pick lock", "set free",
+        "get in cage", "force lock", "pick up item", "put in cage", "attack"];
 
     internal static (SimCommand Order, CharacterTask Task) Order(Rig rig, string name, long tick)
     {

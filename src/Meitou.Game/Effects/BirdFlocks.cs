@@ -508,7 +508,11 @@ public sealed class BirdThread
     /// </summary>
     public void Start()
     {
-        if (_failure is { } e) { _failure = null; throw new InvalidOperationException("The bird thread failed.", e); }
+        if (_failure is { } e)
+        {
+            _failure = null;
+            throw new InvalidOperationException("The bird thread failed.", e);
+        }
         _busy = true;
         _go.Release();
     }

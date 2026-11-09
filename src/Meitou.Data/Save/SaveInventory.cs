@@ -131,7 +131,10 @@ public static class SaveInventory
         Stun = r.Floats.GetValueOrDefault("stun"),
         Death = r.Bools.GetValueOrDefault("death"),
         Unique = r.Bools.GetValueOrDefault("unique"),
-        Lock = r.Ints.TryGetValue("lock lvl", out int lockLevel) ? new SaveItemLock(lockLevel, r.Bools.GetValueOrDefault("locked"), r.Bools.GetValueOrDefault("broken"), r.Floats.GetValueOrDefault("hardness")) : null,
+        Lock = r.Ints.TryGetValue("lock lvl", out int lockLevel)
+            ? new SaveItemLock(lockLevel, r.Bools.GetValueOrDefault("locked"), r.Bools.GetValueOrDefault("broken"),
+                r.Floats.GetValueOrDefault("hardness"))
+            : null,
         Contents = contents,
         Source = r,
     };
@@ -208,7 +211,10 @@ public static class SaveInventory
         return r;
     }
 
-    internal static FcsInstance Link(int index, string target) => new() { Id = index.ToString(System.Globalization.CultureInfo.InvariantCulture), Target = target, Position = Vector3.Zero, Rotation = Quaternion.Identity };
+    internal static FcsInstance Link(int index, string target) => new()
+    {
+        Id = index.ToString(System.Globalization.CultureInfo.InvariantCulture), Target = target, Position = Vector3.Zero, Rotation = Quaternion.Identity
+    };
 
     /// <summary>
     /// Replaces what an INVENTORY_STATE of <paramref name="file"/> holds with <paramref name="items"/>: the old item records (and the contents of containers among them) leave the file, and

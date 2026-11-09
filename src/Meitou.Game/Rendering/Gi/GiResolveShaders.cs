@@ -33,6 +33,7 @@ static partial class GiResolveShaders
         if (!MainRegex().IsMatch(fragment))
             throw new InvalidOperationException("WithAlbedo: the fragment shader has no main()");
         string body = MainRegex().Replace(fragment, "void giLitMain()", 1);
+
         // With two outputs every one needs its location: the colour's is 0.
         body = ColourOutRegex().Replace(body, "layout(location = 0) out vec4 fragColour;", 1);
         if (inShader)

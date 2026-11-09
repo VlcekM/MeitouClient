@@ -7,13 +7,13 @@ namespace Meitou.Game.Rendering.Gpu;
 /// Device memory per frame slot for what a frame's compute passes write and its draws read (the GPU cull's per-view outputs, the grass kernels'
 /// lists): bump allocated, reset when the slot comes round, and sized by need instead of by a fixed chunk.
 /// <list type="bullet">
-/// <item>A slot holds one buffer of the size the last frames needed (the largest need of the trailing <see cref="Window"/> frames, with 25% of headroom,
-/// in whole MB). A frame that needs more takes extra buffers sized to the request; when its slot comes round again the slot is made one buffer again,
-/// large enough for what that frame took (grow on demand).</item>
-/// <item>A slot whose buffer is more than twice what the window needs is made smaller (shrink after): a peak that has passed gives its memory back after
-/// about <see cref="Window"/> frames.</item>
-/// <item><see cref="Cap"/> is the most a slot may hold. A request beyond it is refused (<see cref="TryAllocate"/> returns false, the demand is counted in
-/// <see cref="Overflows"/> and <see cref="DemandBytes"/>) and the caller leaves that view out of the frame: the memory-pressure guard
+/// <item>A slot holds one buffer of the size the last frames needed (the largest need of the trailing <see cref="Window"/> frames, with 25% of
+/// headroom, in whole MB). A frame that needs more takes extra buffers sized to the request; when its slot comes round again the slot is made one
+/// buffer again, large enough for what that frame took (grow on demand).</item>
+/// <item>A slot whose buffer is more than twice what the window needs is made smaller (shrink after): a peak that has passed gives its memory back
+/// after about <see cref="Window"/> frames.</item>
+/// <item><see cref="Cap"/> is the most a slot may hold. A request beyond it is refused (<see cref="TryAllocate"/> returns false, the demand is
+/// counted in <see cref="Overflows"/> and <see cref="DemandBytes"/>) and the caller leaves that view out of the frame: the memory-pressure guard
 /// (<see cref="VramGuard"/>) shortens the ranges when it happens, so the demand falls.</item>
 /// </list>
 /// Render thread only.

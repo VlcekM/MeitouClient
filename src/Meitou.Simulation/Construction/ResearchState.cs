@@ -85,17 +85,23 @@ public sealed class ResearchState
     /// <summary>
     /// Replaces the whole state (a save's): finished, queued with their seconds, and paid ids.
     /// </summary>
-    public void Set(GameDatabase db, IEnumerable<string> ids, IEnumerable<(string Id, float Seconds)> queued, IEnumerable<string> paidIds, IEnumerable<(string Id, float Seconds)> kept)
+    public void Set(GameDatabase db, IEnumerable<string> ids, IEnumerable<(string Id, float Seconds)> queued, IEnumerable<string> paidIds,
+        IEnumerable<(string Id, float Seconds)> kept)
     {
         _completed.Clear();
         BenchLevel = 0;
+
         // A repeatable research is listed once per time it was finished (engine reading: the save format of repetitions is Unknown); extra listings
         // are dropped.
         foreach (var id in ids)
             if (Times(id) < RepetitionsOf(db, id)) _completed.Add(id);
         _queue.Clear();
         foreach (var (id, s) in queued)
-            if (db.Find(id) is { Type: FcsRecordType.Research } && Times(id) < RepetitionsOf(db, id) && _queue.TrueForAll(q => q.Id != id)) _queue.Add(new ResearchItem(id, s));
+        {
+            if (db.Find(id) is { Type: FcsRecordType.Research } && Times(id) < RepetitionsOf(db, id) && _queue.TrueForAll(q => q.Id != id))
+                _queue.Add(new ResearchItem(id, s));
+        }
+
         _paid.Clear();
         foreach (var id in paidIds)
             if (!_paid.Contains(id, StringComparer.Ordinal)) _paid.Add(id);
@@ -111,6 +117,7 @@ public sealed class ResearchState
         Unlocked = ResearchGate.Unlocked(db, _completed);
         var crafts = new HashSet<(CraftKind, string)>();
         foreach (var id in _completed.Distinct(StringComparer.Ordinal))
+        {
             if (db.Find(id) is { Type: FcsRecordType.Research } record)
             {
                 // With repeats above 0 repetition j keeps the entries whose v0 is j; without repeats the lists are not filtered (Verified,
@@ -120,21 +127,34 @@ public sealed class ResearchState
                 foreach (var (kind, item, repetition) in data.EnableCrafts)
                     if (data.Repeats <= 0 || repetition >= 0 && repetition < times) crafts.Add((kind, item));
             }
+        }
+
         UnlockedCrafts = crafts;
+
         // Each finished repetition applies its improvements in finishing order: the multiplier is replaced, the increases add (Observed,
         // FUN_140831a60).
         var upgrades = new Dictionary<string, BuildingUpgrade>(StringComparer.Ordinal);
         foreach (var id in _completed)
+        {
             if (db.Find(id) is { Type: FcsRecordType.Research } record && ResearchData.From(record) is { ImproveBuildings.Count: > 0 } r)
+            {
                 foreach (var building in r.ImproveBuildings)
                 {
                     var u = upgrades.GetValueOrDefault(building, BuildingUpgrade.None);
-                    upgrades[building] = new BuildingUpgrade(r.ProductionMult, u.PowerIncrease + r.PowerIncrease, u.CapacityIncrease + r.CapacityIncrease);
+                    upgrades[building] = new BuildingUpgrade(r.ProductionMult, u.PowerIncrease + r.PowerIncrease,
+                        u.CapacityIncrease + r.CapacityIncrease);
                 }
+            }
+        }
+
         Upgrades = upgrades;
         int level = 1;
         foreach (var id in _completed)
-            if (db.Find(id) is { Type: FcsRecordType.Research } r && r.GetBool("is level upgrade") && r.GetInt("level") is var l && l >= level) level = l + 1;
+        {
+            if (db.Find(id) is { Type: FcsRecordType.Research } r && r.GetBool("is level upgrade") && r.GetInt("level") is var l && l >= level)
+                level = l + 1;
+        }
+
         TechLevel = level;
     }
 
@@ -162,8 +182,11 @@ public sealed class ResearchState
     {
         int n = 0;
         foreach (var record in db.Records.Values)
+        {
             if (record.Type == FcsRecordType.Research)
                 for (int repetitions = RepetitionsOf(db, record.StringId); Times(record.StringId) < repetitions; n++) _completed.Add(record.StringId);
+        }
+
         if (n == 0) return 0;
         _queue.Clear();
         _partial.Clear();
@@ -183,6 +206,7 @@ public sealed class ResearchState
         foreach (var c in _completed) if (c == id) n++;
         return n;
     }
+
     /// <summary>
     /// Every repetition is finished.
     /// </summary>
@@ -196,7 +220,8 @@ public sealed class ResearchState
     /// The upgrade of a building owned by <paramref name="owner"/>: only the player's buildings have one, others the default (<b>Verified</b>,
     /// <c>FUN_14082ec70</c>).
     /// </summary>
-    public BuildingUpgrade Upgrade(World world, string building, int owner) => owner >= 0 && owner == world.Player.Faction ? Upgrade(building) : BuildingUpgrade.None;
+    public BuildingUpgrade Upgrade(World world, string building, int owner) =>
+        owner >= 0 && owner == world.Player.Faction ? Upgrade(building) : BuildingUpgrade.None;
 
     /// <summary>
     /// The crafts the finished research unlocks (kind and record; a weapon type or model by its own id).

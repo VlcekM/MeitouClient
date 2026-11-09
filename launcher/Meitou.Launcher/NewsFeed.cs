@@ -1,7 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace Meitou.Launcher;
@@ -16,17 +14,31 @@ public sealed record NewsPost(
 /// <summary>
 /// The Home page's posts, from the repository's <c>news/</c> folder, one folder per article: listed through the contents API (one call, cached
 /// with its ETag), each folder's <c>index.md</c> fetched from raw.githubusercontent.com and kept on disk by the folder's tree hash,
-/// so only new or changed posts download.
-/// Images are fetched the same way and cached by URL. Works offline from the cache.
+/// so only new or changed posts download. Images are fetched and cached by <see cref="NewsMediaCache"/>. Works offline from the cache.
 /// </summary>
 public sealed class NewsFeed(HttpClient http)
 {
+    /// <summary>
+    /// The branch the posts are read from.
+    /// </summary>
     public const string Branch = "master";
+    /// <summary>
+    /// The repository's news folder.
+    /// </summary>
     const string Folder = "news";
+    /// <summary>
+    /// At most this many posts, the newest.
+    /// </summary>
     const int MaxPosts = 20;
+    /// <summary>
+    /// An article folder's post.
+    /// </summary>
     const string PostFile = "index.md";
 
-    static string CacheDirectory => Path.Combine(LauncherConfig.DataDirectory, "news-cache");
+    /// <summary>
+    /// Where the article list, the posts and (<see cref="NewsMediaCache"/>) their pictures are kept, in the launcher's data folder.
+    /// </summary>
+    internal static string CacheDirectory => Path.Combine(LauncherConfig.DataDirectory, "news-cache");
 
     /// <summary>
     /// Debug builds show the checkout's own <c>news/</c> (found above the executable, next to <c>MeitouClient.slnx</c>), so a post can be
@@ -39,14 +51,22 @@ public sealed class NewsFeed(HttpClient http)
         null;
 #endif
 
+    /// <summary>
+    /// The checkout's <c>news/</c> above the executable, or null.
+    /// </summary>
     static string? FindCheckoutNews()
     {
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
             if (File.Exists(Path.Combine(dir.FullName, "MeitouClient.slnx")) && Directory.Exists(Path.Combine(dir.FullName, Folder)))
                 return Path.Combine(dir.FullName, Folder);
+        }
         return null;
     }
 
+    /// <summary>
+    /// The posts, newest first, and a problem line when GitHub could not be read; the local folder's in Debug builds.
+    /// </summary>
     public async Task<(List<NewsPost> Posts, string? Problem)> FetchAsync(CancellationToken ct = default)
     {
         if (LocalFolder is { } local) return (await ReadLocalAsync(local, ct), null);
@@ -148,6 +168,9 @@ public sealed class NewsFeed(HttpClient http)
     static bool IsArticleFolder(JsonElement f) =>
         f.GetProperty("type").GetString() == "dir" && f.GetProperty("name").GetString() is { Length: > 10 } n && DateOnly.TryParse(n[..10], out _);
 
+    /// <summary>
+    /// The local folder's posts (Debug), newest first.
+    /// </summary>
     static async Task<List<NewsPost>> ReadLocalAsync(string folder, CancellationToken ct)
     {
         var posts = new List<NewsPost>();
@@ -175,8 +198,10 @@ public sealed class NewsFeed(HttpClient http)
             if (end > 0)
             {
                 foreach (var line in lines[1..end])
+                {
                     if (line.IndexOf(':') is var colon and > 0)
                         meta[line[..colon].Trim()] = line[(colon + 1)..].Trim().Trim('"');
+                }
                 bodyStart = end + 1;
             }
         }
@@ -186,75 +211,6 @@ public sealed class NewsFeed(HttpClient http)
         string body = string.Join("\n", lines[bodyStart..]).Trim();
         return new NewsPost(file, title, date, meta.GetValueOrDefault("author"), meta.GetValueOrDefault("image"), body, baseUrl,
             meta.GetValueOrDefault("video"));
-    }
-
-    static string CacheFile(string url, string extension) =>
-        Path.Combine(CacheDirectory, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(url)))[..32] + extension);
-
-    /// <summary>
-    /// A file's first <paramref name="length"/> bytes (a video's poster frame), fetched with a Range request and cached apart from the
-    /// whole file; the whole file when it is already cached or the server sends all of it. Null when it cannot be had.
-    /// </summary>
-    public async Task<byte[]?> HeadAsync(string url, int length, CancellationToken ct = default)
-    {
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile)
-        {
-            try
-            {
-                await using var stream = File.OpenRead(uri.LocalPath);
-                var head = new byte[Math.Min(length, stream.Length)];
-                await stream.ReadExactlyAsync(head, ct);
-                return head;
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
-        }
-        var whole = CacheFile(url, ".img");
-        var cached = CacheFile(url, ".head");
-        try
-        {
-            if (File.Exists(whole)) return await File.ReadAllBytesAsync(whole, ct);
-            if (File.Exists(cached)) return await File.ReadAllBytesAsync(cached, ct);
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Range = new RangeHeaderValue(0, length - 1);
-            using var response = await http.SendAsync(request, ct);
-            response.EnsureSuccessStatusCode();
-            var bytes = await response.Content.ReadAsByteArrayAsync(ct);
-            Directory.CreateDirectory(CacheDirectory);
-            await File.WriteAllBytesAsync(response.StatusCode == HttpStatusCode.PartialContent ? cached : whole, bytes, ct);
-            return bytes;
-        }
-        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// An image's bytes, from the disk cache or downloaded once; null when it cannot be had.
-    /// </summary>
-    public async Task<byte[]?> ImageAsync(string url, CancellationToken ct = default)
-    {
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.IsFile) // a local post's picture (Debug)
-        {
-            try
-            {
-                return await File.ReadAllBytesAsync(uri.LocalPath, ct);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
-        }
-        var cached = CacheFile(url, ".img");
-        try
-        {
-            if (File.Exists(cached)) return await File.ReadAllBytesAsync(cached, ct);
-            var bytes = await http.GetByteArrayAsync(url, ct);
-            Directory.CreateDirectory(CacheDirectory);
-            await File.WriteAllBytesAsync(cached, bytes, ct);
-            return bytes;
-        }
-        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
-        {
-            return null;
-        }
     }
 
     /// <summary>

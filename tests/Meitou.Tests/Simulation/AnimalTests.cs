@@ -154,9 +154,11 @@ public class AnimalTests(ITestOutputHelper output)
         var log = systems.Combat!.Log;
         var bites = log.Where(e => e.Attacker == dog.Slot && e.Outcome == BlowOutcome.Hit).ToList();
         var back = log.Where(e => e.Attacker == me.Slot && e.Outcome == BlowOutcome.Hit).ToList();
-        output.WriteLine($"dog blows {log.Count(e => e.Attacker == dog.Slot)}, hits {bites.Count}, first {bites.FirstOrDefault()}; the player's hits {back.Count}");
+        output.WriteLine($"dog blows {log.Count(e => e.Attacker == dog.Slot)}, hits {bites.Count}, first {bites.FirstOrDefault()}; "
+            + $"the player's hits {back.Count}");
         var pc = table.Cold(me.Slot)!;
-        output.WriteLine($"player: {pc.Name} unconscious {pc.Medical!.Unconscious} dead {pc.Medical.Dead} blood {pc.Medical.Blood} fighter {pc.Fighter?.Weapon?.Data.Name ?? "fists"} combat {pc.InCombat}; dog blood {table.Cold(dog.Slot)?.Medical?.Blood}");
+        output.WriteLine($"player: {pc.Name} unconscious {pc.Medical!.Unconscious} dead {pc.Medical.Dead} blood {pc.Medical.Blood} "
+            + $"fighter {pc.Fighter?.Weapon?.Data.Name ?? "fists"} combat {pc.InCombat}; dog blood {table.Cold(dog.Slot)?.Medical?.Blood}");
 
         Assert.NotEmpty(bites);
         Assert.All(bites, b => Assert.True(b.Cut + b.Blunt + b.Pierce > 0));

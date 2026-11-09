@@ -60,7 +60,11 @@ sealed class SpeechBubbles(PlayerInterface player)
     /// An interrupting bubble moved inside the screen, its left and top edges winning on a screen too small for it (<c>FUN_1407221c0</c>).
     /// </summary>
     UiRect OnScreen(UiRect panel) =>
-        panel with { X = MathF.Max(MathF.Min(panel.X, player.Width - panel.Width), 0), Y = MathF.Max(MathF.Min(panel.Y, player.Height - panel.Height), 0) };
+        panel with
+        {
+            X = MathF.Max(MathF.Min(panel.X, player.Width - panel.Width), 0),
+            Y = MathF.Max(MathF.Min(panel.Y, player.Height - panel.Height), 0),
+        };
 
     void AddBubble(List<UiControl> controls, int n, SpeechBubble bubble, FittedSpeech text, float alpha, UiRect panel)
     {
@@ -130,8 +134,8 @@ sealed class SpeechBubbles(PlayerInterface player)
     static string SpeechFont(SpeechBubble bubble) => bubble.Large ? "Kenshi_StandardFont_Large" : "Kenshi_StandardFont_Medium";
 
     /// <summary>
-    /// <paramref name="bubble"/>'s text wrapped to the layout's widest box and measured in the font it is drawn with, so its advances are the drawn ones
-    /// (CJK included, which breaks between characters as it has no spaces).
+    /// <paramref name="bubble"/>'s text wrapped to the layout's widest box and measured in the font it is drawn with, so its advances are the drawn
+    /// ones (CJK included, which breaks between characters as it has no spaces).
     /// </summary>
     FittedSpeech SpeechText(UiPainter painter, SpeechBubble bubble)
     {

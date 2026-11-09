@@ -71,7 +71,6 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
 
     readonly List<Squad> _squads = [];
     readonly HashSet<int> _attacked = [];
-    readonly HashSet<int> _seen = [];
     readonly List<int> _standing = [];
 
     // The characters standing this check by faction (in slot order) and, per faction asked, the standing enemies of it: a battle of one faction, or of
@@ -174,6 +173,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         foreach (var m in squad.Members)
         {
             if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } c) continue;
+
             // A member running alone (Self preservation) does not stop its squad from breaking; it counts as the others do and is not started again.
             if (c.IsPlayer || c.Fleeing && !c.FleesAlone) return;
             size++;
@@ -183,6 +183,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             _standing.Add(s);
             if (c.InCombat || table.Next[s].Task == (byte)CharacterTask.Attack) fighting = true;
         }
+
         // The squad-intact test (Ai.SquadIntact, FUN_14079acf0, docs/game/perception.md "Fleeing"): a member caged or carried off by a non-ally keeps
         // it intact; else it needs a leader and someone able; under 4 members it holds while the leader is up, from 4 while those able to fight are a
         // share of the squad. No enemy is counted.
@@ -246,6 +247,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             away = new Vector2(here.X - centre.X, here.Z - centre.Z);
             away = away.LengthSquared() > 1e-6f ? Vector2.Normalize(away) : RandomDirection(world, s, 0);
         }
+
         var from = count == 0 ? new Vector2(here.X, here.Z) : new Vector2(centre.X, centre.Z);
         ref var n = ref table.Next[s];
         table.Cold(s)!.Fleeing = true;
@@ -413,6 +415,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
                 _standingBy[c.Faction] = l = _spare.Count > 0 ? _spare.Pop() : [];
                 _standingFactions.Add(c.Faction);
             }
+
             l.Add(i);
         }
     }
@@ -440,6 +443,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     {
         var id = new CharacterId(s, world.Characters.Next[s].Generation);
         ulong roll = Rng.Hash(world.Seed, Rng.Key(id), RngPurpose.Flee, ((ulong)world.Tick << 2) | salt);
+
         // Task_Runaway draws x and z uniformly in [-1, 1] and normalises; a draw at the origin is replaced by +X.
         float x = Rng.Float(roll) * 2 - 1, z = Rng.Float(Rng.Mix(roll)) * 2 - 1;
         var v = new Vector2(x, z);

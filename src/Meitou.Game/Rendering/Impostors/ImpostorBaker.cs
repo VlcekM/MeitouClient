@@ -63,7 +63,8 @@ public sealed class ImpostorMeshes
                 for (int i = 0; i + 2 < part.Indices.Length; i += 3)
                 {
                     var a = part.Vertices[part.Indices[i]].Position;
-                    area += 0.5 * Vector3.Cross(part.Vertices[part.Indices[i + 1]].Position - a, part.Vertices[part.Indices[i + 2]].Position - a).Length();
+                    area += 0.5 * Vector3.Cross(part.Vertices[part.Indices[i + 1]].Position - a,
+                        part.Vertices[part.Indices[i + 2]].Position - a).Length();
                 }
             }
 
@@ -157,6 +158,8 @@ public readonly record struct ImpostorBakeTimes(double Upload, double Render, do
 /// </summary>
 public sealed unsafe class ImpostorBaker : IDisposable
 {
+    #region Baking
+
     readonly IGpuContext _gpu;
     readonly WorldTextureCache _textures;
     readonly bool _ownsTextures;
@@ -166,7 +169,8 @@ public sealed unsafe class ImpostorBaker : IDisposable
 
     /// <param name="assets">Where texture names are looked up; null only when no source names a texture (tests).</param>
     public ImpostorBaker(IGpuContext gpu, AssetLocator? assets)
-        : this(gpu, new WorldTextureCache(gpu, assets!, "impostor textures") { IdleSeconds = double.MaxValue, HighWaterMb = double.MaxValue }, owns: true)
+        : this(gpu, new WorldTextureCache(gpu, assets!, "impostor textures") { IdleSeconds = double.MaxValue, HighWaterMb = double.MaxValue },
+            owns: true)
     {
     }
 
@@ -226,7 +230,24 @@ public sealed unsafe class ImpostorBaker : IDisposable
         return job.Result!;
     }
 
-    // ---- recording (ImpostorBakeJob) ----
+    /// <summary>
+    /// Frees the kept targets and readback buffers, the stand-in's bindless entry, the program and the frame (and the texture cache when it is
+    /// the baker's own).
+    /// </summary>
+    public void Dispose()
+    {
+        _targetsClosed = true;
+        Trim();
+        if (_standIn != 0) _gpu.Bindless.Free(BindlessKind.Texture2D, _standIn);
+
+        _program.Dispose();
+        _frame.Dispose();
+        if (_ownsTextures) _textures.Dispose();
+    }
+
+    #endregion
+
+    #region Recording (ImpostorBakeJob)
 
     internal struct Part
     {
@@ -237,7 +258,8 @@ public sealed unsafe class ImpostorBaker : IDisposable
         public bool HasColours;
     }
 
-    internal sealed record Material(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2, ImpostorMaterial Settings)
+    internal sealed record Material(WorldTexture? Diffuse, WorldTexture? Normal, WorldTexture? Diffuse2, WorldTexture? Normal2,
+        ImpostorMaterial Settings)
     {
         public IEnumerable<WorldTexture?> All => [Diffuse, Normal, Diffuse2, Normal2];
     }
@@ -270,7 +292,11 @@ public sealed unsafe class ImpostorBaker : IDisposable
             {
                 // A rock is drawn by the terrain's mesh program: its own vertex layout and buffers.
                 var (rockLayout, rockBindings) = RockTerrain!.RockBakeVertices(vertices);
-                parts.Add(new Part { Vertices = vertices, Indices = indices, Count = mp.Indices.Length, HasColours = mp.HasColours, Layout = rockLayout, Bindings = rockBindings });
+                parts.Add(new Part
+                {
+                    Vertices = vertices, Indices = indices, Count = mp.Indices.Length, HasColours = mp.HasColours, Layout = rockLayout,
+                    Bindings = rockBindings,
+                });
                 continue;
             }
 
@@ -324,8 +350,9 @@ public sealed unsafe class ImpostorBaker : IDisposable
     /// <paramref name="large"/> (and <paramref name="depth"/>), halved into <paramref name="small"/> by a linear blit and copied into
     /// <paramref name="readback"/> at pass × the row's bytes.
     /// </summary>
-    internal void RecordRow(IGpuCommandList cmd, int row, ImpostorClass size, ImpostorMeshes meshes, Part[] mainParts, Material main, Part[] leavesParts, Material? leaves,
-        GpuTexture large, GpuTexture depth, GpuTexture small, GpuBuffer readback, float lodBias, ImpostorSource? rock = null)
+    internal void RecordRow(IGpuCommandList cmd, int row, ImpostorClass size, ImpostorMeshes meshes, Part[] mainParts, Material main,
+        Part[] leavesParts, Material? leaves, GpuTexture large, GpuTexture depth, GpuTexture small, GpuBuffer readback, float lodBias,
+        ImpostorSource? rock = null)
     {
         int grid = size.Grid, f = size.FramePixels, samples = 2 * f, width = grid * samples, smallWidth = grid * f;
         PrepareFrameGlobals();
@@ -441,7 +468,11 @@ public sealed unsafe class ImpostorBaker : IDisposable
         }
     }
 
-    // ---- readback buffers: a row's three pictures, reused from row to row and bake to bake (render thread, except ReturnReadback) ----
+    #endregion
+
+    #region Readback buffers
+
+    // A row's three pictures, reused from row to row and bake to bake (render thread, except ReturnReadback).
 
     readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, System.Collections.Concurrent.ConcurrentBag<IGpuReadback>> _readbacks = new();
 
@@ -456,7 +487,11 @@ public sealed unsafe class ImpostorBaker : IDisposable
     /// </summary>
     internal void ReturnReadback(IGpuReadback buffer) => _readbacks.GetOrAdd(buffer.Size, _ => new()).Add(buffer);
 
-    // ---- bake targets, kept from bake to bake: a bake takes a set of the atlas's size and gives it back (render thread) ---- Making and freeing the
+    #endregion
+
+    #region Bake targets
+
+    // Kept from bake to bake: a bake takes a set of the atlas's size and gives it back (render thread). Making and freeing the
     // three images of every bake (367 bakes in a minute's fast flight) cost 0.5 to 3 ms of the render thread in a bake's first step and, with the
     // driver busy, 11 to 50 ms (2026-10-10, docs/renderer-native.md "Upload steps"). Every row clears them, so a set from an earlier bake is as good
     // as a new one.
@@ -467,6 +502,11 @@ public sealed unsafe class ImpostorBaker : IDisposable
     const int KeptTargetSets = 3;
 
     readonly List<((int Grid, int Frame) Key, GpuTexture Large, GpuTexture Depth, GpuTexture Small)> _targets = [];
+
+    /// <summary>
+    /// The baker is disposed: a set given back is freed, not kept.
+    /// </summary>
+    bool _targetsClosed;
 
     /// <summary>
     /// A colour target at twice the frame size, its depth and the half-size picture for the atlas size; made when none is kept.
@@ -484,10 +524,14 @@ public sealed unsafe class ImpostorBaker : IDisposable
         }
 
         int f = size.FramePixels, samples = 2 * f, width = size.Grid * samples;
-        return (pre.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, samples, Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "impostor bake target")),
-            pre.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, samples, Use: TextureUse.DepthTarget, Name: "impostor bake target")),
+        return (pre.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, samples,
+                Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "impostor bake target")),
+            pre.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, samples, Use: TextureUse.DepthTarget,
+                Name: "impostor bake target")),
+
             // Metal halves the rows with a sampling render pass (BlitScaled), so the half-size atlas is a colour target as well as a copy source.
-            pre.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.Grid * f, f, Use: TextureUse.ColourTarget | TextureUse.TransferDst | TextureUse.TransferSrc, Name: "impostor bake target")));
+            pre.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size.Grid * f, f,
+                Use: TextureUse.ColourTarget | TextureUse.TransferDst | TextureUse.TransferSrc, Name: "impostor bake target")));
     }
 
     /// <summary>
@@ -533,18 +577,7 @@ public sealed unsafe class ImpostorBaker : IDisposable
         _targets.Clear();
     }
 
-    bool _targetsClosed;
-
-    public void Dispose()
-    {
-        _targetsClosed = true;
-        Trim();
-        if (_standIn != 0) _gpu.Bindless.Free(BindlessKind.Texture2D, _standIn);
-
-        _program.Dispose();
-        _frame.Dispose();
-        if (_ownsTextures) _textures.Dispose();
-    }
+    #endregion
 }
 
 /// <summary>
@@ -639,50 +672,81 @@ public sealed class ImpostorBakeJob : IDisposable
         if (Result is not null || Error is not null) return true;
 
         var gpu = _baker.Gpu;
+        if (_source.IsRock && _recorded < _size.Grid && WaitsForRockBiome(out bool finished)) return finished;
+        if (!_started && !Start(gpu)) return false;
 
-        if (_source.IsRock && _recorded < _size.Grid)
+        HandRowsOver(gpu);
+        if (_recorded < _size.Grid)
         {
-            // A rock is baked with the terrain's material of its biome: no terrain, no atlas. Every row needs the biome resident, and a slot of the
-            // terrain's layer arrays can be given to another biome meanwhile: the bake waits a moment for it and then gives up (the caller asks again
-            // later), so a biome that is gone does not hold the one bake slot.
-            if (_baker.RockTerrain is null)
+            RecordRows(gpu);
+            return false;
+        }
+
+        if (_assembled < _size.Grid) return false;
+        if (_finish is null) StartFinish();
+        return Finished();
+    }
+
+    /// <summary>
+    /// A rock's bake needs its biome resident: true when the step ends here, waiting for the biome (<paramref name="finished"/> false) or failed
+    /// (true, with <see cref="Error"/>).
+    /// </summary>
+    bool WaitsForRockBiome(out bool finished)
+    {
+        // A rock is baked with the terrain's material of its biome: no terrain, no atlas. Every row needs the biome resident, and a slot of the
+        // terrain's layer arrays can be given to another biome meanwhile: the bake waits a moment for it and then gives up (the caller asks again
+        // later), so a biome that is gone does not hold the one bake slot.
+        if (_baker.RockTerrain is null)
+        {
+            Error = new InvalidOperationException("no terrain to bake a TERRAIN-mode rock with");
+            finished = true;
+            return true;
+        }
+
+        if (!_baker.RockTerrain.CanBakeRock(_source.RockBiome))
+        {
+            long now = Environment.TickCount64;
+            if (_rockWaitSince == 0) _rockWaitSince = now;
+
+            if (now - _rockWaitSince > 3000)
             {
-                Error = new InvalidOperationException("no terrain to bake a TERRAIN-mode rock with");
+                Error = new InvalidOperationException($"the biome of terrain row {_source.RockBiome} is not resident");
+                finished = true;
                 return true;
             }
 
-            if (!_baker.RockTerrain.CanBakeRock(_source.RockBiome))
-            {
-                long now = Environment.TickCount64;
-                if (_rockWaitSince == 0) _rockWaitSince = now;
-
-                if (now - _rockWaitSince > 3000)
-                {
-                    Error = new InvalidOperationException($"the biome of terrain row {_source.RockBiome} is not resident");
-                    return true;
-                }
-
-                return false;
-            }
-
-            _rockWaitSince = 0;
+            finished = false;
+            return true;
         }
 
-        if (!_started)
-        {
-            if (!TexturesReady()) return false;
+        _rockWaitSince = 0;
+        finished = false;
+        return false;
+    }
 
-            var t0 = _watch.Elapsed.TotalMilliseconds;
-            _mainParts = _baker.Upload(_meshes.Main, _source.IsRock);
-            _leavesParts = _leaves is not null ? _baker.Upload(_meshes.Leaves!) : [];
-            double t1 = _watch.Elapsed.TotalMilliseconds;
-            (_large, _depth, _small) = _baker.RentTargets(_size, gpu.Frame.PreFrame);
-            _started = true;
-            _upload += _watch.Elapsed.TotalMilliseconds - t0;
-            SlowNote("start", $"meshes {t1 - t0:0.0} ms, targets {_watch.Elapsed.TotalMilliseconds - t1:0.0} ms", _watch.Elapsed.TotalMilliseconds - t0);
-        }
+    /// <summary>
+    /// Uploads the meshes and takes the targets once every texture is decoded; false while they are not.
+    /// </summary>
+    bool Start(IGpuContext gpu)
+    {
+        if (!TexturesReady()) return false;
 
-        // Rows whose frame has completed go to the assembler, in order, one after the other on a worker.
+        var t0 = _watch.Elapsed.TotalMilliseconds;
+        _mainParts = _baker.Upload(_meshes.Main, _source.IsRock);
+        _leavesParts = _leaves is not null ? _baker.Upload(_meshes.Leaves!) : [];
+        double t1 = _watch.Elapsed.TotalMilliseconds;
+        (_large, _depth, _small) = _baker.RentTargets(_size, gpu.Frame.PreFrame);
+        _started = true;
+        _upload += _watch.Elapsed.TotalMilliseconds - t0;
+        SlowNote("start", $"meshes {t1 - t0:0.0} ms, targets {_watch.Elapsed.TotalMilliseconds - t1:0.0} ms", _watch.Elapsed.TotalMilliseconds - t0);
+        return true;
+    }
+
+    /// <summary>
+    /// Hands the rows whose frame has completed to the assembler, in order, one after the other on a worker.
+    /// </summary>
+    void HandRowsOver(IGpuContext gpu)
+    {
         double tRead = _watch.Elapsed.TotalMilliseconds;
 
         while (_rows.Count > 0 && gpu.FrameCompleted(_rows[0].Frame))
@@ -714,53 +778,62 @@ public sealed class ImpostorBakeJob : IDisposable
         }
 
         SlowNote("read back", $"rows handed to the assembler {_assembled}", _watch.Elapsed.TotalMilliseconds - tRead);
+    }
 
-        if (_recorded < _size.Grid)
+    /// <summary>
+    /// Records the next <see cref="RowsPerStep"/> rows into the frame's pre-frame commands.
+    /// </summary>
+    void RecordRows(IGpuContext gpu)
+    {
+        var t0 = _watch.Elapsed.TotalMilliseconds;
+        var cmd = gpu.Frame.PreFrame;
+        FrameProfiler.PreStamp(cmd, StageClock.Uploads);
+        cmd.BeginLabel("impostor bake");
+
+        for (int k = 0; k < RowsPerStep && _recorded < _size.Grid; k++, _recorded++)
         {
-            var t0 = _watch.Elapsed.TotalMilliseconds;
-            var cmd = gpu.Frame.PreFrame;
-            FrameProfiler.PreStamp(cmd, StageClock.Uploads);
-            cmd.BeginLabel("impostor bake");
-
-            for (int k = 0; k < RowsPerStep && _recorded < _size.Grid; k++, _recorded++)
-            {
-                ulong rowBytes = (ulong)(_size.Grid * _size.FramePixels * _size.FramePixels * 4);
-                var buffer = _baker.RentReadback(3 * rowBytes);
-                _baker.RecordRow(cmd, _recorded, _size, _meshes, _mainParts, _main, _leavesParts, _leaves, _large!, _depth!, _small!, buffer.Handle,
-                    _lodBias, _source.IsRock ? _source : null);
-                _rows.Add((_recorded, gpu.Frame.Number, buffer));
-            }
-
-            cmd.EndLabel();
-            FrameProfiler.PreStamp(cmd, StageClock.Bake);
-            cmd.Invalidate();   // the baker bound its own pipelines and sets
-            _render += _watch.Elapsed.TotalMilliseconds - t0;
-            SlowNote("record", $"rows up to {_recorded} of {_size.Grid}", _watch.Elapsed.TotalMilliseconds - t0);
-            return false;
+            ulong rowBytes = (ulong)(_size.Grid * _size.FramePixels * _size.FramePixels * 4);
+            var buffer = _baker.RentReadback(3 * rowBytes);
+            _baker.RecordRow(cmd, _recorded, _size, _meshes, _mainParts, _main, _leavesParts, _leaves, _large!, _depth!, _small!, buffer.Handle,
+                _lodBias, _source.IsRock ? _source : null);
+            _rows.Add((_recorded, gpu.Frame.Number, buffer));
         }
 
-        if (_assembled < _size.Grid) return false;
+        cmd.EndLabel();
+        FrameProfiler.PreStamp(cmd, StageClock.Bake);
+        cmd.Invalidate();   // the baker bound its own pipelines and sets
+        _render += _watch.Elapsed.TotalMilliseconds - t0;
+        SlowNote("record", $"rows up to {_recorded} of {_size.Grid}", _watch.Elapsed.TotalMilliseconds - t0);
+    }
 
-        if (_finish is null)
+    /// <summary>
+    /// Every row assembled: gives the GPU's part back and starts the encode on a worker, after the last row.
+    /// </summary>
+    void StartFinish()
+    {
+        double tFin = _watch.Elapsed.TotalMilliseconds;
+        ReleaseGpu();
+        var previous = _chain;
+        bool compress = _baker.Compress;
+        string name = $"{_source.Name} ({Path.GetFileName(_source.MeshPath)})";
+        _finish = Task.Run(() =>
         {
-            double tFin = _watch.Elapsed.TotalMilliseconds;
-            ReleaseGpu();
-            var previous = _chain;
-            bool compress = _baker.Compress;
-            string name = $"{_source.Name} ({Path.GetFileName(_source.MeshPath)})";
-            _finish = Task.Run(() =>
-            {
-                previous?.Wait();
-                var t = Stopwatch.GetTimestamp();
-                var atlas = _assembler.Finish(name, _meshes.Centre, _meshes.Radius, compress);
-                lock (this) _encode += Stopwatch.GetElapsedTime(t).TotalMilliseconds;
+            previous?.Wait();
+            var t = Stopwatch.GetTimestamp();
+            var atlas = _assembler.Finish(name, _meshes.Centre, _meshes.Radius, compress);
+            lock (this) _encode += Stopwatch.GetElapsedTime(t).TotalMilliseconds;
 
-                return atlas;
-            });
-            SlowNote("finish", "targets given back, encode started", _watch.Elapsed.TotalMilliseconds - tFin);
-        }
+            return atlas;
+        });
+        SlowNote("finish", "targets given back, encode started", _watch.Elapsed.TotalMilliseconds - tFin);
+    }
 
-        if (!_finish.IsCompleted) return false;
+    /// <summary>
+    /// Whether the encode is done: then the result or the error, and the bake's times.
+    /// </summary>
+    bool Finished()
+    {
+        if (!_finish!.IsCompleted) return false;
         if (_finish.IsCompletedSuccessfully) Result = _finish.Result;
         else Error = _finish.Exception?.InnerException ?? new InvalidOperationException("impostor bake failed");
         lock (this) _baker.LastTimes = new ImpostorBakeTimes(_upload, _render, _filter, _encode);

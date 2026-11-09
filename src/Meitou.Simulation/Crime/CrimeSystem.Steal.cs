@@ -38,7 +38,8 @@ public sealed partial class CrimeSystem
     /// <summary>
     /// The effective thievery: stat 10 times its body multiplier.
     /// </summary>
-    public static float Thievery(CharacterCold c) => (c.Stats?[StatsEnumerated.Thieving] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Thieving) ?? 1);
+    public static float Thievery(CharacterCold c) =>
+        (c.Stats?[StatsEnumerated.Thieving] ?? 0) * (c.Medical?.StatMultiplier(StatsEnumerated.Thieving) ?? 1);
 
     /// <summary>
     /// The chance that a steal from a container goes unseen (<c>FUN_1407944d0</c>, <b>Observed</b>): t = lerp(0.5, 1, clamp(distance / 200)), halved
@@ -70,7 +71,11 @@ public sealed partial class CrimeSystem
             if (squad.HomeBuilding?.Key != container.Building) continue;
             foreach (var id in squad.Members)
             {
-                if (!table.TryResolveNext(id, out int s) || !table.Next[s].Alive || table.Cold(s) is not { Medical.Incapacitated: false, IsImprisoned: false } c || !c.CarriedBy.IsNone) continue;
+                if (!table.TryResolveNext(id, out int s) || !table.Next[s].Alive
+                    || table.Cold(s) is not { Medical.Incapacitated: false, IsImprisoned: false } c || !c.CarriedBy.IsNone)
+                {
+                    continue;
+                }
                 float d = Vector3.DistanceSquared(table.Next[s].Position, at);
                 if (world.Sight.FloorOf(s, table.Next[s].Position) == floor) { if (d < sameD) (same, sameD) = (s, d); }
                 else if (d < otherD) (other, otherD) = (s, d);
@@ -160,12 +165,14 @@ public sealed partial class CrimeSystem
         if (TakeCode(world, c, o, kind) is { } code) SetPending(world, thief, code, o.Faction, ownerId, MinTimer);
         if (kind == TakeKind.Drag) item = null;
         float p = 1;
-        bool watches = o.Medical is not { Dead: true } && !(o.Medical is { Unconscious: true, PlayingDead: false }) && o.CarriedBy.IsNone && !o.IsImprisoned
+        bool watches = o.Medical is not { Dead: true } && !(o.Medical is { Unconscious: true, PlayingDead: false })
+            && o.CarriedBy.IsNone && !o.IsImprisoned
             && c.Medical is not { Incapacitated: true };
         if (watches)
         {
             p = 1.1f * Thievery(c) * 0.01f;
-            if (item is not null && Items.InventoryCommands.IsEquipmentSection(item.Section)) p *= item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f;
+            if (item is not null && Items.InventoryCommands.IsEquipmentSection(item.Section))
+                p *= item.Type == Data.Fcs.FcsRecordType.Armour ? 0.75f * 0.75f : 0.75f;
         }
         return Roll(world, thief, watches ? owner : -1, p, o.Faction, ownerId, Rng.Key(ownerId));
     }
@@ -190,16 +197,19 @@ public sealed partial class CrimeSystem
             else
             {
                 if (watcher.InSomething == Locks.HeldState.Bed) world.Fixtures.LeaveBed(world, watcherId);
-                else if (table.Next[w].Task == (byte)CharacterTask.Rest) TaskStart.Become(world, w, CharacterTask.Idle, Data.Gameplay.Ai.TaskType.Idle, TaskSource.Npc);
+                else if (table.Next[w].Task == (byte)CharacterTask.Rest)
+                    TaskStart.Become(world, w, CharacterTask.Idle, Data.Gameplay.Ai.TaskType.Idle, TaskSource.Npc);
                 // One staying low or playing dead stands (posture 0, docs/game/ragdolls.md "Staying low").
                 if (watcher.Medical is { } low) low.StandUp();
                 world.Defer(new Dialogue.DialogueEvent(watcherId, thiefId, CaughtEvent) { Tick = world.Tick + 1 });
                 if (c.IsPlayer) world.Post("Got caught stealing.");
                 SetPending(world, thief, CrimeCode.Theft, faction, victim, CaughtTimer, viaWrapper: true);
-                if (watcher.SquadId >= 0) world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Remember(world, watcher.SquadId, thiefId, Dialogue.MemoryTag.StoleFromMe);
+                if (watcher.SquadId >= 0)
+                    world.SystemOf<Dialogue.DialogueSystem>()?.Memory.Remember(world, watcher.SquadId, thiefId, Dialogue.MemoryTag.StoleFromMe);
             }
         }
-        if (p < 0.98f && !c.IsImprisoned && (c.Pending?.Timer ?? 0) < 10 && c.Stats is { } stats && c.Race is { } race) Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, caught ? CaughtXp : StealXp);
+        if (p < 0.98f && !c.IsImprisoned && (c.Pending?.Timer ?? 0) < 10 && c.Stats is { } stats && c.Race is { } race)
+            Xp?.Continuous(stats, race, StatsEnumerated.Thieving, 1, caught ? CaughtXp : StealXp);
         return caught;
     }
 

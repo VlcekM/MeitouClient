@@ -131,11 +131,14 @@ sealed unsafe class NativeFrame : IDisposable
         g.ApplyCount++;   // owners whose getters share one computation do it once for this segment (FrameGlobals.ApplyCount)
         var bytes = MemoryMarshal.AsBytes(new Span<FrameConstants>(ref _constants));
         for (int i = 0; i < _uniforms.Length; i++)
+        {
             if (_uniforms[i] is { } u)
             {
                 var (_, offset, size) = FrameConstants.Uniforms[i];
                 u.TryRead(bytes.Slice(offset, size));
             }
+        }
+
         for (int i = 0; i < _textures.Length; i++)
         {
             var t = _textures[i] is { } get ? get() : default;
@@ -143,6 +146,7 @@ sealed unsafe class NativeFrame : IDisposable
             var (_, kind, offset) = FrameConstants.Textures[i];
             MemoryMarshal.Write(bytes[offset..], Entry(i, kind, t));
         }
+
         // The frame block again only when it changed (the usual case within a frame: the same bytes, the same slice).
         if (_writtenFrame != frame.Number || !bytes.SequenceEqual(MemoryMarshal.AsBytes(new Span<FrameConstants>(ref _written))))
         {
@@ -152,8 +156,13 @@ sealed unsafe class NativeFrame : IDisposable
         }
         var viewSlice = frame.WriteConstants(MemoryMarshal.AsBytes(new ReadOnlySpan<ViewConstants>(in view)), _align);
         frame.Stats.ConstantBytes += sizeof(ViewConstants);
+
         // Skinning matrices: no consumer skins yet; the block is valid memory that is never read (uSkinned is 0).
-        if (_bonesFrame != frame.Number) { _bones = frame.WriteConstants(NoBones, _align); _bonesFrame = frame.Number; }
+        if (_bonesFrame != frame.Number)
+        {
+            _bones = frame.WriteConstants(NoBones, _align);
+            _bonesFrame = frame.Number;
+        }
 
         int count = 6 + _extraStorage;
         var result = new FrameBinding { Count = count };

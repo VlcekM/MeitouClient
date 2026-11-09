@@ -341,7 +341,8 @@ sealed class WorldPicking(PlayerInterface player)
     /// Where the ray meets a building: its hull prism first (null: no hit), then, when the record has collision triangles, the nearest of those
     /// (null: the ray passes through the prism without touching the building). <paramref name="y"/> is the building's base height.
     /// </summary>
-    internal float? BuildingRayT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float yMin, float yMax, string? record, Vector3 position, float y, Quaternion rotation)
+    internal float? BuildingRayT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float yMin, float yMax, string? record, Vector3 position,
+        float y, Quaternion rotation)
     {
         if (BuildMode.RayPrism(ray.Origin, ray.Direction, hull, y + yMin, y + yMax) is not { } prism) return null;
         if (record is null) return prism;
@@ -379,7 +380,8 @@ sealed class WorldPicking(PlayerInterface player)
     /// The nearest hit of the ray on the triangles (double sided), the mesh turned by <paramref name="rotation"/> and put at <paramref name="at"/>;
     /// null for none.
     /// </summary>
-    internal static float? RayMesh((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
+    internal static float? RayMesh((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at,
+        Quaternion rotation)
     {
         var q = rotation.LengthSquared() < 1e-12f ? Quaternion.Identity : Quaternion.Normalize(rotation);
         var inverse = Quaternion.Conjugate(q);

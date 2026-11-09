@@ -268,7 +268,7 @@ suite and Metal tests pass.
 - `src/Meitou.Game/Rendering/Terrain/TerrainTextures.cs` — layer arrays and samplers.
 - `src/Meitou.Game/Rendering/Metal/MetalShaders.cs` — Metal library/compile options and program creation.
 - `src/Meitou.Game/Rendering/Metal/MslTranslator.cs` — SPIR-V-Cross options.
-- `tools/Meitou.ModelViewer/WorldApp.Bench.cs`, `WorldApp.TerrainAb.cs` — existing terrain A/Bs.
+- `tools/Meitou.ModelViewer/BenchSession.cs`, `WorldApp.TerrainAb.cs` — existing terrain A/Bs.
 - `docs/render-terrain.md`, `docs/metal-performance-memory.md` — terrain and Metal performance notes.
 
 Useful research starting points: Apple's "Optimize Metal Performance for Apple silicon", "Modern Rendering with

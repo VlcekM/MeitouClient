@@ -105,8 +105,8 @@ public sealed class ShaderReflection
     public required IReadOnlyList<InterfaceVariable> Outputs { get; init; }
 
     /// <summary>
-    /// Names of blocks and samplers the module declares but never uses: glslang gives them no binding, so they are left out of <see cref="Blocks"/> and
-    /// <see cref="Samplers"/>. GL calls them inactive.
+    /// Names of blocks and samplers the module declares but never uses: glslang gives them no binding, so they are left out of <see cref="Blocks"/>
+    /// and <see cref="Samplers"/>. GL calls them inactive.
     /// </summary>
     public IReadOnlyList<string> Inactive { get; init; } = [];
 

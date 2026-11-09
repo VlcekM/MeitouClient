@@ -26,8 +26,8 @@ public sealed unsafe partial class FoliageRenderer
     /// <summary>
     /// The first index and the index count a draw of <paramref name="part"/> uses.
     /// </summary>
-    uint DrawFirst(GpuPart part) => CardTrim && part.TrimCount > 0 ? (uint)part.Count : 0;
-    uint DrawCount(GpuPart part) => CardTrim && part.TrimCount > 0 ? (uint)part.TrimCount : (uint)part.Count;
+    uint DrawFirst(FoliageGpuPart part) => CardTrim && part.TrimCount > 0 ? (uint)part.Count : 0;
+    uint DrawCount(FoliageGpuPart part) => CardTrim && part.TrimCount > 0 ? (uint)part.TrimCount : (uint)part.Count;
 
     /// <summary>
     /// <see cref="Decode"/>, then the trimming when the mesh is cut out at draw time: FOLIAGE mode (or the leaves mesh) with the diffuse and the

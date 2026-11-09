@@ -77,8 +77,12 @@ sealed class PortraitBar(PlayerInterface player)
     /// <summary>
     /// An ImageBox's <c>ImageRect</c> for atlas cell <paramref name="cell"/>: the part of the cell its portrait fills.
     /// </summary>
-    internal string PortraitRect(int cell) => FormattableString.Invariant(
-        $"{cell % CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell} {cell / CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell} {PortraitSize} {PortraitSize}");
+    internal string PortraitRect(int cell)
+    {
+        int x = cell % CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell;
+        int y = cell / CharacterRenderer.PortraitColumns * CharacterRenderer.PortraitCell;
+        return FormattableString.Invariant($"{x} {y} {PortraitSize} {PortraitSize}");
+    }
 
     /// <summary>
     /// The player's characters posed every frame however far (<see cref="CharacterInstance.FullRateAnimation"/>) into <paramref name="into"/>: the
@@ -195,7 +199,8 @@ sealed class PortraitBar(PlayerInterface player)
         if (members.Count == 0) return;
 
         // The tab's page (the layout's TabItem rectangle inside SquadPanel).
-        var page = new UiRect(panel.X + panel.Width * 0.0183727f, panel.Y + panel.Height * 0.206897f, panel.Width * 0.965879f, panel.Height * 0.737069f);
+        var page = new UiRect(panel.X + panel.Width * 0.0183727f, panel.Y + panel.Height * 0.206897f, panel.Width * 0.965879f,
+            panel.Height * 0.737069f);
         float scale = player.InventoryScale;
         var grid = SquadGrid(page, members.Count, scale);
         if (grid.Maximum > 0)
@@ -264,7 +269,12 @@ sealed class PortraitBar(PlayerInterface player)
             if (BackOverlayName(state) is { Length: > 0 } back)
                 controls.Add(PortraitImage($"portrait-back-overlay-{i}", At(6, 5, 124, 124), "BackOverlay", back) with { Clip = page });
 
-            var portrait = new Dictionary<string, string> { ["ImageTexture"] = PortraitTexture, ["ImageFlipV"] = "true", ["ImageRect"] = PortraitRect(i) };
+            var portrait = new Dictionary<string, string>
+            {
+                ["ImageTexture"] = PortraitTexture,
+                ["ImageFlipV"] = "true",
+                ["ImageRect"] = PortraitRect(i),
+            };
             if ((state & PortraitState.Faded) != 0) portrait["Alpha"] = "0.25";
             controls.Add(new($"portrait-{i}", "ImageBox", At(6, 6, 124, 123), "", "", "", true, portrait, Vector4.Zero, Clip: page));
             if (FrontOverlayName(state) is { Length: > 0 } front)

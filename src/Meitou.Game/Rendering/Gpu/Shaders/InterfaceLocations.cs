@@ -270,7 +270,9 @@ static partial class InterfaceLocations
             }
             SkipWs(m, ref p, semi);
         }
+
         if (isOut is null || typeName is null) return null;
+
         // the vertex stage's `in` and the fragment stage's `out`/`in` handled by the caller's filter; keep all here
         int slots = BaseSlots(typeName);
         if (slots == 0) return null; // interface block or a type we do not know
@@ -294,11 +296,25 @@ static partial class InterfaceLocations
             HasExplicit = explicitLoc is not null,
         };
         st.PrefixEnd = p;
+        if (!ParseDeclarators(st, m, p, semi, slots, typeDims, explicitLoc, consts, stage)) return null;
+        if (st.Declarators.Count > 0) st.PrefixEnd = st.Declarators[0].NameStart;
+
+        // `in vec2 a, b;` prefix for the rebuilt multi-declarations excludes the array dims of the type (they stay in the prefix text)
+        return st;
+    }
+
+    /// <summary>
+    /// The statement's declarators from <paramref name="p"/> to <paramref name="semi"/>, each with its slots and (after an explicit location)
+    /// the location it takes; false when a declarator is not one an interface variable can be.
+    /// </summary>
+    static bool ParseDeclarators(Statement st, string m, int p, int semi, int slots, int typeDims, int? explicitLoc, Dictionary<string, int> consts,
+        string stage)
+    {
         while (p < semi)
         {
             int nameStart = p;
             string? name = Ident(m, ref p, semi);
-            if (name is null) return null;
+            if (name is null) return false;
             int dims = typeDims;
             int suffixStart = p;
             SkipWs(m, ref p, semi);
@@ -307,14 +323,16 @@ static partial class InterfaceLocations
                 dims *= ArraySize(m, ref p, semi, consts, stage);
                 SkipWs(m, ref p, semi);
             }
+
             string suffix = m[suffixStart..p].Trim();
-            if (p < semi && m[p] == '=') return null; // not valid for in/out; leave alone
+            if (p < semi && m[p] == '=') return false; // not valid for in/out; leave alone
             var d = new Declarator { Name = name, Slots = slots * dims, NameStart = nameStart, DeclEnd = p, Suffix = suffix };
             if (explicitLoc is { } e)
             {
                 d.Location = e;
                 explicitLoc = e + d.Slots;
             }
+
             st.Declarators.Add(d);
             if (p < semi && m[p] == ',')
             {
@@ -325,9 +343,8 @@ static partial class InterfaceLocations
 
             break;
         }
-        if (st.Declarators.Count > 0) st.PrefixEnd = st.Declarators[0].NameStart;
-        // `in vec2 a, b;` prefix for the rebuilt multi-declarations excludes the array dims of the type (they stay in the prefix text)
-        return st;
+
+        return true;
     }
 
     static int ArraySize(string m, ref int p, int end, Dictionary<string, int> consts, string stage)

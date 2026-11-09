@@ -211,7 +211,7 @@ sealed partial class GameHost(
 
     #region Renderer services
 
-    internal WorldFrame.Gpu Gpu = null!;
+    internal WorldGpu Gpu = null!;
     internal Rendering.Upscalers.Streamline? Streamline;
     internal Rendering.Upscalers.Ngx? Ngx;
 
@@ -220,7 +220,7 @@ sealed partial class GameHost(
     /// </summary>
     internal bool MetalRenderer = false;   // set by the Metal loop (GameHost.Metal.cs, macOS builds only)
 
-    // Fallback services for a host whose renderers are not in WorldFrame.Gpu yet (the shared title, audio and save code asks through these).
+    // Fallback services for a host whose renderers are not in WorldGpu yet (the shared title, audio and save code asks through these).
     WorldWeather? _fallbackWeather = null;
     WorldObjectRenderer? _hostObjects = null;
     FoliageRenderer? _hostFoliage = null;
@@ -284,7 +284,7 @@ sealed partial class GameHost(
     /// <summary>
     /// The far cadence (docs/simulation.md "Far cadence"): a character far from the camera and from every player character steps once in this many ticks.
     /// </summary>
-    const int FarTickPeriod = 4;
+    internal const int FarTickPeriod = 4;
 
     internal void Boot(VulkanDisplay display, bool interactive)
     {
@@ -431,7 +431,7 @@ sealed partial class GameHost(
     /// <summary>
     /// The game clock with sunrise, sunset and days per year from the CONSTANTS record (defaults without data).
     /// </summary>
-    static GameClock GameClockFor(Data.Gameplay.GameConstants? c, double startHour, long startDay)
+    internal static GameClock GameClockFor(Data.Gameplay.GameConstants? c, double startHour, long startDay)
     {
         if (c is null) return new GameClock(startHour, startDay);
 
@@ -701,7 +701,7 @@ sealed partial class GameHost(
     /// The callbacks the interface asks the host for: the game data, the map, the build services, the tooltips and the character editor. Shared by the Vulkan
     /// and Metal loops so the two expose the same interaction layer.
     /// </summary>
-    void ConfigurePlayerInterface(PlayerInterface ui)
+    internal void ConfigurePlayerInterface(PlayerInterface ui)
     {
         Modding.ConnectModUi(ui);
         ConnectSaves(ui);
@@ -1118,7 +1118,7 @@ sealed partial class GameHost(
     internal void DrawWorld(int width, int height)
     {
         SyncPreviewLook();
-        if (!Player.CharacterEditor.EditorOpen) CharacterEditor.ClearEditorBar();
+        if (!Player.CharacterEditor.EditorOpen) CharacterEditor.Bar.ClearEditorBar();
 
         if (TitleScreen.TitleVisible)
         {
@@ -1127,7 +1127,7 @@ sealed partial class GameHost(
         }
         if (Player.CharacterEditor.EditorOpen)
         {
-            CharacterEditor.DrawEditorScene(width, height);
+            CharacterEditor.Bar.DrawEditorScene(width, height);
             return;
         }
 

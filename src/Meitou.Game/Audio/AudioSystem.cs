@@ -171,7 +171,8 @@ public sealed class AudioSystem : IDisposable
     /// <paramref name="hour"/> the game hour against <paramref name="sunrise"/> and <paramref name="sunset"/>, <paramref name="eyeAboveGround"/> the
     /// eye's height over the ground under it and <paramref name="realSeconds"/> the real time since the last call.
     /// </summary>
-    public void Update(WeatherRegion? region, WeatherState? weather, double hour, double sunrise, double sunset, float eyeAboveGround, double realSeconds)
+    public void Update(WeatherRegion? region, WeatherState? weather, double hour, double sunrise, double sunset, float eyeAboveGround,
+        double realSeconds)
     {
         Ambience.Update(new AmbienceInput
         {

@@ -3,7 +3,6 @@ using System.Numerics;
 using Meitou.Content;
 using Meitou.Data;
 using Meitou.Data.Ogre;
-using Meitou.Data.Textures;
 using Meitou.Data.World;
 
 using Meitou.Game.Rendering.Frame;
@@ -21,7 +20,11 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 public readonly record struct SkyColours(Vector3 Sun, Vector3 Zenith, Vector3 Horizon, Vector3 SunColour, float Twilight)
 {
-    static float Smooth(float a, float b, float x) { float t = Math.Clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
+    static float Smooth(float a, float b, float x)
+    {
+        float t = Math.Clamp((x - a) / (b - a), 0, 1);
+        return t * t * (3 - 2 * t);
+    }
 
     public static SkyColours For(Vector3 sun)
     {
@@ -55,17 +58,17 @@ public readonly record struct SkyColours(Vector3 Sun, Vector3 Zenith, Vector3 Ho
 /// composite (<see cref="MinLuminance"/>, <see cref="MaxLuminance"/>). Simple mode is the old colour model. A shader that wants any of it includes
 /// <see cref="AtmosphereShaders.Functions"/> and gets its uniforms from <see cref="Apply"/>.
 /// </summary>
-public sealed unsafe partial class SkyRenderer : IDisposable
+public sealed unsafe class SkyRenderer : IDisposable
 {
     #region Fields
 
     // Native programs (docs/renderer-native.md 7.1, wave 3 agent D): the same SPIR-V as the GL programs they replace.
     readonly SkyProg _simple, _sky;
-    // Native textures with the GL sampler state their GL versions had (phase 8 stage 2); null when the file was not found.
-    SampledImage? _starsTexture, _cloudsTexture, _cloudsNormalTexture, _cloudsTileTexture, _cloudsSmooth, _cloudsTileSmooth, _irradianceCube,
-        _specularCube, _ambientMap;
-    // The game's two planets' textures (SkyPlanet.All order); null when the file was not found.
-    readonly SampledImage?[] _planetTextures = new SampledImage?[SkyPlanet.All.Length];
+
+    /// <summary>
+    /// The sky's textures and the game's lighting textures.
+    /// </summary>
+    readonly SkyTextures _textures;
     readonly PassTimer _skyTimer;
     readonly List<double> _gpuSamples = [];
     double _gpuTotal;
@@ -94,12 +97,6 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// The night ambient's multiple of the game's at <see cref="NightAmbientStrength"/> 1.
     /// </summary>
     public const float NightAmbientBase = 1.2f;
-
-    /// <summary>
-    /// The planet's light counts as light for the shadows when its luminance is above this share of the reference sun light (a new planet casts
-    /// nothing worth drawing).
-    /// </summary>
-    const float PlanetLitFloor = 1e-4f;
 
     /// <summary>
     /// The viewer's height band (its own choice; no game behaviour exists up there) over which the game's haze, which measures from SkyX's fixed eye
@@ -557,13 +554,14 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// </summary>
     public float HazeDistance { get; set; } = Meitou.Data.World.KenshiHaze.FarDistance(Meitou.Data.World.KenshiHaze.ViewDistanceSetting);
     /// <summary>
-    /// The viewer's haze strength (not the game's; 1 = the game's haze): scales how far the atmosphere haze is blended in (the game's ramp, or the
-    /// physical haze's amount), not the weather's fog.
-    /// </summary>
-    /// <summary>
     /// The Meitou haze switch: the haze at <see cref="HazeStrength"/>; Faithful is the game's (1).
     /// </summary>
     public bool MeitouHaze { get; set; } = true;
+
+    /// <summary>
+    /// The viewer's haze strength (not the game's; 1 = the game's haze): scales how far the atmosphere haze is blended in (the game's ramp, or the
+    /// physical haze's amount), not the weather's fog.
+    /// </summary>
     public float HazeStrength { get; set; } = Enhancements.MeitouHazeStrength;
     /// <summary>
     /// The Meitou <c>night</c> switch, "night air" (viewer, not the game's; docs/formats/sky.md "Night air"): the game's haze colour is SkyX's sunlit
@@ -616,9 +614,9 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         0) * (1 + (NightAmbientBase * MathF.Max(NightAmbientStrength, 0) - 1) * (1 - Math.Clamp(sunY * 5, 0, 1)));
 
     /// <summary>
-    /// The planet's mean colour (<see cref="Meitou.Data.World.Planetshine.MeanAlbedo(Meitou.Data.Textures.DdsFile)"/>), read when the texture loads.
+    /// The planet's mean colour (<see cref="SkyTextures.PlanetAlbedo"/>), read when the texture loads.
     /// </summary>
-    public Vector3 PlanetAlbedo { get; private set; } = new(Meitou.Data.World.Planetshine.FallbackAlbedo);
+    public Vector3 PlanetAlbedo => _textures.PlanetAlbedo;
 
     /// <summary>
     /// The sun height the shadow pass tests against its cut-off (<see cref="ShadowPass.MinSunHeight"/>): the real sun's, but while the planet is
@@ -729,7 +727,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     {
         if (VolumeShadows)
             return new Vector4(MeitouClouds.ShadowAt(_state.Sun.Y) * FogScale, CloudDensity, CloudHeight, 1);
-        bool on = CloudShadows && Physical && _cloudsSmooth is not null && _cloudsTileSmooth is not null && CloudDensity > 0;
+        bool on = CloudShadows && Physical && _textures.CloudsSmooth is not null && _textures.CloudsTileSmooth is not null && CloudDensity > 0;
         float strength = on ? MeitouClouds.ShadowAt(_state.Sun.Y) * FogScale : 0;
         return new Vector4(strength, CloudLayer.DensityOffset(CloudDensity), MeitouClouds.PlaneHeight, 0);
     }
@@ -797,7 +795,11 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// </summary>
     public void SetFlightHeight(float height)
     {
-        if (!float.IsFinite(height)) { WeatherFogScale = 1; return; }
+        if (!float.IsFinite(height))
+        {
+            WeatherFogScale = 1;
+            return;
+        }
         float t = Math.Clamp((KenshiCamera.FlightHeight - height) / FlightFogFade, 0, 1);
         WeatherFogScale = t * t * (3 - 2 * t);
     }
@@ -836,17 +838,13 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// CPU time of the last <see cref="Prepare"/> in ms.
     /// </summary>
     public double PrepareMs { get; private set; }
+
     /// <summary>
     /// Which of the game's lighting textures were found (irradiance cube, specular cube, ambient map).
     /// </summary>
-    public string LightingTextures => $"irradiance {YesNo(_irradianceCube)}, specularity {YesNo(_specularCube)}, ambient map {YesNo(_ambientMap)}";
+    public string LightingTextures => _textures.LightingTextures;
 
-    /// <summary>
-    /// "yes" or "no", for the texture report: whether the texture was found.
-    /// </summary>
-    static string YesNo(object? found) => found is not null ? "yes" : "no";
-
-    struct State
+    internal struct State
     {
         public Vector3 Sun, SunLight, LightDirection, CloudSun, CloudZenith;   // the last two: sunColour.rgb and zenithLight of the cloud pass
         public Vector3 CloudKey, CloudKeyDirection, CloudAmbient;   // the Meitou clouds' key light (colour, direction) and ambient (MeitouClouds)
@@ -859,71 +857,17 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     public SkyRenderer(IGpuContext gpu, AssetLocator? assets = null)
     {
         Gpu = gpu;
+        _textures = new SkyTextures(gpu);
+        Clouds = new SkyClouds(gpu);
         _simple = new SkyProg(gpu, Vertex, SimpleFragment, "sky simple");
         _sky = new SkyProg(gpu, Vertex, SkyFragment, "sky");
         _skyTimer = new PassTimer(gpu);
         // MEITOU_FORCE_INTEGRATED=1 (VulkanDevice.IsIntegrated) shows the integrated GPU's star layers on any card.
         if (gpu.IsIntegrated) StarLayers = StarField.IntegratedLayers;
-        if (assets is not null)
-        {
-            LoadTextures(assets);
-            string starfield = YesNo(_starsTexture);
-            string planets = string.Join(" ", SkyPlanet.All.Select((p, i) => $"{p.Material} {YesNo(_planetTextures[i])}"));
-            string clouds = YesNo(_cloudsTexture);
-            Console.WriteLine($"sky       textures: starfield {starfield}, planets {planets}, clouds {clouds}");
-        }
+        if (assets is not null) _textures.Load(assets);
         Active = this;
         PublishGlobals();
         ShadowsOffGlobals.Publish(gpu);
-    }
-
-    void LoadTextures(AssetLocator assets)
-    {
-        try
-        {
-            // The whole 4096² file (BC1, 13 levels), repeating: the dome's coordinates wrap as the starfield shifts. The game samples its top level
-            // only (`filtering linear linear none`); the viewer filters trilinearly, which takes the top level at the game's screen sizes and keeps a
-            // smaller view from sparkling.
-            if (assets.Find("SkyX_Starfield.dds") is { } stars) _starsTexture = SampledImage.FromDds(Gpu, DdsReader.ReadFile(stars), repeat: true,
-                    "sky stars");
-            for (int i = 0; i < SkyPlanet.All.Length; i++)
-                if (assets.Find(SkyPlanet.All[i].Texture) is { } planet)
-                {
-                    var dds = DdsReader.ReadFile(planet);
-                    _planetTextures[i] = SampledImage.FromDds(Gpu, dds, repeat: true, $"sky planet {SkyPlanet.All[i].Material}");
-                    // The planetshine's colour, from a low level of the map.
-                    if (i == 0) PlanetAlbedo = Meitou.Data.World.Planetshine.MeanAlbedo(dds);
-                }
-            if (assets.Find("Clouds.dds") is { } clouds)
-            {
-                var img = TextureLoader.LoadFile(clouds, allMips: false).Levels[0];
-                _cloudsTexture = SampledImage.Rgba8(Gpu, img, repeat: true, mipmaps: true, "sky clouds");
-                _cloudsSmooth = SampledImage.Rgba8(Gpu,
-                    new RgbaImage(img.Width, img.Height, MeitouClouds.SmoothRed(img.Pixels, img.Width, img.Height)), repeat: true,
-                    mipmaps: true, "sky clouds smooth");
-            }
-            if (assets.Find("CloudsNormal.dds") is { } cloudsNormal)
-            {
-                var img = TextureLoader.LoadFile(cloudsNormal, allMips: false).Levels[0];
-                _cloudsNormalTexture = SampledImage.Rgba8(Gpu, img, repeat: true, mipmaps: true, "sky clouds normal");
-            }
-            if (assets.Find("CloudsTile.dds") is { } cloudsTile)
-            {
-                var img = TextureLoader.LoadFile(cloudsTile, allMips: false).Levels[0];
-                _cloudsTileTexture = SampledImage.Rgba8(Gpu, img, repeat: true, mipmaps: true, "sky clouds tile");
-                _cloudsTileSmooth = SampledImage.Rgba8(Gpu,
-                    new RgbaImage(img.Width, img.Height, MeitouClouds.SmoothRed(img.Pixels, img.Width, img.Height)), repeat: true,
-                    mipmaps: true, "sky clouds tile smooth");
-            }
-            if (assets.Find("mp_irradiance.dds") is { } irradiance) _irradianceCube = SampledImage.Cube(Gpu, DdsReader.ReadFile(irradiance),
-                    "sky irradiance");
-            if (assets.Find("mp_specularity.dds") is { } specularity) _specularCube = SampledImage.Cube(Gpu, DdsReader.ReadFile(specularity),
-                    "sky specularity");
-        }
-        catch (Exception e) when (e is DdsFormatException or IOException or InvalidOperationException)
-        {
-            Console.WriteLine($"warning   sky textures: {e.Message}");
-        }
     }
 
     /// <summary>
@@ -933,17 +877,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     public void LoadWorld(GameInstall install, GameDatabase db)
     {
         Exposure = ExposureConstants.FromDatabase(db);
-        try
-        {
-            var biomes = TextureLoader.LoadImage(File.ReadAllBytes(Path.Combine(install.DataDirectory, TerrainMaps.BiomeMap)));
-            var map = AmbientMap.Build(db, biomes);
-            _ambientMap?.Dispose();
-            _ambientMap = SampledImage.Rgba8(Gpu, map, repeat: false, mipmaps: false, "sky ambient map");
-        }
-        catch (Exception e) when (e is IOException or InvalidOperationException or InvalidDataException)
-        {
-            Console.WriteLine($"warning   ambient map: {e.Message}");
-        }
+        _textures.LoadAmbientMap(install, db);
         Console.WriteLine(
             $"lighting  {LightingTextures}; exposure band {Exposure.Min:0.##}..{Exposure.Max:0.##}, night darkness {Exposure.NightDarkness:0.##}");
     }
@@ -1026,8 +960,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         // would raise the night ambient fivefold. The ambient sliders scale it.
         float env = KenshiLighting.EnvironmentFactor(lightDir) * AmbientFor(sun.Y);
         float reference = Meitou.Data.World.Planetshine.Luminance(KenshiLighting.SunLight(Vector3.UnitY));
-        var planet = ApplyPlanetshine(sun, lightDir, sunLight, reference);
-        var night = NightAirAt(sun, reference);
+        var planet = SkyNightLight.ApplyPlanetshine(Planetshine, PlanetAlbedo, PlanetshineStrength, sun, lightDir, sunLight, reference);
+        var night = SkyNightLight.NightAirAt(NightAir, PlanetAlbedo, PlanetshineStrength, sun, reference);
         var (cloudKeyDirection, cloudKey) = MeitouClouds.Key(sun, SkyPlanet.All[0].Towards, planet.CloudPlanet);
         var tint = Vector3.One;   // the game tints only the cloud light (zenithLight, below), never the skydome (docs/formats/sky.md)
         var zenith = SkyXModel.Colour(Vector3.UnitY, sun) * tint;
@@ -1062,49 +996,6 @@ public sealed unsafe partial class SkyRenderer : IDisposable
             Valid = true,
             Night = night,
         };
-    }
-
-    /// <summary>
-    /// Meitou planetshine (docs/formats/sky.md "Planetshine"): from the end of the sun's light the planet is the light, its colour in the sun light's
-    /// own unit (the sun at the zenith, undimmed by the air in between, is the reference), added to the sun's, the direction weighted by their
-    /// brightness. What the water's glint is lit by (WorldLighting.GlintDirection / GlintColour): the sun's own radiance and the planet disc's
-    /// radiance as the sky pass draws it (unboosted: the strength-scaled light below is an irradiance made 60 times brighter than the disc, which
-    /// blew the glint out). Left default (the sun's) by day.
-    /// </summary>
-    (Vector3 LightDirection, Vector3 SunLight, Vector3 CloudPlanet, bool PlanetLit, Vector3 GlintDirection, Vector3 GlintColour) ApplyPlanetshine(
-        Vector3 sun, Vector3 lightDir, Vector3 sunLight, float reference)
-    {
-        bool planetLit = false;
-        var cloudPlanet = Vector3.Zero;   // the planet's light the Meitou clouds take (MeitouClouds.Key), with the planetshine
-        Vector3 glintDirection = default, glintColour = default;
-        if (Planetshine && Meitou.Data.World.Planetshine.Weight(sun.Y) is var weight and > 0)
-        {
-            var planetLight = Meitou.Data.World.Planetshine.Light(sun, SkyPlanet.All[0], PlanetAlbedo, reference, PlanetshineStrength) * weight;
-            cloudPlanet = planetLight;
-            var disc = Meitou.Data.World.Planetshine.DiscRadiance(sun, SkyPlanet.All[0], PlanetAlbedo) * weight;
-            var sunRadiance = sunLight * (MathF.PI * (1 - KenshiLighting.DielectricSpecular));
-            (glintDirection, glintColour) = Meitou.Data.World.Planetshine.Combine(lightDir, sunRadiance, SkyPlanet.All[0].Towards, disc);
-
-            (lightDir, sunLight) = Meitou.Data.World.Planetshine.Combine(lightDir, sunLight, SkyPlanet.All[0].Towards, planetLight);
-            planetLit = Meitou.Data.World.Planetshine.Luminance(planetLight) > PlanetLitFloor * reference;
-        }
-        return (lightDir, sunLight, cloudPlanet, planetLit, glintDirection, glintColour);
-    }
-
-    /// <summary>
-    /// Meitou night air (docs/formats/sky.md "Night air"): the colour at full night from the airglow and the planet's light (the strength-scaled one,
-    /// whatever the planetshine switch says), and its weight by the sun's height; the shaders add it to the haze's colour and to the sky's.
-    /// </summary>
-    Vector4 NightAirAt(Vector3 sun, float reference)
-    {
-        var night = Vector4.Zero;
-        if (NightAir && Meitou.Data.World.NightAir.Weight(sun.Y) is var airWeight and > 0)
-        {
-            var planetLight = Meitou.Data.World.Planetshine.Light(sun, SkyPlanet.All[0], PlanetAlbedo, reference, PlanetshineStrength);
-            var air = Meitou.Data.World.NightAir.Colour(planetLight);
-            night = new Vector4(air, airWeight);
-        }
-        return night;
     }
 
     #endregion
@@ -1202,8 +1093,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
             new Vector4(KenshiHaze ? 1f : 0f, hazeStart, hazeEnd, fogWeight > 0 && fogDistance > 1 ? 1f / fogDistance : 0f),
             new Vector4(cloud.X, cloud.Y, cloud.Z, pull),
             new Vector4(KenshiHaze ? AltitudeWeight : 1f, MathF.Max(MeitouHaze ? HazeStrength : 1, 0), AltitudeWeight, 0),
-            new Vector4(_irradianceCube is not null ? 1f : 0f, _specularCube is not null ? 1f : 0f,
-                _ambientMap is not null ? 1f + (Planetshine ? NightAmbientFloor * (1 - Math.Clamp(s.Sun.Y * 5, 0, 1)) : 0f) : 0f,
+            new Vector4(_textures.Irradiance is not null ? 1f : 0f, _textures.Specular is not null ? 1f : 0f,
+                _textures.Ambient is not null ? 1f + (Planetshine ? NightAmbientFloor * (1 - Math.Clamp(s.Sun.Y * 5, 0, 1)) : 0f) : 0f,
                         AmbientMap.HalfWorld),
             s.Night);
     }
@@ -1218,9 +1109,9 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     {
         var g = Gpu.Globals;
         bool Valid() => _state.Valid;
-        g.Publish("uAtmoIrradiance", () => _state.Valid && _irradianceCube is { } t ? t.Sampled() : default);
-        g.Publish("uAtmoSpecular", () => _state.Valid && _specularCube is { } t ? t.Sampled() : default);
-        g.Publish("uAtmoAmbientMap", () => _state.Valid && _ambientMap is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoIrradiance", () => _state.Valid && _textures.Irradiance is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoSpecular", () => _state.Valid && _textures.Specular is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoAmbientMap", () => _state.Valid && _textures.Ambient is { } t ? t.Sampled() : default);
         g.PublishUniform("uAtmoTau", () => Published().Tau, Valid);
         g.PublishUniform("uAtmoParams", () => Published().Params, Valid);
         g.PublishUniform("uAtmoSun", () => Published().Sun, Valid);
@@ -1241,11 +1132,11 @@ public sealed unsafe partial class SkyRenderer : IDisposable
             {
                 var w = CloudLayer.TextureShift(_cloudOffset);
                 return VolumeShadows
-                    ? new Vector4(_volume!.ShadowOrigin.X, _volume.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, 0)
+                    ? new Vector4(Clouds.ShadowOrigin.X, Clouds.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, 0)
                     : new Vector4(w.X, w.Y, 0, 0);
             }, Valid);
-        g.Publish("uAtmoClouds", () => VolumeShadows ? _volume!.ShadowMap : _state.Valid && _cloudsSmooth is { } t ? t.Sampled() : default);
-        g.Publish("uAtmoCloudsTile", () => _state.Valid && _cloudsTileSmooth is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoClouds", () => VolumeShadows ? Clouds.ShadowMap : _state.Valid && _textures.CloudsSmooth is { } t ? t.Sampled() : default);
+        g.Publish("uAtmoCloudsTile", () => _state.Valid && _textures.CloudsTileSmooth is { } t ? t.Sampled() : default);
     }
 
     AtmosphereUniforms Published()
@@ -1310,81 +1201,19 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         Gpu.EndGuest(cmd);
     }
 
+    /// <summary>
+    /// The physical sky's own uniforms: the stars, the planets and the clouds, then which textures it has and the textures themselves.
+    /// </summary>
     void SetSkyUniforms(SkyProg program)
     {
         float coverage = CloudDensity;
-        SetStarUniforms(program, coverage);
-        SetPlanetUniforms(program);
-        SetCloudUniforms(program, coverage);
+        program.SetStars(MeitouStars, _state.Sun.Y, StarLayers, StarSeconds, StarGain);
+        program.SetCelestialAxes(Clock, Day, Hour);
+        program.SetExtra(PlanetFill, coverage, StarHours);
+        program.SetPlanets(Day, Hour, PlanetTurn);
+        program.SetClouds(in _state, coverage, CloudLayer.TextureShift(_cloudOffset), LitClouds, !Clouds.VolumeImage.IsNull, Eye);
+        _textures.SetPresence(program);
         BindSkyTextures(program);
-    }
-
-    /// <summary>
-    /// The Meitou stars, the celestial axes and the extra row (planet fill, coverage, the star field's shift).
-    /// </summary>
-    void SetStarUniforms(SkyProg program, float coverage)
-    {
-        var p = program.P;
-        // The Meitou stars: nothing to draw once the sun is high (SkyX's night factor is 0 by day; the game's texture is not drawn then either), so
-        // the pass skips them.
-        bool meitou = MeitouStars;
-        bool night = meitou && _state.Sun.Y < 0.3f;
-        p.Set(program.StarsMeitou, meitou ? (night ? 1 : -1) : 0, StarLayers, StarSeconds, StarGain);
-        // Staging the title's sun must not turn the stars, which stay continuous into the loading sky.
-        var frame = CelestialSphere.Frame(Clock with { SunTurn = 0 }, Day, Hour);
-        p.Set(program.CelX, frame.X.X, frame.X.Y, frame.X.Z, 0);
-        p.Set(program.CelY, frame.Y.X, frame.Y.Y, frame.Y.Z, 0);
-        p.Set(program.CelZ, frame.Z.X, frame.Z.Y, frame.Z.Z, 0);
-        p.Set(program.Extra, PlanetFill, coverage, Starfield.Shift(StarHours), 0);
-    }
-
-    /// <summary>
-    /// The two planets' directions and sizes, and their spin.
-    /// </summary>
-    void SetPlanetUniforms(SkyProg program)
-    {
-        var p = program.P;
-        // The planets: fixed directions and sizes, each turned by the game's day and hour.
-        Span<float> spin = stackalloc float[4];
-        for (int i = 0; i < 2; i++)
-        {
-            var planet = SkyPlanet.All[i];
-            var towards = Vector3.Transform(planet.Towards, PlanetTurn);
-            p.Set(program.Planet[i], towards.X, towards.Y, towards.Z, planet.SinRadius);
-            float a = planet.Spin(Day, Hour);
-            (spin[2 * i], spin[2 * i + 1]) = (MathF.Cos(a), MathF.Sin(a));
-        }
-        p.Set(program.PlanetSpin, spin[0], spin[1], spin[2], spin[3]);
-    }
-
-    /// <summary>
-    /// The cloud pass's light and offsets, the Meitou clouds' key and ambient, and which textures the shader has.
-    /// </summary>
-    void SetCloudUniforms(SkyProg program, float coverage)
-    {
-        var p = program.P;
-        var s = _state;
-        // The cloud pass: zenithLight and Darkness, sunColour.rgb and DensityOffset, the wind offset's texture shift.
-        var zenith = s.CloudZenith;
-        p.Set(program.CloudLight, zenith.X, zenith.Y, zenith.Z, CloudLayer.Darkness(coverage));
-        p.Set(program.CloudSun, s.CloudSun.X, s.CloudSun.Y, s.CloudSun.Z, CloudLayer.DensityOffset(coverage));
-        var shift = CloudLayer.TextureShift(_cloudOffset);
-        p.Set(program.CloudWind, shift.X, shift.Y, 0, 0);
-        var key = s.CloudKey;
-        var keyDir = s.CloudKeyDirection;
-        var ambient = s.CloudAmbient;
-        // The Meitou clouds are anchored to the world (the eye's parallax, MeitouClouds.Parallax), so the cloud overhead is the one whose shadow
-        // falls here; the game's follow the eye.
-        var (parallaxScale, parallaxOffset) = LitClouds ? MeitouClouds.Parallax(Eye.X, Eye.Y, Eye.Z) : (1f, Vector2.Zero);
-        p.Set(program.CloudMeitou, LitClouds ? (_volumeImage.IsNull ? 1 : 2) : 0, parallaxScale, parallaxOffset.X, parallaxOffset.Y);
-        p.Set(program.CloudKey, key.X, key.Y, key.Z, 0);
-        p.Set(program.CloudKeyDir, keyDir.X, keyDir.Y, keyDir.Z, 0);
-        p.Set(program.CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
-        bool clouds = _cloudsTexture is not null && _cloudsNormalTexture is not null && _cloudsTileTexture is not null;
-        float stars = _starsTexture is not null ? 1f : 0f;
-        float planet0 = _planetTextures[0] is not null ? 1f : 0f, planet1 = _planetTextures[1] is not null ? 1f : 0f;
-        p.Set(program.Has, stars, planet0, clouds ? 1f : 0f, planet1);
-
     }
 
     /// <summary>
@@ -1393,16 +1222,82 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     void BindSkyTextures(SkyProg program)
     {
         var p = program.P;
-        // A missing texture reads GL's stand-in, which an unbound sampler does too.
-        if (_starsTexture is not null) p.Bind(program.Stars, _starsTexture.Sampled());
-        if (_planetTextures[0] is { } planet0) p.Bind(program.Planet0, planet0.Sampled());
-        if (_planetTextures[1] is { } planet1) p.Bind(program.Planet1, planet1.Sampled());
-        if (_cloudsTexture is not null) p.Bind(program.Clouds, _cloudsTexture.Sampled());
-        if (_cloudsNormalTexture is not null) p.Bind(program.CloudsNormal, _cloudsNormalTexture.Sampled());
-        if (_cloudsTileTexture is not null) p.Bind(program.CloudsTile, _cloudsTileTexture.Sampled());
-        if (_cloudsSmooth is not null) p.Bind(program.CloudsSmooth, _cloudsSmooth.Sampled());
-        if (_cloudsTileSmooth is not null) p.Bind(program.CloudsTileSmooth, _cloudsTileSmooth.Sampled());
-        if (!_volumeImage.IsNull) p.Bind(program.VolumeImage, _volumeImage);
+        _textures.Bind(program);
+        if (!Clouds.VolumeImage.IsNull) p.Bind(program.VolumeImage, Clouds.VolumeImage);
+    }
+
+    #endregion
+
+    #region Clouds
+
+    /// <summary>
+    /// The Meitou volumetric clouds (docs/render-clouds.md): the volume, its images and the frame's skip switches.
+    /// </summary>
+    public SkyClouds Clouds { get; }
+
+    /// <summary>
+    /// Whether the volume is drawn this frame: the Meitou clouds on the game's sky with a state, and clouds to show (or the warm-up).
+    /// </summary>
+    bool VolumeEnabled => LitClouds && Physical && _state.Valid && (CloudDensity > 0 || Clouds.Warm);
+
+    /// <summary>
+    /// Whether the land is shaded by the volume's shadow map this frame (else by the flat layer's, or not at all).
+    /// </summary>
+    bool VolumeShadows => VolumeEnabled && CloudShadows && Clouds.ShadowsReady;
+
+    /// <summary>
+    /// The cloud slab of this frame: the base height, the density and the wind's texture shift.
+    /// </summary>
+    CloudSlab Slab() => new(CloudHeight, CloudDensity, CloudLayer.TextureShift(_cloudOffset));
+
+    /// <summary>
+    /// Records the volume's sun-transmission map before any world or reflection pass.
+    /// </summary>
+    public void PrepareCloudShadows()
+    {
+        Clouds.DropShadows();
+        if (!VolumeEnabled || !CloudShadows || _state.Sun.Y <= 0.03f && !Clouds.Warm) return;
+        Clouds.RenderShadow(Eye, Slab(), _state.Sun);
+    }
+
+    /// <summary>
+    /// True when the sky pass's weather fog (the game's fog over pixels with no geometry: the ease-in-out curve of the far clip over the fog
+    /// distance, times the weather's weight) is at least <see cref="FogComplete"/>, as in <see cref="FogCullDistanceOf"/>: the sky then shows the fog
+    /// colour to 0.0002 whatever is drawn under it, clouds included. The sky shader applies that term after the clouds in either view, so it holds
+    /// for both.
+    /// </summary>
+    public static bool WeatherFogHidesSky(in AtmosphereUniforms u)
+    {
+        if (!(u.Fog.Z > 0) || !(u.Haze.W > 0)) return false;
+        float amount = Math.Clamp(u.Fog.W * u.Haze.W, 0f, 1f);
+        float curve = (amount < 0.5f ? 2f * amount * amount : 1f - 2f * (amount - 1f) * (amount - 1f)) * u.Fog.Z;
+        return curve >= FogComplete;
+    }
+
+    /// <summary>
+    /// Ray marches and filters this view's clouds before opening its scene host. <paramref name="fogVolumes"/>: the fog volume pass will run over
+    /// this view's finished sky (the main view with volumes in view), so texels it hides completely need no march.
+    /// </summary>
+    public void PrepareClouds(Matrix4x4 viewProjection, int width, int height, Vector3 eye, bool reflection = false, bool fogVolumes = false)
+    {
+        Clouds.BeginView(reflection);
+        // Made with the first frame that could show it (under the loading cover), not when the weather first brings clouds: its noise atlas and three
+        // programs held that frame ~30 ms (docs/bench.md "Play benchmark").
+        if (LitClouds && Physical && _state.Valid) Clouds.EnsureVolume();
+        if (!VolumeEnabled)
+        {
+            Clouds.Invalidate();
+            return;
+        }
+
+        if (Clouds.CloudFogSkip && !Clouds.Warm && WeatherFogHidesSky(Uniforms()))
+        {
+            // The sky shader falls back to the flat layer, which the same fog covers; the history starts again when the fog thins.
+            Clouds.FogCovers(reflection);
+            return;
+        }
+
+        Clouds.Render(in _state, viewProjection, eye, width, height, Slab(), reflection, fogVolumes);
     }
 
     #endregion
@@ -1423,22 +1318,17 @@ public sealed unsafe partial class SkyRenderer : IDisposable
             if (ms <= 0 || ms >= 1000) continue;
             _gpuTotal += ms;
             _gpuCount++;
-            if (_gpuCount > 120) { _gpuTotal *= 0.5; _gpuCount /= 2; }
+            if (_gpuCount > 120)
+            {
+                _gpuTotal *= 0.5;
+                _gpuCount /= 2;
+            }
         }
     }
 
     public string DescribeCost() =>
-        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)" + CloudCostText()
+        Physical ? $"CPU {PrepareMs:0.00} ms (last prepare); GPU sky pass {GpuMs:0.00} ms/frame (SkyX per pixel)" + Clouds.CostText(VolumeEnabled)
                  : $"simple sky: GPU {GpuMs:0.00} ms/frame";
-
-    /// <summary>
-    /// The cloud part of <see cref="DescribeCost"/>: the sky's skip, the fog's, or the clouds' GPU times.
-    /// </summary>
-    string CloudCostText() =>
-        SkySkipped ? "; sky and clouds not drawn (a fog block hides the sky)"
-        : _volume is null || !VolumeEnabled ? ""
-        : CloudsFogged ? $"; clouds not marched (the weather fog covers the sky), shadow map {_volume.ShadowGpuMs:0.00} ms"
-        : $"; GPU clouds {_volume.MainGpuMs:0.00}, reflection {_volume.ReflectionGpuMs:0.00}, shadow map {_volume.ShadowGpuMs:0.00} ms";
 
     /// <summary>
     /// Mean GPU time of a sky pass over the last hundred or so (a running mean, halved now and then).
@@ -1448,287 +1338,11 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     public void Dispose()
     {
         if (Active == this) Active = null;
-        var textures = new[]
-        {
-            _starsTexture, _cloudsTexture, _cloudsNormalTexture, _cloudsTileTexture, _cloudsSmooth, _cloudsTileSmooth, _irradianceCube,
-            _specularCube, _ambientMap,
-        };
-        foreach (var t in textures) t?.Dispose();
-        foreach (var t in _planetTextures) t?.Dispose();
-        _volumeShadowsReady = false;
-        _volume?.Dispose();
-        _volume = null;
+        _textures.Dispose();
+        Clouds.Dispose();
         _simple.Dispose();
         _sky.Dispose();
     }
 
     #endregion
-}
-
-/// <summary>
-/// The handles of the sky colour uniforms of <see cref="SkyRenderer.SkyFunctions"/> in a native program, resolved once.
-/// </summary>
-public readonly record struct SkyColourHandles(UniformHandle Sun, UniformHandle Zenith, UniformHandle Horizon, UniformHandle SunColour,
-    UniformHandle Twilight)
-{
-    public static SkyColourHandles Resolve(LegacyProgram p) =>
-        new(p.Uniform("uSkySun"), p.Uniform("uSkyZenith"), p.Uniform("uSkyHorizon"), p.Uniform("uSkySunColour"), p.Uniform("uSkyTwilight"));
-
-    /// <summary>
-    /// What the GL <c>SetUniforms</c> set on a program; the atmosphere's uniforms come from <see cref="LegacyProgram.ApplyGlobals"/>.
-    /// </summary>
-    public void Set(LegacyProgram p, SkyColours c)
-    {
-        p.Set(Sun, c.Sun.X, c.Sun.Y, c.Sun.Z);
-        p.Set(Zenith, c.Zenith.X, c.Zenith.Y, c.Zenith.Z);
-        p.Set(Horizon, c.Horizon.X, c.Horizon.Y, c.Horizon.Z);
-        p.Set(SunColour, c.SunColour.X, c.SunColour.Y, c.SunColour.Z);
-        p.Set(Twilight, c.Twilight);
-    }
-}
-
-/// <summary>
-/// The pipelines of one native program's draws (docs/renderer-native.md 7.5): remembers the last two segment states (the scene's pass and the
-/// reflection's multisampled one alternate) and the vertex export they were made for, so a draw compares a few fields instead of building a pipeline
-/// description.
-/// </summary>
-internal sealed class NativeSegment(IGpuContext gpu, LegacyProgram program, PrimitiveType topology, string label)
-{
-    readonly record struct Key(AttachmentFormats Formats, BlendState Blend, ColorMask Mask, PolygonKind Polygon,
-        bool AlphaToCoverage, bool DepthClamp);
-
-    Key _key0, _key1;
-    GpuPipeline? _pipeline0, _pipeline1;
-    VertexArrayBindings? _source0, _source1;
-
-    /// <summary>
-    /// The pipeline for <paramref name="state"/> into <paramref name="formats"/>, with the vertex inputs of <paramref name="vertices"/> (null: none).
-    /// </summary>
-    public GpuPipeline Get(DrawState state, AttachmentFormats formats, VertexArrayBindings? vertices)
-    {
-        var key = new Key(formats, state.Blend, state.ColourMask, state.Polygon, state.AlphaToCoverage, state.DepthClamp);
-        if (_pipeline0 is not null && key == _key0 && ReferenceEquals(vertices, _source0)) return _pipeline0!.Value;
-        if (_pipeline1 is not null && key == _key1 && ReferenceEquals(vertices, _source1)) return _pipeline1!.Value;
-        var layout = program.VertexLayout(vertices is null ? default : vertices.Attributes);
-        var made = gpu.Pipelines.Get(state.Pipeline(program.Program, layout, topology, formats, label));
-        (_key1, _pipeline1, _source1) = (_key0, _pipeline0, _source0);
-        (_key0, _pipeline0, _source0) = (key, made, vertices);
-        return made;
-    }
-}
-
-/// <summary>
-/// A native sky program with its handles resolved at load.
-/// </summary>
-sealed class SkyProg : IDisposable
-{
-    public readonly LegacyProgram P;
-    public readonly NativeSegment Segment;
-    public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, CloudMeitou, CloudKey, CloudKeyDir,
-        CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ;
-    public readonly UniformHandle[] Planet;
-    public readonly SkyColourHandles Colours;
-    public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth, VolumeImage;
-    public readonly Meitou.Game.Rendering.Gpu.Shaders.SamplerInfo? StarsInfo, CloudsInfo;
-
-    public SkyProg(IGpuContext gpu, string vertex, string fragment, string name)
-    {
-        P = LegacyProgram.Create(gpu, vertex, fragment, name);
-        Segment = new NativeSegment(gpu, P, PrimitiveType.Triangles, name);
-        InverseViewProjection = P.Uniform("uInverseViewProjection");
-        Colours = SkyColourHandles.Resolve(P);
-        Extra = P.Uniform("uSkyExtra");
-        Planet = [P.Uniform("uPlanetBody0"), P.Uniform("uPlanetBody1")];
-        PlanetSpin = P.Uniform("uPlanetSpin");
-        CloudLight = P.Uniform("uCloudLight");
-        CloudSun = P.Uniform("uCloudSun");
-        CloudWind = P.Uniform("uCloudWind");
-        CloudMeitou = P.Uniform("uCloudMeitou");
-        CloudKey = P.Uniform("uCloudKey");
-        CloudKeyDir = P.Uniform("uCloudKeyDir");
-        CloudAmbient = P.Uniform("uCloudAmbient");
-        Has = P.Uniform("uHas");
-        StarsMeitou = P.Uniform("uStarsMeitou");
-        CelX = P.Uniform("uCelX");
-        CelY = P.Uniform("uCelY");
-        CelZ = P.Uniform("uCelZ");
-        Stars = P.Sampler("uStars");
-        Planet0 = P.Sampler("uPlanet0");
-        Planet1 = P.Sampler("uPlanet1");
-        Clouds = P.Sampler("uClouds");
-        CloudsNormal = P.Sampler("uCloudsNormal");
-        CloudsTile = P.Sampler("uCloudsTile");
-        CloudsSmooth = P.Sampler("uCloudsSmooth");
-        CloudsTileSmooth = P.Sampler("uCloudsTileSmooth");
-        VolumeImage = P.Sampler("uVolumeImage");
-        if (Stars.IsValid) StarsInfo = P.SamplerInfo(Stars);
-        if (Clouds.IsValid) CloudsInfo = P.SamplerInfo(Clouds);
-    }
-
-    public void Dispose() => P.Dispose();
-}
-
-/// <summary>
-/// (Phase 8 stage 2.) A native texture with the sampler state of the GL texture it replaces: <see cref="SamplerDesc.FromGl"/> with the GL parameters
-/// and, on a mipmapped filter, the upscaler's LOD bias (<see cref="IGpuContext.LodBias"/>), as VkGl's <c>SamplerFor</c> made it; the view covers the
-/// levels VkGl's covered. For <see cref="LegacyProgram.Bind"/> and the frame globals (no bindless entry of its own). Render thread only.
-/// </summary>
-internal sealed class SampledImage : IDisposable
-{
-    readonly IGpuContext _ctx;
-    readonly TextureMinFilter _min;
-    readonly TextureMagFilter _mag;
-    readonly TextureWrapMode _wrap, _wrapR;
-    float _cachedBias = float.NaN;
-    SampledTexture _cached;
-
-    SampledImage(IGpuContext ctx, GpuTexture texture, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, TextureWrapMode wrapR)
-    {
-        this._ctx = ctx;
-        Texture = texture;
-        (this._min, this._mag, this._wrap, this._wrapR) = (min, mag, wrap, wrapR);
-    }
-
-    public GpuTexture Texture { get; }
-
-    /// <summary>
-    /// The sampler and view a draw samples it with now (what VkGl's <c>Sampled</c> gave for the GL texture).
-    /// </summary>
-    public SampledTexture Sampled()
-    {
-        float bias = _ctx.LodBias;
-        if (!(bias == _cachedBias))
-        {
-            var sampler = _ctx.Samplers.Get(SamplerDesc.FromGl(_min, _mag, _wrap, _wrap, _wrapR, false, DepthFunction.Lequal, false, 1, false, bias));
-            (_cached, _cachedBias) = (new SampledTexture(sampler, Texture.View()), bias);
-        }
-        return _cached;
-    }
-
-    static PixelRect Rect(int width, int height) => new(0, 0, (uint)width, (uint)height);
-
-    /// <summary>
-    /// What <c>WorldGl.Texture2D</c> made: RGBA8 from top-first rows, with <paramref name="mipmaps"/> the whole chain made on the GPU as GL's
-    /// GenerateMipmap made it in VkGl (<see cref="IGpuCommandList.GenerateMips"/>) and trilinear filtering, else one level, linear; repeating or
-    /// clamped to the edge (S and T; R stays GL's default, repeat).
-    /// </summary>
-    public static SampledImage Rgba8(IGpuContext ctx, RgbaImage image, bool repeat, bool mipmaps, string name) =>
-        Rgba8(ctx, image.Width, image.Height, image.Pixels, repeat, mipmaps, name);
-
-    /// <inheritdoc cref="Rgba8(GpuContext, RgbaImage, bool, bool, string)"/>
-    public static SampledImage Rgba8(IGpuContext ctx, int width, int height, byte[] rgba, bool repeat, bool mipmaps, string name)
-    {
-        int levels = mipmaps ? 1 + (int)Math.Floor(Math.Log2(Math.Max(Math.Max(width, height), 1))) : 1;
-        using var batch = ctx.Uploads.Begin();
-        var t = batch.Create(new TextureDesc(InternalFormat.Rgba8, width, height, levels,
-            Use: TextureUse.Sampled | TextureUse.TransferDst | TextureUse.TransferSrc, Name: name));
-        batch.Write(t, 0, 0, Rect(width, height), rgba.AsSpan(0, width * height * 4));
-        if (mipmaps) batch.Commands.GenerateMips(t);
-        return new SampledImage(ctx, t, mipmaps ? TextureMinFilter.LinearMipmapLinear : TextureMinFilter.Linear, TextureMagFilter.Linear,
-            repeat ? TextureWrapMode.Repeat : TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat);
-    }
-
-    /// <summary>
-    /// A 2D DDS file with every level it has: BC1 blocks as they are (half a byte a texel), any other format decoded to RGBA8; trilinear, repeating
-    /// or clamped to the edge. The sky's starfield and planet maps (4096² and 4096 × 2048 BC1: 11 and 6 MB instead of 85 and 43 MB as RGBA8).
-    /// <paramref name="bc3Blocks"/>: BC2 and BC3 as blocks too, which the GPU decodes to the same channels (the debris' limb and item maps: decoding
-    /// them on the render thread held the first frame of a town's loading screen 0.3 s).
-    /// </summary>
-    public static SampledImage FromDds(IGpuContext ctx, DdsFile dds, bool repeat, string name, bool bc3Blocks = false)
-    {
-        var format = dds.Format switch
-        {
-            DdsFormat.Bc1 => InternalFormat.CompressedRgbaS3TcDxt1Ext,
-            DdsFormat.Bc2 when bc3Blocks => InternalFormat.CompressedRgbaS3TcDxt3Ext,
-            DdsFormat.Bc3 when bc3Blocks => InternalFormat.CompressedRgbaS3TcDxt5Ext,
-            _ => InternalFormat.Rgba8,
-        };
-        bool blocks = format != InternalFormat.Rgba8;
-        using var batch = ctx.Uploads.Begin();
-        var t = batch.Create(new TextureDesc(format, dds.Width, dds.Height, dds.MipCount, Name: name));
-        for (int level = 0; level < dds.MipCount; level++)
-        {
-            if (blocks)
-            {
-                var s = dds.Surface(0, level);
-                batch.Write(t, level, 0, Rect(s.Width, s.Height), dds.Data.AsSpan(s.Offset, s.Length));
-            }
-            else
-            {
-                var img = DdsDecoder.Decode(dds, 0, level);
-                batch.Write(t, level, 0, Rect(img.Width, img.Height), img.Pixels);
-            }
-        }
-        var filter = dds.MipCount > 1 ? TextureMinFilter.LinearMipmapLinear : TextureMinFilter.Linear;
-        return new SampledImage(ctx, t, filter, TextureMagFilter.Linear, repeat ? TextureWrapMode.Repeat : TextureWrapMode.ClampToEdge,
-            TextureWrapMode.Repeat);
-    }
-
-    /// <summary>
-    /// RGBA32F, one level, linear, clamped to the edge: the GL texture <c>WaterRenderer</c> made for its biome parameter maps.
-    /// </summary>
-    public static SampledImage Rgba32F(IGpuContext ctx, Vector4[] data, int width, int height, string name)
-    {
-        using var batch = ctx.Uploads.Begin();
-        var t = batch.Create(new TextureDesc(InternalFormat.Rgba32F, width, height, Name: name));
-        batch.Write(t, 0, 0, Rect(width, height), System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.AsSpan(0, width * height)));
-        return new SampledImage(ctx, t, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat);
-    }
-
-    /// <summary>
-    /// Two RGBA32F layers (the water's biome parameter maps A and B), linear, clamped to the edge.
-    /// </summary>
-    public static SampledImage Rgba32FArray(IGpuContext ctx, Vector4[] a, Vector4[] b, int width, int height, string name)
-    {
-        using var batch = ctx.Uploads.Begin();
-        var t = batch.Create(new TextureDesc(InternalFormat.Rgba32F, width, height, Layers: 2,
-            Kind: TextureKind.Texture2DArray, Name: name));
-        batch.Write(t, 0, 0, Rect(width, height), System.Runtime.InteropServices.MemoryMarshal.AsBytes(a.AsSpan(0, width * height)));
-        batch.Write(t, 0, 1, Rect(width, height), System.Runtime.InteropServices.MemoryMarshal.AsBytes(b.AsSpan(0, width * height)));
-        return new SampledImage(ctx, t, TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat);
-    }
-
-    /// <summary>
-    /// A cube map from a DDS file with all its mips (RGBA8), faces in the DDS order (+X, −X, +Y, −Y, +Z, −Z) as layers 0..5 (Vulkan's and
-    /// GL's face order); trilinear, clamped to the edge on S, T and R (Vulkan's cube sampling is always seamless, as GL's was with
-    /// <c>TEXTURE_CUBE_MAP_SEAMLESS</c>). The GL version's <c>MAX_LEVEL</c> was the file's last level, so its view had the file's levels too.
-    /// </summary>
-    public static SampledImage Cube(IGpuContext ctx, DdsFile dds, string name)
-    {
-        if (!dds.IsCubemap || dds.ImageCount < 6) throw new InvalidOperationException($"not a cube map: {dds}");
-        var first = DdsDecoder.Decode(dds, 0, 0);
-        using var batch = ctx.Uploads.Begin();
-        var t = batch.Create(new TextureDesc(InternalFormat.Rgba8, first.Width, first.Height, dds.MipCount, Kind: TextureKind.Cube, Name: name));
-        for (int face = 0; face < 6; face++)
-            for (int level = 0; level < dds.MipCount; level++)
-            {
-                var img = face == 0 && level == 0 ? first : DdsDecoder.Decode(dds, face, level);
-                batch.Write(t, level, face, Rect(img.Width, img.Height), img.Pixels);
-            }
-        return new SampledImage(ctx, t, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge);
-    }
-
-
-    public void Dispose() => Texture.Dispose();
-}
-
-/// <summary>
-/// (Phase 8 stage 2.) The shadow blocks a world program reads when there is no <see cref="ShadowPass"/> (<c>--no-shadows</c>), as frame globals:
-/// zeros (shadows off), what <c>ShadowShaders.Bind</c> put on the GL binding points through the unused GL program the terrain linked for it.
-/// Published only where nothing is yet; a <see cref="ShadowPass"/> publishes its own over them whenever it is made. The shadow textures stay
-/// unpublished: readers get the stand-in, as an empty GL unit gave. Called by the sky, which every world view has.
-/// </summary>
-static class ShadowsOffGlobals
-{
-    public static void Publish(IGpuContext gpu)
-    {
-        var g = gpu.Globals;
-        foreach (var (name, bytes) in new[]
-                 {
-                     (ShadowShaders.ReceiverBlock, ShadowPass.ReceiverBytes), (ShadowShaders.CasterBlock, 16),
-                     (MeitouShadowShaders.Block, MeitouShadowShaders.BlockBytes),
-                 })
-            if (g.Block(name) is null) g.Publish(name, new FrameBlock(gpu, bytes).Binding);
-    }
 }

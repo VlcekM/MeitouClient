@@ -80,9 +80,11 @@ public sealed class CommandQueue
                 if (p.Command.Tick <= tick && (include is null || include(p.Command))) (due ??= []).Add(p);
                 else _pending[kept++] = p;
             }
+
             if (due is null) return [];
             _pending.RemoveRange(kept, _pending.Count - kept);
         }
+
         due.Sort(static (a, b) => a.Command.Tick != b.Command.Tick ? a.Command.Tick.CompareTo(b.Command.Tick) : a.Sequence.CompareTo(b.Sequence));
         var commands = new SimCommand[due.Count];
         for (int k = 0; k < commands.Length; k++) commands[k] = due[k].Command;

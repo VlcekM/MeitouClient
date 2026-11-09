@@ -16,7 +16,8 @@ public static class MemorySave
 {
     public const string HandleKey = "tags", LongKey = "taglong", ShortKey = "tagshort", TimeKey = "tagtime";
 
-    public const string PlayerLongKey = "meitou tags player long", PlayerShortKey = "meitou tags player short", PlayerTimeKey = "meitou tags player time",
+    public const string PlayerLongKey = "meitou tags player long", PlayerShortKey = "meitou tags player short",
+        PlayerTimeKey = "meitou tags player time",
         TempAllyKey = "meitou temp ally";
 
     /// <summary>

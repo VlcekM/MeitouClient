@@ -43,7 +43,8 @@ public enum CareKind { None, Treating, Resting }
 /// (<see cref="NeedsSplint"/>, the menu's test with skill 50), what the character is doing (<see cref="Care"/>), its medic job switch and what is
 /// left of a knockout (<see cref="KoTimer"/>, the header's "Unconscious (N)").
 /// </summary>
-public readonly record struct BodyStatus(float Blood, float WorstPart, float Hunger, bool Unconscious, bool Dead, bool NeedsAid = false, CareKind Care = CareKind.None, bool MedicJob = false, bool RescueJob = false,
+public readonly record struct BodyStatus(float Blood, float WorstPart, float Hunger, bool Unconscious, bool Dead, bool NeedsAid = false,
+    CareKind Care = CareKind.None, bool MedicJob = false, bool RescueJob = false,
     bool NeedsSplint = false, float KoTimer = 0, bool PlayingDead = false, bool StayingLow = false, bool NeedsRobotAid = false)
 {
     /// <summary>
@@ -62,6 +63,7 @@ public readonly record struct BodyStatus(float Blood, float WorstPart, float Hun
     public bool Crawling { get; init; }
     public bool RightArmDisabled { get; init; }
 }
+
 public sealed record HealthPartView(string Id, string Name, float Flesh, float Stun, float Bandage, float Rig, float Maximum, bool Robotic)
 {
     /// <summary>
@@ -76,6 +78,7 @@ public sealed record HealthPartView(string Id, string Name, float Flesh, float S
     public bool Vital { get; init; }
     public Meitou.Data.Gameplay.Bodies.BodyPartType Type { get; init; }
 }
+
 /// <summary>
 /// A line of the HUD's stats panel: the label, the value the character fights with and the value it would have unhurt (docs/game/ui-screens.md
 /// section 4).
@@ -91,13 +94,15 @@ public readonly record struct HudStatLine(string Label, float Value, float Base)
     /// </summary>
     public string? Text { get; init; }
 }
+
 /// <summary>
 /// The tooltip rows of the information panel's extended lines (<c>FUN_140895350</c>, <see cref="HudTips"/>), and what the run speed's rows need,
 /// which the host builds in its speed unit: the stored athletics, the leg factor, the fitted legs' athletics factor, while sneaking the sneak speed
 /// cap in units per second, and the gear's run factor (CharStats <c>+0x18</c>).
 /// </summary>
 public sealed record ExtendedTips(IReadOnlyList<(string Key, string Value)> Athletics, IReadOnlyList<(string Key, string Value)> Strength,
-    IReadOnlyList<(string Key, string Value)> Toughness, IReadOnlyList<(string Key, string Value)> Hunger, float StoredAthletics, float LegFactor, float RoboticLegs, float? SneakCap,
+    IReadOnlyList<(string Key, string Value)> Toughness, IReadOnlyList<(string Key, string Value)> Hunger, float StoredAthletics, float LegFactor,
+    float RoboticLegs, float? SneakCap,
     float Gear = 1);
 /// <summary>
 /// What the HUD shows of a selected character besides <see cref="BodyStatus"/> (docs/game/ui-screens.md section 4): the blood in units and its
@@ -136,6 +141,7 @@ public sealed record HudView(float Blood, float BloodCapacity, float Bleeding, f
     /// </summary>
     public IReadOnlyDictionary<Meitou.Data.Gameplay.Bodies.StatsEnumerated, IReadOnlyList<StatReadout>>? StatReadouts { get; init; }
 }
+
 /// <summary>
 /// A stats window row's English label (as the exe writes it, without the leading "-"), its value and whether the row is in Main (the label and value
 /// of "Knockout point:").
@@ -147,7 +153,8 @@ public readonly record struct StatReadout(string Label, string Value, bool Main 
 /// Swimming the swim speed in units per second (<see cref="Speed"/>); <see cref="Penalised"/> shows it Bad. The tooltip: <see cref="Terms"/> for the
 /// job skill, else the fallback's own breakdown.
 /// </summary>
-public readonly record struct CurrentSkillView(Meitou.Data.Gameplay.Bodies.StatsEnumerated Stat, string? Label, float Value, bool Penalised = false, bool Speed = false,
+public readonly record struct CurrentSkillView(Meitou.Data.Gameplay.Bodies.StatsEnumerated Stat, string? Label, float Value, bool Penalised = false,
+    bool Speed = false,
     SkillTerms? Terms = null)
 {
     /// <summary>
@@ -163,6 +170,7 @@ public readonly record struct CurrentSkillView(Meitou.Data.Gameplay.Bodies.Stats
     public AthleticsTerms? Athletics { get; init; }
     public SwimTerms? Swim { get; init; }
 }
+
 /// <summary>
 /// The "Accuracy Error:" line's tooltip: the crossbow's deviation at 0 skill, the effective skill and the resulting deviation, in degrees.
 /// </summary>
@@ -183,13 +191,15 @@ public readonly record struct AthleticsTerms(float Skill, float MaxSpeed, int Le
 /// The Swimming line's tooltip (the HUD update): the trained level, the base swim speed, the injuries (legs and arms), hunger, encumbrance and limb
 /// items' penalties, both arms broken, and the current swim speed.
 /// </summary>
-public readonly record struct SwimTerms(float Skill, float MaxSpeed, int Injuries, int Hunger, int Encumbrance, int Robotics, bool BrokenArms, float Speed);
+public readonly record struct SwimTerms(float Skill, float MaxSpeed, int Injuries, int Hunger, int Encumbrance, int Robotics, bool BrokenArms,
+    float Speed);
 /// <summary>
 /// The breakdown of a skill's tooltip (<c>FUN_140890b00</c>, docs/game/ui-screens.md section 4): the trained level, then each penalty of the stat
 /// multiplier taken alone as (int)((1 - factor) x 100) percent (Robotics below 0 is a bonus), the missing arm penalty (strength only, 0 or 33: (int)
 /// of (1 - 0.66) x 100), the effective level and, for perception, the armour's <c>perception bonus</c> (CharStats <c>+0x30</c>).
 /// </summary>
-public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, int Weather, int Darkness, int Robotics, bool HasRobotics, int Gear, int MissingArm, float Total,
+public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, int Weather, int Darkness, int Robotics, bool HasRobotics, int Gear,
+    int MissingArm, float Total,
     int ArmourBonus = 0)
 {
     /// <summary>
@@ -197,6 +207,7 @@ public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, i
     /// </summary>
     public bool Penalised => Injuries + Hunger + Weather + Darkness + Robotics + Gear > 2;
 }
+
 /// <summary>
 /// The information panel's extended lines (docs/game/ui-screens.md section 4): the XP rates as the fraction the panel shows as a percentage
 /// (Toughness as a plain multiplier), the KO point (negative HP), the run speed in units per second with the unhurt run value it is measured against,
@@ -204,7 +215,8 @@ public readonly record struct SkillTerms(float Base, int Injuries, int Hunger, i
 /// <see cref="Fighting"/>: in combat mode, where Strength XP is the weapon weight factor of the drawn weapon, or with nothing drawn
 /// (<see cref="Fists"/>) 1 - encumbrance, instead of the carrying rate.
 /// </summary>
-public readonly record struct ExtendedStats(float AthleticsXp, float StrengthXp, float ToughnessXp, float KoPoint, float RunSpeed, float RunValue, float HungerRate, bool Resting = false,
+public readonly record struct ExtendedStats(float AthleticsXp, float StrengthXp, float ToughnessXp, float KoPoint, float RunSpeed, float RunValue,
+    float HungerRate, bool Resting = false,
     bool Fighting = false, bool Fists = false, float? WorkHungerRate = null, bool Idle = false);
 public sealed record InventoryItemView(int Index, string Record, string Name, string Section, int X, int Y, int Width, int Height, int Quantity,
     float Weight, float Quality)
@@ -245,6 +257,7 @@ public sealed record InventoryItemView(int Index, string Record, string Name, st
     /// </summary>
     public int BagItems { get; init; } = -1;
 }
+
 public sealed record InventoryView(int Width, int Height, int BagWidth, int BagHeight, IReadOnlyList<InventoryItemView> Items)
 {
     public float? CarryCapacity { get; init; }
@@ -682,7 +695,8 @@ public readonly record struct SlaveView(int State, string Owner, float Looks = 0
 /// A disguise for the data panel and the health word (docs/game/ui-screens.md "Which lines"): the clothing level, the uniform faction's name, the
 /// blown cooldown (seconds), whether it works, and the tooltip's factors (secure location, the looker marks).
 /// </summary>
-public readonly record struct DisguiseView(float Level, string Faction, float Blown, bool Works, bool Secure, bool SameFaction, bool SlaveOwner, bool KnowsMe);
+public readonly record struct DisguiseView(float Level, string Faction, float Blown, bool Works, bool Secure, bool SameFaction, bool SlaveOwner,
+    bool KnowsMe);
 
 /// <summary>
 /// A turret building being manned (<see cref="CharacterSnapshot.Turret"/>): its key (a <see cref="Meitou.Data.World.TownBuilding"/> key, or a player
@@ -882,13 +896,16 @@ public sealed record WorldSnapshot(long Tick, IReadOnlyList<CharacterSnapshot> C
     /// <summary>
     /// What each of the player's crafting benches can craft (by site), for the Craft tab.
     /// </summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<Production.CraftOptionView>> Crafts { get; init; } = new Dictionary<string, IReadOnlyList<Production.CraftOptionView>>();
+    public IReadOnlyDictionary<string, IReadOnlyList<Production.CraftOptionView>> Crafts { get; init; } =
+        new Dictionary<string, IReadOnlyList<Production.CraftOptionView>>();
     /// <summary>
     /// Each crafting bench's current smith (by site), for the Craft tab's queue description; a bench nobody has worked has none.
     /// </summary>
-    public IReadOnlyDictionary<string, Production.CraftSmithView> Smiths { get; init; } = new Dictionary<string, Production.CraftSmithView>();
+    public IReadOnlyDictionary<string, Production.CraftSmithView> Smiths { get; init; } =
+        new Dictionary<string, Production.CraftSmithView>();
 
-    static readonly IReadOnlyDictionary<(string Building, int Door), Locks.DoorView> NoDoors = new Dictionary<(string Building, int Door), Locks.DoorView>();
+    static readonly IReadOnlyDictionary<(string Building, int Door), Locks.DoorView> NoDoors =
+        new Dictionary<(string Building, int Door), Locks.DoorView>();
 
     static readonly IReadOnlySet<string> EmptySet = new HashSet<string>(StringComparer.Ordinal);
     static readonly IReadOnlySet<int> NoFactions = new HashSet<int>();

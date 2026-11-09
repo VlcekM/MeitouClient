@@ -61,9 +61,11 @@ static partial class WorldApp
             }
             (s_tourDistance, s_tourPitch) = (Take("--tour-distance", s_tourDistance), Take("--tour-pitch", s_tourPitch));
             Directory.CreateDirectory(s_fieldTour);
-            if (!rest.Contains("--screenshot")) rest.AddRange(["--screenshot", Path.Combine(s_fieldTour, "overview.png")]);
+            if (!rest.Contains("--screenshot"))
+                rest.AddRange(["--screenshot", Path.Combine(s_fieldTour, "overview.png")]);
         }
-        if (!rest.Contains("--at")) rest.AddRange(["--at", string.Create(CultureInfo.InvariantCulture, $"{spot.X},{spot.Y}")]);
+        if (!rest.Contains("--at"))
+            rest.AddRange(["--at", string.Create(CultureInfo.InvariantCulture, $"{spot.X},{spot.Y}")]);
         if (!rest.Contains("--weather")) rest.AddRange(["--weather", "Default"]);
         if (!rest.Contains("--time")) rest.AddRange(["--time", "10"]);
         rest.AddRange(["--no-foliage", "--no-objects"]);
@@ -91,8 +93,8 @@ static partial class WorldApp
     /// <summary>
     /// The tour: each tile from <see cref="s_tourDistance"/> back at the camera's heading and <see cref="s_tourPitch"/> up, saved as tile-NNN.png.
     /// </summary>
-    static void FieldTour(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h, GpuContext context,
-            GpuTexture target)
+    static void FieldTour(WorldGpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w, int h,
+            GpuContext context, GpuTexture target)
     {
         if (s_fieldTour is null || gpu.Terrain.TextureSet is not { FieldCount: > 0 } t) return;
         var (yaw, pitch, distance, targetAt) = (camera.Yaw, camera.Pitch, camera.Distance, camera.Target);
@@ -108,11 +110,11 @@ static partial class WorldApp
             float cx = t.FieldOrigin.X + (i % t.FieldColumns + 0.5f) * t.FieldTile, cz = t.FieldOrigin.Y + (i / t.FieldColumns + 0.5f) * t.FieldTile;
             camera.Target = new Vector3(cx, gpu.Terrain.HeightAt(cx, cz), cz);
             gpu.Streamer?.Settle(camera.Eye);
-            for (int f = 0; f < gpu.Post!.WarmupFrames
-                    + 3;
-                    f++) { Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
-                    EndFrame(context);
-                    }
+            for (int f = 0; f < gpu.Post!.WarmupFrames + 3; f++)
+            {
+                Draw(gpu, scene, camera, render, w, h, o.Hour, 0, o.FogDistance);
+                EndFrame(context);
+            }
             context.Finish();
             string name = $"tile-{i + 1:000}.png", label = t.FieldLabel(cx, cz) ?? "";
             FramebufferCapture.SavePng(context, target, Path.Combine(s_fieldTour, name), w, h);

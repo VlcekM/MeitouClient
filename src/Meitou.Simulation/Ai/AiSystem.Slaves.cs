@@ -19,6 +19,6 @@ public sealed partial class AiSystem
     /// </summary>
     internal (TownBuilding Building, string Clip, string? Functionality)? WorkAt(World world, CharacterId self, Vector3 at, int epoch) =>
         TownAt(at) is >= 0 and var site && PickWork(world, self, site, epoch) is { } building
-            ? (building, WorkClipOf(building), WorkFunctionalityOf(building))
+            ? (building, _work.ClipOf(building), _work.FunctionalityOf(building))
             : null;
 }

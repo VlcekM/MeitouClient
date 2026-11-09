@@ -5,7 +5,8 @@ using Silk.NET.Input;
 namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
-/// The host's side of frame generation: the generator for the swapchain, the settings' and fps counter's lines on it, and the system pointer it needs.
+/// The host's side of frame generation: the generator for the swapchain, the settings' and fps counter's lines on it, and the system pointer it
+/// needs.
 /// </summary>
 static class FrameGenerationSetup
 {

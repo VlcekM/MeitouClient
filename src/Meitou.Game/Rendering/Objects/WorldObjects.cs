@@ -211,7 +211,8 @@ sealed class WorldObjects : IDisposable
         {
             if (_cleared.Contains(key) == on) return false;
             var next = new HashSet<string>(_cleared, StringComparer.Ordinal);
-            if (on) next.Add(key); else next.Remove(key);
+            if (on) next.Add(key);
+            else next.Remove(key);
             _cleared = next;
             _placementVersion++;
             return true;

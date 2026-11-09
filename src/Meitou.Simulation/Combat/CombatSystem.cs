@@ -104,7 +104,11 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// Stuck bolts kept in the world per bolt mesh (the settings' <c>harpoonLimit</c>, <see cref="CombatOptions.StuckLimit"/>): past it the one that
     /// flew longest goes (<c>FUN_14043acf0</c>).
     /// </summary>
-    public int StuckLimit { get; set; }
+    public int StuckLimit
+    {
+        get => _projectiles.StuckLimit;
+        set => _projectiles.StuckLimit = value;
+    }
 
     /// <summary>
     /// A late but successfully rolled dodge or block still counts (<see cref="CombatOptions.LateDefences"/>); off is the game's rule.
@@ -221,12 +225,12 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         for (int i = 0; i < _read.Length; i++)
         {
             _read[i].Hash(ref hasher);
-            HashZone(ref hasher, i);
+            _zones.Hash(ref hasher, i);
         }
 
         hasher.Add(_log.Count);
-        HashRanged(ref hasher);
-        HashTurrets(ref hasher);
+        _projectiles.Hash(ref hasher);
+        _turretManning.Hash(ref hasher);
     }
 
     void Sync(CharacterTable table)
@@ -242,7 +246,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             if (_read[i].Generation == generation) continue;
 
             _read[i] = CombatSlot.Fresh(generation);
-            _zoneCountRead[i] = 0;
+            _zones.Clear(i);
         }
     }
 
@@ -258,7 +262,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             _write[i] = CombatSlot.Fresh(-1);
         }
 
-        ResizeZones(size);
+        _zones.Resize(size);
     }
 
     /// <summary>
@@ -266,7 +270,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     /// schedule until the swap.
     /// </summary>
     CombatSlot[] Live(World world) =>
-        world.Characters.Phase is TablePhase.Inputs or TablePhase.Outside || world.Characters.Phase == TablePhase.SlowWorld && _swappedTick == world.Tick
+        world.Characters.Phase is TablePhase.Inputs or TablePhase.Outside
+            || world.Characters.Phase == TablePhase.SlowWorld && _swappedTick == world.Tick
             ? _read
             : _write;
 
@@ -411,7 +416,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     int IOrderOwner.SaveKind(OrderEntry order) => order.Detail is PickedAttack ? 0 : -1;
 
     object? IOrderOwner.LoadDetail(World world, CharacterId self, TaskType row, int kind, CharacterId target) =>
-        new PickedAttack(new AttackOrder([self], target) { Picked = true, Unprovoked = row == TaskType.UnprovokedFocusedMeleeAttack, Tick = world.Tick }, false, -1);
+        new PickedAttack(new AttackOrder([self], target) { Picked = true, Unprovoked = row == TaskType.UnprovokedFocusedMeleeAttack,
+            Tick = world.Tick }, false, -1);
 
     /// <summary>
     /// The attack order (row 5) needs a target that is there, awake and has a body (else it leaves the queue), and an attacker able to fight: a
@@ -420,7 +426,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
         var table = world.Characters;
-        if (!table.TryResolveNext(order.Target, out int t) || t == slot || table.Cold(t)!.Medical is not { Incapacitated: false }) return OrderCheck.Gone;
+        if (!table.TryResolveNext(order.Target, out int t) || t == slot || table.Cold(t)!.Medical is not { Incapacitated: false })
+            return OrderCheck.Gone;
 
         var cold = table.Cold(slot)!;
         bool able = cold is { Fighter: not null, Stats: not null, Race: not null, Medical.Incapacitated: false } && cold.CarriedBy.IsNone;
@@ -602,8 +609,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     {
         Sync(world.Characters);
         Array.Copy(_read, _write, world.Characters.HighWater);
-        CopyZones(world.Characters.HighWater);
-        FlyProjectiles(world);
+        _zones.Copy(world.Characters.HighWater);
+        _projectiles.Fly(world, this);
         TickTurrets(world);
         _index.Build(_read, world.Characters, world.Grid);
     }
@@ -687,7 +694,7 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     {
         RepeatAssaults(world);
         (_read, _write) = (_write, _read);
-        SwapZones();
+        _zones.Swap();
         _swappedTick = world.Tick;
     }
 
@@ -703,7 +710,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         var table = world.Characters;
         for (int s = 0; s < table.HighWater; s++)
         {
-            if (!table.Next[s].Alive || table.Cold(s) is not { Running: { Task: CharacterTask.Attack, Row: TaskType.UnprovokedFocusedMeleeAttack } }) continue;
+            if (!table.Next[s].Alive || table.Cold(s) is not { Running: { Task: CharacterTask.Attack, Row: TaskType.UnprovokedFocusedMeleeAttack } })
+                continue;
 
             var fight = StateOf(table.IdOf(s));
             if (fight.TargetSlot < 0 || !table.TryResolveNext(new CharacterId(fight.TargetSlot, fight.TargetGeneration), out int victim)) continue;

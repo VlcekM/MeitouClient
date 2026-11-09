@@ -76,7 +76,8 @@ public enum StandardParts
     /// <summary>
     /// What the game runs.
     /// </summary>
-    All = Population | Player | Pursuit | Movement | Body | Combat | Animation | Feed | Retaliation | FirstAid | Aggro | Flee | Carry | Crime | Trade | Ai | Construction | Dialogue | Production,
+    All = Population | Player | Pursuit | Movement | Body | Combat | Animation | Feed | Retaliation | FirstAid | Aggro | Flee | Carry | Crime | Trade
+        | Ai | Construction | Dialogue | Production,
 }
 
 /// <summary>
@@ -235,195 +236,448 @@ public sealed class StandardSystemSet
 /// </summary>
 public static class StandardSystems
 {
-    public static StandardSystemSet Build(PopulationData data, IWalkability walkability, StandardSystemOptions? options = null)
+    /// <summary>
+    /// Builds the standard systems for <paramref name="data"/>, in their order, with the parts and settings of <paramref name="options"/>.
+    /// </summary>
+    public static StandardSystemSet Build(PopulationData data, IWalkability walkability, StandardSystemOptions? options = null) =>
+        new Builder(data, walkability, options ?? new StandardSystemOptions()).Build();
+
+    /// <summary>
+    /// One build of the standard systems: the wiring and the systems made so far, which later parts link to.
+    /// </summary>
+    sealed class Builder(PopulationData data, IWalkability walkability, StandardSystemOptions options)
     {
-        var o = options ?? new StandardSystemOptions();
+        /// <summary>
+        /// The build's options.
+        /// </summary>
+        readonly StandardSystemOptions _o = options;
 
-        bool Has(StandardParts p) => (o.Parts & p) != 0;
+        /// <summary>
+        /// The population data every system is made from.
+        /// </summary>
+        readonly PopulationData _data = data;
 
-        var systems = new Wiring();
-        PopulationSystem? population = null;
-        MovementSystem? movement = null;
-        CombatSystem? combat = null;
-        if (Has(StandardParts.Population))
-            systems.Add(StandardParts.Population, population = new PopulationSystem(data, o.Population));
-        if (Has(StandardParts.Player))
-            systems.Add(StandardParts.Player, new PlayerSystem(data) { AnimalsPickUp = o.AnimalsPickUp });
+        /// <summary>
+        /// The walkability the movement system paths on.
+        /// </summary>
+        readonly IWalkability _walkability = walkability;
 
-        Ai.AiSystem? ai = null;
-        if (Has(StandardParts.Ai)) systems.Add(StandardParts.Ai, ai = new Ai.AiSystem(data, o.Ai));
+        /// <summary>
+        /// The systems in order, with their parts.
+        /// </summary>
+        readonly Wiring _systems = new();
 
-        if (Has(StandardParts.Pursuit | StandardParts.Combat | StandardParts.Retaliation | StandardParts.Flee))
+        /// <summary>
+        /// The population system, when built.
+        /// </summary>
+        PopulationSystem? _population;
+
+        /// <summary>
+        /// The movement system, when built.
+        /// </summary>
+        MovementSystem? _movement;
+
+        /// <summary>
+        /// The combat system, when built.
+        /// </summary>
+        CombatSystem? _combat;
+
+        /// <summary>
+        /// The AI system, when built.
+        /// </summary>
+        Ai.AiSystem? _ai;
+
+        /// <summary>
+        /// The relation events of deeds, with the live relations the aggro part brings.
+        /// </summary>
+        FactionDeeds? _deeds;
+
+        /// <summary>
+        /// The weather system, when built.
+        /// </summary>
+        WeatherSystem? _weather;
+
+        /// <summary>
+        /// The carry system, when built.
+        /// </summary>
+        Carrying.CarrySystem? _carry;
+
+        /// <summary>
+        /// The kidnap system, when built.
+        /// </summary>
+        Kidnap.KidnapSystem? _kidnap;
+
+        /// <summary>
+        /// The town duty system, when built.
+        /// </summary>
+        Kidnap.TownDutySystem? _townDuty;
+
+        /// <summary>
+        /// The ragdoll system, when built.
+        /// </summary>
+        Ragdolls.RagdollSystem? _ragdolls;
+
+        /// <summary>
+        /// The captive system, when built.
+        /// </summary>
+        Kidnap.CaptiveSystem? _captives;
+
+        /// <summary>
+        /// The bed system, when built.
+        /// </summary>
+        Locks.BedSystem? _beds;
+
+        /// <summary>
+        /// The construction system, when built.
+        /// </summary>
+        Construction.ConstructionSystem? _construction;
+
+        /// <summary>
+        /// The production system, when built.
+        /// </summary>
+        Production.ProductionSystem? _production;
+
+        /// <summary>
+        /// The stonemine cycle the bashers swing by (Task_BashDoor); 0: no animation data.
+        /// </summary>
+        float _bashCycle;
+
+        /// <summary>
+        /// The aggro system, when built.
+        /// </summary>
+        AggroSystem? _aggro;
+
+        /// <summary>
+        /// The crime system, when built.
+        /// </summary>
+        Crime.CrimeSystem? _crime;
+
+        /// <summary>
+        /// The arrest system, when built.
+        /// </summary>
+        Crime.ArrestSystem? _arrest;
+
+        /// <summary>
+        /// The lock system, when built.
+        /// </summary>
+        Locks.LockSystem? _locks;
+
+        /// <summary>
+        /// The trade system, when built.
+        /// </summary>
+        Trading.TradeSystem? _trade;
+
+        /// <summary>
+        /// The dialogue system, when built.
+        /// </summary>
+        Dialogue.DialogueSystem? _talk;
+
+        /// <summary>
+        /// Builds every part in its order and returns the set.
+        /// </summary>
+        public StandardSystemSet Build()
         {
-            combat = new CombatSystem(data.Combat.Techniques, data.Combat.Constants, data.Bodies.Constants, data.BodyOptions,
-                o.AnimationLengths ?? new AnimationLengths(), o.Combat);
-        }
+            AddCore();
+            AddCare();
+            AddCarrying();
+            AddWorks();
+            AddAnimation();
+            AddFights();
+            AddLaw();
+            AddTalk();
 
-        // The relation events of deeds (blows, first aid, cagings) go with the live relations, which the aggro part brings.
-        var deeds = Has(StandardParts.Aggro) ? new FactionDeeds(data.Relations, data) : null;
-        if (combat is not null && Has(StandardParts.Aggro)) (combat.Relations, combat.Deeds) = (data.Relations, deeds);
-        if (combat is not null) combat.Buildings = o.RagdollEnvironment;
-        if (ai is not null && combat is not null) ai.ThreatSource = combat;
-        if (combat is not null)
-            (combat.TurretGuns, combat.Towns) = (new Meitou.Data.Gameplay.Combat.TurretCatalog(data.Db), data);
-        if (Has(StandardParts.Pursuit)) systems.Add(StandardParts.Pursuit, new PursuitSystem(combat!));
-        if (Has(StandardParts.Movement))
-            systems.Add(StandardParts.Movement, movement = new MovementSystem(new PathService(walkability, o.SynchronousPaths)));
-        if (Has(StandardParts.FirstAid))
-            systems.Add(StandardParts.FirstAid, new FirstAid.FirstAidSystem(data.Bodies.Constants, data.BodyOptions, data.Items, o.FirstAid) { Deeds = deeds, Relations = Has(StandardParts.Aggro) ? data.Relations : null });
-
-        WeatherSystem? weather = null;
-
-        if (Has(StandardParts.Body))
-        {
-            systems.Add(StandardParts.Body, new BodySystem(data.Bodies.Constants, data.BodyOptions, o.BodyTimeScale, data.Db));
-            systems.Add(StandardParts.Body, weather = new WeatherSystem(data.Bodies.Constants) { Db = data.Db, Buildings = o.RagdollEnvironment });
-        }
-
-        Carrying.CarrySystem? carry = null;
-        Kidnap.KidnapSystem? kidnap = null;
-        Kidnap.TownDutySystem? townDuty = null;
-        Ragdolls.RagdollSystem? ragdolls = null;
-
-        if (Has(StandardParts.Carry))
-        {
-            // The lift takes the length of the shoulder lift left clip (1 s when the lengths are not known).
-            carry = new Carrying.CarrySystem(data.Bodies.Constants, data.BodyOptions, o.AnimationLengths?.Of(Carrying.CarrySystem.LiftClip) ?? 1, o.Carry);
-            if (Has(StandardParts.Aggro)) carry.Relations = data.Relations;
-
-            carry.Assembly = new CharacterAssembly(data);
-            carry.Data = data;
-            systems.Add(StandardParts.Carry, carry);
-
-            // Raiders lifting the downed and carrying them to a cage of their faction: right after the carry system, whose lift and links it uses; it
-            // adds nothing to the hash until one runs.
-            if (population is not null)
-                systems.Add(StandardParts.Carry, kidnap = new Kidnap.KidnapSystem(data, population, carry, o.Kidnap) { Deeds = deeds });
-
-            // Town goals of AI squads outside the act-outs (removing downed intruders, caging them, fetching food): after the kidnapping, with the
-            // same lift; nothing in the hash until one runs.
-            if (population is not null && Has(StandardParts.Ai))
-                systems.Add(StandardParts.Carry, townDuty = new Kidnap.TownDutySystem(data, population, carry) { Deeds = deeds });
-
-            // The zones' blood smell and the blood hunters (goal 176); nothing in the hash until a corpse has flies or someone bleeds.
-            if (Has(StandardParts.Ai)) systems.Add(StandardParts.Carry, new SmellSystem(data, population));
-        }
-
-        // The captives' fate and the slavers' logistics: right after the kidnapping (serial, like it); nothing in the hash until a job or a town's
-        // kill timer exists.
-        Kidnap.CaptiveSystem? captives = null;
-        if (population is not null && Has(StandardParts.Ai))
-            systems.Add(StandardParts.None, captives = new Kidnap.CaptiveSystem(data, combat, o.Captives) { Kidnap = kidnap });
-
-        Locks.BedSystem? beds = null;
-        if (Has(StandardParts.FirstAid))
-            systems.Add(StandardParts.None, beds = new Locks.BedSystem(data) { Carry = carry });
-
-        Construction.ConstructionSystem? construction = null;
-        if (Has(StandardParts.Construction))
-            systems.Add(StandardParts.Construction, construction = new Construction.ConstructionSystem(data, o.Construction));
-        if (combat is not null) combat.Construction = construction;
-
-        Production.ProductionSystem? production = null;
-        if (Has(StandardParts.Production))
-            systems.Add(StandardParts.Production, production = new Production.ProductionSystem(data, o.Production) { Assembly = new CharacterAssembly(data), Construction = construction, Beds = beds, Carry = carry });
-        if (Has(StandardParts.Combat)) systems.Add(StandardParts.Combat, combat!);
-
-        float bashCycle = 0;   // the stonemine cycle the bashers swing by (Task_BashDoor), 0: no animation data
-
-        if (Has(StandardParts.Animation))
-        {
-            var library = o.AnimationLibrary ?? AnimationLibrary.FromDatabase(data.Db);
-            var lengths = o.AnimationLengths ?? new AnimationLengths();
-            var animation = new AnimationSystem(library, lengths, o.AnimationBlendRate ?? 4, combat) { Rigs = o.Ragdolls };
-            if (library.IndexOf("stonemine") is >= 0 and var mine)
-                bashCycle = lengths.Of(library.Definitions[mine].Clip) / (library.Definitions[mine].PlaySpeed > 0 ? library.Definitions[mine].PlaySpeed : 1);
-
-            systems.Add(StandardParts.Animation, animation);
-
-            // Ragdolls right after the animation: they start from and pin to this tick's pose, and the whole body's position is theirs before
-            // anything later reads it.
-            if (o.Ragdolls is not null)
-                systems.Add(StandardParts.Animation, ragdolls = new Ragdolls.RagdollSystem(o.Ragdolls, o.RagdollEnvironment, data.BodyOptions));
-
-            animation.Ragdolls = ragdolls;
-
-            // The stealth knock-out swing lasts the length of the knockout record's clip.
-            if (carry is not null && library.IndexOf(Carrying.CarrySystem.KnockoutClip) is >= 0 and var ko)
-                carry.KnockoutSeconds = lengths.Of(library.Definitions[ko].Clip);
-
-            if (carry is not null && library.IndexOf(Carrying.CarrySystem.LiftClip) is >= 0 and var lift
-                && lengths.Of(library.Definitions[lift].Clip) is > 0 and var liftLength)
+            return new StandardSystemSet
             {
-                carry.LiftPlaySpeed = library.Definitions[lift].PlaySpeed > 0 ? library.Definitions[lift].PlaySpeed : 1;
-                carry.LiftSeconds = liftLength / carry.LiftPlaySpeed;
+                Systems = Splice(_systems, _o.Extensions, _data),
+                Population = _population,
+                Movement = _movement,
+                Combat = _combat,
+                Aggro = _aggro,
+                Carry = _carry,
+                Kidnap = _kidnap,
+                Captives = _captives,
+                Crime = _crime,
+                Arrest = _arrest,
+                Locks = _locks,
+                Beds = _beds,
+                Trade = _trade,
+                Ai = _ai,
+                Construction = _construction,
+                Production = _production,
+                Ragdolls = _ragdolls,
+                Dialogue = _talk
+            };
+        }
+
+        /// <summary>
+        /// Whether the build includes a part.
+        /// </summary>
+        bool Has(StandardParts p) => (_o.Parts & p) != 0;
+
+        /// <summary>
+        /// The population, the player, the AI, the shared combat system and its links, pursuit and movement.
+        /// </summary>
+        void AddCore()
+        {
+            if (Has(StandardParts.Population))
+                _systems.Add(StandardParts.Population, _population = new PopulationSystem(_data, _o.Population));
+
+            if (Has(StandardParts.Player))
+                _systems.Add(StandardParts.Player, new PlayerSystem(_data) { AnimalsPickUp = _o.AnimalsPickUp });
+
+            if (Has(StandardParts.Ai)) _systems.Add(StandardParts.Ai, _ai = new Ai.AiSystem(_data, _o.Ai));
+
+            if (Has(StandardParts.Pursuit | StandardParts.Combat | StandardParts.Retaliation | StandardParts.Flee))
+            {
+                _combat = new CombatSystem(_data.Combat.Techniques, _data.Combat.Constants, _data.Bodies.Constants, _data.BodyOptions,
+                    _o.AnimationLengths ?? new AnimationLengths(), _o.Combat);
             }
 
-            if (captives is not null && library.IndexOf(Kidnap.CaptiveSystem.ChopClip) is >= 0 and var chop)
-                captives.ChopSeconds = lengths.Of(library.Definitions[chop].Clip);
+            // The relation events of deeds (blows, first aid, cagings) go with the live relations, which the aggro part brings.
+            _deeds = Has(StandardParts.Aggro) ? new FactionDeeds(_data.Relations, _data) : null;
+            if (_combat is not null && Has(StandardParts.Aggro)) (_combat.Relations, _combat.Deeds) = (_data.Relations, _deeds);
+            if (_combat is not null) _combat.Buildings = _o.RagdollEnvironment;
+            if (_ai is not null && _combat is not null) _ai.ThreatSource = _combat;
+            if (_combat is not null)
+                (_combat.TurretGuns, _combat.Towns) = (new Meitou.Data.Gameplay.Combat.TurretCatalog(_data.Db), _data);
+
+            if (Has(StandardParts.Pursuit)) _systems.Add(StandardParts.Pursuit, new PursuitSystem(_combat!));
+            if (Has(StandardParts.Movement))
+                _systems.Add(StandardParts.Movement, _movement = new MovementSystem(new PathService(_walkability, _o.SynchronousPaths)));
         }
 
-        if (Has(StandardParts.Feed)) systems.Add(StandardParts.Feed, new FeedSystem(data.Items, o.Feed));
-        if (Has(StandardParts.Retaliation))
-            systems.Add(StandardParts.Retaliation, new RetaliationSystem(combat!) { Towns = data });
-
-        AggroSystem? aggro = null;
-        if (Has(StandardParts.Aggro))
-            systems.Add(StandardParts.Aggro, aggro = new AggroSystem(data.Relations, o.Aggro) { Combat = combat, Towns = data, Population = population });
-        // Without the Aggro part a fight still reads the senses (target choice, threats, the fight's end): the look keeps them, and nothing else.
-        else if (combat is not null)
-            systems.Add(StandardParts.Aggro, new AggroSystem(data.Relations, (o.Aggro ?? new AggroSettings()) with { AttackOnSight = false }) { Combat = combat, Towns = data, Population = population });
-        if (carry is not null) carry.Aggro = aggro;
-        if (Has(StandardParts.Flee))
-            systems.Add(StandardParts.Flee, new FleeSystem(data.Relations, combat!, o.Aggro?.SightRange ?? AggroSystem.OutdoorSight) { SquadBreak = o.SquadBreak });
-
-        Crime.CrimeSystem? crime = null;
-        Crime.ArrestSystem? arrest = null;
-        Locks.LockSystem? locks = null;
-
-        if (Has(StandardParts.Crime))
+        /// <summary>
+        /// First aid, the body and the weather.
+        /// </summary>
+        void AddCare()
         {
-            // Last: its sweep sees every position, task and carry link the tick left; the deeds come in from combat and carrying in their own serial
-            // steps.
-            systems.Add(StandardParts.Crime, crime = new Crime.CrimeSystem(data.Relations, o.Crime) { Xp = new XpService(data.Bodies.Constants, data.BodyOptions) });
-            if (combat is not null) combat.Crimes = crime;
-            if (carry is not null) carry.Crimes = crime;
-            if (ai is not null) ai.Crimes = crime;
+            if (Has(StandardParts.FirstAid))
+            {
+                _systems.Add(StandardParts.FirstAid,
+                    new FirstAid.FirstAidSystem(_data.Bodies.Constants, _data.BodyOptions, _data.Items, _o.FirstAid)
+                    {
+                        Deeds = _deeds,
+                        Relations = Has(StandardParts.Aggro) ? _data.Relations : null
+                    });
+            }
 
-            // Right after it: the police act on this tick's bookings and sightings; the lock orders (picking, getting out) report their crimes to it.
-            systems.Add(StandardParts.Crime, arrest = new Crime.ArrestSystem(crime, data.Bodies.Constants, o.Arrest) { Carry = carry, Deeds = deeds, Towns = data });
-            arrest.Captives = captives;
-            if (townDuty is not null) townDuty.Arrests = arrest;
-
-            systems.Add(StandardParts.Crime, locks = new Locks.LockSystem(data.Bodies.Constants, data.BodyOptions) { Crimes = crime, DoorsCloseBehind = o.DoorsCloseBehind, Assembly = new CharacterAssembly(data), Combat = combat, CombatConstants = data.Combat.Constants });
-            if (bashCycle > 0) locks.BashClipSeconds = bashCycle;
-            if (combat is not null) combat.Locks = locks;
+            if (Has(StandardParts.Body))
+            {
+                _systems.Add(StandardParts.Body, new BodySystem(_data.Bodies.Constants, _data.BodyOptions, _o.BodyTimeScale, _data.Db));
+                _systems.Add(StandardParts.Body,
+                    _weather = new WeatherSystem(_data.Bodies.Constants) { Db = _data.Db, Buildings = _o.RagdollEnvironment });
+            }
         }
 
-        Trading.TradeSystem? trade = null;
-
-        if (Has(StandardParts.Trade))
+        /// <summary>
+        /// Carrying, with the kidnapping, the town duties and the blood smell that use its lift.
+        /// </summary>
+        void AddCarrying()
         {
-            systems.Add(StandardParts.Trade, trade = new Trading.TradeSystem(data, o.Trade));
-            trade.Crimes = crime;
+            if (Has(StandardParts.Carry))
+            {
+                // The lift takes the length of the shoulder lift left clip (1 s when the lengths are not known).
+                _carry = new Carrying.CarrySystem(_data.Bodies.Constants, _data.BodyOptions,
+                    _o.AnimationLengths?.Of(Carrying.CarrySystem.LiftClip) ?? 1, _o.Carry);
+                if (Has(StandardParts.Aggro)) _carry.Relations = _data.Relations;
+
+                _carry.Assembly = new CharacterAssembly(_data);
+                _carry.Data = _data;
+                _systems.Add(StandardParts.Carry, _carry);
+
+                // Raiders lifting the downed and carrying them to a cage of their faction: right after the carry system, whose lift and links it
+                // uses; it adds nothing to the hash until one runs.
+                if (_population is not null)
+                    _systems.Add(StandardParts.Carry, _kidnap = new Kidnap.KidnapSystem(_data, _population, _carry, _o.Kidnap) { Deeds = _deeds });
+
+                // Town goals of AI squads outside the act-outs (removing downed intruders, caging them, fetching food): after the kidnapping, with
+                // the same lift; nothing in the hash until one runs.
+                if (_population is not null && Has(StandardParts.Ai))
+                    _systems.Add(StandardParts.Carry, _townDuty = new Kidnap.TownDutySystem(_data, _population, _carry) { Deeds = _deeds });
+
+                // The zones' blood smell and the blood hunters (goal 176); nothing in the hash until a corpse has flies or someone bleeds.
+                if (Has(StandardParts.Ai)) _systems.Add(StandardParts.Carry, new SmellSystem(_data, _population));
+            }
         }
 
-        Dialogue.DialogueSystem? talk = null;
-        if (Has(StandardParts.Dialogue))
-            systems.Add(StandardParts.Dialogue, talk = new Dialogue.DialogueSystem(data, o.Dialogue, population));
-        if (deeds is not null && talk is not null)
-            (deeds.CagedHook, deeds.Memory) = (talk.Captured, talk.Memory);   // a captive's squad remembers its captor (MY_CAPTOR), blows their tags
-        if (talk is not null && population is not null)
-            (population.Announcer, population.PendingTalk) = (talk.Announce, talk.HasInterrupt);
-        if (talk is not null) (talk.Arrests, talk.Extensions) = (arrest, o.Extensions);
-        if (weather is not null) weather.Talk = talk;
-        if (talk is not null && aggro is not null) (aggro.Memory, talk.Aggro) = (talk.Memory, aggro);
-        if (talk is not null && ai is not null) ai.Memory = talk.Memory;
-        if (talk is not null && combat is not null) combat.Memory = talk.Memory;
-        if (talk is not null && population is not null) population.Memory = talk.Memory;
-        if (arrest is not null) arrest.Talk = talk;
+        /// <summary>
+        /// The captives, the beds, construction, production and the combat system's own place.
+        /// </summary>
+        void AddWorks()
+        {
+            // The captives' fate and the slavers' logistics: right after the kidnapping (serial, like it); nothing in the hash until a job or a
+            // town's kill timer exists.
+            if (_population is not null && Has(StandardParts.Ai))
+                _systems.Add(StandardParts.None, _captives = new Kidnap.CaptiveSystem(_data, _combat, _o.Captives) { Kidnap = _kidnap });
 
-        return new StandardSystemSet { Systems = Splice(systems, o.Extensions, data), Population = population, Movement = movement, Combat = combat, Aggro = aggro, Carry = carry, Kidnap = kidnap, Captives = captives, Crime = crime, Arrest = arrest, Locks = locks, Beds = beds, Trade = trade, Ai = ai, Construction = construction, Production = production, Ragdolls = ragdolls, Dialogue = talk };
+            if (Has(StandardParts.FirstAid))
+                _systems.Add(StandardParts.None, _beds = new Locks.BedSystem(_data) { Carry = _carry });
+
+            if (Has(StandardParts.Construction))
+                _systems.Add(StandardParts.Construction, _construction = new Construction.ConstructionSystem(_data, _o.Construction));
+
+            if (_combat is not null) _combat.Construction = _construction;
+
+            if (Has(StandardParts.Production))
+            {
+                _systems.Add(StandardParts.Production,
+                    _production = new Production.ProductionSystem(_data, _o.Production)
+                    {
+                        Assembly = new CharacterAssembly(_data),
+                        Construction = _construction,
+                        Beds = _beds,
+                        Carry = _carry
+                    });
+            }
+
+            if (Has(StandardParts.Combat)) _systems.Add(StandardParts.Combat, _combat!);
+        }
+
+        /// <summary>
+        /// The animation and the ragdolls, and the clip lengths the carry, lock and captive systems take from it.
+        /// </summary>
+        void AddAnimation()
+        {
+            if (Has(StandardParts.Animation))
+            {
+                var library = _o.AnimationLibrary ?? AnimationLibrary.FromDatabase(_data.Db);
+                var lengths = _o.AnimationLengths ?? new AnimationLengths();
+                var animation = new AnimationSystem(library, lengths, _o.AnimationBlendRate ?? 4, _combat) { Rigs = _o.Ragdolls };
+                if (library.IndexOf("stonemine") is >= 0 and var mine)
+                {
+                    _bashCycle = lengths.Of(library.Definitions[mine].Clip) / (library.Definitions[mine].PlaySpeed > 0
+                        ? library.Definitions[mine].PlaySpeed
+                        : 1);
+                }
+
+                _systems.Add(StandardParts.Animation, animation);
+
+                // Ragdolls right after the animation: they start from and pin to this tick's pose, and the whole body's position is theirs before
+                // anything later reads it.
+                if (_o.Ragdolls is not null)
+                {
+                    _systems.Add(StandardParts.Animation,
+                        _ragdolls = new Ragdolls.RagdollSystem(_o.Ragdolls, _o.RagdollEnvironment, _data.BodyOptions));
+                }
+
+                animation.Ragdolls = _ragdolls;
+
+                // The stealth knock-out swing lasts the length of the knockout record's clip.
+                if (_carry is not null && library.IndexOf(Carrying.CarrySystem.KnockoutClip) is >= 0 and var ko)
+                    _carry.KnockoutSeconds = lengths.Of(library.Definitions[ko].Clip);
+
+                if (_carry is not null && library.IndexOf(Carrying.CarrySystem.LiftClip) is >= 0 and var lift
+                    && lengths.Of(library.Definitions[lift].Clip) is > 0 and var liftLength)
+                {
+                    _carry.LiftPlaySpeed = library.Definitions[lift].PlaySpeed > 0 ? library.Definitions[lift].PlaySpeed : 1;
+                    _carry.LiftSeconds = liftLength / _carry.LiftPlaySpeed;
+                }
+
+                if (_captives is not null && library.IndexOf(Kidnap.CaptiveSystem.ChopClip) is >= 0 and var chop)
+                    _captives.ChopSeconds = lengths.Of(library.Definitions[chop].Clip);
+            }
+        }
+
+        /// <summary>
+        /// Feeding, retaliation, aggro and fleeing.
+        /// </summary>
+        void AddFights()
+        {
+            if (Has(StandardParts.Feed)) _systems.Add(StandardParts.Feed, new FeedSystem(_data.Items, _o.Feed));
+            if (Has(StandardParts.Retaliation))
+                _systems.Add(StandardParts.Retaliation, new RetaliationSystem(_combat!) { Towns = _data });
+
+            if (Has(StandardParts.Aggro))
+            {
+                _systems.Add(StandardParts.Aggro,
+                    _aggro = new AggroSystem(_data.Relations, _o.Aggro) { Combat = _combat, Towns = _data, Population = _population });
+            }
+
+            // Without the Aggro part a fight still reads the senses (target choice, threats, the fight's end): the look keeps them, and nothing else.
+            else if (_combat is not null)
+            {
+                _systems.Add(StandardParts.Aggro,
+                    new AggroSystem(_data.Relations, (_o.Aggro ?? new AggroSettings()) with { AttackOnSight = false })
+                    {
+                        Combat = _combat,
+                        Towns = _data,
+                        Population = _population
+                    });
+            }
+
+            if (_carry is not null) _carry.Aggro = _aggro;
+            if (Has(StandardParts.Flee))
+            {
+                _systems.Add(StandardParts.Flee,
+                    new FleeSystem(_data.Relations, _combat!, _o.Aggro?.SightRange ?? AggroSystem.OutdoorSight) { SquadBreak = _o.SquadBreak });
+            }
+        }
+
+        /// <summary>
+        /// Crime, arrests and locks.
+        /// </summary>
+        void AddLaw()
+        {
+            if (Has(StandardParts.Crime))
+            {
+                // Last: its sweep sees every position, task and carry link the tick left; the deeds come in from combat and carrying in their own
+                // serial steps.
+                _systems.Add(StandardParts.Crime,
+                    _crime = new Crime.CrimeSystem(_data.Relations, _o.Crime) { Xp = new XpService(_data.Bodies.Constants, _data.BodyOptions) });
+                if (_combat is not null) _combat.Crimes = _crime;
+                if (_carry is not null) _carry.Crimes = _crime;
+                if (_ai is not null) _ai.Crimes = _crime;
+
+                // Right after it: the police act on this tick's bookings and sightings; the lock orders (picking, getting out) report their crimes to
+                // it.
+                _systems.Add(StandardParts.Crime,
+                    _arrest = new Crime.ArrestSystem(_crime, _data.Bodies.Constants, _o.Arrest) { Carry = _carry, Deeds = _deeds, Towns = _data });
+                _arrest.Captives = _captives;
+                if (_townDuty is not null) _townDuty.Arrests = _arrest;
+
+                _systems.Add(StandardParts.Crime,
+                    _locks = new Locks.LockSystem(_data.Bodies.Constants, _data.BodyOptions)
+                    {
+                        Crimes = _crime,
+                        DoorsCloseBehind = _o.DoorsCloseBehind,
+                        Assembly = new CharacterAssembly(_data),
+                        Combat = _combat,
+                        CombatConstants = _data.Combat.Constants
+                    });
+                if (_bashCycle > 0) _locks.BashClipSeconds = _bashCycle;
+                if (_combat is not null) _combat.Locks = _locks;
+            }
+        }
+
+        /// <summary>
+        /// Trade, dialogue and the links that need the dialogue system.
+        /// </summary>
+        void AddTalk()
+        {
+            if (Has(StandardParts.Trade))
+            {
+                _systems.Add(StandardParts.Trade, _trade = new Trading.TradeSystem(_data, _o.Trade));
+                _trade.Crimes = _crime;
+            }
+
+            if (Has(StandardParts.Dialogue))
+                _systems.Add(StandardParts.Dialogue, _talk = new Dialogue.DialogueSystem(_data, _o.Dialogue, _population));
+
+            // a captive's squad remembers its captor (MY_CAPTOR), blows their tags
+            if (_deeds is not null && _talk is not null)
+                (_deeds.CagedHook, _deeds.Memory) = (_talk.Captured, _talk.Memory);
+
+            if (_talk is not null && _population is not null)
+                (_population.Announcer, _population.PendingTalk) = (_talk.Announce, _talk.HasInterrupt);
+
+            if (_talk is not null) (_talk.Arrests, _talk.Extensions) = (_arrest, _o.Extensions);
+            if (_weather is not null) _weather.Talk = _talk;
+            if (_talk is not null && _aggro is not null) (_aggro.Memory, _talk.Aggro) = (_talk.Memory, _aggro);
+            if (_talk is not null && _ai is not null) _ai.Memory = _talk.Memory;
+            if (_talk is not null && _combat is not null) _combat.Memory = _talk.Memory;
+            if (_talk is not null && _population is not null) _population.Memory = _talk.Memory;
+            if (_arrest is not null) _arrest.Talk = _talk;
+        }
     }
 
     /// <summary>

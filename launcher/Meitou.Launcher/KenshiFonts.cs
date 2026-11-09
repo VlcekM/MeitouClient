@@ -38,7 +38,9 @@ sealed class KenshiFonts : FontCollectionBase
                 {
                     fonts.TryAddGlyphTypeface(new MemoryStream(File.ReadAllBytes(path)), out _);
                 }
-                catch (IOException) { }
+                catch (IOException)
+                {
+                }
             }
         }
         FontManager.Current.AddFontCollection(fonts);

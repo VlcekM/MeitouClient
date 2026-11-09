@@ -198,8 +198,10 @@ sealed class Feedback(Store store, Config config, GithubAuth github, IHttpClient
         void Picture(string kind, string label, long? size)
         {
             if (size is { } bytes)
+            {
                 s.AppendLine(bytes <= 5_000_000 ? $"![{label}]({Link(kind)})" : $"[{label}]({Link(kind)}) (png, {Mb(bytes)}, too large to show)")
                     .AppendLine();
+            }
         }
         Picture("screenshot", "Screenshot", row.ScreenshotSize);
         Picture("navmesh", "Navmesh", row.NavmeshSize);

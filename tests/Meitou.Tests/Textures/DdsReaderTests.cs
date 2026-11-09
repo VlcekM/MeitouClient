@@ -158,8 +158,15 @@ public class DdsReaderTests
         foreach (var path in files)
         {
             DdsFile dds;
-            try { dds = DdsReader.ReadFile(path); }
-            catch (DdsFormatException e) { failures.Add($"{Path.GetRelativePath(install.DataDirectory, path)}: {e.Message}"); continue; }
+            try
+            {
+                dds = DdsReader.ReadFile(path);
+            }
+            catch (DdsFormatException e)
+            {
+                failures.Add($"{Path.GetRelativePath(install.DataDirectory, path)}: {e.Message}");
+                continue;
+            }
 
             string kind = (dds.FourCc ?? $"RGB{dds.Masks!.BitCount}") + (dds.IsCubemap ? " cube" : "");
             counts[kind] = counts.GetValueOrDefault(kind) + 1;

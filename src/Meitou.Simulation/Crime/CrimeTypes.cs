@@ -139,7 +139,8 @@ public sealed class BountyLedger
     /// <summary>
     /// The entry <paramref name="faction"/>'s bounties are kept under: its booking faction's (<see cref="CrimeFactions.BookingKey"/>), or null.
     /// </summary>
-    public BountyEntry? BookedFor(FactionRelations relations, int faction) => CrimeFactions.BookingKey(relations, faction) is var key and >= 0 ? Of(key) : null;
+    public BountyEntry? BookedFor(FactionRelations relations, int faction) =>
+        CrimeFactions.BookingKey(relations, faction) is var key and >= 0 ? Of(key) : null;
 
     /// <summary>
     /// The bounty <paramref name="faction"/> sees on the character: its booking faction's entry (0: none).
@@ -317,7 +318,8 @@ public sealed record CrimeSettings
 /// </summary>
 public enum CrimeEventKind { Pending, Witnessed, Booked, Expired }
 
-public readonly record struct CrimeEvent(long Tick, CrimeEventKind Kind, CharacterId Culprit, CrimeCode Code, int Faction, int Amount, CharacterId Witness);
+public readonly record struct CrimeEvent(long Tick, CrimeEventKind Kind, CharacterId Culprit, CrimeCode Code, int Faction,
+    int Amount, CharacterId Witness);
 
 /// <summary>
 /// What the crime rules need to know of the factions: who books bounties and whose goods are free.

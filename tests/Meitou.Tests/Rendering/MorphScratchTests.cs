@@ -13,7 +13,10 @@ public class MorphScratchTests
 {
     static VulkanDevice? TryCreate()
     {
-        try { return VulkanDevice.Create(new VulkanDeviceOptions()); }
+        try
+        {
+            return VulkanDevice.Create(new VulkanDeviceOptions());
+        }
         catch (Exception e)
             when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
         {

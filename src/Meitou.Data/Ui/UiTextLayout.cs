@@ -19,7 +19,13 @@ public readonly record struct UiInsets(float Left, float Top, float Right, float
         if (values.Any(v => !float.IsFinite(v) || v < 0))
             throw new InvalidDataException("Text padding needs finite nonnegative values.");
 
-        return values.Length switch { 1 => Uniform(values[0]), 2 => new(values[0], values[1], values[0], values[1]), 4 => new(values[0], values[1], values[2], values[3]), _ => throw new InvalidDataException("Text padding needs 1, 2 or 4 values (left top right bottom).") };
+        return values.Length switch
+        {
+            1 => Uniform(values[0]),
+            2 => new(values[0], values[1], values[0], values[1]),
+            4 => new(values[0], values[1], values[2], values[3]),
+            _ => throw new InvalidDataException("Text padding needs 1, 2 or 4 values (left top right bottom).")
+        };
     }
 
     public override string ToString() => FormattableString.Invariant($"{Left} {Top} {Right} {Bottom}");

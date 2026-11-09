@@ -15,13 +15,25 @@ public sealed class GettextCatalog
     /// </summary>
     const char ContextSeparator = '\u0004';
 
-    // Key (msgid, or msgctxt 0x04 msgid) -> translated forms; a message without plural has one form.
+    /// <summary>
+    /// Key (msgid, or msgctxt 0x04 msgid) -> translated forms; a message without plural has one form.
+    /// </summary>
     readonly Dictionary<string, string[]> _messages = new(StringComparer.Ordinal);
 
-    // The same messages keyed without case, made on demand (see FindIgnoringCase): a UI layout captions a section "SKILLS" while the catalog's key is
-    // "Skills".
+    /// <summary>
+    /// The same messages keyed without case, made on demand (see FindIgnoringCase): a UI layout captions a section "SKILLS" while the catalog's key
+    /// is "Skills".
+    /// </summary>
     Dictionary<string, string[]>? _byCase;
+
+    /// <summary>
+    /// The <see cref="_version"/> <see cref="_byCase"/> was made at.
+    /// </summary>
     int _byCaseVersion = -1;
+
+    /// <summary>
+    /// Bumped by every stored message.
+    /// </summary>
     int _version;
 
     /// <summary>
@@ -162,112 +174,184 @@ public sealed class GettextCatalog
     /// </summary>
     public static GettextCatalog ReadPo(string text)
     {
-        var catalog = new GettextCatalog();
-        string? context = null, id = null;
-        var plural = new List<string>();
-        var current = new StringBuilder();
-        string? field = null;
-        bool fuzzy = false;
-        int pluralIndex = 0;
+        var reader = new PoReader();
+        foreach (var raw in text.Split('\n')) reader.ReadLine(raw.Trim());
+        reader.Finish();
+        return reader.Catalog;
+    }
 
-        void Flush()
-        {
-            if (field is null) return;
-            Store(field, pluralIndex);
-            field = null;
-        }
+    /// <summary>
+    /// Reads a <c>.po</c> file line by line into <see cref="Catalog"/>: the entry being read, and the field whose quoted text is being gathered.
+    /// </summary>
+    sealed class PoReader
+    {
+        /// <summary>
+        /// The entry's <c>msgctxt</c>, null when it has none.
+        /// </summary>
+        string? _context;
 
-        void Store(string name, int index)
-        {
-            string value = current.ToString();
-            current.Clear();
-            switch (name)
-            {
-                case "msgctxt": context = value; break;
-                case "msgid": id = value; break;
-                case "msgstr":
-                    plural.Clear();
-                    plural.Add(value);
-                    break;
-                case "msgstr[]":
-                    while (plural.Count <= index) plural.Add("");
-                    plural[index] = value;
-                    break;
-            }
-        }
+        /// <summary>
+        /// The entry's <c>msgid</c>, null until read.
+        /// </summary>
+        string? _id;
 
-        void Finish()
-        {
-            Flush();
-            if (id is not null)
-            {
-                if (id.Length == 0)
-                {
-                    if (plural.Count > 0) catalog.ReadHeader(plural[0]);
-                }
-                else if (!fuzzy && plural.Count > 0 && plural[0].Length > 0)
-                    catalog.Set(context is null ? id : context + ContextSeparator + id, [.. plural]);
-            }
-            context = id = null;
-            plural.Clear();
-            fuzzy = false;
-            pluralIndex = 0;
-        }
+        /// <summary>
+        /// The entry's translated forms (<c>msgstr</c>, or <c>msgstr[n]</c> by index).
+        /// </summary>
+        readonly List<string> _plural = [];
 
-        foreach (var raw in text.Split('\n'))
+        /// <summary>
+        /// The text of the field being read, its continuation lines appended.
+        /// </summary>
+        readonly StringBuilder _current = new();
+
+        /// <summary>
+        /// The keyword of the field being read (<c>msgstr[]</c> for an indexed form), null between fields.
+        /// </summary>
+        string? _field;
+
+        /// <summary>
+        /// The entry is marked <c>#, fuzzy</c>.
+        /// </summary>
+        bool _fuzzy;
+
+        /// <summary>
+        /// The index of the <c>msgstr[n]</c> being read.
+        /// </summary>
+        int _pluralIndex;
+
+        /// <summary>
+        /// The messages read so far.
+        /// </summary>
+        public GettextCatalog Catalog { get; } = new();
+
+        /// <summary>
+        /// Reads one trimmed line: a blank line or a comment after the entry's text ends the entry, a quoted line continues the field, a keyword
+        /// starts one.
+        /// </summary>
+        public void ReadLine(string line)
         {
-            var line = raw.Trim();
             if (line.Length == 0)
             {
                 Finish();
-                continue;
+                return;
             }
-            if (line.StartsWith("#~", StringComparison.Ordinal)) continue;   // obsolete entry
+            if (line.StartsWith("#~", StringComparison.Ordinal)) return;   // obsolete entry
             if (line[0] == '#')
             {
                 // A comment after the entry's text starts the next entry.
-                if (field is not null || id is not null) Finish();
+                if (_field is not null || _id is not null) Finish();
                 if (line.StartsWith("#,", StringComparison.Ordinal) && line.Contains("fuzzy", StringComparison.Ordinal))
-                    fuzzy = true;
-                continue;
+                    _fuzzy = true;
+                return;
             }
             if (line[0] == '"')
             {
-                current.Append(Unquote(line));
-                continue;
+                _current.Append(Unquote(line));
+                return;
             }
             Flush();
+            ReadKeyword(line);
+        }
+
+        /// <summary>
+        /// Ends the entry: stores it when it has a translation (the empty <c>msgid</c> is the header), then clears it.
+        /// </summary>
+        public void Finish()
+        {
+            Flush();
+            if (_id is not null)
+            {
+                if (_id.Length == 0)
+                {
+                    if (_plural.Count > 0) Catalog.ReadHeader(_plural[0]);
+                }
+                else if (!_fuzzy && _plural.Count > 0 && _plural[0].Length > 0)
+                    Catalog.Set(_context is null ? _id : _context + ContextSeparator + _id, [.. _plural]);
+            }
+            _context = _id = null;
+            _plural.Clear();
+            _fuzzy = false;
+            _pluralIndex = 0;
+        }
+
+        /// <summary>
+        /// A keyword line (<c>msgctxt</c>, <c>msgid</c>, <c>msgid_plural</c>, <c>msgstr</c>, <c>msgstr[n]</c>) starts its field; a
+        /// <c>msgctxt</c> or <c>msgid</c> after an entry's text starts the next entry. Other lines are ignored.
+        /// </summary>
+        void ReadKeyword(string line)
+        {
             int space = line.IndexOf(' ');
-            if (space < 0) continue;
+            if (space < 0) return;
             string keyword = line[..space];
             if (keyword == "msgctxt" || keyword == "msgid" || keyword == "msgid_plural" || keyword == "msgstr")
             {
-                if (keyword == "msgctxt" && (id is not null || plural.Count > 0)) Finish();
-                if (keyword == "msgid" && plural.Count > 0) Finish();
-                field = keyword;
-                current.Clear().Append(Unquote(line[(space + 1)..]));
+                if (keyword == "msgctxt" && (_id is not null || _plural.Count > 0)) Finish();
+                if (keyword == "msgid" && _plural.Count > 0) Finish();
+                _field = keyword;
+                _current.Clear().Append(Unquote(line[(space + 1)..]));
             }
             else if (keyword.StartsWith("msgstr[", StringComparison.Ordinal) && keyword.EndsWith(']')
                 && int.TryParse(keyword.AsSpan(7, keyword.Length - 8), out int index))
             {
-                field = "msgstr[]";
-                pluralIndex = index;
-                current.Clear().Append(Unquote(line[(space + 1)..]));
+                _field = "msgstr[]";
+                _pluralIndex = index;
+                _current.Clear().Append(Unquote(line[(space + 1)..]));
             }
         }
-        Finish();
-        return catalog;
+
+        /// <summary>
+        /// Stores the field being read, if any.
+        /// </summary>
+        void Flush()
+        {
+            if (_field is null) return;
+            Store(_field, _pluralIndex);
+            _field = null;
+        }
+
+        /// <summary>
+        /// Stores the gathered text as field <paramref name="name"/> (form <paramref name="index"/> of <c>msgstr[]</c>).
+        /// </summary>
+        void Store(string name, int index)
+        {
+            string value = _current.ToString();
+            _current.Clear();
+            switch (name)
+            {
+                case "msgctxt":
+                    _context = value;
+                    break;
+                case "msgid":
+                    _id = value;
+                    break;
+                case "msgstr":
+                    _plural.Clear();
+                    _plural.Add(value);
+                    break;
+                case "msgstr[]":
+                    while (_plural.Count <= index) _plural.Add("");
+                    _plural[index] = value;
+                    break;
+            }
+        }
     }
 
-    // The header message (msgid ""): "Content-Type: ...; charset=..." and "Plural-Forms: ...".
+    /// <summary>
+    /// Reads the header message (msgid ""): "Content-Type: ...; charset=..." and "Plural-Forms: ...".
+    /// </summary>
     void ReadHeader(string header)
     {
         foreach (var line in header.Split('\n'))
+        {
             if (line.StartsWith("Plural-Forms:", StringComparison.OrdinalIgnoreCase))
                 Plurals = PluralRule.Parse(line["Plural-Forms:".Length..]);
+        }
     }
 
-    // The text inside the quotes of a .po string, with the C escapes resolved.
+    /// <summary>
+    /// The text inside the quotes of a .po string, with the C escapes resolved.
+    /// </summary>
     static string Unquote(string quoted)
     {
         quoted = quoted.Trim();

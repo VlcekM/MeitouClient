@@ -65,6 +65,7 @@ public sealed unsafe class HizPyramid : IDisposable
     DeviceBuffer? _buffer;
     readonly uint[] _offsets = new uint[MaxLevels];
     int _levelCount, _width, _height, _baseWidth, _baseHeight;
+
     // The camera the depth was drawn from.
     Vector3 _eye, _right, _up, _back;
     float _tanX, _tanY;
@@ -134,6 +135,7 @@ public sealed unsafe class HizPyramid : IDisposable
         KeepCamera(eyePosition, viewRotation, fieldOfView, aspect);
 
         cmd.BeginLabel("hiz");
+
         // The depth was just drawn (the scene's passes, in whichever layout they leave it: GENERAL), and the last frame's cull may still
         // read the buffer.
         cmd.Order();
@@ -143,6 +145,7 @@ public sealed unsafe class HizPyramid : IDisposable
             cmd.Order();
             RecordReduce(cmd, levels);
         }
+
         // The cull reads it in the next frame's pre-frame commands.
         cmd.Order();
         cmd.EndLabel();
@@ -271,7 +274,22 @@ public sealed unsafe class HizPyramid : IDisposable
 
     static Vector4 SetComponent(Vector4 v, int i, float value)
     {
-        switch (i) { case 0: v.X = value; break; case 1: v.Y = value; break; case 2: v.Z = value; break; default: v.W = value; break; }
+        switch (i)
+        {
+            case 0:
+                v.X = value;
+                break;
+            case 1:
+                v.Y = value;
+                break;
+            case 2:
+                v.Z = value;
+                break;
+            default:
+                v.W = value;
+                break;
+        }
+
         return v;
     }
 

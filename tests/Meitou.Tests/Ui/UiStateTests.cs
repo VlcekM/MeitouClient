@@ -60,9 +60,10 @@ public class UiStateTests
         bindings.Properties["Hidden"] = new Dictionary<string, string> { ["Visible"] = "true" };
         Assert.Contains(MyGuiPresentation.Arrange(layout, 800, 600, bindings, []), c => c.Name == "Content");
         var resources = new MyGuiResources();
-        resources.Resources["Markers"] = XElement.Parse("<Resource type='ResourceImageSet'><Group name='Character' texture='atlas.png' size='32 24'><Index name='Player'><Frame point='100 50'/></Index></Group></Resource>");
-        var image = MyGuiImages.Resolve(resources, new Dictionary<string,
-                string> { ["ImageResource"] = "Markers", ["ImageGroup"] = "Character", ["ImageName"] = "Player" });
+        resources.Resources["Markers"] = XElement.Parse("<Resource type='ResourceImageSet'><Group name='Character' texture='atlas.png' size='32 24'>"
+            + "<Index name='Player'><Frame point='100 50'/></Index></Group></Resource>");
+        var image = MyGuiImages.Resolve(resources,
+            new Dictionary<string, string> { ["ImageResource"] = "Markers", ["ImageGroup"] = "Character", ["ImageName"] = "Player" });
         Assert.Equal(new MyGuiImage("atlas.png", new(100, 50, 32, 24)), image);
     }
     [Fact]

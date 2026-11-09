@@ -29,7 +29,11 @@ public static class FoliageScreenLod
     {
         double sum = 0;
         int n = 0;
-        foreach (float a in areas) { sum += a; n++; }
+        foreach (float a in areas)
+        {
+            sum += a;
+            n++;
+        }
         return n == 0 ? 0 : TriangleExtent(sum, n);
     }
 

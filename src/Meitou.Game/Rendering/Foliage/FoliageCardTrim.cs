@@ -70,27 +70,8 @@ public static class FoliageCardTrimmer
         int triangles = src.Length / 3;
         if (triangles == 0 || !part.HasUv) return null;
 
-        // Triangles are matched by what they look like (position and texture coordinate), not by vertex number: exporters often duplicate the corners
-        // of a quad.
-        var canonical = new int[verts.Length];
-        var ids = new Dictionary<(int, int, int, int, int), int>();
-        for (int i = 0; i < verts.Length; i++)
-        {
-            ref readonly var v = ref verts[i];
-            var key = ((int)MathF.Round(v.Position.X * 100), (int)MathF.Round(v.Position.Y * 100), (int)MathF.Round(v.Position.Z * 100),
-                (int)MathF.Round(v.Uv.X * 10000), (int)MathF.Round(v.Uv.Y * 10000));
-            if (!ids.TryGetValue(key, out int id)) ids[key] = id = ids.Count;
-            canonical[i] = id;
-        }
-        var edges = new Dictionary<(int, int), (int First, int Second, int Count)>();
-        for (int t = 0; t < triangles; t++)
-            for (int e = 0; e < 3; e++)
-            {
-                int a = canonical[src[t * 3 + e]], b = canonical[src[t * 3 + (e + 1) % 3]];
-                var key = a < b ? (a, b) : (b, a);
-                edges[key] = edges.TryGetValue(key, out var found) ? (found.First, t, found.Count + 1) : (t, -1, 1);
-            }
-
+        var canonical = CanonicalIds(verts);
+        var edges = SharedEdges(src, canonical, triangles);
         var used = new bool[triangles];
         var vertices = new List<Vertex>(verts);
         var output = new List<uint>(src.Length);
@@ -101,29 +82,7 @@ public static class FoliageCardTrimmer
             if (used[t]) continue;
             used[t] = true;
             int i0 = (int)src[t * 3], i1 = (int)src[t * 3 + 1], i2 = (int)src[t * 3 + 2];
-
-            // A partner: the triangle across one edge, when the two make a convex quad of one affine map.
-            int partner = -1, opposite = -1, afterEdge = 0;
-            for (int e = 0; e < 3 && partner < 0; e++)
-            {
-                int a = canonical[src[t * 3 + e]], b = canonical[src[t * 3 + (e + 1) % 3]];
-                var key = a < b ? (a, b) : (b, a);
-                if (!edges.TryGetValue(key, out var pair) || pair.Count != 2) continue;
-                int u = pair.First == t ? pair.Second : pair.First;
-                if (u < 0 || used[u]) continue;
-
-                // The vertex of u that is not on the shared edge.
-                int o = -1;
-                for (int k = 0; k < 3; k++)
-                {
-                    int c = canonical[src[u * 3 + k]];
-                    if (c != a && c != b) { o = (int)src[u * 3 + k]; break; }
-                }
-                if (o < 0 || !Consistent(verts, i0, i1, i2, (int)src[u * 3], (int)src[u * 3 + 1], (int)src[u * 3 + 2]))
-                    continue;
-                if (!ConvexQuad(verts, i0, i1, i2, e, o)) continue;
-                (partner, opposite, afterEdge) = (u, o, e);
-            }
+            var (partner, opposite, afterEdge) = FindPartner(t, verts, src, canonical, edges, used, i0, i1, i2);
             if (partner >= 0) used[partner] = true;
 
             // The card's outline in texture space, in cells: a triangle or the quad (the vertices in order around it).
@@ -136,25 +95,18 @@ public static class FoliageCardTrimmer
             double uvArea = Math.Abs(SignedArea(poly));
             double worldArea = WorldArea(verts, i0, i1, i2) + (partner >= 0 ? WorldArea(verts, (int)src[partner * 3], (int)src[partner * 3 + 1],
                 (int)src[partner * 3 + 2]) : 0);
-            stats = stats with { Units = stats.Units + 1, TrianglesBefore = stats.TrianglesBefore + originalTriangles,
-                UvAreaBefore = stats.UvAreaBefore + uvArea, WorldAreaBefore = stats.WorldAreaBefore + worldArea };
+            stats = stats with
+            {
+                Units = stats.Units + 1,
+                TrianglesBefore = stats.TrianglesBefore + originalTriangles,
+                UvAreaBefore = stats.UvAreaBefore + uvArea,
+                WorldAreaBefore = stats.WorldAreaBefore + worldArea,
+            };
 
             // A card in a repeat of the texture (coordinates outside 0 to 1) is worked out in the first repeat and moved back.
             var tile = new Vector2(MathF.Floor(poly.Min(p => p.X) / mask.Width + 0.01f), MathF.Floor(poly.Min(p => p.Y) / mask.Height + 0.01f));
             for (int k = 0; k < poly.Length; k++) poly[k] -= new Vector2(tile.X * mask.Width, tile.Y * mask.Height);
-            Vector2[]? outline = null;
-            bool inside = true;
-            foreach (var p in poly) inside &= p.X >= -0.01f * mask.Width && p.X <= 1.01f * mask.Width && p.Y >= -0.01f * mask.Height && p.Y <= 1.01f * mask.Height;
-            if (!inside) stats = stats with { OutsideUv = stats.OutsideUv + 1 };
-            else if (uvArea < 4) stats = stats with { TinyCards = stats.TinyCards + 1 };
-            if (inside && uvArea >= 4)
-            {
-                int level = Math.Clamp((int)MathF.Floor(MathF.Log2(MathF.Max(MathF.Sqrt((float)uvArea) / options.MinPixels, 1))), 0,
-                    mask.LevelCount - 1);
-                var key = new Key(poly, level);
-                if (!memo.TryGetValue(key, out outline))
-                    memo[key] = outline = Outline(poly, mask, level, options, originalTriangles);
-            }
+            var outline = CardOutline(poly, uvArea, mask, options, originalTriangles, memo, ref stats);
 
             if (outline is null)
             {
@@ -162,8 +114,12 @@ public static class FoliageCardTrimmer
                 output.Add((uint)i1);
                 output.Add((uint)i2);
                 if (partner >= 0) for (int k = 0; k < 3; k++) output.Add(src[partner * 3 + k]);
-                stats = stats with { TrianglesAfter = stats.TrianglesAfter + originalTriangles, UvAreaAfter = stats.UvAreaAfter + uvArea,
-                    WorldAreaAfter = stats.WorldAreaAfter + worldArea };
+                stats = stats with
+                {
+                    TrianglesAfter = stats.TrianglesAfter + originalTriangles,
+                    UvAreaAfter = stats.UvAreaAfter + uvArea,
+                    WorldAreaAfter = stats.WorldAreaAfter + worldArea,
+                };
                 continue;
             }
             if (outline.Length == 0)
@@ -173,32 +129,157 @@ public static class FoliageCardTrimmer
                 continue;
             }
 
-            // New corners by the card's own interpolation (the first triangle's affine map; the quad's other corner agreed with it), in the first triangle's winding.
-            var uv0 = verts[i0].Uv;
-            var uv1 = verts[i1].Uv;
-            var uv2 = verts[i2].Uv;
-            float det = (uv1.X - uv0.X) * (uv2.Y - uv0.Y) - (uv2.X - uv0.X) * (uv1.Y - uv0.Y);
-            var ring = (Vector2[])outline.Clone();
-            if (Math.Sign(SignedArea(ring)) != Math.Sign(det)) Array.Reverse(ring);
-            var indices = new uint[ring.Length];
-            for (int k = 0; k < ring.Length; k++)
-            {
-                var uv = new Vector2(ring[k].X / mask.Width + tile.X, ring[k].Y / mask.Height + tile.Y);
-                int same = -1;
-                foreach (int c in corners)
-                    if (Math.Abs(verts[c].Uv.X - uv.X) < 1e-5f && Math.Abs(verts[c].Uv.Y - uv.Y) < 1e-5f) { same = c; break; }
-                if (same >= 0) { indices[k] = (uint)same; continue; }
-                vertices.Add(Interpolate(verts[i0], verts[i1], verts[i2], uv, det));
-                indices[k] = (uint)(vertices.Count - 1);
-            }
-            for (int k = 1; k + 1 < ring.Length; k++) { output.Add(indices[0]); output.Add(indices[k]); output.Add(indices[k + 1]); }
+            var ring = AddTrimmedCard(outline, verts, i0, i1, i2, corners, tile, mask, vertices, output);
             double newUv = Math.Abs(SignedArea(ring));
             double ratio = uvArea > 0 ? newUv / uvArea : 1;
-            stats = stats with { Trimmed = stats.Trimmed + 1, TrianglesAfter = stats.TrianglesAfter + ring.Length - 2,
-                UvAreaAfter = stats.UvAreaAfter + newUv, WorldAreaAfter = stats.WorldAreaAfter + worldArea * ratio };
+            stats = stats with
+            {
+                Trimmed = stats.Trimmed + 1,
+                TrianglesAfter = stats.TrianglesAfter + ring.Length - 2,
+                UvAreaAfter = stats.UvAreaAfter + newUv,
+                WorldAreaAfter = stats.WorldAreaAfter + worldArea * ratio,
+            };
         }
         if (stats.Trimmed == 0) return new Result(verts, src, stats);
         return new Result([.. vertices], [.. output], stats);
+    }
+
+    /// <summary>
+    /// Triangles are matched by what they look like (position and texture coordinate), not by vertex number: exporters often duplicate the corners
+    /// of a quad. Returns each vertex's id by that look.
+    /// </summary>
+    static int[] CanonicalIds(Vertex[] verts)
+    {
+        var canonical = new int[verts.Length];
+        var ids = new Dictionary<(int, int, int, int, int), int>();
+        for (int i = 0; i < verts.Length; i++)
+        {
+            ref readonly var v = ref verts[i];
+            var key = ((int)MathF.Round(v.Position.X * 100), (int)MathF.Round(v.Position.Y * 100), (int)MathF.Round(v.Position.Z * 100),
+                (int)MathF.Round(v.Uv.X * 10000), (int)MathF.Round(v.Uv.Y * 10000));
+            if (!ids.TryGetValue(key, out int id)) ids[key] = id = ids.Count;
+            canonical[i] = id;
+        }
+        return canonical;
+    }
+
+    /// <summary>
+    /// Each edge (by its corners' ids) with the first two triangles on it and how many triangles share it.
+    /// </summary>
+    static Dictionary<(int, int), (int First, int Second, int Count)> SharedEdges(uint[] src, int[] canonical, int triangles)
+    {
+        var edges = new Dictionary<(int, int), (int First, int Second, int Count)>();
+        for (int t = 0; t < triangles; t++)
+            for (int e = 0; e < 3; e++)
+            {
+                int a = canonical[src[t * 3 + e]], b = canonical[src[t * 3 + (e + 1) % 3]];
+                var key = a < b ? (a, b) : (b, a);
+                edges[key] = edges.TryGetValue(key, out var found) ? (found.First, t, found.Count + 1) : (t, -1, 1);
+            }
+        return edges;
+    }
+
+    /// <summary>
+    /// A partner: the triangle across one edge, when the two make a convex quad of one affine map; the partner, its vertex off the shared edge and
+    /// the edge (-1, -1, 0: none).
+    /// </summary>
+    static (int Partner, int Opposite, int AfterEdge) FindPartner(int t, Vertex[] verts, uint[] src, int[] canonical,
+        Dictionary<(int, int), (int First, int Second, int Count)> edges, bool[] used, int i0, int i1, int i2)
+    {
+        int partner = -1, opposite = -1, afterEdge = 0;
+        for (int e = 0; e < 3 && partner < 0; e++)
+        {
+            int a = canonical[src[t * 3 + e]], b = canonical[src[t * 3 + (e + 1) % 3]];
+            var key = a < b ? (a, b) : (b, a);
+            if (!edges.TryGetValue(key, out var pair) || pair.Count != 2) continue;
+            int u = pair.First == t ? pair.Second : pair.First;
+            if (u < 0 || used[u]) continue;
+
+            // The vertex of u that is not on the shared edge.
+            int o = -1;
+            for (int k = 0; k < 3; k++)
+            {
+                int c = canonical[src[u * 3 + k]];
+                if (c != a && c != b)
+                {
+                    o = (int)src[u * 3 + k];
+                    break;
+                }
+            }
+            if (o < 0 || !Consistent(verts, i0, i1, i2, (int)src[u * 3], (int)src[u * 3 + 1], (int)src[u * 3 + 2]))
+                continue;
+            if (!ConvexQuad(verts, i0, i1, i2, e, o)) continue;
+            (partner, opposite, afterEdge) = (u, o, e);
+        }
+        return (partner, opposite, afterEdge);
+    }
+
+    /// <summary>
+    /// The outline of a card moved into the first repeat (from <paramref name="memo"/> when an equal card had one), at the mask level its size
+    /// asks; null when it is outside the texture or too small to trim, an empty one when nothing of it can show.
+    /// </summary>
+    static Vector2[]? CardOutline(Vector2[] poly, double uvArea, FoliageCardMask mask, FoliageCardTrimOptions options, int originalTriangles,
+        Dictionary<Key, Vector2[]?> memo, ref FoliageCardTrimStats stats)
+    {
+        Vector2[]? outline = null;
+        bool inside = true;
+        foreach (var p in poly)
+            inside &= p.X >= -0.01f * mask.Width && p.X <= 1.01f * mask.Width && p.Y >= -0.01f * mask.Height && p.Y <= 1.01f * mask.Height;
+        if (!inside) stats = stats with { OutsideUv = stats.OutsideUv + 1 };
+        else if (uvArea < 4) stats = stats with { TinyCards = stats.TinyCards + 1 };
+        if (inside && uvArea >= 4)
+        {
+            int level = Math.Clamp((int)MathF.Floor(MathF.Log2(MathF.Max(MathF.Sqrt((float)uvArea) / options.MinPixels, 1))), 0,
+                mask.LevelCount - 1);
+            var key = new Key(poly, level);
+            if (!memo.TryGetValue(key, out outline))
+                memo[key] = outline = Outline(poly, mask, level, options, originalTriangles);
+        }
+        return outline;
+    }
+
+    /// <summary>
+    /// Adds the trimmed card's triangles (a fan over its outline, back in the card's repeat) and its new corners; returns the outline as drawn.
+    /// </summary>
+    static Vector2[] AddTrimmedCard(Vector2[] outline, Vertex[] verts, int i0, int i1, int i2, List<int> corners, Vector2 tile, FoliageCardMask mask,
+        List<Vertex> vertices, List<uint> output)
+    {
+        // New corners by the card's own interpolation (the first triangle's affine map; the quad's other corner agreed with it), in the first
+        // triangle's winding.
+        var uv0 = verts[i0].Uv;
+        var uv1 = verts[i1].Uv;
+        var uv2 = verts[i2].Uv;
+        float det = (uv1.X - uv0.X) * (uv2.Y - uv0.Y) - (uv2.X - uv0.X) * (uv1.Y - uv0.Y);
+        var ring = (Vector2[])outline.Clone();
+        if (Math.Sign(SignedArea(ring)) != Math.Sign(det)) Array.Reverse(ring);
+        var indices = new uint[ring.Length];
+        for (int k = 0; k < ring.Length; k++)
+        {
+            var uv = new Vector2(ring[k].X / mask.Width + tile.X, ring[k].Y / mask.Height + tile.Y);
+            int same = -1;
+            foreach (int c in corners)
+            {
+                if (Math.Abs(verts[c].Uv.X - uv.X) < 1e-5f && Math.Abs(verts[c].Uv.Y - uv.Y) < 1e-5f)
+                {
+                    same = c;
+                    break;
+                }
+            }
+            if (same >= 0)
+            {
+                indices[k] = (uint)same;
+                continue;
+            }
+            vertices.Add(Interpolate(verts[i0], verts[i1], verts[i2], uv, det));
+            indices[k] = (uint)(vertices.Count - 1);
+        }
+        for (int k = 1; k + 1 < ring.Length; k++)
+        {
+            output.Add(indices[0]);
+            output.Add(indices[k]);
+            output.Add(indices[k + 1]);
+        }
+        return ring;
     }
 
     // ---- cards ----
@@ -350,7 +431,11 @@ public static class FoliageCardTrimmer
                     mask.Width - 1);
                 int first = -1, last = -1;
                 for (int c = c0; c <= c1; c++)
-                    if (cells[r * mask.Width + c]) { if (first < 0) first = c; last = c; }
+                    if (cells[r * mask.Width + c])
+                    {
+                        if (first < 0) first = c;
+                        last = c;
+                    }
                 if (first < 0) continue;
                 foreach (float x in (ReadOnlySpan<float>)[first - margin, last + 1 + margin])
                     foreach (float y in (ReadOnlySpan<float>)[r - margin, r + 1 + margin]) points[count++] = new Vector2(x, y);

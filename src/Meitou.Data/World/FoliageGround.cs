@@ -136,8 +136,12 @@ public sealed class FoliageOverlay
     /// <summary>
     /// Tile pixel column of world X (truncated, clamped to the tile), as the game computes it.
     /// </summary>
-    public int PixelX(float x) => x < TileX0 ? 0 : x > TileX0 + TilePixels * PixelSize ? TilePixels - 1 : Math.Min((int)((x - TileX0) / PixelSize), TilePixels - 1);
-    public int PixelZ(float z) => z < TileZ0 ? 0 : z > TileZ0 + TilePixels * PixelSize ? TilePixels - 1 : Math.Min((int)((z - TileZ0) / PixelSize), TilePixels - 1);
+    public int PixelX(float x) => x < TileX0 ? 0
+        : x > TileX0 + TilePixels * PixelSize ? TilePixels - 1
+        : Math.Min((int)((x - TileX0) / PixelSize), TilePixels - 1);
+    public int PixelZ(float z) => z < TileZ0 ? 0
+        : z > TileZ0 + TilePixels * PixelSize ? TilePixels - 1
+        : Math.Min((int)((z - TileZ0) / PixelSize), TilePixels - 1);
 
     /// <summary>
     /// World X/Z of a tile pixel's centre.
@@ -191,8 +195,10 @@ public sealed class FoliageOverlay
     public static byte[] ReadTile(GameInstall install, ZoneCoordinate zone)
     {
         int zonesPerTile = WorldLayout.ZoneCount / TerrainMaps.OverlayTiles;
-        var image = TextureLoader.LoadImage(File.ReadAllBytes(TerrainMaps.OverlayTile(install, "new_overlay", zone.X / zonesPerTile, zone.Y / zonesPerTile)));
-        if (image.Width != TilePixels || image.Height != TilePixels) throw new InvalidDataException($"Overlay tile is {image.Width}x{image.Height}, not {TilePixels}².");
+        string tile = TerrainMaps.OverlayTile(install, "new_overlay", zone.X / zonesPerTile, zone.Y / zonesPerTile);
+        var image = TextureLoader.LoadImage(File.ReadAllBytes(tile));
+        if (image.Width != TilePixels || image.Height != TilePixels)
+            throw new InvalidDataException($"Overlay tile is {image.Width}x{image.Height}, not {TilePixels}².");
         return image.Pixels;
     }
 }
@@ -211,7 +217,8 @@ public sealed class FoliageBiomeMap(int size, byte[] rgba)
     public uint At(float x, float z)
     {
         float cell = (float)WorldLayout.WorldSize / size;
-        int i = Math.Clamp((int)((x + WorldLayout.HalfWorldSize) / cell), 0, size - 1), j = Math.Clamp((int)((z + WorldLayout.HalfWorldSize) / cell), 0, size - 1);
+        int i = Math.Clamp((int)((x + WorldLayout.HalfWorldSize) / cell), 0, size - 1);
+        int j = Math.Clamp((int)((z + WorldLayout.HalfWorldSize) / cell), 0, size - 1);
         int o = (j * size + i) * 4;
         return (uint)(rgba[o] << 16 | rgba[o + 1] << 8 | rgba[o + 2]);
     }

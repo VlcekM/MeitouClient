@@ -20,8 +20,15 @@ public class LoadingSkyTests
     public void StarsRenderThroughTheLoadingPassWithoutWorldCallbacksOrValidationErrors(UpscalerKind upscaler)
     {
         VulkanDevice? native;
-        try { native = VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true }); }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException) { native = null; }
+        try
+        {
+            native = VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true });
+        }
+        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException
+            or Silk.NET.Core.Loader.SymbolLoadingException)
+        {
+            native = null;
+        }
         using var device = native;
         Assert.SkipWhen(device is null, "No Vulkan 1.3 device");
         using (var context = new GpuContext(device!))
@@ -30,7 +37,7 @@ public class LoadingSkyTests
             var options = PostOptions.Create("meitou");
             options.Upscale.Kind = upscaler;
             options.Upscale.Scale = 1;
-            using var gpu = new WorldFrame.Gpu
+            using var gpu = new WorldGpu
             {
                 Terrain = new TerrainRenderer(context, scene.Coarse, scene.CoarseSize, scene.Window),
                 Sky = new SkyRenderer(context) { MeitouStars = true },

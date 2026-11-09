@@ -30,6 +30,7 @@ public static class ZoneSave
             game.Zones[z] = zone;
             made.Add(z);
         }
+
         if (made.Count > 0) BindTowns(game, data, made);
         return made;
     }

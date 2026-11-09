@@ -11,6 +11,7 @@ using Meitou.Simulation.Factions;
 using Meitou.Simulation.Player;
 using Meitou.Simulation.Population;
 using SquadMemoryData = Meitou.Simulation.Dialogue.SquadMemoryData;
+using FreshMember = (Meitou.Simulation.CharacterCold Cold, System.Numerics.Vector3 Position, float Yaw, Meitou.Simulation.CharacterId Id, bool Leader);
 
 namespace Meitou.Simulation.Saving;
 
@@ -335,7 +336,8 @@ public static partial class SaveCapture
             Hand? hand = p.StateId is not null && options.Levels?.Level.Find(p.StateId) is { } level && level.Ints.ContainsKey("handI")
                 ? new Hand(level.GetInt("handTYPE"), level.GetInt("handC"), level.GetInt("handCS"), level.GetInt("handI"), level.GetInt("handS"))
                 : null;
-            builder.AddTown("Town state " + record.Name, p.InstanceId, town.Faction ?? "", isNest: false, WorldLayout.ZoneOf(p.Position.X, p.Position.Z), hand: hand);
+            builder.AddTown("Town state " + record.Name, p.InstanceId, town.Faction ?? "", isNest: false,
+                WorldLayout.ZoneOf(p.Position.X, p.Position.Z), hand: hand);
         }
     }
 
@@ -448,7 +450,9 @@ public static partial class SaveCapture
             if (population is not null && index.TryGetValue(f.Id, out int own)) f.Prosperity = (float)population.ProsperityOf(world, own);
             if (loaded is null || !index.TryGetValue(f.Id, out int a) || loaded.RelationBaseline.Length != index.Count * index.Count) continue;
 
-            if (a < loaded.TrustBaseline.Length && data.Relations.GlobalTrust(a) != loaded.TrustBaseline[a]) f.GlobalTrust = data.Relations.GlobalTrust(a);
+            if (a < loaded.TrustBaseline.Length && data.Relations.GlobalTrust(a) != loaded.TrustBaseline[a])
+                f.GlobalTrust = data.Relations.GlobalTrust(a);
+
             if (f.IsPlayer) continue;
 
             if (a < loaded.RankBaseline.Length && data.Relations.Rank(a) != loaded.RankBaseline[a]) f.Rank = data.Relations.Rank(a);
@@ -472,7 +476,8 @@ public static partial class SaveCapture
             if (index.TryGetValue(r.FactionId, out int b))
             {
                 if (data.Relations.Get(a, b) != loaded.RelationBaseline[a * index.Count + b]) value = data.Relations.Get(a, b);
-                if (loaded.WarBaseline.Length == loaded.RelationBaseline.Length && data.Relations.AtWar(a, b) != loaded.WarBaseline[a * index.Count + b])
+                if (loaded.WarBaseline.Length == loaded.RelationBaseline.Length
+                    && data.Relations.AtWar(a, b) != loaded.WarBaseline[a * index.Count + b])
                     war = data.Relations.AtWar(a, b);
             }
 
@@ -498,6 +503,10 @@ public static partial class SaveCapture
 
     #region Player platoons and characters
 
+    /// <summary>
+    /// The player's squads in order, then any other squad holding characters of a loaded platoon, each as its platoon (the loaded one, else a new
+    /// one) with its characters; the loaded characters and squads gone since are removed. Returns the characters written by id.
+    /// </summary>
     static Dictionary<CharacterId, SaveCharacter> WritePlayerSquads(
         SaveBuilder builder, World world, PopulationData data, LoadedSave? loaded, SaveCaptureOptions options, SaveClock clock,
         IReadOnlyDictionary<string, FcsRecord> buildings, Dictionary<string, RaceData?> races)
@@ -528,30 +537,7 @@ public static partial class SaveCapture
             if (alive.Count == 0 && index < 0) continue;
 
             squads++;
-
-            // The squad's own platoon, by the file it was loaded from (never by its members: a character moved between squads would carry the platoon with it).
-            string? name = squad.SaveName
-                ?? (index < 0 && !squad.Dead ? alive.Select(m => table.Cold(m.Slot)!.Save?.PlatoonName).FirstOrDefault(n => n is not null) : null);
-            var platoon = name is null || kept.Contains(name) ? null : game.Platoons.FirstOrDefault(p => p.Name == name);
-            var at = alive.Count > 0 ? table.Previous[alive[0].Slot].Position : squad.Position;
-            if (platoon is null)
-                platoon = builder.AddPlatoon(FreshName(game, playerState, playerFactionName), playerFactionName, playerFactionId, squad.TemplateId, at);
-            else
-                platoon.Position = at;
-
-            kept.Add(platoon.Name);
-            NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
-            if (index >= 0)
-            {
-                // The name the tabs show is the record's name; the string id stays the file's (Observed: rename writes the record's name, docs/formats/save.md).
-                if (squad.Name.Length > 0) platoon.Record.Name = squad.Name;
-                platoon.Record.Ints["squad index"] = index;
-            }
-            else if (squad.Dead)
-            {
-                platoon.Record.Name = SquadManagement.DeadSquadName;
-            }
-
+            var platoon = PlayerPlatoon(builder, world, squad, alive, index, kept, playerState, playerFactionName, playerFactionId);
             foreach (var id in alive)
             {
                 members++;
@@ -571,7 +557,54 @@ public static partial class SaveCapture
             SetCharCount(platoon);
         }
 
-        // Characters of a loaded platoon that the world had and now has no more (killed, left the squad): gone from the file.
+        DropGone(builder, spawned, seen);
+        DropDeleted(builder, world, loaded, kept);
+        game.Camera.Squads = squads;
+        game.Camera.Members = members;
+        return written;
+    }
+
+    /// <summary>
+    /// The platoon of a player-side squad: its own, by the file it was loaded from (never by its members: a character moved between squads would
+    /// carry the platoon with it), else a new one; placed at its first member, its memory noted, and named as the tabs show it.
+    /// </summary>
+    static SavePlatoon PlayerPlatoon(SaveBuilder builder, World world, Squad squad, List<CharacterId> alive, int index, HashSet<string> kept,
+        SaveFaction? playerState, string playerFactionName, string playerFactionId)
+    {
+        var game = builder.Game;
+        var table = world.Characters;
+        string? name = squad.SaveName
+            ?? (index < 0 && !squad.Dead ? alive.Select(m => table.Cold(m.Slot)!.Save?.PlatoonName).FirstOrDefault(n => n is not null) : null);
+        var platoon = name is null || kept.Contains(name) ? null : game.Platoons.FirstOrDefault(p => p.Name == name);
+        var at = alive.Count > 0 ? table.Previous[alive[0].Slot].Position : squad.Position;
+        if (platoon is null)
+            platoon = builder.AddPlatoon(FreshName(game, playerState, playerFactionName), playerFactionName, playerFactionId, squad.TemplateId, at);
+        else
+            platoon.Position = at;
+
+        kept.Add(platoon.Name);
+        NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
+        if (index >= 0)
+        {
+            // The name the tabs show is the record's name; the string id stays the file's (Observed: rename writes the record's name,
+            // docs/formats/save.md).
+            if (squad.Name.Length > 0) platoon.Record.Name = squad.Name;
+            platoon.Record.Ints["squad index"] = index;
+        }
+        else if (squad.Dead)
+        {
+            platoon.Record.Name = SquadManagement.DeadSquadName;
+        }
+
+        return platoon;
+    }
+
+    /// <summary>
+    /// Characters of a loaded platoon that the world had and now has no more (killed, left the squad): gone from the file.
+    /// </summary>
+    static void DropGone(SaveBuilder builder, HashSet<(string Platoon, int Slot)> spawned, HashSet<(string Platoon, int Slot)> seen)
+    {
+        var game = builder.Game;
         foreach (var (platoonName, slot) in spawned)
         {
             if (seen.Contains((platoonName, slot))) continue;
@@ -580,18 +613,22 @@ public static partial class SaveCapture
             var sc = platoon?.Characters.FirstOrDefault(c => c.Handle.I == slot);
             if (platoon is not null && sc is not null) builder.RemoveCharacter(platoon, sc);
         }
+    }
 
-        // A loaded player squad removed since (DELETE on the squads screen): its platoon goes, as the original destroys it (FUN_1406ba9d0).
+    /// <summary>
+    /// A loaded player squad removed since (DELETE on the squads screen): its platoon goes, as the original destroys it (FUN_1406ba9d0).
+    /// </summary>
+    static void DropDeleted(SaveBuilder builder, World world, LoadedSave? loaded, HashSet<string> kept)
+    {
+        var game = builder.Game;
         foreach (var lp in loaded?.PlayerPlatoons ?? [])
         {
             if (!kept.Contains(lp.Platoon.Name) && world.Squads.Find(lp.Squad.Id) is null
                 && game.Platoons.FirstOrDefault(p => p.Name == lp.Platoon.Name) is { } gone)
+            {
                 builder.RemovePlatoon(gone);
+            }
         }
-
-        game.Camera.Squads = squads;
-        game.Camera.Members = members;
-        return written;
     }
 
     /// <summary>
@@ -619,12 +656,14 @@ public static partial class SaveCapture
     /// loaded ones, else defaults for a new one); a new one's look; what it carries.
     /// </summary>
     static SaveCharacter WriteCharacter(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
         Dictionary<string, RaceData?> races, SavePlatoon platoon, SaveCharacter? sc, CharacterId id, string ownerFactionId, bool isLeader, bool orders)
     {
         ref readonly var hot = ref world.Characters.Previous[id.Slot];
         return WriteCharacter(
-            builder, world, data, options, clock, buildings, races, platoon, sc, world.Characters.Cold(id.Slot)!, hot.Position, hot.Yaw, id, ownerFactionId,
+            builder, world, data, options, clock, buildings, races, platoon, sc, world.Characters.Cold(id.Slot)!, hot.Position, hot.Yaw, id,
+            ownerFactionId,
             isLeader, orders);
     }
 
@@ -633,13 +672,15 @@ public static partial class SaveCapture
     /// (<paramref name="id"/>) or a stored one (none).
     /// </summary>
     static SaveCharacter WriteCharacter(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
         Dictionary<string, RaceData?> races, SavePlatoon platoon, SaveCharacter? sc, CharacterCold cold, Vector3 position, float yaw, CharacterId id,
         string ownerFactionId, bool isLeader, bool orders)
     {
         var hot = (Position: position, Yaw: yaw);
         bool isNew = sc is null;
-        sc ??= builder.AddCharacter(platoon, cold.RecordId, cold.Name, ownerFactionId, hot.Position, SaveRotation.OfYaw(hot.Yaw), isLeader: isLeader, squadMemberType: cold.Role);
+        sc ??= builder.AddCharacter(platoon, cold.RecordId, cold.Name, ownerFactionId, hot.Position, SaveRotation.OfYaw(hot.Yaw), isLeader: isLeader,
+            squadMemberType: cold.Role);
 
         // The handle's own serial is "random" in the original, and the loader rolls a character's look from it: a character with a rolled look gets
         // the look's seed as its serial, so loading a save without its items (one written before inventories were) rolls the same face, hair and
@@ -722,17 +763,19 @@ public static partial class SaveCapture
         db.Find(recordId)?.GetReferences("stats").Where(r => r.Values.Value0 > 0).Select(r => db.Find(r.TargetStringId))
             .FirstOrDefault(s => s?.Type == FcsRecordType.Stats)?.GetFloat("warrior spirit") ?? 0;
 
-    static void WriteBody(SaveCharacter sc, string recordId, CharacterStats? stats, MedicalState? medical, bool isNew, PopulationData data, Dictionary<string, RaceData?> races)
+    static void WriteBody(SaveCharacter sc, string recordId, CharacterStats? stats, MedicalState? medical, bool isNew, PopulationData data,
+        Dictionary<string, RaceData?> races)
     {
         if (stats is null && isNew) stats = new CharacterStats();
         if (stats is not null && sc.Stats is { } sr)
         {
             stats.WriteSave(sr.Floats);
-            SaveBuilder.FillLegacyStats(sr, isNew ? WarriorSpiritOf(data.Db, recordId) : 0);
+            LegacyStats.Fill(sr, isNew ? WarriorSpiritOf(data.Db, recordId) : 0);
         }
 
         if (medical is null && isNew && RaceOf(recordId, data.Db, races) is { } race)
             medical = MedicalState.Create(race, stats?.Strength ?? 50);
+
         if (medical is not null && sc.Medical is { } mr)
         {
             medical.WriteSave(mr.Floats, mr.Bools, mr.Strings);
@@ -813,7 +856,8 @@ public static partial class SaveCapture
     /// them as they are (in the world now) or were (when it left): place, facing, body, kit, bounties; a character whose body is gone leaves the file.
     /// </summary>
     static void WriteSavedNpcs(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
         Dictionary<string, RaceData?> races)
     {
         if (world.Saved is not { } saved) return;
@@ -856,29 +900,41 @@ public static partial class SaveCapture
 
             if (squad is not null) NoteMemory(platoon.Record, MemoryOf(world)?.Snapshot(squad.Id));
             else if (sp.MemorySet) NoteMemory(platoon.Record, sp.Memory);
-            foreach (var m in sp.Members)
+            WriteSavedMembers(builder, world, data, options, clock, buildings, races, platoon, sp, squad);
+            SetCharCount(platoon);
+        }
+    }
+
+    /// <summary>
+    /// The characters of a save's NPC platoon: a corpse gone since leaves the file, one in the world is written as it is, one that left as it was.
+    /// </summary>
+    static void WriteSavedMembers(
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
+        Dictionary<string, RaceData?> races, SavePlatoon platoon, SavedPlatoon sp, Squad? squad)
+    {
+        var table = world.Characters;
+        foreach (var m in sp.Members)
+        {
+            var sc = platoon.Characters.FirstOrDefault(c => c.Handle.I == m.Slot);
+            if (sc is null) continue;
+
+            // A corpse that decayed or was unloaded since it was made leaves its platoon's list, as the original's destroyed character does.
+            if (m.Gone || !m.Live.IsNone && !table.IsAlive(m.Live) && sc.Medical?.Bools.GetValueOrDefault("dead") == true)
             {
-                var sc = platoon.Characters.FirstOrDefault(c => c.Handle.I == m.Slot);
-                if (sc is null) continue;
-
-                // A corpse that decayed or was unloaded since it was made leaves its platoon's list, as the original's destroyed character does.
-                if (m.Gone || !m.Live.IsNone && !table.IsAlive(m.Live) && sc.Medical?.Bools.GetValueOrDefault("dead") == true)
-                {
-                    builder.RemoveCharacter(platoon, sc);
-                    continue;
-                }
-
-                if (!m.Live.IsNone && table.IsAlive(m.Live))
-                {
-                    WriteCharacter(builder, world, data, options, clock, buildings, races, platoon, sc, m.Live, sc.OwnerFactionId, squad?.Leader == m.Live, orders: false);
-                }
-                else if (m.Position is { } at)
-                {
-                    WriteLeftCharacter(builder, world, data, clock, races, platoon, sc, m, at);
-                }
+                builder.RemoveCharacter(platoon, sc);
+                continue;
             }
 
-            SetCharCount(platoon);
+            if (!m.Live.IsNone && table.IsAlive(m.Live))
+            {
+                WriteCharacter(builder, world, data, options, clock, buildings, races, platoon, sc, m.Live, sc.OwnerFactionId,
+                    squad?.Leader == m.Live, orders: false);
+            }
+            else if (m.Position is { } at)
+            {
+                WriteLeftCharacter(builder, world, data, clock, races, platoon, sc, m, at);
+            }
         }
     }
 
@@ -939,59 +995,242 @@ public static partial class SaveCapture
     /// file, which the loader makes from its template. Returns the platoons written by world platoon id.
     /// </summary>
     static Dictionary<int, SavePlatoon> WriteFreshNpcs(
-        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
-        Dictionary<string, RaceData?> races, LoadedSave? loaded)
+        SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+        IReadOnlyDictionary<string, FcsRecord> buildings,
+        Dictionary<string, RaceData?> races, LoadedSave? loaded) =>
+        new FreshNpcWriter(builder, world, data, options, clock, buildings, races).Write(loaded);
+
+    /// <summary>
+    /// Writes the population's NPC squads as new platoons (<see cref="WriteFreshNpcs"/>): the squads in the world, those stored since they left it,
+    /// then a campaign's stand-ins.
+    /// </summary>
+    sealed class FreshNpcWriter
     {
-        var written = new Dictionary<int, SavePlatoon>();
-        var game = builder.Game;
-        var table = world.Characters;
-        var factions = new Dictionary<string, SaveFaction>(StringComparer.Ordinal);
-        foreach (var f in game.Factions) factions.TryAdd(f.Id, f);
-        var townHands = new Dictionary<string, Hand>(StringComparer.Ordinal);
-        foreach (var t in game.Towns)
+        /// <summary>
+        /// The save being built.
+        /// </summary>
+        readonly SaveBuilder _builder;
+
+        /// <summary>
+        /// The world saved.
+        /// </summary>
+        readonly World _world;
+
+        /// <summary>
+        /// The population's data.
+        /// </summary>
+        readonly PopulationData _data;
+
+        /// <summary>
+        /// The capture's options.
+        /// </summary>
+        readonly SaveCaptureOptions _options;
+
+        /// <summary>
+        /// The save's clock.
+        /// </summary>
+        readonly SaveClock _clock;
+
+        /// <summary>
+        /// The buildings' saved states, by instance.
+        /// </summary>
+        readonly IReadOnlyDictionary<string, FcsRecord> _buildings;
+
+        /// <summary>
+        /// The races' data, by record id.
+        /// </summary>
+        readonly Dictionary<string, RaceData?> _races;
+
+        /// <summary>
+        /// The save's game.
+        /// </summary>
+        readonly SaveGame _game;
+
+        /// <summary>
+        /// The save's factions, by id (the first of each).
+        /// </summary>
+        readonly Dictionary<string, SaveFaction> _factions = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The save's towns' handles, by town instance.
+        /// </summary>
+        readonly Dictionary<string, Hand> _townHands = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The save's platoons, by name (the first of each).
+        /// </summary>
+        readonly Dictionary<string, SavePlatoon> _byName = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// The platoons written, by world platoon id.
+        /// </summary>
+        readonly Dictionary<int, SavePlatoon> _written = [];
+
+        /// <summary>
+        /// A writer for the save being built: the save's factions, town handles and platoons indexed.
+        /// </summary>
+        public FreshNpcWriter(SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
+            IReadOnlyDictionary<string, FcsRecord> buildings, Dictionary<string, RaceData?> races)
         {
-            if (t.Instance.Length > 0 && !t.Handle.IsNull) townHands.TryAdd(t.Instance, t.Handle);
+            (_builder, _world, _data, _options, _clock, _buildings, _races) = (builder, world, data, options, clock, buildings, races);
+            _game = builder.Game;
+            foreach (var f in _game.Factions) _factions.TryAdd(f.Id, f);
+            foreach (var t in _game.Towns)
+            {
+                if (t.Instance.Length > 0 && !t.Handle.IsNull) _townHands.TryAdd(t.Instance, t.Handle);
+            }
+
+            foreach (var x in _game.Platoons) _byName.TryAdd(x.Name, x);
         }
 
-        var byName = new Dictionary<string, SavePlatoon>(StringComparer.Ordinal);
-        foreach (var x in game.Platoons) byName.TryAdd(x.Name, x);
+        /// <summary>
+        /// Writes the squads in the world, the stored ones and the campaign's stand-ins; returns the platoons written by world platoon id.
+        /// </summary>
+        public Dictionary<int, SavePlatoon> Write(LoadedSave? loaded)
+        {
+            WriteWorldSquads();
+            WriteStoredSquads();
+            WriteStandIns(loaded);
+            return _written;
+        }
 
-        // A new record, or (`into`) a save's never-made platoon Meitou made from its template (Platoon.Unmade): its own record written back, as the
-        // original's saver does (FUN_140372ef0: `never been activated` 0, its file and char count); its pool, residency, town and home stay as the
-        // record has them.
-        SavePlatoon Write(int town, int factionIndex, string templateId, long money, bool roaming, TownBuilding? homeBuilding, string? package,
-            List<(CharacterCold Cold, Vector3 Position, float Yaw, CharacterId Id, bool Leader)> members, Trading.Shop? shop, Vector3 at = default,
+        /// <summary>
+        /// A save's never-made platoon once made holds its squad in Stored beside its record (Platoon.Unmade).
+        /// </summary>
+        SavePlatoon? Into(Platoon? p) => p is { Saved: { } saved, Stored: not null } ? _byName.GetValueOrDefault(saved.Name) : null;
+
+        /// <summary>
+        /// Whether a squad of the town and faction is written: a known town, a known faction not the player's.
+        /// </summary>
+        bool Writable(int town, int faction) =>
+            town >= 0 && town < _data.Sites.Count && faction >= 0 && faction < _data.Factions.Count && faction != _data.PlayerFaction;
+
+        /// <summary>
+        /// The squads in the world (not a save's platoon), with their dead; a made never-made platoon wiped out keeps its record unless the original
+        /// would drop it.
+        /// </summary>
+        void WriteWorldSquads()
+        {
+            var table = _world.Characters;
+            foreach (var squad in _world.Squads.All)
+            {
+                if (!Writable(squad.Town, squad.Faction)) continue;
+
+                Platoon? roamer = null;
+                if (squad.PlatoonId >= 0)
+                {
+                    roamer = _world.Platoons.Find(squad.PlatoonId);
+                    if (roamer is null || roamer.Saved is not null && roamer.Stored is null) continue;   // a save's platoon (WriteSavedNpcs)
+                }
+
+                // The dead stay in the platoon's list as the original writes it (FUN_1404ff410, docs/game/character-stats.md "Corpses").
+                var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false, Save: null }).ToList();
+                var alive = every.Where(m => table.Cold(m.Slot)!.DiedTick < 0).ToList();
+                var into = Into(roamer);
+                if (alive.Count == 0)
+                {
+                    // A save's never-made platoon once made, wiped out, keeps its record: the original's saver (FUN_140372ef0) drops a declared-dead
+                    // platoon unless a member is carried or a player's squad is within 500, else writes it with its dead and `never been activated` 0
+                    // (a regenerating one too).
+                    if (into is null) continue;
+
+                    if (roamer!.Dead && !every.Any(m => !table.Cold(m.Slot)!.CarriedBy.IsNone) && !PlayerNear(_world, roamer.Position))
+                    {
+                        _builder.RemovePlatoon(into);
+                        continue;
+                    }
+                }
+
+                var leader = alive.Contains(squad.Leader) || alive.Count == 0 ? squad.Leader : alive[0];
+                var members = every
+                    .Select(id => (table.Cold(id.Slot)!, table.Previous[id.Slot].Position, table.Previous[id.Slot].Yaw, id, id == leader))
+                    .ToList();
+                var sp = WriteWorldSquad(squad, roamer, members, into);
+                if (roamer is not null) _written[roamer.Id] = sp;
+            }
+        }
+
+        /// <summary>
+        /// Writes one squad in the world, with its platoon's state when it has one.
+        /// </summary>
+        SavePlatoon WriteWorldSquad(Squad squad, Platoon? roamer, List<FreshMember> members, SavePlatoon? into)
+        {
+            return WritePlatoon(
+                squad.Town, squad.Faction, squad.TemplateId, squad.Money, roamer is { Pinned: false }, squad.HomeBuilding,
+                roamer?.Package ?? squad.Ai?.Current?.Id,
+                members, squad.Shop, ai: AiSave.Of(squad.Ai) ?? squad.SavedAi, memory: MemoryOf(_world)?.Snapshot(squad.Id),
+                imprisoned: roamer?.Imprisoned ?? false, dead: roamer?.Dead ?? false, intact: roamer?.IntactFlag ?? squad.Ai?.Intact ?? true,
+                at: roamer is null ? default : Ground(_world, roamer.Position), into: into,
+                missionTown: squad.Ai is { } board && Ai.AiSystem.BoardMoves(board) && PopulationSystem.MissionSite(board) is >= 0 and var mission
+                    ? mission
+                    : roamer?.Target ?? -1);
+        }
+
+        /// <summary>
+        /// Squads stored since they left the world: a town's since its town unloaded, a roaming one (Meitou) since it first left.
+        /// </summary>
+        void WriteStoredSquads()
+        {
+            foreach (var p in _world.Platoons.All)
+            {
+                if (p is not { State: PlatoonState.Unloaded, Stored: { } stored } || !Writable(p.Origin, p.Faction)) continue;
+
+                // A made never-made one with no one left (the dead are not stored) keeps its record too, but declared dead: the original drops an
+                // unloaded dead platoon.
+                var into = Into(p);
+                if (stored.Members.Count == 0 && (into is null || p.Dead))
+                {
+                    if (into is not null) _builder.RemovePlatoon(into);
+                    continue;
+                }
+
+                var members = stored.Members.Concat(stored.Dead).Select(m => (m.Cold, m.Position, m.Yaw, CharacterId.None, m.Leader)).ToList();
+                _written[p.Id] = WritePlatoon(
+                    p.Origin, p.Faction, p.TemplateId, p.Money, !stored.Pinned, stored.HomeBuilding, p.Package ?? stored.Package, members, stored.Shop,
+                    Ground(_world, p.Position), ai: stored.Ai, memory: stored.Memory, imprisoned: p.Imprisoned, dead: p.Dead, intact: p.IntactFlag,
+                    into: into, missionTown: p.Target);
+                if (p.Persistent) _written[p.Id].Record.Bools["persistent"] = true;   // a split-off prisoner's platoon
+            }
+        }
+
+        /// <summary>
+        /// A campaign's stand-ins that never had their characters (not a save's: those are in it already).
+        /// </summary>
+        void WriteStandIns(LoadedSave? loaded)
+        {
+            foreach (var p in _world.Platoons.All)
+            {
+                if (p is not { Campaign: not null, State: PlatoonState.Unloaded, Saved: null } || p.Stored is { Members.Count: > 0 }
+                    || !Writable(p.Origin, p.Faction))
+                {
+                    continue;
+                }
+
+                if (loaded?.RoamingPlatoons.ContainsKey(p.Id) == true) continue;
+
+                _written[p.Id] = WritePlatoon(
+                    p.Origin, p.Faction, p.TemplateId, p.Money, true, null, p.Package, [], null, Ground(_world, p.Position), imprisoned: p.Imprisoned,
+                    dead: p.Dead, intact: p.IntactFlag, missionTown: p.Target);
+            }
+        }
+
+        /// <summary>
+        /// A new record, or (<paramref name="into"/>) a save's never-made platoon Meitou made from its template (Platoon.Unmade): its own record
+        /// written back, as the original's saver does (FUN_140372ef0: <c>never been activated</c> 0, its file and char count); its pool, residency,
+        /// town and home stay as the record has them.
+        /// </summary>
+        SavePlatoon WritePlatoon(int town, int factionIndex, string templateId, long money, bool roaming, TownBuilding? homeBuilding, string? package,
+            List<FreshMember> members, Trading.Shop? shop, Vector3 at = default,
             AiSave? ai = null, SquadMemoryData? memory = null, bool imprisoned = false, bool dead = false, bool intact = true, SavePlatoon? into = null,
             int missionTown = -1)
         {
-            var faction = data.Factions[factionIndex];
-            factions.TryGetValue(faction.Id, out var state);
-            var site = data.Sites[town];
+            var faction = _data.Factions[factionIndex];
+            var site = _data.Sites[town];
             var lead = members.FirstOrDefault(m => m.Leader);
             if (lead.Cold is null && members.Count > 0) lead = members[0];
             if (members.Count == 0) lead.Position = at;
 
-            int purse = (int)Math.Clamp(money, int.MinValue, int.MaxValue);
-            SavePlatoon platoon;
-            if (into is not null)
-            {
-                platoon = into;
-                builder.GiveFile(platoon);
-                platoon.Position = lead.Position;
-                platoon.Money = purse;
-                platoon.Record.Bools["never been activated"] = false;
-            }
-            else
-            {
-                platoon = builder.AddPlatoon(FreshName(game, state, faction.Name), faction.Name, faction.Id, templateId, lead.Position, purse);
-                if (members.Count == 0)
-                {
-                    // A stand-in with no characters: no platoon file, as the original writes a platoon that is not loaded (`content file` "platoon/").
-                    platoon.File = null;
-                    platoon.ContentFile = "platoon/";
-                }
-            }
-
+            var platoon = PlatoonRecord(faction, templateId, money, members.Count, lead.Position, into);
             var record = platoon.Record;
 
             // The TOWN the town is now (FUN_1404ffad0 compares it with the town's replacement).
@@ -1004,133 +1243,91 @@ public static partial class SaveCapture
             record.Bools["imprisoned"] = imprisoned;
             record.Bools["dead"] = dead;
             record.Bools["intact"] = intact;
-            if (into is null)
-            {
-                int siteFaction = data.SiteFactions.Count > town ? data.SiteFactions[town] : -1;
-
-                // `sqt` is the town pool it counts against: 1 residents (and bar squads), 2 roaming (docs/formats/save.md "NPC platoons"). A template
-                // with `roaming military` is made in mode 2 even from a town's resident list (FUN_140583a10, Verified), so its housing squads are
-                // roaming-pool platoons too.
-                record.Ints["sqt"] = roaming || data.Db.Find(templateId)?.GetBool("roaming military") == true ? 2 : 1;
-
-                // Residents and bar squads are persistent (the original keeps them off screen, docs/game/factions-squads-towns.md "Persistent
-                // platoons"), roaming ones not but while they occupy a town.
-                record.Bools["persistent"] = !roaming || Ai.AiSystem.Occupies(data.Ai, package);
-
-                // A squad with a home is a resident (every platoon of the samples with a file and a `homebuilding` has `is resident`, and only
-                // those): a default resident too.
-                record.Bools["is resident"] = !roaming && (homeBuilding is not null
-                    || ResidentHomes.Entries(site.Town, siteFaction >= 0 ? data.Factions[siteFaction] : null).Any(e => e.Id == templateId));
-            }
+            if (into is null) MarkPools(record, town, site, templateId, roaming, homeBuilding, package);
 
             if (package is not null) record.Strings["currentPackage"] = package;
-            if (missionTown >= 0 && missionTown != town && missionTown < data.Sites.Count) record.Strings[MissionTownKey] = data.Sites[missionTown].Town.Id;
+            if (missionTown >= 0 && missionTown != town && missionTown < _data.Sites.Count)
+                record.Strings[MissionTownKey] = _data.Sites[missionTown].Town.Id;
             else record.Strings.Remove(MissionTownKey);
-            ShopSave.Write(record, shop, world);
+            ShopSave.Write(record, shop, _world);
             AiSave.Write(record, ai);
             NoteMemory(record, memory);
             if (into is null)
             {
                 // Its town and home building by handle, as the original names them (docs/formats/save.md "NPC platoons").
-                if (townHands.TryGetValue(site.InstanceId, out var townHand)) townHand.Write(record, "hometown");
-                if (homeBuilding is { } home && HomeHandle(game, home) is { } homeHand) homeHand.Write(record, "homebuilding");
+                if (_townHands.TryGetValue(site.InstanceId, out var townHand)) townHand.Write(record, "hometown");
+                if (homeBuilding is { } home && HomeHandle(_game, home) is { } homeHand) homeHand.Write(record, "homebuilding");
             }
 
-            WriteMapArea(record, data, lead.Position);
-            foreach (var m in members)
-            {
-                int f = m.Cold.Faction;
-                string owner = f >= 0 && f < data.Factions.Count ? data.Factions[f].Id : faction.Id;
-                WriteCharacter(
-                    builder, world, data, options, clock, buildings, races, platoon, null, m.Cold, m.Position, m.Yaw, m.Id, owner,
-                    ReferenceEquals(m.Cold, lead.Cold), orders: false);
-            }
-
+            WriteMapArea(record, _data, lead.Position);
+            WriteMembers(platoon, faction, members, lead.Cold);
             SetCharCount(platoon);
             return platoon;
         }
 
-        // A save's never-made platoon once made holds its squad in Stored beside its record (Platoon.Unmade).
-        SavePlatoon? Into(Platoon? p) => p is { Saved: { } saved, Stored: not null } ? byName.GetValueOrDefault(saved.Name) : null;
-
-        bool Writable(int town, int faction) =>
-            town >= 0 && town < data.Sites.Count && faction >= 0 && faction < data.Factions.Count && faction != data.PlayerFaction;
-
-        foreach (var squad in world.Squads.All)
+        /// <summary>
+        /// The platoon's record: the made never-made one given its file back, else a new one (a stand-in with no characters gets no file).
+        /// </summary>
+        SavePlatoon PlatoonRecord(FactionData faction, string templateId, long money, int count, Vector3 at, SavePlatoon? into)
         {
-            if (!Writable(squad.Town, squad.Faction)) continue;
-
-            Platoon? roamer = null;
-            if (squad.PlatoonId >= 0)
+            int purse = (int)Math.Clamp(money, int.MinValue, int.MaxValue);
+            if (into is not null)
             {
-                roamer = world.Platoons.Find(squad.PlatoonId);
-                if (roamer is null || roamer.Saved is not null && roamer.Stored is null) continue;   // a save's platoon (WriteSavedNpcs)
+                _builder.GiveFile(into);
+                into.Position = at;
+                into.Money = purse;
+                into.Record.Bools["never been activated"] = false;
+                return into;
             }
 
-            // The dead stay in the platoon's list as the original writes it (FUN_1404ff410, docs/game/character-stats.md "Corpses").
-            var every = squad.Members.Where(m => table.IsAlive(m) && table.Cold(m.Slot) is { IsPlayer: false, Save: null }).ToList();
-            var alive = every.Where(m => table.Cold(m.Slot)!.DiedTick < 0).ToList();
-            var into = Into(roamer);
-            if (alive.Count == 0)
+            _factions.TryGetValue(faction.Id, out var state);
+            var platoon = _builder.AddPlatoon(FreshName(_game, state, faction.Name), faction.Name, faction.Id, templateId, at, purse);
+            if (count == 0)
             {
-                // A save's never-made platoon once made, wiped out, keeps its record: the original's saver (FUN_140372ef0) drops a declared-dead platoon unless
-                // a member is carried or a player's squad is within 500, else writes it with its dead and `never been activated` 0 (a regenerating one too).
-                if (into is null) continue;
-
-                if (roamer!.Dead && !every.Any(m => !table.Cold(m.Slot)!.CarriedBy.IsNone) && !PlayerNear(world, roamer.Position))
-                {
-                    builder.RemovePlatoon(into);
-                    continue;
-                }
+                // A stand-in with no characters: no platoon file, as the original writes a platoon that is not loaded (`content file` "platoon/").
+                platoon.File = null;
+                platoon.ContentFile = "platoon/";
             }
 
-            var leader = alive.Contains(squad.Leader) || alive.Count == 0 ? squad.Leader : alive[0];
-            var members = every.Select(id => (table.Cold(id.Slot)!, table.Previous[id.Slot].Position, table.Previous[id.Slot].Yaw, id, id == leader)).ToList();
-            var sp = Write(
-                squad.Town, squad.Faction, squad.TemplateId, squad.Money, roamer is { Pinned: false }, squad.HomeBuilding, roamer?.Package ?? squad.Ai?.Current?.Id,
-                members, squad.Shop, ai: AiSave.Of(squad.Ai) ?? squad.SavedAi, memory: MemoryOf(world)?.Snapshot(squad.Id),
-                imprisoned: roamer?.Imprisoned ?? false, dead: roamer?.Dead ?? false, intact: roamer?.IntactFlag ?? squad.Ai?.Intact ?? true,
-                at: roamer is null ? default : Ground(world, roamer.Position), into: into,
-                missionTown: squad.Ai is { } board && Ai.AiSystem.BoardMoves(board) && PopulationSystem.MissionSite(board) is >= 0 and var mission
-                    ? mission
-                    : roamer?.Target ?? -1);
-            if (roamer is not null) written[roamer.Id] = sp;
+            return platoon;
         }
 
-        // Squads stored since they left the world: a town's since its town unloaded, a roaming one (Meitou) since it first left.
-        foreach (var p in world.Platoons.All)
+        /// <summary>
+        /// A new platoon's pool, persistence and residency.
+        /// </summary>
+        void MarkPools(FcsRecord record, int town, TownSite site, string templateId, bool roaming, TownBuilding? homeBuilding, string? package)
         {
-            if (p is not { State: PlatoonState.Unloaded, Stored: { } stored } || !Writable(p.Origin, p.Faction)) continue;
+            int siteFaction = _data.SiteFactions.Count > town ? _data.SiteFactions[town] : -1;
 
-            // A made never-made one with no one left (the dead are not stored) keeps its record too, but declared dead: the original drops an unloaded dead platoon.
-            var into = Into(p);
-            if (stored.Members.Count == 0 && (into is null || p.Dead))
+            // `sqt` is the town pool it counts against: 1 residents (and bar squads), 2 roaming (docs/formats/save.md "NPC platoons"). A template
+            // with `roaming military` is made in mode 2 even from a town's resident list (FUN_140583a10, Verified), so its housing squads are
+            // roaming-pool platoons too.
+            record.Ints["sqt"] = roaming || _data.Db.Find(templateId)?.GetBool("roaming military") == true ? 2 : 1;
+
+            // Residents and bar squads are persistent (the original keeps them off screen, docs/game/factions-squads-towns.md "Persistent
+            // platoons"), roaming ones not but while they occupy a town.
+            record.Bools["persistent"] = !roaming || Ai.AiSystem.Occupies(_data.Ai, package);
+
+            // A squad with a home is a resident (every platoon of the samples with a file and a `homebuilding` has `is resident`, and only
+            // those): a default resident too.
+            record.Bools["is resident"] = !roaming && (homeBuilding is not null
+                || ResidentHomes.Entries(site.Town, siteFaction >= 0 ? _data.Factions[siteFaction] : null).Any(e => e.Id == templateId));
+        }
+
+        /// <summary>
+        /// Writes the platoon's characters as new ones, each owned by its own faction (else the platoon's).
+        /// </summary>
+        void WriteMembers(SavePlatoon platoon, FactionData faction, List<FreshMember> members, CharacterCold? lead)
+        {
+            foreach (var m in members)
             {
-                if (into is not null) builder.RemovePlatoon(into);
-                continue;
+                int f = m.Cold.Faction;
+                string owner = f >= 0 && f < _data.Factions.Count ? _data.Factions[f].Id : faction.Id;
+                WriteCharacter(
+                    _builder, _world, _data, _options, _clock, _buildings, _races, platoon, null, m.Cold, m.Position, m.Yaw, m.Id, owner,
+                    ReferenceEquals(m.Cold, lead), orders: false);
             }
-
-            var members = stored.Members.Concat(stored.Dead).Select(m => (m.Cold, m.Position, m.Yaw, CharacterId.None, m.Leader)).ToList();
-            written[p.Id] = Write(
-                p.Origin, p.Faction, p.TemplateId, p.Money, !stored.Pinned, stored.HomeBuilding, p.Package ?? stored.Package, members, stored.Shop,
-                Ground(world, p.Position), ai: stored.Ai, memory: stored.Memory, imprisoned: p.Imprisoned, dead: p.Dead, intact: p.IntactFlag, into: into,
-                missionTown: p.Target);
-            if (p.Persistent) written[p.Id].Record.Bools["persistent"] = true;   // a split-off prisoner's platoon
         }
-
-        // A campaign's stand-ins that never had their characters (not a save's: those are in it already).
-        foreach (var p in world.Platoons.All)
-        {
-            if (p is not { Campaign: not null, State: PlatoonState.Unloaded, Saved: null } || p.Stored is { Members.Count: > 0 } || !Writable(p.Origin, p.Faction))
-                continue;
-            if (loaded?.RoamingPlatoons.ContainsKey(p.Id) == true) continue;
-
-            written[p.Id] = Write(
-                p.Origin, p.Faction, p.TemplateId, p.Money, true, null, p.Package, [], null, Ground(world, p.Position), imprisoned: p.Imprisoned, dead: p.Dead,
-                intact: p.IntactFlag, missionTown: p.Target);
-        }
-
-        return written;
     }
 
     /// <summary>
@@ -1164,12 +1361,16 @@ public static partial class SaveCapture
         if (game.Zones.TryGetValue(b.Zone, out var zone) && zone.BuildingList is { } list)
         {
             var entry = list.Instances.FirstOrDefault(i => i.Id == b.InstanceId);
-            if (entry is not null && zone.File.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.GamestateBuilding && entry.States.Contains(r.StringId)) is { } state
+            if (entry is not null
+                && zone.File.Records.FirstOrDefault(r => r.RecordType == FcsRecordType.GamestateBuilding
+                    && entry.States.Contains(r.StringId)) is { } state
                 && Hand.Read(state, "handle") is { IsNull: false } saved)
                 return saved;
         }
 
-        return b.HandleSlot >= 0 ? new Hand((int)FcsRecordType.Building, SaveZone.ContainerIdOf(b.Zone), ZoneContainerSerial, b.HandleSlot, b.HandleSerial) : null;
+        return b.HandleSlot >= 0
+            ? new Hand((int)FcsRecordType.Building, SaveZone.ContainerIdOf(b.Zone), ZoneContainerSerial, b.HandleSlot, b.HandleSerial)
+            : null;
     }
 
     /// <summary>
@@ -1209,7 +1410,8 @@ public static partial class SaveCapture
             {
                 if (levels is null || !world.Fixtures.HasContents(b)) continue;
 
-                placements ??= levels.Buildings().GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+                placements ??= levels.Buildings().GroupBy(p => p.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(),
+                    StringComparer.Ordinal);
                 if (!placements.TryGetValue(b, out var placement) || AddPlacedState(game, placement) is not { } added) continue;
 
                 buildings[b] = state = added;
@@ -1236,7 +1438,8 @@ public static partial class SaveCapture
         var list = zone.BuildingList;
         if (list is null)
         {
-            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextRecordId(file), Name = "0", StringId = WorldLevelData.BuildingListId };
+            list = new FcsRecord { Type = (int)FcsRecordType.InstanceCollection, Id = NextRecordId(file), Name = "0",
+                StringId = WorldLevelData.BuildingListId };
             file.Records.Add(list);
         }
 
@@ -1246,7 +1449,9 @@ public static partial class SaveCapture
         state.Bools["destroyed"] = placement.DestroyedOverride ?? false;
         state.Floats["world Y pos"] = placement.WorldY ?? placement.Position.Y;
         state.Ints["flags"] = 1;   // bit 0: outside
-        if (placement.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;   // as the level edits write the same placement
+
+        // as the level edits write the same placement
+        if (placement.InteriorLayout is { Length: > 0 } interior) state.Strings["interior layout name"] = interior;
         if (placement.ExteriorLayout is { Length: > 0 } exterior) state.Strings["exterior layout name"] = exterior;
         file.Records.Add(state);
         list.Instances.RemoveAll(i => i.Id == placement.InstanceId);

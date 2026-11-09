@@ -4,7 +4,8 @@ using Meitou.Game.Rendering.Gpu;
 namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
-/// Layouts of the ffx_api structs the frame-generation code shares (FidelityFX SDK 1.1.x <c>ffx_api.h</c> / <c>ffx_api_types.h</c>, MIT; our own code).
+/// Layouts of the ffx_api structs the frame-generation code shares (FidelityFX SDK 1.1.x <c>ffx_api.h</c> / <c>ffx_api_types.h</c>, MIT; our own
+/// code).
 /// </summary>
 internal static unsafe class FfxApi
 {

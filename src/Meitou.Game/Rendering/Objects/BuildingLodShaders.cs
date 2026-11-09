@@ -71,7 +71,7 @@ static class BuildingLodShaders
             float ditherValue() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); }
             vec3 instanceTint(float v) { float p = -v - 1.0; return vec3(mod(p, 256.0), mod(floor(p / 256.0), 256.0), floor(p / 65536.0)) * (1.275 / 255.0); }
             """);
-        // A negative spare M44 is a tint (a farm plant's, WorldObjectRenderer.PackTint).
+        // A negative spare M44 is a tint (a farm plant's, FarmPlants.PackTint).
         // A site's grid lies over the built part too, until it fades from the top down past f = 0.8 (above 1 - 5 (f - 0.8) none).
         f = Literal(f, "if (uUseVertexColour) albedo *= vColour.rgb;", """
             if (uUseVertexColour) albedo *= vColour.rgb;
@@ -157,7 +157,7 @@ static class BuildingLodShaders
         return 4 * (t + 4096 * s);
     }
     /// <summary>
-    /// The largest tint channel <see cref="WorldObjectRenderer.PackTint"/> keeps (a plant's brightness goes to 1.1); <c>instanceTint</c> has the same
+    /// The largest tint channel <see cref="FarmPlants.PackTint"/> keeps (a plant's brightness goes to 1.1); <c>instanceTint</c> has the same
     /// number.
     /// </summary>
     public const float TintRange = 1.275f;
@@ -221,8 +221,9 @@ static class BuildingLodShaders
             flat in float vScaffold;
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             """);
-        return Replace(f,
-            @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + CutVolumes + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
+        return Replace(f, @"void\s+main\s*\(\s*\)\s*\{",
+            "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + CutVolumes
+            + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
             + "    if ((uFadeMode & 2) != 0 && inCutVolume(vWorld)) discard;\n" + ScaffoldTest);
     }
 
@@ -320,7 +321,8 @@ static class BuildingLodShaders
     static string Replace(string source, string pattern, string replacement)
     {
         var regex = new Regex(pattern);
-        if (!regex.IsMatch(source)) throw new InvalidOperationException($"BuildingLodShaders: '{pattern}' not found in the shared mesh shader; update the patch.");
+        if (!regex.IsMatch(source))
+            throw new InvalidOperationException($"BuildingLodShaders: '{pattern}' not found in the shared mesh shader; update the patch.");
         return regex.Replace(source, _ => replacement, 1);
     }
 }

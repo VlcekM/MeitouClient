@@ -29,7 +29,8 @@ internal sealed unsafe class UiFont : IDisposable
     /// <summary>
     /// One glyph: layout in output pixels (offsets from the pen and the baseline, quad size), and its rectangle in the atlas in texels.
     /// </summary>
-    internal readonly record struct Glyph(float Advance, float OffsetX, float OffsetY, float Width, float Height, ushort X, ushort Y, ushort PixelWidth, ushort PixelHeight);
+    internal readonly record struct Glyph(float Advance, float OffsetX, float OffsetY, float Width, float Height, ushort X, ushort Y, ushort PixelWidth,
+        ushort PixelHeight);
 
     const int MaxSide = 2048;
     readonly IGpuContext _gpu;
@@ -103,7 +104,8 @@ internal sealed unsafe class UiFont : IDisposable
             Check(FT_New_Size(_face.Face, &created), "FT_New_Size");
             _size = created;
             Check(FT_Activate_Size(_size), "FT_Activate_Size");
-            if (_face.Scalable) Check(FT_Set_Char_Size(_face.Face, (nint)(options.Size64 * _oversample), 0, options.Dpi, options.Dpi), "FT_Set_Char_Size");
+            if (_face.Scalable)
+                Check(FT_Set_Char_Size(_face.Face, (nint)(options.Size64 * _oversample), 0, options.Dpi, options.Dpi), "FT_Set_Char_Size");
             else SelectStrike(ppem * _oversample);
             var metrics = _face.Face->size->metrics;
             if (_faithful)
@@ -223,6 +225,7 @@ internal sealed unsafe class UiFont : IDisposable
             if (_tab < 0) _tab = _tabWidth > 0 ? _tabWidth : 8 * Lookup(' ').Advance;
             return new Glyph(_tab, 0, 0, 0, 0, 0, 0, 0, 0);
         }
+
         // Line breaks are the text layout's; other C0 controls and (Meitou) zero-width marks have no glyph.
         if (codePoint < 0x20 || !_faithful && codePoint is >= 0x200B and <= 0x200F or 0xFEFF or >= 0xFE00 and <= 0xFE0F) return default;
         return ForIndex(Resolve(codePoint));
@@ -263,6 +266,7 @@ internal sealed unsafe class UiFont : IDisposable
             Check(FT_Activate_Size(_size), "FT_Activate_Size");
             if (LoadGlyph(index) != FT_Error.FT_Err_Ok) return default;
             var slot = _face.Face->glyph;
+
             // MyGUI advances by the hinted advance; Meitou by the unhinted one (light hinting leaves it alone), both in output pixels.
             advance = _faithful ? slot->advance.x / 64f
                 : (slot->linearHoriAdvance != 0 ? slot->linearHoriAdvance / 65536f : slot->advance.x / 64f) / _oversample;
@@ -275,6 +279,7 @@ internal sealed unsafe class UiFont : IDisposable
             }
 
             if (!CopyBitmap(bitmap, width, height)) return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
+
             // MyGUI places the bitmap at the metrics' bearing (floor(ascent - horiBearingY) from the line top, less OffsetHeight); for
             // hinted glyphs that is bitmap_left / bitmap_top, which are used here.
             offsetX = slot->bitmap_left / (float)_oversample;
@@ -283,7 +288,8 @@ internal sealed unsafe class UiFont : IDisposable
         if (!Pack(width, height, out int x0, out int y0)) return new Glyph(advance, 0, 0, 0, 0, 0, 0, 0, 0);
         for (int row = 0; row < height; row++) System.Buffer.BlockCopy(_scratch, row * width, _pixels, (y0 + row) * Side + x0, width);
         MarkDirty(x0, y0, x0 + width, y0 + height);
-        return new Glyph(advance, offsetX, offsetY, width / (float)_oversample, height / (float)_oversample, (ushort)x0, (ushort)y0, (ushort)width, (ushort)height);
+        return new Glyph(advance, offsetX, offsetY, width / (float)_oversample, height / (float)_oversample, (ushort)x0, (ushort)y0, (ushort)width,
+            (ushort)height);
     }
 
     /// <summary>
@@ -350,7 +356,13 @@ internal sealed unsafe class UiFont : IDisposable
         bool restarted = false;
         while (true)
         {
-            if (_cursorX > _pad && _cursorX + width + _pad > Side) { _cursorY += _rowHeight + _pad; _cursorX = _pad; _rowHeight = 0; }
+            if (_cursorX > _pad && _cursorX + width + _pad > Side)
+            {
+                _cursorY += _rowHeight + _pad;
+                _cursorX = _pad;
+                _rowHeight = 0;
+            }
+
             if (width + 2 * _pad <= Side && _cursorY + height + _pad <= Side)
             {
                 (x, y) = (_cursorX, _cursorY);
@@ -461,8 +473,8 @@ internal sealed unsafe class UiFont : IDisposable
         var created = upload.Create(new TextureDesc(InternalFormat.R8, Side, Side, Use: TextureUse.Sampled | TextureUse.TransferDst, Name: "UI font"));
         upload.Write(created, 0, 0, new PixelRect(0, 0, (uint)Side, (uint)Side), _pixels);
         _texture = created;
-        _sampled = new SampledTexture(_gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), created.View());
+        _sampled = new SampledTexture(_gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear)),
+            created.View());
         _dirty = false;
     }
 

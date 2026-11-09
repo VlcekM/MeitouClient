@@ -136,7 +136,10 @@ public class TownOverrideSaveTests
             Assert.Equal(others, b.Fixtures.Find(HouseKey + "#0")!.Owner);
             Assert.Equal("21-t", b.Fixtures.Saved![ShedKey].Strings["owner faction ID"]);
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 
     /// <summary>
@@ -198,6 +201,9 @@ public class TownOverrideSaveTests
             b.Fixtures.RegisterSite(b, data, 0);
             foreach (var h in houses) Assert.Equal(!b.Fixtures.IsDestroyed(h), b.Fixtures.Find(h.Key + "#0") is not null);
         }
-        finally { Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true); }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(folder)!, recursive: true);
+        }
     }
 }

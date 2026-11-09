@@ -28,7 +28,8 @@ public sealed class OgreScriptResourcesTests : IDisposable
         Touch("data/newland/land/t.dds");
         Touch("data/gui/g.material");
         Touch("data/materials/m.material");
-        var res = Config("[General]\nFileSystem=./data/materials\n[GUI]\nFileSystem=./data/gui\n[Landscape]\nFileSystem=./data/land\n[Bootstrap]\nZip=./data/x.zip\n");
+        var res = Config("[General]\nFileSystem=./data/materials\n[GUI]\nFileSystem=./data/gui\n"
+            + "[Landscape]\nFileSystem=./data/land\n[Bootstrap]\nZip=./data/x.zip\n");
 
         Assert.Equal(["GUI", "General", "Landscape"], res.Locations.Select(l => l.Group));
         Assert.EndsWith(Path.Combine("newland", "land"), res.Locations[2].Path);

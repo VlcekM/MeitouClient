@@ -23,6 +23,7 @@ public sealed unsafe class DebugOverlay : IDisposable
     /// The baked characters: printable ASCII and Latin-1 up to the middle dot (U+00B7), which the Meitou UI joins details with.
     /// </summary>
     const int FirstChar = 32, CharCount = 0xB8 - FirstChar;
+
     // The size the glyphs are baked at (16 px; a display face is baked larger so it stays sharp drawn big) and the atlas side that holds them.
     readonly float _pixelHeight = 16;
     readonly int _atlasSize = 512;

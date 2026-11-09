@@ -137,6 +137,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
         if (!c.IsPlayer || order.Site is { } site && world.Fixtures.Find(site) is null || !order.Target.IsNone
                 && !table.TryResolveNext(order.Target, out _))
             return OrderCheck.Gone;
+
         bool inPlace = ((LockWork)order.Detail!).Task == CharacterTask.Idle;
         return c.Medical is not { Incapacitated: true } && c.CarriedBy.IsNone && (inPlace || !c.IsImprisoned) ? OrderCheck.Run : OrderCheck.Blocked();
     }
@@ -157,6 +158,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
             StartRound(world, slot, round, world.Fixtures.Find(request.Site!)!);
             return;
         }
+
         switch (request.Row)
         {
             case TaskType.PickLock or TaskType.OpenDoor
@@ -169,6 +171,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
                 c.DoorJob = null;
                 if (!c.IsImprisoned)
                     MovementSystem.GoTo(table, slot, new Vector2(cage.Position.X, cage.Position.Z), c.RunSpeed);
+
                 break;
             case TaskType.PickLock:
                 // Another faction's locked container, with Alt (the original's FUN_1407fc6e0).
@@ -182,6 +185,7 @@ public sealed partial class LockSystem : ITaskOwner, ITaskHandler, IOrderOwner
                 c.Shackles = new ShackleJob(request.Target, (ShackleWork)request.Detail!);
                 if (request.Target != table.IdOf(slot) && table.TryResolveNext(request.Target, out int w))
                     MovementSystem.GoTo(table, slot, Flat(table.Next[w].Position), c.RunSpeed);
+
                 break;
             case TaskType.ReleasePrisoner:
                 ClearWork(c);

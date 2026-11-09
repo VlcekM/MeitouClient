@@ -154,7 +154,8 @@ public sealed partial class PopulationSystem
         var gearHomes = new List<(uint Base, TownBuilding Building)>();
         foreach (var b in site.Buildings)
         {
-            if (!b.Furnished || playerId is not null && b.OwnerFactionId == playerId || world.Fixtures.OwnsBuilding(b.Key, player) || !templateOf.TryGetValue(b, out var t))
+            if (!b.Furnished || playerId is not null && b.OwnerFactionId == playerId || world.Fixtures.OwnsBuilding(b.Key, player)
+                || !templateOf.TryGetValue(b, out var t))
                 continue;
 
             if (t.ItemArtifactsBaseValue != 0) itemHomes.Add(((uint)t.ItemArtifactsBaseValue, b));

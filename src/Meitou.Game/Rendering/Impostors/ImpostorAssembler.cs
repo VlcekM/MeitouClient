@@ -7,14 +7,14 @@ namespace Meitou.Game.Rendering.Impostors;
 /// The CPU half of a bake (docs/impostors.md, "Filtering"): takes the rendered rows of frames (each frame rendered at 2x the frame size with a hard
 /// cut-out and box-filtered to the frame size on the GPU), and per frame
 /// <list type="number">
-/// <item>undoes the premultiplication: coverage = covered samples / 4; albedo the mean of the covered samples; the normal their normalised sum (stored
-/// octahedrally encoded in the frame's basis, so normals facing away from the frame keep their direction); the gloss the coverage-weighted mean over
-/// the whole atlas;</item>
+/// <item>undoes the premultiplication: coverage = covered samples / 4; albedo the mean of the covered samples; the normal their normalised sum
+/// (stored octahedrally encoded in the frame's basis, so normals facing away from the frame keep their direction); the gloss the coverage-weighted
+/// mean over the whole atlas;</item>
 /// <item>fills the empty pixels by pull-push from the covered ones, so bilinear filtering and the mips never pull in black or a wrong normal at the
 /// silhouette;</item>
 /// <item>builds the mip chain within the frame (coverage-weighted averages, so frames never bleed into each other), down to 4 x 4;</item>
-/// <item>scales each level's coverage (level 0's too) so the share of pixels at or above the 0.5 cut equals the frame's covered area (thin branches do not
-/// vanish: the alpha-test mip correction), then cuts it: a texel is covered or not (BC1's 1-bit alpha).</item>
+/// <item>scales each level's coverage (level 0's too) so the share of pixels at or above the 0.5 cut equals the frame's covered area (thin branches
+/// do not vanish: the alpha-test mip correction), then cuts it: a texel is covered or not (BC1's 1-bit alpha).</item>
 /// </list>
 /// Then <see cref="Finish"/> encodes the levels (BC1 albedo with the cut-out, BC5 normal). Frames are independent, so a row is processed in parallel.
 /// The per-frame arrays come from a shared pool (<see cref="Scratch"/>) and the atlas levels are not cleared before they are written: a large atlas
@@ -75,9 +75,9 @@ public sealed class ImpostorAssembler
     }
 
     /// <summary>
-    /// One row of frames, three RGBA8 pictures (albedo, normal x 0.5 + 0.5, depth + gloss: only the gloss, in green, is used) of <c>grid x frame</c> by
-    /// <c>frame</c> pixels, rows bottom first, each the 2 x 2 box average of a picture rendered at twice the size with alpha 1 on covered samples and 0
-    /// elsewhere (the GPU's linear half-size blit): so alpha is the coverage and the colour is premultiplied by it.
+    /// One row of frames, three RGBA8 pictures (albedo, normal x 0.5 + 0.5, depth + gloss: only the gloss, in green, is used) of <c>grid x frame</c>
+    /// by <c>frame</c> pixels, rows bottom first, each the 2 x 2 box average of a picture rendered at twice the size with alpha 1 on covered samples
+    /// and 0 elsewhere (the GPU's linear half-size blit): so alpha is the coverage and the colour is premultiplied by it.
     /// </summary>
     public unsafe void AddRow(int row, byte[] albedo, byte[] normal, byte[] depth)
     {
@@ -130,7 +130,8 @@ public sealed class ImpostorAssembler
     }
 
     /// <summary>
-    /// The factor that makes the share of <paramref name="cov"/> x factor &gt;= 0.5 closest to <paramref name="target"/> (bisection; 1 when nothing is covered).
+    /// The factor that makes the share of <paramref name="cov"/> x factor &gt;= 0.5 closest to <paramref name="target"/> (bisection; 1 when nothing
+    /// is covered).
     /// </summary>
     internal static float CoverageScale(float[] cov, float target)
     {
@@ -157,7 +158,8 @@ public sealed class ImpostorAssembler
     }
 
     /// <summary>
-    /// Pull-push: empty pixels (coverage 0) take the coverage-weighted average of the covered pixels around them, from the coarsest level that has some.
+    /// Pull-push: empty pixels (coverage 0) take the coverage-weighted average of the covered pixels around them, from the coarsest level that has
+    /// some.
     /// </summary>
     static void Fill(Scratch scratch, float[] cov, float[] values, int size)
     {

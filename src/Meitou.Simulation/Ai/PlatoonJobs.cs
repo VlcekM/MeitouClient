@@ -49,17 +49,22 @@ public static class PlatoonJobs
     {
         var packages = ai.Packages(template);
         AiPackage? package = null;
-        foreach (var p in packages) if (p.Package.Id == savedPackage)
+        foreach (var p in packages)
         {
-            package = p.Package;
-            break;
+            if (p.Package.Id == savedPackage)
+            {
+                package = p.Package;
+                break;
+            }
         }
+
         if (package is null)
         {
             var board = new Blackboard(packages);
             board.Update();
             package = board.Current;
         }
+
         return (package, JobOf(package?.Unloaded ?? 0));
     }
 

@@ -35,6 +35,7 @@ public static class TownMachineSave
                 camera.Ints.Remove(k);
             }
         }
+
         int n = 0;
         foreach (var m in world.Machines.All)
         {
@@ -46,11 +47,13 @@ public static class TownMachineSave
                 camera.Floats[Key(n, " out")] = o.Progress;
                 camera.Ints[Key(n, " outn")] = o.Count;
             }
+
             for (int k = 0; k < m.Inputs.Length; k++)
             {
                 camera.Ints[Key(n, " in" + k.ToString(CultureInfo.InvariantCulture))] = m.Inputs[k].Count;
                 camera.Floats[Key(n, " lv" + k.ToString(CultureInfo.InvariantCulture))] = m.Inputs[k].Level;
             }
+
             n++;
         }
     }
@@ -72,6 +75,7 @@ public static class TownMachineSave
                     foreach (var b in site.Buildings) map[b.Key] = (b, owner);
                 }
             }
+
             return map.TryGetValue(key, out var found) ? found : null;
         };
     }
@@ -91,6 +95,7 @@ public static class TownMachineSave
                 o.Progress = camera.Floats.GetValueOrDefault(Key(i, " out"));
                 o.Count = Math.Clamp(camera.Ints.GetValueOrDefault(Key(i, " outn")), 0, o.Recipe.Capacity);
             }
+
             for (int k = 0; k < m.Inputs.Length; k++)
             {
                 string part = k.ToString(CultureInfo.InvariantCulture);
@@ -98,6 +103,7 @@ public static class TownMachineSave
                 m.Inputs[k].Level = camera.Floats.GetValueOrDefault(Key(i, " lv" + part));
             }
         }
+
         world.Machines.Touch();
     }
 }

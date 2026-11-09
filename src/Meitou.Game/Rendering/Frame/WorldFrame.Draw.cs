@@ -22,7 +22,7 @@ static partial class WorldFrame
     /// </summary>
     struct FrameState
     {
-        public Gpu Gpu;
+        public WorldGpu Gpu;
         public WorldScene Scene;
         public WorldCamera Camera;
         public WorldRenderOptions Render;
@@ -62,8 +62,8 @@ static partial class WorldFrame
     /// <paramref name="hour"/> is the time of day, <paramref name="time"/> the animation clock in seconds, <paramref name="weatherHour"/> the hour
     /// the weather schedule reads when it is not <paramref name="hour"/>. Render thread.
     /// </summary>
-    public static void Draw(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time,
-        float fogDistance, float? weatherHour = null)
+    public static void Draw(WorldGpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour,
+        float time, float fogDistance, float? weatherHour = null)
     {
         var f = new FrameState
         {
@@ -157,6 +157,7 @@ static partial class WorldFrame
 
         // The scene is drawn at the render size (smaller than the display with an upscaler), its projection jittered by the upscaler.
         (f.RenderWidth, f.RenderHeight) = (post.RenderWidth, post.RenderHeight);
+
         // The terrain LOD measures its error in the pixels actually rendered (after the upscaler's render scale).
         f.Render.TerrainPixelScale = TerrainLod.ProjectionScale(f.RenderHeight, f.Camera.FieldOfView);
         if (gpu.Terrain.TextureSet is { } nearRange) nearRange.PixelScale = f.Render.TerrainPixelScale;   // the terrain layers' near ranges
@@ -214,6 +215,7 @@ static partial class WorldFrame
     static void UpdateObjects(ref FrameState f)
     {
         var gpu = f.Gpu;
+
         // the generated object levels are placed by the pixel size too
         if (gpu.Objects is { } lodObjects) lodObjects.LodPixelsPerRadian = f.Render.TerrainPixelScale;
 
@@ -261,6 +263,7 @@ static partial class WorldFrame
         if (gpu.Characters is { } posed && gpu.Debris is { } boltMeshes)
         {
             posed.CollectBolts(gpu.BoltPieces);
+
             // loads a mesh the first time (a held limb's with its look)
             foreach (var bolt in gpu.BoltPieces) boltMeshes.Extent(bolt.Mesh, null, bolt.Limb);
         }
@@ -293,6 +296,7 @@ static partial class WorldFrame
         if (render.Water) floor = Math.Max(floor, WorldWater.Height);
         f.Floor = floor;
         f.Camera.EyeClearance = Math.Max(eye.Y - floor, 1);
+
         // Above the game's camera heights the haze (and the water's glint) move to the viewer's own altitude-aware forms
         // (SkyRenderer.AltitudeWeight).
         gpu.Sky.SetEye(eye, gpu.Terrain.HeightAt, render.Water ? WorldWater.Height : float.NegativeInfinity);
@@ -394,7 +398,7 @@ static partial class WorldFrame
     /// <summary>
     /// The buildings' particle effects, handed to the particles once their background read finishes.
     /// </summary>
-    static void TakeBuildingEffects(Gpu gpu)
+    static void TakeBuildingEffects(WorldGpu gpu)
     {
         if (gpu.BuildingEffects is not { IsCompleted: true } effectsLoad) return;
         gpu.BuildingEffects = null;
@@ -514,7 +518,7 @@ static partial class WorldFrame
     /// The reflection's scene by its level (docs/formats/settings.md): 2 characters, 3 buildings (and the map features, which are not told apart),
     /// 4 everything else (foliage). Characters still reflect when the debug object switch is off.
     /// </summary>
-    static void DrawReflectedScene(Gpu gpu, WorldRenderOptions render, WorldLighting light, Matrix4x4 vp, Vector3 e, Vector4[] frustum)
+    static void DrawReflectedScene(WorldGpu gpu, WorldRenderOptions render, WorldLighting light, Matrix4x4 vp, Vector3 e, Vector4[] frustum)
     {
         var reflection = gpu.Reflection!;
         if (reflection.Level >= 3 && render.Objects && gpu.Objects is { } objects)
@@ -540,8 +544,11 @@ static partial class WorldFrame
         }
 
         if (reflection.Level >= 4 && render.Objects)
+        {
             gpu.Foliage?.Draw(vp, e, frustum, render, light.SunDirection, light.FogColour, light.FogDistance, gpu.Terrain, grass: false,
                     maxRange: reflection.FoliageReach);
+        }
+
         reflection.Lap(3);
         StageClock.Sub("refl foliage");
 
@@ -580,6 +587,7 @@ static partial class WorldFrame
         var host = f.Host = gpu.Scene ??= new SceneHost(post.Context);
         float aspect = f.Aspect = f.Width / (float)Math.Max(f.Height, 1);
         var view = f.View = camera.View;
+
         // Rotation only: with the eye's world position in the matrix, the directions rebuilt from it lose float
         // precision far from the origin and the sky blurs.
         var rotation = f.Rotation = view with { M41 = 0, M42 = 0, M43 = 0 };
@@ -588,8 +596,8 @@ static partial class WorldFrame
         // The fog volume pass runs over this view's sky exactly when volumes are in view (RunFogVolumes below), so the march may leave out what they
         // hide. With the placed fog block hiding the sky in every direction of the view, neither the sky nor its clouds can show: the clear colour
         // stands in.
-        bool skyHidden = gpu.Sky.SkyFogSkip && gpu.FogVolumes is { SkyHidden: true };
-        if (skyHidden) gpu.Sky.SkipMainSky();
+        bool skyHidden = gpu.Sky.Clouds.SkyFogSkip && gpu.FogVolumes is { SkyHidden: true };
+        if (skyHidden) gpu.Sky.Clouds.SkipMainSky();
         else gpu.Sky.PrepareClouds(skyProjection, f.RenderWidth, f.RenderHeight, gpu.Sky.Eye, fogVolumes: gpu.FogVolumes is { UsedData: > 0 });
 
         RecordInteriorMask(ref f);
@@ -943,6 +951,7 @@ static partial class WorldFrame
         }
 
         if (post.LowResParticles)
+        {
             foreach (int divisor in (ReadOnlySpan<int>)[2, 4])
             {
                 if (particles.CountFor(divisor) == 0) continue;
@@ -962,6 +971,8 @@ static partial class WorldFrame
                 post.MarkParticleDraws();
                 post.CompositeParticlesLow(divisor);
             }
+        }
+
         StageClock.Lap(13);
     }
 
@@ -980,7 +991,7 @@ static partial class WorldFrame
 
         post.MarkParticles();
         post.Particles = gpu.Particles;
-        post.SetCloudMotion(gpu.Sky.CloudMotion);
+        post.SetCloudMotion(gpu.Sky.Clouds.CloudMotion);
         post.End();
 
         // The scene's projection, asked only by an overlay that draws.
@@ -991,19 +1002,25 @@ static partial class WorldFrame
 
         // The movement marker and stealth arrows, in their materials' colours, like the game's debug_marker.
         if (gpu.Markers is { Active: true } marker && f.ParticleNear > 0 && post.Target is { } picture)
+        {
             marker.Record(picture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection, camera,
                     f.Sun);
+        }
         else gpu.Markers?.Idle();
 
         // The navmesh debug view (Meitou only).
         if (gpu.NavmeshOverlay is { Visible: true } navOverlay && post.Target is { } navPicture)
+        {
             navOverlay.Record(navPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight, view * SceneProjection().Projection,
                     eye);
+        }
 
         // The pick & collision inspector's hulls over the finished picture (Meitou only).
         if (gpu.InspectorOverlay is { Visible: true } debugOverlay && post.Target is { } debugPicture)
+        {
             debugOverlay.Record(debugPicture, width, height, post.SceneDepth, post.RenderWidth, post.RenderHeight,
                     view * SceneProjection().Projection, eye);
+        }
 
         // The hover outline (Meitou only): the characters' masks drawn after the portraits, the outlined buildings' from what the scene drew of them.
         if (gpu.HoverOutline is { } outline && post.Target is { } hoverPicture)
@@ -1031,7 +1048,7 @@ static partial class WorldFrame
     /// <summary>
     /// The hover outline's masks: the characters', then the outlined buildings' (a list made only when both have some).
     /// </summary>
-    static IReadOnlyList<HoverMask> OutlineMasks(Gpu gpu)
+    static IReadOnlyList<HoverMask> OutlineMasks(WorldGpu gpu)
     {
         IReadOnlyList<HoverMask> characters = gpu.Characters?.HoverMasks ?? [], building = gpu.Objects?.SelectionMasks ?? [];
         if (building.Count == 0) return characters;
