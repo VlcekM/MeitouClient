@@ -1650,9 +1650,10 @@ public sealed partial class FixtureRegistry
     /// The occupant of an unlocked cage is lifted out by the character in <paramref name="lifter"/> (locks.md "Cages and beds", <c>FUN_14034fbe0</c>,
     /// <b>Observed</b>): it is no longer held (the carry link is the caller's). Out of the cage of another faction than the lifter's, the lifter gets
     /// a pending code 7 against the cage owner and the freed one a pending Escaping Prison and the escaped flag. False when it is not imprisoned or
-    /// its cage is effectively locked.
+    /// its cage is effectively locked. <paramref name="stepOut"/>: no one carries it (a gatherer's take-out), so it stands at the cage's
+    /// <see cref="ExitSpot"/>, as every hold clear but the shoulder lift puts it (<c>FUN_140330600</c> -> <c>FUN_140661f90</c>).
     /// </summary>
-    public bool LiftOut(World world, CharacterId prisoner, int lifter, CrimeSystem? crimes = null)
+    public bool LiftOut(World world, CharacterId prisoner, int lifter, CrimeSystem? crimes = null, bool stepOut = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(prisoner, out int s) || table.Cold(s) is not { IsImprisoned: true } c || table.Cold(lifter) is not { } lc)
@@ -1669,6 +1670,7 @@ public sealed partial class FixtureRegistry
 
         if (cage is not null && cage.Occupant == prisoner) cage.Occupant = CharacterId.None;
         bool kidnapped = c.Kidnapped;   // a kidnap victim lifted out is no escapee (the lifter's crime stays)
+        if (stepOut && cage is not null) StepOut(table, s, cage);   // the cage's middle is a pocket no path leaves
         Clear(c);
         c.Escaped = foreign && !kidnapped;
         return true;

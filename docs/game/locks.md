@@ -289,7 +289,9 @@ Same targets as picking; Task_CutLock / Task_BruteForceLock share the shackle ta
   still set, so it looks up the held building's `Node Use` (type 4) node nearest the character's position (`FUN_14038ab50`; the character stands at the cage origin) and
   moves the body there after a physics ray query at the node (`FUN_1403a2fa0`, door hit filter; the ray's exact use is **Unknown**). No node (Prisoner Pole): it stays.
   Data (base game probe): Prisoner Cage's nearest is `usenode008` at local (0.2, 9.4), the door side; Spiked Cage's `Cage_GuardNode003` at (-1.6, -13.4), behind it
-  (its lock node is 14.1 away); Peeler Machine's one node at (0.1, 11.3). Meitou: `FixtureRegistry.ExitSpot` for Get out and Release; lifting out leaves the body to the carrier.
+  (its lock node is 14.1 away); Peeler Machine's one node at (0.1, 11.3). Meitou: `FixtureRegistry.ExitSpot` for Get out and Release; lifting out leaves the body to the carrier, but a gatherer's take-out
+  (173, 217, 245), which no one carries, puts it at the exit spot too (`LiftOut` with `stepOut`). **Observed** (Rebirth, 2026-11-09): the middle of an
+  emptied Prisoner Cage is a pocket of the navmesh no path leaves, so a slave left there stood still all hour while the original's walked to the mines.
 - **Release** (`Task_ReleasePrisoner` 110): clears the occupancy, "{1} has been released from prison." (**Observed**).
 - **Beds**: `+0x2f8 = 1`, bed handle +0x300 ([carry-loot](carry-loot.md)); beds have no lock. Details below.
 - Character save keys: `in something` (= +0x2f8) and `in what` (handle +0x300) (**Verified**, `FUN_1406280a0`); platoons
