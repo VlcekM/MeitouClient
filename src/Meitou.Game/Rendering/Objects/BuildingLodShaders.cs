@@ -18,8 +18,15 @@ namespace Meitou.Game.Rendering.Objects;
 /// </remarks>
 static class BuildingLodShaders
 {
+    /// <summary>
+    /// The first of the four per-instance matrix rows' locations (7 to 10); the mesh's own inputs are below it.
+    /// </summary>
     public const int InstanceLocation = 7;
 
+    /// <summary>
+    /// The shared mesh vertex shader given the per-instance matrix (its spare w column carrying the dither range, the interior and site data and the
+    /// scaffold) and the distant towns' per-vertex fade.
+    /// </summary>
     public static string Vertex()
     {
         string v = Shaders.MeshVertex;
@@ -156,6 +163,7 @@ static class BuildingLodShaders
         int s = Math.Clamp((int)MathF.Round((tiling > 0 ? tiling : 1) * 16), 0, 255);
         return 4 * (t + 4096 * s);
     }
+
     /// <summary>
     /// The largest tint channel <see cref="FarmPlants.PackTint"/> keeps (a plant's brightness goes to 1.1); <c>instanceTint</c> has the same
     /// number.
@@ -179,19 +187,18 @@ static class BuildingLodShaders
             }
         """;
 
+    /// <summary>
+    /// The site's clip in the fragment: above 1.2 f of the part's mesh top only the scaffold grid's opaque texels (alpha above 0.7) are kept.
+    /// </summary>
     const string ScaffoldTest = """
                 if (vScaffold > 2.0 && (vScaffold - 10000.0) * 1.2 < vBuildY && scaffoldGrid(vUv * uTile).a <= 0.7) discard;
         """;
 
     /// <summary>
-    /// The caster's fragment shader with the same clip, so a site's shadow is its built part and scaffold; and the dither range taken at its middle
-    /// (a caster has no dither): of an instance's two blending levels exactly one casts, and a distant town casts only where it is drawn (the
-    /// camera's distance fade). Without that test the Hub's baked distant mesh, the intact town, cast its roofs' shadows into the ruins at every
-    /// distance.
+    /// The view's cut volumes (convex footprint and height range each): a fragment of a cut draw (fadeMode bit 2) inside one is left out. The shadow
+    /// side of the cut into viewed buildings (WorldObjectRenderer.ShadowCut), and the selection mask's floor (WorldObjectRenderer.DrawSelectionMask);
+    /// the main view has none.
     /// </summary>
-    // The view's cut volumes (convex footprint and height range each): a fragment of a cut draw (fadeMode bit 2) inside one is left out. The shadow
-    // side of the cut into viewed buildings (WorldObjectRenderer.ShadowCut), and the selection mask's floor (WorldObjectRenderer.DrawSelectionMask);
-    // the main view has none.
     const string CutVolumes = """
         uniform int uFadeMode;
         uniform uint uCutVolumes;
@@ -211,6 +218,12 @@ static class BuildingLodShaders
         }
         """;
 
+    /// <summary>
+    /// The caster's fragment shader with the same clip, so a site's shadow is its built part and scaffold; and the dither range taken at its middle
+    /// (a caster has no dither): of an instance's two blending levels exactly one casts, and a distant town casts only where it is drawn (the
+    /// camera's distance fade). Without that test the Hub's baked distant mesh, the intact town, cast its roofs' shadows into the ruins at every
+    /// distance.
+    /// </summary>
     static string Depth()
     {
         string f = ShadowShaders.MeshDepthFragment;
@@ -284,13 +297,18 @@ static class BuildingLodShaders
         ["uHeadNormal"] = "textures2D[pc.normal]",
     };
 
+    /// <summary>
+    /// The vertex shader in the native model (the push block, the view's eye for the fade).
+    /// </summary>
     public static string VertexNative() => NativeShaders.Port(Vertex(), NativeShaders.Map(Own), PushMembers);
+
     /// <summary>
     /// The colour program; the full one (not <paramref name="solid"/>) also has the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>).
     /// </summary>
     public static string FragmentNative(bool solid = false) =>
         Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(solid ? Fragment(true) : InteriorMaskRenderer.WithCut(Fragment()), NativeShaders.Map(Own),
                 PushMembers));
+
     /// <summary>
     /// <see cref="ShadowShaders.MeshDepthFragment"/> for <see cref="VertexNative"/>.
     /// </summary>
@@ -318,6 +336,9 @@ static class BuildingLodShaders
         throw new InvalidOperationException($"BuildingLodShaders: '{fromLines[0]}...' not found in the shared mesh shader; update the patch.");
     }
 
+    /// <summary>
+    /// Replaces the first match of <paramref name="pattern"/> in the shared shader source; throws when it is not found (the anchor moved).
+    /// </summary>
     static string Replace(string source, string pattern, string replacement)
     {
         var regex = new Regex(pattern);
@@ -333,28 +354,100 @@ static class BuildingLodShaders
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 128)]
 struct ObjectPush
 {
+    /// <summary>
+    /// The material's tint.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(0)] public System.Numerics.Vector3 Tint;
+    /// <summary>
+    /// World units to texture coordinates for a triplanar material (1/5000).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(12)] public float TriplanarScale;
+    /// <summary>
+    /// A flat colour: the wireframe's or the LOD debug's, or the ghost's or highlight's tint (the shader tints a draw where it is not 0).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(16)] public System.Numerics.Vector3 FlatColour;
+    /// <summary>
+    /// The cut-out threshold (0: none).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(28)] public float AlphaThreshold;
+    /// <summary>
+    /// The material's tiling.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(32)] public System.Numerics.Vector2 Tile;
+    /// <summary>
+    /// The specular multiplier (0.3 untextured).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(40)] public float Specular;
+    /// <summary>
+    /// Where the alpha comes from (<see cref="Objects.AlphaSource"/>, as int).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(44)] public int AlphaSource;
+    /// <summary>
+    /// The channel holding the alpha (0-3).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(48)] public int AlphaChannel;
+    /// <summary>
+    /// The material's grey channel (-1: none).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(52)] public int GreyChannel;
+    /// <summary>
+    /// The diffuse map's bindless index (the stand-in when none).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(56)] public uint Diffuse;
+    /// <summary>
+    /// The normal map's bindless index.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(60)] public uint Normal;
+    /// <summary>
+    /// The second set's diffuse map, bindless index.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(64)] public uint Diffuse2;
+    /// <summary>
+    /// The second set's normal map, bindless index.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(68)] public uint Normal2;
+    /// <summary>
+    /// 1: a distant town's per-vertex fade; 2: the interior cut (map features over a mask, a shadow pass's cut volumes).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(72)] public int FadeMode;
+    /// <summary>
+    /// The normal map is stored with X in alpha and Y in green.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(76)] public uint NormalSwizzled;
+    /// <summary>
+    /// A diffuse map is read.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(80)] public uint HasDiffuse;
+    /// <summary>
+    /// A normal map is read (the part has tangents).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(84)] public uint HasNormal;
+    /// <summary>
+    /// The second texture set is blended in by the vertex colour.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(88)] public uint HasDual;
+    /// <summary>
+    /// The material is mapped triplanar from the world position.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(92)] public uint Triplanar;
+    /// <summary>
+    /// The material is EMISSIVE (only with its normal map).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(96)] public uint Emissive;
+    /// <summary>
+    /// The diffuse is multiplied by the vertex colour.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(100)] public uint UseVertexColour;
+    /// <summary>
+    /// Draw in the flat colour only (wireframe or LOD debug).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(104)] public uint Wireframe;
+    /// <summary>
+    /// The low byte: the <see cref="Sky.MeshSurface"/> flags; above it the scaffold grid's bindless index + 1 (0: not loaded).
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(108)] public uint Spare;
+    /// <summary>
+    /// The dither fades' distances: the real range's band start and end, then the distant reach's.
+    /// </summary>
     [System.Runtime.InteropServices.FieldOffset(112)] public System.Numerics.Vector4 FadeRange;
 }

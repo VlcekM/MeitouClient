@@ -13,16 +13,26 @@ namespace Meitou.Game.Rendering.Shadows;
 /// </summary>
 static class MeitouShadowShaders
 {
+    /// <summary>
+    /// The Meitou block's uniform buffer binding point.
+    /// </summary>
     public const uint Binding = 8;
+
+    /// <summary>
+    /// The Meitou block's GLSL name.
+    /// </summary>
     public const string Block = "MeitouShadowReceiver";
+
     /// <summary>
     /// Size of <see cref="Block"/> (std140): two vec4 arrays of <see cref="ShadowSettings.MaxCascades"/>, four vec4, a mat4 and a vec4.
     /// </summary>
     public const int BlockBytes = 2 * ShadowSettings.MaxCascades * 16 + 4 * 16 + 64 + 16;
+
     /// <summary>
     /// Float offsets in <see cref="Block"/> of the members after the two per-cascade arrays (<c>uMsParams</c> and on).
     /// </summary>
     public const int ParamsOffset = 2 * ShadowSettings.MaxCascades * 4;
+
     /// <summary>
     /// Taps of the filter and of the blocker search.
     /// </summary>
@@ -37,6 +47,9 @@ static class MeitouShadowShaders
         return $"vec2({F((float)(r * Math.Cos(a)))}, {F((float)(r * Math.Sin(a)))})";
     }));
 
+    /// <summary>
+    /// A float as a GLSL literal (invariant culture, always with a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.#########", CultureInfo.InvariantCulture) + (v == MathF.Floor(v) ? ".0" : "");
 
     /// <summary>

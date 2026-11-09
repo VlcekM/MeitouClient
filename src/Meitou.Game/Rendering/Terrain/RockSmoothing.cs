@@ -167,5 +167,8 @@ public static class RockSmoothing
             }
     }
 
+    /// <summary>
+    /// A normal that can be normalised (not zero, not infinite or NaN).
+    /// </summary>
     static bool Usable(Vector3 n) => n.LengthSquared() is > 1e-12f and < float.PositiveInfinity;
 }

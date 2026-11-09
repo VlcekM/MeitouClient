@@ -20,13 +20,25 @@ sealed class LandmarkShadowMap : IDisposable
     /// The map, its comparison sampling, and whether the receivers read it yet.
     /// </summary>
     GpuTexture? _landmarkMap;
+
+    /// <summary>
+    /// The map with its linear comparison sampler.
+    /// </summary>
     SampledTexture _landmarkSampled;
+
+    /// <summary>
+    /// The receivers read the map (from the frame it was first published).
+    /// </summary>
     bool _landmarkPublished;
 
     /// <summary>
     /// The key of the landmark set and the sun the map was drawn for.
     /// </summary>
     long _landmarkKey;
+
+    /// <summary>
+    /// The sun's direction the map was drawn for.
+    /// </summary>
     Vector3 _landmarkSun;
 
     /// <summary>
@@ -34,6 +46,9 @@ sealed class LandmarkShadowMap : IDisposable
     /// </summary>
     readonly List<Vector4> _landmarkSpheres = [];
 
+    /// <summary>
+    /// A landmark map on <paramref name="gpu"/>, made when first drawn.
+    /// </summary>
     public LandmarkShadowMap(IGpuContext gpu) => _gpu = gpu;
 
     /// <summary>
@@ -117,6 +132,9 @@ sealed class LandmarkShadowMap : IDisposable
     /// </summary>
     public string Texel() => Box is { } b ? $"{b.Texel:0} units per texel" : "off";
 
+    /// <summary>
+    /// Frees the map; the receivers stop reading it.
+    /// </summary>
     public void Dispose()
     {
         _landmarkPublished = false;

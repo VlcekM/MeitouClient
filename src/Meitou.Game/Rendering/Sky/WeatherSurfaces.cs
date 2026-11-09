@@ -22,20 +22,26 @@ internal sealed class WeatherSurfaces : IDisposable
     /// </summary>
     public const string NoiseFile = "Turbulent.dds";
 
+    /// <summary>
+    /// The game's <c>Turbulent.dds</c> as the dust noise (null: not found).
+    /// </summary>
     readonly SampledImage? _noise;
 
     /// <summary>
     /// Shared <c>wetness</c> 0..1: how wet the ground and objects are.
     /// </summary>
     public float Wetness;
+
     /// <summary>
     /// Shared <c>dustAmount</c>: x the current dust (above 1 covers more), y the dust inside buildings, z the slope value.
     /// </summary>
     public Vector3 Dust;
+
     /// <summary>
     /// The weather's rain, 0..100 × strength: <c>rainAmount</c> is <c>saturate(rain / 50)</c>.
     /// </summary>
     public float Rain;
+
     /// <summary>
     /// The water shader's <c>gameTime</c> (game hours); the frame sets it.
     /// </summary>
@@ -46,6 +52,9 @@ internal sealed class WeatherSurfaces : IDisposable
     /// </summary>
     public static float RainAmount(float rain) => Math.Clamp(rain / 50f, 0f, 1f);
 
+    /// <summary>
+    /// Loads the dust noise and publishes the weather's surface uniforms and the noise as frame globals.
+    /// </summary>
     public WeatherSurfaces(IGpuContext gpu, AssetLocator assets)
     {
         if (assets.Find(NoiseFile) is { } path)
@@ -63,6 +72,10 @@ internal sealed class WeatherSurfaces : IDisposable
     /// Test overrides (<c>--wetness</c>, <c>--rain</c>, <c>--dust</c>; a NaN dust component keeps the weather's): they win over the weather state.
     /// </summary>
     public float? WetnessOverride, RainOverride;
+
+    /// <summary>
+    /// The dust test override (see <see cref="WetnessOverride"/>).
+    /// </summary>
     public Vector3? DustOverride;
 
     /// <summary>
@@ -77,6 +90,9 @@ internal sealed class WeatherSurfaces : IDisposable
         Dust = d;
     }
 
+    /// <summary>
+    /// Frees the dust noise.
+    /// </summary>
     public void Dispose() => _noise?.Dispose();
 }
 
@@ -90,18 +106,22 @@ static class MeshSurface
     /// The DUST define (building parts, triplanar map features): the weather's dust covers it.
     /// </summary>
     public const uint Dust = 1;
+
     /// <summary>
     /// The foliage shader: wetness with the fixed absorbance 0.9 (leaf and plant map features).
     /// </summary>
     public const uint Foliage = 2;
+
     /// <summary>
     /// An impostor bake: neither dust nor wetness is baked in.
     /// </summary>
     public const uint NoWeather = 4;
+
     /// <summary>
     /// A building interior: <c>dustAmount.y</c> instead of x, and no rain (nothing marks an interior in the viewer yet).
     /// </summary>
     public const uint Interior = 8;
+
     /// <summary>
     /// A triplanar map feature: dust as well (<c>uWeatherDust.w</c> is always 1; the game's caller table gives them no DUST).
     /// </summary>

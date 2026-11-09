@@ -7,7 +7,15 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 public static class VolumetricCloudShaders
 {
+    /// <summary>
+    /// A float as a GLSL literal (invariant culture, always with a decimal point).
+    /// </summary>
     static string F(float v) => v.ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// What every cloud program shares: the noise atlas, <c>uVolume</c> (coverage, wrapped wind shift, frame jitter), the eye, the cloud slab, the
+    /// extinction and the noise functions.
+    /// </summary>
     public static readonly string Common = $$"""
         uniform sampler2D uNoise;
         uniform vec4 uVolume; // coverage, wrapped wind texture shift, frame jitter
@@ -70,6 +78,10 @@ public static class VolumetricCloudShaders
         }
         """;
 
+    /// <summary>
+    /// The half-resolution ray march through the slab (the atmosphere and fog volume functions included): colour and opacity, and the
+    /// opacity-weighted distance along each ray.
+    /// </summary>
     public static readonly string March = "#version 330 core\n" + DepthConvention.Glsl + AtmosphereShaders.Functions + FogVolumeShaders.Functions
         + Common + """
         in vec2 vUv;
@@ -146,6 +158,9 @@ public static class VolumetricCloudShaders
         }
         """;
 
+    /// <summary>
+    /// The world-space sun-transmission map around the eye (the cloud shadow).
+    /// </summary>
     public static readonly string Shadow = "#version 330 core\n" + Common + """
         in vec2 vUv;
         out vec4 fragColour;
@@ -159,6 +174,9 @@ public static class VolumetricCloudShaders
         }
         """;
 
+    /// <summary>
+    /// The history resolve: the marched image blended over the reprojected history (moved by the wind since the last frame).
+    /// </summary>
     public const string Resolve = """
         #version 330 core
         """ + DepthConvention.Glsl + """

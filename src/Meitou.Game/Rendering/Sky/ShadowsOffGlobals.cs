@@ -12,6 +12,9 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 static class ShadowsOffGlobals
 {
+    /// <summary>
+    /// Publishes zeroed receiver, caster and Meitou shadow blocks where nothing is published yet.
+    /// </summary>
     public static void Publish(IGpuContext gpu)
     {
         var g = gpu.Globals;

@@ -17,14 +17,30 @@ sealed class ShadowBlockerMap : IDisposable
     /// The map (one layer per cascade), its nearest-filtered sampling, and whether the receivers read it yet.
     /// </summary>
     GpuTexture? _blocker;
+
+    /// <summary>
+    /// The map with its nearest, edge-clamped sampler.
+    /// </summary>
     SampledTexture _blockerSampled;
+
+    /// <summary>
+    /// The receivers read the map (from the frame it was first filled).
+    /// </summary>
     bool _blockerPublished;
 
     /// <summary>
     /// The blocker search program and its handles, made at the first update.
     /// </summary>
     LegacyProgram? _blockerNative;
+
+    /// <summary>
+    /// The program's cascade-array sampler.
+    /// </summary>
     SamplerSlot _blockerAtlasSlot;
+
+    /// <summary>
+    /// The program's <c>uAtlasSize</c> and <c>uLayer</c> uniforms.
+    /// </summary>
     UniformHandle _blockerSizeHandle, _blockerLayerHandle;
 
     /// <summary>
@@ -34,6 +50,9 @@ sealed class ShadowBlockerMap : IDisposable
         BlendState.Off, ColorMask.R | ColorMask.G | ColorMask.B | ColorMask.A,
         PolygonKind.Fill, false, false);
 
+    /// <summary>
+    /// A blocker map on <paramref name="gpu"/>, made at its first update.
+    /// </summary>
     public ShadowBlockerMap(IGpuContext gpu) => _gpu = gpu;
 
     /// <summary>
@@ -114,6 +133,9 @@ sealed class ShadowBlockerMap : IDisposable
         _gpu.EndNative(cmd);
     }
 
+    /// <summary>
+    /// Frees the map and its program.
+    /// </summary>
     public void Dispose()
     {
         _blocker?.Dispose();

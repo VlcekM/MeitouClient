@@ -10,6 +10,9 @@ namespace Meitou.Game.Rendering.Terrain;
 /// </summary>
 public static class TerrainLayerSkip
 {
+    /// <summary>
+    /// The cliff layer is skipped below its threshold (true, the default); false samples every weight.
+    /// </summary>
     public static bool Enabled { get; set; } = true;
 
     /// <summary>

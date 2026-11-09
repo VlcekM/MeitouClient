@@ -13,18 +13,69 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 public sealed class VolumetricCloudRenderer : IDisposable
 {
+    /// <summary>
+    /// The context the images, programs and passes go through.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The clouds' noise atlas (<see cref="VolumetricClouds.CreateAtlas"/>).
+    /// </summary>
     readonly SampledImage _noise;
+
+    /// <summary>
+    /// The programs: the half-resolution ray march, the history resolve and the sun-transmission map.
+    /// </summary>
     readonly LegacyProgram _march, _resolve, _shadow;
+
+    /// <summary>
+    /// The native segments the three programs are recorded in.
+    /// </summary>
     readonly NativeSegment _marchSegment, _resolveSegment, _shadowSegment;
+
+    /// <summary>
+    /// Times the main view's, the reflection's and the shadow map's passes on the GPU.
+    /// </summary>
     readonly PassTimer _mainTimer, _mirrorTimer, _shadowTimer;
+
+    /// <summary>
+    /// The GPU times read back (scratch).
+    /// </summary>
     readonly List<double> _samples = [];
+
+    /// <summary>
+    /// The main view's clouds' GPU time (ms, the last read back).
+    /// </summary>
     public double MainGpuMs { get; private set; }
+
+    /// <summary>
+    /// The water reflection's clouds' GPU time (ms).
+    /// </summary>
     public double ReflectionGpuMs { get; private set; }
+
+    /// <summary>
+    /// The cloud shadow map's GPU time (ms).
+    /// </summary>
     public double ShadowGpuMs { get; private set; }
+
+    /// <summary>
+    /// The main view's history and the water reflection's.
+    /// </summary>
     readonly ViewHistory _main = new(), _mirror = new();
+
+    /// <summary>
+    /// The world-space sun-transmission map (512² R16F; made on the first <see cref="RenderShadow"/>).
+    /// </summary>
     GpuTexture? _shadowMap;
+
+    /// <summary>
+    /// The world x, z of the shadow map's corner (snapped to its texels, centred on the eye).
+    /// </summary>
     public Vector2 ShadowOrigin { get; private set; }
+
+    /// <summary>
+    /// The shadow map with its linear, edge-clamped sampler (none before the first <see cref="RenderShadow"/>).
+    /// </summary>
     public SampledTexture ShadowMap => _shadowMap is null ? default : Sample(_shadowMap);
 
     /// <summary>
@@ -37,14 +88,44 @@ public sealed class VolumetricCloudRenderer : IDisposable
     /// </summary>
     public const float FogSkipReach = 1.5f;
 
+    /// <summary>
+    /// One view's clouds over time: its images and what they were made with, so the next frame can tell whether to reproject them.
+    /// </summary>
     sealed class ViewHistory : IDisposable
     {
+        /// <summary>
+        /// This frame's marched clouds and their opacity-weighted distance (half resolution), and the two resolved images (A the last, B the next).
+        /// </summary>
         public GpuTexture? Current, Distance, A, B;
+
+        /// <summary>
+        /// The view-projection the history was made with.
+        /// </summary>
         public Matrix4x4 Previous;
+
+        /// <summary>
+        /// The eye, key light, light, ambient and forward direction the history was made with.
+        /// </summary>
         public Vector3 Eye, Key, Light, Ambient, Forward;
+
+        /// <summary>
+        /// The wind offset the history was made with.
+        /// </summary>
         public Vector2 Wind;
+
+        /// <summary>
+        /// The coverage and slab base the history was made with.
+        /// </summary>
         public float Coverage, Bottom;
+
+        /// <summary>
+        /// The frame the history was made in (-10: none, it restarts).
+        /// </summary>
         public long Frame = -10;
+
+        /// <summary>
+        /// Frees the images; the history restarts.
+        /// </summary>
         public void Dispose()
         {
             Current?.Dispose();
@@ -56,6 +137,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Makes the noise atlas, the three programs and their segments, and the timers.
+    /// </summary>
     public VolumetricCloudRenderer(IGpuContext gpu)
     {
         this._gpu = gpu;
@@ -72,19 +156,27 @@ public sealed class VolumetricCloudRenderer : IDisposable
         _shadowSegment = new(gpu, _shadow, PrimitiveType.Triangles, "cloud shadow map");
     }
 
+    /// <summary>
+    /// A sampled colour target, made in an upload batch.
+    /// </summary>
     GpuTexture Make(int width, int height, InternalFormat format, string name)
     {
         using var upload = _gpu.Uploads.Begin();
         return upload.Create(new TextureDesc(format, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
     }
 
+    /// <summary>
+    /// A texture with the linear, edge-clamped sampler.
+    /// </summary>
     SampledTexture Sample(GpuTexture t)
     {
-        var sampler = _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
-            TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+        var sampler = _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear));
         return new(sampler, t.View());
     }
 
+    /// <summary>
+    /// Sets what every cloud program reads: the noise atlas, the coverage and wind (and this frame's jitter), the eye and the cloud slab.
+    /// </summary>
     void Common(LegacyProgram p, float coverage, Vector2 wind, Vector3 eye)
     {
         p.Bind(p.Sampler("uNoise"), _noise.Sampled());
@@ -93,6 +185,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
         p.Set(p.Uniform("uCloudSlab"), Bottom, Bottom + VolumetricClouds.Thickness);
     }
 
+    /// <summary>
+    /// One fullscreen triangle of <paramref name="p"/> into <paramref name="target"/> (and <paramref name="extra"/>), as its own native rendering.
+    /// </summary>
     void Draw(LegacyProgram p, NativeSegment segment, GpuTexture target, GpuTexture? extra = null)
     {
         var targets = PassTargets.Of(target, null, extra);
@@ -108,12 +203,23 @@ public sealed class VolumetricCloudRenderer : IDisposable
         _gpu.EndNative(cmd);
     }
 
-    public void Invalidate() { _main.Frame = _mirror.Frame = -10; MainMotion = null; }
+    /// <summary>
+    /// Both views' histories restart (the clouds' settings jumped).
+    /// </summary>
+    public void Invalidate()
+    {
+        _main.Frame = _mirror.Frame = -10;
+        MainMotion = null;
+    }
 
     /// <summary>
     /// The main view's history only (its sky left out this frame; the reflection keeps marching).
     /// </summary>
-    public void InvalidateMain() { _main.Frame = -10; MainMotion = null; }
+    public void InvalidateMain()
+    {
+        _main.Frame = -10;
+        MainMotion = null;
+    }
 
     /// <summary>
     /// The main view's clouds for the upscalers' motion vectors (<see cref="PostProcess"/>'s cloud motion pass, docs/render-clouds.md "Temporal, fog
@@ -207,6 +313,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
             && Vector3.DistanceSquared(ambient, h.Ambient) < 0.0025f && windDelta.LengthSquared() < 0.0001f;
     }
 
+    /// <summary>
+    /// Draws the world-space sun-transmission map around the eye (before the scene pass opens).
+    /// </summary>
     public void RenderShadow(Vector3 eye, float coverage, Vector2 wind, Vector3 sun)
     {
         if (_gpu.PassOpen) throw new InvalidOperationException("Prepare cloud shadows before opening the scene pass");
@@ -224,6 +333,9 @@ public sealed class VolumetricCloudRenderer : IDisposable
         _shadowTimer.End();
     }
 
+    /// <summary>
+    /// Frees both histories, the shadow map, the noise atlas and the programs.
+    /// </summary>
     public void Dispose()
     {
         _main.Dispose();

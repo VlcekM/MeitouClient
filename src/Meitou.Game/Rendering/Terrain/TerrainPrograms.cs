@@ -23,6 +23,9 @@ sealed class TerrainPrograms : IDisposable
     /// </summary>
     readonly ColourSet?[] _colourSets = new ColourSet?[6];
 
+    /// <summary>
+    /// Makes the depth and prepass programs, the colour set for the current relief, and the tessellated variants where the device has tessellation.
+    /// </summary>
     public TerrainPrograms(IGpuContext gpu, GpuSetLayout[] sets)
     {
         _gpu = gpu;
@@ -161,6 +164,9 @@ sealed class TerrainPrograms : IDisposable
         TerrainProgram Mesh, TerrainProgram MeshNoNormal, TerrainProgram MeshSolid, TerrainProgram MeshSolidNoNormal,
         TerrainProgram? PatchTess, TerrainProgram? PatchCutTess, TerrainProgram? MeshTess, TerrainProgram? MeshSolidTess) : IDisposable
     {
+        /// <summary>
+        /// Frees every program of the set.
+        /// </summary>
         public void Dispose()
         {
             foreach (var p in new[] { Patch, PatchNoNormal, PatchCut, PatchCutNoNormal, Mesh, MeshNoNormal, MeshSolid, MeshSolidNoNormal,
@@ -216,6 +222,9 @@ sealed class TerrainPrograms : IDisposable
             MeshTess(TerrainShaders.MeshFragmentSolidNative(march, reliefQuality: quality), "terrain meshes solid smoothed"));
     }
 
+    /// <summary>
+    /// Frees every program and colour set.
+    /// </summary>
     public void Dispose()
     {
         foreach (var p in new[] { PatchDepth, PatchPrepass, PatchPrepassCut, MeshDepth }) p.Dispose();

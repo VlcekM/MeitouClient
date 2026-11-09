@@ -11,13 +11,39 @@ namespace Meitou.Game.Rendering.Sky;
 /// </summary>
 internal sealed class SampledImage : IDisposable
 {
+    /// <summary>
+    /// The context whose sampler cache the sampler comes from.
+    /// </summary>
     readonly IGpuContext _ctx;
+
+    /// <summary>
+    /// The GL minification filter (mipmapped or not).
+    /// </summary>
     readonly TextureMinFilter _min;
+
+    /// <summary>
+    /// The GL magnification filter.
+    /// </summary>
     readonly TextureMagFilter _mag;
+
+    /// <summary>
+    /// The GL wrap of S and T, and of R.
+    /// </summary>
     readonly TextureWrapMode _wrap, _wrapR;
+
+    /// <summary>
+    /// The LOD bias <see cref="_cached"/> was made with (NaN: none yet).
+    /// </summary>
     float _cachedBias = float.NaN;
+
+    /// <summary>
+    /// The texture with its sampler at <see cref="_cachedBias"/>.
+    /// </summary>
     SampledTexture _cached;
 
+    /// <summary>
+    /// A texture with the GL sampler state it stands for.
+    /// </summary>
     SampledImage(IGpuContext ctx, GpuTexture texture, TextureMinFilter min, TextureMagFilter mag, TextureWrapMode wrap, TextureWrapMode wrapR)
     {
         this._ctx = ctx;
@@ -25,6 +51,9 @@ internal sealed class SampledImage : IDisposable
         (this._min, this._mag, this._wrap, this._wrapR) = (min, mag, wrap, wrapR);
     }
 
+    /// <summary>
+    /// The native texture.
+    /// </summary>
     public GpuTexture Texture { get; }
 
     /// <summary>
@@ -41,6 +70,9 @@ internal sealed class SampledImage : IDisposable
         return _cached;
     }
 
+    /// <summary>
+    /// The whole of a texture's first level as an upload rectangle.
+    /// </summary>
     static PixelRect Rect(int width, int height) => new(0, 0, (uint)width, (uint)height);
 
     /// <summary>
@@ -145,5 +177,8 @@ internal sealed class SampledImage : IDisposable
             TextureWrapMode.ClampToEdge);
     }
 
+    /// <summary>
+    /// Frees the texture.
+    /// </summary>
     public void Dispose() => Texture.Dispose();
 }

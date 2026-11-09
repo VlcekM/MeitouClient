@@ -13,7 +13,14 @@ namespace Meitou.Game.Rendering.Objects;
 /// </summary>
 public sealed unsafe partial class WorldObjectRenderer
 {
+    /// <summary>
+    /// The prop the stage shows (null: none).
+    /// </summary>
     PlacedMesh? _stageProp;
+
+    /// <summary>
+    /// The prop's loose instance (null: none).
+    /// </summary>
     ObjectStreamer.Instance? _stageInstance;
 
     /// <summary>

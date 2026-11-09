@@ -27,6 +27,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     /// </summary>
     const long LayerBudget = 256L << 20;
 
+    /// <summary>
+    /// The decal vertex stage: one instanced quad per decal, its corners from the vertex index, in a layer's clip space.
+    /// </summary>
     const string Vertex = """
         #version 450
         layout(location = 0) in vec4 aQuad;     // the centre and the width axis, in clip space
@@ -46,6 +49,9 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         }
         """;
 
+    /// <summary>
+    /// The decal fragment stage: the decal's texture (by its bindless index) × its colour.
+    /// </summary>
     static readonly string Fragment = "#version 450\n" + BindlessTable.Declarations(NativeShaders.BindlessSet) + """
         layout(location = 0) in vec2 vUv;
         layout(location = 1) in vec4 vColour;
@@ -60,43 +66,127 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     struct DecalInstance
     {
+        /// <summary>
+        /// The row's bytes.
+        /// </summary>
         public const int Size = 48;
+
+        /// <summary>
+        /// Quad: the centre and the width axis in clip space; Colour: the decal's colour, its alpha at most the life.
+        /// </summary>
         public Vector4 Quad, Colour;
+
+        /// <summary>
+        /// The height axis in clip space.
+        /// </summary>
         public Vector2 AxisH;
+
+        /// <summary>
+        /// The texture's bindless index, and padding to 48 bytes.
+        /// </summary>
         public uint Sprite, Pad;
     }
 
+    /// <summary>
+    /// The instance rows' layout (one binding, per instance).
+    /// </summary>
     static readonly VertexLayout Rows = new(
         new VertexInput(0, InternalFormat.Rgba32F, DecalInstance.Size, true),
         new VertexInput(1, InternalFormat.Rgba32F, DecalInstance.Size, true),
         new VertexInput(2, InternalFormat.Rg32F, DecalInstance.Size, true),
         new VertexInput(3, InternalFormat.R32Ui, DecalInstance.Size, true));
 
-    // The colour alpha blended (red, green, blue), the alpha added: the game's separate blend in one pass.
+    /// <summary>
+    /// The colour alpha blended (red, green, blue), the alpha added: the game's separate blend in one pass.
+    /// </summary>
     static readonly BlendState Blend = new(true, BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha,
         AlphaSrc: BlendingFactor.One, AlphaDst: BlendingFactor.One);
 
+    /// <summary>
+    /// The context the layers, the program and the bindless entries go through.
+    /// </summary>
     readonly IGpuContext _gpu;
+
+    /// <summary>
+    /// The frame the decal program is made in.
+    /// </summary>
     readonly NativeFrame _frame;
+
+    /// <summary>
+    /// The decal program.
+    /// </summary>
     readonly GpuProgram _program;
+
+    /// <summary>
+    /// Its pipeline (made on the first draw).
+    /// </summary>
     GpuPipeline? _pipeline;
+
+    /// <summary>
+    /// The decal textures per <see cref="TerrainDecalType"/>, their variants in order (null: the file could not be read).
+    /// </summary>
     readonly SampledImage?[][] _sprites;
-    // Each sprite's bindless index (uint.MaxValue: none), registered with the samplers of spriteBias (the upscaler's LOD bias, as the images give
-    // them).
+
+    /// <summary>
+    /// Each sprite's bindless index (<see cref="uint.MaxValue"/>: none), registered with the samplers of <see cref="_spriteBias"/> (the upscaler's
+    /// LOD bias, as the images give them).
+    /// </summary>
     readonly uint[][] _spriteIndex;
+
+    /// <summary>
+    /// The LOD bias the sprites were registered with (NaN: not yet).
+    /// </summary>
     float _spriteBias = float.NaN;
+
+    /// <summary>
+    /// The instance rows of a layer's draw (grown as needed).
+    /// </summary>
     DecalInstance[] _instances = new DecalInstance[256];
-    // Each layer's cell, the cell version it shows, the rewrite it was cleared at and how many of the cell's appended decals it holds since
-    // (TerrainDecalStore.CellRewrite).
+
+    /// <summary>
+    /// Each layer's cell, the cell version it shows, the rewrite it was cleared at and how many of the cell's appended decals it holds
+    /// since (<see cref="TerrainDecalStore.CellRewrite"/>).
+    /// </summary>
     readonly (uint Key, int Version, int Rewrite, int Appended)[] _slots = new (uint, int, int, int)[MaxSlots];
+
+    /// <summary>
+    /// This frame's near cells with their distance to the eye, nearest first.
+    /// </summary>
     readonly List<(float Distance, uint Key)> _near = [];
+
+    /// <summary>
+    /// The cells on a layer this frame (<see cref="Drawn"/>).
+    /// </summary>
     readonly HashSet<uint> _drawn = [];
+
+    /// <summary>
+    /// Per near cell: its column, row and layer, for the colour shader.
+    /// </summary>
     readonly Vector4[] _cells = new Vector4[MaxSlots];
+
+    /// <summary>
+    /// The layer array (null until a cell is near).
+    /// </summary>
     GpuTexture? _target;
+
+    /// <summary>
+    /// The layers in it.
+    /// </summary>
     int _layers;
+
+    /// <summary>
+    /// The layer array's bindless entry (null: not registered for the current array).
+    /// </summary>
     (GpuTexture Texture, uint Index)? _bindless;
+
+    /// <summary>
+    /// The near cells in <see cref="_cells"/>.
+    /// </summary>
     int _count;
 
+    /// <summary>
+    /// A renderer of <paramref name="sprites"/> (see <see cref="Create"/>).
+    /// </summary>
     TerrainDecalRenderer(IGpuContext gpu, SampledImage?[][] sprites)
     {
         this._gpu = gpu;
@@ -359,9 +449,14 @@ public sealed unsafe partial class TerrainDecalRenderer : IDisposable
         for (int i = 0; i < _count; i++) c.BloodCells[i] = _cells[i];
     }
 
-    GpuSampler Linear() => _gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
-        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0));
+    /// <summary>
+    /// The linear, edge-clamped sampler the colour shader reads the layers with.
+    /// </summary>
+    GpuSampler Linear() => _gpu.Samplers.Get(SamplerDesc.Clamped(TextureMinFilter.Linear, TextureMagFilter.Linear));
 
+    /// <summary>
+    /// Frees the surfaces, the layer array and every bindless entry.
+    /// </summary>
     public void Dispose()
     {
         DisposeSurfaces();
