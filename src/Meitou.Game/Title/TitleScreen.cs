@@ -32,16 +32,51 @@ sealed class TitleScreen(GameHost host)
     /// </summary>
     static readonly Vector3 TitleFill = new(0.064f, 0.052f, 0.04f);
 
+    /// <summary>
+    /// The staged title scene; null until it is made.
+    /// </summary>
     TitleComposition? _titleComposition;
+
+    /// <summary>
+    /// The road fight under the title; null when unavailable.
+    /// </summary>
     internal TitleBattle? TitleBattle;
+
+    /// <summary>
+    /// The looks of the title's characters.
+    /// </summary>
     Data.Characters.CharacterAppearance[] _titleAppearances = [];
+
+    /// <summary>
+    /// The title's characters' looks are prepared (true without a character renderer).
+    /// </summary>
     internal bool TitleCharactersReady => host.ActiveCharacters is not { } characters ||
         _titleAppearances.Length > 0 && _titleAppearances.All(characters.IsPrepared) && !characters.ContentPending;
+
+    /// <summary>
+    /// The title's characters, streaming, objects and foliage are ready to show.
+    /// </summary>
     internal bool TitleSceneReady => TitleCharactersReady && (host.Gpu is null || host.Gpu.Streamer is not { Idle: false } &&
         !(host.Gpu.Objects?.Pending > 0) && !(host.Gpu.Foliage?.Pending > 0));
+
+    /// <summary>
+    /// Makes the title's own particle renderer (the dust).
+    /// </summary>
     internal Func<ParticleRenderer>? TitleParticleFactory;
+
+    /// <summary>
+    /// The title's particle renderer; null until it is made.
+    /// </summary>
     ParticleRenderer? _titleParticles;
+
+    /// <summary>
+    /// The title's dust effect; empty when the library has no <c>kenshi_weather_dust1</c>.
+    /// </summary>
     IReadOnlyList<WeatherEffectEntry>? _titleDust;
+
+    /// <summary>
+    /// The gameplay camera's field of view while the title shows; null when it is given back.
+    /// </summary>
     float? _gameplayLens;
 
     /// <summary>
@@ -49,9 +84,20 @@ sealed class TitleScreen(GameHost host)
     /// </summary>
     Action<CharacterDrawList>? _gameplayCharacters;
 
+    /// <summary>
+    /// The Meitou title shows the live world.
+    /// </summary>
     internal bool TitleVisible => host.Player.TitleOpen && host.Player.UiMode == UiMode.Meitou;
+
+    /// <summary>
+    /// The title's hour: 0.75 h after sunrise.
+    /// </summary>
     internal float TitleHour => host.Scene.Clock.Sunrise + 0.75f;
 
+    /// <summary>
+    /// Makes the title scene once (with the game data): the composition with the saved character's look and build, the road fight, and the
+    /// characters' looks prepared.
+    /// </summary>
     void EnsureTitleScene()
     {
         if (_titleComposition is not null || host.Scene.Database is not { } db) return;
@@ -137,6 +183,9 @@ sealed class TitleScreen(GameHost host)
         return kit;
     }
 
+    /// <summary>
+    /// The character records a start or squad template <paramref name="startOrTemplateId"/> brings, followed through starts and squad templates.
+    /// </summary>
     static HashSet<string> StartingCharacterRecords(GameDatabase db, string startOrTemplateId)
     {
         var characters = new HashSet<string>(StringComparer.Ordinal);
@@ -170,6 +219,9 @@ sealed class TitleScreen(GameHost host)
         return characters;
     }
 
+    /// <summary>
+    /// The title's character source: the composition's wanderer and the fighters.
+    /// </summary>
     void FillTitleCharacters(CharacterDrawList list)
     {
         _titleComposition?.Fill(list);
@@ -230,6 +282,10 @@ sealed class TitleScreen(GameHost host)
         if (host.ActiveObjects is { } things && _titleComposition is { } staged && things.Staged == staged.Staged) things.Staged = null;
     }
 
+    /// <summary>
+    /// Draws the title's world at <paramref name="width"/> by <paramref name="height"/> under the title's sky (clear with a few clouds, the sun to
+    /// the right, no placed fog, warm fill, its own dust), then sets the sky, clock and passes back.
+    /// </summary>
     internal void DrawTitleWorld(int width, int height)
     {
         EnsureTitleScene();
@@ -281,6 +337,9 @@ sealed class TitleScreen(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Makes the title's dust once and sets its weather: a wind across the view that gusts, its tint fading as the camera looks down.
+    /// </summary>
     void PrepareTitleDust(double seconds)
     {
         if (_titleParticles is null && TitleParticleFactory is { } create)
@@ -307,6 +366,9 @@ sealed class TitleScreen(GameHost host)
                 unit.Tint = new Vector3(1, 0.86f, 0.68f) * ((0.4f + 0.25f * gust) * fade);
     }
 
+    /// <summary>
+    /// Disposes the title's dust and fight and drops the composition and looks.
+    /// </summary>
     internal void DisposeTitleScene()
     {
         _titleParticles?.Dispose();

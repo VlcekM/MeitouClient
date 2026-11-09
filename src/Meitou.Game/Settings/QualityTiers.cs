@@ -9,7 +9,14 @@ namespace Meitou.Game.Settings;
 /// </summary>
 sealed class QualityTiers(SettingsMenu menu)
 {
+    /// <summary>
+    /// The quality preset choice's names.
+    /// </summary>
     internal static readonly string[] PresetNames = ["Low", "Medium", "High", "Ultra", "Custom"];
+
+    /// <summary>
+    /// The indexes of Low, Medium, High and Custom in <see cref="PresetNames"/>.
+    /// </summary>
     internal const int LowPreset = 0, MediumPreset = 1, HighPreset = 2, CustomPreset = 4;
 
     /// <summary>
@@ -21,9 +28,14 @@ sealed class QualityTiers(SettingsMenu menu)
     internal sealed record PresetSlider(string Label, float Low, float Medium, float Ultra, bool Scale = false, string? Mode = null, float? High = null,
         bool LowFixed = false);
 
-    // --low-end's large foliage range, as a multiple of the default; the medium and small ranges follow it.
+    /// <summary>
+    /// --low-end's large foliage range, as a multiple of the default; the medium and small ranges follow it.
+    /// </summary>
     const float LowFoliageRange = WorldOptions.LowEndLargeRange / Data.World.FoliageSizes.DefaultLargeRange;
 
+    /// <summary>
+    /// The sliders the presets set.
+    /// </summary>
     internal static readonly PresetSlider[] PresetSliders =
     [
         new(WorldFrame.ObjectDistanceSlider, WorldOptions.LowEndObjectDistance, 0.6f, 2, Mode: "Draw distances", LowFixed: true),
@@ -68,8 +80,10 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal sealed record PresetToggle(string Label, bool Low, bool Medium, bool Ultra);
 
-    // Costs (docs/render-terrain.md "Ground relief", RTX 4090): refinement +0.38 ms. Parallax and displacement are effects (Faithful / Meitou
-    // switches), not tiers.
+    /// <summary>
+    /// Costs (docs/render-terrain.md "Ground relief", RTX 4090): refinement +0.38 ms. Parallax and displacement are effects (Faithful / Meitou
+    /// switches), not tiers. The quality switches the presets set.
+    /// </summary>
     internal static readonly PresetToggle[] PresetToggles =
     [
         new(WorldFrame.FifthCascadeSwitch, false, false, true),
@@ -89,7 +103,14 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     static readonly string[] LowOffToggles = [WorldFrame.OutlineRefineSwitch, WorldFrame.RockSmoothingSwitch];
 
+    /// <summary>
+    /// The fifth shadow cascade switch's label.
+    /// </summary>
     const string FifthCascade = WorldFrame.FifthCascadeSwitch;
+
+    /// <summary>
+    /// The quality preset choice's hint.
+    /// </summary>
     internal const string PresetHint = "Distances, shadows and detail together. Low is the same as --low-end.";
 
     /// <summary>
@@ -103,6 +124,9 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal int LastTier = -1;
 
+    /// <summary>
+    /// The quality preset row: its choice applies the preset.
+    /// </summary>
     internal SettingsMenu.Entry PresetEntry => new("Quality preset", PresetHint, Choice: new(() => PresetNames, CurrentPreset, ApplyPreset));
 
     /// <summary>
@@ -115,8 +139,15 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal static IReadOnlyList<string> PresetChoices => PresetNames;
 
+    /// <summary>
+    /// The default preset's name (High).
+    /// </summary>
     internal static string DefaultPreset => PresetNames[HighPreset];
 
+    /// <summary>
+    /// The value of <paramref name="slider"/> at <paramref name="preset"/>: High's, else the factor (fixed or times the start default, the base by
+    /// the mode switch's side), clamped; a Faithful shadow distance stays within the game's slider.
+    /// </summary>
     internal float PresetTarget(PresetSlider p, Slider slider, int preset)
     {
         float start = 0;
@@ -145,13 +176,23 @@ sealed class QualityTiers(SettingsMenu menu)
         return Math.Clamp(value, slider.Min, slider.Max);
     }
 
+    /// <summary>
+    /// The preset sliders with the menu's sliders of their labels.
+    /// </summary>
     internal IEnumerable<(PresetSlider Preset, Slider Slider)> PresetPairs() =>
         PresetSliders
             .Select(p => (p, menu.Values.Sliders.FirstOrDefault(s => s.Label == p.Label)))
             .Where(x => x.Item2 is not null)!;
 
+    /// <summary>
+    /// The state of switch <paramref name="p"/> at <paramref name="preset"/> (High: <paramref name="start"/>).
+    /// </summary>
     internal static bool SwitchTarget(PresetToggle p, bool start, int preset) => preset switch { 0 => p.Low, 1 => p.Medium, 3 => p.Ultra, _ => start };
 
+    /// <summary>
+    /// The tier every tier slider (and, with the Meitou look, every tier switch) sits at, else <see cref="CustomPreset"/>; the look switches do not
+    /// count.
+    /// </summary>
     internal int CurrentPreset()
     {
         bool faithful = menu.LookPresets.FaithfulLook;
@@ -243,6 +284,9 @@ sealed class QualityTiers(SettingsMenu menu)
     /// </summary>
     internal void SavePreset() => menu.Config.GraphicsPreset = PresetNames[CurrentPreset()];
 
+    /// <summary>
+    /// Applies tier <paramref name="tier"/> (the settings showcase).
+    /// </summary>
     internal void ShowcaseTier(int tier) => ApplyPreset(tier);
 
     /// <summary>
@@ -251,6 +295,9 @@ sealed class QualityTiers(SettingsMenu menu)
     bool SameSliderPlace(PresetSlider preset, Slider slider, int tier) =>
         MathF.Abs(slider.FractionOf(slider.Get()) - slider.FractionOf(PresetTarget(preset, slider, tier))) <= 0.005f;
 
+    /// <summary>
+    /// The preset switches with the menu's toggles of their labels and their start defaults.
+    /// </summary>
     IEnumerable<(PresetToggle Preset, Toggle Toggle, bool Default)> PresetSwitches() =>
         PresetToggles
             .Select(p => (p, Index: menu.Values.Toggles.ToList().FindIndex(t => t.Label == p.Label)))
@@ -258,8 +305,7 @@ sealed class QualityTiers(SettingsMenu menu)
             .Select(x => (x.p, menu.Values.Toggles[x.Index], menu.ToggleDefaults[x.Index]));
 
     /// <summary>
-    /// The tier every tier slider (and, with the Meitou look, every tier switch) sits at, else <see cref="CustomPreset"/>; the look switches do not
-    /// count.
+    /// The fifth shadow cascade's state at <paramref name="preset"/>: off at Low and Medium, on at Ultra, else its start default.
     /// </summary>
     bool CascadeFor(int preset) => preset switch
     {
@@ -268,6 +314,9 @@ sealed class QualityTiers(SettingsMenu menu)
         _ => menu.ToggleDefaults[menu.Values.Toggles.Select(t => t.Label).ToList().IndexOf(FifthCascade)],
     };
 
+    /// <summary>
+    /// Applies <paramref name="preset"/> (nothing for Custom) with the Low cut following it, and says so in the notice.
+    /// </summary>
     void ApplyPreset(int preset)
     {
         if (preset is < 0 or >= CustomPreset) return;
@@ -288,6 +337,9 @@ sealed class QualityTiers(SettingsMenu menu)
             : Loc.Tr("{1} quality applied.", Loc.Tr(PresetNames[preset]));
     }
 
+    /// <summary>
+    /// Sets a tier's switches (Meitou look), Low's other cuts and render scale, High's render scale, the preset sliders and the fifth cascade.
+    /// </summary>
     void ApplyTier(int preset)
     {
         if (preset == LowPreset && menu.Values.Sliders.FirstOrDefault(s => s.Label == WorldFrame.ParticleSliders[0]) is { } particles)

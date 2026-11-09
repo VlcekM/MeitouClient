@@ -7,6 +7,11 @@ using Meitou.Data.Textures;
 /// </summary>
 static class ImageDiff
 {
+    /// <summary>
+    /// Compares the images <paramref name="a"/> and <paramref name="b"/> and prints the statistics; a channel difference over <paramref
+    /// name="threshold"/> counts a pixel as differing. Writes the difference image when <paramref name="diffPng"/> is given; returns the exit code (1
+    /// for different sizes).
+    /// </summary>
     public static int Run(string a, string b, string? diffPng, int threshold = 12)
     {
         var x = TextureLoader.LoadImage(File.ReadAllBytes(a));

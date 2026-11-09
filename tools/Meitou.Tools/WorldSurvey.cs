@@ -558,6 +558,9 @@ static class WorldSurvey
 /// </summary>
 static class WorldPng
 {
+    /// <summary>
+    /// The CRC-32 table of the PNG chunks (polynomial 0xEDB88320).
+    /// </summary>
     static readonly uint[] CrcTable = Enumerable.Range(0, 256).Select(n =>
     {
         uint c = (uint)n;
@@ -565,6 +568,9 @@ static class WorldPng
         return c;
     }).ToArray();
 
+    /// <summary>
+    /// Writes <paramref name="rgb"/> (three bytes per pixel, row by row) as an unfiltered 8-bit RGB PNG.
+    /// </summary>
     public static void Write(string path, int width, int height, byte[] rgb)
     {
         using var fs = File.Create(path);
@@ -588,6 +594,9 @@ static class WorldPng
         Chunk(fs, "IEND", []);
     }
 
+    /// <summary>
+    /// Writes one PNG chunk: length, type, data and the CRC of type and data.
+    /// </summary>
     static void Chunk(Stream s, string type, byte[] data)
     {
         var buf = new byte[4];
@@ -601,6 +610,9 @@ static class WorldPng
         s.Write(buf);
     }
 
+    /// <summary>
+    /// Writes <paramref name="v"/> big-endian at <paramref name="o"/>.
+    /// </summary>
     static void BigEndian(byte[] b, int o, uint v)
     {
         b[o] = (byte)(v >> 24);

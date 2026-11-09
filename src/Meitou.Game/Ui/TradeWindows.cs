@@ -22,10 +22,16 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class TradeWindows(PlayerInterface player)
 {
+    #region Trader
+
     /// <summary>
     /// The trader whose window the interface opened (none: no trade shown) and whether its closing was already sent.
     /// </summary>
     internal CharacterId ShownTrader = CharacterId.None;
+
+    /// <summary>
+    /// The shown trade's closing was already sent.
+    /// </summary>
     bool _tradeCloseSent;
 
     /// <summary>
@@ -102,6 +108,9 @@ sealed class TradeWindows(PlayerInterface player)
             .OrderByDescending(c => c.Bounds.Width * c.Bounds.Height)
             .FirstOrDefault()?.Name;
 
+    /// <summary>
+    /// The trader window's item grid widget, from an arrangement of the open screens.
+    /// </summary>
     string? TraderGrid(string screen)
     {
         var frames = player.FaithfulScreens.Arrange(player.Width, player.Height, player.ScreenRouter.BindFaithfulScreen,
@@ -138,6 +147,9 @@ sealed class TradeWindows(PlayerInterface player)
         return (side - grid.Position.Width * content.Position.Width * r.Width, side - grid.Position.Height * content.Position.Height * r.Height);
     }
 
+    /// <summary>
+    /// The trader window's geometry while a trade is shown.
+    /// </summary>
     internal void BindTraderGeometry(UiBindings b)
     {
         var layout = player.FaithfulScreens.Layout("trader");
@@ -338,26 +350,49 @@ sealed class TradeWindows(PlayerInterface player)
         return Loc.Tr("You have a {1}% chance of getting caught selling this stolen item.\nFence it anyway?", caught);
     }
 
+    /// <summary>
+    /// <paramref name="cats"/> with thousands separators.
+    /// </summary>
     internal static string Money(long cats) => cats.ToString("N0", CultureInfo.InvariantCulture);
+
+    #endregion
+
+    #region Character trading
 
     // The character trading window (docs/game/ui-screens.md "Character trading", DA 41 / 42), shown while the world publishes one
     // (CharacterTradeView), the same in both UI modes: <c>Kenshi_CharacterSelectionWindow</c> with a <c>Kenshi_CharacterSelectionBox</c> row per
     // character stacked in its scroll view. A row's tick box selects it; the total, the selected count and the buyer's money are kept up to date; the
     // confirm button is enabled while a row is ticked and the total is within the buyer's money (<c>FUN_1407281c0</c>), else the total shows in the
     // Bad colour. Confirm sends the ticked characters and closes the window; cancel, Esc or closing it sends the close.
+    /// <summary>
+    /// The character trading window's screen id.
+    /// </summary>
     internal const string CharacterTradeScreen = "character-trade";
+
     /// <summary>
     /// A row's height: the row layout's own (<c>Kenshi_CharacterSelectionBox</c> root, 0.180556 of the screen's height); its width is the scroll
     /// view's (engine choice).
     /// </summary>
     const float CharacterRowShare = 0.180556f;
 
+    /// <summary>
+    /// The row layout (<c>Kenshi_CharacterSelectionBox</c>); null before the UI is read.
+    /// </summary>
     internal MyGuiLayout? CharacterRowLayout;
+
     /// <summary>
     /// The window on show (its <see cref="CharacterTradeView.Id"/>; 0 none), whether its closing was sent, and the ticked rows' characters.
     /// </summary>
     long _shownCharacterTrade;
+
+    /// <summary>
+    /// The shown window's closing was already sent.
+    /// </summary>
     bool _characterTradeCloseSent;
+
+    /// <summary>
+    /// The ticked rows' characters.
+    /// </summary>
     readonly HashSet<CharacterId> _characterTradeTicked = [];
 
     /// <summary>
@@ -418,8 +453,15 @@ sealed class TradeWindows(PlayerInterface player)
         return (count, total);
     }
 
+    /// <summary>
+    /// A row's height in pixels.
+    /// </summary>
     float CharacterRowHeight => player.Height * CharacterRowShare;
 
+    /// <summary>
+    /// The window's bindings: title, confirm caption, the ticked count and total (in the Bad colour when over the buyer's money), and Confirm while a
+    /// row is ticked and affordable.
+    /// </summary>
     internal void BindCharacterTradeScreen(UiBindings b)
     {
         if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade) return;
@@ -517,6 +559,9 @@ sealed class TradeWindows(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// A window event: a row's tick flipped, Confirm (sends the ticked characters), or Cancel (sends the close).
+    /// </summary>
     internal void CharacterTradeAction(MyGuiEvent e)
     {
         if (player.Session.CurrentSnapshot.CharacterTrade is not { } trade) return;
@@ -565,26 +610,48 @@ sealed class TradeWindows(PlayerInterface player)
         return list;
     }
 
+    #endregion
+
+    #region Loot
+
     // The loot window (docs/simulation.md "Carrying, rescue and looting", engine choice: the original's is <b>Unknown</b>): a downed character's
     // whole inventory in a second character window (<c>loot</c>, <c>Kenshi_InventoryCharacterWindow</c>) beside the looter's, its worn gear in the
     // equipment slots, and its bag in <c>loot-bag</c> (the generic window, OPEN BAG). Items are held with the mouse between the two characters'
     // windows (InventoryWindows) or moved with a right click (TakeLootItem, PutLootItem); closing it closes the loot (CloseContainer).
     /// <summary>
+    /// The character and the animal inventory window layouts; null before the UI is read.
+    /// </summary>
+    internal MyGuiLayout? CharacterInventoryLayout, AnimalInventoryLayout;
+
+    /// <summary>
+    /// Whether each inventory or loot window shows the animal layout now.
+    /// </summary>
+    internal readonly Dictionary<string, bool> AnimalWindow = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// The body whose loot window is shown, and one whose window the player closed (not reopened while the sim still has it open).
     /// </summary>
     CharacterId _shownLoot = CharacterId.None, _closedLoot = CharacterId.None;
+
     /// <summary>
     /// The loot's bag window is wanted (OPEN BAG in the loot window toggles it).
     /// </summary>
     internal bool LootBagOpen = true;
+
     /// <summary>
     /// The character whose bag the loot window opened (not left open with OPEN BAG): it closes again with the loot window unless OPEN BAG was pressed
     /// meanwhile.
     /// </summary>
     internal CharacterId LootOpenedBag = CharacterId.None;
 
+    /// <summary>
+    /// Whether <paramref name="c"/> is an animal.
+    /// </summary>
     internal static bool IsAnimal(CharacterSnapshot? c) => c is { Animal: true };
 
+    /// <summary>
+    /// Whether <paramref name="screen"/> is the loot window or its bag's.
+    /// </summary>
     internal static bool IsLootScreen(string screen) => screen is "loot" or "loot-bag";
 
     /// <summary>
@@ -595,9 +662,6 @@ sealed class TradeWindows(PlayerInterface player)
         var id = player.Session.CurrentSnapshot.OpenLoot;
         return id.IsNone ? null : player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id);
     }
-
-    internal MyGuiLayout? CharacterInventoryLayout, AnimalInventoryLayout;
-    internal readonly Dictionary<string, bool> AnimalWindow = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Once a frame, before the windows are arranged: the inventory and loot windows take the original's animal window
@@ -682,6 +746,9 @@ sealed class TradeWindows(PlayerInterface player)
         player.InventoryLayout.PlaceWindowRow();
     }
 
+    /// <summary>
+    /// The loot window's (or its bag's) bindings: the caption (the body's or its bag's name), OPEN BAG with a bag and LIMBS with a limb window.
+    /// </summary>
     internal void BindLootScreen(string id, UiBindings b)
     {
         var body = LootBody();
@@ -712,4 +779,6 @@ sealed class TradeWindows(PlayerInterface player)
             b.Actions["LimbsButton"] = "LimbsButton";
         }
     }
+
+    #endregion
 }

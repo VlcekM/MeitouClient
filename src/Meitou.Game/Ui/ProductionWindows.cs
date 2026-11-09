@@ -31,8 +31,14 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     internal string? ShownMachine, ClosedMachine;
 
+    /// <summary>
+    /// The research tab's selected category, and the blueprint whose description shows.
+    /// </summary>
     internal string? ResearchCategory, ResearchFocus;
 
+    /// <summary>
+    /// The machine at site <paramref name="site"/> in the snapshot; null for none.
+    /// </summary>
     internal MachineSnapshot? Machine(string? site) =>
         site is null ? null : player.Session.CurrentSnapshot.Machines.FirstOrDefault(m => m.Site == site);
 
@@ -42,6 +48,10 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     const float StorageAbove = 86, StorageChrome = 150;
 
+    /// <summary>
+    /// The window a machine opens: the building window (inputs, an output or no storage), the storage window (a plain storage), else the bench
+    /// window.
+    /// </summary>
     internal static string MachineScreen(MachineSnapshot m) =>
         m.Storage is null || m.Inputs.Count > 0 || m.Output is not null ? "building"
         : m.IsStorage && !m.IsContainer && m.TechLevel == 0 ? "storage"
@@ -521,6 +531,9 @@ sealed class ProductionWindows(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// A machine window event: the bench's RESEARCH opens the overview's research tab, the building's QUEUE its Craft tab.
+    /// </summary>
     internal void MachineAction(MyGuiEvent e)
     {
         if (e.Screen == "bench" && e.Widget == "ResearchButton")
@@ -594,8 +607,10 @@ sealed class ProductionWindows(PlayerInterface player)
     /// </summary>
     internal const float MphPerUnit = 0.22369362f;
 
-    // More of the exe's static colour tags (with MainTag and TitleTag): tooltip texts carry them as text, so they are the tags, not the palette's
-    // colours.
+    /// <summary>
+    /// More of the exe's static colour tags (with MainTag and TitleTag): tooltip texts carry them as text, so they are the tags, not the palette's
+    /// colours.
+    /// </summary>
     internal const string InkTag = "#140806", BadTag = "#59231a", GoodTag = "#a8b774";
 
     /// <summary>
@@ -672,6 +687,9 @@ sealed class ProductionWindows(PlayerInterface player)
             TooltipRows: [.. head, (Loc.Tr("Total:"), TooltipRuntime.MainTag + Pc((int)(max * 100)))]));
     }
 
+    /// <summary>
+    /// <paramref name="v"/> as a percentage text.
+    /// </summary>
     static string Pc(int v) => v.ToString(CultureInfo.InvariantCulture) + "%";
 
     /// <summary>
@@ -972,6 +990,9 @@ sealed class ProductionWindows(PlayerInterface player)
 
     // ---- the overview's research tab (docs/game/ui-screens.md "Research tab") ----
 
+    /// <summary>
+    /// The overview's research tab bindings: the categories, the no-bench message and the title with the bench level and rate.
+    /// </summary>
     internal void BindResearchTab(UiBindings b)
     {
         var research = player.Session.CurrentSnapshot.Research;
@@ -993,6 +1014,9 @@ sealed class ProductionWindows(PlayerInterface player)
             b.Text["Root"] = Loc.Tr("RESEARCH - LEVEL {1,num} (CURRENT RATE: {2,num=fix,p=2}x)", research.BenchLevel, research.Rate);
     }
 
+    /// <summary>
+    /// A research tab event: a category picked, a blueprint queued or one cancelled.
+    /// </summary>
     internal void ResearchAction(MyGuiEvent e)
     {
         if (e.Widget == "ResearchTypeList" && e.Action == "select")
@@ -1131,6 +1155,10 @@ sealed class ProductionWindows(PlayerInterface player)
     /// How far the blueprint rows are scrolled, their pitch and the panel they scroll in (the DatapanelGUI's own ScrollView in the original).
     /// </summary>
     float _researchScroll, _researchStep;
+
+    /// <summary>
+    /// The panel the blueprint rows scroll in.
+    /// </summary>
     UiRect _researchArea;
 
     /// <summary>
@@ -1206,11 +1234,24 @@ sealed class ProductionWindows(PlayerInterface player)
     // player's crafting benches, ITEMS what the selected one can craft (a click queues one; locked or too advanced rows are red and do nothing),
     // QUEUE its queue (a click takes one off), Repeat Queue its repeat toggle, DESCRIPTION the hovered or last clicked craft's time and inputs. The
     // original's row widgets and colours are <b>Unknown</b>; Meitou draws plain text rows like the research tab.
+    /// <summary>
+    /// The Craft tab's index in the overview's tabs.
+    /// </summary>
     const int CraftTab = 3;
+
+    /// <summary>
+    /// The Craft tab's selected station's site, and the craft whose description shows.
+    /// </summary>
     string? _craftStation, _craftFocus;
 
+    /// <summary>
+    /// The player's crafting benches.
+    /// </summary>
     List<MachineSnapshot> CraftStations() => [.. player.Session.CurrentSnapshot.Machines.Where(m => m.Craft is not null)];
 
+    /// <summary>
+    /// A station's name: its site's, else its record.
+    /// </summary>
     string StationName(MachineSnapshot m) =>
         player.Session.CurrentSnapshot.Buildings.FirstOrDefault(s => s.Id == m.Site) is { } site ? player.Build.SiteName(site) : m.Record;
 
@@ -1224,6 +1265,9 @@ sealed class ProductionWindows(PlayerInterface player)
         player.FaithfulScreens.SetTab("overview", "TabsMain", CraftTab);
     }
 
+    /// <summary>
+    /// The Craft tab's bindings: the stations, the selected one, and its repeat toggle.
+    /// </summary>
     internal void BindCraftTab(UiBindings b)
     {
         var stations = CraftStations();
@@ -1242,6 +1286,9 @@ sealed class ProductionWindows(PlayerInterface player)
         IndentLabel(b, "lbCraftingDescription");
     }
 
+    /// <summary>
+    /// A Craft tab event: a station picked, the repeat toggled, a craft queued or one taken off the queue.
+    /// </summary>
     internal void CraftAction(MyGuiEvent e)
     {
         if (e.Widget == "CraftingStationsList" && e.Action == "select")

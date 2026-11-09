@@ -13,8 +13,14 @@ namespace Meitou.Launcher;
 /// </summary>
 static class NativeLibraries
 {
+    /// <summary>
+    /// The resource name prefix of the embedded native libraries.
+    /// </summary>
     const string Prefix = "native/";
 
+    /// <summary>
+    /// Writes the embedded native libraries to their content-hash folder (once) and loads them from there; nothing in a Debug build.
+    /// </summary>
     public static void Load()
     {
         var assembly = typeof(NativeLibraries).Assembly;

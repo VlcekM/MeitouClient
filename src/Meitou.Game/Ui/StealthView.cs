@@ -15,10 +15,19 @@ sealed class StealthView(PlayerInterface player)
 {
     #region Stealth arrows
 
-    // The original's arrow colours (FUN_1408586d0).
+    /// <summary>
+    /// The original's arrow colours (FUN_1408586d0). A noticing watcher's arrow.
+    /// </summary>
     static readonly Vector3 ArrowNoticed = new(1, 0xdd / 255f, 0);
+
+    /// <summary>
+    /// A detecting watcher's arrow.
+    /// </summary>
     static readonly Vector3 ArrowDetected = new(0xdd / 255f, 0, 0);
 
+    /// <summary>
+    /// This frame's arrows (reused).
+    /// </summary>
     readonly List<MarkerRenderer.Arrow> _arrows = [];
 
     /// <summary>
@@ -55,9 +64,19 @@ sealed class StealthView(PlayerInterface player)
 
     #region Name tags
 
-    // The original's name-tag fallback colours (NameTagStealthHidden / AlmostSeen / Seen).
+    /// <summary>
+    /// The original's name-tag fallback colours (NameTagStealthHidden / AlmostSeen / Seen). Hidden.
+    /// </summary>
     static readonly Vector4 TagHidden = new(0.25f, 0.521f, 0.745f, 1);
+
+    /// <summary>
+    /// Almost seen.
+    /// </summary>
     static readonly Vector4 TagAlmostSeen = new(0.745f, 0.721f, 0.25f, 1);
+
+    /// <summary>
+    /// Seen.
+    /// </summary>
     static readonly Vector4 TagSeen = new(0.745f, 0.25f, 0.29f, 1);
 
     /// <summary>
@@ -189,8 +208,14 @@ sealed class StealthView(PlayerInterface player)
 
     #region Task bars
 
+    /// <summary>
+    /// The progress bar layout (<c>Kenshi_ProgressBarPanel</c>); null before the UI is read.
+    /// </summary>
     internal MyGuiLayout? TaskBarLayout;
 
+    /// <summary>
+    /// The fill template's track skin, read once.
+    /// </summary>
     string? _taskBarTrack;
 
     /// <summary>
@@ -248,6 +273,9 @@ sealed class StealthView(PlayerInterface player)
         controls.AddRange(parts);
     }
 
+    /// <summary>
+    /// The track skin of <c>Kenshi_ProgressBarFill</c>'s root, read once; null when the template is missing.
+    /// </summary>
     string? TaskBarTrack()
     {
         if (_taskBarTrack is not null) return _taskBarTrack;

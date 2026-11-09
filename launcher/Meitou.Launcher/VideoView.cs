@@ -22,33 +22,132 @@ sealed class VideoView : Border
     /// Bytes fetched for the poster: enough for the first frame of a 720p or 1080p clip.
     /// </summary>
     const int PosterBytes = 1 << 20;
+
+    /// <summary>
+    /// How far the skip buttons and the arrow keys jump.
+    /// </summary>
     static readonly TimeSpan Skip = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// The play and pause icons.
+    /// </summary>
     static readonly Geometry PlayIcon = Geometry.Parse("M 0,0 L 0,14 L 12,7 Z"),
         PauseIcon = Geometry.Parse("M 0,0 H 4 V 14 H 0 Z M 8,0 H 12 V 14 H 8 Z");
 
+    /// <summary>
+    /// The video playing now, null when none is (one plays at a time).
+    /// </summary>
     static VideoView? s_playing;
+
     /// <summary>
     /// The last playback session of any video: the next waits for it, so two never hold OpenAL's current context at once.
     /// </summary>
     static Task s_lastSession = Task.CompletedTask;
 
-    enum State { Poster, Loading, Playing, Paused }
+    /// <summary>
+    /// What the view shows.
+    /// </summary>
+    enum State
+    {
+        /// <summary>
+        /// The first picture with the play button.
+        /// </summary>
+        Poster,
 
+        /// <summary>
+        /// The whole video is being downloaded (the first Play).
+        /// </summary>
+        Loading,
+
+        /// <summary>
+        /// The video plays with its sound.
+        /// </summary>
+        Playing,
+
+        /// <summary>
+        /// Stopped at <see cref="_position"/>.
+        /// </summary>
+        Paused,
+    }
+
+    /// <summary>
+    /// The video's URL.
+    /// </summary>
     readonly string _url;
+
+    /// <summary>
+    /// The news media cache the video comes from.
+    /// </summary>
     readonly NewsMediaCache _media;
+
+    /// <summary>
+    /// The whole video, downloaded on the first Play; null before.
+    /// </summary>
     WebmFile? _file; // the whole video, downloaded on the first Play
+
+    /// <summary>
+    /// The picture.
+    /// </summary>
     readonly Image _image = new() { Stretch = Stretch.Uniform };
+
+    /// <summary>
+    /// The play button over the poster.
+    /// </summary>
     readonly Control _button;
+
+    /// <summary>
+    /// The control bar at the bottom.
+    /// </summary>
     readonly Border _bar;
+
+    /// <summary>
+    /// The bar's play and pause icon.
+    /// </summary>
     readonly Path _playPause;
+
+    /// <summary>
+    /// The seek bar's track and its filled part.
+    /// </summary>
     readonly Border _track, _fill;
+
+    /// <summary>
+    /// The time text (position and length).
+    /// </summary>
     readonly TextBlock _time;
+
+    /// <summary>
+    /// The first picture.
+    /// </summary>
     readonly WriteableBitmap _poster;
+
+    /// <summary>
+    /// The bitmap the playing frames are copied into; null before the first.
+    /// </summary>
     WriteableBitmap? _frame;
+
+    /// <summary>
+    /// Cancels the playback session; null when none runs.
+    /// </summary>
     CancellationTokenSource? _run;
+
+    /// <summary>
+    /// What the view shows.
+    /// </summary>
     State _state = State.Poster;
+
+    /// <summary>
+    /// Where the video is (seconds into it).
+    /// </summary>
     TimeSpan _position;
+
+    /// <summary>
+    /// The pointer is over the view (the bar shows).
+    /// </summary>
     bool _hovered;
+
+    /// <summary>
+    /// The seek bar's fraction while it is held; null when not.
+    /// </summary>
     double? _dragging; // the seek bar's fraction while it is held
 
     /// <summary>
@@ -241,6 +340,9 @@ sealed class VideoView : Border
         DetachedFromVisualTree += (_, _) => ToPoster();
     }
 
+    /// <summary>
+    /// A button of the control bar: an icon (or the given path) that calls <paramref name="click"/>.
+    /// </summary>
     Control BarButton(string? icon, Action click, Path? path = null)
     {
         var control = new Border
@@ -284,6 +386,10 @@ sealed class VideoView : Border
         return host;
     }
 
+    /// <summary>
+    /// The poster: the file read from <paramref name="bytes"/> (only its start when <paramref name="head"/>) and its first picture as BGRA; null when
+    /// it has no video or cannot be decoded.
+    /// </summary>
     static (WebmFile File, byte[] Pixels, int Width, int Height)? Poster(byte[] bytes, bool head)
     {
         try
@@ -345,6 +451,9 @@ sealed class VideoView : Border
         });
     }
 
+    /// <summary>
+    /// Space or a click: pauses while playing, resumes while paused (pausing any other video).
+    /// </summary>
     void TogglePause()
     {
         if (_state == State.Playing) Pause();
@@ -356,6 +465,9 @@ sealed class VideoView : Border
         }
     }
 
+    /// <summary>
+    /// Pauses: the session stops, the position stays.
+    /// </summary>
     void Pause()
     {
         if (_state != State.Playing) return;
@@ -375,6 +487,9 @@ sealed class VideoView : Border
         Start(target, play: _state == State.Playing);
     }
 
+    /// <summary>
+    /// Back to the poster: stops, rewinds and shows the first picture.
+    /// </summary>
     void ToPoster()
     {
         Cancel();
@@ -386,6 +501,9 @@ sealed class VideoView : Border
         UpdateBar();
     }
 
+    /// <summary>
+    /// Stops the playback session.
+    /// </summary>
     void Cancel()
     {
         _run?.Cancel();
@@ -465,6 +583,9 @@ sealed class VideoView : Border
         if (ended) Dispatcher.UIThread.Post(() => { if (!token.IsCancellationRequested) ToPoster(); });
     }
 
+    /// <summary>
+    /// Shows a decoded frame at <paramref name="at"/> on the UI thread; pauses when the view is no longer visible (the Home page was left).
+    /// </summary>
     void Show(byte[] pixels, int width, int height, TimeSpan at, CancellationToken token) =>
         Dispatcher.UIThread.Invoke(() =>
         {
@@ -498,13 +619,25 @@ sealed class VideoView : Border
         _time.Text = $"{Format(duration * f)} / {Format(duration)}";
     }
 
+    /// <summary>
+    /// A time as m:ss, or h:mm:ss from an hour.
+    /// </summary>
     static string Format(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
 
+    /// <summary>
+    /// The pointer's place on the seek bar, 0 to 1.
+    /// </summary>
     double Fraction(PointerEventArgs e) => _track.Bounds.Width > 0 ? Math.Clamp(e.GetPosition(_track).X / _track.Bounds.Width, 0, 1) : 0;
 
+    /// <summary>
+    /// An opaque BGRA bitmap of the size.
+    /// </summary>
     static WriteableBitmap Bitmap(int width, int height) =>
         new(new PixelSize(width, height), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Opaque);
 
+    /// <summary>
+    /// Copies BGRA pixels into the bitmap, row by row.
+    /// </summary>
     static void Copy(byte[] bgra, WriteableBitmap bitmap)
     {
         using var buffer = bitmap.Lock();

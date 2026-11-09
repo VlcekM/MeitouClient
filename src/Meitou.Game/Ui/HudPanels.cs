@@ -189,19 +189,37 @@ sealed class HudPanels(PlayerInterface player)
         return new(label, value, ValueColour: colour, TooltipRows: tip);
     }
 
+    /// <summary>
+    /// The exe's colour tags the stat tooltips carry: Bad, Good, Main and Title.
+    /// </summary>
     internal const string TipBad = "#59231a", TipGood = "#a8b774", TipMain = "#afa68b", TipTitle = "#492620";
+
+    /// <summary>
+    /// <paramref name="v"/> truncated to a whole number.
+    /// </summary>
     static string Num(float v) => ((int)v).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// <paramref name="v"/> in degrees with two decimals.
+    /// </summary>
     static string Degrees(float v) => v.ToString("0.00", CultureInfo.InvariantCulture) + Loc.Tr(" degrees");
+
+    /// <summary>
+    /// A speed in km/h or mph (truncated).
+    /// </summary>
     static string SpeedText(float unitsPerSecond, SpeedUnit unit) =>
         $"{(int)(unitsPerSecond * (unit == SpeedUnit.Kmh ? 0.36f : 0.22369362f))} {(unit == SpeedUnit.Kmh ? "km/h" : "mph")}";
+
     /// <summary>
     /// A penalty of <paramref name="percent"/> above 0 as Bad <c>-n%</c>.
     /// </summary>
     static string Minus(int percent) => TipBad + "-" + percent.ToString(CultureInfo.InvariantCulture) + "%";
+
     /// <summary>
     /// A signed change (<c>FUN_140889320</c>): <c>+n%</c> Good above 0, <c>-n%</c> Bad below.
     /// </summary>
     static string Signed(int percent) => SignedNumber(percent) + "%";
+
     /// <summary>
     /// <c>FUN_140889320</c> alone: <c>+n</c> Good above 0, <c>n</c> Bad otherwise, no unit.
     /// </summary>
@@ -435,8 +453,23 @@ sealed class HudPanels(PlayerInterface player)
         int w = WoundSeverity(parts ?? [], hud?.KoPoint ?? hud?.Extended?.KoPoint);
         float bleeding = hud?.Bleeding ?? 0;
 
-        static (string, string?, string) Word(string word, string? colour, string tip) => (Loc.Tr(word), colour, Loc.Tr(tip));
+        return DownWord(body, w, robot, bleeding)
+            ?? InjuryWord(body, w, bleeding)
+            ?? DisguiseWord(disguise, slaveState)
+            ?? WellWord(body, hud);
+    }
 
+    /// <summary>
+    /// A health word: <paramref name="word"/> and <paramref name="tip"/> translated.
+    /// </summary>
+    static (string, string?, string) Word(string word, string? colour, string tip) => (Loc.Tr(word), colour, Loc.Tr(tip));
+
+    /// <summary>
+    /// <see cref="HealthWord(BodyStatus, HudView?, IReadOnlyList{HealthPartView}?, DisguiseView?, int)"/>'s first matches: dead, being eaten,
+    /// dying, knocked out, coma, playing dead, blood loss; null when none holds. <paramref name="w"/> is <see cref="WoundSeverity"/>.
+    /// </summary>
+    static (string Text, string? Colour, string Tip)? DownWord(BodyStatus body, int w, bool robot, float bleeding)
+    {
         if (body.Dead) return Word("Dead", PlayerInterface.BadColour, "Gone forever. RIP.");
         if (body.BeingEaten)
             return Word("BEING EATEN ALIVE!!", PlayerInterface.BadColour, "Something is eating you alive! AAAAAAHHHHHHHHHH!!");
@@ -470,6 +503,14 @@ sealed class HudPanels(PlayerInterface player)
                 : Word("Blood loss KO", PlayerInterface.BadColour, "Unconscious from blood loss. It will recover over time, bed rest will help.");
         }
 
+        return null;
+    }
+
+    /// <summary>
+    /// The next matches: crippled legs or sword arm, critical injuries, limb trauma, staying low, starving, bleeding; null when none holds.
+    /// </summary>
+    static (string Text, string? Colour, string Tip)? InjuryWord(BodyStatus body, int w, float bleeding)
+    {
         if (body.Crawling)
             return Word("Crippled", PlayerInterface.BadColour, "Your legs are incapable of supporting you.");
         if (body.RightArmDisabled && !body.Unconscious)
@@ -483,8 +524,14 @@ sealed class HudPanels(PlayerInterface player)
         if (body.Hunger < 1)
             return Word("Starving", PlayerInterface.BadColour, "You are starving to death. Get some food fast.");
         if (bleeding > 0) return Word("Bleeding", null, "Losing blood, will collapse if blood goes below 0.");
+        return null;
+    }
 
-        // The slave and disguise record: blown (or an escaped slave discovered) while the cooldown runs, else a working disguise.
+    /// <summary>
+    /// The slave and disguise record: blown (or an escaped slave discovered) while the cooldown runs, else a working disguise; null otherwise.
+    /// </summary>
+    static (string Text, string? Colour, string Tip)? DisguiseWord(DisguiseView? disguise, int slaveState)
+    {
         if (disguise is { } d)
         {
             if ((slaveState > 1 || d.Level > 0) && d.Blown > 0)
@@ -502,6 +549,14 @@ sealed class HudPanels(PlayerInterface player)
                 return (Loc.Tr("In Disguise"), PlayerInterface.MainColour, Loc.Tr("You are currently disguised as {1}", d.Faction));
         }
 
+        return null;
+    }
+
+    /// <summary>
+    /// The last matches, which always give a word: wounded, hungry or malnourished, slightly injured, normal.
+    /// </summary>
+    static (string Text, string? Colour, string Tip) WellWord(BodyStatus body, HudView? hud)
+    {
         if (body.WorstPart < 0.7f) return Word("Wounded", null, "You are kind of healthy for now.");
 
         if (body.Hunger < 2)
@@ -518,6 +573,9 @@ sealed class HudPanels(PlayerInterface player)
             : Word("Normal", null, "You are kind of healthy for now.");
     }
 
+    /// <summary>
+    /// The HUD panels' text: the focused building's or the selected character's lines.
+    /// </summary>
     internal void AddHudText(List<UiControl> controls)
     {
         float row = 20 * player.Height / 1080f, sidePixels = player.StandardPixels;

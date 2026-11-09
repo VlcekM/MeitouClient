@@ -17,27 +17,29 @@ using Meitou.Simulation.Navigation;
 /// </summary>
 static class InteriorSurvey
 {
-    const float Step = 2;
-    /// <summary>
-    /// Heights within this of each other are the same surface (as <see cref="OriginalNavTiles.CoverInteriors"/>).
-    /// </summary>
-    const float SameSurface = 12;
-    /// <summary>
-    /// Ours-only area this far over the base counts as upper storeys.
-    /// </summary>
-    const float Upper = 20;
+    #region Survey
 
+    /// <summary>
+    /// Per building type: the placements surveyed, the sampled area each side has (both, ours only, ours above the base, the original only) and the
+    /// placement with the most ours-only area.
+    /// </summary>
     sealed class Tally
     {
+        /// <summary>
+        /// The placements surveyed and the sample counts: on both meshes, ours only, ours only above the base (upper storeys), the original's only.
+        /// </summary>
         public int Placements, Both, Ours, OursUpper, Original;
+
+        /// <summary>
+        /// The placement (zone and key, with its area) with the most ours-only samples.
+        /// </summary>
         public string Worst = "";
+
+        /// <summary>
+        /// That placement's ours-only sample count.
+        /// </summary>
         public int WorstOurs;
     }
-
-    /// <summary>
-    /// Where <c>--section x,z</c> puts the vertical sections; the hull's middle when null.
-    /// </summary>
-    static Vector2? s_section;
 
     /// <summary>
     /// Whether hulls over the zone's border are surveyed too (<c>--border</c>).
@@ -54,6 +56,10 @@ static class InteriorSurvey
     /// </summary>
     static readonly List<string> Rebuilt = [];
 
+    /// <summary>
+    /// Surveys the zones: per zone each standing placement with an interior is compared (<see cref="SurveyZone"/>), then the totals per building type
+    /// are printed. <paramref name="name"/> limits it to one building, <paramref name="png"/> writes pictures for it. Returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, GameDatabase db, WorldLevelData levels, List<ZoneCoordinate> zones, NavBuildSettings settings,
             string? name, string? png,
         Vector2? sectionAt = null, bool overBorder = false)
@@ -77,6 +83,10 @@ static class InteriorSurvey
         return 0;
     }
 
+    /// <summary>
+    /// Surveys one zone: builds our navmesh and reads the original tile, then samples each standing interior hull of the zone and adds it to its
+    /// type's tally.
+    /// </summary>
     static void SurveyZone(
         ZoneGeometryGatherer gatherer,
         GameInstall install,
@@ -185,6 +195,33 @@ static class InteriorSurvey
         return site.Hull.Polygon.Any(p => p.X < x || p.X > x + size || p.Y < z || p.Y > z + size);
     }
 
+    #endregion
+
+    #region Pictures and sampling
+
+    /// <summary>
+    /// The sampling grid's spacing over a hull, in world units.
+    /// </summary>
+    const float Step = 2;
+
+    /// <summary>
+    /// Heights within this of each other are the same surface (as <see cref="OriginalNavTiles.CoverInteriors"/>).
+    /// </summary>
+    const float SameSurface = 12;
+
+    /// <summary>
+    /// Ours-only area this far over the base counts as upper storeys.
+    /// </summary>
+    const float Upper = 20;
+
+    /// <summary>
+    /// Where <c>--section x,z</c> puts the vertical sections; the hull's middle when null.
+    /// </summary>
+    static Vector2? s_section;
+
+    /// <summary>
+    /// Writes the pictures of one hull: the difference map, the two vertical sections and the polygons as OBJ files.
+    /// </summary>
     static void Pictures(ZoneGeometryGatherer gatherer, ZoneCoordinate zone, NavBuildSettings settings, InteriorJoinSweep.Site site, ZoneNavMesh mesh,
             List<Vector3[]> faces, string png)
     {
@@ -262,6 +299,9 @@ static class InteriorSurvey
         }
     }
 
+    /// <summary>
+    /// <paramref name="key"/> with every character but letters, digits and '-' made '_' (a file name).
+    /// </summary>
     static string Safe(string key) => string.Concat(key.Select(c => char.IsLetterOrDigit(c) || c == '-' ? c : '_'));
 
     /// <summary>
@@ -409,4 +449,6 @@ static class InteriorSurvey
         WorldPng.Write(path + ".orig.png", original.Width, original.Height, original.Rgb);
         WorldPng.Write(path + ".ours.png", ours.Width, ours.Height, ours.Rgb);
     }
+
+    #endregion
 }

@@ -8,12 +8,16 @@ using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 
+/// <summary>
+/// The world viewer's terrain sandbox arguments and its field tour (<c>--field-tour</c>).
+/// </summary>
 static partial class WorldApp
 {
     /// <summary>
     /// <c>--field-tour &lt;dir&gt;</c> (with <c>--terrain-sandbox</c>): a picture of every texture field tile, close up, and an index.html.
     /// </summary>
     static string? s_fieldTour;
+
     /// <summary>
     /// The tour's camera: distance from the tile's centre and degrees above the horizon (<c>--tour-distance</c>, <c>--tour-pitch</c>).
     /// </summary>

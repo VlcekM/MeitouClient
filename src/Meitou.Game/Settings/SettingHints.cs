@@ -8,6 +8,9 @@ namespace Meitou.Game.Settings;
 /// </summary>
 static class SettingHints
 {
+    /// <summary>
+    /// The hint of <paramref name="slider"/> (by its label).
+    /// </summary>
     internal static string SliderHint(Slider slider) => SliderHint(slider.Label);
 
     /// <summary>
@@ -70,6 +73,9 @@ static class SettingHints
         _ => $"Adjust {SettingsMenu.Label(label).ToLowerInvariant()}.",
     };
 
+    /// <summary>
+    /// The hint of the switch <paramref name="label"/>.
+    /// </summary>
     internal static string ToggleHint(string label) => label switch
     {
         "Ambient occlusion" => "Add contact shading around nearby surfaces and creases.",
@@ -112,6 +118,9 @@ static class SettingHints
         _ => $"Enable {SettingsMenu.Label(label).ToLowerInvariant()}.",
     };
 
+    /// <summary>
+    /// The hint of a bindable <paramref name="action"/>.
+    /// </summary>
     internal static string BindingHint(InputAction action) => action switch
     {
         InputAction.MoveForward => "Move the camera forward.",

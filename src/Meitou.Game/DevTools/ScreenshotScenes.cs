@@ -180,6 +180,10 @@ sealed class ScreenshotScenes(GameHost host)
         if (finish) WorldFrame.FinishLoading(context);
     }
 
+    /// <summary>
+    /// <c>--screenshot</c> headless: boots offscreen, warms the upscaler, then photographs the scene shots, or the panels and the settings showcase,
+    /// prints the camera and returns the exit code.
+    /// </summary>
     internal unsafe int Screenshot()
     {
         VulkanDisplay.RayTracing = host.WorldOptions.WantsRayTracing;
@@ -594,6 +598,7 @@ sealed class ScreenshotScenes(GameHost host)
             Console.WriteLine($"saved     {Path.GetFullPath(output)}");
         }
     }
+
     /// <summary>
     /// <c>--settings-showcase</c> with <c>--screenshot</c>: the Graphics page of the settings menu (Meitou UI) over the world, saved as
     /// <c>&lt;screenshot&gt;-settings-&lt;n&gt;-&lt;state&gt;.png</c>. The menu reads and writes no preset file and changes no saved setting.

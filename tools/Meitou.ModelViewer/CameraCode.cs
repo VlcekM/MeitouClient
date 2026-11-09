@@ -9,6 +9,9 @@ namespace Meitou.ModelViewer;
 /// </summary>
 static class CameraCode
 {
+    /// <summary>
+    /// The camera's code (<see cref="WorldCameraCode.Encode"/>).
+    /// </summary>
     public static string Encode(WorldCamera camera) => WorldCameraCode.Encode(camera);
 
     /// <summary>
@@ -16,6 +19,9 @@ static class CameraCode
     /// </summary>
     public static bool TryApply(string? text, WorldCamera camera) => WorldCameraCode.TryApply(text, camera);
 
+    /// <summary>
+    /// The camera as readable text (eye, target, angles; <see cref="WorldCameraCode.Describe"/>).
+    /// </summary>
     public static string Describe(WorldCamera c) => WorldCameraCode.Describe(c);
 
     /// <summary>

@@ -11,6 +11,9 @@ namespace Meitou.ModelViewer;
 sealed class CameraMotion(WorldCamera camera, WorldGpu gpu, Vector3 centre, bool circle, float radius, float unitsPerFrame, float turnRadians,
         float orbitPixels)
 {
+    /// <summary>
+    /// The flight's turn round the circle per frame, radians (the speed over the radius, at least 1).
+    /// </summary>
     readonly float _angleStep = unitsPerFrame / Math.Max(radius, 1);
 
     /// <summary>
@@ -26,6 +29,9 @@ sealed class CameraMotion(WorldCamera camera, WorldGpu gpu, Vector3 centre, bool
     public static CameraMotion Fly(WorldOptions o, WorldCamera camera, WorldGpu gpu, float turnRadians, float orbitPixels) =>
         new(camera, gpu, camera.Target, turnRadians == 0, Math.Max(o.FlyRadius, 1), o.FlySpeed, turnRadians, orbitPixels);
 
+    /// <summary>
+    /// Whether the motion moves the camera at all (a circle, a turn or an orbit).
+    /// </summary>
     public bool Moves => circle || turnRadians != 0 || orbitPixels != 0;
 
     /// <summary>

@@ -10,9 +10,19 @@ namespace Meitou.Launcher;
 /// </summary>
 public sealed class LauncherUpdater(Releases releases, bool prereleases)
 {
+    /// <summary>
+    /// Velopack's update manager over the launcher releases of this repository, on this runtime's channel.
+    /// </summary>
     readonly UpdateManager _manager = new(new LauncherReleaseSource(releases, prereleases), new UpdateOptions { ExplicitChannel = Releases.Rid });
+
+    /// <summary>
+    /// The update found by the last check, downloaded and waiting to be applied; null when none.
+    /// </summary>
     UpdateInfo? _pending;
 
+    /// <summary>
+    /// Whether the launcher was installed by its Setup or AppImage, so it can update itself.
+    /// </summary>
     public bool IsInstalled => _manager.IsInstalled;
 
     /// <summary>

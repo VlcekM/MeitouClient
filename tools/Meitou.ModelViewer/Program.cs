@@ -22,8 +22,19 @@ return 2;
 /// </summary>
 static class SmokeTest
 {
+    /// <summary>
+    /// The seconds after the first frame the window closes at; null without <c>--quit-after</c> (or once it has).
+    /// </summary>
     static double? s_seconds;
+
+    /// <summary>
+    /// The frames drawn.
+    /// </summary>
     static long s_frames;
+
+    /// <summary>
+    /// Runs from the first frame.
+    /// </summary>
     static readonly Stopwatch Clock = new();
 
     /// <summary>

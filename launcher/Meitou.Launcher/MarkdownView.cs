@@ -18,9 +18,19 @@ namespace Meitou.Launcher;
 /// </summary>
 static class MarkdownView
 {
+    /// <summary>
+    /// The code font, with fallbacks for each platform.
+    /// </summary>
     static readonly FontFamily Mono = new("Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace");
+
+    /// <summary>
+    /// The URL of each link span.
+    /// </summary>
     static readonly ConditionalWeakTable<Span, string> LinkUrls = new();
 
+    /// <summary>
+    /// A post's body as controls, one per Markdown block.
+    /// </summary>
     public static Control Render(NewsPost post, NewsMediaCache media, Action<string> open)
     {
         var panel = new StackPanel { Spacing = 10 };
@@ -67,6 +77,9 @@ static class MarkdownView
         return frame;
     }
 
+    /// <summary>
+    /// A block's control: a heading, paragraph (images in it too), list, quote, code block or rule; null for what is left out (raw HTML).
+    /// </summary>
     static Control? Block(Block block, NewsPost post, NewsMediaCache media, Action<string> open)
     {
         switch (block)
@@ -175,6 +188,9 @@ static class MarkdownView
             },
         };
 
+    /// <summary>
+    /// An inline run of text with its links clickable (a hand and a tooltip over one).
+    /// </summary>
     static TextBlock Text(ContainerInline? container, NewsPost post, Action<string> open)
     {
         var text = new TextBlock { TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.Medium, FontSize = 14, LineHeight = 21, Inlines = [] };
@@ -196,6 +212,9 @@ static class MarkdownView
         return text;
     }
 
+    /// <summary>
+    /// The URL of the link at <paramref name="point"/> in <paramref name="text"/>, null when there is none.
+    /// </summary>
     static string? LinkAt(TextBlock text, Point point)
     {
         var hit = text.TextLayout.HitTestPoint(point);
@@ -222,6 +241,9 @@ static class MarkdownView
         }
     }
 
+    /// <summary>
+    /// Adds a Markdown inline to <paramref name="target"/>: text, emphasis, code, a line break, a link or autolink, or a container's inlines.
+    /// </summary>
     static void Add(InlineCollection target, Markdig.Syntax.Inlines.Inline inline, NewsPost post)
     {
         switch (inline)
@@ -258,6 +280,9 @@ static class MarkdownView
         }
     }
 
+    /// <summary>
+    /// A link: underlined in brass, its URL kept for the pointer.
+    /// </summary>
     static Span Link(string label, string url)
     {
         var link = new Underline { Foreground = Brush("BrassLight"), Inlines = { new Run(label) } };
@@ -265,6 +290,9 @@ static class MarkdownView
         return link;
     }
 
+    /// <summary>
+    /// The app's brush <paramref name="key"/>; grey when the theme has none.
+    /// </summary>
     internal static IBrush Brush(string key) =>
         Application.Current!.TryGetResource(key, null, out var value) && value is IBrush brush ? brush : Brushes.Gray;
 }

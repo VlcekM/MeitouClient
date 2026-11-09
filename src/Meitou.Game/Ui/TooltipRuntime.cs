@@ -25,14 +25,17 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// The item records of the game data (for the item tooltip's lines); the host sets it.
     /// </summary>
     public Func<string, GameRecord?>? ItemRecordOf { get; set; }
+
     /// <summary>
     /// The "-Only for:" text of a special food record (<see cref="Meitou.Data.Gameplay.Bodies.SpecialFood.EatenBy"/>); the host sets it.
     /// </summary>
     public Func<string, string>? SpecialFoodRaces { get; set; }
+
     /// <summary>
     /// The combat tables (weapon and armour records); the host sets it.
     /// </summary>
     public Func<CombatDatabase?>? CombatOf { get; set; }
+
     /// <summary>
     /// The game's global damage multiplier (scales a crossbow's damage on its tooltip); the host sets it. Null: 1.
     /// </summary>
@@ -43,10 +46,29 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     internal const string ItemTipKey = "tooltip_item";
 
+    /// <summary>
+    /// The control the pointer is over; null for none.
+    /// </summary>
     string? _tipTarget;
+
+    /// <summary>
+    /// Where the pointer was when the delay last started.
+    /// </summary>
     Vector2 _tipPoint;
+
+    /// <summary>
+    /// When the delay last started (Stopwatch).
+    /// </summary>
     long _tipSince;
+
+    /// <summary>
+    /// The tooltip is showing.
+    /// </summary>
     bool _tipShown;
+
+    /// <summary>
+    /// The item tooltips by their <see cref="ItemTipKey"/>.
+    /// </summary>
     internal readonly Dictionary<string, ItemTip> ItemTips = [];
 
     /// <summary>
@@ -129,6 +151,9 @@ sealed class TooltipRuntime(PlayerInterface player)
         return null;
     }
 
+    /// <summary>
+    /// Whether <paramref name="c"/> carries a tooltip (its user strings or an item).
+    /// </summary>
     static bool CarriesTooltip(UiControl c) => c.Properties.ContainsKey(UiTooltips.Type) || c.Properties.ContainsKey(ItemTipKey);
 
     /// <summary>
@@ -181,7 +206,8 @@ sealed class TooltipRuntime(PlayerInterface player)
         var kind = p.GetValueOrDefault(UiTooltips.Class) switch
         {
             "fixed" => TooltipKind.Fixed,
-            "inventory" => TooltipKind.Inventory, { } c when c.StartsWith("static:", StringComparison.Ordinal) => TooltipKind.Static,
+            "inventory" => TooltipKind.Inventory,
+            { } c when c.StartsWith("static:", StringComparison.Ordinal) => TooltipKind.Static,
             _ => TooltipKind.Floating,
         };
 
@@ -211,16 +237,21 @@ sealed class TooltipRuntime(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// The tooltips' font.
+    /// </summary>
     internal const string TooltipFont = "Kenshi_StandardFont_Medium";
+
+    /// <summary>
+    /// The texture name of the Meitou tooltip plate.
+    /// </summary>
     const string TipPlate = "meitou:tooltip:plate";
+
     /// <summary>
     /// The baked plate's margin (shadow room) and the radius of its corners, in its own pixels (<see cref="MenuArt.WindowSurface"/> at scale 1).
     /// </summary>
     const float TipPlateMargin = 16, TipPlateRadius = 10;
 
-    /// <summary>
-    /// Lays the tooltip out with the painter's measuring and adds its panel and text to <paramref name="controls"/>.
-    /// </summary>
     /// <summary>
     /// A tooltip text in the active language; a bracketed heading keeps its brackets around the translated inside.
     /// </summary>
@@ -230,6 +261,9 @@ sealed class TooltipRuntime(PlayerInterface player)
         return whole != text || text.Length <= 2 || text[0] != '[' || text[^1] != ']' ? whole : "[" + Loc.Tr(text[1..^1]) + "]";
     }
 
+    /// <summary>
+    /// Lays the tooltip out with the painter's measuring and adds its panel and text to <paramref name="controls"/>.
+    /// </summary>
     internal void PlaceTooltip(List<UiControl> controls, UiPainter painter, IReadOnlyList<TooltipLine> lines, TooltipKind kind, UiRect? given,
         string prefix = "tooltip", Vector2? point = null, IReadOnlyList<string?>? valueColours = null)
     {
@@ -252,6 +286,17 @@ sealed class TooltipRuntime(PlayerInterface player)
         var panel = layout.Panel;
         float scale = player.Height / 1080f;
         bool meitou = kind != TooltipKind.Static && player.UiMode == UiMode.Meitou && TooltipPlateReady(painter);
+
+        AddTooltipPanel(controls, kind, meitou, panel, prefix, scale);
+        AddTooltipRows(controls, painter, lines, layout, prefix, meitou, minimum, valueColours);
+    }
+
+    /// <summary>
+    /// The tooltip's background: none for a static one (the window's own panel draws it), the baked plate in Meitou mode, the text box skin for a
+    /// floating one, else the floating panel with the parchment box in it.
+    /// </summary>
+    static void AddTooltipPanel(List<UiControl> controls, TooltipKind kind, bool meitou, UiRect panel, string prefix, float scale)
+    {
         var none = Vector4.Zero;
 
         if (kind == TooltipKind.Static) { }   // drawn by the window's own panel
@@ -283,33 +328,44 @@ sealed class TooltipRuntime(PlayerInterface player)
             controls.Add(new($"{prefix}-box", "Widget", inner, "", "", "Kenshi_GenericTextBoxSkin", true, new Dictionary<string, string>(), none,
                 Pickable: false));
         }
+    }
 
+    /// <summary>
+    /// Each row's key (left), value (right, left of the suffix; <paramref name="valueColours"/> overrides its colour per row) and suffix (right).
+    /// </summary>
+    void AddTooltipRows(List<UiControl> controls, UiPainter painter, IReadOnlyList<TooltipLine> lines, TooltipLayout layout, string prefix,
+        bool meitou, float minimum, IReadOnlyList<string?>? valueColours)
+    {
         for (int i = 0; i < lines.Count; i++)
         {
             var line = lines[i];
             var area = layout.Rows[i].Area;
 
-            void Text(string part, UiRect at, string text, string align, TooltipTone tone, string? colour = null)
-            {
-                if (text.Length == 0) return;
-
-                controls.Add(new($"{prefix}-{part}-{i}", "TextBox", at, text, "", "", true,
-                    new Dictionary<string, string>
-                    {
-                        ["FontName"] = TooltipFont,
-                        ["TextAlign"] = align,
-                        ["WordWrap"] = "true",
-                        ["TextColour"] = colour ?? TipColour(tone, meitou),
-                    },
-                    none, Pickable: false));
-            }
-
-            Text("key", area, line.Key, "Left Top", line.KeyTone);
+            AddTipText(controls, prefix, "key", i, area, line.Key, "Left Top", line.KeyTone, meitou);
             float suffixWidth = line.Suffix.Length > 0 ? painter.MeasureText(TooltipFont, line.Suffix, player.Height, 0, minimum).Width : 0;
-            Text("value", area with { Width = Math.Max(0, area.Width - suffixWidth) }, line.Value, "Right Top", line.ValueTone,
-                valueColours is not null && i < valueColours.Count ? valueColours[i] : null);
-            Text("suffix", area, line.Suffix, "Right Top", line.SuffixTone);
+            AddTipText(controls, prefix, "value", i, area with { Width = Math.Max(0, area.Width - suffixWidth) }, line.Value, "Right Top",
+                line.ValueTone, meitou, valueColours is not null && i < valueColours.Count ? valueColours[i] : null);
+            AddTipText(controls, prefix, "suffix", i, area, line.Suffix, "Right Top", line.SuffixTone, meitou);
         }
+    }
+
+    /// <summary>
+    /// One unpickable, wrapping tooltip text named "prefix-part-row"; nothing for an empty text. <paramref name="colour"/> overrides the tone's.
+    /// </summary>
+    static void AddTipText(List<UiControl> controls, string prefix, string part, int i, UiRect at, string text, string align, TooltipTone tone,
+        bool meitou, string? colour = null)
+    {
+        if (text.Length == 0) return;
+
+        controls.Add(new($"{prefix}-{part}-{i}", "TextBox", at, text, "", "", true,
+            new Dictionary<string, string>
+            {
+                ["FontName"] = TooltipFont,
+                ["TextAlign"] = align,
+                ["WordWrap"] = "true",
+                ["TextColour"] = colour ?? TipColour(tone, meitou),
+            },
+            Vector4.Zero, Pickable: false));
     }
 
     /// <summary>
@@ -336,6 +392,10 @@ sealed class TooltipRuntime(PlayerInterface player)
         TooltipTone.Grade4 => TipHex("fceb0d"),
         _ => plate ? PlateColour(tone) : ParchmentColour(tone),
     };
+
+    /// <summary>
+    /// A tone's colour on the Meitou plate (the kit's).
+    /// </summary>
     static string PlateColour(TooltipTone tone) => tone switch
     {
         TooltipTone.Title => TipHex("d9ceb8"),
@@ -345,6 +405,10 @@ sealed class TooltipRuntime(PlayerInterface player)
         TooltipTone.Cyan => TipHex("c4a062"),
         _ => TipHex("afa68b"),
     };
+
+    /// <summary>
+    /// A tone's colour on the original's parchment.
+    /// </summary>
     static string ParchmentColour(TooltipTone tone) => tone switch
     {
         TooltipTone.Main => PlayerInterface.MainColour,
@@ -386,7 +450,9 @@ sealed class TooltipRuntime(PlayerInterface player)
 
     // ---- HUD tooltips (FUN_14072b540, FUN_14072d3b0: Verified) ----
 
-    // The colour tags of the bounty rows (kenshi_colours.xml Main, Title, Greyed; FUN_1405d2da0's static strings).
+    /// <summary>
+    /// The colour tags of the bounty rows (kenshi_colours.xml Main, Title, Greyed; FUN_1405d2da0's static strings).
+    /// </summary>
     internal const string MainTag = "#afa68b", TitleTag = "#492620", GreyTag = "#444444";
 
     /// <summary>
@@ -565,16 +631,28 @@ sealed class TooltipRuntime(PlayerInterface player)
         return [(TitleTag + SlaveTitle(slave.State), ""), (MainTag + text.TrimEnd(), "")];
     }
 
+    /// <summary>
+    /// The slave title of <paramref name="state"/>: escaped (2), ex-slave (3), else slave.
+    /// </summary>
     static string SlaveTitle(int state) => Loc.Tr(state switch { 2 => "Escaped slave", 3 => "Ex-slave", _ => "Slave" });
 
+    /// <summary>
+    /// The player slave's hint: the Obedient slave job.
+    /// </summary>
     static string SlaveHint() =>
         Loc.Tr("Your character will have a permanent job assigned called [Obedient slave]. While this is active he will automatically work for his "
             + "master. You can remove this job, but beware of the consequences...");
 
+    /// <summary>
+    /// The escaped slave's hint.
+    /// </summary>
     static string EscapedHint() =>
         Loc.Tr("Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. "
             + "Don't get spotted.");
 
+    /// <summary>
+    /// The ex-slave's hint.
+    /// </summary>
     static string ExSlaveHint() =>
         Loc.Tr("Keep your [Looks Like A Slave] level as low as possible, wear clothing or disguises and find a plastic surgeon to restore your hair. "
             + "You should be safe if you stay out of towns.");
@@ -680,24 +758,36 @@ sealed class TooltipRuntime(PlayerInterface player)
         /// Only the name (the machine slots' items, which the original's tooltip shows the same way).
         /// </summary>
         public bool Brief { get; init; }
+
         /// <summary>
         /// The customer's own item while trading (its Sell value is the transfer's price); otherwise a stock item's Value is.
         /// </summary>
         public bool Goods { get; init; }
+
         /// <summary>
         /// The smith who crafted the item ("" none); its tooltip ends with the crafted-by block.
         /// </summary>
         public string Crafter { get; init; } = "";
+
         /// <summary>
         /// The item's <c>unique</c> flag: the [Unique] marker row.
         /// </summary>
         public bool Unique { get; init; }
+
         /// <summary>
         /// How many items a bag holds (-1: not a bag): an empty one is named "{name} (empty)".
         /// </summary>
         public int BagItems { get; init; } = -1;
+
+        /// <summary>
+        /// A tooltip of the name only (<see cref="Brief"/>).
+        /// </summary>
         public static ItemTip NameOnly(string record, string material, string name, int quantity) =>
             new(record, material, name, quantity, 0, 0, "", 0, 0, 0, -1, null, null) { Brief = true };
+
+        /// <summary>
+        /// The tooltip of an inventory item; with <paramref name="trade"/> a customer's own item in a trade.
+        /// </summary>
         public static ItemTip Of(InventoryItemView v, TradeItemView? trade = null, string? mapNote = null) =>
             new(v.Record, v.Material, v.Name, v.Quantity, v.Weight, v.Quality, v.Company, v.Level, v.Charges, v.MaxCharges, v.StolenFrom, trade,
                 mapNote)
@@ -707,6 +797,10 @@ sealed class TooltipRuntime(PlayerInterface player)
                 Unique = v.Unique,
                 BagItems = v.BagItems,
             };
+
+        /// <summary>
+        /// The tooltip of a trader's stock item.
+        /// </summary>
         public static ItemTip Of(TradeItemView v) =>
             new(v.Record, v.Material, v.Name, v.Quantity, v.Weight, v.Quality, v.Company, v.Level, v.Charges, v.MaxCharges, v.StolenFrom, v, null)
             {
@@ -715,6 +809,9 @@ sealed class TooltipRuntime(PlayerInterface player)
             };
     }
 
+    /// <summary>
+    /// <paramref name="v"/> with at most one decimal.
+    /// </summary>
     static string Number(float v) => v.ToString("0.#", CultureInfo.InvariantCulture);
 
     /// <summary>
@@ -1403,6 +1500,7 @@ sealed class TooltipRuntime(PlayerInterface player)
     /// </summary>
     internal static TooltipTone GradeTone(int grade) =>
         grade switch { 0 => TooltipTone.Grade0, 1 => TooltipTone.Grade1, 2 => TooltipTone.Grade2, 3 => TooltipTone.Grade3, _ => TooltipTone.Grade4 };
+
     /// <summary>
     /// A weapon's grade colour by its level (<c>FUN_1401625c0</c>, <b>Observed</b>): below 16, 36, 51, 66, up to 80, above 80.
     /// </summary>

@@ -4,7 +4,9 @@ using Avalonia.Threading;
 
 namespace Meitou.Launcher;
 
-// Play reports for the roadmap (the form is ReportForm): the roadmap's rows read, then the form shown over the window.
+/// <summary>
+/// Play reports for the roadmap (the form is ReportForm): the roadmap's rows read, then the form shown over the window.
+/// </summary>
 public sealed partial class MainWindow
 {
     /// <summary>

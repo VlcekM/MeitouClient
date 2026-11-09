@@ -94,7 +94,13 @@ static partial class Win32Window
     /// A window's rectangle in screen pixels (Win32 <c>RECT</c>).
     /// </summary>
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-    internal struct Rect { public int Left, Top, Right, Bottom; }
+    internal struct Rect
+    {
+        /// <summary>
+        /// The edges, in screen pixels.
+        /// </summary>
+        public int Left, Top, Right, Bottom;
+    }
 
     /// <summary>
     /// <c>SetWindowPos</c> flags: keep the Z order, don't activate.

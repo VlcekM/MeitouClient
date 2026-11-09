@@ -5,14 +5,40 @@ using System.Numerics;
 /// </summary>
 sealed class TopDownRenderer
 {
+    /// <summary>
+    /// The image's world origin (the lowest x and z) and its scale, world units per pixel.
+    /// </summary>
     readonly float _minX, _minZ, _unitsPerPixel;
+
+    /// <summary>
+    /// The height of the surface drawn at each pixel (the highest wins); minus infinity where nothing is drawn yet.
+    /// </summary>
     readonly float[] _depth;
+
+    /// <summary>
+    /// The image, three bytes per pixel, row by row.
+    /// </summary>
     readonly byte[] _rgb;
 
+    /// <summary>
+    /// The image's width in pixels.
+    /// </summary>
     public int Width { get; }
+
+    /// <summary>
+    /// The image's height in pixels.
+    /// </summary>
     public int Height { get; }
+
+    /// <summary>
+    /// The image's pixels (RGB, row by row).
+    /// </summary>
     public byte[] Rgb => _rgb;
 
+    /// <summary>
+    /// An image covering the world rectangle (<paramref name="minX"/>, <paramref name="minZ"/>) to (<paramref name="maxX"/>, <paramref name="maxZ"/>)
+    /// at <paramref name="unitsPerPixel"/>, filled with <paramref name="background"/>.
+    /// </summary>
     public TopDownRenderer(float minX, float minZ, float maxX, float maxZ, float unitsPerPixel, (byte R, byte G, byte B) background)
     {
         this._minX = minX;
@@ -68,6 +94,10 @@ sealed class TopDownRenderer
         }
     }
 
+    /// <summary>
+    /// Paints a square of <paramref name="radius"/> pixels round the world point (<paramref name="x"/>, <paramref name="z"/>) over everything (a
+    /// marker).
+    /// </summary>
     public void Pixel(float x, float z, (byte R, byte G, byte B) colour, int radius = 1)
     {
         int cx = (int)((x - _minX) / _unitsPerPixel), cz = (int)((z - _minZ) / _unitsPerPixel);

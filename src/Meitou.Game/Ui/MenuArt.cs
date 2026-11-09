@@ -126,8 +126,14 @@ static class MenuArt
         return MathF.Sqrt(MathF.Max(qx, 0) * MathF.Max(qx, 0) + MathF.Max(qy, 0) * MathF.Max(qy, 0)) + MathF.Min(MathF.Max(qx, qy), 0) - r;
     }
 
+    /// <summary>
+    /// Smoothstep of <paramref name="t"/>.
+    /// </summary>
     static float Smooth(float t) => t * t * (3 - 2 * t);
 
+    /// <summary>
+    /// <paramref name="a"/> moved <paramref name="t"/> of the way to the 0-255 colour <paramref name="b"/>.
+    /// </summary>
     static Vector3 Mix(Vector3 a, Vector3 b, float t) => a + (b / 255f - a) * t;
 
     /// <summary>
@@ -171,6 +177,9 @@ static class MenuArt
         return new(rgb, a);
     }
 
+    /// <summary>
+    /// Writes colour <paramref name="c"/> (0..1) to pixel (<paramref name="x"/>, <paramref name="y"/>).
+    /// </summary>
     static void Put(RgbaImage image, int x, int y, Vector4 c)
     {
         int i = (y * image.Width + x) * 4;
@@ -185,6 +194,10 @@ static class MenuArt
     /// </summary>
     public static RgbaImage Window(RgbaImage atlas) => WindowSurface(atlas, 128, 128, 1);
 
+    /// <summary>
+    /// A window plate of <paramref name="width"/> by <paramref name="height"/> at scale <paramref name="s"/>: the rust sheet under the dark tint, a
+    /// rounded rim and a soft drop shadow in a 16-unit margin.
+    /// </summary>
     public static RgbaImage WindowSurface(RgbaImage atlas, int width, int height, float s)
     {
         int margin = (int)(16 * s);

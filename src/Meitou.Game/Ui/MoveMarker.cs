@@ -9,6 +9,9 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class MoveMarker(PlayerInterface player)
 {
+    /// <summary>
+    /// The Stopwatch time of the last fade; 0 before the first.
+    /// </summary>
     long _markerFrame;
 
     /// <summary>

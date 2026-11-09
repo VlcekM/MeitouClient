@@ -4,10 +4,15 @@ using Meitou.Content;
 
 namespace Meitou.Launcher;
 
-// The From save button (docs/launcher.md "Mod list"): lists the saves the game lists and applies the chosen one's mods, in its load order,
-// as a preset is applied (not saved yet).
+/// <summary>
+/// The From save button (docs/launcher.md "Mod list"): lists the saves the game lists and applies the chosen one's mods, in its load order, as a
+/// preset is applied (not saved yet).
+/// </summary>
 public sealed partial class MainWindow
 {
+    /// <summary>
+    /// From save: shows the saves the game lists, and applies the chosen one's mods in its load order (names those not on disk).
+    /// </summary>
     async void ModsFromSave_Click(object? sender, RoutedEventArgs e)
     {
         if (_install is null)

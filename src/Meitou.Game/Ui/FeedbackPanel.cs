@@ -14,6 +14,9 @@ sealed record FeedbackForm(string Title, string Body, bool Screenshot, bool Navm
 /// </summary>
 sealed class FeedbackSettings
 {
+    /// <summary>
+    /// Attach a screenshot of the game (default on).
+    /// </summary>
     public bool Screenshot { get; set; } = true;
 
     /// <summary>
@@ -21,7 +24,14 @@ sealed class FeedbackSettings
     /// </summary>
     public bool Navmesh { get; set; }
 
+    /// <summary>
+    /// Make a save when sending and attach it (default on).
+    /// </summary>
     public bool Save { get; set; } = true;
+
+    /// <summary>
+    /// Attach log.txt (default off).
+    /// </summary>
     public bool Log { get; set; }
 
     /// <summary>
@@ -29,6 +39,9 @@ sealed class FeedbackSettings
     /// </summary>
     public bool Discord { get; set; } = true;
 
+    /// <summary>
+    /// The player's Discord name.
+    /// </summary>
     public string DiscordName { get; set; } = "";
 }
 
@@ -43,15 +56,54 @@ sealed class FeedbackPanel(PlayerInterface player)
 {
     #region State
 
+    /// <summary>
+    /// The form's screen id.
+    /// </summary>
     internal const string FeedbackScreen = "feedback";
+
+    /// <summary>
+    /// The button's widget name.
+    /// </summary>
     internal const string FeedbackButton = "MeitouFeedbackButton";
+
+    /// <summary>
+    /// The title edit box.
+    /// </summary>
     const string FeedbackTitleBox = "TitleEditBox";
+
+    /// <summary>
+    /// The text edit box.
+    /// </summary>
     const string FeedbackBodyBox = "BodyEditBox";
+
+    /// <summary>
+    /// The screenshot tick.
+    /// </summary>
     const string FeedbackShotTick = "ScreenshotTickBox";
+
+    /// <summary>
+    /// The navmesh screenshot tick.
+    /// </summary>
     const string FeedbackNavTick = "NavmeshTickBox";
+
+    /// <summary>
+    /// The save tick.
+    /// </summary>
     const string FeedbackSaveTick = "SaveTickBox";
+
+    /// <summary>
+    /// The log tick.
+    /// </summary>
     const string FeedbackLogTick = "LogTickBox";
+
+    /// <summary>
+    /// The Discord name tick.
+    /// </summary>
     const string FeedbackDiscordTick = "DiscordTickBox";
+
+    /// <summary>
+    /// The Discord name edit box.
+    /// </summary>
     const string FeedbackDiscordBox = "DiscordEditBox";
 
     /// <summary>
@@ -64,11 +116,40 @@ sealed class FeedbackPanel(PlayerInterface player)
     /// </summary>
     UiRect _feedbackButtonBounds;
 
+    /// <summary>
+    /// A screenshot was taken when the button was pressed.
+    /// </summary>
     bool _feedbackHasShot;
+
+    /// <summary>
+    /// A navmesh screenshot was taken (only in a game).
+    /// </summary>
     bool _feedbackHasNav;
+
+    /// <summary>
+    /// The status line is an error.
+    /// </summary>
     bool _feedbackStatusError;
+
+    /// <summary>
+    /// Why no save can be made now; null when one can.
+    /// </summary>
     string? _feedbackSaveMissing;
+
+    /// <summary>
+    /// The send's progress or why it failed; empty for none.
+    /// </summary>
     string _feedbackStatus = "";
+
+    /// <summary>
+    /// The player chose to send from this older version anyway (until the form is opened again).
+    /// </summary>
+    bool _feedbackOldConfirmed;
+
+    /// <summary>
+    /// The button's layout (<see cref="FeedbackButtonLayout"/>); null before the UI is read.
+    /// </summary>
+    internal MyGuiLayout? ButtonLayout;
 
     /// <summary>
     /// This frame is the feedback screenshot: drawn without the menus, the form and the button.
@@ -90,17 +171,13 @@ sealed class FeedbackPanel(PlayerInterface player)
     /// </summary>
     public string? FeedbackNewer { get; set; }
 
-    /// <summary>
-    /// The player chose to send from this older version anyway (until the form is opened again).
-    /// </summary>
-    bool _feedbackOldConfirmed;
-
-    internal MyGuiLayout? ButtonLayout;
-
     #endregion
 
     #region Layouts
 
+    /// <summary>
+    /// The button's layout: a Kenshi button at the top right, a tenth of the width wide.
+    /// </summary>
     internal static MyGuiLayout FeedbackButtonLayout() => MyGuiReader.ParseLayout(
         $"""<MyGUI type="Layout"><Widget type="Button" skin="Kenshi_Button1" position_real="0.9 0 0.1 0.03" layer="Info" name="{FeedbackButton}"/></MyGUI>""");
 
@@ -205,6 +282,9 @@ sealed class FeedbackPanel(PlayerInterface player)
         player.UpdateMenuPause();
     }
 
+    /// <summary>
+    /// The form's title, text, the ticked attachments the game has and the Discord name (when ticked and not empty).
+    /// </summary>
     public FeedbackForm FeedbackValues()
     {
         string title = player.FaithfulScreens.GetText(FeedbackScreen, FeedbackTitleBox).Trim();
@@ -240,6 +320,10 @@ sealed class FeedbackPanel(PlayerInterface player)
         player.UpdateMenuPause();
     }
 
+    /// <summary>
+    /// The form's bindings: captions, the ticks as the settings and the attachments the game has allow, the status, and Send only with a title and no
+    /// send under way.
+    /// </summary>
     internal void BindFeedbackScreen(UiBindings b)
     {
         void Enable(params string[] names)
@@ -288,6 +372,9 @@ sealed class FeedbackPanel(PlayerInterface player)
         if (!FeedbackPrefs.Discord) b.Disabled.Add(FeedbackDiscordBox);
     }
 
+    /// <summary>
+    /// A form event: Close, a tick flipped, the Discord name typed, or Send (with a title, not while sending).
+    /// </summary>
     internal void FeedbackFormAction(MyGuiEvent e)
     {
         if (e.Action != "text") player.InterfaceSounds.Sound("General_Click");

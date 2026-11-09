@@ -7,8 +7,15 @@ using Meitou.Data.Fcs;
 /// </summary>
 static class FcsTypeMatcher
 {
+    /// <summary>
+    /// The base game's data files, in load order.
+    /// </summary>
     static readonly string[] BaseFiles = ["gamedata.base", "Newwworld.mod", "Dialogue.mod", "rebirth.mod"];
 
+    /// <summary>
+    /// Prints, for every record type number in the base data, the fcs.def types whose fields match the fields its records use, then the field kind
+    /// cross-check and a summary.
+    /// </summary>
     public static int Run(GameInstall install)
     {
         var schema = FcsSchema.Load(Path.Combine(install.Root, "fcs.def"));
@@ -19,6 +26,9 @@ static class FcsTypeMatcher
         return 0;
     }
 
+    /// <summary>
+    /// Per record type number, every field name its records use with the field kind and how many records use it; and the record count per type.
+    /// </summary>
     static (SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> Used, Dictionary<int, int> RecordCounts)
         ReadUsage(GameInstall install)
     {
@@ -39,6 +49,9 @@ static class FcsTypeMatcher
         return (used, recordCounts);
     }
 
+    /// <summary>
+    /// Prints the best matching schema types of each record type number and returns the best match per number.
+    /// </summary>
     static Dictionary<int, string> PrintTypeMatches(
         FcsSchema schema,
         SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> used,
@@ -88,6 +101,9 @@ static class FcsTypeMatcher
             Console.WriteLine($"  {schemaKind,-10} -> {dataKind,-9} {count,8}");
     }
 
+    /// <summary>
+    /// Prints the chosen schema type per record type number with how well it matches.
+    /// </summary>
     static void PrintSummary(
         FcsSchema schema,
         SortedDictionary<int, Dictionary<string, (string Kind, int Count)>> used,
@@ -104,6 +120,9 @@ static class FcsTypeMatcher
             .Select(u => $"{u.Key}:{u.Value["REMOVED"].Kind}x{u.Value["REMOVED"].Count}")));
     }
 
+    /// <summary>
+    /// A record's field names with their kinds (bool, float, int, vec3, vec4, string, filename, reference).
+    /// </summary>
     static IEnumerable<(string Key, string Kind)> KeysOf(FcsRecord r) =>
         r.Bools.Keys.Select(k => (k, "bool"))
             .Concat(r.Floats.Keys.Select(k => (k, "float")))
@@ -115,8 +134,14 @@ static class FcsTypeMatcher
             .Concat(r.References.Keys.Select(k => (k, "reference")));
 }
 
+/// <summary>
+/// Prints the records of one type number from the base data files: id, name, flags, field names by kind, references with their counts.
+/// </summary>
 static class FcsRecordDump
 {
+    /// <summary>
+    /// Prints up to <paramref name="limit"/> records of type <paramref name="type"/>; returns the exit code.
+    /// </summary>
     public static int Run(GameInstall install, int type, int limit)
     {
         int shown = 0;

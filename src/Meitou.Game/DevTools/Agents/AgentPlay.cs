@@ -372,16 +372,50 @@ sealed class AgentPlay(GameHost host)
     /// </summary>
     sealed class ControlSpawn(string id, HashSet<CharacterId> before, float x, float z, bool ko, bool dead, long deadline)
     {
+        /// <summary>
+        /// The command id the reply goes to.
+        /// </summary>
         public string Id = id;
+
+        /// <summary>
+        /// The characters there before the spawn (the new one is not among them).
+        /// </summary>
         public HashSet<CharacterId> Before = before;
+
+        /// <summary>
+        /// Where the character was spawned.
+        /// </summary>
         public float X = x, Z = z;
+
+        /// <summary>
+        /// Whether it is to be knocked out or killed, and whether that was sent.
+        /// </summary>
         public bool Ko = ko, Dead = dead, Downed;
+
+        /// <summary>
+        /// When the wait gives up (Stopwatch).
+        /// </summary>
         public long Deadline = deadline;
+
+        /// <summary>
+        /// The spawned character, once it shows up.
+        /// </summary>
         public CharacterId Found = CharacterId.None;
+
+        /// <summary>
+        /// The weapon an aggressive spawn gets.
+        /// </summary>
         public string? Weapon;
+
+        /// <summary>
+        /// Whether it is to attack the squad (<c>--aggro</c>), and whether its weapon and attack were sent.
+        /// </summary>
         public bool Aggro, Armed;
     }
 
+    /// <summary>
+    /// The spawns waiting for their character.
+    /// </summary>
     readonly List<ControlSpawn> _controlSpawns = [];
 
     /// <summary>
@@ -922,7 +956,14 @@ sealed class AgentPlay(GameHost host)
     // The <c>ask</c> and <c>task</c> console commands (agent-playtest): the player types a question or an instruction in the dev console and
     // an AI agent reads the queue file (docs/procedures/playtest/agent-play-api.md, "Ask and task").
 
+    /// <summary>
+    /// The longest question or instruction <c>ask</c> and <c>task</c> take, characters.
+    /// </summary>
     const int AskMaxLength = 300;
+
+    /// <summary>
+    /// Guards <c>asks.log</c>'s count and append.
+    /// </summary>
     readonly object _askLock = new();
 
     /// <summary>
@@ -939,6 +980,10 @@ sealed class AgentPlay(GameHost host)
             AskQueue("task", args, con));
     }
 
+    /// <summary>
+    /// Appends a <paramref name="kind"/> line (time, kind, text on one line) to <c>asks.log</c> in the control directory (else beside the game) and
+    /// prints its number.
+    /// </summary>
     void AskQueue(string kind, IReadOnlyList<string> args, DevConsole con)
     {
         string text = string.Join(' ', args).Trim().Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
@@ -1167,33 +1212,82 @@ sealed class AgentPlay(GameHost host)
     /// Within this many metres of the target counts as arrived.
     /// </summary>
     const float MoveWaitArriveRadius = 4f;
+
     /// <summary>
     /// Default game seconds without progress that make a waited move "stuck" (override with <c>--stuck</c>).
     /// </summary>
     internal const float MoveWaitStuckSeconds = 10f;
+
     /// <summary>
     /// Progress means the distance to the target fell by at least this many metres since the last progress.
     /// </summary>
     const float MoveWaitProgressStep = 1f;
+
+    /// <summary>
+    /// The world ticks per game second the waited move's seconds convert at.
+    /// </summary>
     const int MoveWaitTicksPerSecond = 30;
+
     /// <summary>
     /// Most ticks a paused waited move steps in one frame (the same cap as <c>step</c>).
     /// </summary>
     const int MoveWaitPausedTickCap = 3000;
 
+    /// <summary>
+    /// A waited move (<c>order move --wait</c>): its reply id, the character, the target, the start tick, the tick limits and its progress.
+    /// </summary>
     sealed class ControlMoveWait(string id, CharacterId who, float x, float z, long startTick, int timeoutTicks, int stuckTicks, float dist0)
     {
+        /// <summary>
+        /// The command id the reply goes to.
+        /// </summary>
         public string Id = id;
+
+        /// <summary>
+        /// The character that moves.
+        /// </summary>
         public CharacterId Who = who;
+
+        /// <summary>
+        /// The target's x and z.
+        /// </summary>
         public float X = x, Z = z;
+
+        /// <summary>
+        /// The tick the move started.
+        /// </summary>
         public long StartTick = startTick;
+
+        /// <summary>
+        /// The ticks before it times out, and the ticks without progress that make it stuck.
+        /// </summary>
         public int TimeoutTicks = timeoutTicks, StuckTicks = stuckTicks;
+
+        /// <summary>
+        /// The least distance to the target yet.
+        /// </summary>
         public float BestDist = dist0;
+
+        /// <summary>
+        /// The tick of the last progress.
+        /// </summary>
         public long ProgressTick = startTick;
+
+        /// <summary>
+        /// When a stalled world gives up the wait (Stopwatch).
+        /// </summary>
         public long RealDeadline;
     }
 
+    /// <summary>
+    /// The waited moves pending.
+    /// </summary>
     readonly List<ControlMoveWait> _controlMoveWaits = [];
+
+    /// <summary>
+    /// The last waited move's reply JSON.
+    /// </summary>
+    string _controlMoveWaitLast = "";
 
     /// <summary>
     /// Starts a waited move after the order was given; true when the reply is deferred or already written into <paramref name="con"/>.
@@ -1235,8 +1329,6 @@ sealed class AgentPlay(GameHost host)
         host.AgentChannel.ControlReplyDeferred = true;
         con.Print("move wait pending");
     }
-
-    string _controlMoveWaitLast = "";
 
     /// <summary>
     /// One check; true (reply JSON in <see cref="_controlMoveWaitLast"/>) once arrived, stuck or timed out.

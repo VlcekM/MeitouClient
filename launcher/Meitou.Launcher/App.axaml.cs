@@ -5,6 +5,10 @@ using Meitou.Content;
 
 namespace Meitou.Launcher;
 
+/// <summary>
+/// The launcher application: loads its config, finds the Kenshi install (the saved folder, else a search), registers the game's fonts and opens the
+/// main window.
+/// </summary>
 public sealed class App : Application
 {
     public override void Initialize() => AvaloniaXamlLoader.Load(this);

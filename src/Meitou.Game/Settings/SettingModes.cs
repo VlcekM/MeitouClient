@@ -35,6 +35,9 @@ sealed class SettingModes
         yield return row with { Label = "Custom value", Depth = 1, Locked = ModeIndex(key, slider, modes, d.Step) < modes.Count };
     }
 
+    /// <summary>
+    /// The mode the slider's value matches (or Custom, <paramref name="modes"/>' count, when it was picked or none matches).
+    /// </summary>
     int ModeIndex(string key, Slider slider, List<SettingMode> modes, float step)
     {
         if (CustomModes.Contains(key)) return modes.Count;
@@ -44,6 +47,9 @@ sealed class SettingModes
         return mode < 0 ? modes.Count : mode;
     }
 
+    /// <summary>
+    /// Picks mode <paramref name="index"/>: sets the slider to its value, or keeps the slider as it is under Custom.
+    /// </summary>
     void ChooseMode(string key, Slider slider, List<SettingMode> modes, int index)
     {
         if (index >= modes.Count)

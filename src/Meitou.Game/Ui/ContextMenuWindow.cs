@@ -24,17 +24,31 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// How long the command button is held on a target before the menu opens (<b>Observed</b>: 0.2 s, FUN_140800250).
     /// </summary>
     public const double ContextHoldSeconds = 0.2;
+
     /// <summary>
     /// The hold on a squad bar portrait that opens its member's menu (<c>MainBarGUI</c>'s frame update, <c>DAT_141696c80</c>).
     /// </summary>
     public const double PortraitHoldSeconds = 0.25;
 
+    /// <summary>
+    /// A context menu: its title, where it opens and its verbs (caption and what it gives).
+    /// </summary>
     internal sealed record ContextMenu(string Title, Vector2 At, IReadOnlyList<(string Caption, Action Give)> Verbs);
+
+    /// <summary>
+    /// The open menu; null for none.
+    /// </summary>
     internal ContextMenu? OpenMenu;
-    // A right press on a target that has verbs: its menu (built again when the hold ends), where, when, the hold that opens it and the order a quick
-    // click gives (null: none).
+
+    /// <summary>
+    /// A right press on a target that has verbs: its menu (built again when the hold ends), where, when, the hold that opens it and the order a quick
+    /// click gives (null: none).
+    /// </summary>
     (Func<Vector2, ContextMenu?> Menu, Vector2 At, long Since, double Hold, Action? Quick)? _contextPending;
 
+    /// <summary>
+    /// A menu is open.
+    /// </summary>
     public bool ContextMenuOpen => OpenMenu is not null;
 
     /// <summary>
@@ -137,6 +151,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
     static CharacterSnapshot? NearestSelected(Vector3 at, IEnumerable<CharacterSnapshot> candidates) =>
         candidates.MinBy(c => Vector3.DistanceSquared(c.Position, at));
 
+    /// <summary>
+    /// A verb caption and its chance (the number after a tab); null without one.
+    /// </summary>
     static (string Caption, float? Chance) SplitChance(string caption)
     {
         int tab = caption.IndexOf('\t');
@@ -146,6 +163,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
         return (caption[..tab], c);
     }
 
+    /// <summary>
+    /// The original's order number of a verb caption; null for one not listed.
+    /// </summary>
     static int? OrderOf(string caption) => VerbOrders.TryGetValue(SplitChance(caption).Caption, out int order) ? order : null;
 
     /// <summary>
@@ -392,50 +412,64 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// </summary>
     void OtherCharacterVerbs(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection, bool down)
     {
+        if (down) DownVerbs(verbs, target, selection);
+        else if (target.Asleep) AsleepVerbs(verbs, target, selection);
+        else StandingVerbs(verbs, target, selection);
+    }
+
+    /// <summary>
+    /// <see cref="OtherCharacterVerbs"/> on a down character: Loot, and unless someone carries the body the pick-up verb, Stealth KO and Throw out.
+    /// </summary>
+    void DownVerbs(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection)
+    {
         var id = target.Id;
+        if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
+        if (!target.CarriedBy.IsNone) return;   // no pick-up verb or Throw out of home for a carried body
 
-        if (down)
+        verbs.Add(PickUpVerb(target));
+        // 228 on a down character too (FUN_1407a6bc0:583-594).
+        if (target.StealthKoChance is { } downChance)
         {
-            if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
-            if (!target.CarriedBy.IsNone) return;   // no pick-up verb or Throw out of home for a carried body
-
-            verbs.Add(PickUpVerb(target));
-            // 228 on a down character too (FUN_1407a6bc0:583-594).
-            if (target.StealthKoChance is { } downChance)
-            {
-                verbs.Add((WithChance("Stealth KO", downChance),
-                    () => player.Say(new StealthKoOrder(selection, id) { Tick = player.Session.World.Tick })));
-            }
-
-            ThrowOutVerb(verbs, target, selection);
-            return;
+            verbs.Add((WithChance("Stealth KO", downChance),
+                () => player.Say(new StealthKoOrder(selection, id) { Tick = player.Session.World.Tick })));
         }
 
-        if (target.Asleep)
+        ThrowOutVerb(verbs, target, selection);
+    }
+
+    /// <summary>
+    /// Not standing (the original's state 1): Loot (a pickpocket), the pick-up verb and Stealth KO; not hostile, also Attack Unprovoked,
+    /// Bodyguard and Talk To.
+    /// </summary>
+    void AsleepVerbs(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection)
+    {
+        var id = target.Id;
+        if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
+
+        verbs.Add(PickUpVerb(target));
+        ThrowOutVerb(verbs, target, selection);
+        if (target.StealthKoChance is { } koChance)
         {
-            // Not standing (the original's state 1): Loot (a pickpocket), the pick-up verb and Stealth KO; not hostile, also Attack Unprovoked,
-            // Bodyguard and Talk To.
-            if (target.CanOpenInventory) verbs.Add(InventoryVerb(target));
-
-            verbs.Add(PickUpVerb(target));
-            ThrowOutVerb(verbs, target, selection);
-            if (target.StealthKoChance is { } koChance)
-            {
-                verbs.Add((WithChance("Stealth KO", koChance),
-                    () => player.Say(new StealthKoOrder(selection, id) { Tick = player.Session.World.Tick })));
-            }
-
-            if (player.PointerPanel.Hostile(target)) return;
-
-            verbs.Add(("Attack Unprovoked",
-                () => player.Say(new AttackOrder(selection, id) { Tick = player.Session.World.Tick, Picked = true, Unprovoked = true })));
-            verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
-            if (player.Session.World.CanTalk(id, selection[0]))
-                verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = player.Session.World.Tick })));
-
-            return;
+            verbs.Add((WithChance("Stealth KO", koChance),
+                () => player.Say(new StealthKoOrder(selection, id) { Tick = player.Session.World.Tick })));
         }
 
+        if (player.PointerPanel.Hostile(target)) return;
+
+        verbs.Add(("Attack Unprovoked",
+            () => player.Say(new AttackOrder(selection, id) { Tick = player.Session.World.Tick, Picked = true, Unprovoked = true })));
+        verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
+        if (player.Session.World.CanTalk(id, selection[0]))
+            verbs.Add(("Talk To", () => player.Say(new Simulation.Dialogue.TalkOrder(selection[0], id) { Tick = player.Session.World.Tick })));
+    }
+
+    /// <summary>
+    /// A standing character: Talk To, Trade with a trader, then Shoot At from a turret, else Stealth KO and the attacks (hostile) or the
+    /// peaceful verbs (<see cref="PeacefulVerbs"/>).
+    /// </summary>
+    void StandingVerbs(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection)
+    {
+        var id = target.Id;
         bool onTurret = player.Selected().LastOrDefault() is { Turret: not null };
         bool hostile = player.PointerPanel.Hostile(target);
         if (player.Session.World.CanTalk(id, selection[0]))
@@ -465,6 +499,15 @@ sealed class ContextMenuWindow(PlayerInterface player)
             return;
         }
 
+        PeacefulVerbs(verbs, target, selection);
+    }
+
+    /// <summary>
+    /// A standing character that is not hostile: Attack Unprovoked, Bodyguard, Follow, and Pick Up when it regards the lead (never on a diplomat).
+    /// </summary>
+    void PeacefulVerbs(List<(string, Action)> verbs, CharacterSnapshot target, IReadOnlyList<CharacterId> selection)
+    {
+        var id = target.Id;
         verbs.Add(("Attack Unprovoked",
             () => player.Say(new AttackOrder(selection, id) { Tick = player.Session.World.Tick, Picked = true, Unprovoked = true })));
         verbs.Add(("Bodyguard", () => player.Say(new FollowOrder(selection, id) { Guard = true, Tick = player.Session.World.Tick })));
@@ -705,6 +748,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
         return true;
     }
 
+    /// <summary>
+    /// A verb picked: the menu closes and verb <paramref name="argument"/> (its index) gives its order.
+    /// </summary>
     internal void ContextAction(string argument)
     {
         var menu = OpenMenu;

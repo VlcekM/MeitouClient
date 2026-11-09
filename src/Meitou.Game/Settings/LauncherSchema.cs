@@ -16,10 +16,19 @@ namespace Meitou.Game.Settings;
 /// </summary>
 static class LauncherSchema
 {
+    /// <summary>
+    /// A three-level choice's names.
+    /// </summary>
     static readonly string[] LowMediumHigh = ["Low", "Medium", "High"];
 
+    /// <summary>
+    /// The schema key of a <see cref="UserConfig"/> property: its name in camel case.
+    /// </summary>
     static string Key(string property) => JsonNamingPolicy.CamelCase.ConvertName(property);
 
+    /// <summary>
+    /// A Graphics slider's description: the label as key, its name, hint, range, step, shown default and impact.
+    /// </summary>
     static SettingDescription Graphics(string label, float min, float max, float step, float shown) => new()
     {
         Key = label,
@@ -126,8 +135,14 @@ static class LauncherSchema
         new() { Name = "DLAA", Value = 1 },
     ];
 
+    /// <summary>
+    /// <paramref name="scale"/> rounded to two decimals.
+    /// </summary>
     static float Percent(float scale) => MathF.Round(scale * 100) / 100;
 
+    /// <summary>
+    /// A multiplier slider's description: steps of 0.05, logarithmic when its minimum is above 0, shown with an x.
+    /// </summary>
     static SettingDescription Multiplier(string label, float min, float max, float shown) =>
         Graphics(label, min, max, 0.05f, shown) with { Logarithmic = min > 0, Format = "0.00", Suffix = "x" };
 
@@ -217,6 +232,9 @@ static class LauncherSchema
         ],
     };
 
+    /// <summary>
+    /// The schema: the settings version, the renderers, the Display section and the Graphics pages' sections with their groups, and the presets.
+    /// </summary>
     public static SettingsSchema Create()
     {
         var defaults = new UserConfig();
@@ -297,6 +315,9 @@ static class LauncherSchema
         };
     }
 
+    /// <summary>
+    /// Every listed setting's description by key, and its place in the schema's order.
+    /// </summary>
     static readonly Lazy<(Dictionary<string, SettingDescription> Find, Dictionary<string, int> Order)> Catalogue = new(() =>
     {
         var all = Create().Sections.SelectMany(section => section.Settings).ToList();
