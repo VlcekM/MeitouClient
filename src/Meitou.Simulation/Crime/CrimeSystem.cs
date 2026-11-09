@@ -41,14 +41,16 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     /// </summary>
     public const float RecentlyWantedSeconds = 250;
 
-    readonly List<Booking> _bookings = [];
-    long _bookingsTick = -1;
+    /// <summary>
+    /// The bounties booked: the ledger entries' raises and expiry, this tick's bookings by a witness (<see cref="BountyBook"/>).
+    /// </summary>
+    readonly BountyBook _bounties = new();
 
     /// <summary>
     /// The bookings of this tick by a witness (the police-like NPC that booked, the culprit, the faction): the arrest system's witnessed-crime
-    /// trigger. Not world state.
+    /// trigger. Not world state (<see cref="BountyBook.BookingsOf"/>).
     /// </summary>
-    public IReadOnlyList<Booking> BookingsOf(long tick) => _bookingsTick == tick ? _bookings : [];
+    public IReadOnlyList<Booking> BookingsOf(long tick) => _bounties.BookingsOf(tick);
 
     readonly List<CrimeEvent> _log = [];
 
@@ -231,46 +233,10 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     // ------------------------------------------------------------------ booking
 
     /// <summary>
-    /// Books the culprit's pending crime with <paramref name="faction"/> (the game's <c>FUN_140853ec0</c>, <b>Verified</b>): once per pending crime
-    /// (the booked flag), not for a culprit of <c>NPC class</c> BANDIT, DIPLOMAT or LAW_ENFORCEMENT, and Enslaving adds nothing. The amount of the
-    /// crime table is added to the ledger entry, the crime's bit set and the time of the last raise reset. The entry is the booking faction's
-    /// (<c>FUN_140852010</c>, <see cref="CrimeFactions.BookingOf"/>): of the culprit's prison owner while it is imprisoned in a cage that resolves,
-    /// else of <paramref name="faction"/>; its legal system when it has one, else itself when it books bounties. With no booking faction the crime is
-    /// still marked booked and the culprit recently wanted, but the original's entry has a null key that nothing reads, so no bounty is kept.
+    /// Books the culprit's pending crime with <paramref name="faction"/> (the game's <c>FUN_140853ec0</c>, <see cref="BountyBook.Book"/>); true when a
+    /// bounty was raised.
     /// </summary>
-    public bool Book(World world, int culprit, int faction, CharacterId witness)
-    {
-        var c = world.Characters.Cold(culprit);
-        if (c?.Pending is not { Booked: false } p) return false;
-        if (c.NpcClass is FundamentalType.Bandit or FundamentalType.Diplomat or FundamentalType.LawEnforcement) return false;
-        p.Booked = true;
-        if (p.Code == CrimeCode.Enslaving) return false;
-        int owner = c.IsImprisoned && c.InWhat is { } cageId && world.Fixtures.Find(cageId) is { } cage ? cage.Owner : faction;
-        int key = Factions.BookingOf(owner);
-        if (key < 0)
-        {
-            c.RecentlyWanted = RecentlyWantedSeconds;
-            return false;
-        }
-        faction = key;
-        var entry = (c.Bounties ??= new BountyLedger()).Get(faction, Factions.NameOf(faction));
-        entry.Amount += CrimeTable.Amount(p.Code);
-        entry.Crimes |= 1 << (int)p.Code;
-        entry.RaisedTick = world.Tick;
-        c.RecentlyWanted = RecentlyWantedSeconds;
-        if (!witness.IsNone)
-        {
-            if (_bookingsTick != world.Tick) { _bookings.Clear(); _bookingsTick = world.Tick; }
-            _bookings.Add(new Booking(witness, world.Characters.IdOf(culprit), faction));
-        }
-        Note(world, CrimeEventKind.Booked, culprit, p.Code, faction, entry.Amount, witness);
-        if (c.IsPlayer)
-        {
-            world.Post(Loc.Tr("{1} is wanted by {2} for {3}: bounty c.{4}", c.Name, entry.FactionName, CrimeTable.Name(p.Code), entry.Amount));
-        }
-
-        return true;
-    }
+    public bool Book(World world, int culprit, int faction, CharacterId witness) => _bounties.Book(this, world, culprit, faction, witness);
 
     // ------------------------------------------------------------------ the sweep
 
@@ -302,7 +268,7 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
             // The crime tick FUN_1405cbb80 is skipped for a dead character (FUN_1405d00b0): its bounties never expire and its pending crime stays
             // frozen (no countdown, no witness search).
             if (c.Medical is { Dead: true }) continue;
-            if (c.Bounties is { } ledger && !c.IsImprisoned) Expire(world, s, c, ledger, hoursPerTick, every);   // paused while imprisoned (economy.md 11.3)
+            if (c.Bounties is { } ledger && !c.IsImprisoned) BountyBook.Expire(this, world, s, c, ledger, hoursPerTick, every);   // paused while imprisoned (economy.md 11.3)
             if (c.Pending is { } p)
             {
                 // Check, then subtract (FUN_1405cbb80 tail): cleared on the first call after the timer reached 0.
@@ -702,41 +668,15 @@ public sealed partial class CrimeSystem(FactionRelations relations, CrimeSetting
     }
 
     /// <summary>
-    /// Removes entries whose lifetime since their last raise is over (<c>FUN_1405cbb80</c>, <b>Verified</b>): the original removes the first expired
-    /// entry it meets and stops, once per character tick; this sweep runs every <paramref name="ticks"/> ticks, so it removes at most that many.
+    /// The bounty lines of a character for the HUD (<see cref="BountyBook.Lines"/>).
     /// </summary>
-    void Expire(World world, int slot, CharacterCold c, BountyLedger ledger, double hoursPerTick, int ticks)
-    {
-        for (int k = ledger.Count - 1; k >= 0 && ticks > 0; k--)
-        {
-            var e = ledger.Entries[k];
-            if (e.Amount <= 0) continue;
-            double elapsed = (world.Tick - e.RaisedTick) * hoursPerTick;
-            if (elapsed >= 0 && elapsed <= CrimeTable.LifetimeHours(e.Amount)) continue;
-            ledger.Remove(e);
-            ticks--;
-            Note(world, CrimeEventKind.Expired, slot, CrimeCode.None, e.Faction, e.Amount, CharacterId.None);
-            if (c.IsPlayer) world.Post(Loc.Tr("{1} is no longer wanted by {2}", c.Name, e.FactionName));
-        }
-        if (ledger.Count == 0) c.Bounties = null;
-    }
+    public static IReadOnlyList<BountyLine> Lines(CharacterCold c, long tick, float tickSeconds, int local = -1) =>
+        BountyBook.Lines(c, tick, tickSeconds, local);
 
     /// <summary>
-    /// The bounty lines of a character for the HUD, with the hours left at <paramref name="tick"/>; <paramref name="local"/> is the local faction
-    /// (-1: none).
+    /// Adds an event to <see cref="Log"/> (with <see cref="CrimeSettings.RecordLog"/>).
     /// </summary>
-    public static IReadOnlyList<BountyLine> Lines(CharacterCold c, long tick, float tickSeconds, int local = -1)
-    {
-        if (c.Bounties is not { Count: > 0 } ledger) return [];
-        double hoursPerTick = tickSeconds * 11.0 / 1200.0;
-        var lines = new List<BountyLine>(ledger.Count);
-        foreach (var e in ledger.Entries)
-            if (e.Amount > 0)
-                lines.Add(new BountyLine(e.FactionName, e.Amount, CrimeTable.Names(e.Crimes), CrimeTable.LifetimeHours(e.Amount) - (tick - e.RaisedTick) * hoursPerTick, e.Faction == local));
-        return lines;
-    }
-
-    void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
+    internal void Note(World world, CrimeEventKind kind, int culprit, CrimeCode code, int faction, int amount, CharacterId witness)
     {
         if (Settings.RecordLog) _log.Add(new CrimeEvent(world.Tick, kind, world.Characters.IdOf(culprit), code, faction, amount, witness));
     }

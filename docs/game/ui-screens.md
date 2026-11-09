@@ -1108,7 +1108,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     Taking from a non-player CAMPING building (`building category`) is not stealing.
   - Drawing: the held item like an inventory cell at pointer + grab offset, its source cell empty. One `WhiteSkin` rectangle on layer `Info`, alpha 0.5, the footprint's size at the snapped
     cell, shown only when the section takes the item and the footprint fits (what is under it is ignored: swaps are legal); no red or green.
-  - Meitou (`InventoryWindows`, `Items/HeldItems.cs`): the held item is world state (`PlayerState.Held`, commands `LiftItem`, `PlaceHeld`, `GiveHeld`, `DropHeld`,
+  - Meitou (`InventoryWindows`, `Player/HeldItems.cs`): the held item is world state (`PlayerState.Held`, commands `LiftItem`, `PlaceHeld`, `GiveHeld`, `DropHeld`,
     `ReturnHeld`; [simulation](../simulation.md#items-and-eating)). Engine choices: the release places only after the pointer moved at least 5 px since the press (a click keeps the item for the
     next press); right click or Escape puts it back; a stock item goes into a player character's window and such a window's own items onto the stock, the trade passing to that character within 1000 ([simulation](../simulation.md#trade)); give range 1000 (60 for an item out of
     a non-player window) from the window's owner; let go over a squad bar portrait, it is given to that member (same range and room rules; its own portrait puts it back). Race limits: `ItemInstance.WearableBy` (an animal only with its race listed). Not built: section item-count caps (no section is known to set one, above), "That's not for sale." (no trader character window),
@@ -1194,7 +1194,7 @@ unless marked; Meitou: `SquadPanel`, commands in `SquadManagement`.
     - Meitou: `PlayerInterface.InventoryRightClick` buys or sells one unit (Shift all); a bought weapon goes into a free `back` then `hip` cell and armour into its empty slot
       (`InventoryCommands.TryEquip`), the rest of the stack and everything else into the first free cell; a stolen item a non-fence shop may catch asks the prompt above (`TradeItemView.FenceOdds`).
       Window to window (loot, container, storage) the units go by `InventoryCommands.MoveInto` (the open bag window first, then slots, then the main grid). Own windows only: `ReadMapItem`, else
-      `QuickMoveItem` (money, equip / take off, prosthetic onto its stump, main grid to the open bag and back, a blueprint read: [blueprints](buildings-production.md#blueprints)). Owner tag: `HeldItems.MarkFor` clears `StolenFrom` when the item goes to a member of that faction; marking it is the theft rules above.
+      `QuickMoveItem` (money, equip / take off, prosthetic onto its stump, main grid to the open bag and back, a blueprint read: [blueprints](buildings-production.md#blueprints)). Owner tag: `HeldItemTheft.MarkFor` clears `StolenFrom` when the item goes to a member of that faction; marking it is the theft rules above.
   - Reference screenshot (**Observed**, 2026-10-17, from a video): `Money:` label left and `c.442,269` right in the money box, stock icons at their footprints with plain counts bottom
     right, a vertical scrollbar, no other panels; the HUD stays. The character panel reads `Disguise: None`. Its text boxes and empty cells are dark, where the install's skins draw parchment; the cause (a UI mod or setting) is **Unknown**.
 - **Character trading window** (`CharacterTradingWindow` `FUN_14072a880`, rows `FUN_14072a070`; DA 41 / 42 / 43 / 48, [economy 12](economy.md#12-slaves-prisoners-animals); code

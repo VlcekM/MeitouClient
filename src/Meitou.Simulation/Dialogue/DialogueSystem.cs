@@ -131,6 +131,11 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     ulong _rolls;
     long _requestId;
 
+    /// <summary>
+    /// The NPCs walking up to a player character to talk (<c>DA_TALK_TO_LEADER</c>).
+    /// </summary>
+    readonly ApproachQueue _npcApproaches;
+
     // The approach of a Talk order, and the open conversation.
     CharacterId _talker = CharacterId.None, _target = CharacterId.None;
     readonly WalkUp _approach;
@@ -147,6 +152,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         _dialogue = data.Dialogue;
         Settings = settings ?? new DialogueSettings();
         _approach = new(Settings.ApproachSeconds);
+        _npcApproaches = new(this);
     }
 
     public DialogueSettings Settings { get; }
@@ -233,7 +239,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         Memory.Age(world);
         if (_bubbles.Count > 0) StepBubbles(world);
         if (Settings.AmbientEvents && world.Tick % Settings.AmbientEveryTicks == 0) { SeeOthers(world); SeeGettingUp(world); }
-        if (_approaches.Count > 0) StepApproaches(world);
+        if (_npcApproaches.Count > 0) _npcApproaches.Step(world);
         StepFollowers(world);
         StepStalkers(world);
         if (!_talker.IsNone && _open is null)
@@ -304,7 +310,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         return Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z)) < reach && MathF.Abs(a.Y - b.Y) < TalkHeight;
     }
 
-    static bool Awake(CharacterTable table, int slot) => table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
+    internal static bool Awake(CharacterTable table, int slot) => table.Next[slot].Alive && table.Cold(slot) is { IsImprisoned: false } c && c.Medical?.Incapacitated != true;
 
     /// <summary>
     /// Keeps the NPC standing while the talker comes and talks (as the trader in a trade); released when it ends.
@@ -316,10 +322,20 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         if (table.Next[slot].Task is (byte)CharacterTask.Wander or (byte)CharacterTask.Idle) TaskStart.Stand(table, slot);
     }
 
-    static void Release(World world, CharacterId id)
+    internal static void Release(World world, CharacterId id)
     {
         if (world.Characters.TryResolveNext(id, out int slot) && world.Characters.Cold(slot) is { } c) c.Engaged = false;
     }
+
+    /// <summary>
+    /// A player conversation is open.
+    /// </summary>
+    internal bool InConversation => _open is not null;
+
+    /// <summary>
+    /// Whether the open player conversation is with <paramref name="npc"/>.
+    /// </summary>
+    internal bool TalksWith(CharacterId npc) => _open?.Npc == npc;
 
     /// <summary>
     /// The farthest the talking player character may be from the camera for a player conversation to start (<c>FUN_140684320</c>, constant 9216).
@@ -336,7 +352,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
     /// Fires <paramref name="ev"/> at <paramref name="npc"/> with <paramref name="player"/> as its target and opens the conversation
     /// (docs/game/dialogue.md "Player conversation").
     /// </summary>
-    void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false)
+    internal void Start(World world, CharacterId npc, CharacterId player, int ev, bool quiet = false)
     {
         var table = world.Characters;
         if (!table.TryResolveNext(npc, out int n) || table.Cold(n) is not { } nc) return;
@@ -539,7 +555,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
 
     public void Hash(ref StateHasher hasher)
     {
-        if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0 && _ambientAt.Count == 0 && _approaches.Count == 0 && _down.Count == 0 && _quiet.Count == 0 && _followers.Count == 0 && _stalkers.Count == 0 && _open is null && _talker.IsNone) return;
+        if (_lastUse.Count == 0 && _permanent.Count == 0 && _counters.Count == 0 && Memory.IsEmpty && _interrupts.Count == 0 && _bubbles.Count == 0 && _ambientAt.Count == 0 && _npcApproaches.Count == 0 && _down.Count == 0 && _quiet.Count == 0 && _followers.Count == 0 && _stalkers.Count == 0 && _open is null && _talker.IsNone) return;
         hasher.Add(0x44696167);
         hasher.Add(_rolls);
         foreach (var (line, hours) in _lastUse) { hasher.Add(Rng.StableHash(line)); hasher.Add(hours); }
@@ -550,7 +566,7 @@ public sealed partial class DialogueSystem : ITickSystem, IStateHashed, IDialogu
         foreach (var (who, line) in _interrupts) { hasher.Add(who); hasher.Add(Rng.StableHash(line)); }
         foreach (var b in _bubbles) { hasher.Add(b.C.Npc); hasher.Add(Rng.StableHash(b.Line.StringId)); hasher.Add(b.DueTick); }
         foreach (var ((squad, whom), hours) in _ambientAt) { hasher.Add(squad); hasher.Add(whom); hasher.Add(hours); }
-        HashApproaches(ref hasher);
+        _npcApproaches.Hash(ref hasher);
         foreach (var id in _down) hasher.Add(id);
         foreach (var (npc, pc) in _quiet) { hasher.Add(npc); hasher.Add(pc); }
         hasher.Add(_talker);

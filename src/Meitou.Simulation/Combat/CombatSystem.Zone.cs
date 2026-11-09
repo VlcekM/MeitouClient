@@ -13,7 +13,7 @@ public sealed partial class CombatSystem
     /// <summary>
     /// The most characters a blow's zone holds (FUN_1407862e0's limit of 20).
     /// </summary>
-    const int ZoneCapacity = 20;
+    internal const int ZoneCapacity = 20;
 
     /// <summary>
     /// The <see cref="Effect.Kind"/> of the walls and doors a blow's zone may still hit: the target is the attacker, <c>Arg</c> the blow (+0x100 when
@@ -21,9 +21,15 @@ public sealed partial class CombatSystem
     /// </summary>
     public const int ZoneBuildingsEffect = 4;
 
+    /// <summary>
+    /// The characters a zone scan found, nearest first (<see cref="ZoneCapacity"/> at most).
+    /// </summary>
     [InlineArray(ZoneCapacity)]
-    struct ZoneSlots
+    internal struct ZoneSlots
     {
+        /// <summary>
+        /// The first slot (the inline array's element).
+        /// </summary>
         int _first;
     }
 
@@ -51,71 +57,21 @@ public sealed partial class CombatSystem
     /// </summary>
     readonly record struct Zone(Vector2 From, Vector2 Centre, Vector2 Forward, float Half, float Deep, float Y, float High);
 
-    #region Zone lists
-
     /// <summary>
-    /// The characters each fighter's attack zone held when it last looked (the original's list +0x1e0, <c>calculateTargetsInAttackZone</c>
-    /// FUN_1406087a0: built at the attack start and at each blow's impact), <see cref="ZoneCapacity"/> slots per fighter and a count; double-buffered
-    /// like the slots, so a defender reads the attacker's list of the last tick.
+    /// The characters each fighter's attack zone held when it last looked, double-buffered.
     /// </summary>
-    int[] _zoneRead = [], _zoneWrite = [];
-    byte[] _zoneCountRead = [], _zoneCountWrite = [];
+    readonly AttackZoneLists _zones = new();
 
-    /// <summary>
-    /// Whether <paramref name="defender"/> is in <paramref name="attacker"/>'s attack zone list (<c>FUN_140608460</c>), as of the last tick.
-    /// </summary>
-    bool InZone(int attacker, int defender)
-    {
-        int at = attacker * ZoneCapacity;
-        for (int n = 0; n < _zoneCountRead[attacker]; n++)
-            if (_zoneRead[at + n] == defender) return true;
-
-        return false;
-    }
+    #region Attack zone
 
     /// <summary>
     /// Builds fighter <paramref name="i"/>'s attack zone list for blow <paramref name="blow"/> (its own slot of the write buffer: partition-safe).
     /// </summary>
-    void RecordZone(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow) =>
-        Keep(i, Scan(world, i, s, cold, tech, blow));
-
-    void Keep(int i, in ZoneScan scan)
+    void RecordZone(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow)
     {
-        int at = i * ZoneCapacity;
-        for (int n = 0; n < scan.Count; n++) _zoneWrite[at + n] = scan.Slots[n];
-
-        _zoneCountWrite[i] = (byte)scan.Count;
+        var scan = Scan(world, i, s, cold, tech, blow);
+        _zones.Keep(i, in scan.Slots, scan.Count);
     }
-
-    void ResizeZones(int size)
-    {
-        Array.Resize(ref _zoneRead, size * ZoneCapacity);
-        Array.Resize(ref _zoneWrite, size * ZoneCapacity);
-        Array.Resize(ref _zoneCountRead, size);
-        Array.Resize(ref _zoneCountWrite, size);
-    }
-
-    void CopyZones(int highWater)
-    {
-        Array.Copy(_zoneRead, _zoneWrite, highWater * ZoneCapacity);
-        Array.Copy(_zoneCountRead, _zoneCountWrite, highWater);
-    }
-
-    void SwapZones()
-    {
-        (_zoneRead, _zoneWrite) = (_zoneWrite, _zoneRead);
-        (_zoneCountRead, _zoneCountWrite) = (_zoneCountWrite, _zoneCountRead);
-    }
-
-    void HashZone(ref StateHasher hasher, int i)
-    {
-        hasher.Add(_zoneCountRead[i]);
-        for (int n = 0; n < _zoneCountRead[i]; n++) hasher.Add(_zoneRead[i * ZoneCapacity + n]);
-    }
-
-    #endregion
-
-    #region Attack zone
 
     /// <summary>
     /// Emits blow <paramref name="blow"/> of fighter <paramref name="i"/>'s attack to everyone in its attack zone (<b>Verified</b>,
@@ -130,7 +86,7 @@ public sealed partial class CombatSystem
     void Strike(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow, EffectBuffer effects)
     {
         var scan = Scan(world, i, s, cold, tech, blow);
-        Keep(i, in scan);
+        _zones.Keep(i, in scan.Slots, scan.Count);
         int hits = Math.Min(scan.Count, Math.Max(1, tech.MaxSimultaneousHits));
         for (int n = 0; n < hits; n++)
             effects.Emit(i, scan.Slots[n], BlowEffect, s.AttackSeq, new Vector3(s.AttackTech, 0, 0), blow);
