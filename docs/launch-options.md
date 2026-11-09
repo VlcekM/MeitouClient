@@ -288,8 +288,8 @@ These have no user-facing docs; options are from their top-level argument loops.
 | `MEITOU_OBJECT_LOD_CACHE` | `src/Meitou.Game/Rendering/Objects/ObjectLodGen.cs` | Folder for the object LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
 | `MEITOU_CHARACTER_LOD_CACHE` | `src/Meitou.Game/Rendering/Characters/CharacterContent.cs` | Folder for the character LOD cache (default under `%LOCALAPPDATA%\Meitou`). |
 | `MEITOU_IMPOSTOR_CACHE` | `src/Meitou.Game/Rendering/Impostors/ImpostorCache.cs` | Impostor cache folder. |
-| `MEITOU_SSAO_STAMPS` | `src/Meitou.Game/Rendering/Post/PostProcess.cs` | `1`: GPU timestamps around the SSAO pass (diagnostic). |
-| `MEITOU_SHAFT_STAMPS` | `src/Meitou.Game/Rendering/Post/PostProcess.Shafts.cs` | `1`: GPU timestamps around the light-shaft pass (diagnostic). |
+| `MEITOU_SSAO_STAMPS` | `src/Meitou.Game/Rendering/Post/AmbientOcclusion.cs` | `1`: GPU timestamps around the SSAO pass (diagnostic). |
+| `MEITOU_SHAFT_STAMPS` | `src/Meitou.Game/Rendering/Post/LightShafts.cs` | `1`: GPU timestamps around the light-shaft pass (diagnostic). |
 | `MEITOU_UPSCALER_LOG` | `src/Meitou.Game/Rendering/Upscalers/Streamline.cs`, `FsrUpscaler.cs` | `1`: log upscaler info (errors are always logged). |
 | `MEITOU_DLSS_PATH` | `src/Meitou.Game/Rendering/Upscalers/VendorUpscalers.cs` | Folder of the DLSS runtime: the Streamline DLLs on Windows, the DLSS model and `libmeitou_ngx.so` on Linux. |
 | `MEITOU_STREAMLINE_PATH` | `src/Meitou.Game/Rendering/Upscalers/VendorUpscalers.cs` | Older name of `MEITOU_DLSS_PATH`, read when that is unset. |

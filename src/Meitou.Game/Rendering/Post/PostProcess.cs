@@ -31,7 +31,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped minification).
     /// </summary>
-    sealed class Target2D(GpuTexture texture, TextureMinFilter min, TextureMagFilter mag)
+    internal sealed class Target2D(GpuTexture texture, TextureMinFilter min, TextureMagFilter mag)
     {
         public readonly GpuTexture Texture = texture;
         public readonly TextureMinFilter Min = min;
@@ -92,7 +92,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     Target2D? _giAlbedo, _giLow;
     int _giDivisor;
     long _frameIndex;
-    Target2D? _aoA, _aoB, _aoMask;
     Target2D? _ldr, _ldrFxaa;   // the composite's LDR picture that FXAA or the heat haze reads, and FXAA's (or SMAA's) when the heat haze follows it
     Target2D? _smaaEdges, _smaaWeights;   // SMAA's edges and blending weights
     GpuTexture? _flowTexture, _perturbationTexture;   // the heat haze's FlowHAZE.dds and Perturber.dds (null: not found, no heat haze)
@@ -103,9 +102,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
     // The native full-screen passes (docs/renderer-native.md 7.1, wave 3 agent E, step P): the same SPIR-V and layout as the GL programs they
     // replaced. Since phase 8 stage 2 each draws in a rendering of its own (8.6). Every handle is resolved once, here.
-    readonly SsaoPass _ssao;
-    readonly SsaoMaskPass _ssaoMask;
-    readonly BlurPass _blur;
     readonly LuminancePass _luminancePass;
     readonly AdaptPass _adaptPass;
     readonly CompositePass _compositePass;
@@ -125,27 +121,23 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     AoApplyPass? _aoApplyPass;   // made the first time the occlusion goes onto the scene before the particles (ApplySsao)
 
     /// <summary>
+    /// The SSAO's passes and half-size targets (<see cref="RunSsao"/>).
+    /// </summary>
+    readonly AmbientOcclusion _occlusion;
+
+    /// <summary>
+    /// The light shafts' grid, atlases and passes (<see cref="RunLightShafts"/>).
+    /// </summary>
+    readonly LightShafts _shafts;
+
+    /// <summary>
     /// One native full-screen program: the shared vertex shader with a fragment shader, and its resolved handles.
     /// </summary>
-    abstract class FullscreenProgram
+    internal abstract class FullscreenProgram
     {
         public readonly LegacyProgram P;
         protected FullscreenProgram(GpuContext gpu, string fragment, string name) => P = LegacyProgram.Create(gpu, PostProcessShaders.Vertex,
             fragment, name);
-    }
-
-    sealed class SsaoMaskPass : FullscreenProgram
-    {
-        public readonly SamplerSlot Scene;
-        public SsaoMaskPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoMask, "post ssao mask") => Scene = P.Sampler("uScene");
-    }
-
-    sealed class BlurPass : FullscreenProgram
-    {
-        public readonly SamplerSlot Ao, Mask;
-        public readonly UniformHandle Step, CharacterAo;
-        public BlurPass(GpuContext gpu) : base(gpu, PostProcessShaders.SsaoBlur, "post ssao blur") =>
-            (Ao, Mask, Step, CharacterAo) = (P.Sampler("uAo"), P.Sampler("uMask"), P.Uniform("uStep"), P.Uniform("uCharacterAo"));
     }
 
     /// <summary>
@@ -276,20 +268,6 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (Colour, Motion, History) = (P.Sampler("uColour"), P.Sampler("uMotion"), P.Sampler("uHistory"));
             (RenderSize, DisplaySize, Jitter, Blend, Reset) = (P.Uniform("uRenderSize"), P.Uniform("uDisplaySize"), P.Uniform("uJitter"),
                 P.Uniform("uBlend"), P.Uniform("uReset"));
-        }
-    }
-
-    sealed class SsaoPass : FullscreenProgram
-    {
-        public readonly SamplerSlot Depth, Mask;
-        public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY;
-        public SsaoPass(GpuContext gpu) : base(gpu, PostProcessShaders.Ssao, "post ssao")
-        {
-            (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"),
-                P.Uniform("uWaterY"));
-            (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
-                P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
-            (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
         }
     }
 
@@ -435,8 +413,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         Gpu = gpu;
         Options = options;
-        (_ssao, _blur, _luminancePass, _adaptPass) = (new SsaoPass(gpu), new BlurPass(gpu), new LuminancePass(gpu), new AdaptPass(gpu));
-        _ssaoMask = new SsaoMaskPass(gpu);
+        var (ssao, blur) = (new AmbientOcclusion.SsaoPass(gpu), new AmbientOcclusion.BlurPass(gpu));
+        (_luminancePass, _adaptPass) = (new LuminancePass(gpu), new AdaptPass(gpu));
+        _occlusion = new AmbientOcclusion(this, ssao, blur, new AmbientOcclusion.SsaoMaskPass(gpu));
         (_compositePass, _fxaaPass, _hazePass) = (new CompositePass(gpu), new FxaaPass(gpu), new HeatHazePass(gpu));
         _smaaPasses = new SmaaPasses(gpu);
         (_velocityPass, _taaPass, _fogPass) = (new VelocityPass(gpu), new TaaPass(gpu), new FogPass(gpu));
@@ -444,15 +423,16 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         (_particleDepthPass, _particleCompositePass, _particleCoveragePass) = (new ParticleDepthPass(gpu), new ParticleCompositePass(gpu),
             new ParticleCoveragePass(gpu));
         _particleSoftDepthPass = new ParticleSoftDepthPass(gpu);
+        _shafts = new LightShafts(this);
     }
 
     // ---- targets ----
 
     IEnumerable<Target2D> Targets() =>
-        new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _aoA, _aoB, _aoMask, _ldr, _ldrFxaa, _smaaEdges,
-                _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth, _lowTargets[0].Soft, _lowTargets[1].Accum,
-                _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _rateDistance, _rateImage, _neutralRate, _giAlbedo, _giLow, _shaftInjected,
-                _shaftLight, _shaftScatter, _shaftRaw, _shaftHistory }.OfType<Target2D>();
+        new[] { _sceneColour, _sceneDepth, _motion, _upscaleDepth, _reactive, _historyA, _historyB, _occlusion.A, _occlusion.B, _occlusion.Mask,
+                _ldr, _ldrFxaa, _smaaEdges, _smaaWeights, _luminance, _adaptA, _adaptB, _lowTargets[0].Accum, _lowTargets[0].Depth,
+                _lowTargets[0].Soft, _lowTargets[1].Accum, _lowTargets[1].Depth, _lowTargets[1].Soft, _softDepth, _rateDistance, _rateImage,
+                _neutralRate, _giAlbedo, _giLow, _shafts.Injected, _shafts.Light, _shafts.Scatter, _shafts.Raw, _shafts.History }.OfType<Target2D>();
 
     void Free()
     {
@@ -460,11 +440,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         foreach (var t in Targets()) t.Texture.Dispose();   // released after the frames in flight
         _sceneColour = _sceneDepth = _motion = _upscaleDepth = _reactive = _historyA = _historyB = _rateDistance = _rateImage = _neutralRate = null;
         _rateBuiltFrame = long.MinValue;
-        _aoA = _aoB = _aoMask = _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
+        _occlusion.Free();
+        _ldr = _ldrFxaa = _smaaEdges = _smaaWeights = _luminance = _adaptA = _adaptB = null;
         foreach (var l in _lowTargets) l.Accum = l.Depth = l.Soft = null;
-        _giAlbedo = _giLow = _shaftInjected = _shaftLight = _shaftScatter = _shaftRaw = _shaftHistory = _softDepth = null;
+        _giAlbedo = _giLow = _softDepth = null;
+        _shafts.Free();
         FreeBloom();
-        _adaptedValid = _historyValid = _shaftHistoryValid = _softDepthReady = false;
+        _adaptedValid = _historyValid = _softDepthReady = false;
         _adaptedFrames = 0;
     }
 
@@ -474,7 +456,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// Whether the device can make <paramref name="format"/> a storage image (VkGl gave its float colour textures storage use, which the vendor
     /// upscalers write with).
     /// </summary>
-    bool SupportsStorage(InternalFormat format)
+    internal bool SupportsStorage(InternalFormat format)
     {
         if (!_storageSupport.TryGetValue(format, out bool ok))
         {
@@ -488,7 +470,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// A target of a GL internal format (the format VkGl made of it), with the uses VkGl's image had, one level unless asked.
     /// </summary>
-    Target2D Make(IGpuUploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1)
+    internal Target2D Make(IGpuUploadBatch batch, int w, int h, InternalFormat glFormat, TextureMinFilter min, string name, int levels = 1)
     {
         var use = TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst | (GlConventions.IsDepthFormat(glFormat) ? TextureUse.DepthTarget : TextureUse.ColourTarget);
         if (glFormat is InternalFormat.Rgba16F or InternalFormat.R32F or InternalFormat.Rg16F or InternalFormat.Rg32F && SupportsStorage(glFormat)) use |= TextureUse.Storage;
@@ -547,9 +529,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 
             // The LDR, FXAA and SMAA targets are made when a frame first needs them (MakeLdrTargets).
             int hw = Math.Max((w + 1) / 2, 1), hh = Math.Max((h + 1) / 2, 1);
-            _aoA = Make(batch, hw, hh, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
-            _aoB = Make(batch, hw, hh, InternalFormat.Rg16F, TextureMinFilter.Linear, "post ssao");
-            _aoMask = Make(batch, hw, hh, InternalFormat.R8, TextureMinFilter.Linear, "post ssao mask");
+            _occlusion.Allocate(batch, hw, hh);
 
             // Exposure runs after the upscaler, at the display size: the luminance's whole mip chain (GL's, defined by GenerateMipmap), read
             // mipmapped.
@@ -565,7 +545,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// A timestamp at this point of the frame: into the open segment, or interleaved into the frame (VkGl's pass is not ended).
     /// </summary>
-    void Stamp(string name)
+    internal void Stamp(string name)
     {
         var set = _stamps;
         if (set is null || set.Count >= MaxStamps) return;
@@ -782,6 +762,66 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     readonly System.Diagnostics.Stopwatch _frameClock = new();
 
     /// <summary>
+    /// This frame's view rotation (<see cref="SetCamera"/>), for the passes kept in classes of their own.
+    /// </summary>
+    internal Matrix4x4 ViewRotation => _viewRotation;
+
+    /// <summary>
+    /// This frame's eye (<see cref="SetCamera"/>).
+    /// </summary>
+    internal Vector3 EyeNow => _eyeNow;
+
+    /// <summary>
+    /// This frame's vertical field of view (<see cref="SetCamera"/>).
+    /// </summary>
+    internal float FovNow => _fovNow;
+
+    /// <summary>
+    /// This frame's aspect ratio (<see cref="SetCamera"/>).
+    /// </summary>
+    internal float AspectNow => _aspectNow;
+
+    /// <summary>
+    /// The scene's depth planes as the passes rebuild distance from depth.
+    /// </summary>
+    internal Vector2 Planes => _planes;
+
+    /// <summary>
+    /// The scene projection's near plane (<see cref="BeginScene"/>).
+    /// </summary>
+    internal float NearPlane => _nearPlane;
+
+    /// <summary>
+    /// The scene projection's far plane (<see cref="BeginScene"/>).
+    /// </summary>
+    internal float FarPlane => _farPlane;
+
+    /// <summary>
+    /// The scene projection's vertical field of view (<see cref="BeginScene"/>).
+    /// </summary>
+    internal float FovY => _fovY;
+
+    /// <summary>
+    /// The scene projection's aspect ratio (<see cref="BeginScene"/>).
+    /// </summary>
+    internal float Aspect => _aspect;
+
+    /// <summary>
+    /// Whether a scene was drawn this frame (<see cref="BeginScene"/>).
+    /// </summary>
+    internal bool HaveScene => _haveScene;
+
+    /// <summary>
+    /// The scene colour target (null before the targets are made).
+    /// </summary>
+    internal Target2D? SceneColourTarget => _sceneColour;
+
+    /// <summary>
+    /// The scene depth target (null before the targets are made).
+    /// </summary>
+    internal Target2D? SceneDepthTarget => _sceneDepth;
+
+    /// <summary>
     /// The main camera of this frame, before <see cref="BeginScene"/>: for the motion vectors (reprojection into the previous frame).
     /// </summary>
     public void SetCamera(Vector3 eye, Matrix4x4 view, float fieldOfView, float aspectRatio)
@@ -824,12 +864,12 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// The open native segment of the chain (one is begun when none is open: VkGl's pass ends, a full barrier is placed).
     /// </summary>
-    IGpuCommandList Segment() => _segment ??= Gpu.BeginNative("post");
+    internal IGpuCommandList Segment() => _segment ??= Gpu.BeginNative("post");
 
     /// <summary>
     /// Ends the open segment (before anything that records through VkGl: the vendor upscalers, the grass-motion guest).
     /// </summary>
-    void CloseSegment()
+    internal void CloseSegment()
     {
         if (_segment is null) return;
         Gpu.EndNative(_segment);
@@ -842,11 +882,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     readonly Dictionary<(LegacyProgram, InternalFormat, InternalFormat, DrawState), GpuPipeline> _pipelines = [];
 
-    void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width,
+    internal void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width,
         target.Height);
 
-    void Draw(LegacyProgram p, RenderTarget colour, InternalFormat format, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight,
-        DrawState? state = null)
+    internal void Draw(LegacyProgram p, RenderTarget colour, InternalFormat format, int targetWidth, int targetHeight, int viewportWidth,
+        int viewportHeight, DrawState? state = null)
     {
         DrawPass(p, colour, format, default, InternalFormat.None, targetWidth, targetHeight, viewportWidth, viewportHeight, state);
     }
@@ -892,7 +932,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// <summary>
     /// Binds a target (null: the stand-in VkGl bound for nothing). Call where the GL code bound the unit: the sampler depends on the LOD bias then.
     /// </summary>
-    void Bind(LegacyProgram p, SamplerSlot slot, Target2D? target)
+    internal void Bind(LegacyProgram p, SamplerSlot slot, Target2D? target)
     {
         if (slot.IsValid) p.Bind(slot, target is null ? Gpu.Dummy(p.SamplerInfo(slot)) : Sampled(target));
     }
@@ -909,7 +949,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         var final = PassTargets.Of(Target ?? throw new InvalidOperationException("PostProcess.Target is not set"), null);
         bool needDepth = o.Ssao && _haveScene;
         // a caller that drew the layers without ApplySsao: the occlusion stays the composite's
-        if (_shaftsPending || _fogPending) ApplyLayers(false);
+        if (_shafts.Pending || _fogPending) ApplyLayers(false);
 
         bool ao = needDepth;
         if (ao && !_aoApplied) RunSsao();
@@ -931,7 +971,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         bool haze = HeatHazeRuns && (!(fxaa || smaa) || _ldrFxaa is not null);
         var c = _compositePass;
         Bind(c.P, c.Scene, _postColour);
-        Bind(c.P, c.Ao, _aoB);
+        Bind(c.P, c.Ao, _occlusion.B);
         Bind(c.P, c.Adapted, auto ? _adaptB : null);
 
         // Without an upscaler the scene may still be smaller than the display (the render scale): the composite then resamples it (Catmull-Rom).
@@ -1057,11 +1097,34 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// </summary>
     public void MarkParticleDraws() => Stamp("particle draws");
 
+    // ---- light shafts (LightShafts) ----
+
+    /// <summary>
+    /// The light shafts' scan kernel (<see cref="LightShafts.Scan"/>; <c>--ab shafts-scan</c>).
+    /// </summary>
+    public bool ShaftScan { get => _shafts.Scan; set => _shafts.Scan = value; }
+
+    /// <summary>
+    /// Whether the device can run the light shafts' scan kernel (<see cref="LightShafts.ScanSupported"/>).
+    /// </summary>
+    public bool ShaftScanSupported => _shafts.ScanSupported;
+
+    /// <summary>
+    /// What the light shafts did in the last frame (the stats line).
+    /// </summary>
+    public string ShaftsDescribe => _shafts.Describe;
+
+    /// <summary>
+    /// Darkens the haze where the sun is shadowed along the view ray (<see cref="LightShafts.Run"/>; call after the GI resolve, before
+    /// <see cref="RunFogVolumes"/>).
+    /// </summary>
+    public void RunLightShafts(float darkening, float far, float groundY, float airByTime = 1) => _shafts.Run(darkening, far, groundY, airByTime);
+
     /// <summary>
     /// Blends the volumes' accumulated (colour, transmittance) over the scene: source one, destination the source alpha; red, green and
     /// blue only, so the alpha (the characters' SSAO mask) stays.
     /// </summary>
-    static readonly DrawState FogState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
+    internal static readonly DrawState FogState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
         ColourMask = DrawState.Rgb };
 
     /// <summary>
@@ -1077,7 +1140,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         if (MergeLayers)
         {
             PrepareFogLayer();
-            _shaftFrame.Darkening = 0;
+            _shafts.Frame.Darkening = 0;
             Stamp("fog");
             CloseSegment();
             return;
@@ -1094,16 +1157,16 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         f.P.Set(f.WaterY, WaterHeight ?? float.MinValue);
 
         // The light shafts' grid of this frame, if they ran (darkening 0: the volumes as the game draws them).
-        var shaft = _shaftFrame;
-        Bind(f.P, f.ShaftInjected, shaft.Darkening > 0 ? _shaftInjected : null);
+        var shaft = _shafts.Frame;
+        Bind(f.P, f.ShaftInjected, shaft.Darkening > 0 ? _shafts.Injected : null);
         f.P.Set(f.ShaftGrid, shaft.Grid);
         f.P.Set(f.ShaftRange, shaft.Range);
         f.P.Set(f.ShaftTan, shaft.Tan);
         f.P.Set(f.ShaftRight, r.M11, r.M21, r.M31);
         f.P.Set(f.ShaftUp, r.M12, r.M22, r.M32);
         f.P.Set(f.ShaftBack, r.M13, r.M23, r.M33);
-        f.P.Set(f.ShaftFog, shaft.Darkening, _shaftInjected?.Width ?? 1, _shaftInjected?.Height ?? 1, 0);
-        _shaftFrame.Darkening = 0;   // the next frame sets it again if the shafts run
+        f.P.Set(f.ShaftFog, shaft.Darkening, _shafts.Injected?.Width ?? 1, _shafts.Injected?.Height ?? 1, 0);
+        _shafts.Frame.Darkening = 0;   // the next frame sets it again if the shafts run
         f.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
         Draw(f.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, FogState);
         Stamp("fog");
@@ -1130,13 +1193,13 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         MarkScene();
         if (MergeLayers)
         {
-            ApplyLayers(Options.Ssao && _haveScene && _sceneColour is not null && _aoA is not null);
+            ApplyLayers(Options.Ssao && _haveScene && _sceneColour is not null && _occlusion.A is not null);
             return;
         }
-        if (!Options.Ssao || !_haveScene || _sceneColour is null || _aoA is null) return;
+        if (!Options.Ssao || !_haveScene || _sceneColour is null || _occlusion.A is null) return;
         RunSsao();
         var p = _aoApplyPass ??= new AoApplyPass(Gpu);
-        Bind(p.P, p.Ao, _aoB);
+        Bind(p.P, p.Ao, _occlusion.B);
         Draw(p.P, _sceneColour.Attachment, _sceneColour.Format, _width, _height, _width, _height, AoMultiplyState);
         Stamp("ssao");
         CloseSegment();
@@ -1676,77 +1739,19 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     }
 
     /// <summary>
-    /// Whether any character was drawn into the scene this frame (set by the world frame after the scene's characters): none means the scene colour's
-    /// alpha, the SSAO's character mask, is 0 everywhere, so with <see cref="MaskSkip"/> the blur does not read it.
+    /// Whether any character was drawn into the scene this frame (<see cref="AmbientOcclusion.CharactersDrawn"/>).
     /// </summary>
-    public bool CharactersDrawn { get; set; } = true;
+    public bool CharactersDrawn { get => _occlusion.CharactersDrawn; set => _occlusion.CharactersDrawn = value; }
+
     /// <summary>
-    /// Meitou: the SSAO blur's read of the character mask left out when no character was drawn (<c>--ab ssao-mask-skip</c>).
+    /// Meitou: the SSAO blur's read of the character mask left out when no character was drawn (<see cref="AmbientOcclusion.MaskSkip"/>).
     /// </summary>
-    public bool MaskSkip { get; set; } = true;
+    public bool MaskSkip { get => _occlusion.MaskSkip; set => _occlusion.MaskSkip = value; }
 
-    static readonly bool SsaoStamps = Environment.GetEnvironmentVariable("MEITOU_SSAO_STAMPS") == "1";
-
-    void RunSsao()
-    {
-        var a = _aoA!; var b = _aoB!;
-        float tanY = MathF.Tan(_fovY * 0.5f);
-        var s = _ssao;
-        Bind(s.P, s.Depth, _sceneDepth);
-
-        // Characters count less as occluders (the mask, as the blur's below): a body lying on the ground darkened a halo round it as wide as itself.
-        bool characters = _sceneColour is not null && (CharactersDrawn || !MaskSkip);
-        if (characters)
-        {
-            // The characters' mask at this half size first (PostProcessShaders.SsaoMask): the taps below read it instead of the scene colour.
-            Bind(_ssaoMask.P, _ssaoMask.Scene, _sceneColour);
-            Draw(_ssaoMask.P, _aoMask!);
-        }
-        Bind(s.P, s.Mask, characters ? _aoMask : null);
-        s.P.Set(s.CharacterOccluder, characters ? PostOptions.SsaoCharacterOccluder : 1f);
-        s.P.Set(s.Tan, ViewWindow.Tan(tanY * _aspect, tanY));
-        s.P.Set(s.NearFar, _nearPlane, _farPlane);
-        s.P.Set(s.Size, (float)_width, (float)_height);
-        s.P.Set(s.Radius, PostOptions.SsaoRadius);
-        s.P.Set(s.Strength, PostOptions.SsaoStrength);
-
-        // Fade out with distance: the occlusion is a detail effect, and far geometry is hazy and has little depth precision.
-        s.P.Set(s.FadeStart, PostOptions.SsaoFadeStart);
-        s.P.Set(s.FadeEnd, PostOptions.SsaoFadeEnd);
-
-        // The air in front of each surface (haze, weather fog, fog volumes) hides its occlusion: the shader evaluates it at the world position
-        // rebuilt from depth.
-        var r = _viewRotation;
-        s.P.Set(s.Right, r.M11, r.M21, r.M31);
-        s.P.Set(s.Up, r.M12, r.M22, r.M32);
-        s.P.Set(s.Back, ViewWindow.BackFor(r, _fovY, _aspect));
-        s.P.Set(s.Eye, _eyeNow.X, _eyeNow.Y, _eyeNow.Z);
-        s.P.Set(s.WaterY, WaterHeight ?? float.MinValue);   // the floor's occlusion fades under the water, which writes no depth
-        s.P.ApplyGlobals();   // the atmosphere's and the fog volumes' uniforms, through the frame globals
-        Draw(s.P, a);
-        if (SsaoStamps) Stamp("ssao gen");
-
-        var bl = _blur;
-        Bind(bl.P, bl.Ao, a);
-        Bind(bl.P, bl.Mask, null);
-        bl.P.Set(bl.Step, 1f / a.Width, 0f);
-        bl.P.Set(bl.CharacterAo, 1f);
-        Draw(bl.P, b);
-        if (SsaoStamps) Stamp("ssao blur x");
-
-        // The second pass also takes the occlusion off the characters' pixels (the scene colour's alpha; only they write it), by
-        // SsaoCharacterStrength.
-        bool mask = _sceneColour is not null && (CharactersDrawn || !MaskSkip);
-        Bind(bl.P, bl.Ao, b);
-        Bind(bl.P, bl.Mask, mask ? _sceneColour : null);
-        bl.P.Set(bl.Step, 0f, 1f / a.Height);
-        bl.P.Set(bl.CharacterAo, mask ? PostOptions.SsaoCharacterStrength : 1f);
-        Draw(bl.P, a);
-        if (SsaoStamps) Stamp("ssao blur y");
-
-        // The composite reads aoB: swap so the finished result is there.
-        (_aoA, _aoB) = (_aoB, _aoA);
-    }
+    /// <summary>
+    /// The SSAO of this frame (<see cref="AmbientOcclusion.Run"/>).
+    /// </summary>
+    void RunSsao() => _occlusion.Run();
 
     // ---- heat haze ----
 
@@ -1879,7 +1884,11 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// Forgets what the temporal passes kept (the upscaler's history, the shafts' history, the previous camera): the next frame starts afresh. A
     /// tiled screenshot calls it between tiles.
     /// </summary>
-    public void ResetHistory() => (_historyValid, _previousValid, _shaftHistoryValid) = (false, false, false);
+    public void ResetHistory()
+    {
+        (_historyValid, _previousValid) = (false, false);
+        _shafts.ResetHistory();
+    }
 
     /// <summary>
     /// Pins the adapted luminance to <paramref name="adapted"/> for the next <paramref name="frames"/> exposure passes (the band collapses to it), so
@@ -1952,14 +1961,15 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         External?.Dispose();
         Free();
         DisposeShadingRate();
-        DisposeShafts();
+        _shafts.Dispose();
         DisposeSceneLayers();
         DisposeLateParticles();
         DisposeMerged();
         DisposeUpscaleExposure();
         DisposeBloom();
         Hiz?.Dispose();
-        foreach (var p in new FullscreenProgram[] { _ssao, _ssaoMask, _blur, _luminancePass, _adaptPass, _compositePass, _fxaaPass, _hazePass,
+        _occlusion.Dispose();
+        foreach (var p in new FullscreenProgram[] { _luminancePass, _adaptPass, _compositePass, _fxaaPass, _hazePass,
                 _velocityPass, _cloudMotionPass, _taaPass, _fogPass, _particleDepthPass, _particleSoftDepthPass, _particleCompositePass,
                 _particleCoveragePass }) p.P.Dispose();
         _smaaPasses.Dispose();

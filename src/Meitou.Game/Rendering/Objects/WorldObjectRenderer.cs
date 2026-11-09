@@ -35,6 +35,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// </summary>
     public IGpuContext Gpu { get; }
     readonly NativeFrame _nativeFrame;
+    readonly AssetLocator _assets;
     // the colour, the colour without a discard (EarlyDepth) and the depth (shadow caster) programs, native
     readonly ObjProg _colourProg, _solidProg, _depthProg;
     readonly WorldTextureCache _textureCache;
@@ -139,6 +140,9 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         _meshes = new ObjectMeshCache(gpu, assets, _uploads);
         _meshes.Unloaded = gpu => { _unloadedMeshes.Add(gpu); RemoveBatches(gpu); };
         _streamer = new ObjectStreamer(objects, _meshes);
+        Doors = new DoorPoses(this);
+        Joints = new JointPoses(Rotors);
+        Farms = new FarmPlants(_streamer);
         if (landmarks)
         {
             _landmarkClass = new LandmarkClass(assets);
@@ -157,6 +161,26 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         foreach (var t in objects.DistantTowns)
             _towns.Add(new TownDraw { Town = t, Mesh = _meshes.Get(t.MeshPath, distant: true), Centre = t.Position });
     }
+
+    /// <summary>
+    /// The doors' open amounts and the door parts' poses.
+    /// </summary>
+    internal DoorPoses Doors { get; }
+
+    /// <summary>
+    /// The parts that turn by themselves; the host advances them once a frame.
+    /// </summary>
+    public RotatingParts Rotors { get; } = new();
+
+    /// <summary>
+    /// The turrets' turns and the poses of the parts with joints (turrets and rotating parts).
+    /// </summary>
+    internal JointPoses Joints { get; }
+
+    /// <summary>
+    /// The crops of the player's farms.
+    /// </summary>
+    internal FarmPlants Farms { get; }
 
     /// <summary>
     /// Interactive use (non-zero): bounded upload work per frame. 0 (screenshots): no limit.
@@ -835,8 +859,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         }
         inst.Gpu = gpu;
         inst.Centre = centre;
-        inst.DoorOpen = -1;   // a door part is posed again from its placement (PoseDoor)
-        inst.TurretStamp = -1;   // a turret part is posed again (PoseTurret)
+        inst.DoorOpen = -1;   // a door part is posed again from its placement (DoorPoses.Pose)
+        inst.TurretStamp = -1;   // a turret part is posed again (JointPoses.Pose)
         inst.Radius = radius;
         inst.Limit = inst.Placed.Kind == PlacedKind.BuildingPart
             ? ObjectRanges.PartRenderingDistance(gpu.Radius, inst.Placed.Owner.GetInt("function"), ObjectRanges.ObjectsViewRange)
@@ -1213,6 +1237,20 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
+    /// The top of a mesh (its bounds' maximum y), from its file's bounds chunk; 0 when not found.
+    /// </summary>
+    public float MeshTop(string meshPath) => MeshBounds(meshPath).Item2.Y;
+
+    /// <summary>
+    /// A mesh's local bounds from its file's bounds chunk (empty when the file is not found).
+    /// </summary>
+    (Vector3, Vector3) MeshBounds(string name)
+    {
+        var path = _assets.Find(name) ?? _assets.Find(Path.GetFileName(name.Replace('\\', '/')));
+        return path is not null && OgreMeshReader.TryReadBounds(path, out var b) && b.Max.X >= b.Min.X ? (b.Min, b.Max) : default;
+    }
+
+    /// <summary>
     /// Finds a file a record names (an install-relative path, or a bare name the asset locator knows), or null.
     /// </summary>
     internal string? FindRecordFile(string recordPath) =>
@@ -1320,7 +1358,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         }
 
         // The crops of the player's farms: drawn as real objects, in the shadow passes too.
-        if (_farmSlots.Count > 0 && !_landmarksOnly) DrawFarms(real, eye, frustum, options, now);
+        if (Farms.Count > 0 && !_landmarksOnly) DrawFarms(real, eye, frustum, options, now);
 
         // The placement ghost (Build mode): its parts at the cursor, dithered and tinted green or red; not in a shadow or the landmarks-only pass.
         if (_ghostsDrawn && !_depthPass && !_landmarksOnly) DrawGhosts(eye, frustum, now);
@@ -1405,8 +1443,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // A shadow pass keeps what the floor view hides above the viewed floor, so a lower floor stays shaded under its ceiling
         // (docs/render-objects.md "Closed interiors"): only a closed building's interior parts stay out.
         if ((_depthPass ? OutsideHidden(inst.Placed) : InteriorHidden(inst.Placed) || StandsAbove(inst)) || ClosedAround(inst)) return;
-        if (inst.Placed.DoorIndex >= 0) PoseDoor(inst, gpu);
-        if (inst.Placed.Joints is not null) PoseJoints(inst, gpu);
+        if (inst.Placed.DoorIndex >= 0) Doors.Pose(inst, gpu);
+        if (inst.Placed.Joints is not null) Joints.Pose(inst, gpu);
         float value = Vector3.Distance(inst.Centre, eye) - inst.Radius;
         float limit = Math.Min(range, inst.Limit);
         if (value >= limit || !SphereVisible(frustum, inst.Centre, inst.Radius) || MirrorCull?.Invoke(inst.Centre,
@@ -1444,6 +1482,16 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     /// <summary>
+    /// The farms' shown plants, as real instances of <see cref="Draw"/>.
+    /// </summary>
+    void DrawFarms(float range, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, long now)
+    {
+        foreach (var slot in Farms.Slots)
+            for (int i = 0; i < slot.Instances.Count; i++)
+                if (slot.Shown[i]) DrawReal(_streamer.Loose, slot.Instances[i], range, eye, frustum, options, now);
+    }
+
+    /// <summary>
     /// Adds an instance at its LOD level (<see cref="AddLevels"/>).
     /// </summary>
     void Emit(ObjectStreamer.Instance inst, GpuObjectMesh gpu, float value, float weight) => Emit(inst, gpu, value, weight, value);
@@ -1465,7 +1513,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         m.M34 = (IndoorFurniture(inst) ? 1 : 0) + (!_depthPass && EmissiveDark is { } dark && dark(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId) ? 2 : 0);
 
         // Another spare component, M44: 1, or for a construction site BuildingLodShaders.ScaffoldBase + its look's f, or a negative packed tint
-        // (PackTint). A site's M34 also carries its part's mesh top and the scaffold tiling (BuildingLodShaders.PackSite).
+        // (FarmPlants.PackTint). A site's M34 also carries its part's mesh top and the scaffold tiling (BuildingLodShaders.PackSite).
         bool site = false;
         bool highlight = HighlightSigns && !_depthPass && !inst.Stand && inst.Placed.Owner.GetBool("is sign");
         if (_construction is { Count: > 0 } && !inst.Stand && _construction.TryGetValue(inst.Placed.ParentPlacementId ?? inst.Placed.PlacementId,

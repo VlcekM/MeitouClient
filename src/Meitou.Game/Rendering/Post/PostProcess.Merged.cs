@@ -40,9 +40,10 @@ public sealed unsafe partial class PostProcess
     bool _exposureStateZeroed;
     GpuSampler _pointSampler;
 
-    GpuSampler Point() => _pointSampler.Index != 0 ? _pointSampler : _pointSampler = Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest,
-        TextureMagFilter.Nearest,
-        TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
+    internal GpuSampler Point() => _pointSampler.Index != 0
+        ? _pointSampler
+        : _pointSampler = Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest, TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat, false, DepthFunction.Lequal, false, 1, false, 0));
 
     /// <summary>
     /// Whether the kernels can run: they write storage images (the formats of the motion, depth, reactivity and adaptation targets).

@@ -441,10 +441,10 @@ sealed class BuildingSync(GameHost host)
         var open = new Dictionary<(string Placement, int Door), float>(doors.Count);
         foreach (var (key, view) in doors)
             if (view.Open > 0) open[key] = view.Open;
-        objects.Doors = open.Count == 0 ? null : open;
+        objects.Doors.Open = open.Count == 0 ? null : open;
     }
 
-    // The parts that turn by themselves (WorldObjectRenderer.AdvanceRotors, docs/game/buildings-production.md "Rotating parts"): each frame the
+    // The parts that turn by themselves (RotatingParts.Advance, docs/game/buildings-production.md "Rotating parts"): each frame the
     // object renderer is told the scheduled wind and what each building's ROTATION_OUTPUT parts turn by, then moves them by the frame's game time
     // (real time x speed, 0 while paused). Display only.
     readonly Dictionary<string, float> _rotorOutputs = new(StringComparer.Ordinal);
@@ -464,13 +464,13 @@ sealed class BuildingSync(GameHost host)
         _unbuiltSites.Clear();
         foreach (var site in snapshot.Buildings)
             if (!site.Complete) _unbuiltSites.Add(site.Id);
-        objects.RotorOutput ??= RotorOutputOf;
-        objects.RotorUnbuilt ??= placed => _unbuiltSites.Contains(placed.PlacementId);
-        objects.RotorWind ??= (x, z) => host.Gpu.Weather?.World is { } weather ? weather.WindAt(x, z) : (0, Vector2.Zero);
+        objects.Rotors.Output ??= RotorOutputOf;
+        objects.Rotors.Unbuilt ??= placed => _unbuiltSites.Contains(placed.PlacementId);
+        objects.Rotors.Wind ??= (x, z) => host.Gpu.Weather?.World is { } weather ? weather.WindAt(x, z) : (0, Vector2.Zero);
         float real = _rotorClock.IsRunning ? (float)Math.Min(_rotorClock.Elapsed.TotalSeconds, 0.25) : 0;
         _rotorClock.Restart();
         var sim = host.Session.Simulation;
-        objects.AdvanceRotors(sim.IsPaused ? 0 : real * (float)sim.Speed);
+        objects.Rotors.Advance(sim.IsPaused ? 0 : real * (float)sim.Speed);
     }
 
     /// <summary>
@@ -493,7 +493,7 @@ sealed class BuildingSync(GameHost host)
         return share;
     }
 
-    // The turrets' turning parts from the snapshot to the object renderer (WorldObjectRenderer.Turrets, docs/simulation.md "Combat", turrets): a
+    // The turrets' turning parts from the snapshot to the object renderer (JointPoses.Turrets, docs/simulation.md "Combat", turrets): a
     // manned, simulated turret (MannedTurret.Angles) is drawn with its parts turned by the angles of the last two snapshots, interpolated by the
     // simulation's alpha. Display only. A turret keeps its last turn when its gunner leaves (the building keeps the turn, as the simulation's turret
     // does); a world change drops them all.
@@ -514,7 +514,7 @@ sealed class BuildingSync(GameHost host)
             _turretPosesWorld = host.Session.World;
             _turretPoses.Clear();
             _turretPoseMissing.Clear();
-            objects.Turrets = null;
+            objects.Joints.Turrets = null;
         }
         _previousTurretAngles.Clear();
         foreach (var c in host.Session.PreviousSnapshot.Characters)
@@ -545,6 +545,6 @@ sealed class BuildingSync(GameHost host)
             }
             if (changed) pose.Version++;
         }
-        if (added) objects.Turrets = new Dictionary<string, TurretPose>(_turretPoses, StringComparer.Ordinal);
+        if (added) objects.Joints.Turrets = new Dictionary<string, TurretPose>(_turretPoses, StringComparer.Ordinal);
     }
 }
