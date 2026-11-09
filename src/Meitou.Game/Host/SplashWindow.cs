@@ -9,15 +9,42 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed unsafe partial class SplashWindow : IDisposable
 {
+    /// <summary>
+    /// The splash window's size, pixels.
+    /// </summary>
     const int Width = 960, Height = 540;
+    /// <summary>
+    /// The thread that makes the window and runs its message loop.
+    /// </summary>
     readonly Thread _thread;
+    /// <summary>
+    /// Set once the window was made (or failed): the constructor waits for it, up to 2 s.
+    /// </summary>
     readonly ManualResetEventSlim _created = new();
+    /// <summary>
+    /// The splash window; 0 before it is made or once closed.
+    /// </summary>
     static nint s_window;
-    static byte[]? s_picture;   // BGRA, top row first
+    /// <summary>
+    /// The loading picture, BGRA, top row first; null until decoded (or without one).
+    /// </summary>
+    static byte[]? s_picture;
+    /// <summary>
+    /// The picture's size, pixels.
+    /// </summary>
     static int s_pictureWidth, s_pictureHeight;
+    /// <summary>
+    /// When the window was made (<c>Environment.TickCount64</c>), the spinner's clock.
+    /// </summary>
     static long s_started;
-    static nint s_font;   // the original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf), 0 when missing
+    /// <summary>
+    /// The original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf), 0 when missing.
+    /// </summary>
+    static nint s_font;
 
+    /// <summary>
+    /// Starts the splash thread and waits until its window was made (at most 2 s).
+    /// </summary>
     SplashWindow(string? picturePath, string? fontPath)
     {
         _thread = new Thread(() => Run(picturePath, fontPath)) { IsBackground = true, Name = "splash" };
@@ -52,12 +79,18 @@ sealed unsafe partial class SplashWindow : IDisposable
         }
     }
 
+    /// <summary>
+    /// The splash thread: loads the font, makes and shows the window centred on the screen, starts the 33 ms spinner timer, decodes the picture, then
+    /// runs the message loop until the window is closed.
+    /// </summary>
     void Run(string? picturePath, string? fontPath)
     {
         s_started = Environment.TickCount64;
         if (fontPath is not null && AddFontResourceExW(fontPath, 0x10 /* FR_PRIVATE */, 0) > 0)
+        {
             fixed (char* face = "Mailart Rubberstamp")
                 s_font = CreateFontW(-40, 0, 0, 0, 400, 0, 0, 0, 0, 0, 0, 4 /* ANTIALIASED_QUALITY */, 0, face);
+        }
         var instance = GetModuleHandleW(null);
         fixed (char* className = "MeitouSplash")
         fixed (char* title = "Meitou")
@@ -102,15 +135,26 @@ sealed unsafe partial class SplashWindow : IDisposable
         }
     }
 
+    /// <summary>
+    /// The window's procedure: WM_TIMER repaints, WM_ERASEBKGND is skipped, WM_PAINT paints, WM_DESTROY ends the loop.
+    /// </summary>
     [UnmanagedCallersOnly]
     static nint WndProc(nint hwnd, uint message, nint wParam, nint lParam)
     {
         switch (message)
         {
-            case 0x0113: InvalidateRect(hwnd, null, 0); return 0;   // WM_TIMER: the next spinner frame
-            case 0x0014: return 1;   // WM_ERASEBKGND: the whole window is painted
-            case 0x000F: Paint(hwnd); return 0;   // WM_PAINT
-            case 0x0002: KillTimer(hwnd, 1); PostQuitMessage(0); return 0;   // WM_DESTROY
+            case 0x0113:   // WM_TIMER: the next spinner frame
+                InvalidateRect(hwnd, null, 0);
+                return 0;
+            case 0x0014:   // WM_ERASEBKGND: the whole window is painted
+                return 1;
+            case 0x000F:   // WM_PAINT
+                Paint(hwnd);
+                return 0;
+            case 0x0002:   // WM_DESTROY
+                KillTimer(hwnd, 1);
+                PostQuitMessage(0);
+                return 0;
         }
         return DefWindowProcW(hwnd, message, wParam, lParam);
     }
@@ -181,6 +225,9 @@ sealed unsafe partial class SplashWindow : IDisposable
         EndPaint(hwnd, &ps);
     }
 
+    /// <summary>
+    /// A GDI <c>COLORREF</c>.
+    /// </summary>
     static uint Rgb(byte r, byte g, byte b) => r | (uint)g << 8 | (uint)b << 16;
 
     /// <summary>
@@ -202,82 +249,278 @@ sealed unsafe partial class SplashWindow : IDisposable
 
     // The Win32 structures keep the field names of the Windows headers.
 #pragma warning disable IDE1006
+    /// <summary>
+    /// Win32 <c>WNDCLASSEXW</c>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Wndclassexw
     {
+        /// <summary>
+        /// The structure's size and the class styles.
+        /// </summary>
         public uint cbSize, style;
+        /// <summary>
+        /// The window procedure.
+        /// </summary>
         public delegate* unmanaged<nint, uint, nint, nint, nint> lpfnWndProc;
+        /// <summary>
+        /// Extra bytes for the class and each window.
+        /// </summary>
         public int cbClsExtra, cbWndExtra;
+        /// <summary>
+        /// The module, icon, cursor and background brush.
+        /// </summary>
         public nint hInstance, hIcon, hCursor, hbrBackground;
+        /// <summary>
+        /// The menu and class names.
+        /// </summary>
         public char* lpszMenuName, lpszClassName;
+        /// <summary>
+        /// The small icon.
+        /// </summary>
         public nint hIconSm;
     }
 
+    /// <summary>
+    /// Win32 <c>MSG</c>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    struct Msg { public nint hwnd; public uint message; public nint wParam, lParam; public uint time; public int x, y; }
+    struct Msg
+    {
+        /// <summary>
+        /// The window the message is for.
+        /// </summary>
+        public nint hwnd;
+        /// <summary>
+        /// The message.
+        /// </summary>
+        public uint message;
+        /// <summary>
+        /// The message's parameters.
+        /// </summary>
+        public nint wParam, lParam;
+        /// <summary>
+        /// When it was posted.
+        /// </summary>
+        public uint time;
+        /// <summary>
+        /// The pointer then, screen pixels.
+        /// </summary>
+        public int x, y;
+    }
 
+    /// <summary>
+    /// Win32 <c>RECT</c>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    struct Rect { public int left, top, right, bottom; }
+    struct Rect
+    {
+        /// <summary>
+        /// The rectangle's edges, pixels.
+        /// </summary>
+        public int left, top, right, bottom;
+    }
 
+    /// <summary>
+    /// Win32 <c>PAINTSTRUCT</c>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Paintstruct
     {
+        /// <summary>
+        /// The device context to paint with.
+        /// </summary>
         public nint hdc;
+        /// <summary>
+        /// Whether the background must be erased.
+        /// </summary>
         public int fErase;
+        /// <summary>
+        /// The rectangle to paint.
+        /// </summary>
         public Rect rcPaint;
+        /// <summary>
+        /// Reserved for the system.
+        /// </summary>
         public int fRestore, fIncUpdate;
+        /// <summary>
+        /// Reserved for the system.
+        /// </summary>
         public fixed byte rgbReserved[32];
     }
 
+    /// <summary>
+    /// Win32 <c>BITMAPINFOHEADER</c>.
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     struct Bitmapinfoheader
     {
+        /// <summary>
+        /// The structure's size.
+        /// </summary>
         public uint biSize;
+        /// <summary>
+        /// The bitmap's size, pixels (a negative height: top row first).
+        /// </summary>
         public int biWidth, biHeight;
+        /// <summary>
+        /// Planes (1) and bits per pixel.
+        /// </summary>
         public ushort biPlanes, biBitCount;
+        /// <summary>
+        /// The compression and the image's size in bytes.
+        /// </summary>
         public uint biCompression, biSizeImage;
+        /// <summary>
+        /// The resolution, pixels per metre.
+        /// </summary>
         public int biXPelsPerMeter, biYPelsPerMeter;
+        /// <summary>
+        /// Colours used and important.
+        /// </summary>
         public uint biClrUsed, biClrImportant;
     }
 #pragma warning restore IDE1006
 
+    /// <summary>
+    /// kernel32 <c>GetModuleHandleW</c>: the handle of a loaded module (null: this program's).
+    /// </summary>
     [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial nint GetModuleHandleW(string? name);
+    /// <summary>
+    /// user32 <c>RegisterClassExW</c>: registers a window class.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial ushort RegisterClassExW(Wndclassexw* wc);
+    /// <summary>
+    /// user32 <c>CreateWindowExW</c>: makes a window.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial nint CreateWindowExW(uint exStyle, char* className, char* title, uint style, int x, int y,
         int w, int h, nint parent, nint menu, nint instance, void* param);
+    /// <summary>
+    /// user32 <c>DefWindowProcW</c>: the default handling of a window message.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial nint DefWindowProcW(nint hwnd, uint message, nint wParam, nint lParam);
+    /// <summary>
+    /// user32 <c>GetMessageW</c>: waits for the thread's next message; 0 after WM_QUIT.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int GetMessageW(Msg* msg, nint hwnd, uint min, uint max);
+    /// <summary>
+    /// user32 <c>TranslateMessage</c>: turns key messages into character messages.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int TranslateMessage(Msg* msg);
+    /// <summary>
+    /// user32 <c>DispatchMessageW</c>: hands a message to its window's procedure.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial nint DispatchMessageW(Msg* msg);
+    /// <summary>
+    /// user32 <c>PostQuitMessage</c>: ends the thread's message loop.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial void PostQuitMessage(int code);
+    /// <summary>
+    /// user32 <c>PostMessageW</c>: posts a message to a window's thread.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int PostMessageW(nint hwnd, uint message, nint wParam, nint lParam);
+    /// <summary>
+    /// user32 <c>SetTimer</c>: a timer that posts WM_TIMER every so many milliseconds.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial nuint SetTimer(nint hwnd, nuint id, uint ms, nint callback);
+    /// <summary>
+    /// user32 <c>KillTimer</c>: stops a timer.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int KillTimer(nint hwnd, nuint id);
+    /// <summary>
+    /// user32 <c>InvalidateRect</c>: asks for a window (or part of it) to be painted again.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int InvalidateRect(nint hwnd, Rect* rect, int erase);
+    /// <summary>
+    /// user32 <c>GetSystemMetrics</c>: a system metric (0 and 1: the screen's width and height).
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int GetSystemMetrics(int index);
+    /// <summary>
+    /// user32 <c>LoadCursorW</c>: a system cursor.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial nint LoadCursorW(nint instance, nint name);
+    /// <summary>
+    /// user32 <c>BeginPaint</c>: starts painting a window, giving its device context.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial nint BeginPaint(nint hwnd, Paintstruct* ps);
+    /// <summary>
+    /// user32 <c>EndPaint</c>: ends painting a window.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int EndPaint(nint hwnd, Paintstruct* ps);
+    /// <summary>
+    /// user32 <c>FillRect</c>: fills a rectangle with a brush.
+    /// </summary>
     [LibraryImport("user32.dll")] private static partial int FillRect(nint dc, Rect* rect, nint brush);
+    /// <summary>
+    /// gdi32 <c>CreateCompatibleDC</c>: a memory device context like a given one.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial nint CreateCompatibleDC(nint dc);
+    /// <summary>
+    /// gdi32 <c>CreateCompatibleBitmap</c>: a bitmap for a device context.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial nint CreateCompatibleBitmap(nint dc, int w, int h);
+    /// <summary>
+    /// gdi32 <c>SelectObject</c>: selects an object (bitmap, pen, brush, font) into a device context, giving the one it replaces.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial nint SelectObject(nint dc, nint obj);
+    /// <summary>
+    /// gdi32 <c>DeleteObject</c>: frees a GDI object.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int DeleteObject(nint obj);
+    /// <summary>
+    /// gdi32 <c>DeleteDC</c>: frees a memory device context.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int DeleteDC(nint dc);
+    /// <summary>
+    /// gdi32 <c>CreateSolidBrush</c>: a brush of one colour.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial nint CreateSolidBrush(uint colour);
+    /// <summary>
+    /// gdi32 <c>CreatePen</c>: a pen.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial nint CreatePen(int style, int width, uint colour);
+    /// <summary>
+    /// gdi32 <c>MoveToEx</c>: moves a device context's pen position.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int MoveToEx(nint dc, int x, int y, void* previous);
+    /// <summary>
+    /// gdi32 <c>LineTo</c>: draws a line from the pen position.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int LineTo(nint dc, int x, int y);
+    /// <summary>
+    /// gdi32 <c>SetBkMode</c>: whether text is drawn over a filled background.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int SetBkMode(nint dc, int mode);
+    /// <summary>
+    /// gdi32 <c>SetTextColor</c>: the text colour.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial uint SetTextColor(nint dc, uint colour);
+    /// <summary>
+    /// gdi32 <c>TextOutW</c>: draws text.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int TextOutW(nint dc, int x, int y, char* text, int length);
+    /// <summary>
+    /// gdi32 <c>SetStretchBltMode</c>: how a stretched copy samples.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int SetStretchBltMode(nint dc, int mode);
+    /// <summary>
+    /// gdi32 <c>StretchDIBits</c>: copies device-independent pixels to a device context, scaled.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int StretchDIBits(nint dc, int x, int y, int w, int h, int sx, int sy, int sw, int sh,
         void* bits, Bitmapinfoheader* info, uint usage, uint rop);
+    /// <summary>
+    /// gdi32 <c>AddFontResourceExW</c>: adds a font file (FR_PRIVATE: for this process only).
+    /// </summary>
     [LibraryImport("gdi32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial int AddFontResourceExW(string path, uint flags,
         nint reserved);
+    /// <summary>
+    /// gdi32 <c>CreateFontW</c>: a font of a face and size.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial nint CreateFontW(int height, int width, int escapement, int orientation, int weight,
         uint italic, uint underline, uint strikeOut, uint charSet, uint outPrecision, uint clipPrecision, uint quality, uint pitchAndFamily,
             char* face);
+    /// <summary>
+    /// gdi32 <c>BitBlt</c>: copies a rectangle between device contexts.
+    /// </summary>
     [LibraryImport("gdi32.dll")] private static partial int BitBlt(nint dc, int x, int y, int w, int h, nint source, int sx, int sy, uint rop);
 }

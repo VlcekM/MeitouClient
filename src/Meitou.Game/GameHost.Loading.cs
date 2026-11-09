@@ -11,12 +11,24 @@ namespace Meitou.Game;
 /// </summary>
 sealed partial class GameHost
 {
+    /// <summary>
+    /// The display the loading frames are drawn on; null once the loading screen ended.
+    /// </summary>
     VulkanDisplay? _loadingDisplay;
+    /// <summary>
+    /// The overlay the loading screen draws with; null once it ended.
+    /// </summary>
     internal DebugOverlay? LoadingOverlay;
+    /// <summary>
+    /// The loading screen; null once it ended.
+    /// </summary>
     internal LoadingScreen? Loading;
-    // The steps of a start, in order, with their shown names and about how many seconds each takes (measured 2026-10-14 on an RTX 4070 machine, a
-    // cold start at The Hub); the bar's share of a step is its time over the sum. The renderer's steps are named by WorldFrame.CreateGpu. "colourmap"
-    // comes only on a start that has to encode the terrain colour cache (the first), so its share is kept small though it then takes the longest.
+    /// <summary>
+    /// The steps of a start, in order, with their shown names and about how many seconds each takes (measured 2026-10-14 on an RTX 4070 machine, a
+    /// cold start at The Hub); the bar's share of a step is its time over the sum. The renderer's steps are named by WorldFrame.CreateGpu.
+    /// "colourmap" comes only on a start that has to encode the terrain colour cache (the first), so its share is kept small though it then takes
+    /// the longest.
+    /// </summary>
     static readonly (string Step, string Label, double Seconds)[] StartSteps =
     [
         ("scene", "the world", 0.5), ("terrain", "terrain", 0.3), ("colourmap", "terrain colour map (first start only)", 0.3),
@@ -27,17 +39,38 @@ sealed partial class GameHost
         ("interface", "the interface", 0.3),
         ("navmesh", "paths", 0.5), ("characters", "characters", 0.2), ("finishing", "finishing", 0.4), ("view", "the view", 1.2),
     ];
-    // The steps of a load between scenes (GameHost.Transition.cs).
+    /// <summary>
+    /// The steps of a load between scenes (GameHost.Transition.cs).
+    /// </summary>
     internal static readonly (string Step, string Label, double Seconds)[] SceneSteps =
     [
         ("read", "the save", 0.6), ("build", "the world", 0.5), ("people", "people", 0.3), ("finishing", "finishing", 0.2), ("view", "the view", 1.2),
     ];
+    /// <summary>
+    /// The steps of the load running: <see cref="StartSteps"/>, or <see cref="SceneSteps"/> between scenes.
+    /// </summary>
     internal (string Step, string Label, double Seconds)[] LoadingSteps = StartSteps;
 
     /// <summary>
     /// The original's background-loading bar (Faithful UI mode), stepped once a drawn frame.
     /// </summary>
     internal readonly ResourceLoadBar LoadBar = new();
+    /// <summary>
+    /// When the last loading frame was drawn (a <see cref="System.Diagnostics.Stopwatch"/> timestamp); 0 before the first.
+    /// </summary>
+    long _lastLoadingFrame;
+    /// <summary>
+    /// The loading frames drawn since the last report.
+    /// </summary>
+    int _loadingFrames;
+    /// <summary>
+    /// The step running now, and the one the last frame was drawn in.
+    /// </summary>
+    string _currentStep = "", _lastFrameStep = "";
+    /// <summary>
+    /// The longest time without a loading frame since the last report, and its step.
+    /// </summary>
+    (double Ms, string Step) _longestGap;
 
     /// <summary>
     /// What the bar counts as the original's resource loader queue: the objects' and the characters' loads waiting (engine choice: the original's
@@ -81,12 +114,6 @@ sealed partial class GameHost
         Loading.Step(LoadingSteps[i].Label, start, start + LoadingSteps[i].Seconds / total, LoadingSteps[i].Seconds);
         _currentStep = step;
     }
-
-    long _lastLoadingFrame;
-    int _loadingFrames;
-    string _currentStep = "", _lastFrameStep = "";
-    (double Ms, string Step) _longestGap;
-
     /// <summary>
     /// Prints how smooth the load was and starts the count again.
     /// </summary>
@@ -139,8 +166,18 @@ sealed partial class GameHost
         return work.GetAwaiter().GetResult();
     }
 
-    void AwaitLoading(Task work) => AwaitLoading(work.ContinueWith(t => { t.GetAwaiter().GetResult(); return true; }, TaskScheduler.Default));
+    /// <summary>
+    /// Waits for <paramref name="work"/> drawing loading frames, as <see cref="AwaitLoading{T}"/>; its exception is thrown here.
+    /// </summary>
+    void AwaitLoading(Task work) => AwaitLoading(work.ContinueWith(t =>
+    {
+        t.GetAwaiter().GetResult();
+        return true;
+    }, TaskScheduler.Default));
 
+    /// <summary>
+    /// Frees the loading screen, its overlay and its display.
+    /// </summary>
     internal void EndLoadingScreen()
     {
         Loading?.Dispose();

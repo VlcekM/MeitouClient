@@ -23,11 +23,17 @@ public sealed class LevelEditorServices
     /// Clears the building of a key (placed here or of the level data); false when there is none.
     /// </summary>
     public required Func<string, bool> Clear { get; init; }
+    /// <summary>
+    /// Whether the level data building of a key was cleared.
+    /// </summary>
     public required Func<string, bool> IsCleared { get; init; }
     /// <summary>
     /// Writes the edits into the editor's mod; returns the message to show.
     /// </summary>
     public required Func<string> Save { get; init; }
+    /// <summary>
+    /// The name of the mod the edits are saved into, shown on the bar.
+    /// </summary>
     public required string ModName { get; init; }
 }
 
@@ -38,11 +44,26 @@ public sealed class LevelEditorServices
 /// </summary>
 sealed class LevelEditorPanel(PlayerInterface player)
 {
+    /// <summary>
+    /// What the editor needs from the host; null while the host has not set it (the editor does not open).
+    /// </summary>
     internal LevelEditorServices? Services;
+    /// <summary>
+    /// Whether the top bar is open, and whether its BUILDINGS tool (build mode in the editor's mode) is on.
+    /// </summary>
     internal bool LevelEditor, LevelBuild;
+    /// <summary>
+    /// Every BUILDING record id of the build menu's catalog, made on first use: the editor offers them all.
+    /// </summary>
     HashSet<string>? _levelEveryBuilding;
 
+    /// <summary>
+    /// What the editor needs from the host (the host sets it).
+    /// </summary>
     public LevelEditorServices? LevelHost { get => Services; set => Services = value; }
+    /// <summary>
+    /// Whether the top bar is open.
+    /// </summary>
     public bool LevelEditorOpen => LevelEditor;
 
     /// <summary>
@@ -64,6 +85,9 @@ sealed class LevelEditorPanel(PlayerInterface player)
         else OpenLevelEditor();
     }
 
+    /// <summary>
+    /// Closes the top bar, and build mode with it while the BUILDINGS tool is on.
+    /// </summary>
     void CloseLevelEditor()
     {
         if (LevelBuild) player.Build.SetBuildMode(false);
@@ -124,6 +148,9 @@ sealed class LevelEditorPanel(PlayerInterface player)
     static readonly string[] LevelEditorButtons = ["towns", "populate", "buildings", "items", "snaps", "navmesh", "features",
         "fogfeatures", "save", "exit"];
 
+    /// <summary>
+    /// Fills the top bar's bindings: its buttons, the mod's name and the exe's "Fix stuff" caption.
+    /// </summary>
     internal void BindLevelEditorScreen(UiBindings b)
     {
         foreach (string name in LevelEditorButtons)
@@ -135,6 +162,9 @@ sealed class LevelEditorPanel(PlayerInterface player)
         b.Text["mod"] = Services?.ModName ?? "";
     }
 
+    /// <summary>
+    /// A top bar button: BUILDINGS toggles build mode in the editor's mode, SAVE writes the mod, EXIT closes the bar, the tools not done yet say so.
+    /// </summary>
     internal void LevelEditorAction(MyGuiEvent e)
     {
         switch (e.Widget)
@@ -150,9 +180,12 @@ sealed class LevelEditorPanel(PlayerInterface player)
                 player.Build.SetBuildMode(true);
                 if (!player.Build.Active) LevelBuild = false;
                 break;
-            case "save": if (Services is { } host) player.Notice(host.Save()); break;
-            case "exit": CloseLevelEditor();
-            break;
+            case "save":
+                if (Services is { } host) player.Notice(host.Save());
+                break;
+            case "exit":
+                CloseLevelEditor();
+                break;
             default:
                 string caption = e.Widget == "snaps" ? "Fix stuff"
                     : player.FaithfulScreens.Layout("leveleditor").Find(e.Widget)?.Properties.GetValueOrDefault("Caption") ?? e.Widget;
@@ -171,6 +204,9 @@ sealed class LevelEditorPanel(PlayerInterface player)
         "Press [Confirm] when finished",
     ];
 
+    /// <summary>
+    /// CONFIRM in the editor's build mode: places the queued ghosts as level buildings and clears the queue.
+    /// </summary>
     internal void LevelConfirm()
     {
         if (Services is null || player.Build.BuildQueue.Count == 0) return;

@@ -13,8 +13,14 @@ namespace Meitou.Modding;
 sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<string, Assembly>? imports = null)
     : AssemblyLoadContext($"mod {name}", isCollectible: false)
 {
+    /// <summary>
+    /// The simple names of the assemblies the game ships (the trusted platform list), read once.
+    /// </summary>
     static readonly Lazy<HashSet<string>> Shipped = new(ReadShipped);
 
+    /// <summary>
+    /// The mod's folder, where its own assemblies and native libraries are resolved.
+    /// </summary>
     public string Folder { get; } = folder;
 
     /// <summary>
@@ -45,6 +51,10 @@ sealed class ModLoadContext(string folder, string name, IReadOnlyDictionary<stri
         return 0;
     }
 
+    /// <summary>
+    /// The file names a native library may have on this platform: the name as given, then with the platform's extension (and the lib prefix
+    /// off Windows).
+    /// </summary>
     static IEnumerable<string> NativeNames(string name)
     {
         yield return name;

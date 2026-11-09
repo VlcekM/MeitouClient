@@ -10,9 +10,21 @@ namespace Meitou.Game.Host;
 /// </summary>
 static class LatestRelease
 {
+    /// <summary>
+    /// How long an answer is reused before the service is asked again.
+    /// </summary>
     static readonly TimeSpan Reuse = TimeSpan.FromMinutes(15);
+    /// <summary>
+    /// The client for the service, with a 10 s timeout.
+    /// </summary>
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    /// <summary>
+    /// The last question to the service: the newest release's tag and the newest of any kind; null inside for no answer.
+    /// </summary>
     static Task<(string? Release, string? Any)?>? s_fetched;
+    /// <summary>
+    /// When <see cref="s_fetched"/> was asked.
+    /// </summary>
     static DateTime s_fetchedAt;
 
     /// <summary>

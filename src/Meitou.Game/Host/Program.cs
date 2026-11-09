@@ -10,6 +10,9 @@ using Meitou.Game.Title;
 
 namespace Meitou.Game.Host;
 
+/// <summary>
+/// The game's entry point.
+/// </summary>
 static class Program
 {
     /// <summary>
@@ -17,6 +20,10 @@ static class Program
     /// </summary>
     internal const string HardwareProbeFlag = "--recommend-preset";
 
+    /// <summary>
+    /// Runs the game from the command line: the launcher's settings schema and hardware probe first, then the options, the install, the data check
+    /// and the other one-shot modes, then the window and the game loop; returns the process's exit code (2 for bad options, 1 without an install).
+    /// </summary>
     static int Main(string[] args)
     {
         GameConsole.AttachToParent();

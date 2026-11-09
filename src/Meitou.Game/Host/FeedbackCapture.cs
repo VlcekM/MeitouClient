@@ -14,12 +14,21 @@ sealed class FeedbackCapture(GameHost host)
     /// The next frame is the feedback screenshot (drawn without the menus, the settings and the debug overlays).
     /// </summary>
     internal bool FeedbackShotRequested;
+    /// <summary>
+    /// The form's Send was pressed: the next frame starts the send.
+    /// </summary>
     bool _feedbackSendRequested;
     /// <summary>
     /// The PNG of the last feedback screenshot, encoded off the frame thread; null without one.
     /// </summary>
     Task<byte[]>? _feedbackPicture;
+    /// <summary>
+    /// The report's send on a worker; null when none runs.
+    /// </summary>
     Task<FeedbackResult>? _feedbackSend;
+    /// <summary>
+    /// The send's progress line (written by the worker), and the one the form shows.
+    /// </summary>
     string _feedbackStatus = "", _feedbackStatusShown = "";
     /// <summary>
     /// Where the camera was when the button was pressed, sent with every report made in a game; null outside one.
@@ -29,11 +38,41 @@ sealed class FeedbackCapture(GameHost host)
     /// <summary>
     /// The steps of the navmesh screenshot, made when a send asks for it: the zones round the camera load, the view is built, one frame is kept.
     /// </summary>
-    enum FeedbackNavStage { None, Loading, Drawing, Capturing }
+    enum FeedbackNavStage
+    {
+        /// <summary>
+        /// No navmesh screenshot under way.
+        /// </summary>
+        None,
+        /// <summary>
+        /// The zones round the camera load (at most 10 s).
+        /// </summary>
+        Loading,
+        /// <summary>
+        /// The navmesh view is built and drawn.
+        /// </summary>
+        Drawing,
+        /// <summary>
+        /// The frame being kept as the navmesh screenshot.
+        /// </summary>
+        Capturing
+    }
 
+    /// <summary>
+    /// The navmesh screenshot's step.
+    /// </summary>
     FeedbackNavStage _feedbackNavStage;
+    /// <summary>
+    /// The navmesh loads of the zones round the camera.
+    /// </summary>
     Task? _feedbackNavLoad;
+    /// <summary>
+    /// When the navmesh loads started (a <see cref="Stopwatch"/> timestamp).
+    /// </summary>
     long _feedbackNavSince;
+    /// <summary>
+    /// The navmesh overlay as it was before the screenshot, put back after it.
+    /// </summary>
     DebugOverlays.NavView _feedbackNavRestore;
     /// <summary>
     /// The navmesh screenshot's PNG, encoded off the frame thread; null without one.
@@ -48,6 +87,9 @@ sealed class FeedbackCapture(GameHost host)
     /// </summary>
     Task<string?>? _feedbackNewer;
 
+    /// <summary>
+    /// A feedback button's action: open takes the screenshot first (unless the navmesh one is under way), send asks for the send.
+    /// </summary>
     internal void FeedbackAction(MyGuiEvent e)
     {
         if (e.Action == "feedback-open" && _feedbackNavStage == FeedbackNavStage.None) FeedbackShotRequested = true;

@@ -5,20 +5,61 @@ using Meitou.Simulation.Combat;
 
 namespace Meitou.Modding;
 
-enum ModCodeKind { DialogueCondition, DialogueEffect, RecordType }
+/// <summary>
+/// The kinds of numbered code a mod claims; each code has one owner (<see cref="ModRegistry.CheckFree"/>).
+/// </summary>
+enum ModCodeKind
+{
+    /// <summary>
+    /// A dialogue condition's code (<see cref="ModContext.AddDialogueCondition"/>).
+    /// </summary>
+    DialogueCondition,
+    /// <summary>
+    /// A dialogue effect's code (<see cref="ModContext.AddDialogueEffect"/>).
+    /// </summary>
+    DialogueEffect,
+    /// <summary>
+    /// A record type's number (<see cref="ModContext.AddRecordType"/>).
+    /// </summary>
+    RecordType
+}
 
 /// <summary>
 /// What one mod registered during its <see cref="IMod.Initialize"/>; committed to the <see cref="ModRegistry"/> only when that returns.
 /// </summary>
 sealed class ModRegistrations
 {
+    /// <summary>
+    /// The tick system factories, in registration order.
+    /// </summary>
     public List<SystemFactory> Systems { get; } = [];
+    /// <summary>
+    /// The dialogue condition handlers by code.
+    /// </summary>
     public Dictionary<int, DialogueConditionHandler> Conditions { get; } = [];
+    /// <summary>
+    /// The dialogue effect handlers by code.
+    /// </summary>
     public Dictionary<int, DialogueEffectHandler> Effects { get; } = [];
+    /// <summary>
+    /// The record types' names by type number.
+    /// </summary>
     public Dictionary<int, string> RecordTypes { get; } = [];
+    /// <summary>
+    /// The player interface extensions.
+    /// </summary>
     public List<IUiExtension> Ui { get; } = [];
+    /// <summary>
+    /// The debug menu's commands.
+    /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
+    /// <summary>
+    /// The combat hit feeds.
+    /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
+    /// <summary>
+    /// The mod's settings group; null when it registered none.
+    /// </summary>
     public ModSettingsGroup? Settings { get; set; }
 }
 
@@ -27,8 +68,17 @@ sealed class ModRegistrations
 /// </summary>
 sealed class ModHitFeed(string owner, Action<IReadOnlyList<CombatHit>> run)
 {
+    /// <summary>
+    /// The id of the mod that registered the feed.
+    /// </summary>
     public string Owner => owner;
+    /// <summary>
+    /// Hands the feed the hits resolved in a tick.
+    /// </summary>
     public Action<IReadOnlyList<CombatHit>> Run => run;
+    /// <summary>
+    /// Set once the feed threw; a faulted feed is not called again.
+    /// </summary>
     public bool Faulted { get; set; }
 }
 
@@ -42,14 +92,38 @@ sealed record ModSystemTag(string ModId, string Name);
 /// </summary>
 sealed class ModRegistry
 {
+    /// <summary>
+    /// The owner of each claimed code, by kind and code.
+    /// </summary>
     readonly Dictionary<(ModCodeKind Kind, int Code), string> _owners = [];
+    /// <summary>
+    /// The mod and name each world's mod system was made under (weakly held, gone with the world).
+    /// </summary>
     readonly ConditionalWeakTable<ITickSystem, ModSystemTag> _made = new();
 
+    /// <summary>
+    /// The simulation's mod part: the systems (tagged with their mod) and the dialogue handlers.
+    /// </summary>
     public SimulationExtensions Simulation { get; } = new();
+    /// <summary>
+    /// Every mod's interface extensions, in load order.
+    /// </summary>
     public List<IUiExtension> Ui { get; } = [];
+    /// <summary>
+    /// Every mod's debug menu commands, in load order.
+    /// </summary>
     public List<ModDebugCommand> DebugCommands { get; } = [];
+    /// <summary>
+    /// Every mod's combat hit feeds, in load order.
+    /// </summary>
     public List<ModHitFeed> HitFeeds { get; } = [];
+    /// <summary>
+    /// The record types' names by type number.
+    /// </summary>
     public Dictionary<int, string> RecordTypes { get; } = [];
+    /// <summary>
+    /// Every mod's settings group, in load order.
+    /// </summary>
     public List<ModSettingsGroup> Settings { get; } = [];
 
     /// <summary>
@@ -72,6 +146,9 @@ sealed class ModRegistry
         if (mine) throw new InvalidOperationException($"{kind} {code} is registered twice by mod '{mod}'.");
     }
 
+    /// <summary>
+    /// Adds a mod's registrations once its <see cref="IMod.Initialize"/> has returned: systems tagged with the mod, codes claimed, the rest appended.
+    /// </summary>
     public void Commit(string mod, ModRegistrations r)
     {
         foreach (var factory in r.Systems) Simulation.Systems.Add(Tagged(mod, factory));
@@ -91,18 +168,28 @@ sealed class ModRegistry
     /// </summary>
     public ModSystemTag? TagOf(ITickSystem system) => _made.TryGetValue(system, out var tag) ? tag : null;
 
+    /// <summary>
+    /// Records the mod as the code's owner and adds its handler.
+    /// </summary>
     void Claim(ModCodeKind kind, int code, string mod, Action add)
     {
         _owners[(kind, code)] = mod;
         add();
     }
 
+    /// <summary>
+    /// The factory with its systems tagged with the mod (<see cref="TagOf"/>); a system whose factory throws is left out of the world, with a
+    /// log line.
+    /// </summary>
     SystemFactory Tagged(string mod, SystemFactory factory) => factory with
     {
         Create = context =>
         {
             ITickSystem? system;
-            try { system = factory.Create(context); }
+            try
+            {
+                system = factory.Create(context);
+            }
             catch (Exception e)
             {
                 // A mod's fault leaves its system out of this world; the world is still made.

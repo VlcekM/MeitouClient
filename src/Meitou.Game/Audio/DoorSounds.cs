@@ -27,14 +27,35 @@ public sealed class DoorSounds(WwisePlayer player)
     /// </summary>
     public const float Range = 3000;
 
+    /// <summary>
+    /// The <c>Door_Type</c> switch values by the record's <c>door type</c> (0 Wood, 1 Mechanical, 2 Gate); other types are clamped into the table.
+    /// </summary>
     static readonly string[] TypeNames = ["Wood", "Mechanical_Metal", "Gate"];
 
+    /// <summary>
+    /// One door's sound state: its game object and the motion and broken flag it was last stepped to.
+    /// </summary>
     sealed class Door(ulong id)
     {
+        /// <summary>
+        /// The door's game object id (from <see cref="FirstObject"/> up).
+        /// </summary>
         public readonly ulong Object = id;
+        /// <summary>
+        /// The motion last stepped to (0 closed, 1 open, 2 opening, 3 closing).
+        /// </summary>
         public int Motion;
+        /// <summary>
+        /// Whether the door was broken at the last step.
+        /// </summary>
         public bool Broken;
+        /// <summary>
+        /// Whether <see cref="Update"/> handed the door since <see cref="Begin"/> this frame.
+        /// </summary>
         public bool Seen;
+        /// <summary>
+        /// The state last handed: its position places the object and its type picks <c>Door_Type</c>.
+        /// </summary>
         public DoorSoundState Last;
     }
 
@@ -42,6 +63,9 @@ public sealed class DoorSounds(WwisePlayer player)
     /// The doors by building id and door index (the snapshot's key; a string made of the two per door a frame was garbage).
     /// </summary>
     readonly Dictionary<(string Building, int Door), Door> _doors = [];
+    /// <summary>
+    /// The next door's game object id.
+    /// </summary>
     ulong _next = FirstObject;
 
     /// <summary>
@@ -88,6 +112,11 @@ public sealed class DoorSounds(WwisePlayer player)
             if (!door.Seen) Step(door, 0, door.Broken, eye);
     }
 
+    /// <summary>
+    /// Moves a door to <paramref name="motion"/> and <paramref name="broken"/> and, when it changed and is within <see cref="Range"/> of the eye,
+    /// places its object, sets <c>Door_Type</c> and posts <c>Break</c>, <c>Door_Open</c>, <c>Door_Close</c> and <c>Door_Shut</c> as the change asks
+    /// (a state skipped between frames still gets its sounds).
+    /// </summary>
     void Step(Door door, int motion, bool broken, Vector3 eye)
     {
         int before = door.Motion;
@@ -112,6 +141,9 @@ public sealed class DoorSounds(WwisePlayer player)
         if ((motion == 0 && before is 3 or 1) || (motion == 1 && before is 2 or 0)) Post("Door_Shut", door);
     }
 
+    /// <summary>
+    /// Posts an event on the door's object and counts it in <see cref="Posted"/>.
+    /// </summary>
     void Post(string eventName, Door door)
     {
         player.Post(eventName, door.Object);

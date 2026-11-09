@@ -16,19 +16,54 @@ public sealed class MusicDirector
     /// </summary>
     static readonly string[] Names = ["Dunes", "Savannah", "Swamplands", "Tarsands"];
 
+    /// <summary>
+    /// The main theme's bank, loaded by <see cref="StartMainTheme"/> and dropped at the first biome change.
+    /// </summary>
     const string MainThemeBank = "MT_Music_Bank";
+    /// <summary>
+    /// Real seconds after a biome music bank was last current that it is unloaded.
+    /// </summary>
     const double UnloadAfter = 60;
 
+    /// <summary>
+    /// The bank player the music events go to.
+    /// </summary>
     readonly WwisePlayer _player;
+    /// <summary>
+    /// Real seconds, the timer's clock.
+    /// </summary>
     readonly Func<double> _clock;
+    /// <summary>
+    /// Draws the factor (0.8..1.4) on each interval after the first.
+    /// </summary>
     readonly Random _random;
-    // The biome music banks asked for, with the time each was last the current one.
+    /// <summary>
+    /// The biome music banks asked for, with the time each was last the current one. Unloaded by <see cref="UnloadStale"/>.
+    /// </summary>
     readonly Dictionary<string, double> _lastCurrent = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// <c>Music frequency</c> in minutes, at least 0.1: the timer's base interval.
+    /// </summary>
     float _frequencyMinutes;
+    /// <summary>
+    /// The real time (of <see cref="_clock"/>) the timer next fires.
+    /// </summary>
     double _deadline;
+    /// <summary>
+    /// The <c>music</c> index of the last biome step (0..3 a biome, 4 none); -1 before the first.
+    /// </summary>
     int _index = -1;
+    /// <summary>
+    /// The event the timer posts (<c>Music_&lt;Name&gt;_Play</c>); null when no biome music is remembered.
+    /// </summary>
     string? _remembered;
+    /// <summary>
+    /// The biome music bank loading for the current biome; its switch and event are set once it has loaded.
+    /// </summary>
     string? _pendingBank;
+    /// <summary>
+    /// Whether no biome step has run yet (the first drops the main theme's bank).
+    /// </summary>
     bool _firstChange = true;
 
     /// <summary>
@@ -76,8 +111,14 @@ public sealed class MusicDirector
         SetVolume(volume);
     }
 
+    /// <summary>
+    /// The timer's base interval in real seconds.
+    /// </summary>
     double Interval() => _frequencyMinutes * 60;
 
+    /// <summary>
+    /// Sets <c>Music volume</c> (clamped to 0..1) and sends it as <c>User_Volume_Music</c> × 100.
+    /// </summary>
     public void SetVolume(float volume)
     {
         Volume = Math.Clamp(volume, 0, 1);
@@ -133,6 +174,9 @@ public sealed class MusicDirector
         UnloadStale(now);
     }
 
+    /// <summary>
+    /// A biome music bank's name, <c>&lt;Name&gt;_Music_Bank</c>.
+    /// </summary>
     static string BankOf(string name) => $"{name}_Music_Bank";
 
     /// <summary>
@@ -169,6 +213,9 @@ public sealed class MusicDirector
         }
     }
 
+    /// <summary>
+    /// Remembers the current biome's music once its pending bank has loaded, and clears the pending bank.
+    /// </summary>
     void CompleteLoad()
     {
         if (_pendingBank is null || !_player.IsBankLoaded(_pendingBank)) return;
@@ -176,6 +223,9 @@ public sealed class MusicDirector
         _pendingBank = null;
     }
 
+    /// <summary>
+    /// Makes a biome's music the remembered one: sets <see cref="Biome"/>, the event the timer posts and the <c>Biomes</c> switch.
+    /// </summary>
     void Remember(string name)
     {
         Biome = name;

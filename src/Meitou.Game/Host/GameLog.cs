@@ -8,17 +8,35 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed class GameLog : TextWriter
 {
+    /// <summary>
+    /// Past 10 MiB the log is cut down to its last 8 MiB.
+    /// </summary>
     const long Cap = 10 << 20, Keep = 8 << 20;
 
+    /// <summary>
+    /// The log file, opened for appending.
+    /// </summary>
     readonly FileStream _file;
+    /// <summary>
+    /// The file's UTF-8 writer, flushed per write.
+    /// </summary>
     readonly StreamWriter _writer;
     /// <summary>
     /// The output and the error both write here, each through its own synchronised writer; the flushing thread too.
     /// </summary>
     readonly object _gate = new();
+    /// <summary>
+    /// Set at each line's end, waking <see cref="FlushToDisk"/>.
+    /// </summary>
     readonly AutoResetEvent _lineEnded = new(false);
+    /// <summary>
+    /// Set on dispose: the flushing thread ends.
+    /// </summary>
     bool _disposed;
 
+    /// <summary>
+    /// A log writing to <paramref name="file"/>, with its flushing thread started.
+    /// </summary>
     GameLog(FileStream file)
     {
         this._file = file;
@@ -55,6 +73,7 @@ sealed class GameLog : TextWriter
         }
     }
 
+    /// <inheritdoc/>
     public override Encoding Encoding => _writer.Encoding;
 
     /// <summary>
@@ -112,6 +131,9 @@ sealed class GameLog : TextWriter
         }
     }
 
+    /// <summary>
+    /// Wakes the flushing thread at a line's end, and past <see cref="Cap"/> keeps only the last <see cref="Keep"/> bytes from a whole line.
+    /// </summary>
     void Trim(bool lineEnd)
     {
         if (lineEnd) _lineEnded.Set();   // FlushToDisk
@@ -146,6 +168,7 @@ sealed class GameLog : TextWriter
 /// </summary>
 sealed class TeeWriter(TextWriter first, TextWriter second) : TextWriter
 {
+    /// <inheritdoc/>
     public override Encoding Encoding => second.Encoding;
 
     public override void Write(char value)

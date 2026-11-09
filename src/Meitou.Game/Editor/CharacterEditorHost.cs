@@ -33,6 +33,10 @@ sealed class CharacterEditorHost(GameHost host)
     /// </summary>
     bool _creationWarmOwed;
 
+    /// <summary>
+    /// Gives a new interface's editor the game data, the install root and the preview hooks (the looks, their readiness, close-up prefetch
+    /// and warming).
+    /// </summary>
     internal void ConfigureEditor(PlayerInterface ui)
     {
         if (host.PopData is not { } data) return;

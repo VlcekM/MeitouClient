@@ -17,20 +17,38 @@ public sealed class WorldEmitters(WwisePlayer player)
     /// </summary>
     public const ulong FirstObject = 1UL << 32;
 
+    /// <summary>
+    /// One placed emitter's sound state: its sound, place, game object, and whether it plays, is out of range or is powered.
+    /// </summary>
     sealed class Emitter(string key, AmbientSound sound, Vector3 position)
     {
+        /// <summary>
+        /// The emitter's key (the building's, unique among the emitters).
+        /// </summary>
         public readonly string Key = key;
+        /// <summary>
+        /// The AMBIENT_SOUND record's sound: its <c>Emitters</c> name, range, base intensity and power needs.
+        /// </summary>
         public readonly AmbientSound Sound = sound;
+        /// <summary>
+        /// Where the emitter is; <see cref="Move"/> changes it for one that follows something.
+        /// </summary>
         public Vector3 Position = position;
         /// <summary>
         /// The game object; 0 until the first start registers it (the game registers lazily).
         /// </summary>
         public ulong Object;
+        /// <summary>
+        /// Whether <c>Start_Emitter</c> was posted and no <c>Stop_Emitter</c> since.
+        /// </summary>
         public bool Started;
         /// <summary>
         /// The eye is beyond the range (the game starts every emitter far away, then updates it once on creation).
         /// </summary>
         public bool Far = true;
+        /// <summary>
+        /// Whether the building was told it runs on power (<see cref="SetPower"/>); an emitter that needs power starts only then.
+        /// </summary>
         public bool Powered;
         /// <summary>
         /// The last <c>Intensity</c> the game decided on (the base intensity at first, sent or not).
@@ -38,7 +56,13 @@ public sealed class WorldEmitters(WwisePlayer player)
         public float Level = sound.Intensity * 100;
     }
 
+    /// <summary>
+    /// The emitters by key.
+    /// </summary>
     readonly Dictionary<string, Emitter> _emitters = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The next emitter's game object id.
+    /// </summary>
     ulong _next = FirstObject;
 
     /// <summary>
@@ -56,6 +80,9 @@ public sealed class WorldEmitters(WwisePlayer player)
     /// </summary>
     public float NearestDistance { get; private set; } = float.PositiveInfinity;
 
+    /// <summary>
+    /// The name (<c>Emitters</c> value) of the nearest emitter at the last <see cref="Update"/>; null with none.
+    /// </summary>
     public string? NearestName { get; private set; }
 
     /// <summary>
@@ -91,6 +118,9 @@ public sealed class WorldEmitters(WwisePlayer player)
         if (e.Object != 0) player.UnregisterObject(e.Object);
     }
 
+    /// <summary>
+    /// Whether an emitter with this key exists.
+    /// </summary>
     public bool Contains(string key) => _emitters.ContainsKey(key);
 
     /// <summary>
@@ -104,6 +134,9 @@ public sealed class WorldEmitters(WwisePlayer player)
         if (e.Object != 0) player.SetPosition(e.Object, position);
     }
 
+    /// <summary>
+    /// Removes every emitter (<see cref="Remove"/> each: stopped, then unregistered).
+    /// </summary>
     public void Clear()
     {
         foreach (string key in _emitters.Keys.ToArray()) Remove(key);
@@ -161,6 +194,9 @@ public sealed class WorldEmitters(WwisePlayer player)
         }
     }
 
+    /// <summary>
+    /// Posts <c>Start_Emitter</c> when the emitter is not playing, registering its object first when it has none.
+    /// </summary>
     void Start(Emitter e)
     {
         if (!e.Started)
@@ -172,6 +208,9 @@ public sealed class WorldEmitters(WwisePlayer player)
         e.Started = true;
     }
 
+    /// <summary>
+    /// Posts <c>Stop_Emitter</c> when the emitter plays.
+    /// </summary>
     void Stop(Emitter e)
     {
         if (e.Started)
@@ -182,6 +221,9 @@ public sealed class WorldEmitters(WwisePlayer player)
         e.Started = false;
     }
 
+    /// <summary>
+    /// Gives the emitter its game object: registers it, sets its <c>Emitters</c> switch, places it and sends its intensity when that is not 0.
+    /// </summary>
     void Register(Emitter e)
     {
         e.Object = _next++;

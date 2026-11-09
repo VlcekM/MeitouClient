@@ -9,6 +9,9 @@ using Meitou.Game.Rendering.Sky;
 
 namespace Meitou.Game;
 
+/// <summary>
+/// The host's Metal side (macOS): the Metal loop of the run, and its renderers as the host's own.
+/// </summary>
 sealed partial class GameHost
 {
     /// <summary>
@@ -42,6 +45,7 @@ sealed partial class GameHost
         return _metal.Run();
     }
 
+    /// <inheritdoc/>
     partial void OnWorldSettled() => _metal?.WorldSettled();
 
     /// <summary>

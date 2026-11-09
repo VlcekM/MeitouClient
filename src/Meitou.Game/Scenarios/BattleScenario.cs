@@ -20,6 +20,9 @@ sealed class BattleScenario(GameHost host)
     /// apart (more for bigger races).
     /// </summary>
     const float BattleGap = 40, BattleSpacing = 6;
+    /// <summary>
+    /// The most fighters in one rank of a block.
+    /// </summary>
     const int BattleRankWidth = 25;
     /// <summary>
     /// No orders before this tick: the blocks stand a moment before they charge.
@@ -42,16 +45,34 @@ sealed class BattleScenario(GameHost host)
     /// </summary>
     public static readonly Vector2 FogBattleSpot = new(-71560, -39953);
 
+    /// <summary>
+    /// Whether this run is a <c>--battle</c>.
+    /// </summary>
     internal bool IsBattle => host.GameOptions.Battle is not null;
     /// <summary>
     /// The floor is the sandbox's: the animation sandbox's, or the battle's with <c>--battle-map sandbox</c>.
     /// </summary>
     internal bool IsFlat => host.Sandbox.IsSandbox || IsBattle && host.GameOptions.BattleFlat;
 
+    /// <summary>
+    /// The battle's spot on the ground (the chosen map's, at the ground's height).
+    /// </summary>
     Vector3 _battleSpot;
+    /// <summary>
+    /// The two sides: CHARACTER record, name, how many, and the faction they fight for (null until one is given).
+    /// </summary>
     readonly List<(string Record, string Name, int Count, int? Faction)> _battleSides = [];
+    /// <summary>
+    /// Each side's fighters, as spawned.
+    /// </summary>
     readonly List<CharacterId>[] _battleFighters = [[], []];
+    /// <summary>
+    /// The tick the last orders were given at; -1 after a restart.
+    /// </summary>
     long _battleOrderedAt = -1;
+    /// <summary>
+    /// A restart was asked for (Backspace); the battle is over (one side has nobody standing), so no more orders.
+    /// </summary>
     internal bool BattleRestartRequested, BattleOver;
 
     /// <summary>
@@ -59,9 +80,17 @@ sealed class BattleScenario(GameHost host)
     /// </summary>
     const int BattleRetargetTicks = 30;
 
-    // The counter's numbers per side (standing, alive), counted again when the world ticks.
+    /// <summary>
+    /// The counter's numbers per side (standing, alive), counted again when the world ticks.
+    /// </summary>
     readonly (int Standing, int Alive)[] _battleCounts = new (int, int)[2];
+    /// <summary>
+    /// The tick the counts were taken at; -1 to count again.
+    /// </summary>
     long _battleCountedAt = -1;
+    /// <summary>
+    /// The world the counts were taken in (a restart makes a new one).
+    /// </summary>
     World? _battleCountedIn;
 
     /// <summary>
@@ -110,6 +139,9 @@ sealed class BattleScenario(GameHost host)
         return host.SimWalkability!.IsWalkable(position.X, position.Z);
     }
 
+    /// <summary>
+    /// A side's label: its count and name.
+    /// </summary>
     string BattleSide(int side) => $"{_battleSides[side].Count} x {_battleSides[side].Name}";
 
     /// <summary>
@@ -148,7 +180,8 @@ sealed class BattleScenario(GameHost host)
             var fighters = _battleFighters[side];
             fighters.Clear();
             float sign = side == 0 ? -1 : 1;
-            // Bigger bodies stand further apart: BattleSpacing is a human's (footprint 4), scaled by the race's footprint, never closer; the front rank at least that far off the middle.
+            // Bigger bodies stand further apart: BattleSpacing is a human's (footprint 4), scaled by the race's footprint, never closer; the front
+            // rank at least that far off the middle.
             var db = host.Scene.Database!;
             var race = db.Find(record)?.GetReferences("race").FirstOrDefault(r => r.Values.Value0 > 0) is { TargetStringId: { } raceId }
                 ? db.Find(raceId)

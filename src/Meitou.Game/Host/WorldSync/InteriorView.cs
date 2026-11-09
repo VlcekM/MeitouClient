@@ -10,6 +10,64 @@ namespace Meitou.Game.Host.WorldSync;
 sealed class InteriorView(GameHost host)
 {
     /// <summary>
+    /// The value behind <see cref="ViewedFloor"/>, 0..3.
+    /// </summary>
+    internal int ViewedFloorValue;
+    /// <summary>
+    /// The buildings in the interior view this frame and the floor each shows (3, every floor, for one held open), by placement id; handed to the
+    /// object renderer.
+    /// </summary>
+    internal readonly Dictionary<string, int> InteriorFloors = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The buildings that hold a player character this frame, shown at the viewed floor.
+    /// </summary>
+    readonly List<InteriorVolume> _viewed = [];
+    /// <summary>
+    /// Buildings a player character was in lately and the game time (seconds) one was last inside: left, a building shows every floor for 10 s after,
+    /// then closes (game: the interior's keep-open timer, 10 s of game time set each frame while occupied, FUN_1407f7230 / FUN_14054a790; left
+    /// buildings get floor 4, all).
+    /// </summary>
+    readonly Dictionary<string, (InteriorVolume Room, double Occupied)> _keepOpen = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The buildings left within the keep-open time, shown with every floor this frame (<see cref="HoldLeftOpen"/>).
+    /// </summary>
+    readonly List<InteriorVolume> _held = [];
+    /// <summary>
+    /// The keep-open entries that closed this frame, removed after the loop.
+    /// </summary>
+    readonly List<string> _expired = [];
+    /// <summary>
+    /// The keep-open time (game seconds) after the last player character leaves a building: the game's 10 s.
+    /// </summary>
+    const double KeepOpenSeconds = 10;
+    /// <summary>
+    /// The characters not drawn: those above the viewed floor of a building in the view (game: FUN_1409fb540 hides objects above their building's
+    /// floor), and those inside a building seen from outside, whose interior is not drawn (a construction site is open, so its builders stay).
+    /// </summary>
+    internal readonly HashSet<CharacterId> HiddenIndoors = [];
+    /// <summary>
+    /// The followed character the viewed floor follows (game: PI+0x270): the viewed floor follows that character's floor changes only.
+    /// </summary>
+    CharacterId? _floorFollow;
+    /// <summary>
+    /// The floor <see cref="_floorFollow"/> was last seen on (game: PI+0x290); -1 without one.
+    /// </summary>
+    int _followedFloor = -1;
+    /// <summary>
+    /// By character slot, the last answer of the strictly-inside test in <see cref="UpdateInteriorView"/> (asked again once the character moves; a
+    /// slot's new character only inherits a place's answer).
+    /// </summary>
+    Rendering.Objects.WorldObjectRenderer.InteriorMemo[] _interiorMemos = [];
+    /// <summary>
+    /// The floor shown per building for <see cref="CameraFloor"/> (0 for a building not in the view); made once.
+    /// </summary>
+    Func<string, int>? _cameraFloorOf;
+    /// <summary>
+    /// How far (units) outside the indoor hull a character still counts as inside (engine choice: the feet stand on the floor at the hull's bottom).
+    /// </summary>
+    internal const float InsideMargin = 2;
+
+    /// <summary>
     /// The viewed floor, 0..3 (the game's global floor): 0 at the start, stepped by PageUp / PageDown (<see cref="StepFloor"/>), and set to the
     /// followed character's floor when the camera starts following it or that character changes floor. Every building in the interior view hides what
     /// is above it.
@@ -19,25 +77,6 @@ sealed class InteriorView(GameHost host)
         get => ViewedFloorValue;
         set => ViewedFloorValue = Math.Clamp(value, 0, 3);
     }
-
-    internal int ViewedFloorValue;
-    internal readonly Dictionary<string, int> InteriorFloors = new(StringComparer.Ordinal);
-    readonly List<InteriorVolume> _viewed = [];
-    // Buildings a player character was in lately and the game time (seconds) one was last inside: left, a building shows every floor for 10 s after,
-    // then closes (game: the interior's keep-open timer, 10 s of game time set each frame while occupied, FUN_1407f7230 / FUN_14054a790; left
-    // buildings get floor 4, all).
-    readonly Dictionary<string, (InteriorVolume Room, double Occupied)> _keepOpen = new(StringComparer.Ordinal);
-    readonly List<InteriorVolume> _held = [];
-    readonly List<string> _expired = [];
-    const double KeepOpenSeconds = 10;
-    /// <summary>
-    /// The characters not drawn: those above the viewed floor of a building in the view (game: FUN_1409fb540 hides objects above their building's
-    /// floor), and those inside a building seen from outside, whose interior is not drawn (a construction site is open, so its builders stay).
-    /// </summary>
-    internal readonly HashSet<CharacterId> HiddenIndoors = [];
-    // The followed character and the floor it was last seen on (game: PI+0x270 / +0x290): the viewed floor follows that floor's changes only.
-    CharacterId? _floorFollow;
-    int _followedFloor = -1;
 
     /// <summary>
     /// The game's floor_up / floor_down (PageUp / PageDown): one floor up or down, clamped to 0..3.
@@ -83,10 +122,9 @@ sealed class InteriorView(GameHost host)
         host.GroundItemSync.UpdateGroundVisibility();
     }
 
-    // By character slot, the last answer of the test above (asked again once the character moves; a slot's new character only inherits a place's
-    // answer).
-    Rendering.Objects.WorldObjectRenderer.InteriorMemo[] _interiorMemos = [];
-
+    /// <summary>
+    /// A character slot's interior memo, the array grown to fit it.
+    /// </summary>
     ref Rendering.Objects.WorldObjectRenderer.InteriorMemo InteriorMemo(int slot)
     {
         if (slot >= _interiorMemos.Length) Array.Resize(ref _interiorMemos, Math.Max(slot + 1, _interiorMemos.Length * 2));
@@ -163,13 +201,6 @@ sealed class InteriorView(GameHost host)
     /// panning lets go of it.
     /// </summary>
     float? CameraFloor(float x, float z) => host.ActiveObjects?.FloorHeightAt(x, z, _cameraFloorOf ??= key => InteriorFloors.GetValueOrDefault(key));
-
-    Func<string, int>? _cameraFloorOf;
-
-    /// <summary>
-    /// How far (units) outside the indoor hull a character still counts as inside (engine choice: the feet stand on the floor at the hull's bottom).
-    /// </summary>
-    internal const float InsideMargin = 2;
 
     /// <summary>
     /// Where a click ray first comes down onto a walkable navmesh surface clear of the terrain (a wall top, a ramp, a deck) within <paramref

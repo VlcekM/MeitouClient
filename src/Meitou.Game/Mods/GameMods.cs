@@ -16,13 +16,26 @@ namespace Meitou.Modding;
 /// </summary>
 sealed class GameMods(GameHost host)
 {
+    /// <summary>
+    /// The session's code mods; null without enabled code mods.
+    /// </summary>
     internal ModHost? Mods;
-    // With code mods enabled the JIT warm-up starts only once they are initialized: a method compiled before a Harmony patch keeps any inlined copy
-    // of the target.
+    /// <summary>
+    /// Whether the JIT warm-up waits for the code mods (<see cref="StartDeferredWarmup"/>). With code mods enabled the JIT warm-up starts only once
+    /// they are initialized: a method compiled before a Harmony patch keeps any inlined copy of the target.
+    /// </summary>
     bool _warmupAfterMods;
-    // The mods' hit feeds: the queue the current world fills, and the frame's hits handed to them.
+    /// <summary>
+    /// The world whose combat hit feed is <see cref="_hitFeed"/>; a new world gets a new queue.
+    /// </summary>
     World? _hitsFor;
+    /// <summary>
+    /// The queue the current world publishes its combat hits to.
+    /// </summary>
     ConcurrentQueue<CombatHit> _hitFeed = new();
+    /// <summary>
+    /// This frame's hits handed to the mods' feeds, kept to avoid allocating.
+    /// </summary>
     readonly List<CombatHit> _frameHits = [];
 
     /// <summary>
@@ -34,6 +47,9 @@ sealed class GameMods(GameHost host)
         else JitWarmup.Start();
     }
 
+    /// <summary>
+    /// Starts the JIT warm-up held back for the code mods, once they are initialized.
+    /// </summary>
     internal void StartDeferredWarmup()
     {
         if (!_warmupAfterMods) return;
@@ -90,6 +106,9 @@ sealed class GameMods(GameHost host)
     static Content.CodeModVersion? RunningVersion() =>
         Content.CodeModVersion.TryParse(BuildVersion.Tag.TrimStart('v'), out var version) ? version : null;
 
+    /// <summary>
+    /// The code mods running (none without code mods), tagged with this build's version.
+    /// </summary>
     Content.CodeModEnvironment CurrentModEnvironment() => Mods?.Environment(BuildVersion.Tag) ?? new(BuildVersion.Tag, []);
 
     /// <summary>
@@ -119,6 +138,9 @@ sealed class GameMods(GameHost host)
         }
     }
 
+    /// <summary>
+    /// Compares the save's code-mod record with the mods running now and notices each change.
+    /// </summary>
     void NoticeModChangesSince(Data.Save.SaveGame save)
     {
         if (save.ModEnvironment is not { } bytes) return;
@@ -139,10 +161,19 @@ sealed class GameMods(GameHost host)
     /// </summary>
     internal void RestoreModData(World world, Data.Save.SaveGame save) => Mods?.RestoreSaveData(world, save.ModData);
 
+    /// <summary>
+    /// The debug menu rows the mods registered, after the game's own.
+    /// </summary>
     internal IReadOnlyList<ModDebugCommand> ModDebugRows => Mods?.DebugCommands ?? [];
 
+    /// <summary>
+    /// The debug menu's rows: the game's labels, then the mods'.
+    /// </summary>
     internal int DebugRowCount => DebugMenu.DebugLabels.Length + ModDebugRows.Count;
 
+    /// <summary>
+    /// A debug menu row's label: the game's, or the mod's command with its owner in brackets.
+    /// </summary>
     internal string DebugLabel(int row)
     {
         if (row < DebugMenu.DebugLabels.Length) return DebugMenu.DebugLabels[row];
@@ -150,6 +181,9 @@ sealed class GameMods(GameHost host)
         return $"{command.Label} [{command.Owner}]";
     }
 
+    /// <summary>
+    /// Grows the debug menu's typed fields to one per row.
+    /// </summary>
     internal void EnsureDebugFields()
     {
         while (host.DebugMenu.DebugFields.Count < DebugRowCount) host.DebugMenu.DebugFields.Add("");
@@ -162,7 +196,10 @@ sealed class GameMods(GameHost host)
     {
         var command = ModDebugRows[row];
         var context = new DebugCommandContext(field, selected, here, tick, host.Session.World.Commands.Enqueue);
-        try { return command.Run(context) ?? ""; }
+        try
+        {
+            return command.Run(context) ?? "";
+        }
         catch (Exception e)
         {
             Console.Error.WriteLine($"mod       {command.Owner}: debug command '{command.Label}' failed: {e}");

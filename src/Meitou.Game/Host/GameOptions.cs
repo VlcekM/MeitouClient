@@ -11,14 +11,29 @@ sealed class GameOptions
 {
     #region Options
 
+    /// <summary>
+    /// <c>--title-preview</c>: with <c>--screenshot</c>, a picture of the staged Meitou title scene.
+    /// </summary>
     public bool TitlePreview;
+    /// <summary>
+    /// <c>--fps-limit</c>: the frame limit when vsync is off for this run (0 = unlimited); null keeps the saved one.
+    /// </summary>
     public int? FpsLimit;
+    /// <summary>
+    /// <c>--seed</c>: the world seed (default 0).
+    /// </summary>
     public ulong Seed;
     /// <summary>
     /// <c>--seed</c> was given: a new game from the menu keeps it instead of rolling a fresh one.
     /// </summary>
     public bool SeedGiven;
+    /// <summary>
+    /// <c>--vsync</c> / <c>--no-vsync</c> for this run; null keeps the saved setting.
+    /// </summary>
     public bool? VSync;
+    /// <summary>
+    /// <c>--ui</c>: the UI mode for this run; null keeps the saved one.
+    /// </summary>
     public Meitou.Data.Ui.UiMode? UiMode;
     /// <summary>
     /// <c>--low-end</c> (also passed on to WorldOptions): the Faithful UI for this run, whatever <c>--ui</c> or the saved mode says.
@@ -33,6 +48,9 @@ sealed class GameOptions
     /// <c>--mods-cfg</c>: read the enabled mods from this file instead of <c>data/mods.cfg</c> (also <c>MEITOU_MODS_CFG</c>; the option wins).
     /// </summary>
     public string? ModsCfg;
+    /// <summary>
+    /// <c>--ui-showcase</c>: with <c>--screenshot</c>, pictures of the HUD, inventory, stats, map, menus, a trade and a conversation.
+    /// </summary>
     public bool UiShowcase;
     /// <summary>
     /// With <c>--screenshot</c>: one HUD/panel to open for the picture (null: the HUD only).
@@ -46,6 +64,10 @@ sealed class GameOptions
     /// With <c>--screenshot</c>: control ticks (and their real time of simulation, at speed 1) run before the picture, with no input.
     /// </summary>
     public int Ticks;
+    /// <summary>
+    /// <c>--no-population</c> (an empty world), <c>--new-game</c> (a new game at a start), <c>--list-starts</c> (print the starts and exit) and
+    /// <c>--data-check</c> (print the load order's data problems and exit).
+    /// </summary>
     public bool NoPopulation, NewGame, ListStarts, DataCheck;
     /// <summary>
     /// <c>--wiki-export &lt;dir&gt;</c>: write the agent wiki's generated JSON files from the game data and exit (<see cref="WikiExport"/>).
@@ -130,6 +152,9 @@ sealed class GameOptions
     /// The start to play (null = the default); with <c>--move-to</c> the picture shows a selected squad walking.
     /// </summary>
     public string? NewGameName;
+    /// <summary>
+    /// <c>--move-to</c>: with <c>--new-game</c>, the squad is selected and ordered to walk to this X/Z.
+    /// </summary>
     public (float X, float Z)? MoveTo;
     /// <summary>
     /// Interactive run that closes itself after this many seconds and prints the frame rate (an unattended smoke test).
@@ -196,6 +221,9 @@ sealed class GameOptions
 
     #region Command line
 
+    /// <summary>
+    /// The command line's help text (its Keys part is also logged when play starts).
+    /// </summary>
     public const string Usage = """
         meitou [where] [options]     boots into the world with the Kenshi camera (default --town "The Hub")
           --fps-limit <n>            frame limit when vsync is off (default 150 from meitou.user.json; 0 = unlimited)

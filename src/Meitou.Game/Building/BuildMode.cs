@@ -39,34 +39,84 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     const float CeilingHang = 1;
 
+    /// <summary>
+    /// The host's building services (data, menu, placement checks); null until the host sets them, and build mode does not open without them.
+    /// </summary>
     internal BuildServices? Services;
+    /// <summary>
+    /// Whether build mode is open.
+    /// </summary>
     internal bool Active;
-    // Build mode paused a running game (the original's requested pause, FUN_1404e65e0): leaving it resumes the speed the player had.
+    /// <summary>
+    /// Whether build mode paused a running game: leaving it resumes the speed the player had. Build mode paused a running game (the original's
+    /// requested pause, FUN_1404e65e0): leaving it resumes the speed the player had.
+    /// </summary>
     bool _buildPausedGame;
+    /// <summary>
+    /// The building category chosen in the menu; null for the first that shows.
+    /// </summary>
     string? _buildCategory;
+    /// <summary>
+    /// The index of the chosen group in its category's list.
+    /// </summary>
     int _buildGroup;
 
     /// <summary>
     /// A right click dropped the held building: no building is held until one is chosen from the lists again (<c>FUN_1404e27e0</c>).
     /// </summary>
     internal bool BuildDiscarded;
-    // Which member of the group is chosen (null: its default pick).
+    /// <summary>
+    /// Which member of the group is chosen (null: its default pick).
+    /// </summary>
     internal BuildingBuildData? BuildMember;
+    /// <summary>
+    /// The ghosts placed and not yet confirmed, sent as one order on Confirm.
+    /// </summary>
     internal readonly List<QueuedGhost> BuildQueue = [];
+    /// <summary>
+    /// The ghost's turn (degrees), lift over where the cursor meets (units) and tilt factor.
+    /// </summary>
     float _ghostYaw, _ghostLift, _ghostTilt = DefaultTilt;
-    // How far the ghost may still sink and rise at its last place (PlacementCheck.Margins, after the nudge); the height keys stop at them.
+    /// <summary>
+    /// How far the ghost may still sink and rise at its last place (PlacementCheck.Margins, after the nudge); the height keys stop at them.
+    /// </summary>
     PlacementCheck.VerticalMargins _ghostMargins = PlacementCheck.VerticalMargins.Unlimited;
-    // The ghost now: where the cursor meets the ground or a building's floor (On), its rotation (tilt included), the first failure.
+    /// <summary>
+    /// The ghost now: where the cursor meets the ground or a building's floor (On), its rotation (tilt included), the first failure.
+    /// </summary>
     internal (Vector3 Position, Quaternion Rotation, PlacementFailure Failure, BuildingBuildData Building, Vector2[]? Hull, GhostFloor? On)? Ghost;
+    /// <summary>
+    /// The build map's keys held down (the ghost's controls run while held).
+    /// </summary>
     readonly HashSet<Key> _buildHeld = [];
+    /// <summary>
+    /// The timestamp of the last ghost update (<see cref="System.Diagnostics.Stopwatch"/>); 0 to start the frame time afresh.
+    /// </summary>
     long _buildClock;
+    /// <summary>
+    /// Whether the queue's ghosts were drawn last frame, so an emptied queue clears them once.
+    /// </summary>
     bool _ghostsDrawn;
+    /// <summary>
+    /// The placement failure shown in the message panel; null while the ghost can stand.
+    /// </summary>
     string? _buildMessage;
-    // Walls (docs/game/buildings-production.md "Walls"): the line being laid (its wall, start, the snap there and whether it runs backwards),
-    // its pieces this frame with their checks, the snap at its end, and the snap of the ghost before the first click.
+    /// <summary>
+    /// The wall line being laid (docs/game/buildings-production.md "Walls"): its wall, start, the snap there and whether it runs backwards; null
+    /// outside a line.
+    /// </summary>
     internal (BuildingBuildData Master, Vector3 Start, WallSnap? StartSnap, bool Reversed)? WallLine;
+    /// <summary>
+    /// The wall line's pieces this frame, each with its own placement check and footprint.
+    /// </summary>
     internal readonly List<(WallPiece Piece, PlacementFailure Failure, Vector2[]? Hull)> WallPieces = [];
+    /// <summary>
+    /// The snap at the wall line's end, and the snap of the ghost before the first click.
+    /// </summary>
     WallSnap? _wallEndSnap, _ghostSnap;
+    /// <summary>
+    /// The buildable buildings by record id, made on first use.
+    /// </summary>
     Dictionary<string, BuildingBuildData>? _buildIndex;
 
     /// <summary>
@@ -93,8 +143,14 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     public BuildServices? BuildHost { get => Services; set => Services = value; }
 
+    /// <summary>
+    /// Whether build mode is open.
+    /// </summary>
     public bool BuildModeOn => Active;
 
+    /// <summary>
+    /// The buildings the player may build: every building while the level editor builds, otherwise the snapshot's unlocked ones.
+    /// </summary>
     internal IReadOnlySet<string> Unlocked() =>
         player.LevelEditorPanel.LevelBuild ? player.LevelEditorPanel.LevelEveryBuilding() : player.Session.CurrentSnapshot.UnlockedBuildings;
 
@@ -103,6 +159,10 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     public void ToggleBuildMode() => SetBuildMode(!Active);
 
+    /// <summary>
+    /// Opens build mode (pausing a running game and clearing the ghost) or closes it (dropping the queue and resuming the speed it paused); does not
+    /// open without services or over a modal screen.
+    /// </summary>
     internal void SetBuildMode(bool on)
     {
         if (on && (Services is null || player.FaithfulScreens.HasModal)) return;
@@ -150,6 +210,9 @@ sealed class BuildMode(PlayerInterface player)
 
     #region Menu
 
+    /// <summary>
+    /// The menu's categories with something unlocked (sorted by name while the level editor builds).
+    /// </summary>
     IReadOnlyList<string> BuildCategories()
     {
         if (Services?.Menu.Categories(Unlocked()) is not { } categories) return [];
@@ -167,9 +230,15 @@ sealed class BuildMode(PlayerInterface player)
         return _buildCategory is { } chosen && categories.Contains(chosen) ? chosen : categories[0];
     }
 
+    /// <summary>
+    /// The chosen category's groups with something unlocked.
+    /// </summary>
     IReadOnlyList<BuildGroup> BuildGroups() =>
         CurrentCategory() is { } category && Services is { } host ? host.Menu.Groups(category, Unlocked()) : [];
 
+    /// <summary>
+    /// The chosen group; null without groups or after a right click dropped the held building.
+    /// </summary>
     BuildGroup? CurrentGroup()
     {
         var groups = BuildGroups();
@@ -182,6 +251,9 @@ sealed class BuildMode(PlayerInterface player)
     internal BuildingBuildData? CurrentBuilding() =>
         CurrentGroup() is { } group ? BuildMember is { } member && group.Members.Contains(member) ? member : group.Default : null;
 
+    /// <summary>
+    /// Steps the chosen group's member by <paramref name="step"/> (wrapping round), resetting the lift.
+    /// </summary>
     void StepVariant(int step)
     {
         if (CurrentGroup() is not { Members.Count: > 1 } group || CurrentBuilding() is not { } current) return;
@@ -227,6 +299,9 @@ sealed class BuildMode(PlayerInterface player)
     /// </summary>
     public bool OwnsBuildNumpad(Key key) => Active && key is EngineKey.KeypadAdd or EngineKey.KeypadSubtract;
 
+    /// <summary>
+    /// A key went up: the build map's controls stop.
+    /// </summary>
     public void BuildKeyUp(Key key)
     {
         player.UiInput++;
@@ -360,6 +435,9 @@ sealed class BuildMode(PlayerInterface player)
 
     #region Walls
 
+    /// <summary>
+    /// A buildable building by record id; null for one not in the menu's catalog.
+    /// </summary>
     BuildingBuildData? BuildData(string id)
     {
         _buildIndex ??= Services?.Menu.Catalog.GroupBy(b => b.Id, StringComparer.Ordinal)
@@ -409,6 +487,9 @@ sealed class BuildMode(PlayerInterface player)
         return false;
     };
 
+    /// <summary>
+    /// The distance between two points on the ground plane (x, z).
+    /// </summary>
     static float FlatDistance(Vector3 a, Vector3 b) => Vector2.Distance(new(a.X, a.Z), new(b.X, b.Z));
 
     /// <summary>
@@ -592,6 +673,9 @@ sealed class BuildMode(PlayerInterface player)
         return min is { } a && max is { } b ? b - a : default;
     }
 
+    /// <summary>
+    /// Drops the wall line being laid, else the last queued ghost (with its sound).
+    /// </summary>
     void BuildUndo()
     {
         if (WallCancel()) return;
@@ -601,6 +685,9 @@ sealed class BuildMode(PlayerInterface player)
         BuildQueue.RemoveAt(BuildQueue.Count - 1);
     }
 
+    /// <summary>
+    /// Sends the queue as one <see cref="PlaceBuildings"/> order (the level editor's own confirm while it builds) and leaves build mode.
+    /// </summary>
     void BuildConfirm()
     {
         if (player.LevelEditorPanel.LevelBuild)
@@ -630,6 +717,9 @@ sealed class BuildMode(PlayerInterface player)
 
     #region Window
 
+    /// <summary>
+    /// Fills the build screen's bindings: the categories, groups and members, the message panel, and the buttons' actions.
+    /// </summary>
     internal void BindBuildScreen(UiBindings b)
     {
         void Enable(string name, string action)
@@ -785,13 +875,27 @@ sealed class BuildMode(PlayerInterface player)
                 BuildMember = null;
                 _ghostLift = 0;
                 break;
-            case ("BuldingTypePrevButton", _): StepVariant(-1); break;
-            case ("BuldingTypeNextButton", _): StepVariant(1); break;
-            case ("ConfirmButton", _): BuildConfirm(); break;
-            case ("UndoButton", _): BuildUndo(); break;
-            case ("BuildButton", _): SetBuildMode(false); break;
-            case ("FloorArrowUp", _): player.Floor?.Step(1); break;
-            case ("FloorArrowDown", _): player.Floor?.Step(-1); break;
+            case ("BuldingTypePrevButton", _):
+                StepVariant(-1);
+                break;
+            case ("BuldingTypeNextButton", _):
+                StepVariant(1);
+                break;
+            case ("ConfirmButton", _):
+                BuildConfirm();
+                break;
+            case ("UndoButton", _):
+                BuildUndo();
+                break;
+            case ("BuildButton", _):
+                SetBuildMode(false);
+                break;
+            case ("FloorArrowUp", _):
+                player.Floor?.Step(1);
+                break;
+            case ("FloorArrowDown", _):
+                player.Floor?.Step(-1);
+                break;
         }
     }
 
@@ -799,7 +903,9 @@ sealed class BuildMode(PlayerInterface player)
 
     #region Sites
 
-    // A right press on a site: when, where and which, for the quick order (build) given on release or the menu opened after the hold.
+    /// <summary>
+    /// A right press on a site: when, where and which, for the quick order (build) given on release or the menu opened after the hold.
+    /// </summary>
     (BuildingSnapshot Site, Vector2 At, long Since)? _sitePending;
 
     /// <summary>
@@ -1037,6 +1143,9 @@ sealed class BuildMode(PlayerInterface player)
         }
     }
 
+    /// <summary>
+    /// Orders the selection to build (or repair) the site; with the slow modifier it also adds the matching job.
+    /// </summary>
     void OrderConstruction(BuildingSnapshot site, IReadOnlyList<CharacterId> selection)
     {
         player.Say(new BuildOrder(selection, site.Id) { Tick = player.Session.World.Tick });

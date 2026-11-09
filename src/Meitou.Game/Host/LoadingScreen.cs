@@ -17,26 +17,64 @@ namespace Meitou.Game.Host;
 /// </summary>
 sealed class LoadingScreen : IDisposable
 {
-    readonly DebugOverlay _overlay;
-    DebugOverlay? _stamp;   // the original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf)
-    readonly UiPainter? _painter;
-    readonly MyGuiResources? _resources;
-    readonly MyGuiLayout? _layout;
-    readonly Random _random = new();
-    readonly string[] _tips, _pictures, _groups;
-    string? _picture, _group;
-    string _tip = "";
-    double _shownAt;
-    readonly Stopwatch _clock = Stopwatch.StartNew();
-    string _label = "";
-    double _from, _to, _expected = 1, _stepStart;
-    float _shown;
-    const double ExitSeconds = 0.7;
-    double? _exitStart;
-    bool _drawn;
+    #region Showing
 
-    float ExitProgress => _exitStart is { } start ? (float)Math.Clamp((_clock.Elapsed.TotalSeconds - start) / ExitSeconds, 0, 1) : 0;
-    public bool Exiting => _exitStart is not null && ExitProgress < 1;
+    /// <summary>
+    /// The overlay the screen draws its rectangles and text with.
+    /// </summary>
+    readonly DebugOverlay _overlay;
+    /// <summary>
+    /// The original's LOADING... face (Kenshi_UI_Messages: MailartRubberstamp-Regular.ttf); null without the font.
+    /// </summary>
+    DebugOverlay? _stamp;
+    /// <summary>
+    /// Paints the layout's controls; null when the original's layout did not load (the spinner only).
+    /// </summary>
+    readonly UiPainter? _painter;
+    /// <summary>
+    /// The original's MyGUI resources (<c>kenshi_init.xml</c>); null when they did not load.
+    /// </summary>
+    readonly MyGuiResources? _resources;
+    /// <summary>
+    /// The expanded <c>Kenshi_LoadingScreen.layout</c>; null without it.
+    /// </summary>
+    readonly MyGuiLayout? _layout;
+    /// <summary>
+    /// Picks each showing's tip, picture and group.
+    /// </summary>
+    readonly Random _random = new();
+    /// <summary>
+    /// What a showing picks from: the tips, the Meitou pictures (<c>loading_screen*.dds</c>) and the image set's groups (Faithful).
+    /// </summary>
+    readonly string[] _tips, _pictures, _groups;
+    /// <summary>
+    /// This showing's picture and image-set group; null when there are none.
+    /// </summary>
+    string? _picture, _group;
+    /// <summary>
+    /// This showing's tip, translated; empty without tips.
+    /// </summary>
+    string _tip = "";
+    /// <summary>
+    /// When this showing began (seconds of <see cref="_clock"/>): the Faithful dots count from it.
+    /// </summary>
+    double _shownAt;
+    /// <summary>
+    /// The screen's clock (seconds) for the steps, the exit and the splash.
+    /// </summary>
+    readonly Stopwatch _clock = Stopwatch.StartNew();
+    /// <summary>
+    /// The original's image set of the Faithful pictures.
+    /// </summary>
+    const string ImageSet = "Kenshi_LoadingScreen";
+    /// <summary>
+    /// Windows-1252, its code page provider registered once.
+    /// </summary>
+    static readonly Lazy<System.Text.Encoding> Windows1252 = new(() =>
+    {
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+        return System.Text.Encoding.GetEncoding(1252);
+    });
 
     /// <summary>
     /// The original's background-loading bar, drawn over the Faithful screen (the host steps it).
@@ -49,14 +87,8 @@ sealed class LoadingScreen : IDisposable
     public bool Faithful { get; set; }
 
     /// <summary>
-    /// Reveal the ready scene while the panels slide out (Faithful: hidden at once, as the original's window). A fast sky load that never showed
-    /// panels has nothing to dismiss.
+    /// A screen with its resources and what it picks from, the first showing's tip and picture picked.
     /// </summary>
-    public void Finish()
-    {
-        if (_drawn) _exitStart ??= _clock.Elapsed.TotalSeconds - (Faithful ? ExitSeconds : 0);
-    }
-
     LoadingScreen(DebugOverlay overlay, UiPainter? painter, MyGuiResources? resources, MyGuiLayout? layout, string[] tips,
         string[] pictures, string[] groups)
     {
@@ -109,8 +141,6 @@ sealed class LoadingScreen : IDisposable
         }
     }
 
-    const string ImageSet = "Kenshi_LoadingScreen";
-
     /// <summary>
     /// The non-empty lines of a tips file: by its byte order mark when it has one, else UTF-8 when it is valid UTF-8, else Windows-1252 (the French,
     /// German and Spanish files are; engine choice: how the original's MyGUI strings show those bytes is Unknown).
@@ -133,110 +163,6 @@ sealed class LoadingScreen : IDisposable
     }
 
     /// <summary>
-    /// Windows-1252, its code page provider registered once.
-    /// </summary>
-    static readonly Lazy<System.Text.Encoding> Windows1252 = new(() =>
-    {
-        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-        return System.Text.Encoding.GetEncoding(1252);
-    });
-
-    /// <summary>
-    /// A step starts: its name, the bar's share it covers (<paramref name="start"/> to <paramref name="end"/>, 0..1) and about how long it takes.
-    /// </summary>
-    public void Step(string name, double start, double end, double seconds)
-    {
-        _label = name;
-        _from = Math.Max(start, _shown);
-        _to = Math.Max(end, _from);
-        _expected = Math.Max(seconds, 0.05);
-        _stepStart = _clock.Elapsed.TotalSeconds;
-    }
-
-    /// <summary>
-    /// The bar's position now: the step's start, eased towards 95 % of its share by the time it has run against the time it usually takes.
-    /// </summary>
-    public float Progress
-    {
-        get
-        {
-            double t = (_clock.Elapsed.TotalSeconds - _stepStart) / _expected;
-            double eased = _from + (_to - _from) * 0.95 * (1 - Math.Exp(-2.5 * t));
-            return _shown = Math.Max(_shown, (float)Math.Clamp(eased, 0, 1));
-        }
-    }
-
-    /// <summary>
-    /// The original's splash (<c>FUN_140916140</c>, stepped by <c>FUN_140913720</c>; docs/game/ui-screens.md "Splash"): on black, the
-    /// <c>Kenshi_Splash_Logos</c> picture (its height × 100, so the screen's height) and then <c>Kenshi_Splash_LoFi</c> (× 0.7), each centred, at the
-    /// image's height × the UI scale × that factor, capped at the screen's height.
-    /// </summary>
-    static readonly (string ImageSet, float Scale)[] SplashSlides = [("Kenshi_Splash_Logos", 100), ("Kenshi_Splash_LoFi", 0.7f)];
-    int _splashSlide = -1, _fullFrames;
-    double _slideStart;
-    bool _skipSlide;
-
-    /// <summary>
-    /// A splash slide's height: the image height × the GUI's horizontal scale (<c>DAT_1421337ec</c> = screen width / the 1920 px width of
-    /// <c>Kenshi_UI.png</c>, set by <c>FUN_1406e3c30</c>) × the slide's factor, capped at the screen height.
-    /// </summary>
-    internal static int SplashSlideHeight(float imageHeight, int screenWidth, int screenHeight,
-        float factor) => (int)Math.Min(imageHeight * (screenWidth / 1920f) * factor, screenHeight);
-
-    /// <summary>
-    /// Plays the splash from its first picture (the Faithful start, which opens on the title); the loading screen shows once it is over.
-    /// </summary>
-    public void StartSplash()
-    {
-        if (_painter is null || _resources is null) return;
-        (_splashSlide, _fullFrames, _skipSlide, _slideStart) = (0, 0, false, _clock.Elapsed.TotalSeconds);
-    }
-
-    /// <summary>
-    /// The splash is still showing a picture.
-    /// </summary>
-    public bool SplashPlaying => _splashSlide >= 0 && _splashSlide < SplashSlides.Length;
-
-    /// <summary>
-    /// A key or button was pressed: the picture showing ends once it is fully shown.
-    /// </summary>
-    public void SkipSplash() { if (SplashPlaying) _skipSlide = true; }
-
-    /// <summary>
-    /// One frame of the splash: the picture fades in at 3 a second and ends after 4 seconds, or on a press, once it has been drawn fully opaque on
-    /// more than three frames; then the next one starts at once, with no fade out.
-    /// </summary>
-    void DrawSplash(int width, int height)
-    {
-        double elapsed = _clock.Elapsed.TotalSeconds - _slideStart;
-        float alpha = (float)Math.Min(1, elapsed * 3);
-        if (alpha == 1) _fullFrames++;
-        bool ended = (_skipSlide || elapsed > 4) && _fullFrames > 3;
-        _overlay.Rect(0, 0, width, height, new Vector4(0, 0, 0, 1));
-        _overlay.Flush(width, height);
-        if (!ended && _resources!.Resources.TryGetValue(SplashSlides[_splashSlide].ImageSet, out var set)
-            && set.Element("Group")?.Attribute("size")?.Value.Split(' ') is [var w, var h]
-            && float.TryParse(w, CultureInfo.InvariantCulture, out float imageWidth)
-                && float.TryParse(h, CultureInfo.InvariantCulture, out float imageHeight) && imageHeight > 0)
-        {
-            int shownHeight = SplashSlideHeight(imageHeight, width, height, SplashSlides[_splashSlide].Scale);
-            int shownWidth = (int)(imageWidth / imageHeight * shownHeight);
-            var bounds = new UiRect((int)(width * 0.5f - shownWidth * 0.5f), (int)(height * 0.5f - shownHeight * 0.5f), shownWidth, shownHeight);
-            var properties = new Dictionary<string, string>
-            {
-                ["ImageResource"] = SplashSlides[_splashSlide].ImageSet,
-                ["ImageGroup"] = "Main",
-                ["ImageName"] = "Main",
-                ["Alpha"] = alpha.ToString(CultureInfo.InvariantCulture),
-            };
-            _painter!.Mode = UiMode.Faithful;
-            _painter.Draw([new UiControl("Splash", "ImageBox", bounds, "", "", "", true, properties, Vector4.Zero)], width,
-                height, new Vector2(-1, -1), null);
-        }
-        if (ended) (_splashSlide, _fullFrames, _skipSlide, _slideStart) = (_splashSlide + 1, 0, false, _clock.Elapsed.TotalSeconds);
-    }
-
-    /// <summary>
     /// Starts the bar again (a new load between scenes), with a new tip and picture.
     /// </summary>
     public void Restart()
@@ -249,19 +175,10 @@ sealed class LoadingScreen : IDisposable
         Pick();
     }
 
-    bool _released;
-
     /// <summary>
-    /// Once the screen has gone, frees its pictures (the picture and the UI atlas, about 17 MB at 1080p); the next showing loads them again. The host
-    /// calls it on frames the screen is not drawn.
+    /// One frame of the screen: the splash while it plays, else the Faithful window or Meitou's two panels with the bar, sliding out as it exits;
+    /// nothing once gone.
     /// </summary>
-    public void ReleaseWhenGone()
-    {
-        if (_released || _exitStart is null || ExitProgress < 1) return;
-        _painter?.ReleaseTextures();
-        _released = true;
-    }
-
     public void Draw(int width, int height, bool background = true)
     {
         float t = ExitProgress;
@@ -412,9 +329,192 @@ sealed class LoadingScreen : IDisposable
         _painter.Draw(controls, width, height, new Vector2(-1, -1), null);
     }
 
+    /// <summary>
+    /// Frees the painter and the LOADING... face.
+    /// </summary>
     public void Dispose()
     {
         _painter?.Dispose();
         _stamp?.Dispose();
     }
+
+    #endregion
+
+    #region Progress
+
+    /// <summary>
+    /// The running step's name.
+    /// </summary>
+    string _label = "";
+    /// <summary>
+    /// The running step's share of the bar (from, to; 0..1), the seconds it usually takes and when it started.
+    /// </summary>
+    double _from, _to, _expected = 1, _stepStart;
+    /// <summary>
+    /// The bar's position last shown; it never goes back.
+    /// </summary>
+    float _shown;
+
+    /// <summary>
+    /// A step starts: its name, the bar's share it covers (<paramref name="start"/> to <paramref name="end"/>, 0..1) and about how long it takes.
+    /// </summary>
+    public void Step(string name, double start, double end, double seconds)
+    {
+        _label = name;
+        _from = Math.Max(start, _shown);
+        _to = Math.Max(end, _from);
+        _expected = Math.Max(seconds, 0.05);
+        _stepStart = _clock.Elapsed.TotalSeconds;
+    }
+
+    /// <summary>
+    /// The bar's position now: the step's start, eased towards 95 % of its share by the time it has run against the time it usually takes.
+    /// </summary>
+    public float Progress
+    {
+        get
+        {
+            double t = (_clock.Elapsed.TotalSeconds - _stepStart) / _expected;
+            double eased = _from + (_to - _from) * 0.95 * (1 - Math.Exp(-2.5 * t));
+            return _shown = Math.Max(_shown, (float)Math.Clamp(eased, 0, 1));
+        }
+    }
+
+    #endregion
+
+    #region Exit
+
+    /// <summary>
+    /// How long the panels take to slide out (seconds).
+    /// </summary>
+    const double ExitSeconds = 0.7;
+    /// <summary>
+    /// When the exit began (seconds of <see cref="_clock"/>); null while loading.
+    /// </summary>
+    double? _exitStart;
+    /// <summary>
+    /// The screen was drawn this showing: a load that never showed it has nothing to dismiss.
+    /// </summary>
+    bool _drawn;
+    /// <summary>
+    /// The pictures were freed since the screen went (<see cref="ReleaseWhenGone"/>).
+    /// </summary>
+    bool _released;
+
+    /// <summary>
+    /// The exit's progress, 0..1; 0 before it starts.
+    /// </summary>
+    float ExitProgress => _exitStart is { } start ? (float)Math.Clamp((_clock.Elapsed.TotalSeconds - start) / ExitSeconds, 0, 1) : 0;
+    /// <summary>
+    /// The panels are sliding out.
+    /// </summary>
+    public bool Exiting => _exitStart is not null && ExitProgress < 1;
+
+    /// <summary>
+    /// Reveal the ready scene while the panels slide out (Faithful: hidden at once, as the original's window). A fast sky load that never showed
+    /// panels has nothing to dismiss.
+    /// </summary>
+    public void Finish()
+    {
+        if (_drawn) _exitStart ??= _clock.Elapsed.TotalSeconds - (Faithful ? ExitSeconds : 0);
+    }
+
+    /// <summary>
+    /// Once the screen has gone, frees its pictures (the picture and the UI atlas, about 17 MB at 1080p); the next showing loads them again. The host
+    /// calls it on frames the screen is not drawn.
+    /// </summary>
+    public void ReleaseWhenGone()
+    {
+        if (_released || _exitStart is null || ExitProgress < 1) return;
+        _painter?.ReleaseTextures();
+        _released = true;
+    }
+
+    #endregion
+
+    #region Splash
+
+    /// <summary>
+    /// The original's splash (<c>FUN_140916140</c>, stepped by <c>FUN_140913720</c>; docs/game/ui-screens.md "Splash"): on black, the
+    /// <c>Kenshi_Splash_Logos</c> picture (its height × 100, so the screen's height) and then <c>Kenshi_Splash_LoFi</c> (× 0.7), each centred, at the
+    /// image's height × the UI scale × that factor, capped at the screen's height.
+    /// </summary>
+    static readonly (string ImageSet, float Scale)[] SplashSlides = [("Kenshi_Splash_Logos", 100), ("Kenshi_Splash_LoFi", 0.7f)];
+    /// <summary>
+    /// The splash picture showing (-1 before the splash, past the last once it is over), and the frames it was drawn fully opaque.
+    /// </summary>
+    int _splashSlide = -1, _fullFrames;
+    /// <summary>
+    /// When the picture showing started (seconds of <see cref="_clock"/>).
+    /// </summary>
+    double _slideStart;
+    /// <summary>
+    /// A press asked to end the picture showing.
+    /// </summary>
+    bool _skipSlide;
+
+    /// <summary>
+    /// A splash slide's height: the image height × the GUI's horizontal scale (<c>DAT_1421337ec</c> = screen width / the 1920 px width of
+    /// <c>Kenshi_UI.png</c>, set by <c>FUN_1406e3c30</c>) × the slide's factor, capped at the screen height.
+    /// </summary>
+    internal static int SplashSlideHeight(float imageHeight, int screenWidth, int screenHeight,
+        float factor) => (int)Math.Min(imageHeight * (screenWidth / 1920f) * factor, screenHeight);
+
+    /// <summary>
+    /// Plays the splash from its first picture (the Faithful start, which opens on the title); the loading screen shows once it is over.
+    /// </summary>
+    public void StartSplash()
+    {
+        if (_painter is null || _resources is null) return;
+        (_splashSlide, _fullFrames, _skipSlide, _slideStart) = (0, 0, false, _clock.Elapsed.TotalSeconds);
+    }
+
+    /// <summary>
+    /// The splash is still showing a picture.
+    /// </summary>
+    public bool SplashPlaying => _splashSlide >= 0 && _splashSlide < SplashSlides.Length;
+
+    /// <summary>
+    /// A key or button was pressed: the picture showing ends once it is fully shown.
+    /// </summary>
+    public void SkipSplash()
+    {
+        if (SplashPlaying) _skipSlide = true;
+    }
+
+    /// <summary>
+    /// One frame of the splash: the picture fades in at 3 a second and ends after 4 seconds, or on a press, once it has been drawn fully opaque on
+    /// more than three frames; then the next one starts at once, with no fade out.
+    /// </summary>
+    void DrawSplash(int width, int height)
+    {
+        double elapsed = _clock.Elapsed.TotalSeconds - _slideStart;
+        float alpha = (float)Math.Min(1, elapsed * 3);
+        if (alpha == 1) _fullFrames++;
+        bool ended = (_skipSlide || elapsed > 4) && _fullFrames > 3;
+        _overlay.Rect(0, 0, width, height, new Vector4(0, 0, 0, 1));
+        _overlay.Flush(width, height);
+        if (!ended && _resources!.Resources.TryGetValue(SplashSlides[_splashSlide].ImageSet, out var set)
+            && set.Element("Group")?.Attribute("size")?.Value.Split(' ') is [var w, var h]
+            && float.TryParse(w, CultureInfo.InvariantCulture, out float imageWidth)
+                && float.TryParse(h, CultureInfo.InvariantCulture, out float imageHeight) && imageHeight > 0)
+        {
+            int shownHeight = SplashSlideHeight(imageHeight, width, height, SplashSlides[_splashSlide].Scale);
+            int shownWidth = (int)(imageWidth / imageHeight * shownHeight);
+            var bounds = new UiRect((int)(width * 0.5f - shownWidth * 0.5f), (int)(height * 0.5f - shownHeight * 0.5f), shownWidth, shownHeight);
+            var properties = new Dictionary<string, string>
+            {
+                ["ImageResource"] = SplashSlides[_splashSlide].ImageSet,
+                ["ImageGroup"] = "Main",
+                ["ImageName"] = "Main",
+                ["Alpha"] = alpha.ToString(CultureInfo.InvariantCulture),
+            };
+            _painter!.Mode = UiMode.Faithful;
+            _painter.Draw([new UiControl("Splash", "ImageBox", bounds, "", "", "", true, properties, Vector4.Zero)], width,
+                height, new Vector2(-1, -1), null);
+        }
+        if (ended) (_splashSlide, _fullFrames, _skipSlide, _slideStart) = (_splashSlide + 1, 0, false, _clock.Elapsed.TotalSeconds);
+    }
+
+    #endregion
 }

@@ -14,11 +14,26 @@ namespace Meitou.Modding;
 /// </summary>
 public sealed class ModContext
 {
+    /// <summary>
+    /// The registry the mod's registrations are committed to when its <see cref="IMod.Initialize"/> returns.
+    /// </summary>
     readonly ModRegistry _registry;
+    /// <summary>
+    /// The current world, if any: the tick and the command queue.
+    /// </summary>
     readonly Func<World?> _world;
+    /// <summary>
+    /// The mod's saved setting values (key to text), applied by <see cref="AddSettings"/>; null when none were saved.
+    /// </summary>
     readonly IReadOnlyDictionary<string, string>? _savedSettings;
+    /// <summary>
+    /// The mod's Harmony instance, made on first use.
+    /// </summary>
     Harmony? _harmony;
 
+    /// <summary>
+    /// Made by the host for one mod before its <see cref="IMod.Initialize"/>; its random purpose comes from the manifest id.
+    /// </summary>
     internal ModContext(LoadedMod mod, ModRegistry registry, GameDatabase data, PopulationData population, Func<World?> world,
         IReadOnlyDictionary<string, string>? savedSettings = null)
     {
@@ -31,8 +46,17 @@ public sealed class ModContext
         RngPurpose = (RngPurpose)(uint)(Rng.StableHash(mod.Manifest.Id) | 0x8000_0000UL);
     }
 
+    /// <summary>
+    /// The mod this context belongs to.
+    /// </summary>
     internal LoadedMod Mod { get; }
+    /// <summary>
+    /// What the mod registers during its <see cref="IMod.Initialize"/>, committed when it returns.
+    /// </summary>
     internal ModRegistrations Pending { get; } = new();
+    /// <summary>
+    /// Whether registering is allowed: true during <see cref="IMod.Initialize"/>, cleared when it returns.
+    /// </summary>
     internal bool Open { get; set; } = true;
 
     /// <summary>
@@ -45,7 +69,13 @@ public sealed class ModContext
     /// </summary>
     public string Name => Mod.Info.Name;
 
+    /// <summary>
+    /// The mod's folder (where its <c>.mod</c> file and code are).
+    /// </summary>
     public string Folder => Mod.Info.Folder;
+    /// <summary>
+    /// The mod's code manifest.
+    /// </summary>
     public CodeModManifest Manifest => Mod.Manifest;
 
     /// <summary>
@@ -69,6 +99,9 @@ public sealed class ModContext
     /// </summary>
     public Harmony Harmony => _harmony ??= new Harmony(Id);
 
+    /// <summary>
+    /// Whether the mod used its Harmony instance.
+    /// </summary>
     internal bool HasHarmony => _harmony is not null;
 
     /// <summary>
@@ -230,6 +263,9 @@ public sealed class ModContext
         return group;
     }
 
+    /// <summary>
+    /// Throws once <see cref="IMod.Initialize"/> has returned: registering is only allowed during it.
+    /// </summary>
     void CheckOpen()
     {
         if (!Open) throw new InvalidOperationException($"{Id}: registering is only allowed during IMod.Initialize.");

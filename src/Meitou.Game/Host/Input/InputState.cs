@@ -8,14 +8,38 @@ namespace Meitou.Game.Host.Input;
 /// </summary>
 public sealed class TickInput
 {
+    /// <summary>
+    /// How many keys there are (<see cref="Key"/>'s values).
+    /// </summary>
     static readonly int KeyCount = Enum.GetValues<Key>().Length;
+    /// <summary>
+    /// How many mouse buttons there are (<see cref="MouseButton"/>'s values).
+    /// </summary>
     static readonly int ButtonCount = Enum.GetValues<MouseButton>().Length;
 
+    /// <summary>
+    /// Each key's state at the tick: down.
+    /// </summary>
     internal readonly bool[] KeyDown = new bool[KeyCount];
+    /// <summary>
+    /// Each key went down since the previous tick.
+    /// </summary>
     internal readonly bool[] KeyPressed = new bool[KeyCount];
+    /// <summary>
+    /// Each key went up since the previous tick.
+    /// </summary>
     internal readonly bool[] KeyReleased = new bool[KeyCount];
+    /// <summary>
+    /// Each mouse button's state at the tick: down.
+    /// </summary>
     internal readonly bool[] ButtonDown = new bool[ButtonCount];
+    /// <summary>
+    /// Each mouse button went down since the previous tick.
+    /// </summary>
     internal readonly bool[] ButtonPressed = new bool[ButtonCount];
+    /// <summary>
+    /// Each mouse button went up since the previous tick.
+    /// </summary>
     internal readonly bool[] ButtonReleased = new bool[ButtonCount];
 
     /// <summary>
@@ -26,17 +50,47 @@ public sealed class TickInput
     /// Wheel notches since the previous tick, positive away from the user (zoom in).
     /// </summary>
     public float Wheel { get; internal set; }
+    /// <summary>
+    /// The mouse position at the tick, in window pixels.
+    /// </summary>
     public Vector2 MousePosition { get; internal set; }
 
+    /// <summary>
+    /// Whether the key is down at the tick.
+    /// </summary>
     public bool IsDown(Key key) => KeyDown[(int)key];
+    /// <summary>
+    /// Whether the key went down since the previous tick.
+    /// </summary>
     public bool WasPressed(Key key) => KeyPressed[(int)key];
+    /// <summary>
+    /// Whether the key went up since the previous tick.
+    /// </summary>
     public bool WasReleased(Key key) => KeyReleased[(int)key];
+    /// <summary>
+    /// Whether the mouse button is down at the tick.
+    /// </summary>
     public bool IsDown(MouseButton button) => ButtonDown[(int)button];
+    /// <summary>
+    /// Whether the mouse button went down since the previous tick.
+    /// </summary>
     public bool WasPressed(MouseButton button) => ButtonPressed[(int)button];
+    /// <summary>
+    /// Whether the mouse button went up since the previous tick.
+    /// </summary>
     public bool WasReleased(MouseButton button) => ButtonReleased[(int)button];
 
+    /// <summary>
+    /// Whether the binding's key or button is down at the tick.
+    /// </summary>
     public bool IsDown(Binding b) => b.IsMouse ? IsDown(b.Button) : IsDown(b.Key);
+    /// <summary>
+    /// Whether the binding's key or button went down since the previous tick.
+    /// </summary>
     public bool WasPressed(Binding b) => b.IsMouse ? WasPressed(b.Button) : WasPressed(b.Key);
+    /// <summary>
+    /// Whether the binding's key or button went up since the previous tick.
+    /// </summary>
     public bool WasReleased(Binding b) => b.IsMouse ? WasReleased(b.Button) : WasReleased(b.Key);
 
     /// <summary>
@@ -55,11 +109,26 @@ public sealed class TickInput
 /// </summary>
 public sealed class InputState
 {
+    /// <summary>
+    /// The edges and sums gathered for the next tick.
+    /// </summary>
     TickInput _pending = new();
+    /// <summary>
+    /// Each key's state as the host has reported so far.
+    /// </summary>
     readonly bool[] _keyHeld = new bool[Enum.GetValues<Key>().Length];
+    /// <summary>
+    /// Each mouse button's state as the host has reported so far.
+    /// </summary>
     readonly bool[] _buttonHeld = new bool[Enum.GetValues<MouseButton>().Length];
+    /// <summary>
+    /// The mouse position last reported.
+    /// </summary>
     Vector2 _mousePosition;
 
+    /// <summary>
+    /// A key went down or up; a repeated report of the same state (OS key repeat) is no edge.
+    /// </summary>
     public void SetKey(Key key, bool down)
     {
         int i = (int)key;
@@ -68,6 +137,9 @@ public sealed class InputState
         (down ? _pending.KeyPressed : _pending.KeyReleased)[i] = true;
     }
 
+    /// <summary>
+    /// A mouse button went down or up; a repeated report of the same state is no edge.
+    /// </summary>
     public void SetMouseButton(MouseButton button, bool down)
     {
         int i = (int)button;
@@ -86,8 +158,14 @@ public sealed class InputState
     /// </summary>
     public void AddMouseDelta(float dx, float dy) => _pending.MouseDelta += new Vector2(dx, dy);
 
+    /// <summary>
+    /// Adds wheel notches since the last report (positive away from the user).
+    /// </summary>
     public void AddWheel(float notches) => _pending.Wheel += notches;
 
+    /// <summary>
+    /// The mouse position now, in window pixels.
+    /// </summary>
     public void SetMousePosition(float x, float y) => _mousePosition = new Vector2(x, y);
 
     /// <summary>

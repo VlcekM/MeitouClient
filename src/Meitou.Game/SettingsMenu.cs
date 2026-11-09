@@ -20,27 +20,181 @@ namespace Meitou.Game;
 /// </summary>
 sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBindings bindings, Action save, Slider frameLimit, UserConfig config)
 {
-    internal readonly PlayerInterface Player = player;
-    internal readonly SettingsPanel Values = values;
-    internal readonly InputBindings Bindings = bindings;
-    internal readonly UserConfig Config = config;
-    internal FeatureGrouping Grouping => field ??= new(this);
-    internal SettingModes Modes => field ??= new();
-    internal MenuMotion Motion => field ??= new(this);
-    internal GamePages GamePages => field ??= new(this);
-    internal QualityTiers Tiers => field ??= new(this);
-    internal LookPresets LookPresets => field ??= new(this);
-    internal LookBar LookBar => field ??= new(this);
-    internal PresetNamingDialog PresetNaming => field ??= new(this);
-    internal ModsPage ModsPage => field ??= new(this);
-    internal SettingsCanvas Canvas => field ??= new(this);
+    #region State
 
+    /// <summary>
+    /// The player's interface (its painter and the menu pause).
+    /// </summary>
+    internal readonly PlayerInterface Player = player;
+    /// <summary>
+    /// The panel's sliders and switches the rows edit.
+    /// </summary>
+    internal readonly SettingsPanel Values = values;
+    /// <summary>
+    /// The key bindings the Controls page edits.
+    /// </summary>
+    internal readonly InputBindings Bindings = bindings;
+    /// <summary>
+    /// The player's settings the pages read and write.
+    /// </summary>
+    internal readonly UserConfig Config = config;
+    /// <summary>
+    /// The pages, in their buttons' order (the indices of <see cref="Page"/>).
+    /// </summary>
     static readonly string[] Pages =
         ["Display", "Graphics", "Interface", "Controls", "Advanced", "Audio", "Gameplay", "Fixes", "Mods"];
     /// <summary>
     /// The MODS page (<see cref="Settings.ModsPage"/>): the loaded mods, each with the settings its code registered.
     /// </summary>
     internal const int ModsPageIndex = 8;
+    /// <summary>
+    /// The Graphics tabs: the look tabs, then the quality tabs (<see cref="GraphicsSection"/>).
+    /// </summary>
+    internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
+    /// <summary>
+    /// The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.
+    /// </summary>
+    internal const string MetalPresetSlider = "Metal upscaling";
+    /// <summary>
+    /// The sliders' values when the menu was made: what Restore defaults puts back.
+    /// </summary>
+    internal readonly float[] Defaults = values.Sliders.Select(s => s.Get()).ToArray();
+    /// <summary>
+    /// The switches' values when the menu was made: what Restore defaults puts back.
+    /// </summary>
+    internal readonly bool[] ToggleDefaults = values.Toggles.Select(t => t.Get()).ToArray();
+    /// <summary>
+    /// The clickable widgets as the last frame drew them.
+    /// </summary>
+    internal readonly List<Hit> Hits = [];
+    /// <summary>
+    /// The controls the last frame drew.
+    /// </summary>
+    internal readonly List<UiControl> Controls = [];
+    /// <summary>
+    /// The menu's pictures.
+    /// </summary>
+    internal readonly SettingsMenuArt Art = new();
+    /// <summary>
+    /// The menu is open (it may still be sliding in or out), and Restore defaults waits for its confirmation.
+    /// </summary>
+    internal bool MenuOpen, ResetPending;
+    /// <summary>
+    /// The page shown (<see cref="Pages"/>), the Graphics tab, and the row the keys focus (-1: none).
+    /// </summary>
+    internal int Page, GraphicsPage, Focus = -1;
+    /// <summary>
+    /// The page's scroll (shown and aimed at), its limit, and the window's scale (1 at 1120 × 720).
+    /// </summary>
+    internal float ScrollOffset, ScrollTarget, MaxScroll, Scale = 1;
+    /// <summary>
+    /// The left button is down.
+    /// </summary>
+    internal bool PointerDown;
+    /// <summary>
+    /// The pointer, pixels.
+    /// </summary>
+    internal Vector2 Pointer;
+    /// <summary>
+    /// The page's scrolled area and the window, pixels.
+    /// </summary>
+    internal UiRect Viewport, Bounds;
+    /// <summary>
+    /// The slider being dragged; null when none.
+    /// </summary>
+    Hit? _dragging;
+    /// <summary>
+    /// The action waiting for a key or button to bind; null when none.
+    /// </summary>
+    internal InputAction? Rebinding;
+    /// <summary>
+    /// The open drop-down; null when none.
+    /// </summary>
+    internal Choice? ActiveChoice;
+    /// <summary>
+    /// The drop-down's highlighted option and its scroll.
+    /// </summary>
+    internal int ChoiceSelection, ChoiceScroll;
+    /// <summary>
+    /// The footer's notice; empty for none.
+    /// </summary>
+    internal string Notice = "";
+    /// <summary>
+    /// The slider whose value is being typed; null when none.
+    /// </summary>
+    internal Slider? EditingNumber;
+    /// <summary>
+    /// The typed value's text.
+    /// </summary>
+    internal string NumberText = "";
+    /// <summary>
+    /// The typed value's caret and the other end of its selection.
+    /// </summary>
+    internal int NumberCaret, NumberAnchor;
+    /// <summary>
+    /// Where the typed value's box is.
+    /// </summary>
+    internal UiRect NumberBounds;
+
+    /// <summary>
+    /// Groups the look switches into features.
+    /// </summary>
+    internal FeatureGrouping Grouping => field ??= new(this);
+    /// <summary>
+    /// The Faithful / Meitou sides of the settings.
+    /// </summary>
+    internal SettingModes Modes => field ??= new();
+    /// <summary>
+    /// The menu's opening, page and row motion.
+    /// </summary>
+    internal MenuMotion Motion => field ??= new(this);
+    /// <summary>
+    /// The Interface, Controls, Advanced, Audio, Gameplay and Fixes pages' rows.
+    /// </summary>
+    internal GamePages GamePages => field ??= new(this);
+    /// <summary>
+    /// The Graphics quality presets.
+    /// </summary>
+    internal QualityTiers Tiers => field ??= new(this);
+    /// <summary>
+    /// The look presets.
+    /// </summary>
+    internal LookPresets LookPresets => field ??= new(this);
+    /// <summary>
+    /// The Graphics page's look and quality rows.
+    /// </summary>
+    internal LookBar LookBar => field ??= new(this);
+    /// <summary>
+    /// The dialog that names a look preset.
+    /// </summary>
+    internal PresetNamingDialog PresetNaming => field ??= new(this);
+    /// <summary>
+    /// The MODS page.
+    /// </summary>
+    internal ModsPage ModsPage => field ??= new(this);
+    /// <summary>
+    /// Draws the menu's controls.
+    /// </summary>
+    internal SettingsCanvas Canvas => field ??= new(this);
+
+    /// <summary>
+    /// A drop-down: its options, the chosen one, and what choosing does.
+    /// </summary>
+    internal sealed record Choice(Func<IReadOnlyList<string>> Options, Func<int> Current, Action<int> Choose);
+
+    /// <summary>
+    /// A row of a page: its label and hint, and the slider, switch, drop-down, binding or action it edits, with how it is drawn.
+    /// </summary>
+    internal sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
+        InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false, bool Changed = false,
+        string? Impact = null, bool Warn = false, string? Raw = null, int Depth = 0, bool? Open = null, string? GroupId = null, Action? Reset = null,
+        bool Locked = false);
+
+    /// <summary>
+    /// A clickable widget as the last frame drew it: its bounds, what a click does, and a slider's track.
+    /// </summary>
+    internal sealed record Hit(UiRect Bounds, Action Activate, Slider? Slider = null, UiRect? Track = null, string Label = "");
+
     /// <summary>
     /// The names <c>ui-open settings:&lt;name&gt;</c> takes: a page, or <c>graphics:&lt;sub-page&gt;</c>; compared ignoring case (spaces and "&amp;"
     /// count).
@@ -71,42 +225,6 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The Graphics tabs: the look tabs, then the quality tabs (<see cref="GraphicsSection"/>).
-    /// </summary>
-    internal static readonly string[] GraphicsPages = ["Lighting", "Sky & weather", "Colour", "World", "Characters"];
-    /// <summary>
-    /// The Metal-only preset row (Native / MetalFX quality, balanced, performance / TAA), edited by the Metal settings panel.
-    /// </summary>
-    internal const string MetalPresetSlider = "Metal upscaling";
-    internal readonly float[] Defaults = values.Sliders.Select(s => s.Get()).ToArray();
-    internal readonly bool[] ToggleDefaults = values.Toggles.Select(t => t.Get()).ToArray();
-    internal readonly List<Hit> Hits = [];
-    internal readonly List<UiControl> Controls = [];
-    internal readonly SettingsMenuArt Art = new();
-    internal bool MenuOpen, ResetPending;
-    internal int Page, GraphicsPage, Focus = -1;
-    internal float ScrollOffset, ScrollTarget, MaxScroll, Scale = 1;
-    internal bool PointerDown;
-    internal Vector2 Pointer;
-    internal UiRect Viewport, Bounds;
-    Hit? _dragging;
-    internal InputAction? Rebinding;
-    internal Choice? ActiveChoice;
-    internal int ChoiceSelection, ChoiceScroll;
-    internal string Notice = "";
-    internal Slider? EditingNumber;
-    internal string NumberText = "";
-    internal int NumberCaret, NumberAnchor;
-    internal UiRect NumberBounds;
-
-    internal sealed record Choice(Func<IReadOnlyList<string>> Options, Func<int> Current, Action<int> Choose);
-    internal sealed record Entry(string Label, string Hint = "", Slider? Slider = null, Toggle? Toggle = null, Choice? Choice = null,
-        InputAction? Binding = null, Action? Run = null, string? Picture = null, bool Segmented = false, bool Changed = false,
-        string? Impact = null, bool Warn = false, string? Raw = null, int Depth = 0, bool? Open = null, string? GroupId = null, Action? Reset = null,
-        bool Locked = false);
-    internal sealed record Hit(UiRect Bounds, Action Activate, Slider? Slider = null, UiRect? Track = null, string Label = "");
-
-    /// <summary>
     /// The labelled clickable widgets as the last frame drew them (agent control channel: ui-tree, ui-click); sliders are left out.
     /// </summary>
     internal IReadOnlyList<(string Label, UiRect Bounds, Action Activate)> Clickables =>
@@ -122,76 +240,19 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     /// </summary>
     internal IReadOnlyList<(Slider Slider, UiRect Bounds)> SliderHits => [.. Hits.Where(h => h.Slider is not null).Select(h => (h.Slider!, h.Bounds))];
 
+    /// <summary>
+    /// The panel's sliders.
+    /// </summary>
     public IReadOnlyList<Slider> Sliders => Values.Sliders;
+
+    /// <summary>
+    /// The panel's switches.
+    /// </summary>
     public IReadOnlyList<Toggle> Toggles => Values.Toggles;
-    public Func<string>? UpscalerStatus { get; init; }
+
     /// <summary>
-    /// What the Frame generation row reports as its state ("active", "off", ...); null on a host without that setting.
+    /// Whether the menu shows (open, or still sliding out); setting it opens or closes it, dropping what was under way, and closing saves.
     /// </summary>
-    public Func<string>? FrameGenerationStatus { get; init; }
-    /// <summary>
-    /// Applies a new attackers-per-target setting to the running combat system.
-    /// </summary>
-    public Action<int?>? AttackSlotsChanged { get; init; }
-    /// <summary>
-    /// Applies the late-dodges setting to the running combat system.
-    /// </summary>
-    public Action<bool>? LateDefencesChanged { get; init; }
-    /// <summary>
-    /// Applies the turret gunner facing fix to the running combat system.
-    /// </summary>
-    public Action<bool>? GunnerFacingChanged { get; init; }
-    public Action<bool>? PunchReachChanged { get; init; }
-    public Action<bool>? BenchFacingChanged { get; init; }
-    /// <summary>
-    /// Called when an off-screen switch changes (the config holds the new values).
-    /// </summary>
-    public Action? OffscreenChanged { get; init; }
-    /// <summary>
-    /// The Tutorials option changed (the config holds it).
-    /// </summary>
-    public Action<bool>? TutorialsChanged { get; init; }
-    /// <summary>
-    /// The Reset Tutorials button.
-    /// </summary>
-    public Action? ResetTutorials { get; init; }
-    /// <summary>
-    /// The door auto-close switch changed (<see cref="UserConfig.DoorsCloseBehind"/>).
-    /// </summary>
-    public Action<bool>? DoorsCloseChanged { get; init; }
-    public Action<bool>? AnimalsPickUpChanged { get; init; }
-    /// <summary>
-    /// The fast speeds changed (<see cref="UserConfig.FastSpeed"/>, <see cref="UserConfig.FastestSpeed"/>).
-    /// </summary>
-    public Action? TimeSpeedsChanged { get; init; }
-    /// <summary>
-    /// Applies a new camera rotation speed (<see cref="UserConfig.CameraRotateSpeed"/>) to the camera.
-    /// </summary>
-    public Action<float>? CameraRotateSpeedChanged { get; init; }
-    /// <summary>
-    /// A camera option other than the rotation speed changed (invert X / Y, move speed, zoom speed; <see cref="UserConfig.ApplyCamera"/>).
-    /// </summary>
-    public Action? CameraChanged { get; init; }
-    /// <summary>
-    /// The person races of the loaded data with their skin default (<c>CharacterRenderer.PersonRaces</c>), listed on Graphics > Skin.
-    /// </summary>
-    public IReadOnlyList<(string Id, string Name, bool Default)> SkinRaceList { get; init; } = [];
-    /// <summary>
-    /// A race's skin was turned on or off (the config's <see cref="UserConfig.SkinRaces"/> holds it); the game hands it to the character renderer.
-    /// </summary>
-    public Action? SkinRacesChanged { get; init; }
-    /// <summary>
-    /// Called when a Gameplay setting changes (the config holds the new values); the game hands them to the running world.
-    /// </summary>
-    public Action? GameplayChanged { get; init; }
-    /// <summary>
-    /// Called when an audio slider changes (the config holds the new values); the game applies them to the running sound.
-    /// </summary>
-    public Action? AudioChanged { get; init; }
-    /// <summary>
-    /// The registered settings; read each time the page is drawn, since mods load after the menu may be made.
-    /// </summary>
-    public Func<IReadOnlyList<ModSettingsGroup>> ModSettings { get; init; } = () => [];
     public bool Visible
     {
         get => MenuOpen || Motion.MenuProgress > 0;
@@ -219,6 +280,205 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
     }
 
+    /// <summary>
+    /// Set by the showcase: presets are neither read from nor written to disk.
+    /// </summary>
+    internal bool NoDiskWrites { get; init; }
+
+    /// <summary>
+    /// Opens the menu on the Graphics page's tab <paramref name="tab"/>.
+    /// </summary>
+    internal void ShowGraphicsTab(int tab)
+    {
+        Visible = true;
+        Page = 1;
+        GraphicsPage = tab;
+        ActiveChoice = null;
+        PresetNaming.Open = false;
+        ScrollOffset = ScrollTarget = 0;
+    }
+
+    /// <summary>
+    /// Opens a drop-down at <paramref name="at"/>, its chosen option highlighted.
+    /// </summary>
+    internal void OpenChoice(Choice choice, UiRect at)
+    {
+        ActiveChoice = choice;
+        ChoiceSelection = Math.Clamp(choice.Current(), 0, Math.Max(0, choice.Options().Count - 1));
+        ChoiceScroll = Math.Max(0, ChoiceSelection - 3);
+        Canvas.ChoiceAnchor = at;
+        Focus = -1;
+    }
+
+    /// <summary>
+    /// Shows page <paramref name="next"/> from its top.
+    /// </summary>
+    internal void Navigate(int next)
+    {
+        Page = next;
+        ScrollOffset = ScrollTarget = 0;
+        Motion.ContentProgress = 0;
+        Focus = -1;
+        ActiveChoice = null;
+        Rebinding = null;
+        Notice = "";
+    }
+
+    /// <summary>
+    /// Sets the look switch <paramref name="label"/> (the showcase).
+    /// </summary>
+    internal void ShowcaseSwitch(string label, bool on)
+    {
+        if (Values.Toggles.FirstOrDefault(t => t.Label == label) is { } t) t.Set(on);
+    }
+
+    /// <summary>
+    /// Sets the slider <paramref name="label"/> (the showcase).
+    /// </summary>
+    internal void ShowcaseSet(string label, float value)
+    {
+        if (Values.Sliders.FirstOrDefault(s => s.Label == label) is { } s) s.Set(value);
+    }
+
+    #endregion
+
+    #region Host hooks
+
+    /// <summary>
+    /// What the upscaler rows report as their state; null on a host without them.
+    /// </summary>
+    public Func<string>? UpscalerStatus { get; init; }
+
+    /// <summary>
+    /// What the Frame generation row reports as its state ("active", "off", ...); null on a host without that setting.
+    /// </summary>
+    public Func<string>? FrameGenerationStatus { get; init; }
+
+    /// <summary>
+    /// Applies a new attackers-per-target setting to the running combat system.
+    /// </summary>
+    public Action<int?>? AttackSlotsChanged { get; init; }
+
+    /// <summary>
+    /// Applies the late-dodges setting to the running combat system.
+    /// </summary>
+    public Action<bool>? LateDefencesChanged { get; init; }
+
+    /// <summary>
+    /// Applies the turret gunner facing fix to the running combat system.
+    /// </summary>
+    public Action<bool>? GunnerFacingChanged { get; init; }
+
+    /// <summary>
+    /// Applies the punch reach fix (<see cref="UserConfig.FixPunchReach"/>) to the running combat system.
+    /// </summary>
+    public Action<bool>? PunchReachChanged { get; init; }
+
+    /// <summary>
+    /// Applies the bench facing fix (<see cref="UserConfig.FixBenchFacing"/>).
+    /// </summary>
+    public Action<bool>? BenchFacingChanged { get; init; }
+
+    /// <summary>
+    /// Called when an off-screen switch changes (the config holds the new values).
+    /// </summary>
+    public Action? OffscreenChanged { get; init; }
+
+    /// <summary>
+    /// The Tutorials option changed (the config holds it).
+    /// </summary>
+    public Action<bool>? TutorialsChanged { get; init; }
+
+    /// <summary>
+    /// The Reset Tutorials button.
+    /// </summary>
+    public Action? ResetTutorials { get; init; }
+
+    /// <summary>
+    /// The door auto-close switch changed (<see cref="UserConfig.DoorsCloseBehind"/>).
+    /// </summary>
+    public Action<bool>? DoorsCloseChanged { get; init; }
+
+    /// <summary>
+    /// The animals' pick-up switch changed (<see cref="UserConfig.AnimalsPickUp"/>).
+    /// </summary>
+    public Action<bool>? AnimalsPickUpChanged { get; init; }
+
+    /// <summary>
+    /// The fast speeds changed (<see cref="UserConfig.FastSpeed"/>, <see cref="UserConfig.FastestSpeed"/>).
+    /// </summary>
+    public Action? TimeSpeedsChanged { get; init; }
+
+    /// <summary>
+    /// Applies a new camera rotation speed (<see cref="UserConfig.CameraRotateSpeed"/>) to the camera.
+    /// </summary>
+    public Action<float>? CameraRotateSpeedChanged { get; init; }
+
+    /// <summary>
+    /// A camera option other than the rotation speed changed (invert X / Y, move speed, zoom speed; <see cref="UserConfig.ApplyCamera"/>).
+    /// </summary>
+    public Action? CameraChanged { get; init; }
+
+    /// <summary>
+    /// The person races of the loaded data with their skin default (<c>CharacterRenderer.PersonRaces</c>), listed on Graphics > Skin.
+    /// </summary>
+    public IReadOnlyList<(string Id, string Name, bool Default)> SkinRaceList { get; init; } = [];
+
+    /// <summary>
+    /// A race's skin was turned on or off (the config's <see cref="UserConfig.SkinRaces"/> holds it); the game hands it to the character renderer.
+    /// </summary>
+    public Action? SkinRacesChanged { get; init; }
+
+    /// <summary>
+    /// Called when a Gameplay setting changes (the config holds the new values); the game hands them to the running world.
+    /// </summary>
+    public Action? GameplayChanged { get; init; }
+
+    /// <summary>
+    /// Called when an audio slider changes (the config holds the new values); the game applies them to the running sound.
+    /// </summary>
+    public Action? AudioChanged { get; init; }
+
+    /// <summary>
+    /// The registered settings; read each time the page is drawn, since mods load after the menu may be made.
+    /// </summary>
+    public Func<IReadOnlyList<ModSettingsGroup>> ModSettings { get; init; } = () => [];
+
+    #endregion
+
+    #region Rows
+
+    /// <summary>
+    /// The prefix of a switch's key in <c>meitou.user.json</c>'s <c>graphics</c> (the Faithful / Meitou ones and the plain on/off ones alike).
+    /// </summary>
+    internal const string SwitchKeyPrefix = "Meitou: ";
+    /// <summary>
+    /// The Tick ahead row's hint.
+    /// </summary>
+    internal const string TickAheadHint =
+        "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
+        + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, "
+        + "up to 33 ms more input delay.";
+    /// <summary>
+    /// The Frame generation row's hint, its state in place of {1}.
+    /// </summary>
+    const string FrameGenerationTemplate =
+        "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
+        + "FSR 3 (AMD's, any GPU) needs the FidelityFX library; DLSS (NVIDIA's, Windows, RTX 40 or later) needs Streamline's "
+        + "frame generation DLLs and turns Reflex on. "
+        + "Both work with TAA, FSR and DLSS upscaling. A change takes effect after a restart. Now: {1}";
+    /// <summary>
+    /// The Frame generation row's choices.
+    /// </summary>
+    internal static readonly string[] FrameGenerationChoices = ["Off", "FSR 3", "DLSS"];
+    /// <summary>
+    /// The Tick ahead row's choices.
+    /// </summary>
+    internal static readonly string[] TickAheadChoices = ["Faithful (in series)", "Meitou (when busy)", "Always on"];
+
+    /// <summary>
+    /// A row's label without its range or its numbering; Anti-aliasing reads Anti-aliasing/upscaling.
+    /// </summary>
     internal static string Label(string label) =>
         label == "Anti-aliasing" ? "Anti-aliasing/upscaling" : Regex.Replace(label.Split('(')[0].Trim(), @"\s+0-\d+.*$", "")
         .Replace(" x", " multiplier", StringComparison.Ordinal).Replace(": error px", "", StringComparison.Ordinal);
@@ -275,10 +535,8 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     }
 
     /// <summary>
-    /// The prefix of a switch's key in <c>meitou.user.json</c>'s <c>graphics</c> (the Faithful / Meitou ones and the plain on/off ones alike).
+    /// The config key of a look switch's label.
     /// </summary>
-    internal const string SwitchKeyPrefix = "Meitou: ";
-
     internal static string SwitchKey(string label) => SwitchKeyPrefix + label;
 
     /// <summary>
@@ -297,21 +555,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         };
     }
 
-    internal const string TickAheadHint =
-        "Faithful runs the world, then draws it, as the game does. Meitou runs the next world tick while the frame is drawn "
-        + "whenever the world is busy (big fights, crowds), Always on every frame: much higher frame rates with many characters, "
-        + "up to 33 ms more input delay.";
-    const string FrameGenerationTemplate =
-        "Shows a generated frame between each two rendered ones: nearly twice the frames shown, with a little more input delay. "
-        + "FSR 3 (AMD's, any GPU) needs the FidelityFX library; DLSS (NVIDIA's, Windows, RTX 40 or later) needs Streamline's "
-        + "frame generation DLLs and turns Reflex on. "
-        + "Both work with TAA, FSR and DLSS upscaling. A change takes effect after a restart. Now: {1}";
-
-    internal static readonly string[] FrameGenerationChoices = ["Off", "FSR 3", "DLSS"];
-
+    /// <summary>
+    /// The Frame generation row's hint with its state now.
+    /// </summary>
     string FrameGenerationHint() => Loc.Tr(FrameGenerationTemplate, Loc.Tr(FrameGenerationStatus?.Invoke() ?? "off"));
-
-    internal static readonly string[] TickAheadChoices = ["Faithful (in series)", "Meitou (when busy)", "Always on"];
 
     /// <summary>
     /// A Tab panel slider's key in the catalogue (<see cref="LauncherSchema.Find"/>): its label, or the top-level key of the display switches.
@@ -360,6 +607,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             : new(label, hint, Slider: slider, Raw: key);
     }
 
+    /// <summary>
+    /// The rows of the page shown.
+    /// </summary>
     internal List<Entry> Entries()
     {
         if (Page == 1) return GraphicsRows(GraphicsPages[GraphicsPage]);
@@ -373,13 +623,26 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
         switch (Page)
         {
-            case 0: return DisplayRows(result);
-            case 2: GamePages.InterfaceRows(result); break;
-            case 3: GamePages.ControlsRows(result); break;
-            case 4: GamePages.AdvancedRows(result); break;
-            case 5: GamePages.AudioRows(result); break;
-            case 6: GamePages.GameplayRows(result); break;
-            case 7: GamePages.FixesRows(result); break;
+            case 0:
+                return DisplayRows(result);
+            case 2:
+                GamePages.InterfaceRows(result);
+                break;
+            case 3:
+                GamePages.ControlsRows(result);
+                break;
+            case 4:
+                GamePages.AdvancedRows(result);
+                break;
+            case 5:
+                GamePages.AudioRows(result);
+                break;
+            case 6:
+                GamePages.GameplayRows(result);
+                break;
+            case 7:
+                GamePages.FixesRows(result);
+                break;
         }
 
         return result;
@@ -457,12 +720,62 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     bool ShownNow(Entry entry) => entry.Raw is not { } key || LauncherSchema.Find(key)?.ShownWhen is not { } when
         || Values.Sliders.FirstOrDefault(s => s.Label == when.Key) is not { } other || when.Matches(other.Get());
 
+    /// <summary>
+    /// An action's name for its row: its words spaced.
+    /// </summary>
     internal static string ActionLabel(InputAction action) => Regex.Replace(action.ToString(), "(?<=[a-z0-9])(?=[A-Z])|(?<=[a-z])(?=[0-9])", " ");
-    internal Func<string>? PendingAction;
-    internal string Confirmation = "", ConfirmTitle = "";
 
+    /// <summary>
+    /// A page's all-Faithful / all-Meitou switch over its Faithful / Meitou <paramref name="toggles"/> and the <paramref name="sliders"/> with both
+    /// marks; it reads 1 when all are Meitou, 0 when all are Faithful, -1 when they are mixed.
+    /// </summary>
+    Entry SidesEntry(string label, string hint, string what, IReadOnlyList<Toggle> toggles, IReadOnlyList<Slider> sliders) =>
+        new(label, hint, Segmented: true,
+        Choice: new(() => ["Faithful", "Meitou"], () =>
+        {
+            var live = toggles.Where(t => !LookPresets.StuckSwitches.Contains(t.Label)).ToList();
+
+            static bool AtMark(Slider s, float? mark) => mark is { } m && MathF.Abs(s.Get() - m) <= 0.002f * (s.Max - s.Min);
+
+            return live.All(t => t.Get()) && sliders.All(s => AtMark(s, s.Meitou)) ? 1
+                : live.All(t => !t.Get()) && sliders.All(s => AtMark(s, s.Faithful)) ? 0
+                : -1;
+        }, side =>
+        {
+            bool meitou = side == 1;
+
+            foreach (var toggle in toggles.Where(t => t.Get() != meitou))
+            {
+                toggle.Set(meitou);
+                if (toggle.Get() != meitou) LookPresets.StuckSwitches.Add(toggle.Label);
+            }
+
+            foreach (var slider in sliders) slider.Set((meitou ? slider.Meitou : slider.Faithful)!.Value);
+
+            Notice = meitou ? $"Every {what} is Meitou." : $"Every {what} is as the game ships it.";
+        }));
+
+    /// <summary>
+    /// The Advanced or Fixes page's all switch, over that page's Faithful / Meitou switches (not the plain on/off ones such as luckyren Mode) and
+    /// sliders with both marks.
+    /// </summary>
+    internal Entry PageSidesEntry(List<Entry> entries, string label, string hint, string what) => SidesEntry(label, hint, what,
+        entries.Select(e => e.Toggle).OfType<Toggle>().Where(t => t.Remaster).ToList(),
+        entries.Select(e => e.Slider).OfType<Slider>().Where(s => s.Faithful is not null && s.Meitou is not null).ToList());
+
+    #endregion
+
+    #region Input
+
+    /// <summary>
+    /// The menu takes every point while it shows.
+    /// </summary>
     public bool Contains(Vector2 _) => Visible;
 
+    /// <summary>
+    /// A button press: a binding being set takes it, a typed value is committed first, then the hit widget acts (a slider starts its drag); true
+    /// while the menu shows.
+    /// </summary>
     public bool MouseDown(Vector2 at, MouseButton button = MouseButton.Left)
     {
         if (!Visible) return false;
@@ -511,6 +824,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return true;
     }
 
+    /// <summary>
+    /// A pointer move: a dragged slider follows it.
+    /// </summary>
     public bool MouseMove(Vector2 at)
     {
         Pointer = at;
@@ -520,6 +836,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return true;
     }
 
+    /// <summary>
+    /// The button's release ends a slider's drag; true when one was dragged.
+    /// </summary>
     public bool MouseUp()
     {
         bool had = _dragging is not null;
@@ -528,6 +847,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return had;
     }
 
+    /// <summary>
+    /// A wheel step: the drop-down, the mod details or the page scroll; true while the menu shows.
+    /// </summary>
     public bool Scroll(float steps)
     {
         if (!Visible) return false;
@@ -542,6 +864,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return true;
     }
 
+    /// <summary>
+    /// A key with no typed value: a binding being set takes it, Esc closes the dialog, the drop-down or the menu, a drop-down takes its keys, then
+    /// Page Up / Down scroll and the focus keys move and act; true while the menu shows.
+    /// </summary>
     public bool KeyDown(Key key, bool shift)
     {
         if (!Visible) return false;
@@ -606,6 +932,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return true;
     }
 
+    /// <summary>
+    /// A key: the preset name dialog, else the typed value's keys (Esc, Enter, Tab, the caret and selection), else as without Ctrl.
+    /// </summary>
     public bool KeyDown(Key key, bool shift, bool ctrl)
     {
         if (PresetNaming.Open && Visible) return PresetNaming.OnKey(key);
@@ -617,7 +946,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
                 EditingNumber = null;
                 Notice = "";
                 break;
-            case Key.Enter: CommitNumber(); break;
+            case Key.Enter:
+                CommitNumber();
+                break;
             case Key.Tab:
                 if (CommitNumber()) KeyDown(key, shift);
                 break;
@@ -658,6 +989,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return true;
     }
 
+    /// <summary>
+    /// A typed character: to the preset name dialog, else to a typed value (digits and the number's signs).
+    /// </summary>
     public void TextInput(char value)
     {
         if (PresetNaming.Open && Visible)
@@ -671,6 +1005,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             ReplaceNumberSelection(value == ',' ? "." : value.ToString());
     }
 
+    /// <summary>
+    /// Starts typing a slider's value in the box at <paramref name="at"/>, all of it selected.
+    /// </summary>
     internal void BeginNumber(Slider slider, UiRect at)
     {
         EditingNumber = slider;
@@ -683,6 +1020,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Notice = "";
     }
 
+    /// <summary>
+    /// Replaces the typed value's selection (at most 24 characters).
+    /// </summary>
     void ReplaceNumberSelection(string replacement)
     {
         int start = Math.Min(NumberCaret, NumberAnchor), end = Math.Max(NumberCaret, NumberAnchor);
@@ -693,6 +1033,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Notice = "";
     }
 
+    /// <summary>
+    /// Sets the slider to the typed value; false, with a notice, when it is not a number.
+    /// </summary>
     bool CommitNumber()
     {
         if (EditingNumber is not { } slider) return true;
@@ -709,6 +1052,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         return true;
     }
 
+    /// <summary>
+    /// Binds <paramref name="action"/> to <paramref name="binding"/>; a reserved key is refused with a notice.
+    /// </summary>
     void SetBinding(InputAction action, Binding binding)
     {
         if (!binding.IsMouse
@@ -744,6 +1090,10 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Notice = $"{ActionLabel(action)} bound to {binding}.";
     }
 
+    /// <summary>
+    /// Restore defaults: every slider (but the time of day and speed) and switch to its value at start, the frame limit 240, the mods' settings and
+    /// the other settings to their defaults.
+    /// </summary>
     void Reset()
     {
         for (int i = 0; i < Values.Sliders.Count; i++)
@@ -822,30 +1172,13 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Notice = "Default settings restored.";
     }
 
+    #endregion
+
+    #region Drawing
+
     /// <summary>
-    /// Set by the showcase: presets are neither read from nor written to disk.
+    /// Draws the menu: its motion, the window, the page, the footer and the dialogs.
     /// </summary>
-    internal bool NoDiskWrites { get; init; }
-
-    internal void ShowGraphicsTab(int tab)
-    {
-        Visible = true;
-        Page = 1;
-        GraphicsPage = tab;
-        ActiveChoice = null;
-        PresetNaming.Open = false;
-        ScrollOffset = ScrollTarget = 0;
-    }
-
-    internal void OpenChoice(Choice choice, UiRect at)
-    {
-        ActiveChoice = choice;
-        ChoiceSelection = Math.Clamp(choice.Current(), 0, Math.Max(0, choice.Options().Count - 1));
-        ChoiceScroll = Math.Max(0, ChoiceSelection - 3);
-        Canvas.ChoiceAnchor = at;
-        Focus = -1;
-    }
-
     public void Draw(int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
         if (!Visible || Player.SettingsPainter is not { } painter) return;
@@ -933,8 +1266,13 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             for (int i = 0; i < GraphicsPages.Length; i++)
             {
                 int index = i;
-                Canvas.Button(GraphicsPages[i], Canvas.R(212 + i * (tabWidth + tabGap), 174, tabWidth, 30),
-                    () => { GraphicsPage = index; ScrollOffset = ScrollTarget = 0; Motion.ContentProgress = 0; Focus = -1; }, GraphicsPage == i);
+                Canvas.Button(GraphicsPages[i], Canvas.R(212 + i * (tabWidth + tabGap), 174, tabWidth, 30), () =>
+                {
+                    GraphicsPage = index;
+                    ScrollOffset = ScrollTarget = 0;
+                    Motion.ContentProgress = 0;
+                    Focus = -1;
+                }, GraphicsPage == i);
             }
 
             top = 212;
@@ -961,11 +1299,29 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     void DrawFooter()
     {
         Canvas.Rect(Canvas.R(20, 676, 1080, 1), SettingsCanvas.MainInk with { W = 0.12f });
-        Canvas.Button("Restore defaults", Canvas.R(20, 686, 150, 28), () => { ResetPending = true; ActiveChoice = null; Focus = -1; });
+        Canvas.Button("Restore defaults", Canvas.R(20, 686, 150, 28), () =>
+        {
+            ResetPending = true;
+            ActiveChoice = null;
+            Focus = -1;
+        });
         if (Notice.Length > 0) Canvas.Text(Notice, Canvas.R(188, 686, 744, 28), 11, SettingsCanvas.Brass);
 
         Canvas.Button("Save", Canvas.R(960, 684, 140, 32), () => Visible = false, primary: true);
     }
+
+    #endregion
+
+    #region Dialogs
+
+    /// <summary>
+    /// The confirmed action waiting for its dialog; it returns the notice. Null when none.
+    /// </summary>
+    internal Func<string>? PendingAction;
+    /// <summary>
+    /// The confirmation dialog's question and title.
+    /// </summary>
+    internal string Confirmation = "", ConfirmTitle = "";
 
     /// <summary>
     /// What opens over the page: the open choice's list, the preset naming box, the rebinding prompt and the confirmations.
@@ -1013,58 +1369,5 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         }
     }
 
-    internal void Navigate(int next)
-    {
-        Page = next;
-        ScrollOffset = ScrollTarget = 0;
-        Motion.ContentProgress = 0;
-        Focus = -1;
-        ActiveChoice = null;
-        Rebinding = null;
-        Notice = "";
-    }
-
-    /// <summary>
-    /// A page's all-Faithful / all-Meitou switch over its Faithful / Meitou <paramref name="toggles"/> and the <paramref name="sliders"/> with both
-    /// marks; it reads 1 when all are Meitou, 0 when all are Faithful, -1 when they are mixed.
-    /// </summary>
-    Entry SidesEntry(string label, string hint, string what, IReadOnlyList<Toggle> toggles, IReadOnlyList<Slider> sliders) =>
-        new(label, hint, Segmented: true,
-        Choice: new(() => ["Faithful", "Meitou"], () =>
-        {
-            var live = toggles.Where(t => !LookPresets.StuckSwitches.Contains(t.Label)).ToList();
-
-            static bool AtMark(Slider s, float? mark) => mark is { } m && MathF.Abs(s.Get() - m) <= 0.002f * (s.Max - s.Min);
-
-            return live.All(t => t.Get()) && sliders.All(s => AtMark(s, s.Meitou)) ? 1
-                : live.All(t => !t.Get()) && sliders.All(s => AtMark(s, s.Faithful)) ? 0
-                : -1;
-        }, side =>
-        {
-            bool meitou = side == 1;
-
-            foreach (var toggle in toggles.Where(t => t.Get() != meitou))
-            {
-                toggle.Set(meitou);
-                if (toggle.Get() != meitou) LookPresets.StuckSwitches.Add(toggle.Label);
-            }
-
-            foreach (var slider in sliders) slider.Set((meitou ? slider.Meitou : slider.Faithful)!.Value);
-
-            Notice = meitou ? $"Every {what} is Meitou." : $"Every {what} is as the game ships it.";
-        }));
-
-    /// <summary>
-    /// The Advanced or Fixes page's all switch, over that page's Faithful / Meitou switches (not the plain on/off ones such as luckyren Mode) and
-    /// sliders with both marks.
-    /// </summary>
-    internal Entry PageSidesEntry(List<Entry> entries, string label, string hint, string what) => SidesEntry(label, hint, what,
-        entries.Select(e => e.Toggle).OfType<Toggle>().Where(t => t.Remaster).ToList(),
-        entries.Select(e => e.Slider).OfType<Slider>().Where(s => s.Faithful is not null && s.Meitou is not null).ToList());
-
-    internal void ShowcaseSwitch(string label, bool on) { if (Values.Toggles.FirstOrDefault(t => t.Label == label) is { } t)
-        t.Set(on); }
-
-    internal void ShowcaseSet(string label, float value) { if (Values.Sliders.FirstOrDefault(s => s.Label == label) is { } s)
-        s.Set(value); }
+    #endregion
 }

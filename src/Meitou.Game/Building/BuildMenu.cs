@@ -25,6 +25,9 @@ public sealed record BuildGroup(string Name, IReadOnlyList<BuildingBuildData> Me
 /// </summary>
 public sealed class BuildMenu(IReadOnlyList<BuildingBuildData> catalog)
 {
+    /// <summary>
+    /// Every BUILDING's build data, the candidates of the menu.
+    /// </summary>
     public IReadOnlyList<BuildingBuildData> Catalog { get; } = catalog;
 
     /// <summary>
@@ -91,6 +94,9 @@ public sealed record WorldBuildingInfo(
 /// </summary>
 public sealed class BuildServices
 {
+    /// <summary>
+    /// The build menu's lists.
+    /// </summary>
     public required BuildMenu Menu { get; init; }
     /// <summary>
     /// An ITEM record's name.
@@ -108,11 +114,17 @@ public sealed class BuildServices
     /// The game's saved picture of a BUILDING (<c>data/icons/buildings</c>), null when none: the window then shows the renderer's drawing.
     /// </summary>
     public Func<string, string?> IconFile { get; init; } = _ => null;
+    /// <summary>
+    /// The ground, footprints and collision lookups the placement checks use.
+    /// </summary>
     public required PlacementServices Placement { get; init; }
     /// <summary>
     /// The placed towns, for <c>PlacementRules.TownBlock</c>.
     /// </summary>
     public required Func<IReadOnlyList<PlacementTown>> Towns { get; init; }
+    /// <summary>
+    /// The player's faction id, for the town ownership checks.
+    /// </summary>
     public required Func<string> PlayerFactionId { get; init; }
     /// <summary>
     /// What the panel shows of a level-data building: its name, type, town, owner faction and public flags.

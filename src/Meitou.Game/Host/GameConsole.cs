@@ -10,7 +10,30 @@ namespace Meitou.Game.Host;
 /// </summary>
 static partial class GameConsole
 {
+    /// <summary>
+    /// <c>ATTACH_PARENT_PROCESS</c>: the console of the process that started this one.
+    /// </summary>
     const uint AttachParentProcess = unchecked((uint)-1);
+    /// <summary>
+    /// <c>STD_OUTPUT_HANDLE</c>.
+    /// </summary>
+    const int StdOutputHandle = -11;
+    /// <summary>
+    /// <c>FILE_TYPE_DISK</c> and <c>FILE_TYPE_PIPE</c> of <c>GetFileType</c>.
+    /// </summary>
+    const uint FileTypeDisk = 1, FileTypePipe = 3;
+    /// <summary>
+    /// ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION: Smart App Control or an App Control (WDAC) policy refused to load a file (issue #127).
+    /// </summary>
+    const int PolicyBlocked = unchecked((int)0x800711C7);
+    /// <summary>
+    /// The message box's <c>MB_ICONERROR</c>, <c>MB_SETFOREGROUND</c> and <c>MB_TOPMOST</c>.
+    /// </summary>
+    const uint MessageBoxIconError = 0x10, MessageBoxSetForeground = 0x10000, MessageBoxTopmost = 0x40000;
+    /// <summary>
+    /// log.txt, synchronised; null until <see cref="StartLog"/> opened it (or when another game has it).
+    /// </summary>
+    static TextWriter? s_log;
 
     /// <summary>
     /// Joins the console of the terminal that started the game, if any. Call before anything is written.
@@ -21,8 +44,10 @@ static partial class GameConsole
         if (AttachConsole(AttachParentProcess) != 0) Rebind();
     }
 
-    // A parent that hands the game a pipe or a file (the Debug launcher's capture) keeps it; attaching would rebind past it.
-    // Console.IsOutputRedirected is no test here: it also says true when a GUI program got no handle at all.
+    /// <summary>
+    /// Whether standard output is already a file or a pipe. A parent that hands the game a pipe or a file (the Debug launcher's capture) keeps it;
+    /// attaching would rebind past it. Console.IsOutputRedirected is no test here: it also says true when a GUI program got no handle at all.
+    /// </summary>
     static bool OutputRedirected()
     {
         nint handle = GetStdHandle(StdOutputHandle);
@@ -30,11 +55,6 @@ static partial class GameConsole
         uint type = GetFileType(handle);
         return type is FileTypeDisk or FileTypePipe;
     }
-
-    const int StdOutputHandle = -11;
-    const uint FileTypeDisk = 1, FileTypePipe = 3;
-
-    static TextWriter? s_log;
 
     /// <summary>
     /// Starts log.txt (after <see cref="AttachToParent"/>): output and error go to it as well, and so does an exception that ends the game.
@@ -48,9 +68,6 @@ static partial class GameConsole
         Bind(Console.Out, Console.Error);
         AppDomain.CurrentDomain.UnhandledException += (_, e) => shared.WriteLine($"unhandled {e.ExceptionObject}");
     }
-
-    // ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION: Smart App Control or an App Control (WDAC) policy refused to load a file (issue #127).
-    const int PolicyBlocked = unchecked((int)0x800711C7);
 
     /// <summary>
     /// When Windows refused one of our files, says so in a message box before the game closes: our binaries are not code-signed, and Smart App
@@ -75,8 +92,9 @@ static partial class GameConsole
         }
     }
 
-    const uint MessageBoxIconError = 0x10, MessageBoxSetForeground = 0x10000, MessageBoxTopmost = 0x40000;
-
+    /// <summary>
+    /// Points the console's output and error at the writers, through log.txt as well once it is open.
+    /// </summary>
     static void Bind(TextWriter output, TextWriter error)
     {
         Console.SetOut(s_log is null ? output : new TeeWriter(s_log, output));
@@ -93,7 +111,9 @@ static partial class GameConsole
         return new Release(true);
     }
 
-    // Console's readers and writers are made on first use from the handles the process had then; point them at the new console.
+    /// <summary>
+    /// Console's readers and writers are made on first use from the handles the process had then; point them at the new console.
+    /// </summary>
     static void Rebind()
     {
         // Console's own writers never write a byte-order mark; a StreamWriter over UTF-8 would.
@@ -103,8 +123,14 @@ static partial class GameConsole
         Console.SetIn(new StreamReader(Console.OpenStandardInput(), Console.InputEncoding));
     }
 
+    /// <summary>
+    /// Frees a console opened for a prompt when disposed (<see cref="ForPrompt"/>).
+    /// </summary>
     sealed class Release(bool free) : IDisposable
     {
+        /// <summary>
+        /// Frees the console, the reader and writers bound to nothing; once only.
+        /// </summary>
         public void Dispose()
         {
             if (!free) return;
@@ -115,12 +141,33 @@ static partial class GameConsole
         }
     }
 
+    /// <summary>
+    /// kernel32 <c>GetConsoleWindow</c>: the attached console's window; 0 without one.
+    /// </summary>
     [LibraryImport("kernel32.dll")] private static partial nint GetConsoleWindow();
+    /// <summary>
+    /// kernel32 <c>AttachConsole</c>: joins a process's console; 0 on failure.
+    /// </summary>
     [LibraryImport("kernel32.dll")] private static partial int AttachConsole(uint processId);
+    /// <summary>
+    /// kernel32 <c>AllocConsole</c>: opens a console of the process's own; 0 on failure.
+    /// </summary>
     [LibraryImport("kernel32.dll")] private static partial int AllocConsole();
+    /// <summary>
+    /// kernel32 <c>FreeConsole</c>: leaves the console.
+    /// </summary>
     [LibraryImport("kernel32.dll")] private static partial int FreeConsole();
+    /// <summary>
+    /// kernel32 <c>GetStdHandle</c>: a standard handle (0 or -1 for none).
+    /// </summary>
     [LibraryImport("kernel32.dll")] private static partial nint GetStdHandle(int handle);
+    /// <summary>
+    /// kernel32 <c>GetFileType</c>: what a handle is (disk, pipe, character device).
+    /// </summary>
     [LibraryImport("kernel32.dll")] private static partial uint GetFileType(nint file);
+    /// <summary>
+    /// user32 <c>MessageBoxW</c>: a message box.
+    /// </summary>
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)] private static partial int MessageBoxW(nint owner, string text,
         string caption, uint type);
 }

@@ -36,12 +36,30 @@ sealed class DuelScenario(GameHost host)
     /// The two start this far apart along Z (across the sun), facing each other, and charge on <see cref="DuelOrderTick"/>.
     /// </summary>
     const float DuelGap = 40;
+    /// <summary>
+    /// The tick the pair is ordered to fight.
+    /// </summary>
     const int DuelOrderTick = 45;
 
+    /// <summary>
+    /// The duel's spot on the ground (the chosen one, at the terrain's height).
+    /// </summary>
     Vector3 _duelSpot;
+    /// <summary>
+    /// The spawn's shift from the spot, so the middle of the lap's fight is on it (<see cref="CentreOnSpot"/>).
+    /// </summary>
     Vector2 _duelShift;
+    /// <summary>
+    /// The CHARACTER record's string id both fighters are made from.
+    /// </summary>
     string _duelRecord = "";
+    /// <summary>
+    /// The faction whose looks they get; null when the data has none of that name.
+    /// </summary>
     int? _duelFaction;
+    /// <summary>
+    /// The two fighters; none before the first lap.
+    /// </summary>
     CharacterId _duelA = CharacterId.None, _duelB = CharacterId.None;
 
     /// <summary>
@@ -54,14 +72,27 @@ sealed class DuelScenario(GameHost host)
     /// </summary>
     int _duelLaps;
 
-    // The looks (SpawnSandbox's variant numbers): the first two whose rolled clothing has a helmet.
+    /// <summary>
+    /// The looks (SpawnSandbox's variant numbers): the first two whose rolled clothing has a helmet.
+    /// </summary>
     (int A, int B) _duelVariants = (1, 2);
 
-    // The hour a lap starts at: --time, or what the Tab panel's time of day slider last set (it would snap back at the next lap otherwise).
+    /// <summary>
+    /// The hour a lap starts at: --time, or what the Tab panel's time of day slider last set (it would snap back at the next lap otherwise).
+    /// </summary>
     internal float HeldHour;
+    /// <summary>
+    /// The world settings each lap's world is made with.
+    /// </summary>
     internal WorldSettings WorldSettings = null!;
+    /// <summary>
+    /// A restart was asked for (Backspace).
+    /// </summary>
     internal bool DuelRestartRequested;
 
+    /// <summary>
+    /// Whether this run is a <c>--duel</c> (the sandbox wins when both are given).
+    /// </summary>
     internal bool IsDuel => host.GameOptions.Duel && !host.Sandbox.IsSandbox;
 
     /// <summary>

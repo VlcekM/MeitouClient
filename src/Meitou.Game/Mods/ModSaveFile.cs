@@ -9,9 +9,18 @@ namespace Meitou.Modding;
 /// </summary>
 static class ModSaveFile
 {
+    /// <summary>
+    /// The file's magic: "MTMD" read as a little-endian uint32.
+    /// </summary>
     const uint Magic = 0x444D544D;   // "MTMD"
+    /// <summary>
+    /// The format version this game writes and reads.
+    /// </summary>
     const int FormatVersion = 1;
 
+    /// <summary>
+    /// The file of a mod's systems' entries: name and data each, in order.
+    /// </summary>
     public static byte[] Write(IReadOnlyList<(string Name, byte[] Data)> entries)
     {
         using var stream = new MemoryStream();
@@ -49,6 +58,9 @@ static class ModSaveFile
         }
     }
 
+    /// <summary>
+    /// Reads <paramref name="count"/> entries (name, length, data); throws for a length past the end of the file.
+    /// </summary>
     static Dictionary<string, byte[]> ReadEntries(BinaryReader r, int count)
     {
         var entries = new Dictionary<string, byte[]>(StringComparer.Ordinal);

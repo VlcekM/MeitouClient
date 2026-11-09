@@ -11,10 +11,18 @@ namespace Meitou.Game.Audio;
 /// </summary>
 public sealed partial class WwisePlayer
 {
-    // The objects the host registered; positions are written from the host's threads and read by the mixer (a tiny lock), the rest is the audio
-    // thread's.
+    /// <summary>
+    /// The objects the host registered; positions are written from the host's threads and read by the mixer (a tiny lock), the rest is the
+    /// audio thread's.
+    /// </summary>
     readonly ConcurrentDictionary<ulong, GameObjectState> _gameObjects = new();
+    /// <summary>
+    /// Guards <see cref="_listener"/> (set from the host's threads, read by the mixer).
+    /// </summary>
     readonly object _listenerGate = new();
+    /// <summary>
+    /// Where the ears are and the way they face (<see cref="SetListener"/>).
+    /// </summary>
     Listener _listener = Listener.Default;
 
     /// <summary>
@@ -22,18 +30,36 @@ public sealed partial class WwisePlayer
     /// </summary>
     ulong _postingObject;
 
+    /// <summary>
+    /// One game object: its place (behind a lock, written from the host's threads) and its own game parameters and switches (the audio thread's).
+    /// </summary>
     sealed class GameObjectState
     {
+        /// <summary>
+        /// Guards the place.
+        /// </summary>
         readonly object _gate = new();
+        /// <summary>
+        /// Where the object is and the way it faces (zero: no facing).
+        /// </summary>
         Vector3 _position, _front;
+        /// <summary>
+        /// Whether the object was ever placed; an unplaced one's sounds are heard at the listener.
+        /// </summary>
         bool _placed;
 
         /// <summary>
         /// Per-object game parameter values (override the global ones) and switch values: the audio thread's.
         /// </summary>
         public readonly Dictionary<uint, float> Parameters = [];
+        /// <summary>
+        /// The object's own switch values by group id (override the global states for the sounds playing on it).
+        /// </summary>
         public readonly Dictionary<uint, uint> Switches = [];
 
+        /// <summary>
+        /// Places the object (any thread).
+        /// </summary>
         public void Place(Vector3 position, Vector3 front)
         {
             lock (_gate)
@@ -44,6 +70,9 @@ public sealed partial class WwisePlayer
             }
         }
 
+        /// <summary>
+        /// The object's place; false when it was never placed.
+        /// </summary>
         public bool TryGetPlace(out Vector3 position, out Vector3 front)
         {
             lock (_gate)
@@ -55,6 +84,9 @@ public sealed partial class WwisePlayer
         }
     }
 
+    /// <summary>
+    /// The object's state, registering it on first use.
+    /// </summary>
     GameObjectState ObjectState(ulong id) => _gameObjects.GetOrAdd(id, _ => new GameObjectState());
 
     /// <summary>
@@ -96,6 +128,9 @@ public sealed partial class WwisePlayer
         lock (_listenerGate) _listener = new Listener(position, front, up);
     }
 
+    /// <summary>
+    /// The listener as last set (under its lock).
+    /// </summary>
     Listener CurrentListener()
     {
         lock (_listenerGate) return _listener;
@@ -106,6 +141,9 @@ public sealed partial class WwisePlayer
     /// </summary>
     public void Post(string eventName, ulong gameObject) => Post(WwiseHash.Id(eventName), gameObject);
 
+    /// <summary>
+    /// Posts an event by id on a game object (any thread; run at the next block, retried for 10 s while its bank loads).
+    /// </summary>
     public void Post(uint eventId, ulong gameObject)
     {
         ObjectState(gameObject);
@@ -117,6 +155,9 @@ public sealed partial class WwisePlayer
     /// </summary>
     public void SetParameter(string name, float value, ulong gameObject) => SetParameter(WwiseHash.Id(name), value, gameObject);
 
+    /// <summary>
+    /// Sets a game parameter by id for one object; object 0 sets the global value.
+    /// </summary>
     public void SetParameter(uint id, float value, ulong gameObject)
     {
         if (gameObject == 0)
@@ -134,6 +175,9 @@ public sealed partial class WwisePlayer
     /// </summary>
     public void SetSwitch(string group, string value, ulong gameObject) => SetSwitch(WwiseHash.Id(group), WwiseHash.Id(value), gameObject);
 
+    /// <summary>
+    /// Sets a switch group by id for one object (the object's instances hear of a change); object 0 sets the global state.
+    /// </summary>
     public void SetSwitch(uint group, uint value, ulong gameObject)
     {
         if (gameObject == 0)

@@ -19,19 +19,84 @@ using EngineKey = Meitou.Game.Host.Input.Key;
 
 namespace Meitou.Game;
 
+/// <summary>
+/// The interface's MyGUI side: loading the original's layouts and screens, binding and arranging the HUD each frame, and the keys, clicks, text and
+/// wheel the screens take.
+/// </summary>
 sealed partial class PlayerInterface
 {
-    public UiMode UiMode { get; set; }
-    int _lastMemberClick = -1;
+    #region Interface state
+
+    /// <summary>
+    /// The information panel is extended (the <c>extendedstats</c> action).
+    /// </summary>
     internal bool InfoExpanded;
-    long _lastMemberClickAt;
+    /// <summary>
+    /// The original's HUD, <c>Kenshi_MainPanel.layout</c> expanded.
+    /// </summary>
     internal MyGuiLayout FaithfulHud = null!;
+    /// <summary>
+    /// The original's MyGUI resources (<c>kenshi_init.xml</c>, the fonts).
+    /// </summary>
     internal MyGuiResources UiResources = new();
+    /// <summary>
+    /// The UI extensions' host (<see cref="RegisterUiExtension"/>).
+    /// </summary>
     readonly UiHost _uiHost = new();
+    /// <summary>
+    /// The interface's own UI extension's registration, removed in <see cref="DisposeUi"/>.
+    /// </summary>
     IDisposable? _uiRegistration;
+    /// <summary>
+    /// Paints the arranged controls; null before <see cref="CreateUiPainter"/> or after <see cref="DisposeUi"/>.
+    /// </summary>
     internal UiPainter? UiPainter;
-    internal UiPainter? SettingsPainter => UiPainter;
+    /// <summary>
+    /// The settings panel is open: the world pauses (<see cref="UpdateMenuPause"/>).
+    /// </summary>
     internal bool SettingsOpen;
+    /// <summary>
+    /// The original's screens (the windows of <see cref="FaithfulScreenFiles"/>), made in <see cref="LoadUi"/>.
+    /// </summary>
+    internal MyGuiScreenHost FaithfulScreens = null!;
+    /// <summary>
+    /// An action of the screens for the host (save, load, new game, the options and exit buttons).
+    /// </summary>
+    public event Action<MyGuiEvent>? ScreenAction;
+
+    /// <summary>
+    /// The interface style, Faithful (the original's layouts) or Meitou.
+    /// </summary>
+    public UiMode UiMode { get; set; }
+
+    /// <summary>
+    /// The painter the settings panel draws with.
+    /// </summary>
+    internal UiPainter? SettingsPainter => UiPainter;
+
+    /// <summary>
+    /// The viewed floor of the interior view (the host's): read for the HUD's floor text, stepped by its arrows.
+    /// </summary>
+    public (Func<int> Get, Action<int> Step)? Floor { get; set; }
+
+    /// <summary>
+    /// The interface is drawn and takes input (F7 and the cinema's clean picture hide it).
+    /// </summary>
+    public bool UiVisible { get; set; } = true;
+
+    /// <summary>
+    /// The share of the screen under fully opaque controls in the last drawn UI frame (<see cref="UiPainter.OpaqueCoverage"/>); 0 without a painter.
+    /// </summary>
+    public float OpaqueUiCoverage => UiPainter?.OpaqueCoverage ?? 0;
+
+    /// <summary>
+    /// The controls this frame, arranged (<see cref="ArrangeUi"/>).
+    /// </summary>
+    internal IReadOnlyList<UiControl> UiFrame => ArrangeUi();
+
+    /// <summary>
+    /// Opens or closes the settings panel, ending an inventory drag, and pauses the world while it is open.
+    /// </summary>
     internal void SetSettingsOpen(bool value)
     {
         SettingsOpen = value;
@@ -39,25 +104,40 @@ sealed partial class PlayerInterface
         UpdateMenuPause();
     }
 
-    internal MyGuiScreenHost FaithfulScreens = null!;
-    public event Action<MyGuiEvent>? ScreenAction;
-
     /// <summary>
     /// Raises <see cref="ScreenAction"/> for a feature class (an event is raised only by its own type).
     /// </summary>
     internal void RaiseScreenAction(MyGuiEvent e) => ScreenAction?.Invoke(e);
 
-    /// <summary>
-    /// The viewed floor of the interior view (the host's): read for the HUD's floor text, stepped by its arrows.
-    /// </summary>
-    public (Func<int> Get, Action<int> Step)? Floor { get; set; }
-    public bool UiVisible { get; set; } = true;
-    /// <summary>
-    /// The share of the screen under fully opaque controls in the last drawn UI frame (<see cref="UiPainter.OpaqueCoverage"/>); 0 without a painter.
-    /// </summary>
-    public float OpaqueUiCoverage => UiPainter?.OpaqueCoverage ?? 0;
-    internal IReadOnlyList<UiControl> UiFrame => ArrangeUi();
+    #endregion
 
+    #region Loading and binding
+
+    /// <summary>
+    /// The original layouts the faithful mode opens as screens: id, layout file, modal.
+    /// </summary>
+    internal static readonly (string Id, string File, bool Modal)[] FaithfulScreenFiles =
+    [
+        ("inventory", "Kenshi_InventoryCharacterWindow", false), ("stats", "Kenshi_StatsWindow", false),
+        ("overview", "Kenshi_OverviewWindow", false), ("menu", "Kenshi_MainMenuPopupPanel", true),
+        ("title", "Kenshi_MainMenu", true), ("new-game", "Kenshi_NewGamePanel", true),
+        ("save", "Kenshi_SaveGamePanel", true),
+        ("load", "Kenshi_LoadGamePanel", true), ("import", "Kenshi_ImportGamePanel", true), ("message", "Kenshi_MessageBox", true),
+        ("bag", "Kenshi_InventoryGenericWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false),
+        ("loot-bag", "Kenshi_InventoryGenericWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false),
+        ("trader", "Kenshi_InventoryTraderWindow", false),
+        ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false),
+        ("storage", "Kenshi_InventoryGenericWindow", false),
+        ("build", "Kenshi_BuildWindow", false), ("editor", "Kenshi_CharacterEditor", true), ("dialogue", "Kenshi_ConversationPanel", true),
+        ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow", false),
+        ("leveleditor", "Kenshi_LevelEditor", false),
+        (TradeWindows.CharacterTradeScreen, "Kenshi_CharacterSelectionWindow", false),
+    ];
+
+    /// <summary>
+    /// Loads the original's interface: the catalog's help texts, the palette, the resources, the HUD and every screen's layout, and registers the
+    /// interface's actions.
+    /// </summary>
     public void LoadUi(UiMode mode, Func<string, string?> resolve)
     {
         UiMode = mode;
@@ -124,32 +204,14 @@ sealed partial class PlayerInterface
         resolve(file) is { } path ? MyGuiTemplates.Expand(MyGuiReader.ReadLayout(path), UiResources) : null;
 
     /// <summary>
-    /// The original layouts the faithful mode opens as screens: id, layout file, modal.
-    /// </summary>
-    internal static readonly (string Id, string File, bool Modal)[] FaithfulScreenFiles =
-    [
-        ("inventory", "Kenshi_InventoryCharacterWindow", false), ("stats", "Kenshi_StatsWindow", false),
-        ("overview", "Kenshi_OverviewWindow", false), ("menu", "Kenshi_MainMenuPopupPanel", true),
-        ("title", "Kenshi_MainMenu", true), ("new-game", "Kenshi_NewGamePanel", true),
-        ("save", "Kenshi_SaveGamePanel", true),
-        ("load", "Kenshi_LoadGamePanel", true), ("import", "Kenshi_ImportGamePanel", true), ("message", "Kenshi_MessageBox", true),
-        ("bag", "Kenshi_InventoryGenericWindow", false), ("loot", "Kenshi_InventoryCharacterWindow", false),
-        ("loot-bag", "Kenshi_InventoryGenericWindow", false), ("limbs", "Kenshi_LimbReplacementWindow", false),
-        ("trader", "Kenshi_InventoryTraderWindow", false),
-        ("building", "Kenshi_GenericBuildingWindow", false), ("bench", "Kenshi_InventoryResearchWindow", false),
-        ("storage", "Kenshi_InventoryGenericWindow", false),
-        ("build", "Kenshi_BuildWindow", false), ("editor", "Kenshi_CharacterEditor", true), ("dialogue", "Kenshi_ConversationPanel", true),
-        ("file", "Kenshi_OpenSaveFileDialog", true), ("prospect", "Kenshi_ProspectingWindow", false), ("tutorials", "Kenshi_TutorialsWindow", false),
-        ("leveleditor", "Kenshi_LevelEditor", false),
-        (TradeWindows.CharacterTradeScreen, "Kenshi_CharacterSelectionWindow", false),
-    ];
-
-    /// <summary>
     /// The expanded layout and the current bindings of the HUD (<c>"hud"</c>) or of a faithful screen, for the layout audit test.
     /// </summary>
     internal (MyGuiLayout Layout, UiBindings Bindings) FaithfulBindings(string id) =>
         id == "hud" ? (FaithfulHud, BindUi()) : (FaithfulScreens.Layout(id), ScreenRouter.BindFaithfulScreen(id));
 
+    /// <summary>
+    /// Makes the painter on <paramref name="overlay"/> and reads the screens' pictures ahead.
+    /// </summary>
     public void CreateUiPainter(DebugOverlay overlay, Func<string, string?> resolve)
     {
         UiPainter = new(overlay, UiResources, resolve) { Mode = UiMode, FontSizeSetting = _fontSize };
@@ -160,6 +222,9 @@ sealed partial class PlayerInterface
             .Select(w => w.Properties.GetValueOrDefault("ImageTexture")).OfType<string>());
     }
 
+    /// <summary>
+    /// Frees the painter and removes the interface's UI extension.
+    /// </summary>
     public void DisposeUi()
     {
         UiPainter?.Dispose();
@@ -173,13 +238,9 @@ sealed partial class PlayerInterface
     /// </summary>
     public IDisposable RegisterUiExtension(IUiExtension extension) => _uiHost.Register(extension);
 
-    public bool ContainsUi(Vector2 p)
-    {
-        if (!UiVisible) return false;
-        var controls = ArrangeUi();
-        return FaithfulScreens.Contains(p) || MyGuiPresentation.HitTest(controls, p.X, p.Y) is not null;
-    }
-
+    /// <summary>
+    /// Switches the interface style; a drag or a held order under way ends.
+    /// </summary>
     public void SetUiMode(UiMode mode)
     {
         UiMode = mode;
@@ -192,6 +253,9 @@ sealed partial class PlayerInterface
         UpdateMenuPause();
     }
 
+    /// <summary>
+    /// The HUD's bindings this frame: the status texts, shortcut buttons, orders, panels, jobs, squad tabs, disabled buttons and tooltips.
+    /// </summary>
     UiBindings BindUi()
     {
         // The original sizes the HUD's template parts by height / 1080 (Observed: the squad tabs' 37 px HeaderPlace at 1440 lines,
@@ -334,6 +398,65 @@ sealed partial class PlayerInterface
     /// </summary>
     static bool AlwaysLiveButton(string name) => name is "BuildButton" or "FloorArrowUp" or "FloorArrowDown";
 
+    #endregion
+
+    #region Arranging
+
+    // The arranged base (the HUD, the squad bar, the HUD text and the open screens) is kept across frames while nothing it is made from changed:
+    // the shown snapshot, the mouse, the window, the mode, the open screens, the speed, the modifiers and any input since. What moves with the camera
+    // or real time (name tags, floaters, speech, the notice, the hover label) is added every frame on top (ArrangeUi).
+    /// <summary>
+    /// The HUD's last arrangement and what it was made from (<see cref="MyGuiPresentation.Arrange"/> depends on nothing else): reused while the
+    /// bindings stay the same, so most frames skip the layout; remade at least every <see cref="HudRearrangeCalls"/> calls in case a binding is
+    /// missed by <see cref="UiBindings.ContentEquals"/>.
+    /// </summary>
+    UiBindings? _hudBindings;
+    /// <summary>
+    /// The HUD's last arranged controls.
+    /// </summary>
+    IReadOnlyList<UiControl> _hudControls = [];
+    /// <summary>
+    /// What <see cref="_hudControls"/> was arranged for: the HUD, the window's size, the layers and the language.
+    /// </summary>
+    (MyGuiLayout Layout, int Width, int Height, IReadOnlyList<string> Layers, GameLanguage Language) _hudKey;
+    /// <summary>
+    /// The arrangements reused since the last one.
+    /// </summary>
+    int _hudReuses;
+    /// <summary>
+    /// The HUD is arranged again at least every this many calls.
+    /// </summary>
+    const int HudRearrangeCalls = 30;
+    /// <summary>
+    /// The most a base is reused (real seconds), in case something it reads changed without any of the key's parts.
+    /// </summary>
+    const double UiReuseSeconds = 0.05;
+    /// <summary>
+    /// The key <see cref="_uiBase"/> was arranged for; null before the first.
+    /// </summary>
+    UiBaseKey? _uiBaseKey;
+    /// <summary>
+    /// The open screens <see cref="_uiBase"/> was arranged with.
+    /// </summary>
+    string[] _uiBaseScreens = [];
+    /// <summary>
+    /// The last arranged base.
+    /// </summary>
+    List<UiControl> _uiBase = [];
+    /// <summary>
+    /// When <see cref="_uiBase"/> was arranged (a <see cref="System.Diagnostics.Stopwatch"/> timestamp).
+    /// </summary>
+    long _uiBaseAt;
+
+    /// <summary>
+    /// What a base was arranged from: when it changes, the base is arranged again.
+    /// </summary>
+    readonly record struct UiBaseKey(WorldSnapshot Snapshot, Vector2 Mouse, int Width, int Height, UiMode Mode, GameLanguage Language,
+        int Input, int Town, int? Tutorial, double Speed, bool Paused, bool Hud, bool Ctrl, bool Alt, bool ShotWithoutMenus);
+
+    /// <summary>
+    /// Arranges this frame's controls: the base (reused while nothing it is made from changed), then what moves every frame on top.
+    /// </summary>
     internal IReadOnlyList<UiControl> ArrangeUi()
     {
         SyncScreens();
@@ -455,16 +578,8 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// The HUD's last arrangement and what it was made from (<see cref="MyGuiPresentation.Arrange"/> depends on nothing else): reused while the
-    /// bindings stay the same, so most frames skip the layout; remade at least every <see cref="HudRearrangeCalls"/> calls in case a binding is
-    /// missed by <see cref="UiBindings.ContentEquals"/>.
+    /// The HUD arranged from <paramref name="b"/>, reused while the bindings and <see cref="_hudKey"/> stay the same.
     /// </summary>
-    UiBindings? _hudBindings;
-    IReadOnlyList<UiControl> _hudControls = [];
-    (MyGuiLayout Layout, int Width, int Height, IReadOnlyList<string> Layers, GameLanguage Language) _hudKey;
-    int _hudReuses;
-    const int HudRearrangeCalls = 30;
-
     internal List<UiControl> ArrangeHud(UiBindings b)
     {
         (MyGuiLayout, int, int, IReadOnlyList<string>, GameLanguage) key = (FaithfulHud, Width, Height, UiResources.Layers, Loc.Language);
@@ -476,6 +591,65 @@ sealed partial class PlayerInterface
         return [.. _hudControls];
     }
 
+    /// <summary>
+    /// A copy of the base for this frame (the caller adds to it), made again when its key changed,
+    /// something in it animates, or it is <see cref="UiReuseSeconds"/> old.
+    /// </summary>
+    List<UiControl> ArrangedBase(bool hud)
+    {
+        var key = BaseKey(hud);
+        var screens = FaithfulScreens.OpenScreens.ToArray();
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        bool fresh = _uiBaseKey is { } kept && kept == key && screens.AsSpan().SequenceEqual(_uiBaseScreens) && !UiAnimating
+            && System.Diagnostics.Stopwatch.GetElapsedTime(_uiBaseAt, now).TotalSeconds < UiReuseSeconds;
+        if (!fresh)
+        {
+            _uiBase = ArrangeBase(hud);
+            (_uiBaseKey, _uiBaseScreens, _uiBaseAt) = (key, FaithfulScreens.OpenScreens.ToArray(), now);
+        }
+
+        return [.. _uiBase];
+    }
+
+    /// <summary>
+    /// This frame's base key.
+    /// </summary>
+    UiBaseKey BaseKey(bool hud) => new(Session.CurrentSnapshot, Mouse, Width, Height, UiMode, Loc.Language, UiInput, TownPanel.ShownTown,
+        TutorialWindow.TutorialShown, Session.Simulation.Speed, Session.Simulation.IsPaused, hud, CtrlHeld, AltHeld, FeedbackPanel.ShotWithoutMenus);
+
+    /// <summary>
+    /// The base shows something that moves on real time or with the camera: it is arranged every frame.
+    /// </summary>
+    bool UiAnimating => TitleOpen || CharacterEditor.EditorOpen || Frontend.ShowCredits || BiomeBanner.BiomeShown || WorldMap.MapShown
+        || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0 || FaithfulScreens.CapturesPointer;
+
+    #endregion
+
+    #region Clicks and actions
+
+    /// <summary>
+    /// The squad bar member last clicked, for the double click (-1 for none).
+    /// </summary>
+    int _lastMemberClick = -1;
+    /// <summary>
+    /// When <see cref="_lastMemberClick"/> was clicked (a <see cref="System.Diagnostics.Stopwatch"/> timestamp).
+    /// </summary>
+    long _lastMemberClickAt;
+
+    /// <summary>
+    /// Whether a point is over the interface: an open screen or an arranged control.
+    /// </summary>
+    public bool ContainsUi(Vector2 p)
+    {
+        if (!UiVisible) return false;
+        var controls = ArrangeUi();
+        return FaithfulScreens.Contains(p) || MyGuiPresentation.HitTest(controls, p.X, p.Y) is not null;
+    }
+
+    /// <summary>
+    /// A button press on the interface: to the first that takes it (the inventory, the map, the squad windows, the screens, the HUD's controls);
+    /// false when none did.
+    /// </summary>
     bool UiMouseDown(Vector2 p)
     {
         if (!UiVisible) return false;
@@ -528,6 +702,9 @@ sealed partial class PlayerInterface
             FaithfulScreens.Open("tutorials");
     }
 
+    /// <summary>
+    /// Runs an interface action: the speed buttons, the windows, the orders and the rest of the HUD's buttons.
+    /// </summary>
     internal void ExecuteUiAction(string action, string argument)
     {
         InterfaceSounds.SoundForAction(action, argument);
@@ -589,10 +766,88 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
+    /// Whether the interface takes the pointer: a screen that captures it, the map's or a scroll bar's drag, or an item lifted.
+    /// </summary>
+    public bool UiCapturesPointer => UiVisible && (FaithfulScreens.CapturesPointer || WorldMap.MapDrag is not null
+        || InventoryWindows.LiftPress is not null || ScrollBars.ScrollDrag is not null);
+
+    /// <summary>
+    /// A modal screen (the Esc menu, a message box) is up: the pointer is the interface's, even in the free camera.
+    /// </summary>
+    public bool ModalOpen => UiVisible && FaithfulScreens.HasModal;
+
+    /// <summary>
+    /// The faithful screens open, bottom first (the play benchmark says which modal one stopped the game).
+    /// </summary>
+    public IReadOnlyList<string> OpenScreens => FaithfulScreens.OpenScreens;
+
+    /// <summary>
+    /// The widgets a click can reach in the last arranged frame (the topmost control at its own centre): the HUD and its panels in either UI mode and
+    /// the open screens, for the agent control channel (ui-tree, ui-click). Screen is the faithful screen's id, "hud" for the rest.
+    /// </summary>
+    internal IEnumerable<(string Screen, UiControl Control)> UiClickables()
+    {
+        if (!UiVisible) yield break;
+        var controls = ArrangeUi();
+        var owner = new Dictionary<UiControl, string>(ReferenceEqualityComparer.Instance);
+        foreach (var screen in FaithfulScreens.LastFrame)
+            foreach (var c in screen.Controls) owner[c] = screen.Id;
+        foreach (var c in controls)
+        {
+            float cx = c.Bounds.X + c.Bounds.Width / 2, cy = c.Bounds.Y + c.Bounds.Height / 2;
+            if (!c.Enabled || c.Bounds.Width < 2 || c.Bounds.Height < 2 || cx < 0 || cy < 0 || cx > Width || cy > Height)
+                continue;
+            if (c.Type != "Button" && c.Action.Length == 0) continue;
+            if (MyGuiPresentation.HitTest(controls, cx, cy) is { } top && ReferenceEquals(top, c))
+                yield return (owner.GetValueOrDefault(c, "hud"), c);
+        }
+    }
+
+    /// <summary>
+    /// A left click at <paramref name="p"/> through the game's own pointer path (press and release).
+    /// </summary>
+    internal void UiClickAt(Vector2 p)
+    {
+        MouseDown(MouseButton.Left, p, false);
+        MouseUp(MouseButton.Left, p, false);
+    }
+
+    /// <summary>
+    /// Opens a registered faithful screen by id (the agent control channel); false when there is none.
+    /// </summary>
+    internal bool OpenFaithfulScreen(string id)
+    {
+        if (!FaithfulScreens.IsRegistered(id)) return false;
+        FaithfulScreens.Open(id);
+        UpdateMenuPause();
+        return true;
+    }
+
+    #endregion
+
+    #region Drawing
+
+    /// <summary>
+    /// The rule-of-thirds camera grid (Shift+;, toggle_camera_grid, event 0x29: the widget "CameraGrid", <c>FUN_1406e5fc0</c>), under the interface.
+    /// </summary>
+    bool _cameraGrid;
+    /// <summary>
+    /// Frames left before the screenshot with the camera grid hidden is taken.
+    /// </summary>
+    int _gridHold;
+    /// <summary>
+    /// The camera grid was hidden for a screenshot and is shown again after it.
+    /// </summary>
+    bool _gridRestore;
+
+    /// <summary>
     /// The original's background-loading bar, drawn over the interface in the Faithful mode (the host steps it).
     /// </summary>
     internal ResourceLoadBar? LoadBar { get; set; }
 
+    /// <summary>
+    /// Draws the interface: the camera grid, the arranged controls and the Faithful background-loading bar.
+    /// </summary>
     void DrawGameUi(DebugOverlay overlay, int width, int height, DebugOverlay.OverlayPass? pass = null)
     {
         IReadOnlyList<UiControl> controls = ArrangeUi();
@@ -618,13 +873,6 @@ sealed partial class PlayerInterface
     }
 
     /// <summary>
-    /// The rule-of-thirds camera grid (Shift+;, toggle_camera_grid, event 0x29: the widget "CameraGrid", <c>FUN_1406e5fc0</c>), under the interface.
-    /// </summary>
-    bool _cameraGrid;
-    int _gridHold;
-    bool _gridRestore;
-
-    /// <summary>
     /// The screenshot event with the camera grid shown (the frame-end callback <c>FUN_14082b6e0</c>, <b>Verified</b>): the "CameraGrid" widget is
     /// hidden and the picture is taken two frames later, when the widget is shown again (<see cref="EndScreenshot"/>); with the grid hidden or
     /// missing the picture is taken at once. Returns whether the picture is taken this frame.
@@ -647,7 +895,9 @@ sealed partial class PlayerInterface
         (_cameraGrid, _gridRestore) = (true, false);
     }
 
-
+    /// <summary>
+    /// The rule-of-thirds lines.
+    /// </summary>
     static void DrawCameraGrid(DebugOverlay overlay, int width, int height)
     {
         var white = Vector4.One;
@@ -737,64 +987,23 @@ sealed partial class PlayerInterface
         }
     }
 
-    public bool UiCapturesPointer => UiVisible && (FaithfulScreens.CapturesPointer || WorldMap.MapDrag is not null
-        || InventoryWindows.LiftPress is not null || ScrollBars.ScrollDrag is not null);
+    #endregion
 
-    /// <summary>
-    /// A modal screen (the Esc menu, a message box) is up: the pointer is the interface's, even in the free camera.
-    /// </summary>
-    public bool ModalOpen => UiVisible && FaithfulScreens.HasModal;
-    /// <summary>
-    /// The faithful screens open, bottom first (the play benchmark says which modal one stopped the game).
-    /// </summary>
-    public IReadOnlyList<string> OpenScreens => FaithfulScreens.OpenScreens;
-    /// <summary>
-    /// The widgets a click can reach in the last arranged frame (the topmost control at its own centre): the HUD and its panels in either UI mode and
-    /// the open screens, for the agent control channel (ui-tree, ui-click). Screen is the faithful screen's id, "hud" for the rest.
-    /// </summary>
-    internal IEnumerable<(string Screen, UiControl Control)> UiClickables()
-    {
-        if (!UiVisible) yield break;
-        var controls = ArrangeUi();
-        var owner = new Dictionary<UiControl, string>(ReferenceEqualityComparer.Instance);
-        foreach (var screen in FaithfulScreens.LastFrame)
-            foreach (var c in screen.Controls) owner[c] = screen.Id;
-        foreach (var c in controls)
-        {
-            float cx = c.Bounds.X + c.Bounds.Width / 2, cy = c.Bounds.Y + c.Bounds.Height / 2;
-            if (!c.Enabled || c.Bounds.Width < 2 || c.Bounds.Height < 2 || cx < 0 || cy < 0 || cx > Width || cy > Height)
-                continue;
-            if (c.Type != "Button" && c.Action.Length == 0) continue;
-            if (MyGuiPresentation.HitTest(controls, cx, cy) is { } top && ReferenceEquals(top, c))
-                yield return (owner.GetValueOrDefault(c, "hud"), c);
-        }
-    }
-
-    /// <summary>
-    /// A left click at <paramref name="p"/> through the game's own pointer path (press and release).
-    /// </summary>
-    internal void UiClickAt(Vector2 p)
-    {
-        MouseDown(MouseButton.Left, p, false);
-        MouseUp(MouseButton.Left, p, false);
-    }
-
-    /// <summary>
-    /// Opens a registered faithful screen by id (the agent control channel); false when there is none.
-    /// </summary>
-    internal bool OpenFaithfulScreen(string id)
-    {
-        if (!FaithfulScreens.IsRegistered(id)) return false;
-        FaithfulScreens.Open(id);
-        UpdateMenuPause();
-        return true;
-    }
+    #region Keys and text
 
     /// <summary>
     /// Keys the host keeps for itself (the sandbox's letters), so the faithful window shortcuts leave them alone.
     /// </summary>
     public HashSet<Key> ReservedKeys { get; } = [];
+
+    /// <summary>
+    /// Pauses the world while the settings panel or a modal screen is open.
+    /// </summary>
     internal void UpdateMenuPause() => Session.Simulation.RequestedPause = SettingsOpen || FaithfulScreens.HasModal;
+
+    /// <summary>
+    /// A key to the interface: the camera grid, Esc, an edit box, the open screens, then the window hotkeys; false when it did not take it.
+    /// </summary>
     public bool UiKey(Key key, bool ctrl = false, bool shift = false)
     {
         UiInput++;
@@ -961,12 +1170,18 @@ sealed partial class PlayerInterface
         return false;
     }
 
+    /// <summary>
+    /// A typed character to the screens' edit box.
+    /// </summary>
     public void UiText(char value)
     {
         UiInput++;
         if (UiVisible) FaithfulScreens.TextInput(value);
     }
 
+    /// <summary>
+    /// A wheel step to the first list or view under the pointer that takes it; false when none did.
+    /// </summary>
     public bool UiScroll(Vector2 p, float steps)
     {
         UiInput++;
@@ -982,12 +1197,19 @@ sealed partial class PlayerInterface
         return CharacterEditor.EditorWheel(p, steps) || FaithfulScreens.Wheel(p, steps);
     }
 
-    // ---- keys in the faithful windows' edit boxes (MyGUI 3.2.2 EditBox, docs/game/ui-input.md "Edit boxes") and the clipboard ----
 
+    #endregion
+
+    #region Edit boxes and the clipboard
+
+    // The keys in the faithful windows' edit boxes (MyGUI 3.2.2 EditBox, docs/game/ui-input.md "Edit boxes") and the clipboard.
     /// <summary>
     /// The system clipboard's text and where copied text goes (the window's keyboard); null: the boxes keep a clipboard of their own.
     /// </summary>
     public Func<string?>? ClipboardRead { get; set; }
+    /// <summary>
+    /// Where copied text goes (the window's keyboard); null: the boxes keep a clipboard of their own.
+    /// </summary>
     public Action<string>? ClipboardWrite { get; set; }
 
     /// <summary>
@@ -1043,57 +1265,19 @@ sealed partial class PlayerInterface
         return true;
     }
 
-    // ---- the arranged base (the HUD, the squad bar, the HUD text and the open screens), kept across frames while nothing it is made from changed:
-    // the shown snapshot, the mouse, the window, the mode, the open screens, the speed, the modifiers and any input since. What moves with the camera
-    // or real time (name tags, floaters, speech, the notice, the hover label) is added every frame on top (ArrangeUi) ----
 
-    /// <summary>
-    /// The most a base is reused (real seconds), in case something it reads changed without any of the key's parts.
-    /// </summary>
-    const double UiReuseSeconds = 0.05;
+    #endregion
 
-    readonly record struct UiBaseKey(WorldSnapshot Snapshot, Vector2 Mouse, int Width, int Height, UiMode Mode, GameLanguage Language,
-        int Input, int Town, int? Tutorial, double Speed, bool Paused, bool Hud, bool Ctrl, bool Alt, bool ShotWithoutMenus);
-
-    UiBaseKey? _uiBaseKey;
-    string[] _uiBaseScreens = [];
-    List<UiControl> _uiBase = [];
-    long _uiBaseAt;
-
-    /// <summary>
-    /// A copy of the base for this frame (the caller adds to it), made again when its key changed,
-    /// something in it animates, or it is <see cref="UiReuseSeconds"/> old.
-    /// </summary>
-    List<UiControl> ArrangedBase(bool hud)
-    {
-        var key = BaseKey(hud);
-        var screens = FaithfulScreens.OpenScreens.ToArray();
-        long now = System.Diagnostics.Stopwatch.GetTimestamp();
-        bool fresh = _uiBaseKey is { } kept && kept == key && screens.AsSpan().SequenceEqual(_uiBaseScreens) && !UiAnimating
-            && System.Diagnostics.Stopwatch.GetElapsedTime(_uiBaseAt, now).TotalSeconds < UiReuseSeconds;
-        if (!fresh)
-        {
-            _uiBase = ArrangeBase(hud);
-            (_uiBaseKey, _uiBaseScreens, _uiBaseAt) = (key, FaithfulScreens.OpenScreens.ToArray(), now);
-        }
-
-        return [.. _uiBase];
-    }
-
-    UiBaseKey BaseKey(bool hud) => new(Session.CurrentSnapshot, Mouse, Width, Height, UiMode, Loc.Language, UiInput, TownPanel.ShownTown,
-        TutorialWindow.TutorialShown, Session.Simulation.Speed, Session.Simulation.IsPaused, hud, CtrlHeld, AltHeld, FeedbackPanel.ShotWithoutMenus);
-
-    /// <summary>
-    /// The base shows something that moves on real time or with the camera: it is arranged every frame.
-    /// </summary>
-    bool UiAnimating => TitleOpen || CharacterEditor.EditorOpen || Frontend.ShowCredits || BiomeBanner.BiomeShown || WorldMap.MapShown
-        || PortraitBar.PortraitFlashes.Count > 0 || TutorialWindow.TutorialFlashes.Count > 0 || FaithfulScreens.CapturesPointer;
+    #region Speed buttons
 
     /// <summary>
     /// The speed buttons: pause, then the clock's three speeds.
     /// </summary>
     internal const int SpeedButtons = 4;
 
+    /// <summary>
+    /// A speed button: the clock's speed at that step (the pause button sets 0).
+    /// </summary>
     void PressButton(int index)
     {
         Session.Simulation.SetSpeed(ButtonSpeed(index));   // the pause button (0) never resumes; only the pause key does
@@ -1116,4 +1300,7 @@ sealed partial class PlayerInterface
             return $"meitou:speed.{index}";
         }
     }
+
+
+    #endregion
 }
