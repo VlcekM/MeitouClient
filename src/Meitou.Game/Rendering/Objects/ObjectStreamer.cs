@@ -383,12 +383,15 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
             bool near = false;
             foreach (var t in taken)
             {
-                if (Vector3.Distance(p, t) > KeptMergeDistance) continue;
-
-                near = true;
-                break;
+                if (Vector3.Distance(p, t) <= KeptMergeDistance)
+                {
+                    near = true;
+                    break;
+                }
             }
+
             if (!near) taken.Add(p);
+
         }
         return taken;
     }
@@ -601,7 +604,7 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
         var mesh = meshes.Get(p.MeshPath, distant: stand);
         if (terrainMode) mesh.KeepLevelIndices = true;
         var inst = new Instance { Placed = p, Mesh = mesh, Transform = p.Transform, Centre = p.Transform.Translation, TerrainMode = terrainMode,
-                Stand = stand };
+            Stand = stand };
         zone.Unresolved.Add(inst);
         return inst;
     }
@@ -683,8 +686,9 @@ sealed class ObjectStreamer(WorldObjects objects, ObjectMeshCache meshes) : IDis
                     case ObjectMesh.State.None:
                         // Kept unparked (the zone test would bring it back every frame), but only near the arrival or a kept point is it asked for
                         // during a flight.
-                        if (Ahead is null || LoadNear(eye, inst.Centre) - RequestMargin <= range) meshes.Request(inst.Mesh, d,
-                                Rank(eye, inst.Centre, range) - RequestMargin);
+                        if (Ahead is null || LoadNear(eye, inst.Centre) - RequestMargin <= range)
+                            meshes.Request(inst.Mesh, d, Rank(eye, inst.Centre, range) - RequestMargin);
+
                         waiting++;
                         break;
                     case ObjectMesh.State.Loading or ObjectMesh.State.Uploading:

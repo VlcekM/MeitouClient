@@ -40,16 +40,16 @@ public sealed class VertexLayout : IEquatable<VertexLayout>
 /// has a fragment shading rate attachment (the pipeline is made for it); <paramref name="Extra"/>: a second colour attachment (location 1; the
 /// GI resolve's surface target, docs/render-gi.md), written only by programs whose fragment shader declares that output.
 /// </summary>
-public readonly record struct AttachmentFormats(
-    InternalFormat Colour, InternalFormat Depth, int Samples = 1, bool ShadingRate = false, InternalFormat Extra = InternalFormat.None);
+public readonly record struct AttachmentFormats(InternalFormat Colour, InternalFormat Depth, int Samples = 1, bool ShadingRate = false,
+    InternalFormat Extra = InternalFormat.None);
 
 /// <summary>
 /// GL's blend: one factor pair for colour and alpha, add (or <paramref name="ColourOp"/> / <paramref name="AlphaOp"/>, e.g. min and max);
 /// <paramref name="AlphaSrc"/> / <paramref name="AlphaDst"/>: alpha's own pair (GL's separate blend).
 /// </summary>
-public readonly record struct BlendState(
-    bool Enable, BlendingFactor Src = BlendingFactor.One, BlendingFactor Dst = BlendingFactor.Zero, BlendOperation ColourOp = BlendOperation.Add,
-    BlendOperation AlphaOp = BlendOperation.Add, BlendingFactor? AlphaSrc = null, BlendingFactor? AlphaDst = null)
+public readonly record struct BlendState(bool Enable, BlendingFactor Src = BlendingFactor.One, BlendingFactor Dst = BlendingFactor.Zero,
+    BlendOperation ColourOp = BlendOperation.Add, BlendOperation AlphaOp = BlendOperation.Add, BlendingFactor? AlphaSrc = null,
+    BlendingFactor? AlphaDst = null)
 {
     public static readonly BlendState Off = new(false);
 }
@@ -167,9 +167,8 @@ public static unsafe class PipelineFactory
                     PDynamicState = &dynamic,
                     Layout = layout,
                 };
-                VulkanException.Check(
-                    device.Vk.CreateGraphicsPipelines(device.Device, device.PipelineCache, 1, &info, null, out var pipeline),
-                    "vkCreateGraphicsPipelines");
+                var result = device.Vk.CreateGraphicsPipelines(device.Device, device.PipelineCache, 1, &info, null, out var pipeline);
+                VulkanException.Check(result, "vkCreateGraphicsPipelines");
                 return pipeline;
             }
         }
@@ -359,9 +358,8 @@ public static unsafe class PipelineFactory
                 Stage = stage,
                 Layout = layout,
             };
-            VulkanException.Check(
-                device.Vk.CreateComputePipelines(device.Device, device.PipelineCache, 1, &info, null, out var pipeline),
-                "vkCreateComputePipelines");
+            var result = device.Vk.CreateComputePipelines(device.Device, device.PipelineCache, 1, &info, null, out var pipeline);
+            VulkanException.Check(result, "vkCreateComputePipelines");
             return pipeline;
         }
     }

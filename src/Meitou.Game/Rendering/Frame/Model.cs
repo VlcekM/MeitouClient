@@ -154,7 +154,7 @@ public sealed class Model
     }
 
     static ModelPart BuildPart(int s, OgreSubMesh sub, OgreVertexData vd, List<OgreBoneAssignment> assignments, int? boneCount, uint[] indices,
-            List<string> warnings, bool gameBinormals, bool tangentSign)
+        List<string> warnings, bool gameBinormals, bool tangentSign)
     {
         int n = (int)vd.VertexCount;
         var verts = new Vertex[n];

@@ -252,7 +252,7 @@ static partial class WorldFrame
             // reflection draws them.
             float aspect = f.RenderWidth / (float)Math.Max(f.RenderHeight, 1);
             shown.ShownView = WorldCamera.FrustumPlanes(camera.View * camera.Projection(aspect, camera.ClipNear, Math.Max(camera.ViewDistance,
-                    2 * shown.DrawDistance)));
+                2 * shown.DrawDistance)));
             shown.ShownMirror = render.Water && render.Reflections && gpu.Water is not null && gpu.Reflection is { Level: >= 2 }
                 ? WorldWater.Height : null;
         }
@@ -261,8 +261,8 @@ static partial class WorldFrame
         if (gpu.Characters is { } posed && gpu.Debris is { } boltMeshes)
         {
             posed.CollectBolts(gpu.BoltPieces);
-            foreach (var bolt in gpu.BoltPieces) boltMeshes.Extent(bolt.Mesh, null,
-                    bolt.Limb);   // loads a mesh the first time (a held limb's with its look)
+            // loads a mesh the first time (a held limb's with its look)
+            foreach (var bolt in gpu.BoltPieces) boltMeshes.Extent(bolt.Mesh, null, bolt.Limb);
         }
         StageClock.Part(StageClock.PartBolts);
 
@@ -386,7 +386,7 @@ static partial class WorldFrame
             gpu.Particles?.CollectFogVolumes(gpu.EffectFogs);
             float aspect = f.RenderWidth / (float)Math.Max(f.RenderHeight, 1);
             fogVolumes.Update(f.Eye, camera.Forward, camera.FieldOfView, aspect, gpu.Sky.HazeDistance, f.Sun.Y, true, gpu.EffectFogs,
-                    gpu.Sky.FogCullDistance);
+                gpu.Sky.FogCullDistance);
             gpu.Sky.CloudShadowScale = fogVolumes.CloudShadowScale;
         }
     }
@@ -524,7 +524,7 @@ static partial class WorldFrame
             objects.LodBias = bias * reflection.ObjectLodBias;
             objects.ObjectDistance = Math.Min(distance, reflection.ObjectReach);
             objects.LandmarkDistance = Math.Min(landmarks,
-                    reflection.ObjectReach);   // the mirrored scene has no landmarks beyond the reflection's own object range
+                reflection.ObjectReach);   // the mirrored scene has no landmarks beyond the reflection's own object range
             objects.MirrorCull = reflection.CullToWater ? reflection.MayShow : null;
             objects.AllFloors = true;   // the game shows every floor in the water reflection (docs/formats/zones.md "Interior view")
 
@@ -841,7 +841,7 @@ static partial class WorldFrame
     /// CharacterRenderer.DrawView).
     /// </summary>
     static void AttachMotion(ref FrameState f, Matrix4x4 viewProjection, Matrix4x4 unjittered, Vector4[] frustum, Matrix4x4 relative,
-            Matrix4x4 relativeUnjittered)
+        Matrix4x4 relativeUnjittered)
     {
         var gpu = f.Gpu;
         var post = f.Post;
@@ -891,7 +891,7 @@ static partial class WorldFrame
 
         post.RunGiResolve();
         StageClock.Lap(14,
-                "gi resolve");   // the resolve is the gi stage's (its time was the particles stage's before, with the shafts and the fog volumes)
+            "gi resolve");   // the resolve is the gi stage's (its time was the particles stage's before, with the shafts and the fog volumes)
 
         if (gpu.Shadow is { Enabled: true })
         {
@@ -931,7 +931,7 @@ static partial class WorldFrame
         float pixelsPerUnit = post.ParticlePixelsPerUnit(f.Camera.Projection(f.Aspect, 1, 10).M22);
         bool late = post.ParticlesAfterUpscale;
         particles.Prepare(f.ParticleView, f.ParticleClose, f.ParticleNear, f.View, f.Eye, f.Sun, pixelsPerUnit,
-                (float)post.RenderWidth * post.RenderHeight,
+            (float)post.RenderWidth * post.RenderHeight,
             post.Options.ParticleDivisor, lowViewProjection: late ? f.ParticleLow : null, lowCloseViewProjection: late ? f.ParticleLowClose : null);
 
         if (particles.FullCount > 0)
@@ -1013,7 +1013,7 @@ static partial class WorldFrame
             {
                 var (near, far, projection) = SceneProjection();
                 outline.Record(hoverPicture, width, height, masks, post.SceneDepth, post.RenderWidth, post.RenderHeight, near, far,
-                        view * projection);
+                    view * projection);
             }
         }
 

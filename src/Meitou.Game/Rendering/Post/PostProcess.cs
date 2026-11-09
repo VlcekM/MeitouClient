@@ -131,7 +131,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         public readonly LegacyProgram P;
         protected FullscreenProgram(GpuContext gpu, string fragment, string name) => P = LegacyProgram.Create(gpu, PostProcessShaders.Vertex,
-                fragment, name);
+            fragment, name);
     }
 
     sealed class SsaoMaskPass : FullscreenProgram
@@ -162,7 +162,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         public readonly SamplerSlot Scene;
         public readonly UniformHandle Cell;
         public LuminancePass(GpuContext gpu) : base(gpu, PostProcessShaders.Luminance, "post luminance") => (Scene, Cell) = (P.Sampler("uScene"),
-                P.Uniform("uCell"));
+            P.Uniform("uCell"));
     }
 
     sealed class AdaptPass : FullscreenProgram
@@ -180,14 +180,14 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         public readonly SamplerSlot Scene, Ao, Adapted, Bloom;
         public readonly UniformHandle Auto, Exposure, UseAo, Dither, SceneSize, Sharpen, Tone, ToneMix, Grade, Saturation, Contrast, Night, Balance,
-                BloomStrength;
+            BloomStrength;
         public CompositePass(GpuContext gpu) : base(gpu, PostProcessShaders.Composite, "post composite")
         {
             (Scene, Ao, Adapted) = (P.Sampler("uScene"), P.Sampler("uAo"), P.Sampler("uAdapted"));
             (SceneSize, Sharpen) = (P.Uniform("uSceneSize"), P.Uniform("uSharpen"));
             (Auto, Exposure, UseAo, Dither) = (P.Uniform("uAuto"), P.Uniform("uExposure"), P.Uniform("uUseAo"), P.Uniform("uDither"));
             (Tone, ToneMix, Grade, Saturation, Contrast) = (P.Uniform("uTone"), P.Uniform("uToneMix"), P.Uniform("uGrade"), P.Uniform("uSaturation"),
-                    P.Uniform("uContrast"));
+                P.Uniform("uContrast"));
             (Night, Balance) = (P.Uniform("uNight"), P.Uniform("uBalance"));
             (Bloom, BloomStrength) = (P.Sampler("uBloom"), P.Uniform("uBloomStrength"));
         }
@@ -198,7 +198,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         public readonly SamplerSlot Image;
         public readonly UniformHandle Texel;
         public FxaaPass(GpuContext gpu) : base(gpu, PostProcessShaders.Fxaa, "post fxaa") => (Image, Texel) = (P.Sampler("uImage"),
-                P.Uniform("uTexel"));
+            P.Uniform("uTexel"));
     }
 
     /// <summary>
@@ -253,7 +253,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         public readonly SamplerSlot NearDepth;
         public readonly UniformHandle NearToPrev, NearPlanes, FullPlanes, JitterNdc, Mode, FlipDepthY, Tan, Right, Up, Back, EyeY, WaterY,
-                WaterReactive;
+            WaterReactive;
         public readonly UniformHandle Sun, SunMotionUniform;
         public VelocityPass(GpuContext gpu) : base(gpu, UpscaleShaders.Velocity, "post velocity")
         {
@@ -275,7 +275,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         {
             (Colour, Motion, History) = (P.Sampler("uColour"), P.Sampler("uMotion"), P.Sampler("uHistory"));
             (RenderSize, DisplaySize, Jitter, Blend, Reset) = (P.Uniform("uRenderSize"), P.Uniform("uDisplaySize"), P.Uniform("uJitter"),
-                    P.Uniform("uBlend"), P.Uniform("uReset"));
+                P.Uniform("uBlend"), P.Uniform("uReset"));
         }
     }
 
@@ -286,7 +286,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         public SsaoPass(GpuContext gpu) : base(gpu, PostProcessShaders.Ssao, "post ssao")
         {
             (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"),
-                    P.Uniform("uWaterY"));
+                P.Uniform("uWaterY"));
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
@@ -311,7 +311,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
                 P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uWaterY"));
             ShaftInjected = P.Sampler("uShaftInjected");
             (ShaftGrid, ShaftRange, ShaftTan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftTan"),
-                    P.Uniform("uShaftFog"));
+                P.Uniform("uShaftFog"));
             (ShaftRight, ShaftUp, ShaftBack) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
         }
     }
@@ -339,7 +339,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         public readonly SamplerSlot Low;
         public readonly UniformHandle LowSize;
         public GiApplyPass(GpuContext gpu) : base(gpu, Gi.GiResolveShaders.Apply, "post gi apply") => (Low, LowSize) = (P.Sampler("uLow"),
-                P.Uniform("uLowSize"));
+            P.Uniform("uLowSize"));
     }
 
     /// <summary>
@@ -361,7 +361,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     {
         public readonly SamplerSlot Depth;
         public ParticleSoftDepthPass(GpuContext gpu) : base(gpu,
-                PostProcessShaders.ParticleSoftDepth, "post particle soft depth") => Depth = P.Sampler("uDepth");
+            PostProcessShaders.ParticleSoftDepth, "post particle soft depth") => Depth = P.Sampler("uDepth");
     }
 
     /// <summary>
@@ -392,7 +392,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
             (AccumFar, LowDepthFar) = (P.Sampler("uAccumFar"), P.Sampler("uLowDepthFar"));
             (LowSize, NearPlanes, Div, FullSize, Limit) = (P.Uniform("uLowSize"), P.Uniform("uNearPlanes"), P.Uniform("uDiv"), P.Uniform("uFullSize"),
-                    P.Uniform("uLimit"));
+                P.Uniform("uLimit"));
         }
     }
 
@@ -442,7 +442,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         (_velocityPass, _taaPass, _fogPass) = (new VelocityPass(gpu), new TaaPass(gpu), new FogPass(gpu));
         _cloudMotionPass = new CloudMotionPass(gpu);
         (_particleDepthPass, _particleCompositePass, _particleCoveragePass) = (new ParticleDepthPass(gpu), new ParticleCompositePass(gpu),
-                new ParticleCoveragePass(gpu));
+            new ParticleCoveragePass(gpu));
         _particleSoftDepthPass = new ParticleSoftDepthPass(gpu);
     }
 
@@ -554,7 +554,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
             // Exposure runs after the upscaler, at the display size: the luminance's whole mip chain (GL's, defined by GenerateMipmap), read
             // mipmapped.
             _luminance = Make(batch, LuminanceSize, LuminanceSize, InternalFormat.R32F, TextureMinFilter.LinearMipmapNearest, "post luminance",
-                    LuminanceLevels);
+                LuminanceLevels);
             _adaptA = Make(batch, 1, 1, InternalFormat.Rg32F, TextureMinFilter.Linear, "post exposure adapted");
             _adaptB = Make(batch, 1, 1, InternalFormat.Rg32F, TextureMinFilter.Linear, "post exposure adapted");
         }
@@ -843,10 +843,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     readonly Dictionary<(LegacyProgram, InternalFormat, InternalFormat, DrawState), GpuPipeline> _pipelines = [];
 
     void Draw(LegacyProgram p, Target2D target) => Draw(p, target.Attachment, target.Format, target.Width, target.Height, target.Width,
-            target.Height);
+        target.Height);
 
     void Draw(LegacyProgram p, RenderTarget colour, InternalFormat format, int targetWidth, int targetHeight, int viewportWidth, int viewportHeight,
-            DrawState? state = null)
+        DrawState? state = null)
     {
         DrawPass(p, colour, format, default, InternalFormat.None, targetWidth, targetHeight, viewportWidth, viewportHeight, state);
     }
@@ -856,7 +856,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// pipeline is cached per program and attachment formats: one state each).
     /// </summary>
     void DrawPass(LegacyProgram p, RenderTarget colour, InternalFormat format, RenderTarget depth, InternalFormat depthFormat, int targetWidth,
-            int targetHeight, int viewportWidth, int viewportHeight, DrawState? state)
+        int targetHeight, int viewportWidth, int viewportHeight, DrawState? state)
     {
         var cmd = Segment();
         cmd.BeginLabel(p.Name);   // each pass its own range in a GPU trace (the segment is "post")
@@ -1062,7 +1062,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// blue only, so the alpha (the characters' SSAO mask) stays.
     /// </summary>
     static readonly DrawState FogState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.SrcAlpha),
-            ColourMask = DrawState.Rgb };
+        ColourMask = DrawState.Rgb };
 
     /// <summary>
     /// The placed fog volumes (docs/formats/fogfeatures.md), in one full-screen pass over the finished scene: after the opaque geometry, the water
@@ -1118,7 +1118,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// The occlusion multiplied in: the scene colour kept by the factor; red, green and blue only (the alpha is the characters' mask).
     /// </summary>
     static readonly DrawState AoMultiplyState = PassState with { Blend = new BlendState(true, BlendingFactor.Zero, BlendingFactor.SrcColor),
-            ColourMask = DrawState.Rgb };
+        ColourMask = DrawState.Rgb };
 
     /// <summary>
     /// Runs the SSAO and multiplies it into the scene colour now, so what is drawn after (the weather's particles) is not darkened by the occlusion
@@ -1167,10 +1167,10 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
         // The lit surfaces' normal, sqrt(albedo) and take-the-probes flag, packed (AtmosphereShaders' giAlbedoOut); the low target signed (the
         // probes' light can be below the sky's) with the view depth in alpha.
         _giAlbedo = new Target2D(batch.Create(new TextureDesc(InternalFormat.Rgba16Ui, _width, _height,
-                Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
+            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "post gi surface")),
             TextureMinFilter.Nearest, TextureMagFilter.Nearest);
         _giLow = Make(batch, (_width + _giDivisor - 1) / _giDivisor, (_height + _giDivisor - 1) / _giDivisor, InternalFormat.Rgba16F,
-                TextureMinFilter.Nearest, "post gi resolve");
+            TextureMinFilter.Nearest, "post gi resolve");
     }
 
     /// <summary>
@@ -1211,7 +1211,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// The resolve added to the scene: source one, destination one; red, green and blue only (the alpha is the characters' SSAO mask).
     /// </summary>
     static readonly DrawState GiAddState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.One),
-            ColourMask = DrawState.Rgb };
+        ColourMask = DrawState.Rgb };
 
     // ---- low-resolution particles (Meitou) ----
 
@@ -1344,8 +1344,9 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// The far draw's depth for its soft fade (<see cref="ParticleTargetsFar"/>), or null (Faithful).
     /// </summary>
     public ParticleRenderer.SoftDepth? SoftParticleDepthFar(int divisor) =>
-        Options.MeitouFog && divisor > 1 && LowFor(divisor).SoftFar is { } t ? new ParticleRenderer.SoftDepth(Sampled(t), _planes.X,
-                _planes.Y) : null;
+        Options.MeitouFog && divisor > 1 && LowFor(divisor).SoftFar is { } t
+            ? new ParticleRenderer.SoftDepth(Sampled(t), _planes.X, _planes.Y)
+            : null;
 
     /// <summary>
     /// Whether the low-resolution particles are blended over the vendor upscaler's output instead of the scene it upscales (docs/render-post.md
@@ -1399,7 +1400,7 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// characters' mask).
     /// </summary>
     static readonly DrawState ParticleLowState = PassState with { Blend = new BlendState(true, BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha),
-            ColourMask = DrawState.Rgb };
+        ColourMask = DrawState.Rgb };
 
     void DrawFinal(LegacyProgram p, PassTargets final) =>
         Draw(p, final.Colour, final.Formats.Colour, final.Width, final.Height, _displayWidth, _displayHeight);
@@ -1411,8 +1412,8 @@ public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
     /// scene's reversed convention: nothing is drawn with it; the velocity pass re-encodes the scene depth into it and DLSS gets it as
     /// <c>ViewToClip</c> (depth not inverted).
     /// </summary>
-    Matrix4x4 FullProjection(float fov,
-            float aspectRatio) => ViewWindow.Current.Apply(Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar));
+    Matrix4x4 FullProjection(float fov, float aspectRatio) =>
+        ViewWindow.Current.Apply(Matrix4x4.CreatePerspectiveFieldOfView(fov, aspectRatio, UpscaleNear, UpscaleFar));
 
     /// <summary>
     /// The planes of the upscalers' depth: fixed, not the camera's (its near plane follows the eye's height above the ground and the far one the

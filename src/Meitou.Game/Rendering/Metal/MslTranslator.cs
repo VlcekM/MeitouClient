@@ -35,7 +35,7 @@ public static unsafe class MslTranslator
     /// spirv-cross names the stages' entry points the same).
     /// </summary>
     public static string Translate(byte[] spirv, string entryPoint, ExecutionModel stage, uint mslVersion = MslVersion,
-            uint? argumentBufferSet = null)
+        uint? argumentBufferSet = null)
     {
         ArgumentNullException.ThrowIfNull(spirv);
         var cross = Cross.GetApi();

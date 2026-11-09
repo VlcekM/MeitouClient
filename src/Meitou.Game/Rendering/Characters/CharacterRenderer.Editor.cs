@@ -14,7 +14,7 @@ namespace Meitou.Game.Rendering.Characters;
 /// left).
 /// </summary>
 public readonly record struct EditorStageRequest(long Key, int Width, int Height, float Yaw, float Elevation, float Distance, bool Head,
-        float FieldOfView, float ShiftX);
+    float FieldOfView, float ShiftX);
 
 /// <summary>
 /// The character editor's stage (docs/characters.md "Character editor"): the original draws the edited character into a workspace of its own and puts
@@ -91,7 +91,7 @@ internal sealed unsafe partial class CharacterRenderer
         {
             DisposeStageHdr();
             (_stageHdr, _stageHdrDepth, _stageHdrSampled) = PreviewResolve.Targets(Gpu, r.Width, r.Height, _look with { Supersample = scale },
-                    "character stage hdr");
+                "character stage hdr");
             _stageHdrScale = scale;
         }
         int index = -1;
@@ -110,13 +110,13 @@ internal sealed unsafe partial class CharacterRenderer
             var (eye, pivot) = StageCamera(in l, in r);
             var view = Matrix4x4.CreateLookAt(eye, pivot, Vector3.UnitY);
             var projection = Matrix4x4.CreatePerspectiveFieldOfView(r.FieldOfView, r.Width / (float)r.Height, 0.5f,
-                    400) * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
+                400) * Matrix4x4.CreateTranslation(r.ShiftX, 0, 0);
             var light = Vector3.Normalize(Vector3.TransformNormal(StageLight, l.World));
             Matrix4x4.Decompose(l.World, out _, out var facing, out _);
             StageView = (view * projection, eye, light, Matrix4x4.CreateFromQuaternion(facing) * Matrix4x4.CreateTranslation(Ground(in l)));
             _portraitLive = index;
             try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light, FogDistance = hdr ? -3 : -2 }, eye,
-                    []); }
+                []); }
             finally { _portraitLive = -1; }
         }
         Gpu.EndHostPass(cmd);
@@ -133,7 +133,7 @@ internal sealed unsafe partial class CharacterRenderer
         if (!_look.Enhanced || _stageHdr is null || _stageColour is null || StageRequest is null) return;
         _preview ??= new PreviewResolve(Gpu);
         _preview.Run(_stageHdrSampled, _stageColour, _look with { Supersample = _stageHdrScale }, [new PixelRect(0, 0, (uint)_stageColour.Desc.Width,
-                (uint)_stageColour.Desc.Height)]);
+            (uint)_stageColour.Desc.Height)]);
     }
 
     /// <summary>
@@ -182,7 +182,7 @@ internal sealed unsafe partial class CharacterRenderer
         }
         else pivot = Ground(in l) + new Vector3(0, 12, 0);
         var local = Vector3.Transform(new Vector3(0, 0, r.Distance), Quaternion.CreateFromAxisAngle(Vector3.UnitY,
-                r.Yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -r.Elevation));
+            r.Yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, -r.Elevation));
         return (pivot + Vector3.TransformNormal(local, l.World) / scale, pivot);
     }
 
@@ -207,9 +207,9 @@ internal sealed unsafe partial class CharacterRenderer
     {
         DisposeStage();
         _stageColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, width, height, Use: TextureUse.Sampled | TextureUse.ColourTarget,
-                Name: "character stage"));
+            Name: "character stage"));
         _stageDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width, height, Use: TextureUse.DepthTarget,
-                Name: "character stage depth"));
+            Name: "character stage depth"));
         _stageSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), _stageColour.View());
     }

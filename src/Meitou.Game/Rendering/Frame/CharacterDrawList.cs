@@ -14,12 +14,7 @@ public readonly record struct CharacterPose(string Animation, float Time, float 
 /// the renderer can keep its GPU resources and last frame's bones (motion vectors) by it; <see cref="Appearance"/> is compared by
 /// reference to find the meshes and materials.
 /// </summary>
-public readonly record struct CharacterInstance(
-    long Key,
-    CharacterAppearance Appearance,
-    Vector3 Position,
-    float Yaw,
-    IReadOnlyList<CharacterPose> Poses)
+public readonly record struct CharacterInstance(long Key, CharacterAppearance Appearance, Vector3 Position, float Yaw, IReadOnlyList<CharacterPose> Poses)
 {
     /// <summary>
     /// Show the weapon in hand (the parts tagged <see cref="WeaponShown.Drawn"/>) instead of sheathed.

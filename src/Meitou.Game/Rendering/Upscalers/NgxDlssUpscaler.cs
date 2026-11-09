@@ -96,14 +96,8 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
     {
         if (_failed) return false;
 
-        var wanted = (
-            Mode(i.RenderWidth / (float)i.DisplayWidth),
-            i.RenderWidth,
-            i.RenderHeight,
-            i.DisplayWidth,
-            i.DisplayHeight,
-            VendorUpscalers.DlssPreset(i.Preset),
-            i.Exposure is null);
+        var wanted = (Mode(i.RenderWidth / (float)i.DisplayWidth), i.RenderWidth, i.RenderHeight, i.DisplayWidth, i.DisplayHeight,
+            VendorUpscalers.DlssPreset(i.Preset), i.Exposure is null);
         if (_feature != null && _options != wanted) Release();
 
         var list = (CommandList)_ctx.BeginNative("dlss upscale");

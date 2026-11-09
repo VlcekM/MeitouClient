@@ -57,12 +57,8 @@ internal sealed class NativeProg : IDisposable
             result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                 ? a.Buffer
                 : _ctx.ConstantVertexAttributes
-                    ? new GpuBufferBinding(
-                        _ctx.DummyVertex,
-                        GlConventions.DummyVertexOffset(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float))
-                    : new GpuBufferBinding(
-                        _ctx.DummyVertexArray(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float),
-                        0);
+                    ? new GpuBufferBinding(_ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float))
+                    : new GpuBufferBinding(_ctx.DummyVertexArray(input >= 0 ? _kinds[input] : Gpu.Shaders.ScalarKind.Float), 0);
         }
 
         return result;

@@ -409,10 +409,16 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         if (weld) OgreMeshWeld.Apply(mesh);
         var model = Model.Build(mesh, null);
         if (distant)
+        {
             foreach (var part in model.Parts)
+            {
                 for (int i = 0; i < part.Vertices.Length; i++)
-                    part.Vertices[i].Colour = new Vector4(part.Vertices[i].Colour.X * 1.5f, part.Vertices[i].Colour.Y * 1.5f,
-                            part.Vertices[i].Colour.Z * 1.5f, part.Vertices[i].Colour.W);
+                {
+                    var colour = part.Vertices[i].Colour;
+                    part.Vertices[i].Colour = new Vector4(colour.X * 1.5f, colour.Y * 1.5f, colour.Z * 1.5f, colour.W);
+                }
+            }
+        }
         var centre = model.Center;
         float radius = model.Radius, top = centre.Y + radius;
         Vector3 min = new(float.MaxValue), max = new(float.MinValue);
@@ -612,7 +618,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
                 gpuContext.EnsureFrame();
                 using var batch = gpuContext.Uploads.Begin();
                 batch.Write(gp!.Indices, (ulong)start,
-                        System.Runtime.InteropServices.MemoryMarshal.AsBytes(prepared.All.AsSpan()).Slice(start, length));
+                    System.Runtime.InteropServices.MemoryMarshal.AsBytes(prepared.All.AsSpan()).Slice(start, length));
             }, label + " (indices)");
         }
         uploads.Add(() =>

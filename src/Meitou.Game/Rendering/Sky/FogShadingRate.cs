@@ -25,7 +25,7 @@ public static class FogShadingRate
     /// What shows of a surface behind the haze and the volumes is <c>(1 - hazeHidden) * transmittance</c>; this is the rest, how much the air hides.
     /// </summary>
     public static float Opacity(float hazeHidden, float transmittance) => 1f - (1f - Math.Clamp(hazeHidden, 0f, 1f)) * Math.Clamp(transmittance,
-            0f, 1f);
+        0f, 1f);
 
     /// <summary>
     /// The fragment size (pixels on a side: 1, 2 or 4) for <paramref name="opacity"/>, at most <paramref name="largest"/> (what the device lists).
@@ -43,7 +43,7 @@ public static class FogShadingRate
     /// log2(height)</c> (1x1 is 0, 2x2 is 5, 4x4 is 10).
     /// </summary>
     public static int Encode(int width,
-            int height) => (System.Numerics.BitOperations.Log2((uint)width) << 2) | System.Numerics.BitOperations.Log2((uint)height);
+        int height) => (System.Numerics.BitOperations.Log2((uint)width) << 2) | System.Numerics.BitOperations.Log2((uint)height);
 
     /// <summary>The square fragment size a texel code stands for (2 x 1 and the like read as the larger side).</summary>
     public static int SizeOf(int code) => 1 << Math.Max(code >> 2, code & 3);

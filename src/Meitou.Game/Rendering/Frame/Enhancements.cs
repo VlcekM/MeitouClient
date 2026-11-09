@@ -9,7 +9,7 @@ namespace Meitou.Game.Rendering.Frame;
 /// shadow quality...), which keep their meaning in both. Reads and writes the live options through its delegates.
 /// </summary>
 public sealed class Enhancement(string id, string name, string faithful, string meitou, Func<bool> get, Action<bool> set, string note,
-        Func<string>? liveMeitou = null)
+    Func<string>? liveMeitou = null)
 {
     /// <summary>
     /// The command-line name (<c>--meitou ao,haze</c>).

@@ -128,9 +128,9 @@ public static class SpikeLog
     {
         long g2 = GC.CollectionCount(2), g0 = GC.CollectionCount(0);
         var pause = GC.GetTotalPauseDuration();
-        if (g0 != s_gcCount || g2 != s_gc2)
-            sb.Append(CultureInfo.InvariantCulture,
-                    $"GC gen0+{g0 - s_gcCount} gen2+{g2 - s_gc2} pause {(pause - s_gcPause).TotalMilliseconds:0.0} ms; ");
+        double pauseMs = (pause - s_gcPause).TotalMilliseconds;
+        if (g0 != s_gcCount || g2 != s_gc2) sb.Append(CultureInfo.InvariantCulture, $"GC gen0+{g0 - s_gcCount} gen2+{g2 - s_gc2} pause {pauseMs:0.0} ms; ");
+
 
         (s_gcCount, s_gc2, s_gcPause) = (g0, g2, pause);
     }

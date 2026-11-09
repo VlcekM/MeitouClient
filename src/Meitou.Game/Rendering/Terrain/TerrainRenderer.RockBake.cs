@@ -24,7 +24,7 @@ public sealed unsafe partial class TerrainRenderer
         if (_rockBake is not null) return _rockBake;
         GpuSetLayout[] sets = [_nativeFrame.SetLayout, GpuSetLayout.Bindless, _constantsLayout];
         return _rockBake = new TerrainProgram(_gpu, sets, TerrainShaders.RockBakeVertexNative(), TerrainShaders.RockBakeFragmentNative(),
-                "terrain rock bake");
+            "terrain rock bake");
     }
 
     /// <summary>True when the biome of parameter row <paramref name="row"/> has its layer textures resident now (the bake waits for it).</summary>
@@ -120,7 +120,7 @@ public sealed unsafe partial class TerrainRenderer
     /// bindless indices, the colour window, the world's half size and the two distances (80% and 100% of <paramref name="materialDistance"/>).
     /// <c>Flags</c> bit 0 ground map, 1 whole-world colour, 2 colour map.</summary>
     internal (Vector4 Region, uint Ground, uint WorldColour, uint Colour, float HalfWorld, float FarStart, float FarEnd,
-            uint Flags) RockFarView(float materialDistance)
+        uint Flags) RockFarView(float materialDistance)
     {
         uint flags = 0, ground = _standIn2D, worldColour = _standIn2D, colour = _standIn2D;
         var region = Vector4.Zero;
@@ -145,14 +145,14 @@ public sealed unsafe partial class TerrainRenderer
     /// gloss). <paramref name="distance"/> is the distance the material is shaded for (its fade with distance), <paramref name="scale"/> the placement's.
     /// </summary>
     internal void RecordRockBake(IGpuCommandList cmd, AttachmentFormats formats, DrawState state, int row, float scale, float distance,
-            in Matrix4x4 viewProjection, Vector3 eye, Vector3 dir, Vector3 right, Vector3 up, int pass, ImpostorBaker.Part[] parts)
+        in Matrix4x4 viewProjection, Vector3 eye, Vector3 dir, Vector3 right, Vector3 up, int pass, ImpostorBaker.Part[] parts)
     {
         var p = RockBakeProgram();
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = Vector3.UnitY, FogDistance = 0 };
         var binding = _nativeFrame.Prepare(in view);
         NativeFrame.Record(cmd, p.P, in binding);
-        var constantsSlice = _gpu.Frame.WriteConstants(
-            System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>([BakeConstants(row)])), _uniformAlign);
+        var constants = System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>([BakeConstants(row)]));
+        var constantsSlice = _gpu.Frame.WriteConstants(constants, _uniformAlign);
         ulong key = (ulong)constantsSlice.Handle.Index;
         if (!_constantSets.TryGetValue(key, out var set)) _constantSets[key] = set = ConstantSet(constantsSlice.Handle);
         uint offset = (uint)constantsSlice.Offset;

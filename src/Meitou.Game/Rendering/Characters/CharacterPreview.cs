@@ -96,9 +96,9 @@ internal sealed class PreviewResolve : IDisposable
         _program = LegacyProgram.Create(gpu, PostProcessShaders.Vertex, Fragment, "character preview resolve");
         _source = _program.Sampler("uSource");
         (_rect, _scale, _tone, _toneMix) = (_program.Uniform("uRect"), _program.Uniform("uScale"), _program.Uniform("uTone"),
-                _program.Uniform("uToneMix"));
+            _program.Uniform("uToneMix"));
         (_grade, _saturation, _contrast, _dither) = (_program.Uniform("uGrade"), _program.Uniform("uSaturation"), _program.Uniform("uContrast"),
-                _program.Uniform("uDither"));
+            _program.Uniform("uDither"));
     }
 
     /// <summary>
@@ -106,13 +106,13 @@ internal sealed class PreviewResolve : IDisposable
     /// <paramref name="look"/>'s supersampling.
     /// </summary>
     public static (GpuTexture Colour, GpuTexture Depth, SampledTexture Sampled) Targets(IGpuContext gpu, int width, int height, PreviewLook look,
-            string name)
+        string name)
     {
         int s = Math.Max(look.Supersample, 1);
         var colour = gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, width * s, height * s,
-                Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
+            Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: name));
         var depth = gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, width * s, height * s, Use: TextureUse.DepthTarget,
-                Name: name + " depth"));
+            Name: name + " depth"));
         var sampled = new SampledTexture(gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), colour.View());
         return (colour, depth, sampled);

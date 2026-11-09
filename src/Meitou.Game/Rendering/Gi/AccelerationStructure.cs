@@ -10,7 +10,7 @@ namespace Meitou.Game.Rendering.Gi;
 /// <summary>One triangle geometry of a bottom-level build: positions (three floats at the start of each vertex) and 32-bit indices, both
 /// reached by device address (buffers made with <see cref="BufferUse.RayInput"/>).</summary>
 public readonly record struct TriangleGeometry(ulong VertexAddress, uint VertexStride, uint VertexCount, ulong IndexAddress, uint TriangleCount,
-        bool Opaque = true);
+    bool Opaque = true);
 
 /// <summary>A TLAS instance as Vulkan lays it out (<c>VkAccelerationStructureInstanceKHR</c>, 64 bytes): a 3 x 4 row-major transform, the
 /// 24-bit custom index with the 8-bit mask, the 24-bit hit group offset with 8 bits of flags, and the BLAS's device address.</summary>
@@ -27,7 +27,7 @@ public unsafe struct InstanceRecord
     /// <summary>An instance of <paramref name="blas"/> placed by <paramref name="world"/> (a System.Numerics row-vector matrix: the translation in
     /// row 4), visible to rays whose cull mask shares a bit with <paramref name="mask"/>.</summary>
     public static InstanceRecord Of(in Matrix4x4 world, uint customIndex, byte mask, ulong blas,
-            GeometryInstanceFlagsKHR flags = GeometryInstanceFlagsKHR.TriangleFacingCullDisableBitKhr)
+        GeometryInstanceFlagsKHR flags = GeometryInstanceFlagsKHR.TriangleFacingCullDisableBitKhr)
     {
         var r = new InstanceRecord
         {
@@ -68,7 +68,7 @@ public sealed unsafe class AccelerationStructure : IDisposable
         Type = type;
         var ext = device.AccelerationStructures ?? throw new InvalidOperationException("the device has no ray queries");
         _storage = device.Allocator.CreateBuffer(size, BufferUsageFlags.AccelerationStructureStorageBitKhr | BufferUsageFlags.ShaderDeviceAddressBit,
-                MemoryKind.DeviceLocal, name);
+            MemoryKind.DeviceLocal, name);
         var info = new AccelerationStructureCreateInfoKHR
         {
             SType = StructureType.AccelerationStructureCreateInfoKhr,
@@ -95,7 +95,7 @@ public sealed unsafe class AccelerationStructure : IDisposable
     /// used).
     /// <paramref name="updatable"/>: it can be refitted (<see cref="RefitBottom"/>), and keeps its scratch buffer for that.</summary>
     public static AccelerationStructure BuildBottom(VulkanDevice device, CommandList cmd, ReadOnlySpan<TriangleGeometry> geometries, string name,
-            bool updatable = false)
+        bool updatable = false)
     {
         int n = geometries.Length;
         var geos = stackalloc AccelerationStructureGeometryKHR[Math.Max(n, 1)];
@@ -140,7 +140,7 @@ public sealed unsafe class AccelerationStructure : IDisposable
     }
 
     static void FillBottom(ReadOnlySpan<TriangleGeometry> geometries, AccelerationStructureGeometryKHR* geos,
-            AccelerationStructureBuildRangeInfoKHR* ranges, uint* counts)
+        AccelerationStructureBuildRangeInfoKHR* ranges, uint* counts)
     {
         for (int i = 0; i < geometries.Length; i++)
         {
@@ -188,10 +188,10 @@ public sealed unsafe class AccelerationStructure : IDisposable
         sizes.AccelerationStructureSize = Math.Max(sizes.AccelerationStructureSize, traceSizes.AccelerationStructureSize);
         sizes.BuildScratchSize = Math.Max(sizes.BuildScratchSize, traceSizes.BuildScratchSize);
         var top = new AccelerationStructure(device, AccelerationStructureTypeKHR.TopLevelKhr, Math.Max(sizes.AccelerationStructureSize, 256),
-                name) { MaxInstances = maxInstances };
-        top._scratch = device.Allocator.CreateBuffer(sizes.BuildScratchSize + device.ScratchAlignment,
-                BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit,
-            MemoryKind.DeviceLocal, name + " scratch");
+            name) { MaxInstances = maxInstances };
+        var scratchSize = sizes.BuildScratchSize + device.ScratchAlignment;
+        var scratchUse = BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit;
+        top._scratch = device.Allocator.CreateBuffer(scratchSize, scratchUse, MemoryKind.DeviceLocal, name + " scratch");
         return top;
     }
 
@@ -210,7 +210,7 @@ public sealed unsafe class AccelerationStructure : IDisposable
         var sizes = new AccelerationStructureBuildSizesInfoKHR { SType = StructureType.AccelerationStructureBuildSizesInfoKhr };
         uint max = maxInstances;
         device.AccelerationStructures!.GetAccelerationStructureBuildSizes(device.Device, AccelerationStructureBuildTypeKHR.DeviceKhr, &build, &max,
-                &sizes);
+            &sizes);
         return sizes;
     }
 
@@ -260,7 +260,7 @@ public sealed unsafe class AccelerationStructure : IDisposable
     };
 
     static AccelerationStructure Build(VulkanDevice device, CommandList cmd, AccelerationStructureTypeKHR type,
-            AccelerationStructureGeometryKHR* geos, uint geometryCount,
+        AccelerationStructureGeometryKHR* geos, uint geometryCount,
         AccelerationStructureBuildRangeInfoKHR* ranges, uint* maxPrimitives, BuildAccelerationStructureFlagsKHR flags,
         string name, bool keepScratch = false)
     {
@@ -277,10 +277,9 @@ public sealed unsafe class AccelerationStructure : IDisposable
         var sizes = new AccelerationStructureBuildSizesInfoKHR { SType = StructureType.AccelerationStructureBuildSizesInfoKhr };
         ext.GetAccelerationStructureBuildSizes(device.Device, AccelerationStructureBuildTypeKHR.DeviceKhr, &build, maxPrimitives, &sizes);
         var structure = new AccelerationStructure(device, type, Math.Max(sizes.AccelerationStructureSize, 256), name);
-        structure._scratch = device.Allocator.CreateBuffer(
-            (keepScratch ? Math.Max(sizes.BuildScratchSize, sizes.UpdateScratchSize) : sizes.BuildScratchSize) + device.ScratchAlignment,
-            BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit,
-            MemoryKind.DeviceLocal, name + " scratch");
+        var scratchSize = (keepScratch ? Math.Max(sizes.BuildScratchSize, sizes.UpdateScratchSize) : sizes.BuildScratchSize) + device.ScratchAlignment;
+        var scratchUse = BufferUsageFlags.StorageBufferBit | BufferUsageFlags.ShaderDeviceAddressBit;
+        structure._scratch = device.Allocator.CreateBuffer(scratchSize, scratchUse, MemoryKind.DeviceLocal, name + " scratch");
         build.DstAccelerationStructure = structure.Handle;
         build.ScratchData = new DeviceOrHostAddressKHR { DeviceAddress = structure.ScratchAddress() };
         var rangePointer = ranges;

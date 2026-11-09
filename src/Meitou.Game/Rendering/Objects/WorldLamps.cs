@@ -248,8 +248,8 @@ internal sealed class WorldLamps : IDisposable
         int count = lamps.Length + Moving.Count;
         if (count == 0) return;
 
-        float x0 = MathF.Floor(eye.X / CellSize) * CellSize - Cells / 2 * CellSize,
-                z0 = MathF.Floor(eye.Z / CellSize) * CellSize - Cells / 2 * CellSize;
+        float x0 = MathF.Floor(eye.X / CellSize) * CellSize - Cells / 2 * CellSize;
+        float z0 = MathF.Floor(eye.Z / CellSize) * CellSize - Cells / 2 * CellSize;
         CollectNear(x0, z0, count, objects, daylight);
         if (_near.Count == 0) return;
 
@@ -305,8 +305,8 @@ internal sealed class WorldLamps : IDisposable
             _dataValues[row] = new Vector4(l.Position, l.Radius);
             _dataValues[row + 1] = new Vector4(l.Colour * power, l.Type == WorldLightType.Spot ? 1 : 0);
             _dataValues[row + 2] = new Vector4(l.Direction, MathF.Cos(outer * 0.5f));
-            _dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), l.Falloff > 0 ? l.Falloff : 1, room?.Footprint.Length ?? 0,
-                    Emitter(l.PlacementId));
+            float falloff = l.Falloff > 0 ? l.Falloff : 1;
+            _dataValues[row + 3] = new Vector4(MathF.Cos(inner * 0.5f), falloff, room?.Footprint.Length ?? 0, Emitter(l.PlacementId));
             if (room is not null) FillRoomEdges(row, room);
         }
     }
@@ -351,10 +351,10 @@ internal sealed class WorldLamps : IDisposable
             for (int k = 0; k < _near.Count; k++)
             {
                 var l = Lamp(_near[k].Lamp);
-                int cx0 = Math.Max((int)MathF.Floor((l.Position.X - l.Radius - x0) / CellSize), 0),
-                        cx1 = Math.Min((int)MathF.Floor((l.Position.X + l.Radius - x0) / CellSize), Cells - 1);
-                int cz0 = Math.Max((int)MathF.Floor((l.Position.Z - l.Radius - z0) / CellSize), 0),
-                        cz1 = Math.Min((int)MathF.Floor((l.Position.Z + l.Radius - z0) / CellSize), Cells - 1);
+                int cx0 = Math.Max((int)MathF.Floor((l.Position.X - l.Radius - x0) / CellSize), 0);
+                int cx1 = Math.Min((int)MathF.Floor((l.Position.X + l.Radius - x0) / CellSize), Cells - 1);
+                int cz0 = Math.Max((int)MathF.Floor((l.Position.Z - l.Radius - z0) / CellSize), 0);
+                int cz1 = Math.Min((int)MathF.Floor((l.Position.Z + l.Radius - z0) / CellSize), Cells - 1);
                 for (int cz = cz0; cz <= cz1; cz++)
                     for (int cx = cx0; cx <= cx1; cx++)
                     {
@@ -385,8 +385,9 @@ internal sealed class WorldLamps : IDisposable
         {
             batch.Write(_cells[_slot], 0, 0, full, MemoryMarshal.AsBytes(_cellValues.AsSpan()));
             batch.Write(_index[_slot], 0, 0, new PixelRect(0, 0, IndexWidth, IndexRows), MemoryMarshal.AsBytes(_indexValues.AsSpan()));
-            batch.Write(_data[_slot], 0, 0, new PixelRect(0, 0, DataWidth, (uint)_near.Count),
-                    MemoryMarshal.AsBytes(_dataValues.AsSpan(0, _near.Count * DataWidth)));
+            var rows = new PixelRect(0, 0, DataWidth, (uint)_near.Count);
+            batch.Write(_data[_slot], 0, 0, rows, MemoryMarshal.AsBytes(_dataValues.AsSpan(0, _near.Count * DataWidth)));
+
         }
     }
 

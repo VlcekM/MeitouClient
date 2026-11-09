@@ -29,7 +29,7 @@ public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion R
 /// untinted) and the race's blood colour. Equal diffuse maps share a loaded mesh.
 /// </summary>
 public sealed record LimbLook(string Diffuse, string? Mask, Vector3 SkinTone, Vector3 BloodColour, string? Race = null, bool SkinDefault = true,
-        string? Normal = null);
+    string? Normal = null);
 
 /// <summary>
 /// Loose meshes thrown about by the host (luckyren Mode's bones and limbs, docs/game/luckyren.md): each a static mesh, centred on its bounds,
@@ -264,7 +264,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
     /// A loaded mesh: one buffer of vertices and one of indices, a draw per part.
     /// </summary>
     sealed class Mesh(DeviceBuffer vertices, DeviceBuffer indices,
-            (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold, bool Coloured)[] parts, Vector3 extent)
+        (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold, bool Coloured)[] parts, Vector3 extent)
     {
         public readonly DeviceBuffer Vertices = vertices, Indices = indices;
         public readonly (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold, bool Coloured)[] Parts = parts;
@@ -336,7 +336,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
     DebrisTexture? _bloodMap;
 
     static uint Pack(Vector3 c) => (uint)(Math.Clamp((int)MathF.Round(c.X * 255), 0, 255) << 16 | Math.Clamp((int)MathF.Round(c.Y * 255), 0,
-            255) << 8 | Math.Clamp((int)MathF.Round(c.Z * 255), 0, 255));
+        255) << 8 | Math.Clamp((int)MathF.Round(c.Z * 255), 0, 255));
 
     static string Key(string mesh, LimbLook? limb) => limb is null ? mesh : mesh + "|" + limb.Diffuse;
 
@@ -345,7 +345,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
     /// <paramref name="sliceViewProjection"/> is the slice's (absolute world to clip), <paramref name="frustum"/> its planes.
     /// </summary>
     public void Draw(ReadOnlySpan<DebrisPiece> pieces, Matrix4x4 sliceViewProjection, Vector3 eye, Vector4[] frustum, in WorldLighting light,
-            Func<LimbLook, uint>? skinTable = null)
+        Func<LimbLook, uint>? skinTable = null)
     {
         if (pieces.IsEmpty) return;
         var cmd = _gpu.BeginGuest("debris");
@@ -418,7 +418,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             var middle = mesh.Limb ? piece.Position + Vector3.Transform(mesh.Centre * piece.Scale, piece.Rotation) : piece.Position;
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
             var m = Matrix4x4.CreateScale(piece.Scale, piece.Scale,
-                    piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
+                piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
             for (int k = 0; k < 5; k++) _bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle,
                     (ulong)(k switch { 0 => 0, 1 => 12, 2 => 20, 3 => 36, _ => 28 }));
             cmd.BindVertexBuffers(0, _bindings);
@@ -485,10 +485,10 @@ public sealed unsafe class DebrisRenderer : IDisposable
         foreach (var part in built.Parts)
         {
             var material = limb is null ? _resolver?.Candidates(materialOf,
-                    new OgreSubMesh { MaterialName = part.MaterialName }).FirstOrDefault() : null;
+                new OgreSubMesh { MaterialName = part.MaterialName }).FirstOrDefault() : null;
             float threshold = material is { Alpha: AlphaSource.DiffuseAlpha } ? MathF.Max(material.AlphaThreshold, 0.5f) : 0;
             parts.Add(((uint)indices.Count, (uint)part.Indices.Length, vertices.Count,
-                    Texture(diffuse ?? (limb is null ? material?.Diffuse : limb.Diffuse)), threshold,
+                Texture(diffuse ?? (limb is null ? material?.Diffuse : limb.Diffuse)), threshold,
                 material?.VertexColours ?? false));
             // a limb keeps the mesh's own space (its blood mapping reads x)
             foreach (var v in part.Vertices) vertices.Add(limb is null ? v with { Position = v.Position - centre } : v);

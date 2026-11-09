@@ -11,6 +11,7 @@ using Meitou.Game.Rendering.Shadows;
 using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
 using SamplerInfo = Meitou.Game.Rendering.Gpu.Shaders.SamplerInfo;
+using ScalarKind = Meitou.Game.Rendering.Gpu.Shaders.ScalarKind;
 
 namespace Meitou.Game.Rendering.Objects;
 
@@ -130,7 +131,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         _nativeFrame = new NativeFrame(gpu);
         _colourProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.FragmentNative(), "objects");
         _solidProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(),
-                BuildingLodShaders.FragmentNative(solid: true), "objects solid");
+            BuildingLodShaders.FragmentNative(solid: true), "objects solid");
         _depthProg = new ObjProg(gpu, _nativeFrame, BuildingLodShaders.VertexNative(), BuildingLodShaders.DepthNative(), "objects depth");
         _textureCache = new WorldTextureCache(gpu, assets, "object textures") { Share = TextureShare.For(gpu) };
         var library = assets.Materials;
@@ -146,7 +147,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             _landmarkTask = Task.Run(() => { var found = _landmarkClass.Collect(objects); _landmarkMs = collectWatch.Elapsed.TotalMilliseconds; return found; });
         }
         var distant = new SurfaceMaterial { Description = "DistantTown (vertex colour x texture x 1.5)", Diffuse = DistantTowns.DiffuseTexture,
-                VertexColours = true, SpecularMult = 0 };
+            VertexColours = true, SpecularMult = 0 };
         var distantDiffuse = _textureCache.Get(distant.Diffuse, false);
         // its coordinates are the towns' own, not the mesh's: mip streaming leaves it
         if (distantDiffuse is not null) distantDiffuse.KeepAllMips = true;
@@ -394,7 +395,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         foreach (var slot in _ghostSlots)
         {
             int tint = slot.State switch { GhostState.Valid => BatchKind.Ghost, GhostState.Invalid => BatchKind.GhostBad,
-                    _ => BatchKind.GhostQueued };
+                _ => BatchKind.GhostQueued };
             foreach (var inst in slot.Instances)
             {
                 if (inst.Gpu is not { } gpu) continue;
@@ -815,7 +816,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         var t = inst.Placed.Transform;
         var centre = Vector3.Transform(gpu.Centre, t);
         float scale = MathF.Sqrt(Math.Max(new Vector3(t.M11, t.M12, t.M13).LengthSquared(),
-                Math.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
+            Math.Max(new Vector3(t.M21, t.M22, t.M23).LengthSquared(), new Vector3(t.M31, t.M32, t.M33).LengthSquared())));
         float radius = gpu.Radius * scale;
         if (!inst.Stand && gpu.MinLevel > 0 && inst.TerrainMode)
         {
@@ -890,7 +891,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             // triplanar: a surface edge-on to a projection axis has a footprint smaller than a pixel on that axis, so no bound
             float texel = minTile > 0 && !triplanar ? part.UvScale / minTile : float.PositiveInfinity;
             result[i] = new ObjectPartMaterial(m, _textureCache.Get(m?.Diffuse, border, deferred: true),
-                    wantNormal ? _textureCache.Get(m?.Normal, border, deferred: true) : null,
+                wantNormal ? _textureCache.Get(m?.Normal, border, deferred: true) : null,
                 wantSecond ? _textureCache.Get(m?.Diffuse2, border, deferred: true) : null,
                         wantSecond && part.HasTangents ? _textureCache.Get(m?.Normal2, border, deferred: true) : null,
                 texel, triplanar)
@@ -943,7 +944,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// The nearest loaded building's movement destination, using collision up to the viewed floor, before the terrain.
     /// </summary>
     public Vector3? MoveHit(Vector3 origin, Vector3 direction, int floor, float maxDistance) => FloorHit(origin, direction, floor,
-            maxDistance)?.Position;
+        maxDistance)?.Position;
 
     /// <summary>
     /// <see cref="MoveHit"/> with the building whose collision was hit.
@@ -1268,7 +1269,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// Draws the objects seen from <paramref name="eye"/> through <paramref name="frustum"/>.
     /// </summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour,
-            float fogDistance, TerrainRenderer terrain)
+        float fogDistance, TerrainRenderer terrain)
     {
         var cpu = Stopwatch.StartNew();
         long now = Environment.TickCount64;
@@ -1350,7 +1351,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         if (_active.Count > 0)
         {
             var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour,
-                    FogDistance = fogDistance };
+                FogDistance = fogDistance };
             if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
             else (view.CutVolumes, view.CutRanges, view.CutPlanes) = (_cutConstants.CutVolumes, _cutConstants.CutRanges, _cutConstants.CutPlanes);
             var fadeRange = new Vector4(real - realBand, real, DistantReach - distantBand, DistantReach);
@@ -1396,7 +1397,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// streamer's scans use.
     /// </summary>
     void DrawReal(ObjectStreamer.Zone zone, ObjectStreamer.Instance inst, float range, Vector3 eye, Vector4[] frustum, WorldRenderOptions options,
-            long now)
+        long now)
     {
         if (inst.Gpu is not { } gpu) return;
         if (!ReferenceEquals(inst.Mesh.Gpu, gpu)) { Unresolve(zone, inst); return; }
@@ -1430,7 +1431,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
             // A TERRAIN-mode feature over an interior mask: drawn with the cut (Feature_Terrain_DX11 clips against the mask,
             // docs/render-interior-cut.md).
             var into = !_depthPass && inst.Placed.Kind == PlacedKind.MapFeature && InteriorCut is { Active: true } mask && mask.Overlaps(inst.Centre,
-                    inst.Radius) ? _terrainMeshesCut : _terrainMeshes;
+                inst.Radius) ? _terrainMeshesCut : _terrainMeshes;
             foreach (var gp in g.Parts)
                 if (gp.Count[lv] > 0)
                 {
@@ -1479,9 +1480,10 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // A map feature (CLIP_INTERIOR, docs/render-interior-cut.md) over a building's interior mask takes the cut, and so does another building's
         // part over the mask of a building in the interior view (CutsIntoViewed); the rest keep the programs without it. In a shadow pass such a part
         // casts nothing inside the viewed buildings' hulls (ShadowCut).
-        bool cut = _depthPass ? _shadowCuts.Count > 0 && CutsShadow(inst)
-            : InteriorCut is { Active: true } mask && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre,
-                    inst.Radius) : CutsIntoViewed(inst, mask));
+        bool cut = _depthPass
+            ? _shadowCuts.Count > 0 && CutsShadow(inst)
+            : InteriorCut is { Active: true } mask
+                && (inst.Placed.Kind == PlacedKind.MapFeature ? mask.Overlaps(inst.Centre, inst.Radius) : CutsIntoViewed(inst, mask));
         if (_selecting.Count > 0 && SelectingKey(inst.Placed) is { } selectedKey)
             _selectionDraws.Add(new(selectedKey, gpu, inst.Materials!, blend, m, weight, value, inst.Placed.Interior, site, inst.Centre,
                     inst.Radius));
@@ -1512,8 +1514,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     public bool CutIntoViewed { get; set; } = true;
 
     bool CutsIntoViewed(ObjectStreamer.Instance inst, InteriorMaskRenderer mask) =>
-        CutIntoViewed && InteriorView.Count > 0 && Cuttable(inst) && mask.Overlaps(inst.Centre, inst.Radius,
-                InteriorView) && !mask.Drew(inst.Placed.PlacementId);
+        CutIntoViewed && InteriorView.Count > 0 && Cuttable(inst) && mask.Overlaps(inst.Centre, inst.Radius, InteriorView)
+        && !mask.Drew(inst.Placed.PlacementId);
 
     bool Cuttable(ObjectStreamer.Instance inst) =>
         !inst.Stand && inst.Placed is { Kind: PlacedKind.BuildingPart, DoorIndex: < 0, ParentPlacementId: null, Contained: false };
@@ -1565,7 +1567,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     }
 
     void Add(GpuObjectMesh gpu, ObjectMaterialSet materials, int level, Matrix4x4 m, float lo, float hi, float near, bool backCull = false,
-            bool site = false, int ghost = 0, bool highlight = false, bool cut = false)
+        bool site = false, int ghost = 0, bool highlight = false, bool cut = false)
     {
         var manual = gpu.Manual[level];
 
@@ -1573,7 +1575,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
         // the old merging. A construction site discards the fragments above its clip plane, so it needs the program with a discard as well.
         bool fading = !EarlyDepth.Enabled || lo > 0 || hi < 1 || site;
         var batch = BatchFor(manual ?? gpu, materials, manual is null ? level : 0,
-                (fading ? BatchKind.Fading : BatchKind.Solid) | (backCull ? BatchKind.BackCull : 0) | ghost | (highlight ? BatchKind.Highlight : 0) | (cut ? BatchKind.Cut : 0));
+            (fading ? BatchKind.Fading : BatchKind.Solid) | (backCull ? BatchKind.BackCull : 0) | ghost | (highlight ? BatchKind.Highlight : 0) | (cut ? BatchKind.Cut : 0));
         batch.Manual = manual is not null;
         if (batch.Count == 0) { _active.Add(batch); batch.Near = near; } else if (near < batch.Near) batch.Near = near;
         m.M14 = lo;
@@ -1725,9 +1727,8 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
                 result[loc] = loc < byLocation.Length && byLocation[loc] is { } a
                     ? a.Buffer
                     : _ctx.ConstantVertexAttributes
-                    ? new GpuBufferBinding(_ctx.DummyVertex,
-                            GlConventions.DummyVertexOffset(input >= 0 ? _kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float))
-                    : new GpuBufferBinding(_ctx.DummyVertexArray(input >= 0 ? _kinds[input] : Meitou.Game.Rendering.Gpu.Shaders.ScalarKind.Float), 0);
+                    ? new GpuBufferBinding(_ctx.DummyVertex, GlConventions.DummyVertexOffset(input >= 0 ? _kinds[input] : ScalarKind.Float))
+                    : new GpuBufferBinding(_ctx.DummyVertexArray(input >= 0 ? _kinds[input] : ScalarKind.Float), 0);
             }
             return result;
         }
@@ -2055,7 +2056,7 @@ public sealed unsafe partial class WorldObjectRenderer : IDisposable
     /// level an instance takes (<see cref="ShadowLod"/>). Leaves the draw counters describing this call.
     /// </summary>
     public void DrawDepth(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, TerrainRenderer terrain,
-            float coarseTexel = 0)
+        float coarseTexel = 0)
     {
         _depthPass = true;
         _shadowLodFloor = ShadowLod.ObjectLodFloor(coarseTexel, options.TerrainPixelScale);

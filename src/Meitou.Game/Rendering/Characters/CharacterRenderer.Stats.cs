@@ -63,7 +63,7 @@ internal sealed unsafe partial class CharacterRenderer
         for (int corner = 0; corner < 8; corner++)
         {
             var p = centre + new Vector3((corner & 1) == 0 ? -radius : radius, (corner & 2) == 0 ? -radius : radius,
-                    (corner & 4) == 0 ? -radius : radius);
+                (corner & 4) == 0 ? -radius : radius);
             var clip = Vector4.Transform(new Vector4(p, 1), viewProjection);
             if (clip.W <= 0.01f) return null;
             float x = (clip.X / clip.W * 0.5f + 0.5f) * width, y = (0.5f - clip.Y / clip.W * 0.5f) * height;

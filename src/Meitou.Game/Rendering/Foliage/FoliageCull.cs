@@ -33,7 +33,7 @@ public sealed class FoliageCullView
 /// before it as a reciprocal (<see cref="FoliageCull.TransitionFade"/>); infinite without one.
 /// </summary>
 public readonly record struct FoliageGroupRange(float Range, float RangeSquared, float InverseBand, float Transition = float.PositiveInfinity,
-        float InverseTransitionBand = 0)
+    float InverseTransitionBand = 0)
 {
     public static FoliageGroupRange Of(float range, float band) => new(range, range * range, 1 / band);
 
@@ -131,7 +131,7 @@ public static class FoliageCull
     /// The share of the mesh at <paramref name="distance"/>: 1 before the crossfade band, 0 from the transition on.
     /// </summary>
     public static float TransitionFade(in FoliageGroupRange range,
-            float distance) => Math.Clamp((range.Transition - distance) * range.InverseTransitionBand, 0, 1);
+        float distance) => Math.Clamp((range.Transition - distance) * range.InverseTransitionBand, 0, 1);
 
     /// <summary>
     /// The mesh's packed value with an impostor: <paramref name="m"/> in the band (the mesh's dither keeps that share), else the range fade's.
@@ -169,7 +169,7 @@ public static class FoliageCull
     /// impostors only those from its band on (<see cref="PackImpostor"/>).
     /// </summary>
     internal static void CullGroup(ReadOnlySpan<FoliageInstanceRecord> instances, in FoliageGroupRange range, Vector2 eye, FoliageCullView view,
-            bool record, FoliageCullOutput output, int parts = MeshPart, FogVolumes? fog = null)
+        bool record, FoliageCullOutput output, int parts = MeshPart, FogVolumes? fog = null)
     {
         output.Count = output.InRangeCount = output.ImpostorCount = output.FogCulled = 0;
         bool split = range.HasImpostor;

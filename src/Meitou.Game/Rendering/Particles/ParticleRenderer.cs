@@ -207,7 +207,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     readonly VertexArrayBindings _vertexSource;
     readonly GpuBufferBinding[] _bindings = new GpuBufferBinding[5];
     readonly UniformHandle _viewProjection, _cameraRight, _cameraUp, _mode, _anchor, _commonDirection, _commonUp, _colourScale, _coverageMode,
-            _coverageLimit, _coverageGain, _soft;
+        _coverageLimit, _coverageGain, _soft;
     readonly UniformHandle _litVertex, _litFragment, _particleEye;
     /// <summary>
     /// Meitou (the <c>fog</c> switch): alpha sprites lit as the scene is, darker where the sun is shadowed (by <see cref="SunShade"/>), brighter seen
@@ -254,7 +254,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// Mean simulation and main-thread wait per simulated frame since the start (for the benchmarks).
     /// </summary>
     public (double Simulation, double Wait) MeanMilliseconds => _simulationFrames == 0 ? (0,
-            0) : (_simulationTotal * 1000.0 / Stopwatch.Frequency / _simulationFrames, _waitTotal * 1000.0 / Stopwatch.Frequency / _simulationFrames);
+        0) : (_simulationTotal * 1000.0 / Stopwatch.Frequency / _simulationFrames, _waitTotal * 1000.0 / Stopwatch.Frequency / _simulationFrames);
 
     public ParticleLibrary Library { get; }
     /// <summary>
@@ -386,7 +386,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _softDepthSlot = _program.Sampler("uSoftDepth");
         _soft = _program.Uniform("uSoft");
         (_litVertex, _litFragment, _particleEye) = (_program.Uniform("uLitVertex"), _program.Uniform("uLitFragment"),
-                _program.Uniform("uParticleEye"));
+            _program.Uniform("uParticleEye"));
         float[] corners = [-0.5f, -0.5f, -0.5f, 0.5f, 0.5f, -0.5f, 0.5f, 0.5f];   // triangle strip
         _quad = DeviceBuffer.Create(gpu, sizeof(float) * (ulong)corners.Length, BufferUse.Vertex, "particle quad");
         using (var batch = gpu.Uploads.Begin()) batch.Write(_quad, 0, System.Runtime.InteropServices.MemoryMarshal.AsBytes(corners.AsSpan()));
@@ -397,7 +397,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         _vertexSource = new VertexArrayBindings(attributes, default);
         _white = SampledImage.Rgba8(gpu, 1, 1, [255, 255, 255, 255], repeat: false, mipmaps: false, "particle white");
         _tracerTexture = SampledImage.Rgba8(gpu, TracerTextureWidth, TracerTextureHeight, TracerPixels(), repeat: false,
-                mipmaps: true, "particle tracer");
+            mipmaps: true, "particle tracer");
     }
 
     const int TracerTextureWidth = 16, TracerTextureHeight = 64;
@@ -408,7 +408,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         Source = new PuNode("technique", [], 0),
     };
     static readonly ParticleMaterial TracerMaterial = new("meitou tracer", null, ParticleBlend.Alpha, DepthCheck: true, DepthWrite: false,
-            Ambient: false, Vector4.One, Clamp: true);
+        Ambient: false, Vector4.One, Clamp: true);
     readonly SampledImage _tracerTexture;
 
     /// <summary>
@@ -525,7 +525,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// none), for <see cref="MoveBurst"/>.
     /// </summary>
     public EffectUnit? Burst(string system, Vector3 position, Quaternion orientation, float seconds, float size = 1, float lifeScale = 1,
-            Vector3? recolour = null)
+        Vector3? recolour = null)
     {
         if (!Enabled) return null;
         Sync();
@@ -731,12 +731,12 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// <param name="forcedDivisor">0: by sprite size; 1, 2 or 4: every eligible draw there but rain and fire (for measuring, and the Half and Quarter
     /// settings).</param>
     public void Prepare(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye,
-            Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor = 0,
+        Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor = 0,
         Matrix4x4? lowViewProjection = null, Matrix4x4? lowCloseViewProjection = null)
     {
         long start = Stopwatch.GetTimestamp();
         PrepareInner(viewProjectionMatrix, closeViewProjection, nearPlane, view, eye, sunDirection, pixelsPerUnit, screenPixels, forcedDivisor,
-                late: lowViewProjection is not null);
+            late: lowViewProjection is not null);
 
         // The low-resolution draws' own matrices: unjittered when they are blended after the upscaler (PostProcess.ParticlesAfterUpscale), whose
         // output is.
@@ -786,7 +786,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
         // The alpha channel of the scene target carries the characters' mask: particles write colour only (the low-resolution target uses all four).
         const ColorMask rgb = ColorMask.R | ColorMask.G | ColorMask.B;
         RecordDraws(cmd, in baseState, in targets, hasDepth, hasColour, low ? rgb | ColorMask.A : rgb, low ? Kind.Low : Kind.Colour, softDepth,
-                divisor);
+            divisor);
         _gpu.EndGuest(cmd);
     }
 
@@ -800,11 +800,11 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// Mean main-thread cost of Update and Draw (draw includes the wait for the simulation) per frame, in ms (for the benchmarks).
     /// </summary>
     public (double Update,
-            double Draw) MeanMainThreadMilliseconds => (_updateFrames == 0 ? 0 : _updateTotal * 1000.0 / Stopwatch.Frequency / _updateFrames,
-            _drawFrames == 0 ? 0 : _drawTotal * 1000.0 / Stopwatch.Frequency / _drawFrames);
+        double Draw) MeanMainThreadMilliseconds => (_updateFrames == 0 ? 0 : _updateTotal * 1000.0 / Stopwatch.Frequency / _updateFrames,
+        _drawFrames == 0 ? 0 : _drawTotal * 1000.0 / Stopwatch.Frequency / _drawFrames);
 
     void PrepareInner(Matrix4x4 viewProjectionMatrix, Matrix4x4 closeViewProjection, float nearPlane, Matrix4x4 view, Vector3 eye,
-            Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor, bool late)
+        Vector3 sunDirection, float pixelsPerUnit, float screenPixels, int forcedDivisor, bool late)
     {
         (_lastDivisors, _nextDivisors) = (_nextDivisors, _lastDivisors);
         _nextDivisors.Clear();
@@ -841,7 +841,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 // A unit stepped at a lower rate (StartSimulation) is drawn ahead by the time it has queued since its last step, so it moves every
                 // frame.
                 int written = sim.Collect(t, _scratch.AsSpan(0, n), material.Blend == ParticleBlend.Add ? u.Tint * shown : u.Tint,
-                        u.Alpha * EffectOpacity(u.Effect.Name) * shown, offset, Math.Min(u.Pending, MaxDrawAhead));
+                    u.Alpha * EffectOpacity(u.Effect.Name) * shown, offset, Math.Min(u.Pending, MaxDrawAhead));
                 if (written == 0) continue;
                 int close = PartitionByDepth(_scratch.AsSpan(0, written), forward, nearPlane);
 
@@ -863,7 +863,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                     _nextDivisors[(u, t)] = divisor;
                 }
                 _draws.Add(new DrawItem { Instances = instances, Count = written, Close = close, Technique = def, Material = material,
-                        Texture = texture, Divisor = divisor, Fill = fill, Rain = rain, Fire = fire });
+                    Texture = texture, Divisor = divisor, Fill = fill, Rain = rain, Fire = fire });
                 _drawnParticles += written;
             }
         }
@@ -964,14 +964,14 @@ public sealed unsafe class ParticleRenderer : IDisposable
             float length = along.Length();
             if (length < 1e-3f || Vector3.Distance(t.Head, eye) - length > DrawRange) continue;
             _scratch[n++] = new ParticleInstance { Position = (t.Head + t.Tail) * 0.5f - eye, Direction = along / length, Width = t.Width,
-                    Height = length, Colour = t.Colour };
+                Height = length, Colour = t.Colour };
         }
         if (n == 0) return;
         int close = _gpu is not GpuContext ? 0 : PartitionByDepth(_scratch.AsSpan(0, n), forward, nearPlane);
         var instances = frame.AllocateConstants((ulong)(n * InstanceBytes), 16);
         _scratch.AsSpan(0, n).CopyTo(new Span<ParticleInstance>(instances.Pointer, n));
         _draws.Add(new DrawItem { Instances = instances, Count = n, Close = close, Technique = TracerTechnique, Material = TracerMaterial,
-                Texture = _tracerTexture, Divisor = 1, Tracer = true });
+            Texture = _tracerTexture, Divisor = 1, Tracer = true });
         _drawnParticles += n;
     }
 
@@ -1041,7 +1041,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
     /// into smudges whenever a few flew close to the camera.
     /// </summary>
     static (int Divisor, float Fill) DivisorFor(ReadOnlySpan<ParticleInstance> instances, Vector3 forward, float nearPlane, float pixelsPerUnit,
-            float screenPixels, int forced, int last = 0,
+        float screenPixels, int forced, int last = 0,
         float needed = 1)
     {
         double area = 0;
@@ -1096,7 +1096,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                         : hasColour ? BlendFor(m.Blend) : BlendState.Off,
                 };
                 _program.Set(_coverageMode,
-                        kind == Kind.Low ? (m.Blend == ParticleBlend.Alpha ? 3 : 4) : coverage == 0 ? 0 : m.Blend == ParticleBlend.Alpha ? 1 : 2);
+                    kind == Kind.Low ? (m.Blend == ParticleBlend.Alpha ? 3 : 4) : coverage == 0 ? 0 : m.Blend == ParticleBlend.Alpha ? 1 : 2);
 
                 // The TAA takes half the motion target's alpha, so 2 is "all current frame". Rain's streaks change fast with a small alpha per pixel:
                 // the history would keep most of what is behind them, so they count 30x, saturating. Fire counts its brightness, at most 0.9 of
@@ -1132,7 +1132,7 @@ public sealed unsafe class ParticleRenderer : IDisposable
                 bool litOn = Lit && coverage == 0;
                 _program.Set(_litVertex, litOn ? 1 : 0, 0, SunGlow, 0);
                 _program.Set(_litFragment, litOn ? 1 : 0, Math.Clamp(SunShade, 0, 1),
-                        m.Blend == ParticleBlend.Alpha ? 0 : m.Blend == ParticleBlend.Add ? 1 : 2, 0);
+                    m.Blend == ParticleBlend.Alpha ? 0 : m.Blend == ParticleBlend.Add ? 1 : 2, 0);
                 _program.Set(_particleEye, _frameEye);
                 _program.Bind(_softDepthSlot, softDepth is { } bound ? bound.Texture : _white.Sampled());
                 cmd.SetRaster(state.Cull, state.Front);

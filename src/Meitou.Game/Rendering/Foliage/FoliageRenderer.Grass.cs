@@ -69,7 +69,7 @@ public sealed unsafe partial class FoliageRenderer
 
         // Each place kept loaded besides the eye's (Areas) holds its own pages: the store is that many times larger, within the same caps.
         return Math.Min((int)Math.Ceiling(Math.Clamp(grassRange * grassRange / (DefaultGrassRange * DefaultGrassRange) * _areas, 1,
-                MaxGrassStoreScale)), fits);
+            MaxGrassStoreScale)), fits);
     }
 
     void InitGrassStore(IGpuContext gpu)
@@ -81,9 +81,9 @@ public sealed unsafe partial class FoliageRenderer
         if (!_grassStore.Kernels) return;
         _grassFrame = new NativeFrame(gpu, extraStorage: 1);
         _grassGpuProgram = new NativeProg(gpu, _grassFrame, FoliageGrassShaders.GrassVertexGpu(), FoliageGrassShaders.GrassFragmentGpu(),
-                "foliage grass gpu");
+            "foliage grass gpu");
         _grassMotionGpuProgram = new NativeProg(gpu, _grassFrame, FoliageGrassShaders.GrassMotionVertexGpu(),
-                FoliageGrassShaders.GrassMotionFragmentGpu(), "foliage grass motion gpu");
+            FoliageGrassShaders.GrassMotionFragmentGpu(), "foliage grass motion gpu");
         _grassMeshGpu = ArenaMesh(_grassGpuProgram);
         _grassMeshMotionGpu = ArenaMesh(_grassMotionGpuProgram);
     }
@@ -257,7 +257,7 @@ public sealed unsafe partial class FoliageRenderer
                 var b = buffers[i];
                 if (b.Slot < 0) continue;
                 store.WriteSlot(b.Slot, new GrassSlot { X0 = x0, Z0 = z0, Y = y, FirstBlade = b.FirstBlade, Count = (uint)b.Count, Zone = zone,
-                        Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
+                    Local = (uint)i, Tie = serial << 8 | (uint)i }, b.Prefixes);
             }
             page.Buffers = buffers;
             _grassVersion++;
@@ -341,7 +341,7 @@ public sealed unsafe partial class FoliageRenderer
     /// draw.
     /// </summary>
     bool DrawGrassGpu(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, WorldRenderOptions options, Vector3 light, Vector3 fogColour,
-            float fogDistance, bool coverage)
+        float fogDistance, bool coverage)
     {
         if (_grassStore.SlotHigh == 0 || frustum.Length > 8) return false;
         if (BuildGrassRows(false, options, coverage) == 0) return false;
@@ -357,7 +357,7 @@ public sealed unsafe partial class FoliageRenderer
         var (prefixIndex, fraction) = FoliageGrassGpu.DensityStep(Math.Min(GrassDensitySetting, MaxGrassDensity) / MaxGrassDensity);
         var result = _grassStore.Dispatch(frustum, new Vector2(eye.X, eye.Z), PageSize, prefixIndex, fraction, in tables);
         var view = new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance,
-                Time = SwayPhase() };
+            Time = SwayPhase() };
         if (!_depthPass) InteriorMaskRenderer.Apply(ref view, InteriorCut);
         var job = _grassGpuJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program) = (this, targets, state, p);

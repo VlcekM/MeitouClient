@@ -358,10 +358,10 @@ public sealed unsafe class VulkanPresenter : IDisposable
         var surfaceExt = _device.SurfaceExtension!;
         var surface = _device.Surface;
         var pd = _device.PhysicalDevice;
-        VulkanException.Check(
-            surfaceExt.GetPhysicalDeviceSurfaceCapabilities(pd, surface, out var caps),
-            "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+        var result = surfaceExt.GetPhysicalDeviceSurfaceCapabilities(pd, surface, out var caps);
+        VulkanException.Check(result, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
         return caps;
+
     }
 
     /// <summary>

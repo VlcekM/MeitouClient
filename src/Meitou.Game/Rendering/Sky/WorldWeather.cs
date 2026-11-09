@@ -104,8 +104,9 @@ public sealed class WorldWeather
     public int Current() => World.ForcedWeather is null && Here is { } r ? r.WeatherEntryIndex : -1;
 
     /// <summary>The list's button: the region and its weather.</summary>
-    public string ChoiceLabel() => World.ForcedWeather is { } f ? $"Weather: {f.Name} (forced)" : Here is { } r ? $"Weather: {r.Weather.Name}"
-            : "Weather";
+    public string ChoiceLabel() => World.ForcedWeather is { } f ? $"Weather: {f.Name} (forced)"
+        : Here is { } r ? $"Weather: {r.Weather.Name}"
+        : "Weather";
 
     /// <summary>
     /// The Tab panel's weather list: the camera region starts the season's weather <paramref name="entry"/> now (a forced weather is released first),
@@ -190,7 +191,7 @@ public sealed class WorldWeather
         else where = $"forced {s.Weather.Name}";
         float heading = MathF.Atan2(s.WindDirection.Y, s.WindDirection.X) * 180 / MathF.PI;
         return string.Create(inv,
-                $"{where}; strength {s.Strength:0.00}, wind {s.WindSpeed:0} u/s heading {heading:0} deg, day {Day}");
+            $"{where}; strength {s.Strength:0.00}, wind {s.WindSpeed:0} u/s heading {heading:0} deg, day {Day}");
     }
 
     /// <summary>Game minutes as <c>1 d 3 h</c>, <c>3 h 20 min</c> or <c>45 min</c>.</summary>

@@ -63,9 +63,9 @@ internal sealed unsafe partial class CharacterRenderer
             {
                 int w = PortraitCell * PortraitColumns, h = PortraitCell * PortraitRows;
                 _portraitColour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Srgb8Alpha8, w, h,
-                        Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "portraits"));
+                    Use: TextureUse.Sampled | TextureUse.ColourTarget, Name: "portraits"));
                 _portraitDepth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h, Use: TextureUse.DepthTarget,
-                        Name: "portraits depth"));
+                    Name: "portraits depth"));
                 _portraitSampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
                     TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), _portraitColour.View());
                 _cleared = false;
@@ -156,7 +156,7 @@ internal sealed unsafe partial class CharacterRenderer
             var cmd = Gpu.BeginNative("portrait");
             var target = PassTargets.Of(_portraitHdr, _portraitHdrDepth);
             cmd.BeginRendering(new RenderingDesc(target.Colour, target.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, target.Width,
-                    target.Height));
+                target.Height));
             Gpu.BeginHostPass(cmd, target, DrawState.Scene(target.Formats));
             var whole = new PixelRect(0, 0, (uint)target.Width, (uint)target.Height);
             DrawPortraitCell(cmd, request, index, new PixelViewport(0, 0, target.Width, target.Height, 0, 1), whole);
@@ -225,7 +225,7 @@ internal sealed unsafe partial class CharacterRenderer
         // The shader's plain model (fixed lights: a portrait is a still and does not follow the sky), unclamped either way; enhanced, the resolve finishes it.
         try { DrawView(new ViewConstants { ViewProjection = view * projection, Eye = eye, LightDir = light }, eye, []); }
         finally { _portraitLive = -1; (_bones, _previousBones) = (liveBones, livePrevious); (l.BoneBase, l.AttachBase, l.WeaponDrawn,
-                l.RangedDrawn) = (boneBase, attachBase, weapon, ranged); }
+            l.RangedDrawn) = (boneBase, attachBase, weapon, ranged); }
     }
 
     void DisposePortraitHdr()
@@ -297,7 +297,7 @@ internal sealed unsafe partial class CharacterRenderer
         var target = Vector3.Transform(head, l.World) + Vector3.TransformNormal(offset, l.World);
         float yaw = (serial % 500 / 1000f - 0.25f) * MathF.PI, pitch = (serial % 252 / 1000f - 0.083f) * MathF.PI;
         var local = Vector3.Transform(new Vector3(0, 0, race.GetFloat("portrait distance", 10)), Quaternion.CreateFromAxisAngle(Vector3.UnitY,
-                yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, pitch));
+            yaw) * Quaternion.CreateFromAxisAngle(Vector3.UnitX, pitch));
         var direction = Vector3.TransformNormal(local, l.World) / Math.Max(scale, 1e-3f);
         return (target + direction, target);
     }

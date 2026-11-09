@@ -61,7 +61,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     readonly SkyProg _simple, _sky;
     // Native textures with the GL sampler state their GL versions had (phase 8 stage 2); null when the file was not found.
     SampledImage? _starsTexture, _cloudsTexture, _cloudsNormalTexture, _cloudsTileTexture, _cloudsSmooth, _cloudsTileSmooth, _irradianceCube,
-            _specularCube, _ambientMap;
+        _specularCube, _ambientMap;
     // The game's two planets' textures (SkyPlanet.All order); null when the file was not found.
     readonly SampledImage?[] _planetTextures = new SampledImage?[SkyPlanet.All.Length];
     readonly PassTimer _skyTimer;
@@ -194,7 +194,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// cref="StarHaloShare"/> of the brightness above the threshold, at most <see cref="StarHaloMax"/>).
     /// </summary>
     public const float StarSigma = 0.7f, StarCoreReach = 2.2f, StarHaloFrom = 0.4f, StarHaloSigma = 1.8f, StarHaloGrow = 1.6f,
-            StarHaloShare = 0.25f, StarHaloMax = 0.5f;
+        StarHaloShare = 0.25f, StarHaloMax = 0.5f;
 
     // The Meitou night sky (the `stars` switch; docs/formats/sky.md "Meitou night sky"): procedural point stars on the celestial sphere, evaluated
     // per pixel. StarField / NightAtmosphere (Meitou.Data) are the reference for every number here.
@@ -587,7 +587,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// cref="NightAmbientStrength"/> by night.
     /// </summary>
     float AmbientFor(float sunY) => MathF.Max(AmbientStrength,
-            0) * (1 + (NightAmbientBase * MathF.Max(NightAmbientStrength, 0) - 1) * (1 - Math.Clamp(sunY * 5, 0, 1)));
+        0) * (1 + (NightAmbientBase * MathF.Max(NightAmbientStrength, 0) - 1) * (1 - Math.Clamp(sunY * 5, 0, 1)));
 
     /// <summary>
     /// The planet's mean colour (<see cref="Meitou.Data.World.Planetshine.MeanAlbedo(Meitou.Data.Textures.DdsFile)"/>), read when the texture loads.
@@ -847,8 +847,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
                 var img = TextureLoader.LoadFile(clouds, allMips: false).Levels[0];
                 _cloudsTexture = SampledImage.Rgba8(Gpu, img, repeat: true, mipmaps: true, "sky clouds");
                 _cloudsSmooth = SampledImage.Rgba8(Gpu,
-                        new RgbaImage(img.Width, img.Height, MeitouClouds.SmoothRed(img.Pixels, img.Width, img.Height)), repeat: true,
-                        mipmaps: true, "sky clouds smooth");
+                    new RgbaImage(img.Width, img.Height, MeitouClouds.SmoothRed(img.Pixels, img.Width, img.Height)), repeat: true,
+                    mipmaps: true, "sky clouds smooth");
             }
             if (assets.Find("CloudsNormal.dds") is { } cloudsNormal)
             {
@@ -860,8 +860,8 @@ public sealed unsafe partial class SkyRenderer : IDisposable
                 var img = TextureLoader.LoadFile(cloudsTile, allMips: false).Levels[0];
                 _cloudsTileTexture = SampledImage.Rgba8(Gpu, img, repeat: true, mipmaps: true, "sky clouds tile");
                 _cloudsTileSmooth = SampledImage.Rgba8(Gpu,
-                        new RgbaImage(img.Width, img.Height, MeitouClouds.SmoothRed(img.Pixels, img.Width, img.Height)), repeat: true,
-                        mipmaps: true, "sky clouds tile smooth");
+                    new RgbaImage(img.Width, img.Height, MeitouClouds.SmoothRed(img.Pixels, img.Width, img.Height)), repeat: true,
+                    mipmaps: true, "sky clouds tile smooth");
             }
             if (assets.Find("mp_irradiance.dds") is { } irradiance) _irradianceCube = SampledImage.Cube(Gpu, DdsReader.ReadFile(irradiance),
                     "sky irradiance");
@@ -1024,9 +1024,9 @@ public sealed unsafe partial class SkyRenderer : IDisposable
             var planetLight = Meitou.Data.World.Planetshine.Light(sun, SkyPlanet.All[0], PlanetAlbedo, reference, PlanetshineStrength) * weight;
             cloudPlanet = planetLight;
             var disc = Meitou.Data.World.Planetshine.DiscRadiance(sun, SkyPlanet.All[0], PlanetAlbedo) * weight;
-            (glintDirection, glintColour) = Meitou.Data.World.Planetshine.Combine(lightDir,
-                    sunLight * (MathF.PI * (1 - KenshiLighting.DielectricSpecular)),
-                SkyPlanet.All[0].Towards, disc);
+            var sunRadiance = sunLight * (MathF.PI * (1 - KenshiLighting.DielectricSpecular));
+            (glintDirection, glintColour) = Meitou.Data.World.Planetshine.Combine(lightDir, sunRadiance, SkyPlanet.All[0].Towards, disc);
+
             (lightDir, sunLight) = Meitou.Data.World.Planetshine.Combine(lightDir, sunLight, SkyPlanet.All[0].Towards, planetLight);
             planetLit = Meitou.Data.World.Planetshine.Luminance(planetLight) > PlanetLitFloor * reference;
         }
@@ -1056,8 +1056,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// The values of <see cref="AtmosphereShaders.Functions"/>' loose uniforms (what <see cref="Apply"/> sets), by GLSL name minus <c>uAtmo</c>.
     /// </summary>
     public readonly record struct AtmosphereUniforms(Vector4 Tau, Vector4 Params, Vector4 Sun, Vector4 Light, Vector3 SunLight, Vector3 Tint,
-            Vector4 Fog,
-        Vector3 FogColour, Vector4 Simple, Vector4 Haze, Vector4 HazeCloud, Vector4 Altitude, Vector4 Maps, Vector4 Night);
+        Vector4 Fog, Vector3 FogColour, Vector4 Simple, Vector4 Haze, Vector4 HazeCloud, Vector4 Altitude, Vector4 Maps, Vector4 Night);
 
     /// <summary>
     /// The distance from the eye beyond which the weather's fog replaces what a world shader's <c>atmoApply</c> would show by the fog colour, so a
@@ -1072,8 +1071,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     /// <para>Why the fog term and not the haze's transmittance: the Kenshi haze returns <c>mix(colour, rgb, alpha)</c>; <c>alpha = 1</c> removes the
     /// surface but leaves <c>rgb</c>, the haze colour, which depends on the distance below the dome radius and differs from the sky pass's colour.
     /// Only the weather fog (<c>rgb = mix(hazeRgb, fogColour, curve)</c>) at <c>curve = 1</c> makes the pixel independent of what is drawn. It also
-    /// makes
-    /// <c>alpha &gt;= 0.9998</c>, so the transmittance is below 1/255 in every channel. Verified from <see cref="AtmosphereShaders.Functions"/>:
+    /// makes <c>alpha &gt;= 0.9998</c>, so the transmittance is below 1/255 in every channel. Verified from <see cref="AtmosphereShaders.Functions"/>:
     /// in the Kenshi branch alpha, curve and the weather term depend on the distance alone (the ray direction enters only <c>rgb</c>), so there is no
     /// vertical dependence to bound; the physical branch's column of air only lowers the transmittance, and its fog ramp is applied after it.</para>
     /// Null when: the simple sky is on (it never fogs fully); the fog is off or its weight is under 0.9998 (a partial weight leaves part of the
@@ -1178,13 +1176,13 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         g.PublishUniform("uAtmoNight", () => Published().Night, Valid);
         g.PublishUniform("uAtmoCloud", CloudShadowUniform, Valid);
         g.PublishUniform("uAtmoCloudWind",
-                () =>
-                {
-                    var w = CloudLayer.TextureShift(_cloudOffset);
-                    return VolumeShadows
-                        ? new Vector4(_volume!.ShadowOrigin.X, _volume.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, 0)
-                        : new Vector4(w.X, w.Y, 0, 0);
-                }, Valid);
+            () =>
+            {
+                var w = CloudLayer.TextureShift(_cloudOffset);
+                return VolumeShadows
+                    ? new Vector4(_volume!.ShadowOrigin.X, _volume.ShadowOrigin.Y, VolumetricClouds.ShadowSpan, 0)
+                    : new Vector4(w.X, w.Y, 0, 0);
+            }, Valid);
         g.Publish("uAtmoClouds", () => VolumeShadows ? _volume!.ShadowMap : _state.Valid && _cloudsSmooth is { } t ? t.Sampled() : default);
         g.Publish("uAtmoCloudsTile", () => _state.Valid && _cloudsTileSmooth is { } t ? t.Sampled() : default);
     }
@@ -1316,8 +1314,10 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         p.Set(program.CloudKeyDir, keyDir.X, keyDir.Y, keyDir.Z, 0);
         p.Set(program.CloudAmbient, ambient.X, ambient.Y, ambient.Z, MeitouClouds.AmbientGreyAt(coverage));
         bool clouds = _cloudsTexture is not null && _cloudsNormalTexture is not null && _cloudsTileTexture is not null;
-        p.Set(program.Has, _starsTexture is not null ? 1f : 0f, _planetTextures[0] is not null ? 1f : 0f, clouds ? 1f : 0f,
-                _planetTextures[1] is not null ? 1f : 0f);
+        float stars = _starsTexture is not null ? 1f : 0f;
+        float planet0 = _planetTextures[0] is not null ? 1f : 0f, planet1 = _planetTextures[1] is not null ? 1f : 0f;
+        p.Set(program.Has, stars, planet0, clouds ? 1f : 0f, planet1);
+
     }
 
     /// <summary>Binds the textures the sky has (a missing one reads the stand-in).</summary>
@@ -1392,7 +1392,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
 
 /// <summary>The handles of the sky colour uniforms of <see cref="SkyRenderer.SkyFunctions"/> in a native program, resolved once.</summary>
 public readonly record struct SkyColourHandles(UniformHandle Sun, UniformHandle Zenith, UniformHandle Horizon, UniformHandle SunColour,
-        UniformHandle Twilight)
+    UniformHandle Twilight)
 {
     public static SkyColourHandles Resolve(LegacyProgram p) =>
         new(p.Uniform("uSkySun"), p.Uniform("uSkyZenith"), p.Uniform("uSkyHorizon"), p.Uniform("uSkySunColour"), p.Uniform("uSkyTwilight"));
@@ -1446,7 +1446,7 @@ sealed class SkyProg : IDisposable
     public readonly LegacyProgram P;
     public readonly NativeSegment Segment;
     public readonly UniformHandle InverseViewProjection, Extra, PlanetSpin, CloudLight, CloudSun, CloudWind, CloudMeitou, CloudKey, CloudKeyDir,
-            CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ;
+        CloudAmbient, Has, StarsMeitou, CelX, CelY, CelZ;
     public readonly UniformHandle[] Planet;
     public readonly SkyColourHandles Colours;
     public readonly SamplerSlot Stars, Planet0, Planet1, Clouds, CloudsNormal, CloudsTile, CloudsSmooth, CloudsTileSmooth, VolumeImage;
@@ -1580,7 +1580,7 @@ internal sealed class SampledImage : IDisposable
         }
         var filter = dds.MipCount > 1 ? TextureMinFilter.LinearMipmapLinear : TextureMinFilter.Linear;
         return new SampledImage(ctx, t, filter, TextureMagFilter.Linear, repeat ? TextureWrapMode.Repeat : TextureWrapMode.ClampToEdge,
-                TextureWrapMode.Repeat);
+            TextureWrapMode.Repeat);
     }
 
     /// <summary>RGBA32F, one level, linear, clamped to the edge: the GL texture <c>WaterRenderer</c> made for its biome parameter maps.</summary>
@@ -1621,7 +1621,7 @@ internal sealed class SampledImage : IDisposable
                 batch.Write(t, level, face, Rect(img.Width, img.Height), img.Pixels);
             }
         return new SampledImage(ctx, t, TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear, TextureWrapMode.ClampToEdge,
-                TextureWrapMode.ClampToEdge);
+            TextureWrapMode.ClampToEdge);
     }
 
 

@@ -88,7 +88,7 @@ public static class FoliageLodBuilder
     /// whether collapses must keep the texture coordinates (<see cref="MeshSimplifier.Chain"/>'s <c>uvPerWorld</c>).
     /// </summary>
     public readonly record struct Settings(float[] Fractions, int Floor, float MaxRelativeError, float MaxNormalAngle, float MinGain, bool UvAware,
-            bool TwoSided = false);
+        bool TwoSided = false);
 
     /// <summary>
     /// What the foliage meshes are built with.
@@ -121,7 +121,7 @@ public static class FoliageLodBuilder
                 continue;
             }
             chains[p] = MeshSimplifier.Chain(part.Vertices, part.Indices, settings.Fractions, settings.Floor,
-                    settings.UvAware ? MeshSimplifier.UvPerWorld(part.Vertices, part.Indices) : 0);
+                settings.UvAware ? MeshSimplifier.UvPerWorld(part.Vertices, part.Indices) : 0);
             errors[p] = new float[steps];
             angles[p] = new float[steps];
             for (int k = 0; k < steps; k++)
@@ -318,7 +318,7 @@ public static class FoliageLodCache
     const uint Magic = 0x444F4C4D;   // "MLOD"
 
     public static string Root { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Meitou",
-            "lods");
+        "lods");
 
     public static string PathFor(string name, byte[] fileBytes, string? root = null, int version = FoliageLodBuilder.Version, string variant = "")
     {

@@ -578,7 +578,7 @@ public sealed class FrameProfiler : IDisposable
                 double ticks = Mean(_simTicks, _cpuHead, _cpuCount, meanFrames), inTicks = 0;
                 for (int p = 0; p < _simPhases - 1; p++) inTicks += _simRows[p].Ms;
                 string ticksText = string.Create(CultureInfo.InvariantCulture,
-                        $"{indent}    {ticks:0.0} ticks, {(ticks > 0 ? inTicks / ticks : 0):0.00} ms each");
+                    $"{indent}    {ticks:0.0} ticks, {(ticks > 0 ? inTicks / ticks : 0):0.00} ms each");
                 overlay.Text(ticksText, lx + swatch + 6, NextRow(-1), dim);
                 overlay.Text($"{indent}    {_simPaths} paths waiting", lx + swatch + 6, NextRow(-1), dim);
                 foreach (var (name, ms) in _simRows)
@@ -740,8 +740,10 @@ public sealed class FrameProfiler : IDisposable
         }
     }
 
-    /// <summary>The sim rows to list: the phases in order, then the systems costing the most over the last <paramref name="frames"/> frames and the
-    /// rest as one row, then the systems' parts in order.</summary>
+    /// <summary>
+    /// The sim rows to list: the phases in order, then the systems costing the most over the last <paramref name="frames"/> frames and the rest as
+    /// one row, then the systems' parts in order.
+    /// </summary>
     void SimRows(int frames)
     {
         const int shown = 10;

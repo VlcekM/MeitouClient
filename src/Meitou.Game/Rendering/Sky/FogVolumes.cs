@@ -272,7 +272,7 @@ internal sealed class FogVolumes
                     };
                     // The game's node sits at the corners' mean (FUN_14010b6a0), and Ogre sorts transparent objects by the node's distance.
                     v.SortCentre = corners.Count > 0 ? corners.Aggregate(Vector3.Zero, (a, c) => a + c) / corners.Count
-                            : (v.BoxMin + v.BoxMax) * 0.5f;
+                        : (v.BoxMin + v.BoxMax) * 0.5f;
                     v.Data[0] = new Vector4(v.BoxMin, FogVolumeShaders.BlockType);
                     v.Data[1] = new Vector4(v.BoxMax, f.EdgeBlur);
                     v.Data[2] = new Vector4(f.Colour, f.Density);
@@ -346,7 +346,7 @@ internal sealed class FogVolumes
     /// the shaders cap every distance (so a volume beyond it adds nothing). <paramref name="on"/> false draws none.
     /// </summary>
     public void Update(Vector3 eye, Vector3 forward, float fieldOfView, float aspect, float far, float sunY, bool on,
-            IReadOnlyList<EffectFog>? effectFogs = null, float? atmosphereCull = null)
+        IReadOnlyList<EffectFog>? effectFogs = null, float? atmosphereCull = null)
     {
         ClearFrame(eye, effectFogs);
         if (on && Enabled && !HidePlaced)
@@ -646,7 +646,7 @@ internal sealed class FogVolumes
     /// the fog and raises it for the paths, so one result holds while the eye stays within it.</para>
     /// </summary>
     public static float? HideDistanceByDirection(ReadOnlySpan<Vector4> planes, Vector3 eye, float margin, float edgeBlur, float density,
-            float far, int budget = 40000)
+        float far, int budget = 40000)
     {
         if (!(density > 0) || !(edgeBlur > 0) || far <= 0 || planes.Length == 0) return null;
         int n = planes.Length;
@@ -698,7 +698,7 @@ internal sealed class FogVolumes
     /// <summary>Measures each plane's normal length and the eye's inside distance with the margin (into the spans); false when the eye is not
     /// inside one of the planes.</summary>
     static bool MeasurePlanes(ReadOnlySpan<Vector4> planes, Vector3 eye, float margin, Span<double> nx, Span<double> ny, Span<double> nz,
-            Span<double> length, Span<double> insideLo, Span<double> insideHi)
+        Span<double> length, Span<double> insideLo, Span<double> insideHi)
     {
         for (int i = 0; i < planes.Length; i++)
         {

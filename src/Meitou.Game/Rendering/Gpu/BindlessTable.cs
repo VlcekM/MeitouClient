@@ -42,13 +42,13 @@ public sealed unsafe class BindlessTable : IDisposable, IGpuBindlessTable
     /// The GLSL names of the arrays, by binding (<see cref="BindlessKind"/> order).
     /// </summary>
     public static readonly string[] GlslArrays = ["textures2D", "textures2DArray", "texturesCube", "shadowTextures", "utextures2D", "itextures2D",
-            "shadowArrays"];
+        "shadowArrays"];
 
     /// <summary>
     /// The GLSL types of the arrays' elements, by binding.
     /// </summary>
     public static readonly string[] GlslTypes = ["sampler2D", "sampler2DArray", "samplerCube", "sampler2DShadow", "usampler2D", "isampler2D",
-            "sampler2DArrayShadow"];
+        "sampler2DArrayShadow"];
 
     /// <summary>The set's declarations for a native shader (set 0), with the extension <c>nonuniformEXT</c> needs. Index an array with
     /// <c>textures2D[nonuniformEXT(index)]</c> when the index may differ between invocations of a draw.</summary>

@@ -405,12 +405,12 @@ sealed class WorldObjects : IDisposable
         GameRecord? townMaterial;
         lock (Towns) townMaterial = Towns.MaterialOf(town);
         var position = new Vector3(b.Position.X, y, b.Position.Z);
-        var parts = WorldObjectLayout.Building(Database, record, b.InstanceId, position, b.Rotation,
-                new BuildingState(isDestroyed, townMaterial) { WithInterior = !isDestroyed, Identity = b.Key });
+        var buildingState = new BuildingState(isDestroyed, townMaterial) { WithInterior = !isDestroyed, Identity = b.Key };
+        var parts = WorldObjectLayout.Building(Database, record, b.InstanceId, position, b.Rotation, buildingState);
 
         // A destroyed building gets no interior view (game: the per-frame interior driver skips it).
-        if (!isDestroyed && InteriorVolume.For(Database, record, b.Key, position, b.Rotation, _interiorCollisions!,
-                gateways: true) is { } interior) (interior.IsGateway ? result.GateHulls : result.Interiors).Add(interior);
+        var interior = isDestroyed ? null : InteriorVolume.For(Database, record, b.Key, position, b.Rotation, _interiorCollisions!, gateways: true);
+        if (interior is not null) (interior.IsGateway ? result.GateHulls : result.Interiors).Add(interior);
 
         // Resource buildings ("is foliage", no parts) are drawn by the foliage system as a FOLIAGE_MESH naming them as "building type".
         if (parts.Count == 0 && record.GetBool("is foliage")) Interlocked.Increment(ref _foliage);

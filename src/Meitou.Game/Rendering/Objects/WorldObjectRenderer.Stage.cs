@@ -58,9 +58,9 @@ public sealed unsafe partial class WorldObjectRenderer
         cmd.BeginRendering(new RenderingDesc(targets.Colour, targets.Depth, targets.Width, targets.Height));
         Gpu.BeginHostPass(cmd, targets, DrawState.Scene(targets.Formats));
         Gpu.SetPassViewport(new PixelViewport(0, 0, targets.Width, targets.Height, 0, 1),
-                new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height));
+            new PixelRect(0, 0, (uint)targets.Width, (uint)targets.Height));
         var constants = new ViewConstants { ViewProjection = Matrix4x4.CreateTranslation(eye) * viewProjection, Eye = Vector3.Zero, LightDir = light,
-                FogDistance = fogDistance };
+            FogDistance = fogDistance };
         PrepareDraws(IconOptions, wire: false);
         for (int d = 0; d < _drawCount; d++) _draws[d].Push.Spare = MeshSurface.NoWeather;
         RecordDraws(_colourProg, wire: false, in constants, default);

@@ -171,7 +171,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
     internal static string WithCut(string fragment)
     {
         var main = System.Text.RegularExpressions.Regex.Match(fragment, @"void\s+main\s*\(\s*\)\s*\{",
-                System.Text.RegularExpressions.RegexOptions.RightToLeft);
+            System.Text.RegularExpressions.RegexOptions.RightToLeft);
         if (!main.Success) throw new InvalidOperationException("InteriorMaskRenderer.WithCut: no main() in the fragment text.");
         return fragment.Insert(main.Index + main.Length, "\n" + Cut)
             .Insert(main.Index, "uniform sampler2D uInteriorMask;\nuniform bool uInteriorCut;\n");
@@ -230,7 +230,7 @@ public sealed unsafe class InteriorMaskRenderer : IDisposable
         _bindless = null;
         _target?.Dispose();
         _target = _gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, width, height, Use: TextureUse.ColourTarget | TextureUse.Sampled,
-                Name: "interior mask"));
+            Name: "interior mask"));
         return _target;
     }
 

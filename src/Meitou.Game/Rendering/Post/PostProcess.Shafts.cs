@@ -43,7 +43,7 @@ public sealed unsafe partial class PostProcess
         {
             (Current, History) = (P.Sampler("uShaftCurrent"), P.Sampler("uShaftHistory"));
             (PrevRange, PrevEye, PrevRight, PrevUp) = (P.Uniform("uShaftPrevRange"), P.Uniform("uShaftPrevEye"), P.Uniform("uShaftPrevRight"),
-                    P.Uniform("uShaftPrevUp"));
+                P.Uniform("uShaftPrevUp"));
             (PrevBack, PrevTan, Blend) = (P.Uniform("uShaftPrevBack"), P.Uniform("uShaftPrevTan"), P.Uniform("uShaftBlend"));
         }
     }
@@ -52,7 +52,7 @@ public sealed unsafe partial class PostProcess
     {
         public readonly SamplerSlot Injected;
         public ShaftIntegratePass(GpuContext gpu) : base(gpu,
-                LightShaftShaders.Integrate, "post shafts integrate") => Injected = P.Sampler("uShaftInjected");
+            LightShaftShaders.Integrate, "post shafts integrate") => Injected = P.Sampler("uShaftInjected");
     }
 
     sealed class ShaftApplyPass : ShaftPass
@@ -64,7 +64,7 @@ public sealed unsafe partial class PostProcess
             (NearDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
             Air = P.Uniform("uShaftAir");
             (NearPlanes, WaterY, Atlas, Params) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uShaftAtlas"),
-                    P.Uniform("uShaftParams"));
+                P.Uniform("uShaftParams"));
         }
     }
 
@@ -76,7 +76,7 @@ public sealed unsafe partial class PostProcess
         public readonly SamplerSlot Injected;
         public readonly UniformHandle Air;
         public ShaftScatterPass(GpuContext gpu) : base(gpu, LightShaftShaders.Scatter, "post shafts scatter") => (Injected,
-                Air) = (P.Sampler("uShaftInjected"), P.Uniform("uShaftAir"));
+            Air) = (P.Sampler("uShaftInjected"), P.Uniform("uShaftAir"));
     }
 
 
@@ -97,7 +97,7 @@ public sealed unsafe partial class PostProcess
     struct ShaftScanParams
     {
         public Vector4 Grid, Range, Eye, Right, Up, Back, Tan, Air, AtmoParams, AtmoSimple, AtmoHaze, AtmoAltitude, AtmoFog, AtmoSun, SunLight,
-                AtmoMaps;
+            AtmoMaps;
     }
 
     GpuProgram? _shaftScanProgram;
@@ -233,7 +233,7 @@ public sealed unsafe partial class PostProcess
 
         // The air layer: density at the ground under the eye, its scale height, the phase's anisotropy (0 density: no layer, no pass).
         var air = new Vector4(MathF.Max(o.ShaftAir, 0) * MathF.Max(airByTime, 0) * PostOptions.ShaftAirDensity, groundY,
-                MathF.Max(PostOptions.ShaftAirHeight, 1), Math.Clamp(PostOptions.ShaftAirPhase, 0, 0.95f));
+            MathF.Max(PostOptions.ShaftAirHeight, 1), Math.Clamp(PostOptions.ShaftAirPhase, 0, 0.95f));
 
         float near = Math.Clamp(PostOptions.ShaftNear, 1, far * 0.5f);
         var grid = new Vector4(across, down, slices, LightShaftShaders.AtlasColumns);
@@ -287,7 +287,7 @@ public sealed unsafe partial class PostProcess
             _shaftHistoryValid = true;
             _shaftHistoryFrame = Gpu.Frame.Number;
             _shaftPrevious = (range, _eyeNow, new Vector3(r.M11, r.M21, r.M31), new Vector3(r.M12, r.M22, r.M32), new Vector3(r.M13, r.M23, r.M33),
-                    new Vector2(tanY * _aspectNow, tanY));
+                new Vector2(tanY * _aspectNow, tanY));
         }
         else
         {

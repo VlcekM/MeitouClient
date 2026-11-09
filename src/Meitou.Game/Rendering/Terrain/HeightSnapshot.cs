@@ -47,7 +47,7 @@ internal readonly struct HeightSnapshot
         int i1 = Math.Min(i + 1, cols - 1), j1 = Math.Min(j + 1, rows - 1);
         float tx = fx - i, tz = fz - j;
         float v = raw[j * cols + i] * (1 - tx) * (1 - tz) + raw[j * cols + i1] * tx * (1 - tz) + raw[j1 * cols + i] * (1 - tx) * tz +
-                raw[j1 * cols + i1] * tx * tz;
+            raw[j1 * cols + i1] * tx * tz;
         return v * (WorldLayout.MaxHeight / ushort.MaxValue);
     }
 }

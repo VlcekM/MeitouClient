@@ -57,8 +57,8 @@ public sealed unsafe partial class TerrainRenderer
         PrepareConstants(material: true, patches: true);
         var c = _constants;
         // The bake has no march (its program is built without it); uParallax gives the relief height's depth.
-        (c.Displace, c.FarStart, c.FarEnd, c.Debug, c.Grid, c.InteriorCut, c.BloodCount, c.FieldCount,
-                c.BakeLevels) = (0, 1e9f, 2e9f, 0, 0, 0, 0, 0, 0);
+        (c.Displace, c.FarStart, c.FarEnd, c.Debug, c.Grid) = (0, 1e9f, 2e9f, 0, 0);
+        (c.InteriorCut, c.BloodCount, c.FieldCount, c.BakeLevels) = (0, 0, 0, 0);
         int key = CacheKey(in c, t.MaterialVersion);
         if (key != _cacheKey) ResetCacheInputs(key, t);
 
@@ -89,7 +89,7 @@ public sealed unsafe partial class TerrainRenderer
 
     /// <summary>Bakes what level <paramref name="k"/> needs this frame: its strips when it moved, else its first bake's next chunk.</summary>
     void BakeLevel(int k, Vector3 eye, ref IGpuCommandList? cmd, ref TerrainConstants c, Span<(int X, int Y, int W, int H)> rects,
-            ref int budget, ref int build)
+        ref int budget, ref int build)
     {
         float texel = CacheTexel * (1 << k), side = texel * CacheSide, step = texel * CacheStep;
         var want = new Vector2(MathF.Floor((eye.X - side / 2) / step) * step, MathF.Floor((eye.Z - side / 2) / step) * step);
@@ -115,7 +115,7 @@ public sealed unsafe partial class TerrainRenderer
 
     /// <summary>The strips a level gained as it moved from <paramref name="have"/> to <paramref name="want"/>, and its share of the refresh rows.</summary>
     void BakeStrips(int k, Vector2 want, Vector2 have, float texel, Span<(int X, int Y, int W, int H)> rects, ref IGpuCommandList? cmd,
-            ref TerrainConstants c, ref int budget)
+        ref TerrainConstants c, ref int budget)
     {
         float side = texel * CacheSide;
         int n = 0;
@@ -144,7 +144,7 @@ public sealed unsafe partial class TerrainRenderer
 
     /// <summary>The next chunk of a level's first bake (its rows done so far in <see cref="_cacheBuilt"/>); whole, the level is ready.</summary>
     void BakeFirstChunk(int k, Vector2 want, float texel, Span<(int X, int Y, int W, int H)> rects, ref IGpuCommandList? cmd,
-            ref TerrainConstants c, ref int build)
+        ref TerrainConstants c, ref int build)
     {
         // A first bake, towards the origin it started with; the strips catch up once it is whole.
         if (_cacheBuilt[k] < 0) { _cacheBuilt[k] = 0; _cacheTarget[k] = want; }
@@ -159,8 +159,9 @@ public sealed unsafe partial class TerrainRenderer
         _cacheOrigin[k] = new Vector4(_cacheTarget[k], texel, CacheSide);
         Vector2 target = _cacheTarget[k];
         float side = texel * CacheSide;
-        Console.WriteLine(
-            $"terrain   material cache level {k} baked ({texel * CacheSide / 10:0} m square round {target.X + side / 2:0}, {target.Y + side / 2:0})");
+        string round = $"{target.X + side / 2:0}, {target.Y + side / 2:0}";
+        Console.WriteLine($"terrain   material cache level {k} baked ({texel * CacheSide / 10:0} m square round {round})");
+
     }
 
     bool CreateCache(TerrainTextures t)
@@ -181,7 +182,7 @@ public sealed unsafe partial class TerrainRenderer
         _cacheNormalIndex = _gpu.Bindless.Register(BindlessKind.Texture2DArray, new SampledTexture(sampler, _cacheNormal.View()));
         GpuSetLayout[] sets = [_nativeFrame.SetLayout, GpuSetLayout.Bindless, _constantsLayout];
         _cacheProgram = new TerrainProgram(_gpu, sets, TerrainShaders.MaterialBakeVertexNative(), TerrainShaders.MaterialBakeFragmentNative(),
-                "terrain material bake");
+            "terrain material bake");
         return true;
     }
 
@@ -189,7 +190,7 @@ public sealed unsafe partial class TerrainRenderer
     static int Wrapped(Span<(int X, int Y, int W, int H)> rects, int n, float x0, float x1, float z0, float z1, float texel)
     {
         int tx0 = (int)MathF.Round(x0 / texel), tx1 = (int)MathF.Round(x1 / texel), tz0 = (int)MathF.Round(z0 / texel),
-                tz1 = (int)MathF.Round(z1 / texel);
+            tz1 = (int)MathF.Round(z1 / texel);
         Span<(int A, int L)> xs = stackalloc (int, int)[2], zs = stackalloc (int, int)[2];
         int nx = Split(xs, tx0, tx1), nz = Split(zs, tz0, tz1);
         for (int i = 0; i < nx; i++)
@@ -211,7 +212,7 @@ public sealed unsafe partial class TerrainRenderer
     /// Bakes <paramref name="rects"/> of level <paramref name="level"/> for its origin <paramref name="origin"/>: albedo and normal in one pass.
     /// </summary>
     void Bake(ref IGpuCommandList? cmd, int level, Vector2 origin, float texel, ref TerrainConstants c,
-            ReadOnlySpan<(int X, int Y, int W, int H)> rects)
+        ReadOnlySpan<(int X, int Y, int W, int H)> rects)
     {
         cmd ??= _gpu.BeginNative("terrain material cache");
         c.BakeOrigin[level] = new Vector4(origin, texel, CacheSide);
@@ -231,7 +232,7 @@ public sealed unsafe partial class TerrainRenderer
         var binding = _nativeFrame.Prepare(in view);
         NativeFrame.Record(cmd, p.P, in binding);
         var slice = _gpu.Frame.WriteConstants(System.Runtime.InteropServices.MemoryMarshal.AsBytes(new ReadOnlySpan<TerrainConstants>(in c)),
-                _uniformAlign);
+            _uniformAlign);
         ulong key = (ulong)slice.Handle.Index;
         if (!_constantSets.TryGetValue(key, out var set)) _constantSets[key] = set = ConstantSet(slice.Handle);
         uint offset = (uint)slice.Offset;

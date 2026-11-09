@@ -52,7 +52,7 @@ internal sealed class AssetPart
     /// back melee weapon (<paramref name="back"/>, else the hip one), with <paramref name="shots"/> bolts loaded in the crossbow.
     /// </summary>
     public bool ShowsWith(bool weaponDrawn, bool ranged, int shots = 1,
-            bool back = false) => (ShownShots == 0 || (ShownShots < 0 ? shots <= 0 : shots >= ShownShots)) && Shown switch
+        bool back = false) => (ShownShots == 0 || (ShownShots < 0 ? shots <= 0 : shots >= ShownShots)) && Shown switch
     {
         WeaponShown.Drawn => weaponDrawn && !ranged && !back,
         WeaponShown.Sheathed => !(weaponDrawn && !ranged && !back),
@@ -314,7 +314,7 @@ internal sealed class CharacterContent : IDisposable
 
     /// <param name="FirstMaterialName">The first submesh's material (script) name, which is all the material resolver takes of a submesh; null: no submesh.</param>
     sealed record LoadedMesh(GpuObjectMesh Gpu, string? FirstMaterialName, Vector3 Centre, float Radius, MeshMorphs? Morphs = null,
-            float[]? ShadowDistances = null, int ShadowFirst = 0, PickBox[]? PickBoxes = null,
+        float[]? ShadowDistances = null, int ShadowFirst = 0, PickBox[]? PickBoxes = null,
         float[]? FileDistances = null, int FileFirst = 0, float FileRadius = 0, PreparedMesh? NeckCap = null, PreparedMesh? HeadCap = null);
 
     public CharacterContent(IGpuContext gpu, GameInstall install, GameDatabase db, AssetLocator assets, CharacterRigs? rigs = null)
@@ -381,7 +381,7 @@ internal sealed class CharacterContent : IDisposable
     /// What a worker makes of a mesh file (<see cref="PrepareMesh"/>): everything but the GPU buffers.
     /// </summary>
     sealed record PreparedMesh(PreparedPart[] Parts, float[] Distances, string? FirstMaterialName, Vector3 Centre, float Radius, MeshMorphs? Morphs,
-            float[]? ShadowDistances, int ShadowFirst, PickBox[] PickBoxes,
+        float[]? ShadowDistances, int ShadowFirst, PickBox[] PickBoxes,
         float[]? FileDistances, int FileFirst, float FileRadius, PreparedMesh? NeckCap = null, PreparedMesh? HeadCap = null);
     /// <summary>
     /// A prepared mesh (null: it could not be read) and the messages its reading left.
@@ -399,7 +399,7 @@ internal sealed class CharacterContent : IDisposable
     /// The preparation of a mesh, made once (any thread; the first caller's level settings stand).
     /// </summary>
     Lazy<Prepared> Prepare(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs = null,
-            bool close = false, bool icon = false, string? partMap = null) =>
+        bool close = false, bool icon = false, string? partMap = null) =>
         _prepared.GetOrAdd((path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant()),
                 _ => new Lazy<Prepared>(() => PrepareMesh(path, boneCount, lodScale, shadowLevels, pixelsPerRadian, limbs, close, icon, partMap)));
 
@@ -416,7 +416,7 @@ internal sealed class CharacterContent : IDisposable
     /// time a mesh takes (a hair 1 to 2 s), and the editor shows one character up close.
     /// </summary>
     static Prepared PrepareMesh(string path, int? boneCount, float lodScale, bool shadowLevels, float pixelsPerRadian, LimbHide? limbs, bool close,
-            bool icon = false, string? partMap = null)
+        bool icon = false, string? partMap = null)
     {
         var messages = new List<string>();
         try
@@ -465,10 +465,10 @@ internal sealed class CharacterContent : IDisposable
             var decoded = new DecodedObjectMesh { Model = model, Levels = levels, Manual = [], Centre = centre, Radius = radius };
             var parts = model.Parts.Select(part => ObjectMeshCache.PreparePart(decoded, part, keepLevels: false)).ToArray();
             return new(new PreparedMesh(parts, [.. levels.Select(l => l.Distance)], mesh.SubMeshes.FirstOrDefault()?.MaterialName, centre, radius,
-                    morphs, shadowDistances, shadowFirst,
+                morphs, shadowDistances, shadowFirst,
                 PickBox.From(model), fileDistances, fileFirst, fileRadius,
-                limbs is not null && !close && !icon ? CapMesh(model, head: false) : null, limbs is not null && !close && !icon ? CapMesh(model,
-                        head: true) : null), messages);
+                limbs is not null && !close && !icon ? CapMesh(model, head: false) : null,
+                limbs is not null && !close && !icon ? CapMesh(model, head: true) : null), messages);
         }
         catch (Exception e) when (e is OgreFormatException or IOException or EndOfStreamException or InvalidDataException)
         {
@@ -482,7 +482,7 @@ internal sealed class CharacterContent : IDisposable
     /// preparing it.
     /// </summary>
     LoadedMesh? Mesh(string path, int? boneCount, float lodScale = 1, bool shadowLevels = false, LimbHide? limbs = null, bool close = false,
-            bool icon = false, string? partMap = null)
+        bool icon = false, string? partMap = null)
     {
         var key = (path.ToLowerInvariant(), icon ? IconBones : boneCount ?? -1, close, partMap?.ToLowerInvariant());
         if (_meshes.TryGetValue(key, out var cached)) return cached;
@@ -495,7 +495,7 @@ internal sealed class CharacterContent : IDisposable
     LoadedMesh Upload(PreparedMesh ready)
     {
         var gpuMesh = new GpuObjectMesh { Distances = ready.Distances, Manual = new GpuObjectMesh?[ready.Distances.Length], Centre = ready.Centre,
-                Radius = ready.Radius };
+            Radius = ready.Radius };
         _gpu.EnsureFrame();
         using var uploads = _gpu.Uploads.Begin();
         foreach (var made in ready.Parts)
@@ -529,7 +529,7 @@ internal sealed class CharacterContent : IDisposable
         }
         MeshBytes += gpuMesh.Bytes;
         return new LoadedMesh(gpuMesh, ready.FirstMaterialName, ready.Centre, ready.Radius, ready.Morphs, ready.ShadowDistances, ready.ShadowFirst,
-                ready.PickBoxes,
+            ready.PickBoxes,
             ready.FileDistances, ready.FileFirst, ready.FileRadius, ready.NeckCap, ready.HeadCap);
     }
 
@@ -652,7 +652,7 @@ internal sealed class CharacterContent : IDisposable
         var bodyPath = FindMesh(c.BodyMesh);
         if (bodyPath is null) return null;
         var parts = c.Parts.Select(p => (Path: FindMesh(p.Mesh), Shared: p.Mode == AttachMode.SharedSkeleton, Scale: PartLodScale(c,
-                p))).Where(p => p.Path is not null).ToList();
+            p))).Where(p => p.Path is not null).ToList();
         var partMap = PartMapPath(c);
         float pixels = LodPixelsPerRadian;
         Interlocked.Increment(ref _fetchesRunning);
@@ -697,7 +697,7 @@ internal sealed class CharacterContent : IDisposable
         var claimedPart = new Dictionary<string, int>(StringComparer.Ordinal);   // the same bones to the part's index in the health parts' order (MedicalState.Create: BodyPartTemplate.MedicalOrder, stable)
         var anatomy = c.Race.GetReferences("combat anatomy").Select(r => _db.Find(r.TargetStringId)).Where(p => p is { Type: FcsRecordType.LocationalDamage }).Select(p => p!).ToList();
         var rank = anatomy.Select((p, i) => (p, i)).OrderBy(x => Data.Gameplay.Bodies.BodyPartTemplate.From(x.p).MedicalOrder).Select((x, k) => (x.i,
-                k)).ToDictionary(x => x.i, x => x.k);
+            k)).ToDictionary(x => x.i, x => x.k);
         for (int partIndex = 0; partIndex < anatomy.Count; partIndex++)
         {
             var part = anatomy[partIndex];
@@ -777,7 +777,7 @@ internal sealed class CharacterContent : IDisposable
                 if (partMap is not null)
                 {
                     int x = Math.Clamp((int)(partMap.Width * v.Uv.X), 0, partMap.Width - 1), y = Math.Clamp((int)(partMap.Height * v.Uv.Y), 0,
-                            partMap.Height - 1);
+                        partMap.Height - 1);
                     var (r, g, b, a) = partMap[x, y];
                     if (a > 0) bits |= PartBit(r << 16 | g << 8 | b) << 4;
                 }
@@ -833,8 +833,11 @@ internal sealed class CharacterContent : IDisposable
             static Vector3 Key(Vector3 p) => new(MathF.Round(p.X, 3), MathF.Round(p.Y, 3), MathF.Round(p.Z, 3));
             var byPosition = new Dictionary<Vector3, (float Sum, int Count)>();
             for (int i = 0; i < v.Length; i++)
-                byPosition[Key(v[i].Position)] = byPosition.TryGetValue(Key(v[i].Position), out var s) ? (s.Sum + sum[i],
-                        s.Count + count[i]) : (sum[i], count[i]);
+            {
+                byPosition[Key(v[i].Position)] = byPosition.TryGetValue(Key(v[i].Position), out var s)
+                    ? (s.Sum + sum[i], s.Count + count[i])
+                    : (sum[i], count[i]);
+            }
             for (int i = 0; i < v.Length; i++)
             {
                 var s = byPosition[Key(v[i].Position)];
@@ -847,7 +850,7 @@ internal sealed class CharacterContent : IDisposable
     /// How much farther a part's generated levels start (<see cref="HairLodScale"/> for a person's hair and beard).
     /// </summary>
     static float PartLodScale(CharacterAppearance c,
-            CharacterPart part) => part.Record.Type == FcsRecordType.Attachment && c.Animal is null ? HairLodScale : 1;
+        CharacterPart part) => part.Record.Type == FcsRecordType.Attachment && c.Animal is null ? HairLodScale : 1;
 
     /// <summary>
     /// The steps (share of a part's triangles), floor per part, limits and guards the character levels are built with: the objects' limits, and
@@ -878,7 +881,7 @@ internal sealed class CharacterContent : IDisposable
     static MeshLodLevel FullLevel(OgreMesh mesh) => new(0, mesh.SubMeshes.Select(s => (uint[]?)s.Indices.Indices).ToList());
 
     static List<MeshLodLevel> GeneratedLevels(string path, OgreMesh mesh, Model model, float radius, float pixelsPerRadian,
-            FoliageLodBuilder.Settings settings)
+        FoliageLodBuilder.Settings settings)
     {
         var levels = new List<MeshLodLevel> { FullLevel(mesh) };
         var parts = model.Parts.Where(p => p.Indices.Length > 0).ToList();
@@ -1142,9 +1145,9 @@ internal sealed class CharacterContent : IDisposable
         var model = new Model();
         model.Parts.Add(part);
         var decoded = new DecodedObjectMesh { Model = model, Levels = [new MeshLodLevel(0, [part.Indices])], Manual = [], Centre = (min + max) / 2,
-                Radius = Math.Max((max - min).Length() / 2, 0.5f) };
+            Radius = Math.Max((max - min).Length() / 2, 0.5f) };
         return new PreparedMesh([ObjectMeshCache.PreparePart(decoded, part, keepLevels: false)], [0], "neck cap", decoded.Centre, decoded.Radius,
-                null, null, 0, [], null, 0, decoded.Radius);
+            null, null, 0, [], null, 0, decoded.Radius);
     }
 
     PartMaterial BodyMaterial(CharacterAppearance c)
@@ -1275,7 +1278,7 @@ internal sealed class CharacterContent : IDisposable
 
         // Weapons and anything else: the resolver (weapon models of the manufacturers, own textures, script material).
         var candidate = loaded.FirstMaterialName is null ? null : _resolver.Candidates(path,
-                new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
+            new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
         m.Description = candidate?.Description ?? "untextured";
         m.Tex[CharacterShaders.SlotDiffuse] = Texture(candidate?.Diffuse, false);
         m.Tex[CharacterShaders.SlotNormal] = Texture(candidate?.Normal, false);
@@ -1326,7 +1329,7 @@ internal sealed class CharacterContent : IDisposable
         else
         {
             var candidate = loaded.FirstMaterialName is null ? null : _resolver.Candidates(path,
-                    new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
+                new OgreSubMesh { MaterialName = loaded.FirstMaterialName }).FirstOrDefault();
             m.Description = candidate?.Description ?? "untextured";
             m.Tex[CharacterShaders.SlotDiffuse] = Texture(candidate?.Diffuse, false);
             m.Tex[CharacterShaders.SlotNormal] = Texture(candidate?.Normal, false);

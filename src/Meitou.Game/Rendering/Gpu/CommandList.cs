@@ -22,7 +22,7 @@ public readonly record struct RenderTarget(GpuView View, LoadOp Load = LoadOp.Lo
 /// (<c>ShadingRate</c>, an R8_UINT view in GENERAL layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been
 /// made for it, <see cref="AttachmentFormats.ShadingRate"/>).</summary>
 public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0,
-        GpuView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default);
+    GpuView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default);
 
 /// <summary>
 /// A command buffer being recorded (docs/renderer-native.md 2.7). Thin: every method records what it says. It keeps only a redundancy
@@ -86,7 +86,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         _cmdBindVertexBuffers = (delegate* unmanaged<CommandBuffer, uint, uint, Buffer*, ulong*, void>)Proc("vkCmdBindVertexBuffers");
         _cmdBindIndexBuffer = (delegate* unmanaged<CommandBuffer, Buffer, ulong, IndexType, void>)Proc("vkCmdBindIndexBuffer");
         _cmdBindDescriptorSets = (delegate* unmanaged<CommandBuffer, PipelineBindPoint, PipelineLayout, uint, uint, DescriptorSet*, uint, uint*,
-                void>)Proc("vkCmdBindDescriptorSets");
+            void>)Proc("vkCmdBindDescriptorSets");
         _cmdPushConstants = (delegate* unmanaged<CommandBuffer, PipelineLayout, ShaderStageFlags, uint, uint, void*, void>)Proc("vkCmdPushConstants");
         _cmdDraw = (delegate* unmanaged<CommandBuffer, uint, uint, uint, uint, void>)Proc("vkCmdDraw");
         _cmdDrawIndexed = (delegate* unmanaged<CommandBuffer, uint, uint, uint, int, uint, void>)Proc("vkCmdDrawIndexed");
@@ -375,7 +375,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     /// Binds sets to a program (the layout comes from the program).
     /// </summary>
     public void BindSets(GpuProgram program, uint first, ReadOnlySpan<GpuSet> sets, ReadOnlySpan<uint> dynamicOffsets,
-            GpuBindPoint point = GpuBindPoint.Graphics)
+        GpuBindPoint point = GpuBindPoint.Graphics)
     {
         Span<DescriptorSet> resolved = stackalloc DescriptorSet[sets.Length];
         for (int i = 0; i < sets.Length; i++) resolved[i] = _device.SetAt(sets[i].Index);
@@ -404,7 +404,7 @@ public sealed unsafe class CommandList : IGpuCommandList
     {
         if (_push is null) throw new InvalidOperationException("VK_KHR_push_descriptor is not available");
         fixed (WriteDescriptorSet* pw = writes) _push.CmdPushDescriptorSet(Handle, VkBindPoint(point), _ctx.Shaders.Backend(program).Layout, set,
-                (uint)writes.Length, pw);
+            (uint)writes.Length, pw);
         Stats.DescriptorPushes++;
     }
 
@@ -634,7 +634,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         blit.SrcOffsets[1] = new Offset3D(src.Desc.Width, src.Desc.Height, 1);
         blit.DstOffsets[1] = new Offset3D(dst.Desc.Width, dst.Desc.Height, 1);
         _vk.CmdBlitImage(Handle, _device.NativeImage(src), ImageLayout.General, _device.NativeImage(dst), ImageLayout.General, 1, &blit,
-                GlConventions.VkFilter(filter));
+            GlConventions.VkFilter(filter));
     }
 
     /// <summary>
@@ -666,7 +666,7 @@ public sealed unsafe class CommandList : IGpuCommandList
             blit.SrcOffsets[1] = new Offset3D(Math.Max(d.Width >> (level - 1), 1), Math.Max(d.Height >> (level - 1), 1), 1);
             blit.DstOffsets[1] = new Offset3D(Math.Max(d.Width >> level, 1), Math.Max(d.Height >> level, 1), 1);
             _vk.CmdBlitImage(Handle, _device.NativeImage(t), ImageLayout.General, _device.NativeImage(t), ImageLayout.General, 1, &blit,
-                    Filter.Linear);
+                Filter.Linear);
         }
         Barrier(BarrierBatch.Full);
     }
@@ -685,7 +685,7 @@ public sealed unsafe class CommandList : IGpuCommandList
         blit.SrcOffsets[1] = new Offset3D(Math.Max(d.Width >> srcLevel, 1), Math.Max(d.Height >> srcLevel, 1), 1);
         blit.DstOffsets[1] = new Offset3D(Math.Max(d.Width >> dstLevel, 1), Math.Max(d.Height >> dstLevel, 1), 1);
         _vk.CmdBlitImage(Handle, _device.NativeImage(texture), ImageLayout.General, _device.NativeImage(texture), ImageLayout.General, 1, &blit,
-                GlConventions.VkFilter(filter));
+            GlConventions.VkFilter(filter));
     }
 
     #endregion
@@ -754,24 +754,24 @@ public sealed unsafe class CommandList : IGpuCommandList
             stages |= s; flags |= f; write |= w;
         }
         Add(Access.ColourTarget, PipelineStageFlags2.ColorAttachmentOutputBit,
-                AccessFlags2.ColorAttachmentReadBit | AccessFlags2.ColorAttachmentWriteBit, true);
+            AccessFlags2.ColorAttachmentReadBit | AccessFlags2.ColorAttachmentWriteBit, true);
         Add(Access.DepthTarget, PipelineStageFlags2.EarlyFragmentTestsBit | PipelineStageFlags2.LateFragmentTestsBit,
             AccessFlags2.DepthStencilAttachmentReadBit | AccessFlags2.DepthStencilAttachmentWriteBit, true);
         Add(Access.DepthRead, PipelineStageFlags2.EarlyFragmentTestsBit | PipelineStageFlags2.LateFragmentTestsBit,
-                AccessFlags2.DepthStencilAttachmentReadBit, false);
+            AccessFlags2.DepthStencilAttachmentReadBit, false);
         Add(Access.Sampled, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit,
-                AccessFlags2.ShaderSampledReadBit, false);
+            AccessFlags2.ShaderSampledReadBit, false);
         Add(Access.StorageRead, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit,
-                AccessFlags2.ShaderStorageReadBit, false);
+            AccessFlags2.ShaderStorageReadBit, false);
         Add(Access.StorageWrite, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit,
             AccessFlags2.ShaderStorageReadBit | AccessFlags2.ShaderStorageWriteBit, true);
         Add(Access.TransferSrc, PipelineStageFlags2.AllTransferBit, AccessFlags2.TransferReadBit, false);
         Add(Access.TransferDst, PipelineStageFlags2.AllTransferBit, AccessFlags2.TransferWriteBit, true);
         Add(Access.IndirectRead, PipelineStageFlags2.DrawIndirectBit, AccessFlags2.IndirectCommandReadBit, false);
         Add(Access.VertexRead, PipelineStageFlags2.VertexAttributeInputBit | PipelineStageFlags2.IndexInputBit,
-                AccessFlags2.VertexAttributeReadBit | AccessFlags2.IndexReadBit, false);
+            AccessFlags2.VertexAttributeReadBit | AccessFlags2.IndexReadBit, false);
         Add(Access.UniformRead, PipelineStageFlags2.VertexShaderBit | PipelineStageFlags2.FragmentShaderBit | PipelineStageFlags2.ComputeShaderBit,
-                AccessFlags2.UniformReadBit, false);
+            AccessFlags2.UniformReadBit, false);
         Add(Access.Present, PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryReadBit, false);
         if (stages == PipelineStageFlags2.None)
             return (PipelineStageFlags2.AllCommandsBit, AccessFlags2.MemoryReadBit | AccessFlags2.MemoryWriteBit, true);

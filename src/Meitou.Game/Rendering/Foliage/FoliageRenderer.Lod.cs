@@ -84,7 +84,7 @@ public sealed unsafe partial class FoliageRenderer
     /// view the ones that count the size of the triangles.
     /// </summary>
     float[] LevelErrors(RockLod lod) => ScreenLod && _lodActive && !_lodView.Ortho ? lod.Effective(LodTolerance, ScreenLodTriPixels,
-            ScreenLodMultiple) : lod.Relative;
+        ScreenLodMultiple) : lod.Relative;
 
     float[] RelativeErrors(FoliageLodSet set, float radius)
     {

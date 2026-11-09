@@ -1411,7 +1411,7 @@ static partial class TerrainShaders
         if (at < 0)
             throw new InvalidOperationException("TerrainShaders.Fragment no longer starts with the wireframe line.");
         return !fade ? f : f.Insert(at,
-                "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
+            "if (vFade > 0.0 && vFade < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vFade) discard;\n            ");
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O): the texts above through NativeShaders.Port, bodies unchanged ----

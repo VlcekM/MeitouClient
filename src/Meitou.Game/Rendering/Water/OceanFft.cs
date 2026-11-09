@@ -242,6 +242,7 @@ public sealed unsafe class OceanWaves : IDisposable
     {
         (_upload, _uploadBoth, _builtWind) = (s, true, float.NaN);
     }
+
     /// <summary>
     /// For tests: the clock in game seconds.
     /// </summary>

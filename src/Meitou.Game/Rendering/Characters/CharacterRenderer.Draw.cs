@@ -110,11 +110,11 @@ internal sealed unsafe partial class CharacterRenderer
     /// <paramref name="viewProjection"/> carries the rounding of the eye's world position (<see cref="DrawView"/>).
     /// </summary>
     public void Draw(Matrix4x4 viewProjection, Vector3 eye, Vector4[] frustum, Vector3 light, Vector3 fogColour, float fogDistance,
-            Matrix4x4? relative = null)
+        Matrix4x4? relative = null)
     {
         _shownLight = light;
         DrawView(new ViewConstants { ViewProjection = viewProjection, Eye = eye, LightDir = light, FogColour = fogColour, FogDistance = fogDistance },
-                eye, frustum, relative: relative);
+            eye, frustum, relative: relative);
     }
 
     /// <summary>
@@ -210,11 +210,11 @@ internal sealed unsafe partial class CharacterRenderer
         var job = _drawJobs.Rent();
         (job.Owner, job.Targets, job.State, job.Program, job.Count) = (this, targets, state, prog.P, 0);
         job.Frame = _nativeFrame.Prepare(in view, [_bones.Binding, _content.Materials.Binding(Gpu.Frame), _content.Morphs.Binding(Gpu.Frame),
-                _previousBones.Binding]);
+            _previousBones.Binding]);
         job.Cull = _depthPass ? CullMode.None : CullMode.Back;
         for (int a = 0; a < 9; a++) job.Rows[a] = new GpuBufferBinding(instances.Handle, instances.Offset + (ulong)(16 * a));
         job.Push = new CharacterPush { DepthIndex = _motionPass ? _motionDepth : 0, Fill = new(Fill, 0),
-                SkinLut = SkinShading ? _skinScattering.Index : 0 };
+            SkinLut = SkinShading ? _skinScattering.Index : 0 };
         job.RowCount = _motionPass ? 9 : 5;
         if (job.Draws.Length < active.Count) job.Draws = new DrawJob.Draw[Math.Max(active.Count, job.Draws.Length * 2)];
 
@@ -508,7 +508,7 @@ internal sealed unsafe partial class CharacterRenderer
             views[k].Batches.ChunkCount = count;
         }
         Parallel.For(0, count, c => GatherChunk(c, c * ChunkCharacters, Math.Min(_liveCount, (c + 1) * ChunkCharacters), views, viewCount, depth,
-                motion));
+            motion));
         return count;
     }
 
@@ -561,7 +561,7 @@ internal sealed unsafe partial class CharacterRenderer
     /// One placed part's instance, added to the chunk of every view in <paramref name="seen"/> at the level that view chooses.
     /// </summary>
     void GatherPart(in Live l, AssetPart part, in PartFrame f, int c, uint seen, GatherView[] views, int viewCount, bool depth, bool motion,
-            float bias)
+        float bias)
     {
         var instance = new CharInstance
         {
@@ -811,6 +811,6 @@ static class MatrixExtensions
     /// The largest axis scale of a transform's upper 3x3 (a bounding radius through it).
     /// </summary>
     public static float ScaleLength(this in Matrix4x4 m) =>
-        MathF.Sqrt(Math.Max(new Vector3(m.M11, m.M12, m.M13).LengthSquared(), Math.Max(new Vector3(m.M21, m.M22, m.M23).LengthSquared(),
-                new Vector3(m.M31, m.M32, m.M33).LengthSquared())));
+        MathF.Sqrt(Math.Max(new Vector3(m.M11, m.M12, m.M13).LengthSquared(),
+            Math.Max(new Vector3(m.M21, m.M22, m.M23).LengthSquared(), new Vector3(m.M31, m.M32, m.M33).LengthSquared())));
 }

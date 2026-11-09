@@ -38,7 +38,7 @@ public sealed partial class WorldObjectRenderer
         inst.Centre = Vector3.Transform(gpu.Centre, m);
 
         static Vector3 Unit(float x, float y, float z) => new Vector3(x, y,
-                z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
+            z) is var v && v.LengthSquared() > 1e-12f ? Vector3.Normalize(v) : Vector3.Zero;
     }
 
     /// <summary>

@@ -313,7 +313,7 @@ public sealed class ReflectionPass : IDisposable
         Free();
         (_width, _height, _builtFor) = (w, h, Samples);
         _colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, w, h,
-                Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferDst, Name: "reflection colour"));
+            Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferDst, Name: "reflection colour"));
 
         // The picture is drawn multisampled and resolved: the mirrored shoreline, fences and rooflines are hard edges, and
         // without it each texel of the half-resolution image is a visible stair step that the wave distortion then smears.
@@ -375,8 +375,8 @@ public sealed class ReflectionPass : IDisposable
         Poll();
         _lapAt = Stopwatch.GetTimestamp();
         Array.Clear(LastPhaseMs);
-        if (!Warm && CanReuse(camera, fullWidth,
-                fullHeight)) { Valid = _hasImage; _skipped++; _age++; return; }   // the image, or the verdict that there is no water in view
+        // the image, or the verdict that there is no water in view
+        if (!Warm && CanReuse(camera, fullWidth, fullHeight)) { Valid = _hasImage; _skipped++; _age++; return; }
         _age = 0;
         _lastEye = eye;
         _lastView = camera.View;
@@ -422,8 +422,8 @@ public sealed class ReflectionPass : IDisposable
         sky.PrepareClouds(skyProjection, _width, _height, mirroredEye, reflection: true);
         var cmd = Gpu.BeginNative("reflection");
         bool unlit = NoShadows && !FaithfulShadows;
-        if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, (_unshadowed ??= new FrameBlock(Gpu,
-                ShadowPass.ReceiverBytes)).Binding);   // zeros: shadows off
+        // zeros: shadows off
+        if (unlit) Gpu.Globals.OverrideBlock(ShadowShaders.ReceiverBlock, (_unshadowed ??= new FrameBlock(Gpu, ShadowPass.ReceiverBytes)).Binding);
         var target = _msColour is not null ? PassTargets.Of(_msColour, _msDepth) : PassTargets.Of(_colour, _depth);
         // Wave 4 (docs/renderer-native.md 6): the guests' segments are secondaries, recorded on the job threads when the pass ends.
         bool secondaries = Gpu.RecordsSecondaries;
@@ -482,7 +482,7 @@ public sealed class ReflectionPass : IDisposable
     /// (what the water samples with) and the oblique one the depth was drawn with, or null when the range is too short to draw.
     /// </summary>
     (Matrix4x4 Mapped, Matrix4x4 Drawn)? DrawMirrored(WorldCamera camera, float aspect, Matrix4x4 view, Vector4 clip, Vector4 rect,
-            Vector3 mirroredEye,
+        Vector3 mirroredEye,
         TerrainRenderer terrain, WorldLighting light, SceneDraw? drawObjects)
     {
         float near = camera.Near, far = Math.Min(camera.ViewDistance, MaxDistance);
@@ -506,9 +506,12 @@ public sealed class ReflectionPass : IDisposable
     {
         if (_age >= MaxAge || _builtFor != Samples) return false;
         // An image at this size, or the no-water verdict at this size (heights stream in, so it is checked again after MaxAge frames like an image).
-        if (_hasImage ? _colour is null || _msColour is null && _samples != 0 || _width != Math.Max((int)(fullWidth * Scale),
-                64) || _height != Math.Max((int)(fullHeight * Scale), 64)
-                     : !_noWater || fullWidth != _noWaterWidth || fullHeight != _noWaterHeight) return false;
+        int width = Math.Max((int)(fullWidth * Scale), 64);
+        int height = Math.Max((int)(fullHeight * Scale), 64);
+        bool stale = _hasImage
+            ? _colour is null || _msColour is null && _samples != 0 || _width != width || _height != height
+            : !_noWater || fullWidth != _noWaterWidth || fullHeight != _noWaterHeight;
+        if (stale) return false;
         var view = camera.View;
         float shift = Vector3.Distance(camera.Eye, _lastEye);
         // About a texel of parallax for things 3000 units away, and no more than a tenth of a degree of turn.
@@ -645,7 +648,7 @@ public sealed class ReflectionPass : IDisposable
             for (int i = 0; i < nx; i++)
             {
                 var dir = Vector3.TransformNormal(new Vector3(((i + 0.5f) / nx * 2 - 1) * tan * aspect, ((j + 0.5f) / ny * 2 - 1) * tan, -1),
-                        inverse);
+                    inverse);
                 if (dir.Y > -1e-4f) continue;
                 var p = _realEye + dir * (he / -dir.Y);
                 float distance = dir.Length() * (he / -dir.Y);
@@ -736,7 +739,7 @@ public sealed class ReflectionPass : IDisposable
         }
         var p = _fogProgram;
         p.Bind(p.Sampler("uDepth"), new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Nearest, TextureMagFilter.Nearest,
-                TextureWrapMode.ClampToEdge,
+            TextureWrapMode.ClampToEdge,
             TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), depthTexture.View()));
         p.Set(p.Uniform("uInverse"), in inverse);
         p.Set(p.Uniform("uRayInverse"), in rayInverse);

@@ -50,7 +50,7 @@ public sealed record Slider(string Label, float Min, float Max, Func<float> Get,
 /// and a look preset may turn it on.
 /// </summary>
 public sealed record Toggle(string Label, Func<bool> Get, Action<bool> Set, Func<string>? Text = null, bool Remaster = false, bool OnOff = false,
-        bool Optional = false);
+    bool Optional = false);
 
 /// <summary>
 /// A button beside the reset one that asks first: <see cref="Question"/> is shown with Yes / No, Yes runs <see cref="Run"/>, whose text is shown
@@ -72,7 +72,7 @@ public sealed record PanelChoice(Func<string> Label, Func<IReadOnlyList<string>>
 /// <see cref="PanelChoice"/> drop-down lists.
 /// </summary>
 public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyList<Slider> mainSliders, IReadOnlyList<Toggle>? toggles = null,
-        string togglesTitle = "",
+    string togglesTitle = "",
     IReadOnlyList<PanelAction>? actions = null, IReadOnlyList<Slider>? sideSliders = null, IReadOnlyList<PanelChoice>? choices = null)
 {
     const float Margin = 16, Pad = 12, TrackHeight = 6, RowGap = 10, ColumnGap = 28, MinTrackWidth = 220;
@@ -186,7 +186,7 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
     float ButtonWidth => ResetLabel.Length * overlay.CharWidth + 16;
 
     float LabelWidth => Math.Max(_sliders.Max(s => s.Label.Length + 9),
-            _toggles.Count == 0 ? 0 : _toggles.Max(t => t.Label.Length + 4 + (t.Text?.Invoke().Length ?? 0) + 2)) * overlay.CharWidth;
+        _toggles.Count == 0 ? 0 : _toggles.Max(t => t.Label.Length + 4 + (t.Text?.Invoke().Length ?? 0) + 2)) * overlay.CharWidth;
 
     /// <summary>
     /// The sliders run down the first column, then the second and the third.
@@ -360,7 +360,7 @@ public sealed class SettingsPanel(DebugOverlay overlay, string title, IReadOnlyL
         {
             float x = ActionX(i);
             overlay.Rect(x, ButtonTop, x + BoxWidth(_actions[i].Label), ButtonBottom, i == _confirming ? fill * new Vector4(0.6f, 0.6f, 0.6f,
-                    1) : track);
+                1) : track);
             overlay.Text(_actions[i].Label, x + 8, ButtonTop + 4, DebugOverlay.TextColour);
         }
     }
