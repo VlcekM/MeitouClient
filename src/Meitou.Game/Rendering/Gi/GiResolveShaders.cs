@@ -110,8 +110,7 @@ static partial class GiResolveShaders
             vec3 sky = atmoIrradiance(n) * {{F(1 - KenshiLighting.DielectricSpecular)}} * atmoAmbientMapAt(p).rgb * uAtmoLight.w;
             bool interior = (surface.w & 512u) != 0u;
             gi.rgb = giSurfaceIrradiance(gi.rgb, sky, interior);
-            // The haze is linear in the colour (colour · T + in-scattering): T from two evaluations, so the added light is hazed as the fragment's
-            // was.
+            // The haze is linear in the colour (colour · T + in-scattering): T from two evaluations, so the added light is hazed as the fragment's was.
             vec3 transmittance = atmoApply(vec3(1.0), uGiEye, p) - atmoApply(vec3(0.0), uGiEye, p);
             fragColour = vec4((gi.rgb - sky) * share * transmittance, interior ? -z : z);
         }
