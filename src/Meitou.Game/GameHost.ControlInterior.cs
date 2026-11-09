@@ -72,6 +72,16 @@ sealed partial class GameHost
         {
             if (ActiveLamps is not { } lamps || args.Count == 0) { con.Error("usage: lamps list [radius] | lamps off <index...> | lamps on"); return; }
             if (args[0] == "on") { lamps.DebugOff.Clear(); con.Print("all lamps on"); return; }
+            if (args[0] == "carry")
+            {
+                if (args.Count < 4) { lamps.DebugCarried = null; con.Print("carried lamp off"); return; }
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                float cx = float.Parse(args[1], inv), cz = float.Parse(args[2], inv), lift = float.Parse(args[3], inv), reach = args.Count > 4 ? float.Parse(args[4], inv) : 300;
+                lamps.DebugCarried = new Meitou.Data.World.WorldLight(new System.Numerics.Vector3(cx, gpu.Terrain.HeightAt(cx, cz) + lift, cz), new System.Numerics.Vector3(1, 0.9f, 0.6f), 0.8f, reach, Meitou.Data.World.WorldLightType.Point,
+                    -System.Numerics.Vector3.UnitY, 0, 0, 1, default, default, false, 0, "debug", "debug", "debug-carried");
+                con.Print($"carried lamp at {cx} {cz}");
+                return;
+            }
             if (args[0] == "refview")
             {
                 lamps.DebugReference = args.Count < 3 ? null : (int.Parse(args[1]), args[2] == "objects" ? 3 : args[2] == "ref60" ? 2 : args[2] == "ref" ? 1 : 0);

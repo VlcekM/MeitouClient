@@ -89,7 +89,7 @@ static class LampShaders
             }
             float texel = texelPerDepth * d;
             float nl = clamp(dot(n, l), 0.03, 1.0);
-            float slope = min(sqrt(1.0 - nl * nl) / nl, 3.0), margin = 1.0 + texel * (1.0 + slope);
+            float slope = min(sqrt(1.0 - nl * nl) / nl, 3.0), margin = 0.5 + texel * (1.0 + slope);
             int place = int(t.z), row = place / 128;
             ivec2 corner = ivec2(place - row * 128, row) * LAMP_TILE_UNIT;
             vec2 st = uv * float(side);

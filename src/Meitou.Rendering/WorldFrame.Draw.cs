@@ -379,6 +379,7 @@ static partial class WorldFrame
         if (gpu.Lamps is { } lamps)
         {
             lamps.Moving.Clear();
+            if (lamps.DebugCarried is { } debugCarried) lamps.Moving.Add(debugCarried);
             gpu.Characters?.CollectLamps(lamps.Moving);   // the lanterns characters carry, where this update posed them
         }
         // With the lamps traced the rays stop their light at the walls: the room's hull would only trim the wall round a door into a dark polygon.

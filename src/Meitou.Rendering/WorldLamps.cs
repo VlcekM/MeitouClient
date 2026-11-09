@@ -60,6 +60,9 @@ internal sealed class WorldLamps : IDisposable
     /// <summary>Debug: the cache's state.</summary>
     public string TilesDescription => Tiles?.Describe() ?? "none";
 
+    /// <summary>Debug (the console's <c>lamps carry</c>): a lamp treated as a carried one, wherever the console last put it.</summary>
+    public WorldLight? DebugCarried { get; set; }
+
     /// <summary>Debug (the console's <c>lamps refview</c>): the lamp whose visibility is shown over the scene, as its tile gives it or as the truth of many rays.</summary>
     public (int Lamp, int Truth)? DebugReference { get; set; }
 
