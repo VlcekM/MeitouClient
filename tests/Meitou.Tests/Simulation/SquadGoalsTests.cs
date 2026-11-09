@@ -3,7 +3,9 @@ using Meitou.Simulation.Ai;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>The squad goal list's counts (Blackboard::howManyGuysWorkingOnThisSubTarget, isMySubTarget; docs/game/ai-tasks.md).</summary>
+/// <summary>
+/// The squad goal list's counts (Blackboard::howManyGuysWorkingOnThisSubTarget, isMySubTarget; docs/game/ai-tasks.md).
+/// </summary>
 public class SquadGoalsTests
 {
     [Fact]

@@ -2,7 +2,9 @@ using Meitou.Simulation.Dialogue;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>The censorship word list (<c>FUN_14067e8b0</c>, docs/game/dialogue.md "Censorship").</summary>
+/// <summary>
+/// The censorship word list (<c>FUN_14067e8b0</c>, docs/game/dialogue.md "Censorship").
+/// </summary>
 public class CensorshipTests
 {
     [Theory]

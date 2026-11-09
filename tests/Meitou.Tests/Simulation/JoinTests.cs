@@ -16,8 +16,11 @@ public class JoinTests
         q.Enqueue(Order(3, 2));
         q.Enqueue(Order(5, 3));
         q.Enqueue(Order(9, 4));
+
         Assert.Empty(q.TakeDue(2));
+
         var due = q.TakeDue(5).Cast<MoveOrder>().Select(o => o.Target.X).ToArray();
+
         Assert.Equal([2f, 1f, 3f], due);
         Assert.Equal(1, q.Count);
     }

@@ -8,10 +8,14 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Stage 7 in the world: stats and medical states at spawn, the medical tick, the speed chain, limping, lying down and determinism.</summary>
+/// <summary>
+/// Stage 7 in the world: stats and medical states at spawn, the medical tick, the speed chain, limping, lying down and determinism.
+/// </summary>
 public class BodyWiringTests
 {
-    /// <summary>Hurts every second character's left leg at tick 20 and knocks the others out at tick 60 (a scripted serial input).</summary>
+    /// <summary>
+    /// Hurts every second character's left leg at tick 20 and knocks the others out at tick 60 (a scripted serial input).
+    /// </summary>
     sealed class Hitter : ITickSystem
     {
         public void Inputs(SimWorld world, IReadOnlyList<SimCommand> commands)
@@ -20,7 +24,8 @@ public class BodyWiringTests
             var table = world.Characters;
             for (int s = 0; s < table.Next.Length; s++)
             {
-                if (!table.Next[s].Alive || table.Cold(s) is not { Medical: { } medical, Race: { } race, Stats: { } stats }) continue;
+                if (!table.Next[s].Alive || table.Cold(s) is not { Medical: { } medical, Race: { } race, Stats: { } stats })
+                    continue;
                 var ctx = new MedicalContext(GameConstants.Default, BodyOptions.Default, race)
                 {
                     Toughness = stats.Toughness, Strength = stats.Strength, Seed = world.Seed, CharacterKey = Rng.Key(table.IdOf(s)),
@@ -46,13 +51,19 @@ public class BodyWiringTests
         int slot = Enumerable.Range(0, table.HighWater).First(s => table.Previous[s].Alive && table.Cold(s)!.Medical is not null);
         var id = table.IdOf(slot);
         var cold = table.Cold(slot)!;
-        var ctx = new MedicalContext(GameConstants.Default, BodyOptions.Default, cold.Race!) { Toughness = 50, Strength = 50, Seed = 7, CharacterKey = Rng.Key(id) };
+        var ctx = new MedicalContext(GameConstants.Default, BodyOptions.Default, cold.Race!) { Toughness = 50, Strength = 50, Seed = 7,
+                CharacterKey = Rng.Key(id) };
         cold.Medical!.ApplyHit(0, new HitDamage(100000, 0, 0), ctx);
+
         Assert.True(cold.Medical.Dead);
+
         world.RunTicks(5);
+
         Assert.Equal(Vector3.Zero, table.Previous[slot].Velocity);
         Assert.True(table.IsAlive(id), "the corpse lies there");
+
         world.RunTicks((int)(BodySystem.CorpseTicks + 10));
+
         Assert.False(table.IsAlive(id));
     }
 

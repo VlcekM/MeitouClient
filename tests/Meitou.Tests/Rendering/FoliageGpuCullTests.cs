@@ -21,13 +21,15 @@ public class FoliageGpuCullTests
         {
             return VulkanDevice.Create(new VulkanDeviceOptions { Validation = true, SyncValidation = true });
         }
-        catch (Exception e) when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
+        catch (Exception e)
+            when (e is VulkanException or DllNotFoundException or EntryPointNotFoundException or Silk.NET.Core.Loader.SymbolLoadingException)
         {
             return null;
         }
     }
 
     static void ExpectClean(VulkanDevice d) =>
+
         Assert.True(d.ValidationErrors == 0, "Validation errors:\n" + string.Join("\n", d.ValidationLog));
 
     sealed record SyntheticGroup(int Batch, FoliageInstanceRecord[] Records, FoliageGroupRange Range)
@@ -63,7 +65,8 @@ public class FoliageGpuCullTests
                 float dist = i % 3 == 0 ? range * (1 + (float)(random.NextDouble() - 0.5) * 4e-7f) : range * (float)random.NextDouble() * 1.1f;
                 var p = new Vector3(eye.X + MathF.Cos(angle) * dist, (float)(random.NextDouble() * 300), eye.Z + MathF.Sin(angle) * dist);
                 float scale = (float)(0.5 + random.NextDouble() * 1.5);
-                var t = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromYawPitchRoll((float)random.NextDouble() * 6.28f, 0.05f, 0) * Matrix4x4.CreateTranslation(p);
+                var t = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromYawPitchRoll((float)random.NextDouble() * 6.28f, 0.05f,
+                        0) * Matrix4x4.CreateTranslation(p);
                 records[i] = new FoliageInstanceRecord { Transform = t, Ground = new Vector4(p.X, p.Z, scale, g) };
             }
             FoliageCull.FillSpheres(records, centre, 4);
@@ -95,7 +98,9 @@ public class FoliageGpuCullTests
     public unsafe void Gpu_cull_matches_FoliageCull_on_synthetic_data()
     {
         using var d = TryCreate();
+
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+
         var random = new Random(21);
         using (var ctx = new GpuContext(d!))
         {
@@ -116,7 +121,8 @@ public class FoliageGpuCullTests
                     float band = 1 / g.Range.InverseBand, t = (g.Range.Range - band) * (0.3f + 0.6f * (float)random.NextDouble()), b = t * 0.1f;
                     for (int i = 1; i < g.Records.Length; i += 3)
                     {
-                        float at = (i % 2 == 0 ? t : t - b) * (1 + (float)(random.NextDouble() - 0.5) * 4e-7f), angle = (float)(random.NextDouble() * Math.PI * 2);
+                        float at = (i % 2 == 0 ? t : t - b) * (1 + (float)(random.NextDouble() - 0.5) * 4e-7f),
+                                angle = (float)(random.NextDouble() * Math.PI * 2);
                         ref var r = ref g.Records[i];
                         var p = new Vector3(eye.X + MathF.Cos(angle) * at, r.Transform.M42, eye.Z + MathF.Sin(angle) * at);
                         r.Transform.Translation = p;
@@ -129,14 +135,20 @@ public class FoliageGpuCullTests
                 var eyeXz = new Vector2(eye.X, eye.Z);
 
                 ctx.BeginFrame();
+
                 // Place every group (a grown arena moves them all: place again), then chunks grouped by batch, groups in order.
                 bool placed;
                 do
                 {
                     placed = true;
                     foreach (var g in groups.Concat(splitGroups))
-                        if (!cull.Place(ref g.Arena, ref g.Generation, g.Records)) { placed = false; break; }
+                        if (!cull.Place(ref g.Arena, ref g.Generation, g.Records))
+                        {
+                            placed = false;
+                            break;
+                        }
                 } while (!placed);
+
                 // Batches 0..4 the plain ones, then the split groups' meshes and then their impostors.
                 var batches = new List<(List<SyntheticGroup> Groups, uint Flags, uint[] IndexCounts)>();
                 for (int b = 0; b < plainBatches; b++)
@@ -155,9 +167,12 @@ public class FoliageGpuCullTests
                         for (int at = 0; at < g.Records.Length; at += FoliageShaders.CullChunk)
                             chunks.Add(new FoliageCullChunk
                             {
-                                First = FoliageGpuCull.FirstOf(g.Arena) + (uint)at, Count = (uint)Math.Min(FoliageShaders.CullChunk, g.Records.Length - at),
-                                Range = g.Range.Range, RangeSquared = g.Range.RangeSquared, InverseBand = g.Range.InverseBand, Flags = batches[b].Flags,
-                                Transition = batches[b].Flags == 0 ? 0 : g.Range.Transition, InverseTransitionBand = batches[b].Flags == 0 ? 0 : g.Range.InverseTransitionBand,
+                                First = FoliageGpuCull.FirstOf(g.Arena) + (uint)at,
+                                        Count = (uint)Math.Min(FoliageShaders.CullChunk, g.Records.Length - at),
+                                Range = g.Range.Range, RangeSquared = g.Range.RangeSquared, InverseBand = g.Range.InverseBand,
+                                        Flags = batches[b].Flags,
+                                Transition = batches[b].Flags == 0 ? 0 : g.Range.Transition,
+                                        InverseTransitionBand = batches[b].Flags == 0 ? 0 : g.Range.InverseTransitionBand,
                             });
                     foreach (var indexCount in batches[b].IndexCounts)
                         draws.Add(new FoliageCullDraw { IndexCount = indexCount, ChunkStart = (uint)starts[b], ChunkEnd = (uint)chunks.Count });
@@ -183,7 +198,8 @@ public class FoliageGpuCullTests
                 for (int b = 0; b < splitBatches; b++)
                     foreach (var g in batches[plainBatches + b].Groups)
                     {
-                        FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output, FoliageCull.MeshPart | FoliageCull.ImpostorPart);
+                        FoliageCull.CullGroup(g.Records, g.Range, eyeXz, view, record: false, output,
+                                FoliageCull.MeshPart | FoliageCull.ImpostorPart);
                         expected[plainBatches + b].AddRange(output.Visible.AsSpan(0, output.Count));
                         expected[plainBatches + splitBatches + b].AddRange(output.ImpostorVisible.AsSpan(0, output.ImpostorCount));
                         foreach (var m in output.ImpostorVisible.AsSpan(0, output.ImpostorCount)) if (m.M14 < 0) inBand++;
@@ -194,47 +210,59 @@ public class FoliageGpuCullTests
                 var args = MemoryMarshal.Cast<byte, uint>(readback.Read(argsAt, (ulong)draws.Count * 20)).ToArray();
                 ulong rowsAt = argsAt + FoliageGpuCull.Align16((ulong)draws.Count * 20);
                 var rows = MemoryMarshal.Cast<byte, Matrix4x4>(readback.Read(rowsAt, (ulong)offsets[n] * 64)).ToArray();
+
                 Assert.Equal(expected.Sum(e => e.Count), (int)offsets[n]);
+
                 int draw = 0;
                 for (int b = 0; b < batches.Count; b++)
                 {
                     uint first = offsets[starts[b]], count = offsets[starts[b + 1]] - first;
+
                     Assert.Equal(expected[b].Count, (int)count);
+
                     for (int j = 0; j < count; j++)
                     {
                         var e = expected[b][j];
                         var got = rows[first + j];
+
                         // Bit for bit, the fade (row 0 w) included.
-                        Assert.True(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in e)).SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in got))),
+                        Assert.True(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in e))
+                                .SequenceEqual(MemoryMarshal.AsBytes(new ReadOnlySpan<Matrix4x4>(in got))),
+
                             $"view {viewNumber}, batch {b}, instance {j}: GPU fade {got.M14:R}, CPU {e.M14:R}; translation {got.Translation} against {e.Translation}");
                     }
                     foreach (var indexCount in batches[b].IndexCounts)
                     {
                         Assert.Equal([indexCount, count, 0u, 0u, first], args[(draw * 5)..(draw * 5 + 5)]);
+
                         draw++;
                     }
                 }
                 totalVisible += expected.Take(plainBatches).Sum(e => e.Count);
                 totalCandidates += groups.Sum(g => g.Records.Length);
             }
+
             Assert.True(cull.Grows > 0, "the arena should have grown");
-            Assert.True(totalVisible > 1000 && totalVisible < totalCandidates / 2, $"{totalVisible} of {totalCandidates} visible: the views should cut the sets");
+            Assert.True(totalVisible > 1000 && totalVisible < totalCandidates / 2,
+                    $"{totalVisible} of {totalCandidates} visible: the views should cut the sets");
             Assert.True(inBand > 100, $"{inBand} instances in the crossfade band: the band should be exercised");
         }
         ExpectClean(d!);
     }
 
     /// <summary>
-    /// The occlusion cull in the kernel (<c>HizOccluded</c>) against the CPU rule of <see cref="OcclusionCullTests"/>: a pyramid drawn from a synthetic scene (spheres and a
-    /// ground plane), the instances behind it in random places and the eye moved by 0 to 40 units; the instances the kernel keeps are the ones the rule does not hide, and the
-    /// count it left out (the offsets' third extra entry) equals the rule's.
+    /// The occlusion cull in the kernel (<c>HizOccluded</c>) against the CPU rule of <see cref="OcclusionCullTests"/>: a pyramid drawn from a
+    /// synthetic scene (spheres and a ground plane), the instances behind it in random places and the eye moved by 0 to 40 units; the instances the
+    /// kernel keeps are the ones the rule does not hide, and the count it left out (the offsets' third extra entry) equals the rule's.
     /// </summary>
     [Fact]
     [Slow]
     public unsafe void Gpu_cull_leaves_out_what_the_depth_pyramid_hides_as_the_rule_does()
     {
         using var d = TryCreate();
+
         Assert.SkipWhen(d is null, "No Vulkan 1.3 device");
+
         var random = new Random(5);
         long hiddenTotal = 0, keptTotal = 0;
         using (var ctx = new GpuContext(d!))
@@ -244,12 +272,15 @@ public class FoliageGpuCullTests
             {
                 var scene = new List<OcclusionCullTests.Occluder>();
                 for (int i = random.Next(2, 9); i > 0; i--)
-                    scene.Add(new OcclusionCullTests.Occluder(new Vector3(random.Next(-600, 600), random.Next(20, 400), random.Next(150, 1500)), random.Next(40, 500)));
+                    scene.Add(new OcclusionCullTests.Occluder(new Vector3(random.Next(-600, 600), random.Next(20, 400), random.Next(150, 1500)),
+                            random.Next(40, 500)));
                 var eye = new Vector3(random.Next(-5000, 5000), random.Next(20, 120), random.Next(-5000, 5000));
-                var local = OcclusionCullTests.Camera.Look(Vector3.Zero, (float)(random.NextDouble() * 0.2 - 0.1), (float)(random.NextDouble() * 0.2 - 0.1));
+                var local = OcclusionCullTests.Camera.Look(Vector3.Zero, (float)(random.NextDouble() * 0.2 - 0.1),
+                        (float)(random.NextDouble() * 0.2 - 0.1));
                 var cam = local with { Eye = eye };
                 const int w = OcclusionCullTests.W, h = OcclusionCullTests.H;
                 var z = new float[h, w];
+
                 // The scene lies round the origin; the camera is offset to a far position by moving the scene with it.
                 var moved = scene.Select(o => o with { Centre = o.Centre + eye }).ToList();
                 float jx = (float)random.NextDouble() - 0.5f, jy = (float)random.NextDouble() - 0.5f;
@@ -269,6 +300,7 @@ public class FoliageGpuCullTests
                 }
                 float delta = new[] { 0f, 0.5f, 3f, 12f, 40f }[random.Next(5)];
                 var current = eye + OcclusionCullTests.RandomUnit(random) * delta;
+
                 // Instances: behind the blockers mostly (in the camera's frame), some anywhere.
                 var records = new List<FoliageInstanceRecord>();
                 var spheres = new List<Vector4>();
@@ -290,14 +322,16 @@ public class FoliageGpuCullTests
                 for (int at2 = 0; at2 < group.Records.Length; at2 += FoliageShaders.CullChunk)
                     chunks.Add(new FoliageCullChunk
                     {
-                        First = FoliageGpuCull.FirstOf(group.Arena) + (uint)at2, Count = (uint)Math.Min(FoliageShaders.CullChunk, group.Records.Length - at2),
+                        First = FoliageGpuCull.FirstOf(group.Arena) + (uint)at2,
+                                Count = (uint)Math.Min(FoliageShaders.CullChunk, group.Records.Length - at2),
                         Range = group.Range.Range, RangeSquared = group.Range.RangeSquared, InverseBand = group.Range.InverseBand,
                     });
                 var draws = new[] { new FoliageCullDraw { IndexCount = 3, ChunkStart = 0, ChunkEnd = (uint)chunks.Count } };
                 var work = cull.Prepare(chunks.ToArray(), draws);
                 using var pyramidBuffer = DeviceBuffer.Create(ctx, (ulong)data.Count * 4, BufferUse.Storage | BufferUse.TransferDst, "pyramid test");
                 ctx.Uploads.Write(pyramidBuffer, 0, MemoryMarshal.AsBytes(data.ToArray().AsSpan()));
-                var vectors = HizPyramid.Vectors(eye, Vector3.Distance(current, eye), cam.Right, cam.Up, cam.Back, OcclusionCullTests.TanX, OcclusionCullTests.TanY, w, h, sizes.Count, sizes[0].W, sizes[0].H, offsets);
+                var vectors = HizPyramid.Vectors(eye, Vector3.Distance(current, eye), cam.Right, cam.Up, cam.Back, OcclusionCullTests.TanX,
+                        OcclusionCullTests.TanY, w, h, sizes.Count, sizes[0].W, sizes[0].H, offsets);
                 var occlusion = new OcclusionView(new GpuBufferBinding(pyramidBuffer.Handle, 0, pyramidBuffer.Size), vectors);
                 var view = new FoliageCullView().Set([]);
                 var result = cull.Dispatch(work, view, new Vector2(current.X, current.Z), default, 0.999f, default, occlusion);
@@ -314,21 +348,26 @@ public class FoliageGpuCullTests
                 for (int i = 0; i < recordArray.Length; i++)
                 {
                     var s = spheres[i];
-                    if (pyramid.Occluded(cam, new Vector3(s.X, s.Y, s.Z), s.W, Vector3.Distance(current, eye))) expectedHidden++;
+                    if (pyramid.Occluded(cam, new Vector3(s.X, s.Y, s.Z), s.W, Vector3.Distance(current, eye)))
+                        expectedHidden++;
                     else expected.Add(new Vector3(s.X, s.Y, s.Z));
                 }
                 var counts = MemoryMarshal.Cast<byte, uint>(readback.Read(0, (ulong)(n + 1) * 4)).ToArray();
                 var tail = MemoryMarshal.Cast<byte, uint>(total.Read(0, 12)).ToArray();
                 ulong rowsAt = FoliageGpuCull.Align16((ulong)(n + 1) * 4) + FoliageGpuCull.Align16(20);
                 var rows = MemoryMarshal.Cast<byte, Matrix4x4>(readback.Read(rowsAt, (ulong)counts[n] * 64)).ToArray();
+
                 Assert.Equal(expected.Count, (int)counts[n]);
                 Assert.Equal(expectedHidden, (int)tail[2]);
+
                 foreach (var row in rows) Assert.Contains(row.Translation, expected);
                 hiddenTotal += expectedHidden;
                 keptTotal += expected.Count;
             }
         }
+
         Assert.True(hiddenTotal > 100 && keptTotal > 100, $"{hiddenTotal} hidden, {keptTotal} kept: the views should have both");
+
         ExpectClean(d!);
     }
 }

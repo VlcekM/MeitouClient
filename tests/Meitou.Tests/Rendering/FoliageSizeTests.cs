@@ -7,18 +7,24 @@ using Meitou.Game.Rendering.Frame;
 
 namespace Meitou.Tests.Rendering;
 
-/// <summary>The size classes of the Meitou <c>range</c> switch (docs/formats/foliage.md, "Mesh sizes").</summary>
+/// <summary>
+/// The size classes of the Meitou <c>range</c> switch (docs/formats/foliage.md, "Mesh sizes").
+/// </summary>
 public class FoliageSizeTests
 {
-    /// <summary>Named base-game meshes land in the class the owner's examples put them in: litter and small plants small, junk, boulders
-    /// and bushes medium, trees, ruins, wrecks, rocks, pillars, hoodoos and rock stacks large (sizes as the renderer measures them, from the decoded meshes);
-    /// of the large ones only the trees under 1000 take the normal impostor distance (<see cref="FoliageSizes.LargeBillboard"/> false).</summary>
+    /// <summary>
+    /// Named base-game meshes land in the class the owner's examples put them in: litter and small plants small, junk, boulders and bushes medium,
+    /// trees, ruins, wrecks, rocks, pillars, hoodoos and rock stacks large (sizes as the renderer measures them, from the decoded meshes); of the
+    /// large ones only the trees under 1000 take the normal impostor distance (<see cref="FoliageSizes.LargeBillboard"/> false).
+    /// </summary>
     [Fact]
     [Slow]
     public void Base_game_meshes_fall_into_the_expected_classes()
     {
         var install = GameInstall.Locate();
+
         Assert.SkipWhen(install is null, "Kenshi install not found");
+
         var db = GameDatabase.Load(LoadOrder.BaseGame(install!));
         var catalog = FoliageCatalog.Load(db);
         var assets = new AssetLocator(install!);
@@ -39,19 +45,25 @@ public class FoliageSizeTests
         foreach (var (name, cls, large) in expected)
         {
             var mesh = catalog.Meshes.Values.FirstOrDefault(m => m.Name == name);
+
             Assert.SkipWhen(mesh is null, $"{name} is not in this game's foliage (a mod or another version)");
+
             float radius = Radius(assets, mesh!);
             float size = FoliageSizes.Size(radius, mesh!);
             var got = FoliageSizes.Classify(size);
+
             Assert.True(got == cls, $"{name}: size {size:0} is {got}, expected {cls}");
             Assert.True(FoliageSizes.LargeBillboard(radius, mesh!) == large, $"{name}: large billboard should be {large}");
         }
     }
 
-    /// <summary>The renderer's bounding radius (FoliageRenderer.PumpMeshes): half the diagonal of the main and leaves meshes' box, at least 1.</summary>
+    /// <summary>
+    /// The renderer's bounding radius (FoliageRenderer.PumpMeshes): half the diagonal of the main and leaves meshes' box, at least 1.
+    /// </summary>
     static float Radius(AssetLocator assets, FoliageMesh mesh)
     {
-        Model Decode(string name) => Model.Build(OgreMeshReader.ReadFile(assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')))!), null);
+        Model Decode(string name) => Model.Build(OgreMeshReader.ReadFile(assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\',
+                '/')))!), null);
         var main = Decode(mesh.MeshPath);
         var (min, max) = (main.Min, main.Max);
         if (mesh.LeavesMesh is { } leavesName)

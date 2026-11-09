@@ -15,14 +15,16 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Player conversations (docs/simulation.md "Dialogue", docs/game/dialogue.md) on an invented database.</summary>
+/// <summary>
+/// Player conversations (docs/simulation.md "Dialogue", docs/game/dialogue.md) on an invented database.
+/// </summary>
 public class DialogueTests
 {
     static FcsReference Ref(string id, int v0 = 0) => new(id, v0, 0, 0);
 
     /// <summary>
-    /// A villager with two event-1 dialogues: "rich" (needs the player's money &gt;= 500, so it scores 1) greets with the GREETING word swap and offers to sell for c.100, which locks it;
-    /// "plain" (score 0) says hello.
+    /// A villager with two event-1 dialogues: "rich" (needs the player's money &gt;= 500, so it scores 1) greets with the GREETING word swap and
+    /// offers to sell for c.100, which locks it; "plain" (score 0) says hello.
     /// </summary>
     static PopulationData Data() => PopulationData.Create(Db([
         Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
@@ -31,7 +33,8 @@ public class DialogueTests
         Rec("money-d", FcsRecordType.DialogAction, r => r.Ints["condition name"] = DialogueConditions.PlayerMoney),
         Rec("pay-d", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.TakeMoney),
         Rec("rich-d", FcsRecordType.Dialogue, r => { r.References["conditions"] = [Ref("money-d", 500)]; r.References["lines"] = [Ref("rich-l")]; }),
-        Rec("rich-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "/GREETING/, rich /YOURNAME/."; r.References["lines"] = [Ref("buy-l"), Ref("bye-l")]; }),
+        Rec("rich-l", FcsRecordType.DialogueLine,
+                r => { r.Strings["text0"] = "/GREETING/, rich /YOURNAME/."; r.References["lines"] = [Ref("buy-l"), Ref("bye-l")]; }),
         Rec("buy-l", FcsRecordType.DialogueLine, r =>
         {
             r.Ints["speaker"] = (int)Talker.Target;
@@ -47,8 +50,9 @@ public class DialogueTests
     ]), []);
 
     /// <summary>
-    /// The Shinobi Thieves' gate (docs/game/factions-squads-towns.md "Faction rank") on the same ids: at rank 0 the villager says "I don't know you." and offers to join
-    /// (c.10,000 and DA_INCREASE_FACTION_RANK capped at 1); at rank 1 (checked with `who` 1, which the game ignores) it offers to buy.
+    /// The Shinobi Thieves' gate (docs/game/factions-squads-towns.md "Faction rank") on the same ids: at rank 0 the villager says "I don't know you."
+    /// and offers to join (c.10,000 and DA_INCREASE_FACTION_RANK capped at 1); at rank 1 (checked with `who` 1, which the game ignores) it offers to
+    /// buy.
     /// </summary>
     static PopulationData Guild() => PopulationData.Create(Db([
         Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
@@ -58,7 +62,8 @@ public class DialogueTests
         Rec("rank-who-d", FcsRecordType.DialogAction, r => { r.Ints["condition name"] = 10; r.Ints["who"] = 1; }),
         Rec("pay-d", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.TakeMoney),
         Rec("raise-d", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.IncreaseFactionRank),
-        Rec("stranger-d", FcsRecordType.Dialogue, r => { r.References["conditions"] = [Ref("rank-d", 0)]; r.References["lines"] = [Ref("stranger-l")]; }),
+        Rec("stranger-d", FcsRecordType.Dialogue,
+                r => { r.References["conditions"] = [Ref("rank-d", 0)]; r.References["lines"] = [Ref("stranger-l")]; }),
         Rec("stranger-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "I don't know you."; r.References["lines"] = [Ref("join-l")]; }),
         Rec("join-l", FcsRecordType.DialogueLine, r =>
         {
@@ -66,7 +71,8 @@ public class DialogueTests
             r.Strings["text0"] = "I'll join.";
             r.References["effects"] = [Ref("pay-d", 10000), Ref("raise-d", 1)];
         }),
-        Rec("member-d", FcsRecordType.Dialogue, r => { r.References["conditions"] = [Ref("rank-who-d", 1)]; r.References["lines"] = [Ref("member-l")]; }),
+        Rec("member-d", FcsRecordType.Dialogue,
+                r => { r.References["conditions"] = [Ref("rank-who-d", 1)]; r.References["lines"] = [Ref("member-l")]; }),
         Rec("member-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "Need to sell off some junk?"),
     ]), []);
 
@@ -83,7 +89,8 @@ public class DialogueTests
             Data = data ?? DialogueTests.Data();
             Dialogue = new DialogueSystem(Data);
             var ground = new OpenGroundWalkability((_, _) => 150);
-            World = new SimWorld(new WorldSettings { Seed = 5, Threads = threads, PublishSnapshots = false }, ground, [new MovementSystem(new PathService(ground, true)), Dialogue]);
+            World = new SimWorld(new WorldSettings { Seed = 5, Threads = threads, PublishSnapshots = false }, ground,
+                    [new MovementSystem(new PathService(ground, true)), Dialogue]);
             World.Player.Faction = Data.PlayerFaction;
             Hero = Spawn("hero", Vector2.Zero, Data.PlayerFaction, true, "");
             Villager = Spawn("Villager", new Vector2(apart, 0), Data.FactionIndex("f-d"), false, "npc-d");
@@ -101,7 +108,8 @@ public class DialogueTests
             cold.RecordId = record;
             cold.Inventory = new Inventory();
             cold.SquadId = squad.Id;
-            var id = World.Characters.Spawn(new CharacterHot { Position = new Vector3(at.X, 150, at.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+            var id = World.Characters.Spawn(new CharacterHot { Position = new Vector3(at.X, 150, at.Y), Health = 100, MaxSpeed = 60, WalkSpeed = 15,
+                    Task = (byte)CharacterTask.Idle }, cold, 0);
             squad.Members.Add(id);
             squad.Leader = id;
             return id;
@@ -115,6 +123,7 @@ public class DialogueTests
     public void The_best_scoring_passing_dialogue_is_said_with_its_word_swaps_and_its_effects_lock_it()
     {
         var data = Data();
+
         Assert.Equal(1, data.Dialogue.Node("rich-d")!.ListScore);   // one condition
         Assert.Equal(0, data.Dialogue.Node("plain-d")!.ListScore);
 
@@ -122,42 +131,57 @@ public class DialogueTests
         v.World.Player.Money = 100;   // too poor for "rich": the condition fails, "plain" is said
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
         v.World.RunTicks(2);
+
         Assert.Equal(("Hello.", "[Leave]"), (v.Talk!.Text, v.Talk.Choices.Single()));
+
         v.Say(new DialogueChoice(0) { Tick = 0 });
         v.World.RunTicks(1);
+
         Assert.Null(v.Talk);
 
         v.World.Player.Money = 1000;
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
         v.World.RunTicks(2);
+
         Assert.Equal("Well met, rich hero.", v.Talk!.Text);
         Assert.Equal(["Here, c.100. [c.100]", "Bye."], v.Talk.Choices);   // one " [c.N]" per take-money effect (FUN_140675320)
+
         v.Say(new DialogueChoice(0) { Tick = 0 });
         v.World.RunTicks(1);
+
         Assert.Null(v.Talk);   // nothing follows the reply
         Assert.Equal(900, v.World.Player.Money);
+
         var cold = v.World.Characters.Cold(v.Villager.Slot)!;
+
         Assert.True(cold.DialogueLocks!["rich-d"]);
 
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });   // locked: back to "plain"
         v.World.RunTicks(2);
+
         Assert.Equal("Hello.", v.Talk!.Text);
 
         // The lock is saved as the original's lok0 pair.
         var state = new FcsRecord { StringId = "s", RecordType = FcsRecordType.GamestateCharacter };
         DialogueSave.Write(state, cold);
+
         Assert.Equal(("rich-d", true), (state.Strings["lok0"], state.Bools["lok0"]));
+
         var loaded = new Combat.Combatant { Name = "x" }.MakeCold();
         DialogueSave.Read(state, loaded);
+
         Assert.True(loaded.DialogueLocks!["rich-d"]);
     }
 
-    /// <summary>A dumb villager (Agnu, Ray) with one dialogue; <paramref name="listed"/>: the dialogue's <c>is character</c> names it.</summary>
+    /// <summary>
+    /// A dumb villager (Agnu, Ray) with one dialogue; <paramref name="listed"/>: the dialogue's <c>is character</c> names it.
+    /// </summary>
     static PopulationData Dumb(bool listed) => PopulationData.Create(Db([
         Rec("204-gamedata.base", FcsRecordType.Faction, r => r.Name = "Nameless"),
         Rec("f-d", FcsRecordType.Faction, r => r.Name = "Villagers"),
         Rec("npc-d", FcsRecordType.Character, r => { r.Name = "Villager"; r.Bools["dumb"] = true; r.References["dialogue"] = [Ref("plain-d")]; }),
-        Rec("plain-d", FcsRecordType.Dialogue, r => { r.References["lines"] = [Ref("plain-l")]; if (listed) r.References["is character"] = [Ref("npc-d")]; }),
+        Rec("plain-d", FcsRecordType.Dialogue,
+                r => { r.References["lines"] = [Ref("plain-l")]; if (listed) r.References["is character"] = [Ref("npc-d")]; }),
         Rec("plain-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "Hello."),
     ]), []);
 
@@ -169,12 +193,14 @@ public class DialogueTests
         {
             v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
             v.World.RunTicks(2);
+
             Assert.Null(v.Talk);
         }
         using (var v = new Village(data: Dumb(listed: true)))
         {
             v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
             v.World.RunTicks(2);
+
             Assert.Equal("Hello.", v.Talk!.Text);
         }
     }
@@ -187,21 +213,25 @@ public class DialogueTests
         v.World.Player.Money = 12000;
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
         v.World.RunTicks(2);
+
         Assert.Equal(("I don't know you.", "I'll join. [c.10,000]"), (v.Talk!.Text, v.Talk.Choices.Single()));
+
         v.Say(new DialogueChoice(0) { Tick = 0 });
         v.World.RunTicks(1);
+
         Assert.Equal((1, 2000), (v.Data.Relations.Rank(guild), v.World.Player.Money));
 
         v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
         v.World.RunTicks(2);
+
         Assert.Equal("Need to sell off some junk?", v.Talk!.Text);
         Assert.False(v.Data.Relations.RaiseRank(guild, 1));   // the join line's cap
         Assert.Equal(1, v.Data.Relations.Rank(guild));
     }
 
     /// <summary>
-    /// A guard greets a stranger of another squad (event 3; its line refuses player targets) with a crowd trigger: his mate cheers (event 74), and the chain passes to the line the
-    /// stranger says back (speaker T_TARGET).
+    /// A guard greets a stranger of another squad (event 3; its line refuses player targets) with a crowd trigger: his mate cheers (event 74), and
+    /// the chain passes to the line the stranger says back (speaker T_TARGET).
     /// </summary>
     [Fact]
     public void A_greeting_between_npcs_sets_off_the_crowd_and_the_target_answers()
@@ -239,7 +269,8 @@ public class DialogueTests
             }
             var cold = new Combat.Combatant { Name = name }.MakeCold();
             (cold.Faction, cold.IsPlayer, cold.RecordId, cold.Inventory, cold.SquadId) = (faction, player, record, new Inventory(), last!.Id);
-            var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+            var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15,
+                    Task = (byte)CharacterTask.Idle }, cold, 0);
             last.Members.Add(id);
             if (!join) last.Leader = id;
             return id;
@@ -255,13 +286,20 @@ public class DialogueTests
             world.RunTicks(1);
             foreach (var s in dialogue.PublishSpeech()) said.Add($"{world.Characters.Cold(s.Speaker.Slot)!.Name}: {s.Text}");
         }
+
         // Which of the two greets depends on the scan order; the other cheers.
         string[] all = [.. said.Order()];
-        Assert.True(all.SequenceEqual(["Guard: Hail, Stranger.", "Mate: Hurrah!", "Stranger: Hail yourself."]) || all.SequenceEqual(["Guard: Hurrah!", "Mate: Hail, Stranger.", "Stranger: Hail yourself."]),
+
+        Assert.True(all.SequenceEqual(["Guard: Hail, Stranger.", "Mate: Hurrah!", "Stranger: Hail yourself."]) || all.SequenceEqual(["Guard: Hurrah!",
+                "Mate: Hail, Stranger.", "Stranger: Hail yourself."]),
+
             string.Join(" | ", all));
     }
 
-    /// <summary>A guard's line with DA_TALK_TO_LEADER sends his squad's leader, 200 away, to the hero; within reach the leader opens the conversation window (event 1).</summary>
+    /// <summary>
+    /// A guard's line with DA_TALK_TO_LEADER sends his squad's leader, 200 away, to the hero; within reach the leader opens the conversation window
+    /// (event 1).
+    /// </summary>
     [Fact]
     public void Talk_to_leader_sends_the_leader_to_open_a_conversation()
     {
@@ -272,13 +310,15 @@ public class DialogueTests
             Rec("boss-c", FcsRecordType.Character, r => { r.Name = "Boss"; r.References["dialogue"] = [Ref("boss-d")]; }),
             Rec("leader-da", FcsRecordType.DialogAction, r => r.Ints["action name"] = DialogueActions.TalkToLeader),
             Rec("ask-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("ask-l")]),
-            Rec("ask-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "Talk to the boss."; r.References["effects"] = [Ref("leader-da")]; }),
+            Rec("ask-l", FcsRecordType.DialogueLine,
+                    r => { r.Strings["text0"] = "Talk to the boss."; r.References["effects"] = [Ref("leader-da")]; }),
             Rec("boss-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("boss-l")]),
             Rec("boss-l", FcsRecordType.DialogueLine, r => r.Strings["text0"] = "What do you want?"),
         ]), []);
         var dialogue = new DialogueSystem(data);
         var ground = new OpenGroundWalkability((_, _) => 150);
-        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, ground, [new MovementSystem(new PathService(ground, true)), dialogue]);
+        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, ground,
+                [new MovementSystem(new PathService(ground, true)), dialogue]);
         world.Player.Faction = data.PlayerFaction;
         int villagers = data.FactionIndex("f-d");
         Squad? last = null;
@@ -291,7 +331,8 @@ public class DialogueTests
             }
             var cold = new Combat.Combatant { Name = name }.MakeCold();
             (cold.Faction, cold.IsPlayer, cold.RecordId, cold.Inventory, cold.SquadId) = (faction, player, record, new Inventory(), last!.Id);
-            var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+            var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15,
+                    Task = (byte)CharacterTask.Idle }, cold, 0);
             last.Members.Add(id);
             if (!join) last.Leader = id;
             return id;
@@ -302,20 +343,24 @@ public class DialogueTests
 
         world.Commands.Enqueue(new TalkOrder(hero, guard) { Tick = world.Tick });
         world.RunTicks(2);
+
         Assert.Equal(("Talk to the boss.", "[Leave]"), (dialogue.PublishConversation()!.Text, dialogue.PublishConversation()!.Choices.Single()));
+
         world.Commands.Enqueue(new DialogueChoice(0) { Tick = world.Tick });
         world.RunTicks(1);
+
         Assert.Null(dialogue.PublishConversation());
 
         for (int i = 0; i < 600 && dialogue.PublishConversation() is null; i++) world.RunTicks(1);
         var talk = dialogue.PublishConversation();
+
         Assert.NotNull(talk);
         Assert.Equal((boss, "What do you want?"), (talk.Npc, talk.Text));
     }
 
     /// <summary>
-    /// A slaver of the jail town's faction whose reply carries DA 42 (CHOOSE_SLAVES_BUYING) lists its caged slave at the formula price, trunc(20 + 15 + 10.4) x 100 (docs/game/economy.md
-    /// 12); buying it takes the money and frees it from cage and slavery, without joining the hero's squad.
+    /// A slaver of the jail town's faction whose reply carries DA 42 (CHOOSE_SLAVES_BUYING) lists its caged slave at the formula price, trunc(20 + 15
+    /// + 10.4) x 100 (docs/game/economy.md 12); buying it takes the money and frees it from cage and slavery, without joining the hero's squad.
     /// </summary>
     [Fact]
     public void Buying_a_caged_slave_lists_it_at_its_value_and_paying_frees_it()
@@ -325,11 +370,13 @@ public class DialogueTests
             Rec("buy-da", FcsRecordType.DialogAction, r => r.Ints["action name"] = 42),
             Rec("trade-d", FcsRecordType.Dialogue, r => r.References["lines"] = [Ref("trade-l")]),
             Rec("trade-l", FcsRecordType.DialogueLine, r => { r.Strings["text0"] = "Looking to trade?"; r.References["lines"] = [Ref("buy-l")]; }),
-            Rec("buy-l", FcsRecordType.DialogueLine, r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "I'm looking to buy some slaves"; r.References["effects"] = [Ref("buy-da")]; }),
+            Rec("buy-l", FcsRecordType.DialogueLine,
+                    r => { r.Ints["speaker"] = (int)Talker.Target; r.Strings["text0"] = "I'm looking to buy some slaves"; r.References["effects"] = [Ref("buy-da")]; }),
         ]);
         var dialogue = new DialogueSystem(data);
         var ground = new OpenGroundWalkability((_, _) => 150);
-        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, ground, [new MovementSystem(new PathService(ground, true)), dialogue]);
+        using var world = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, ground,
+                [new MovementSystem(new PathService(ground, true)), dialogue]);
         world.Fixtures.RegisterSite(world, data, 0);
         world.Player.Faction = data.PlayerFaction;
         int city = data.FactionIndex("50-a");
@@ -339,14 +386,16 @@ public class DialogueTests
             var cold = new Combat.Combatant { Name = name }.MakeCold();
             (cold.Inventory, cold.SquadId) = (new Inventory(), squad.Id);
             tweak(cold);
-            var id = world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+            var id = world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15,
+                    Task = (byte)CharacterTask.Idle }, cold, 0);
             squad.Members.Add(id);
             if (squad.Leader.IsNone) squad.Leader = id;
             return id;
         }
         Squad NewSquad(int faction, int town = -1)
         {
-            var s = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = faction, Town = town, HomeCentre = new Vector2(centre.X, centre.Z), HomeRadius = 500 };
+            var s = new Squad { Id = world.Squads.NextId(), TemplateId = "t", Faction = faction, Town = town,
+                    HomeCentre = new Vector2(centre.X, centre.Z), HomeRadius = 500 };
             world.Squads.Add(s);
             return s;
         }
@@ -362,20 +411,26 @@ public class DialogueTests
         var sc = world.Characters.Cold(slave.Slot)!;
         Meitou.Simulation.Locks.FixtureRegistry.Enslave(world, sc, city);
         var cage = world.Fixtures.Find("0.0:cageA")!;
+
         Assert.True(world.Fixtures.Imprison(world, slave, cage));
+
         world.Player.Money = 10000;
 
         world.Commands.Enqueue(new TalkOrder(hero, slaver) { Tick = world.Tick });
         world.RunTicks(2);
+
         Assert.Equal("Looking to trade?", dialogue.PublishConversation()!.Text);
+
         world.Commands.Enqueue(new DialogueChoice(0) { Tick = world.Tick });
         world.RunTicks(2);
         var window = dialogue.PublishCharacterTrade()!;
+
         Assert.Equal("Buying Slaves", window.Title);
         Assert.Equal([(slave, 4500L)], window.Rows.Select(r => (r.Character, r.Price)));
 
         world.Commands.Enqueue(new ConfirmCharacterTrade([slave]) { Tick = world.Tick });
         world.RunTicks(2);
+
         Assert.Null(dialogue.PublishCharacterTrade());
         Assert.Equal(5500, world.Player.Money);
         Assert.Equal((0, false, false), (sc.SlaveState, sc.IsImprisoned, sc.IsPlayer));
@@ -383,7 +438,9 @@ public class DialogueTests
         Assert.DoesNotContain(slave, players.Members);
     }
 
-    /// <summary>The hero walks 300 up to the villager and talks twice (rich, buying; then plain), pinned in <see cref="GoldenHashTests"/>.</summary>
+    /// <summary>
+    /// The hero walks 300 up to the villager and talks twice (rich, buying; then plain), pinned in <see cref="GoldenHashTests"/>.
+    /// </summary>
     internal static List<ulong> Scripted(int threads)
     {
         using var v = new Village(threads, apart: 300);
@@ -399,12 +456,16 @@ public class DialogueTests
             if (target == 310) v.Say(new TalkOrder(v.Hero, v.Villager) { Tick = 0 });
             hashes.Add(v.World.StateHash());
         }
+
         Assert.Equal("Well met, rich hero.|Hello.|", said);   // it covers what it is for: an approach, a choice with effects, the lock
+
         return hashes;
     }
 }
 
-/// <summary>Talking to the Hub's barman, and the residents' speech bubbles, over the installed game's data. Skipped without the game.</summary>
+/// <summary>
+/// Talking to the Hub's barman, and the residents' speech bubbles, over the installed game's data. Skipped without the game.
+/// </summary>
 [Slow]
 public class DialogueInstallTests
 {
@@ -412,6 +473,7 @@ public class DialogueInstallTests
     public void The_hub_barman_talks_and_offers_two_replies_and_a_resident_says_a_speech_bubble()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
+
         var install = InstallData.Install!;
         var db = InstallData.BaseGame!;
         var levels = WorldLevelData.LoadBaseGame(install, includeInteriors: true);
@@ -442,18 +504,22 @@ public class DialogueInstallTests
         squad.Leader = hero;
 
         Assert.True(world.CanTalk(table.IdOf(barman)));
+
         world.Commands.Enqueue(new TalkOrder(hero, table.IdOf(barman)) { Tick = world.Tick });
         world.RunTicks(2);
         var talk = dialogue.PublishConversation();
+
         Assert.NotNull(talk);
         Assert.Equal("Barman", talk.SpeakerName);
         Assert.NotEmpty(talk.Text);
         Assert.Equal(2, talk.Choices.Count);   // trade or decline; their texts are picked at random
 
         // A resident next to the player character says a speech bubble within a few game hours.
-        // The Hub is allied with the player: its residents have event 67 lines (most event 3 lines are disabled or conditional in the data); each is said at a chance of 30 % once per squad per half game hour, so the loop spans a few of those.
+        // The Hub is allied with the player: its residents have event 67 lines (most event 3 lines are disabled or conditional in the data); each is
+        // said at a chance of 30 % once per squad per half game hour, so the loop spans a few of those.
         for (int i = 0; i < table.HighWater; i++)
-            if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: false } resident) data.Relations.Set(resident.Faction, data.PlayerFaction, 100);
+            if (table.Next[i].Alive && table.Cold(i) is { IsPlayer: false } resident)
+                data.Relations.Set(resident.Faction, data.PlayerFaction, 100);
 
         bool spoke = false;
         for (int i = 0; i < 8000 && !spoke; i++)
@@ -461,22 +527,30 @@ public class DialogueInstallTests
             world.RunTicks(1);
             spoke = dialogue.PublishSpeech().Any(s => s.Text.Length > 0);
         }
+
         Assert.True(spoke);
     }
 
-    /// <summary>DC 69 HAS_ILLEGAL_ITEM: a Holy Nation gate guard's inspection finds the player's Hashish (the faction culture's <c>illegal goods</c>) and posts the find once.</summary>
+    /// <summary>
+    /// DC 69 HAS_ILLEGAL_ITEM: a Holy Nation gate guard's inspection finds the player's Hashish (the faction culture's <c>illegal goods</c>) and
+    /// posts the find once.
+    /// </summary>
     [Fact]
     public void A_holy_nation_gate_guard_finds_hashish_and_posts_the_smuggling_once()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");
+
         var db = InstallData.BaseGame!;
         var data = PopulationData.Create(db, []);
         var dialogue = new DialogueSystem(data);
         var ground = new OpenGroundWalkability((_, _) => 150);
-        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, ground, [new MovementSystem(new PathService(ground, true)), dialogue]);
+        using var world = new SimWorld(new WorldSettings { Seed = 1, PublishSnapshots = false }, ground,
+                [new MovementSystem(new PathService(ground, true)), dialogue]);
         world.Player.Faction = data.PlayerFaction;
+
         // The check (DIALOGUE 52700) starts locked, and its male greeting (DIALOGUE_LINE 52728) asks for one personality tag of the guard.
-        int tag = db.Find("52728-Dialogue.mod")!.GetReferences("conditions").Select(c => db.Find(c.TargetStringId)!).First(a => a.GetInt("condition name") == 26).GetInt("tag");
+        int tag = db.Find("52728-Dialogue.mod")!.GetReferences("conditions").Select(c => db.Find(c.TargetStringId)!)
+                .First(a => a.GetInt("condition name") == 26).GetInt("tag");
 
         CharacterId Spawn(string name, float x, int faction, bool player, string template)
         {
@@ -487,19 +561,24 @@ public class DialogueInstallTests
             cold.IsPlayer = player;
             cold.Inventory = new Inventory();
             cold.SquadId = squad.Id;
-            if (!player) (cold.Personality, cold.DialogueLocks) = (tag, new(StringComparer.Ordinal) { ["52700-Dialogue.mod"] = false });   // part 1 (53178) unlocks the check as it stops the player
-            var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15, Task = (byte)CharacterTask.Idle }, cold, 0);
+            // part 1 (53178) unlocks the check as it stops the player
+            if (!player) (cold.Personality, cold.DialogueLocks) = (tag, new(StringComparer.Ordinal) { ["52700-Dialogue.mod"] = false });
+            var id = world.Characters.Spawn(new CharacterHot { Position = new Vector3(x, 150, 0), Health = 100, MaxSpeed = 60, WalkSpeed = 15,
+                    Task = (byte)CharacterTask.Idle }, cold, 0);
             squad.Members.Add(id);
             squad.Leader = id;
             return id;
         }
         var hero = Spawn("hero", 0, data.PlayerFaction, true, "");
         var guard = Spawn("Guard", 20, data.FactionIndex("1083-gamedata.base"), false, "18881-rebirth.mod");   // Holy Gate Guards
+
         Assert.True(world.Characters.TryResolveNext(hero, out int hs));
         Assert.True(world.Characters.Cold(hs)!.Inventory!.Add(new ItemInstance { Record = "1230-gamedata.base" }));   // Hashish
 
         world.Commands.Enqueue(new TalkOrder(hero, guard) { Tick = world.Tick });
-        // Show the gear, then take the first reply each time until the guard orders the seizure ("/SEIZE/" says "Attack"); every line on the way re-checks DC 69.
+
+        // Show the gear, then take the first reply each time until the guard orders the seizure ("/SEIZE/" says "Attack"); every line on the way
+        // re-checks DC 69.
         var posted = new List<string>();
         string said = "";
         for (int step = 0; step < 12 && !said.StartsWith("Attack", StringComparison.Ordinal); step++)
@@ -507,14 +586,19 @@ public class DialogueInstallTests
             world.RunTicks(2);
             posted.AddRange(world.TakeMessages());
             var talk = dialogue.PublishConversation();
+
             Assert.NotNull(talk);
+
             said = talk.Text;
             int gear = talk.Choices.ToList().FindIndex(t => t.Contains("Show him your gear", StringComparison.Ordinal));
             world.Commands.Enqueue(new DialogueChoice(Math.Max(0, gear)) { Tick = world.Tick });
         }
+
         Assert.StartsWith("Attack", said);
+
         world.RunTicks(2);
         posted.AddRange(world.TakeMessages());
+
         Assert.Equal(["hero has been discovered smuggling Hashish"], posted.Where(m => m.Contains("smuggling", StringComparison.Ordinal)));
     }
 }

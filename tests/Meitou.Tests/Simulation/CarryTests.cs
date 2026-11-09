@@ -13,13 +13,20 @@ using static Meitou.Tests.Bodies.BodyFixtures;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Carrying downed characters, rescue and looting (docs/game/carry-loot.md, docs/simulation.md "Carrying, rescue and looting").</summary>
+/// <summary>
+/// Carrying downed characters, rescue and looting (docs/game/carry-loot.md, docs/simulation.md "Carrying, rescue and looting").
+/// </summary>
 public class CarryTests
 {
-    /// <summary>The fixture's Greenlander, carriable like every base race but the Leviathan.</summary>
-    static readonly RaceData Person = new() { StringId = "17-c", Name = "Greenlander", StatMultipliers = Human.StatMultipliers, Anatomy = Human.Anatomy, Carriable = true };
+    /// <summary>
+    /// The fixture's Greenlander, carriable like every base race but the Leviathan.
+    /// </summary>
+    static readonly RaceData Person = new() { StringId = "17-c", Name = "Greenlander", StatMultipliers = Human.StatMultipliers,
+            Anatomy = Human.Anatomy, Carriable = true };
 
-    /// <summary>Hand-made characters on open ground with the game's movement, body and carry systems (in the game's order).</summary>
+    /// <summary>
+    /// Hand-made characters on open ground with the game's movement, body and carry systems (in the game's order).
+    /// </summary>
     sealed class Rig : IDisposable
     {
         public SimWorld World { get; }
@@ -29,23 +36,29 @@ public class CarryTests
         public Rig(int threads = 1, int minPartition = 16, FactionRelations? relations = null, ulong seed = 5, CarrySettings? settings = null)
         {
             Carry = new CarrySystem(BaseGame, BodyOptions.Default, 1, settings) { Relations = relations };
-            var systems = new List<ITickSystem> { new PlayerSystem(), new MovementSystem(new PathService(_walk, true)), new BodySystem(BaseGame, BodyOptions.Default), Carry };
-            World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition }, _walk, systems);
+            var systems = new List<ITickSystem> { new PlayerSystem(), new MovementSystem(new PathService(_walk, true)),
+                    new BodySystem(BaseGame, BodyOptions.Default), Carry };
+            World = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = minPartition },
+                    _walk, systems);
         }
 
-        public CharacterId Add(float x, float z, bool player = true, int squad = 0, int faction = 0, float strength = 50, RaceData? race = null, CharacterTask task = CharacterTask.Idle, float yaw = 0, bool leader = false)
+        public CharacterId Add(float x, float z, bool player = true, int squad = 0, int faction = 0, float strength = 50, RaceData? race = null,
+                CharacterTask task = CharacterTask.Idle, float yaw = 0, bool leader = false)
         {
             var stats = new CharacterStats();
             stats[StatsEnumerated.Strength] = strength;
             var cold = new CharacterCold
             {
-                Name = "C" + World.Characters.HighWater, Race = race ?? Person, Stats = stats, Medical = MedicalState.Create(race ?? Person, strength), Inventory = new Inventory(),
+                Name = "C" + World.Characters.HighWater, Race = race ?? Person, Stats = stats,
+                        Medical = MedicalState.Create(race ?? Person, strength), Inventory = new Inventory(),
                 IsPlayer = player, SquadId = squad, Faction = faction,
             };
             var hot = new CharacterHot { Position = new Vector3(x, 300, z), MaxSpeed = 40, WalkSpeed = 15, Task = (byte)task, Yaw = yaw };
             var id = World.Characters.Spawn(hot, cold, 0);
             var sq = World.Squads.Find(squad);
-            if (sq is null) World.Squads.Add(sq = new Squad { Id = squad, TemplateId = "t", Faction = faction, HomeCentre = new Vector2(x, z), HomeRadius = 100 });
+            if (sq is null)
+                World.Squads.Add(sq = new Squad { Id = squad, TemplateId = "t", Faction = faction, HomeCentre = new Vector2(x, z),
+                        HomeRadius = 100 });
             sq.Members.Add(id);
             if (leader || sq.Leader.IsNone) sq.Leader = id;
             return id;
@@ -57,7 +70,9 @@ public class CarryTests
         public CharacterTask Task(CharacterId id) => (CharacterTask)Hot(id).Task;
         public void Say(SimCommand c) => World.Commands.Enqueue(c);
 
-        /// <summary>Orders a pick-up and runs until the lift is over; returns the ticks it took.</summary>
+        /// <summary>
+        /// Orders a pick-up and runs until the lift is over; returns the ticks it took.
+        /// </summary>
         public int PickUp(CharacterId carrier, CharacterId body, int max = 1500)
         {
             Say(new PickUpOrder([carrier], body) { Tick = World.Tick });
@@ -93,17 +108,25 @@ public class CarryTests
             if (liftStart < 0 && rig.Cold(carrier).LiftTime >= 0) liftStart = rig.World.Tick;
             if (attached < 0 && rig.Cold(carrier).Carrying == body) attached = rig.World.Tick;
         }
+
         Assert.True(liftStart > 0 && attached > 0, "it walked up and lifted");
         Assert.True(Flat(rig.Hot(carrier).Position, new Vector3(1000, 0, 2000)) > 70, "it walked to the body");
-        // The clip is 1 s here: the body is attached once more than 0.4 of it has played (12 or 13 ticks of 1/30 s, by float rounding), the lift ends at 0.95.
+
+        // The clip is 1 s here: the body is attached once more than 0.4 of it has played (12 or 13 ticks of 1/30 s, by float rounding), the lift ends
+        // at 0.95.
         Assert.InRange(attached - liftStart, 11, 13);
         Assert.Equal(CharacterTask.Idle, rig.Task(carrier));
         Assert.Equal(carrier, rig.Cold(body).CarriedBy);
+
         rig.World.RunTicks(2);
+
         Assert.Equal(rig.Hot(carrier).Position, rig.Hot(body).Position);
-        // The load is carry person weight (30 in the base game) on top of an empty inventory: strength 5 carries 1.2 x 5 + 15 = 21 freely, so the factor drops.
+
+        // The load is carry person weight (30 in the base game) on top of an empty inventory: strength 5 carries 1.2 x 5 + 15 = 21 freely, so the
+        // factor drops.
         var c = rig.Cold(carrier);
         float factor = Encumbrance.Factor(BaseGame, 0, true, 5, c.Medical!.StatMultiplier(StatsEnumerated.Strength));
+
         Assert.Equal((21 - 0.05f * 30) / (0.95f * 30), Encumbrance.Factor(BaseGame, 0, true, 5), 4);
         Assert.True(factor < 1);
         Assert.Equal(Speed.Run(Person, c.Stats!, c.Medical!, factor), rig.Hot(carrier).MaxSpeed, 3);
@@ -147,14 +170,19 @@ public class CarryTests
         rig.World.RunTick();
         rig.PickUp(a, awake);
         rig.PickUp(b, down);
+
         Assert.True(rig.Cold(awake).CarriedAwake);
         Assert.True(rig.Body(down).Incapacitated && !rig.Cold(down).CarriedAwake);
+
         for (int t = 0; t < 1500 && !rig.Cold(down).CarriedBy.IsNone; t++) rig.World.RunTick();
+
         Assert.False(rig.Body(down).Incapacitated);
         Assert.True(rig.Cold(down).CarriedBy.IsNone, "set down once it came round");
         Assert.Equal(a, rig.Cold(awake).CarriedBy);
+
         rig.Say(new PutDownOrder([a]) { Tick = rig.World.Tick });
         for (int t = 0; t < 100 && !rig.Cold(awake).CarriedBy.IsNone; t++) rig.World.RunTick();
+
         Assert.True(rig.Cold(awake).CarriedBy.IsNone);
         Assert.False(rig.Cold(awake).CarriedAwake);
         Assert.False(rig.Body(awake).Incapacitated, "a friendly put-down knocks no one out");
@@ -168,18 +196,23 @@ public class CarryTests
     // Factions: 0 townsfolk (neutral), 1 the player (Nameless).
     static FactionRelations TwoFactions()
     {
-        var table = FactionRelations.Build([new FactionData { Id = "townsfolk", Name = "townsfolk", DefaultRelation = 10 }, new FactionData { Id = "Nameless", Name = "Nameless", DefaultRelation = 10 }]);
+        var table = FactionRelations.Build([new FactionData { Id = "townsfolk", Name = "townsfolk", DefaultRelation = 10 },
+                new FactionData { Id = "Nameless", Name = "Nameless", DefaultRelation = 10 }]);
         table.PlayerFaction = 1;
         return table;
     }
 
-    /// <summary>A player looter, a knocked-out townsman with three items, and a townsman 300 units away facing the looter or away from it. Returns the relation after the loot.</summary>
+    /// <summary>
+    /// A player looter, a knocked-out townsman with three items, and a townsman 300 units away facing the looter or away from it. Returns the
+    /// relation after the loot.
+    /// </summary>
     static (float Relation, LootEntry Loot) LootScene(bool facing)
     {
         var relations = TwoFactions();
         using var rig = new Rig(relations: relations);
         var looter = rig.Add(1000, 2000, faction: 1);
         var victim = rig.Add(1100, 2000, player: false, squad: 1, faction: 0);
+
         // The witness stands at x 1400 and looks along -X (yaw -90 degrees) at the scene, or along +X away from it.
         rig.Add(1400, 2000, player: false, squad: 2, faction: 0, yaw: facing ? -MathF.PI / 2 : MathF.PI / 2);
         foreach (var r in new[] { "a", "b", "c" }) rig.Cold(victim).Inventory!.Add(Item(r, 1, 1));
@@ -188,10 +221,12 @@ public class CarryTests
         float before = relations.Get(0, 1);
         rig.Say(new LootOrder([looter], victim) { Tick = rig.World.Tick });
         for (int t = 0; t < 1000 && rig.Carry.Loots.Count == 0; t++) rig.World.RunTick();
+
         Assert.Equal(10, before);
         Assert.Equal(3, rig.Cold(looter).Inventory!.Items.Count);
         Assert.Empty(rig.Cold(victim).Inventory!.Items);
         Assert.Equal(CharacterTask.Idle, rig.Task(looter));
+
         return (relations.Get(0, 1), rig.Carry.Loots.Single());
     }
 
@@ -199,10 +234,13 @@ public class CarryTests
     public void Looting_seen_by_a_member_of_the_victims_faction_is_a_theft_and_unseen_it_is_not()
     {
         var (seen, loot) = LootScene(facing: true);
+
         Assert.True(loot.Witnessed);
         Assert.Equal(3, loot.Taken);
         Assert.Equal(10, seen);   // looting moves no relation (the game has no such relation event)
+
         var (unseen, quiet) = LootScene(facing: false);
+
         Assert.False(quiet.Witnessed);
         Assert.Equal(10, unseen);
     }
@@ -221,10 +259,13 @@ public class CarryTests
         rig.World.RunTick();
         rig.Say(new LootOrder([looter], animal) { Tick = rig.World.Tick });
         for (int t = 0; t < 1000 && rig.Carry.Loots.Count == 0; t++) rig.World.RunTick();
+
         Assert.Equal((true, DeathCause.Butchered), (rig.Body(animal).Dead, rig.Body(animal).Cause));
         Assert.Contains($"{rig.Cold(animal).Name} has been butchered", rig.World.TakeMessages());
+
         // The taken units are the looter's now, no longer death items.
         var held = rig.Cold(looter).Inventory!.Items;
+
         Assert.Equal((5, false), (held.Sum(i => i.Quantity), held.Any(i => i.Death)));
         Assert.Empty(rig.Cold(animal).Inventory!.Items);
     }
@@ -232,8 +273,8 @@ public class CarryTests
     // ------------------------------------------------------------------ determinism
 
     /// <summary>
-    /// A scripted game: player characters pick up, carry, put down and loot; one has the rescue job; an NPC squad rescues its leader; a carrier is knocked out mid-carry.
-    /// Cut into one-slot partitions; pinned in <see cref="GoldenHashTests"/>.
+    /// A scripted game: player characters pick up, carry, put down and loot; one has the rescue job; an NPC squad rescues its leader; a carrier is
+    /// knocked out mid-carry. Cut into one-slot partitions; pinned in <see cref="GoldenHashTests"/>.
     /// </summary>
     internal static List<ulong> Scripted(int threads)
     {
@@ -247,8 +288,13 @@ public class CarryTests
         var down3 = rig.Add(900, 2200, squad: 3, faction: 1);
         var leader = rig.Add(1600, 2000, player: false, squad: 4, faction: 0, leader: true);
         var rescuer = rig.Add(1650, 2000, player: false, squad: 4, faction: 0, task: CharacterTask.Wander);
-        // Its AI chose goal 142 (Find and rescue leader, listed by a few retreat packages); a squad whose package does not list it leaves its leader lying.
-        rig.Cold(rescuer).Ai = new Meitou.Simulation.Ai.AiMind { Squad = rig.World.Squads.Find(4)!, Goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("142", "Find and rescue leader", Data.Gameplay.Ai.TaskType.FindAndRescueLeader, Data.Gameplay.Ai.TaskPriority.NonUrgent, Data.Gameplay.Ai.TaskTargetType.Specific, Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 100, 1) };
+
+        // Its AI chose goal 142 (Find and rescue leader, listed by a few retreat packages); a squad whose package does not list it leaves its leader
+        // lying.
+        rig.Cold(rescuer).Ai = new Meitou.Simulation.Ai.AiMind { Squad = rig.World.Squads.Find(4)!,
+                Goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("142", "Find and rescue leader",
+                Data.Gameplay.Ai.TaskType.FindAndRescueLeader, Data.Gameplay.Ai.TaskPriority.NonUrgent, Data.Gameplay.Ai.TaskTargetType.Specific,
+                Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 100, 1) };
         rig.Add(1700, 2050, player: false, squad: 4, faction: 0, task: CharacterTask.Idle, yaw: -MathF.PI / 2);   // the witness, facing the looting
         foreach (var r in new[] { "a", "b", "c", "d" }) rig.Cold(down1).Inventory!.Add(Item(r, 2, 2));
         rig.Body(down1).KnockOut(10000);
@@ -278,9 +324,12 @@ public class CarryTests
             hashes.Add(rig.World.StateHash());
         }
         string happened = $"carried {string.Join(", ", carried)}; loots {string.Join(", ", rig.Carry.Loots.Select(l => $"{l.Taken}/{l.Left}{(l.Witnessed ? " seen" : "")}"))}; relation {relations.Get(0, 1)}";
-        // The script lifts (p1 a townsman, p2 a downed mate, an NPC its leader; p3's rescue job finds no bed in this bedless world, so it lifts no one), loots in sight of the
+
+        // The script lifts (p1 a townsman, p2 a downed mate, an NPC its leader; p3's rescue job finds no bed in this bedless world, so it lifts no
+        // one), loots in sight of the
         // townsfolk (the relation stays 10) and loots an emptied body.
         Assert.Equal("carried 3.0<-0.0, 5.0<-1.0, 6.0<-7.0; loots 4/0 seen, 0/0; relation 10", happened);
+
         return hashes;
     }
 
@@ -288,17 +337,20 @@ public class CarryTests
     public void A_carried_body_that_came_round_is_put_down_unless_it_is_chained_and_the_carriers_enemy()
     {
         // Goal 169's desire (FUN_1405a0710): 1 unless the body is chained and the carrier's enemy (FUN_14079c950).
-        var table = FactionRelations.Build([new FactionData { Id = "a", Name = "a", DefaultRelation = 50 }, new FactionData { Id = "b", Name = "b", DefaultRelation = -50 }, new FactionData { Id = "c", Name = "c", DefaultRelation = 50 }]);
+        var table = FactionRelations.Build([new FactionData { Id = "a", Name = "a", DefaultRelation = 50 },
+                new FactionData { Id = "b", Name = "b", DefaultRelation = -50 }, new FactionData { Id = "c", Name = "c", DefaultRelation = 50 }]);
         var carry = new CarrySystem(BaseGame, BodyOptions.Default, 1) { Relations = table };
         CharacterCold Make(int faction, bool chained)
         {
             var c = new CharacterCold { Faction = faction, Inventory = new Inventory() };
             if (!chained) return c;
-            var shackles = new ItemInstance { Record = "shackles", Name = "shackles", Lock = new Meitou.Simulation.Locks.LockState { Locked = true, Level = 10, Hardness = 5 } };
+            var shackles = new ItemInstance { Record = "shackles", Name = "shackles",
+                    Lock = new Meitou.Simulation.Locks.LockState { Locked = true, Level = 10, Hardness = 5 } };
             c.Inventory.Add(shackles);
             shackles.Section = "legs";
             return c;
         }
+
         Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(1, false)));
         Assert.False(carry.WakesIntoPutDown(Make(0, false), Make(1, true)));
         Assert.True(carry.WakesIntoPutDown(Make(0, false), Make(2, true)));
@@ -311,11 +363,16 @@ public class CarryTests
         // The AI scores only the goals of its lists: a carrier whose race goals (or package) lack 169 keeps the awake body on its shoulder.
         using var rig = new Rig(1, minPartition: 1, seed: 21);
         var carrier = rig.Add(1000, 2000, player: false, squad: 1, faction: 0);
-        var goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("169", "Putting down", Data.Gameplay.Ai.TaskType.PutDownCarriedDudeIfTheyCanWalk, Data.Gameplay.Ai.TaskPriority.Urgent, Data.Gameplay.Ai.TaskTargetType.Self, Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 24, 1);
+        var goal = new Meitou.Data.Gameplay.Ai.AiGoal(new Meitou.Data.Gameplay.Ai.AiTask("169", "Putting down",
+                Data.Gameplay.Ai.TaskType.PutDownCarriedDudeIfTheyCanWalk, Data.Gameplay.Ai.TaskPriority.Urgent, Data.Gameplay.Ai.TaskTargetType.Self,
+                Data.Gameplay.Ai.TaskEndEvent.Nothing), 0, 24, 1);
         var squad = rig.World.Squads.Find(1)!;
         rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad };
+
         Assert.False(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));
+
         rig.Cold(carrier).Ai = new Meitou.Simulation.Ai.AiMind { Squad = squad, RaceGoals = [goal] };
+
         Assert.True(rig.Carry.ListsPutDown(rig.World, carrier.Slot, rig.Cold(carrier)));
     }
 }

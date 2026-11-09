@@ -12,15 +12,19 @@ using SimWorld = Meitou.Simulation.World;
 
 namespace Meitou.Tests.Simulation;
 
-/// <summary>Combat wired into the game's system order: pursuit through the path service, the body system's medical tick, retaliation.</summary>
+/// <summary>
+/// Combat wired into the game's system order: pursuit through the path service, the body system's medical tick, retaliation.
+/// </summary>
 public class FightWiringTests
 {
     static (SimWorld World, CombatSystem Combat, CharacterId A, CharacterId B, CharacterId C) Fight(ulong seed, int threads, float distance = 120)
     {
-        var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths, new CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = true });
+        var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
+                new CombatOptions { SelfApproach = false, TickMedical = false, RecordLog = true });
         var walk = new OpenGroundWalkability((_, _) => 150);
         var world = new SimWorld(new WorldSettings { Seed = seed, Threads = threads, PublishSnapshots = false, MinPartitionSize = 1 }, walk,
-            [new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat, new RetaliationSystem(combat)]);
+            [new PursuitSystem(combat), new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat,
+                    new RetaliationSystem(combat)]);
         var squad = new Squad { Id = world.Squads.NextId(), TemplateId = "t" };
         world.Squads.Add(squad);
         CharacterId Make(string name, Vector3 at, bool player)
@@ -28,7 +32,8 @@ public class FightWiringTests
             var cold = new Combatant { Name = name }.MakeCold();
             cold.IsPlayer = player;
             cold.SquadId = player ? -1 : squad.Id;
-            return world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15, Mode = SpeedMode.Free }, cold, 0);
+            return world.Characters.Spawn(new CharacterHot { Position = at, Health = 100, MaxSpeed = 60, WalkSpeed = 15, Mode = SpeedMode.Free },
+                    cold, 0);
         }
         var a = Make("player", new Vector3(1000, 150, 1000), true);
         var b = Make("bandit", new Vector3(1000 + distance, 150, 1000), false);
@@ -39,8 +44,8 @@ public class FightWiringTests
     }
 
     /// <summary>
-    /// The attacked bandit fights back (Self preservation's stand-in, <see cref="RetaliationSystem"/>); its mate, with no goal that protects anyone (no AI here), keeps out: squad mates join only by
-    /// their own protect goals (docs/game/ai-tasks.md "Combat goals").
+    /// The attacked bandit fights back (Self preservation's stand-in, <see cref="RetaliationSystem"/>); its mate, with no goal that protects anyone
+    /// (no AI here), keeps out: squad mates join only by their own protect goals (docs/game/ai-tasks.md "Combat goals").
     /// </summary>
     [Fact]
     public void An_attacker_walks_to_its_target_fights_and_the_attacked_retaliates_alone()
@@ -50,17 +55,24 @@ public class FightWiringTests
         var table = world.Characters;
         float start = Vector3.Distance(table.Previous[a.Slot].Position, table.Previous[b.Slot].Position);
         world.RunTicks(120);
+
         Assert.True(Vector3.Distance(table.Previous[a.Slot].Position, table.Previous[b.Slot].Position) < start - 20, "walked towards the target");
+
         int ticks = 120;
-        while (ticks < 9000 && !table.Cold(a.Slot)!.Medical!.Incapacitated && !table.Cold(b.Slot)!.Medical!.Incapacitated) { world.RunTick(); ticks++; }
+        while (ticks < 9000 && !table.Cold(a.Slot)!.Medical!.Incapacitated
+                && !table.Cold(b.Slot)!.Medical!.Incapacitated) { world.RunTick(); ticks++; }
+
         Assert.True(table.Cold(a.Slot)!.Medical!.Incapacitated || table.Cold(b.Slot)!.Medical!.Incapacitated, "the fight resolved");
+
         // The attacked bandit fought back at the player; its mate did not join.
         Assert.Contains(combat.Log, e => e.Attacker == b.Slot && e.Defender == a.Slot);
         Assert.DoesNotContain(combat.Log, e => e.Attacker == c.Slot);
+
         // A downed character does not move any more.
         int down = table.Cold(a.Slot)!.Medical!.Incapacitated ? a.Slot : b.Slot;
         var at = table.Previous[down].Position;
         world.RunTicks(120);
+
         Assert.Equal(at, table.Previous[down].Position);
     }
 
@@ -72,15 +84,22 @@ public class FightWiringTests
         var hunger = world.Characters.Cold(a.Slot)!.Medical!.Hunger;
         world.RunTicks(1000);
         float once = hunger - world.Characters.Cold(a.Slot)!.Medical!.Hunger;
+
         Assert.InRange(once, 1e-5f, 0.1f);
+
         // A second world, the same but with the combat system also ticking: twice the drain.
-        var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths, new CombatOptions { SelfApproach = false, TickMedical = true });
+        var combat = new CombatSystem(KatanaTechniques(), Constants, BaseGame, BodyOptions.Default, DuelFixture.Lengths,
+                new CombatOptions { SelfApproach = false, TickMedical = true });
         var walk = new OpenGroundWalkability((_, _) => 150);
-        using var twice = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, walk, [new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat]);
+        using var twice = new SimWorld(new WorldSettings { Seed = 5, PublishSnapshots = false }, walk,
+                [new MovementSystem(new PathService(walk, true)), new BodySystem(BaseGame), combat]);
         var cold = new Combatant().MakeCold();
         var id = twice.Characters.Spawn(new CharacterHot { Position = new Vector3(1000, 150, 1000), Health = 100 }, cold, 0);
         twice.RunTicks(1000);
-        Assert.True(hunger - cold.Medical!.Hunger > once * 1.5f, "two systems ticking the same body drain it twice as fast (why the game sets TickMedical = false)");
+
+        Assert.True(hunger - cold.Medical!.Hunger > once * 1.5f,
+                "two systems ticking the same body drain it twice as fast (why the game sets TickMedical = false)");
+
         _ = id;
     }
 

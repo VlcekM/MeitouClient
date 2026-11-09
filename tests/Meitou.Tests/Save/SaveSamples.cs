@@ -1,6 +1,8 @@
 namespace Meitou.Tests.Save;
 
-/// <summary>Scratch folders for the save tests (they never read the user's own saves).</summary>
+/// <summary>
+/// Scratch folders for the save tests (they never read the user's own saves).
+/// </summary>
 public static class SaveSamples
 {
     public static string Temp(string name)
