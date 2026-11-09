@@ -82,7 +82,9 @@ public sealed unsafe class MetalFrame : IGpuFrame
         return _preFrame;
     }
 
-    /// <summary>Commits the pre-frame before the frame's own command buffer.</summary>
+    /// <summary>
+    /// Commits the pre-frame before the frame's own command buffer.
+    /// </summary>
     internal void CommitPreFrame(bool wait = false)
     {
         if (_preCommand.NativePtr == IntPtr.Zero) return;
@@ -91,7 +93,9 @@ public sealed unsafe class MetalFrame : IGpuFrame
         if (wait) _preCommand.WaitUntilCompleted();
     }
 
-    /// <summary>The slot's previous pre-frame has completed; release its wrapper.</summary>
+    /// <summary>
+    /// The slot's previous pre-frame has completed; release its wrapper.
+    /// </summary>
     internal void ReleasePreFrame()
     {
         if (_preCommand.NativePtr != IntPtr.Zero) _preCommand.Dispose();
@@ -102,13 +106,19 @@ public sealed unsafe class MetalFrame : IGpuFrame
     public GpuStats Stats { get; }
     public IGpuTimestamps Timestamps => _ctx.Timestamps;
 
-    /// <summary>The command buffer this frame's commands are recorded into (the present pass continues it at <see cref="MetalContext.EndFrame"/>).</summary>
+    /// <summary>
+    /// The command buffer this frame's commands are recorded into (the present pass continues it at <see cref="MetalContext.EndFrame"/>).
+    /// </summary>
     internal MTLCommandBuffer Command { get; private set; }
 
-    /// <summary>The drawable this frame draws into (the context's <see cref="MetalDisplay.TryBeginFrame"/> gave it).</summary>
+    /// <summary>
+    /// The drawable this frame draws into (the context's <see cref="MetalDisplay.TryBeginFrame"/> gave it).
+    /// </summary>
     public CAMetalDrawable Drawable { get; internal set; }
 
-    /// <summary>Writes bytes into the frame's constant ring (the default blocks' slices), aligned; the slice lives for the frame.</summary>
+    /// <summary>
+    /// Writes bytes into the frame's constant ring (the default blocks' slices), aligned; the slice lives for the frame.
+    /// </summary>
     public unsafe Transient WriteConstants(ReadOnlySpan<byte> data, ulong alignment = 16)
     {
         var slice = AllocateConstants((ulong)data.Length, alignment);
@@ -128,6 +138,7 @@ public sealed unsafe class MetalFrame : IGpuFrame
         offset = (_current.Used + alignment - 1) / alignment * alignment;
         var pointer = _current.Pointer + (nint)offset;
         _current.Used = offset + size;
+
         // Shared mode needs no flush (Managed's DidModifyRange); the GPU reads the memory as it is.
         return new Transient(_current.Handle, offset, pointer, size);
     }
@@ -166,6 +177,7 @@ public sealed unsafe class MetalFrame : IGpuFrame
             _chunks.RemoveAt(i);
             _ctx.DeferDelete(() => _ctx.ReleaseBuffer(stale.Handle));
         }
+
         // The context retains this command for its slot (the queue's autorelease would otherwise end it after
         // one frame); the slot is reused only after the three-frame ring has advanced. A failed command is the
         // first thing to look for when the present stops advancing.
@@ -191,7 +203,9 @@ public sealed unsafe class MetalFrame : IGpuFrame
 
     internal void End() => Open = false;
 
-    /// <summary>Waits for this slot's command buffer (the Vulkan fence diagnostic; the command is retained by the slot).</summary>
+    /// <summary>
+    /// Waits for this slot's command buffer (the Vulkan fence diagnostic; the command is retained by the slot).
+    /// </summary>
     internal void WaitForCompletion()
     {
         if (Command.NativePtr == IntPtr.Zero) return;
@@ -201,8 +215,10 @@ public sealed unsafe class MetalFrame : IGpuFrame
         ReleasePreFrame();
     }
 
-    /// <summary>The command buffer completed and the slot will be reused: drop the pointer so teardown releases do not retain
-    /// a command object the queue may already have freed.</summary>
+    /// <summary>
+    /// The command buffer completed and the slot will be reused: drop the pointer so teardown releases do not retain
+    /// a command object the queue may already have freed.
+    /// </summary>
     internal void ForgetCommand()
     {
         if (Command.NativePtr != IntPtr.Zero) Command.Dispose();

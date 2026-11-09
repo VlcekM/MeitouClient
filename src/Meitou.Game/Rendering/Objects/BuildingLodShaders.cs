@@ -125,9 +125,12 @@ static class BuildingLodShaders
                 colour = albedo * (ambient + diff * sunLight) + spec * diff * sunLight;
             }
             """);
-        // An EMISSIVE material glows only while its building's lights are on (the instance's spare component carries 2 when they are off, WorldObjectRenderer.Emit).
+        // An EMISSIVE material glows only while its building's lights are on (the instance's spare component carries 2 when they are off,
+        // WorldObjectRenderer.Emit).
         f = Literal(f, "if (uEmissive) colour += albedo * nm.a;", "if (uEmissive && vInterior < 1.5) colour += albedo * nm.a;");
-        // The placement ghost (docs/render-objects.md "Placement ghost") draws with a non-zero flat colour (which an ordinary draw leaves at 0): it tints the lit picture.
+
+        // The placement ghost (docs/render-objects.md "Placement ghost") draws with a non-zero flat colour (which an ordinary draw leaves at 0): it
+        // tints the lit picture.
         f = Literal(f, "fragColour = vec4(colour, 1.0);\n", """
             if (dot(uFlatColour, uFlatColour) > 0.0) colour = mix(colour, colour * uFlatColour * 1.6 + uFlatColour * 0.12, 0.7);
             fragColour = vec4(colour, 1.0);
@@ -136,15 +139,16 @@ static class BuildingLodShaders
     }
 
     /// <summary>
-    /// The scaffold of an unfinished building (docs/game/buildings-production.md "Construction look"): <c>vScaffold</c> is the instance matrix's spare M44, 1 for every
-    /// ordinary instance and <see cref="ScaffoldBase"/> plus the look's f for a site. Above 1.2 f of the part's mesh top only the grid (<c>construction.dds</c> at the
-    /// mesh coordinates x the tiling, alpha above 0.7) is kept; without the texture (not loaded) a procedural grid stands in.
+    /// The scaffold of an unfinished building (docs/game/buildings-production.md "Construction look"): <c>vScaffold</c> is the instance matrix's
+    /// spare M44, 1 for every ordinary instance and <see cref="ScaffoldBase"/> plus the look's f for a site. Above 1.2 f of the part's mesh top only
+    /// the grid (<c>construction.dds</c> at the mesh coordinates x the tiling, alpha above 0.7) is kept; without the texture (not loaded) a
+    /// procedural grid stands in.
     /// </summary>
     public const float ScaffoldBase = 10000;
 
     /// <summary>
-    /// What a site adds to the instance's M34 (whose low two bits are its interior and lights flags): 4 x (the part's mesh top in decimetres, 1-4095, + 4096 x
-    /// round(16 x <c>scaffolding tex scale</c>), 0-255; 1 when the field is 0 or absent), exact in a float.
+    /// What a site adds to the instance's M34 (whose low two bits are its interior and lights flags): 4 x (the part's mesh top in decimetres, 1-4095,
+    /// + 4096 x round(16 x <c>scaffolding tex scale</c>), 0-255; 1 when the field is 0 or absent), exact in a float.
     /// </summary>
     public static float PackSite(float top, float tiling)
     {
@@ -152,10 +156,16 @@ static class BuildingLodShaders
         int s = Math.Clamp((int)MathF.Round((tiling > 0 ? tiling : 1) * 16), 0, 255);
         return 4 * (t + 4096 * s);
     }
-    /// <summary>The largest tint channel <see cref="WorldObjectRenderer.PackTint"/> keeps (a plant's brightness goes to 1.1); <c>instanceTint</c> has the same number.</summary>
+    /// <summary>
+    /// The largest tint channel <see cref="WorldObjectRenderer.PackTint"/> keeps (a plant's brightness goes to 1.1); <c>instanceTint</c> has the same
+    /// number.
+    /// </summary>
     public const float TintRange = 1.275f;
 
-    /// <summary>The grid and its helpers (<c>uScaffold</c>: the push spare's upper bits, index + 1, 0 not loaded), at the tiled mesh coordinates (objects.hlsl).</summary>
+    /// <summary>
+    /// The grid and its helpers (<c>uScaffold</c>: the push spare's upper bits, index + 1, 0 not loaded), at the tiled mesh coordinates
+    /// (objects.hlsl).
+    /// </summary>
     const string ScaffoldFunctions = """
             in float vBuildY;
             flat in float vScaffoldTiling;
@@ -174,12 +184,14 @@ static class BuildingLodShaders
         """;
 
     /// <summary>
-    /// The caster's fragment shader with the same clip, so a site's shadow is its built part and scaffold; and the dither range taken at its middle (a caster
-    /// has no dither): of an instance's two blending levels exactly one casts, and a distant town casts only where it is drawn (the camera's distance fade).
-    /// Without that test the Hub's baked distant mesh, the intact town, cast its roofs' shadows into the ruins at every distance.
+    /// The caster's fragment shader with the same clip, so a site's shadow is its built part and scaffold; and the dither range taken at its middle
+    /// (a caster has no dither): of an instance's two blending levels exactly one casts, and a distant town casts only where it is drawn (the
+    /// camera's distance fade). Without that test the Hub's baked distant mesh, the intact town, cast its roofs' shadows into the ruins at every
+    /// distance.
     /// </summary>
-    // The view's cut volumes (convex footprint and height range each): a fragment of a cut draw (fadeMode bit 2) inside one is left out. The shadow side of the
-    // cut into viewed buildings (WorldObjectRenderer.ShadowCut), and the selection mask's floor (WorldObjectRenderer.DrawSelectionMask); the main view has none.
+    // The view's cut volumes (convex footprint and height range each): a fragment of a cut draw (fadeMode bit 2) inside one is left out. The shadow
+    // side of the cut into viewed buildings (WorldObjectRenderer.ShadowCut), and the selection mask's floor (WorldObjectRenderer.DrawSelectionMask);
+    // the main view has none.
     const string CutVolumes = """
         uniform int uFadeMode;
         uniform uint uCutVolumes;
@@ -209,15 +221,18 @@ static class BuildingLodShaders
             flat in float vScaffold;
             float gridLine(float v) { float f = fract(v); return min(f, 1.0 - f); }
             """);
-        return Replace(f, @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + CutVolumes + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
+        return Replace(f,
+                @"void\s+main\s*\(\s*\)\s*\{", "uniform uint uSurface;\n" + ScaffoldFunctions + "\n" + CutVolumes + "\nvoid main()\n{\n    if (vRange.x > 0.5 || vRange.y <= 0.5) discard;\n"
             + "    if ((uFadeMode & 2) != 0 && inCutVolume(vWorld)) discard;\n" + ScaffoldTest);
     }
 
     // ---- the native model (docs/renderer-native.md 3.3, step O) ----
 
-    /// <summary>The objects' push constants (<see cref="ObjectPush"/> is the C# side; std430, 128 bytes): <see cref="NativeShaders.MeshPushMembers"/>
+    /// <summary>
+    /// The objects' push constants (<see cref="ObjectPush"/> is the C# side; std430, 128 bytes): <see cref="NativeShaders.MeshPushMembers"/>
     /// without what these programs never vary (the head textures, <c>uHasHead</c> and <c>uSkinned</c>, which the GL code set to 0 once, are
-    /// constants false here; <c>uCoverage</c> is foliage's), plus the dither fade's mode and range.</summary>
+    /// constants false here; <c>uCoverage</c> is foliage's), plus the dither fade's mode and range.
+    /// </summary>
     public const string PushMembers = """
             vec3 tint;
             float triplanarScale;
@@ -245,7 +260,9 @@ static class BuildingLodShaders
             vec4 fadeRange;
         """;
 
-    /// <summary>What these programs map beyond <see cref="NativeShaders.Map"/>: the fade (the eye is the view's), and the constants.</summary>
+    /// <summary>
+    /// What these programs map beyond <see cref="NativeShaders.Map"/>: the fade (the eye is the view's), and the constants.
+    /// </summary>
     static readonly Dictionary<string, string> Own = new()
     {
         ["uFadeMode"] = "pc.fadeMode",
@@ -258,7 +275,8 @@ static class BuildingLodShaders
         ["uCutPlanes"] = "view.cutPlanes",
         ["uSkinned"] = "false",
         ["uHasHead"] = "false",
-        // The scaffold grid (construction.dds): the push spare's upper bits hold its bindless index + 1 (WorldObjectRenderer.RecordDraws); read only when not 0.
+        // The scaffold grid (construction.dds): the push spare's upper bits hold its bindless index + 1 (WorldObjectRenderer.RecordDraws); read only
+        // when not 0.
         ["uScaffold"] = "textures2D[max(pc.spare >> 8u, 1u) - 1u]",
         // Read only under uHasHead (never): any valid bindless entry.
         ["uHeadDiffuse"] = "textures2D[pc.diffuse]",
@@ -266,13 +284,21 @@ static class BuildingLodShaders
     };
 
     public static string VertexNative() => NativeShaders.Port(Vertex(), NativeShaders.Map(Own), PushMembers);
-    /// <summary>The colour program; the full one (not <paramref name="solid"/>) also has the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>).</summary>
+    /// <summary>
+    /// The colour program; the full one (not <paramref name="solid"/>) also has the interior cut (<see cref="InteriorMaskRenderer.WithCut"/>).
+    /// </summary>
     public static string FragmentNative(bool solid = false) =>
-        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(solid ? Fragment(true) : InteriorMaskRenderer.WithCut(Fragment()), NativeShaders.Map(Own), PushMembers));
-    /// <summary><see cref="ShadowShaders.MeshDepthFragment"/> for <see cref="VertexNative"/>.</summary>
+        Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(solid ? Fragment(true) : InteriorMaskRenderer.WithCut(Fragment()), NativeShaders.Map(Own),
+                PushMembers));
+    /// <summary>
+    /// <see cref="ShadowShaders.MeshDepthFragment"/> for <see cref="VertexNative"/>.
+    /// </summary>
     public static string DepthNative() => NativeShaders.Port(Depth(), NativeShaders.Map(Own), PushMembers);
 
-    /// <summary>The first <paramref name="from"/> in <paramref name="source"/> (text, with the lines' indentation made equal) replaced by <paramref name="to"/>.</summary>
+    /// <summary>
+    /// The first <paramref name="from"/> in <paramref name="source"/> (text, with the lines' indentation made equal) replaced by
+    /// <paramref name="to"/>.
+    /// </summary>
     static string Literal(string source, string from, string to)
     {
         static string Flat(string s) => string.Join("\n", s.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()));
@@ -299,7 +325,9 @@ static class BuildingLodShaders
     }
 }
 
-/// <summary>The C# side of <see cref="BuildingLodShaders.PushMembers"/> (std430 push constants, 128 bytes). GLSL bools are 32-bit (0 / 1).</summary>
+/// <summary>
+/// The C# side of <see cref="BuildingLodShaders.PushMembers"/> (std430 push constants, 128 bytes). GLSL bools are 32-bit (0 / 1).
+/// </summary>
 [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit, Size = 128)]
 struct ObjectPush
 {

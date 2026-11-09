@@ -11,28 +11,32 @@ using Meitou.Game.Rendering.Terrain;
 namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
-/// One loose mesh in the world: its file, its size and where it is (rotation and translation, the mesh's middle at the translation); <paramref name="Stretch"/> lengthens
-/// it along its own z (a bolt in flight).
+/// One loose mesh in the world: its file, its size and where it is (rotation and translation, the mesh's middle at the translation);
+/// <paramref name="Stretch"/> lengthens it along its own z (a bolt in flight).
 /// </summary>
 public readonly record struct DebrisPiece(string Mesh, float Scale, Quaternion Rotation, Vector3 Position, float Stretch = 1, LimbLook? Limb = null)
 {
-    /// <summary>A mesh named <c>file</c> + this + <c>texture</c> is drawn with that diffuse texture on every part (the birds' <c>HWBirds</c> material clone, docs/game/birds.md).</summary>
+    /// <summary>
+    /// A mesh named <c>file</c> + this + <c>texture</c> is drawn with that diffuse texture on every part (the birds' <c>HWBirds</c> material clone,
+    /// docs/game/birds.md).
+    /// </summary>
     public const char TextureMark = '?';
 }
 
 /// <summary>
-/// How a severed limb is drawn (the original's <c>SeveredLimb</c> material, docs/game/blood-decals.md "On the body and on severed limbs"): the item's MATERIAL record's texture map and
-/// skin-tone mask (bare file names), the skin tone (<c>severed_limb_fs</c>: albedo x (1 - tone x mask), 0 = untinted) and the race's blood colour. Equal diffuse maps share
-/// a loaded mesh.
+/// How a severed limb is drawn (the original's <c>SeveredLimb</c> material, docs/game/blood-decals.md "On the body and on severed limbs"): the item's
+/// MATERIAL record's texture map and skin-tone mask (bare file names), the skin tone (<c>severed_limb_fs</c>: albedo x (1 - tone x mask), 0 =
+/// untinted) and the race's blood colour. Equal diffuse maps share a loaded mesh.
 /// </summary>
-public sealed record LimbLook(string Diffuse, string? Mask, Vector3 SkinTone, Vector3 BloodColour, string? Race = null, bool SkinDefault = true, string? Normal = null);
+public sealed record LimbLook(string Diffuse, string? Mask, Vector3 SkinTone, Vector3 BloodColour, string? Race = null, bool SkinDefault = true,
+        string? Normal = null);
 
 /// <summary>
-/// Loose meshes thrown about by the host (luckyren Mode's bones and limbs, docs/game/luckyren.md): each a static mesh, centred on its bounds, textured with
-/// its first resolved diffuse map and lit as the world's objects (<c>kenshiLight</c> under the game sky, the plain light otherwise, then the haze). The same
-/// fragment runs on Vulkan and Metal: every atmosphere/shadow texture and the debris diffuse map come through the bindless table, so Metal's 16 direct
-/// fragment samplers are no longer a constraint. Drawn in the scene pass before the characters (colour only, leaving the alpha to them); they
-/// cast no shadow. A mesh is loaded the first time its <see cref="Extent"/> is asked for.
+/// Loose meshes thrown about by the host (luckyren Mode's bones and limbs, docs/game/luckyren.md): each a static mesh, centred on its bounds,
+/// textured with its first resolved diffuse map and lit as the world's objects (<c>kenshiLight</c> under the game sky, the plain light otherwise,
+/// then the haze). The same fragment runs on Vulkan and Metal: every atmosphere/shadow texture and the debris diffuse map come through the bindless
+/// table, so Metal's 16 direct fragment samplers are no longer a constraint. Drawn in the scene pass before the characters (colour only, leaving the
+/// alpha to them); they cast no shadow. A mesh is loaded the first time its <see cref="Extent"/> is asked for.
 /// </summary>
 public sealed unsafe class DebrisRenderer : IDisposable
 {
@@ -153,8 +157,10 @@ public sealed unsafe class DebrisRenderer : IDisposable
         }
         """;
 
-    /// <summary>The native push block shared by the vertex and fragment stages (std430, 128 bytes): the model, the simple-sky fallback light, and the
-    /// per-part bindless diffuse index and cut-out state.</summary>
+    /// <summary>
+    /// The native push block shared by the vertex and fragment stages (std430, 128 bytes): the model, the simple-sky fallback light, and the
+    /// per-part bindless diffuse index and cut-out state.
+    /// </summary>
     const string PushMembers = """
         mat4 model;
         vec3 sunColour;
@@ -169,7 +175,9 @@ public sealed unsafe class DebrisRenderer : IDisposable
         uint limbTone;
         """;
 
-    /// <summary>The uniforms whose native form is not in <see cref="NativeShaders.Map"/>: the model and the simple-sky fallback.</summary>
+    /// <summary>
+    /// The uniforms whose native form is not in <see cref="NativeShaders.Map"/>: the model and the simple-sky fallback.
+    /// </summary>
     static readonly Dictionary<string, string> NativeOwn = new()
     {
         ["uModel"] = "pc.model",
@@ -186,9 +194,11 @@ public sealed unsafe class DebrisRenderer : IDisposable
         ["uLimbNormal"] = "textures2D[floatBitsToUint(pc.alphaThreshold)]",
     };
 
-    /// <summary>A loaded diffuse texture and its stable bindless entry. The sampler can change with the upscaler's LOD bias; the index
+    /// <summary>
+    /// A loaded diffuse texture and its stable bindless entry. The sampler can change with the upscaler's LOD bias; the index
     /// stays, so a draw recorded earlier in the frame keeps its view (the table's update-after-bind rules). Or a texture of a shared cache
-    /// (<see cref="SharedTextures"/>: the characters' own image, kept while drawn), whose index is the cache's.</summary>
+    /// (<see cref="SharedTextures"/>: the characters' own image, kept while drawn), whose index is the cache's.
+    /// </summary>
     sealed class DebrisTexture : IDisposable
     {
         readonly IGpuContext _gpu;
@@ -212,8 +222,10 @@ public sealed unsafe class DebrisRenderer : IDisposable
             this._shared = shared;
         }
 
-        /// <summary>The bindless index for <see cref="SampledImage.Sampled"/> now, registering or updating the entry (a shared texture's: the
-        /// cache's entry, the stand-in until it is resident; reading it counts as use).</summary>
+        /// <summary>
+        /// The bindless index for <see cref="SampledImage.Sampled"/> now, registering or updating the entry (a shared texture's: the
+        /// cache's entry, the stand-in until it is resident; reading it counts as use).
+        /// </summary>
         public uint Index
         {
             get
@@ -229,17 +241,16 @@ public sealed unsafe class DebrisRenderer : IDisposable
                     _handle = new BindlessHandle(BindlessKind.Texture2D, _gpu.Bindless.Register(BindlessKind.Texture2D, sampled));
                     _hasEntry = true;
                 }
-                else if (!sampled.Equals(_registered))
-                {
-                    _gpu.Bindless.Update(_handle, sampled);
-                }
+                else if (!sampled.Equals(_registered)) _gpu.Bindless.Update(_handle, sampled);
                 _registered = sampled;
                 CachedIndex = _handle.Index;
                 return CachedIndex;
             }
         }
 
-        /// <summary>The index <see cref="Index"/> last registered; safe to use after the frame's bindless table has been bound.</summary>
+        /// <summary>
+        /// The index <see cref="Index"/> last registered; safe to use after the frame's bindless table has been bound.
+        /// </summary>
         public uint CachedIndex { get; private set; }
 
         public void Dispose()
@@ -249,13 +260,18 @@ public sealed unsafe class DebrisRenderer : IDisposable
         }
     }
 
-    /// <summary>A loaded mesh: one buffer of vertices and one of indices, a draw per part.</summary>
-    sealed class Mesh(DeviceBuffer vertices, DeviceBuffer indices, (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold, bool Coloured)[] parts, Vector3 extent)
+    /// <summary>
+    /// A loaded mesh: one buffer of vertices and one of indices, a draw per part.
+    /// </summary>
+    sealed class Mesh(DeviceBuffer vertices, DeviceBuffer indices,
+            (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold, bool Coloured)[] parts, Vector3 extent)
     {
         public readonly DeviceBuffer Vertices = vertices, Indices = indices;
         public readonly (uint First, uint Count, int VertexOffset, DebrisTexture? Diffuse, float AlphaThreshold, bool Coloured)[] Parts = parts;
         public readonly Vector3 Extent = extent;
-        /// <summary>A severed limb's: its skin-tone mask, the mesh's bounds middle in its own space (the vertices are moved by it).</summary>
+        /// <summary>
+        /// A severed limb's: its skin-tone mask, the mesh's bounds middle in its own space (the vertices are moved by it).
+        /// </summary>
         public DebrisTexture? Mask, Normal;
         public bool Limb;
         public Vector3 Centre;
@@ -271,8 +287,10 @@ public sealed unsafe class DebrisRenderer : IDisposable
     readonly Dictionary<string, Mesh?> _meshes = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, DebrisTexture?> _textures = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The cache whose images the debris textures share (the characters', which hold the same skins and items), when there is one by
-    /// the time a texture is first asked for; else each is loaded here and kept.</summary>
+    /// <summary>
+    /// The cache whose images the debris textures share (the characters', which hold the same skins and items), when there is one by
+    /// the time a texture is first asked for; else each is loaded here and kept.
+    /// </summary>
     public Func<WorldTextureCache?>? SharedTextures { get; init; }
 
     /// <param name="resolver">Finds a mesh's textures (null: every mesh untextured).</param>
@@ -286,6 +304,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         string vertex = NativeShaders.Port(Vertex, NativeShaders.Map(NativeOwn), PushMembers);
         string fragment = Gi.GiResolveShaders.WithAlbedo(NativeShaders.Port(Fragment, NativeShaders.Map(NativeOwn), PushMembers));
         _program = new NativeProg(gpu, _frame, vertex, fragment, "debris");
+
         // The object layout (GpuVertex), its colour at 3 and tangent at 4.
         uint stride = GpuVertex.ObjectSize;
         _layout = _program.Layout(
@@ -296,6 +315,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
             new LegacyProgram.Attribute(default, InternalFormat.Rgba16F, stride, false),
             new LegacyProgram.Attribute(default, InternalFormat.Rgba16Snorm, stride, false),
         ]);
+
         // The native model's bindless table is what keeps the full atmosphere inside Metal's direct-sampler budget.
         if (_program.P.Info.FragmentReflection is { } reflection)
             SamplerBudget.Require("debris", reflection.Samplers, NativeShaders.BindlessSet);
@@ -307,12 +327,16 @@ public sealed unsafe class DebrisRenderer : IDisposable
     /// </summary>
     public Vector3? Extent(string mesh, string? materialOf = null, LimbLook? limb = null) => Load(mesh, materialOf, limb)?.Extent;
 
-    /// <summary>The middle of <paramref name="mesh"/>'s bounds in its own space (where its origin lies from the middle, which is what a piece's position names); loads it like <see cref="Extent"/>.</summary>
+    /// <summary>
+    /// The middle of <paramref name="mesh"/>'s bounds in its own space (where its origin lies from the middle, which is what a piece's position
+    /// names); loads it like <see cref="Extent"/>.
+    /// </summary>
     public Vector3? Centre(string mesh, LimbLook? limb = null) => Load(mesh, null, limb)?.Centre;
 
     DebrisTexture? _bloodMap;
 
-    static uint Pack(Vector3 c) => (uint)(Math.Clamp((int)MathF.Round(c.X * 255), 0, 255) << 16 | Math.Clamp((int)MathF.Round(c.Y * 255), 0, 255) << 8 | Math.Clamp((int)MathF.Round(c.Z * 255), 0, 255));
+    static uint Pack(Vector3 c) => (uint)(Math.Clamp((int)MathF.Round(c.X * 255), 0, 255) << 16 | Math.Clamp((int)MathF.Round(c.Y * 255), 0,
+            255) << 8 | Math.Clamp((int)MathF.Round(c.Z * 255), 0, 255));
 
     static string Key(string mesh, LimbLook? limb) => limb is null ? mesh : mesh + "|" + limb.Diffuse;
 
@@ -320,7 +344,8 @@ public sealed unsafe class DebrisRenderer : IDisposable
     /// Draws <paramref name="pieces"/> in the open scene pass (a guest): depth tested and written, back faces culled, colour only.
     /// <paramref name="sliceViewProjection"/> is the slice's (absolute world to clip), <paramref name="frustum"/> its planes.
     /// </summary>
-    public void Draw(ReadOnlySpan<DebrisPiece> pieces, Matrix4x4 sliceViewProjection, Vector3 eye, Vector4[] frustum, in WorldLighting light, Func<LimbLook, uint>? skinTable = null)
+    public void Draw(ReadOnlySpan<DebrisPiece> pieces, Matrix4x4 sliceViewProjection, Vector3 eye, Vector4[] frustum, in WorldLighting light,
+            Func<LimbLook, uint>? skinTable = null)
     {
         if (pieces.IsEmpty) return;
         var cmd = _gpu.BeginGuest("debris");
@@ -344,6 +369,7 @@ public sealed unsafe class DebrisRenderer : IDisposable
         // The bindless table is bound once per segment: register/update the debris textures before that bind. On Metal the
         // argument buffer must already name them when the encoder takes it.
         var standIn = _gpu.StandIn2D;
+
         // Pieces of one mesh come in runs (a flock of birds): the lookup is made once per run.
         string? runName = null;
         Mesh? runMesh = null;
@@ -387,11 +413,14 @@ public sealed unsafe class DebrisRenderer : IDisposable
                 if (!_meshes.TryGetValue(Key(piece.Mesh, piece.Limb), out mesh) || mesh is null) continue;
                 if (piece.Limb is null) (runName, runMesh) = (piece.Mesh, mesh);
             }
+
             // A limb's piece is at its mesh's origin (its blood mapping reads the mesh's own x); the others are centred on their bounds.
             var middle = mesh.Limb ? piece.Position + Vector3.Transform(mesh.Centre * piece.Scale, piece.Rotation) : piece.Position;
             if (!FrustumTests.SphereVisible(frustum, middle, mesh.Extent.Length() * piece.Scale * MathF.Max(piece.Stretch, 1))) continue;
-            var m = Matrix4x4.CreateScale(piece.Scale, piece.Scale, piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
-            for (int k = 0; k < 5; k++) _bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle, (ulong)(k switch { 0 => 0, 1 => 12, 2 => 20, 3 => 36, _ => 28 }));
+            var m = Matrix4x4.CreateScale(piece.Scale, piece.Scale,
+                    piece.Scale * piece.Stretch) * Matrix4x4.CreateFromQuaternion(piece.Rotation) * Matrix4x4.CreateTranslation(piece.Position - eye);
+            for (int k = 0; k < 5; k++) _bindings[k] = new GpuBufferBinding(mesh.Vertices.Handle,
+                    (ulong)(k switch { 0 => 0, 1 => 12, 2 => 20, 3 => 36, _ => 28 }));
             cmd.BindVertexBuffers(0, _bindings);
             cmd.BindIndexBuffer(new GpuBufferBinding(mesh.Indices.Handle, 0), IndexKind.U32);
             foreach (var part in mesh.Parts)
@@ -403,8 +432,9 @@ public sealed unsafe class DebrisRenderer : IDisposable
                 push.AlphaThreshold = part.AlphaThreshold;
                 if (mesh.Limb && piece.Limb is { } look)
                 {
-                    // A severed limb (see the fragment): the diffuse map, the mask and the blood map, the colours packed, the mesh's centre x in place of the cut-out.
-                    // Textured: the low byte 2 (+ 4 with a normal map), the blood colour above it; the normal map's index in the bits of the cut-out word.
+                    // A severed limb (see the fragment): the diffuse map, the mask and the blood map, the colours packed, the mesh's centre x in
+                    // place of the cut-out. Textured: the low byte 2 (+ 4 with a normal map), the blood colour above it; the normal map's index in
+                    // the bits of the cut-out word.
                     push.Textured = (int)(2 | (mesh.Normal is not null ? 4u : 0) | Pack(look.BloodColour) << 8);
                     push.AlphaThreshold = BitConverter.UInt32BitsToSingle(mesh.Normal?.CachedIndex ?? standIn);
                     push.LimbMask = mesh.Mask?.CachedIndex ?? standIn;
@@ -454,11 +484,14 @@ public sealed unsafe class DebrisRenderer : IDisposable
         var parts = new List<(uint, uint, int, DebrisTexture?, float, bool)>();
         foreach (var part in built.Parts)
         {
-            var material = limb is null ? _resolver?.Candidates(materialOf, new OgreSubMesh { MaterialName = part.MaterialName }).FirstOrDefault() : null;
+            var material = limb is null ? _resolver?.Candidates(materialOf,
+                    new OgreSubMesh { MaterialName = part.MaterialName }).FirstOrDefault() : null;
             float threshold = material is { Alpha: AlphaSource.DiffuseAlpha } ? MathF.Max(material.AlphaThreshold, 0.5f) : 0;
-            parts.Add(((uint)indices.Count, (uint)part.Indices.Length, vertices.Count, Texture(diffuse ?? (limb is null ? material?.Diffuse : limb.Diffuse)), threshold,
+            parts.Add(((uint)indices.Count, (uint)part.Indices.Length, vertices.Count,
+                    Texture(diffuse ?? (limb is null ? material?.Diffuse : limb.Diffuse)), threshold,
                 material?.VertexColours ?? false));
-            foreach (var v in part.Vertices) vertices.Add(limb is null ? v with { Position = v.Position - centre } : v);   // a limb keeps the mesh's own space (its blood mapping reads x)
+            // a limb keeps the mesh's own space (its blood mapping reads x)
+            foreach (var v in part.Vertices) vertices.Add(limb is null ? v with { Position = v.Position - centre } : v);
             indices.AddRange(part.Indices);
         }
         var packed = GpuVertex.PackObject(CollectionsMarshal.AsSpan(vertices));
@@ -470,7 +503,8 @@ public sealed unsafe class DebrisRenderer : IDisposable
             batch.Write(ib, 0, MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(indices)));
         }
         var result = new Mesh(vb, ib, [.. parts], (built.Max - built.Min) / 2) { Centre = centre };
-        if (limb is not null) (result.Limb, result.Mask, result.Normal) = (true, limb.Mask is null ? null : Texture(limb.Mask), limb.Normal is null ? null : Texture(limb.Normal));
+        if (limb is not null) (result.Limb, result.Mask, result.Normal) = (true, limb.Mask is null ? null : Texture(limb.Mask),
+                limb.Normal is null ? null : Texture(limb.Normal));
         return result;
     }
 
@@ -513,8 +547,10 @@ public sealed unsafe class DebrisRenderer : IDisposable
     }
 }
 
-/// <summary>The C# side of <see cref="DebrisRenderer.PushMembers"/> (std430 push constants, 128 bytes): each vec3 starts on 16 bytes, a scalar may
-/// fill the fourth word after one.</summary>
+/// <summary>
+/// The C# side of <see cref="DebrisRenderer.PushMembers"/> (std430 push constants, 128 bytes): each vec3 starts on 16 bytes, a scalar may
+/// fill the fourth word after one.
+/// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 128)]
 struct DebrisPush
 {

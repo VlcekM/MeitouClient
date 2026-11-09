@@ -11,34 +11,46 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
-/// The build window's pictures of buildings the game would draw (docs/game/ui-screens.md "Building icons"), made here when its saved picture is not at hand: the building's
-/// parts (as the placement ghost lays them out) turned and framed as <see cref="BuildingIconStyle"/> describes, drawn through the objects' program into a texture of
-/// their own. The parts stand at the eye of the frame they were asked in (so the streaming loads their meshes and fine textures), are drawn each frame until every
-/// texture is resident, then dropped; the picture is kept.
+/// The build window's pictures of buildings the game would draw (docs/game/ui-screens.md "Building icons"), made here when its saved picture is not
+/// at hand: the building's parts (as the placement ghost lays them out) turned and framed as <see cref="BuildingIconStyle"/> describes, drawn through
+/// the objects' program into a texture of their own. The parts stand at the eye of the frame they were asked in (so the streaming loads their meshes
+/// and fine textures), are drawn each frame until every texture is resident, then dropped; the picture is kept.
 /// </summary>
 public sealed unsafe partial class WorldObjectRenderer
 {
-    /// <summary>Pictures drawn at once; the others wait their turn.</summary>
+    /// <summary>
+    /// Pictures drawn at once; the others wait their turn.
+    /// </summary>
     const int BuildingIconsPerFrame = 2;
-    /// <summary>Frames a picture is drawn waiting for its meshes and textures before it is shown with what it has.</summary>
+    /// <summary>
+    /// Frames a picture is drawn waiting for its meshes and textures before it is shown with what it has.
+    /// </summary>
     const int BuildingIconGiveUpFrames = 300;
 
     sealed class BuildingIconEntry
     {
         public required string Record;
         public required IReadOnlyList<PlacedMesh> Parts;
-        /// <summary>The parts drawn, laid out at the origin, and their instances (in the same order).</summary>
+        /// <summary>
+        /// The parts drawn, laid out at the origin, and their instances (in the same order).
+        /// </summary>
         public PlacedMesh[] Base = [];
         public List<ObjectStreamer.Instance>? Instances;
-        /// <summary>The camera and the node's turns are set (<see cref="FrameIcon"/>).</summary>
+        /// <summary>
+        /// The camera and the node's turns are set (<see cref="FrameIcon"/>).
+        /// </summary>
         public bool Framed;
         public Matrix4x4 Model, View, Projection;
         public Vector3 Anchor;
         public GpuTexture? Colour, Depth;
         public SampledTexture Sampled;
-        /// <summary>Nothing to draw (no parts, no bounds): the window shows none.</summary>
+        /// <summary>
+        /// Nothing to draw (no parts, no bounds): the window shows none.
+        /// </summary>
         public bool Failed;
-        /// <summary>The image holds a picture (published to the UI thread).</summary>
+        /// <summary>
+        /// The image holds a picture (published to the UI thread).
+        /// </summary>
         public volatile bool Drawn;
         public int Frames;
     }
@@ -48,7 +60,8 @@ public sealed unsafe partial class WorldObjectRenderer
     readonly List<BuildingIconEntry> _buildingIconsUnsettled = [];
 
     /// <summary>
-    /// The drawn picture of the BUILDING <paramref name="record"/> (upside down, as the renderer's targets are: show it flipped) once it exists; asking starts it being made from
+    /// The drawn picture of the BUILDING <paramref name="record"/> (upside down, as the renderer's targets are: show it flipped) once it exists;
+    /// asking starts it being made from
     /// <paramref name="parts"/> (laid out at the origin, unrotated). Any thread.
     /// </summary>
     public bool TryGetBuildingIcon(string record, IReadOnlyList<PlacedMesh> parts, out (GpuTexture Texture, SampledTexture Sampled) icon)
@@ -63,10 +76,15 @@ public sealed unsafe partial class WorldObjectRenderer
         return entry.Drawn;
     }
 
-    /// <summary>Building pictures asked for and not yet final.</summary>
+    /// <summary>
+    /// Building pictures asked for and not yet final.
+    /// </summary>
     public int PendingBuildingIcons => _buildingIconRequests.Count + _buildingIconsUnsettled.Count;
 
-    /// <summary>Draws the pictures being made, each into its own texture (after <see cref="Update"/>, outside any pass, before the frame's <see cref="Draw"/>).</summary>
+    /// <summary>
+    /// Draws the pictures being made, each into its own texture (after <see cref="Update"/>, outside any pass, before the frame's
+    /// <see cref="Draw"/>).
+    /// </summary>
     public void DrawBuildingIcons()
     {
         while (_buildingIconRequests.TryDequeue(out var requested)) _buildingIconsUnsettled.Add(requested);
@@ -101,7 +119,9 @@ public sealed unsafe partial class WorldObjectRenderer
         }
     }
 
-    /// <summary>The parts as loose instances at the eye, not yet turned (the ghost's parts: interior ones left out), so the streaming loads their meshes.</summary>
+    /// <summary>
+    /// The parts as loose instances at the eye, not yet turned (the ghost's parts: interior ones left out), so the streaming loads their meshes.
+    /// </summary>
     void LayOutIcon(BuildingIconEntry entry)
     {
         entry.Base = [.. entry.Parts.Where(p => !p.Interior)];
@@ -110,7 +130,9 @@ public sealed unsafe partial class WorldObjectRenderer
         entry.Instances = [.. entry.Base.Select(p => _streamer.MakeLoose(p with { Transform = p.Transform * at }))];
     }
 
-    /// <summary>The camera from the loaded meshes' bounds (many files have no bounds chunk), and the parts turned as the node is.</summary>
+    /// <summary>
+    /// The camera from the loaded meshes' bounds (many files have no bounds chunk), and the parts turned as the node is.
+    /// </summary>
     void FrameIcon(BuildingIconEntry entry)
     {
         entry.Framed = true;
@@ -138,8 +160,10 @@ public sealed unsafe partial class WorldObjectRenderer
             entry.Colour = Gpu.CreateTexture(new TextureDesc(InternalFormat.Rgba8, size, size, Use: TextureUse.Sampled | TextureUse.ColourTarget | TextureUse.TransferSrc, Name: $"building icon {entry.Record}"));
             entry.Depth = Gpu.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, size, size, Use: TextureUse.DepthTarget, Name: $"building icon depth {entry.Record}"));
             entry.Sampled = new SampledTexture(Gpu.Samplers.Get(SamplerDesc.FromGl(TextureMinFilter.Linear, TextureMagFilter.Linear,
-                TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false, 0)), entry.Colour.View());
+                TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, false, DepthFunction.Lequal, false, 1, false,
+                        0)), entry.Colour.View());
         }
+
         // The batches of this picture alone (the frame's Draw starts its own from nothing).
         foreach (var b in _batchMap.Values) b.Count = 0;
         _active.Clear();
@@ -153,7 +177,8 @@ public sealed unsafe partial class WorldObjectRenderer
         UploadInstances();
         var cmd = Gpu.BeginNative("building icon");
         var targets = PassTargets.Of(entry.Colour, entry.Depth);
-        cmd.BeginRendering(new RenderingDesc(targets.Colour, targets.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, targets.Width, targets.Height));
+        cmd.BeginRendering(new RenderingDesc(targets.Colour, targets.Depth with { Load = LoadOp.Clear, DepthClear = 1f }, targets.Width,
+                targets.Height));
         Gpu.BeginHostPass(cmd, targets, DrawState.Scene(targets.Formats));
         var rect = new PixelRect(0, 0, (uint)size, (uint)size);
         cmd.Clear(true, default, true, 1, rect);
@@ -166,6 +191,7 @@ public sealed unsafe partial class WorldObjectRenderer
             var eye = toWorld.Translation;
             var constants = new ViewConstants { ViewProjection = view * entry.Projection, Eye = eye, LightDir = Vector3.UnitZ, FogDistance = 0 };
             PrepareDraws(IconOptions, wire: false);
+
             // The picture shows no weather (the game's has no dust), as an impostor bake.
             for (int d = 0; d < _drawCount; d++) _draws[d].Push.Spare = MeshSurface.NoWeather;
             RecordDraws(_colourProg, wire: false, in constants, default);

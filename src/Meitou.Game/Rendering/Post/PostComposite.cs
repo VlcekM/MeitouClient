@@ -16,6 +16,8 @@ namespace Meitou.Game.Rendering.Post;
 /// </summary>
 sealed class PostComposite : IDisposable
 {
+    #region Setup
+
     const int LuminanceSize = 256, LuminanceLevels = 9;
     const float AdaptationRate = 0.5f;
 
@@ -53,7 +55,9 @@ sealed class PostComposite : IDisposable
     bool _adaptedValid;
     int _adaptedFrames;
 
-    /// <summary>What <see cref="ApplyScene"/> and <see cref="Draw"/> need from the frame's camera.</summary>
+    /// <summary>
+    /// What <see cref="ApplyScene"/> and <see cref="Draw"/> need from the frame's camera.
+    /// </summary>
     public readonly record struct SceneInputs(Vector3 Eye, Matrix4x4 View, float FieldOfView, float Aspect, float Near, float Far,
         bool CharactersDrawn = true, float? WaterHeight = null);
 
@@ -112,16 +116,30 @@ sealed class PostComposite : IDisposable
         _linearMipSampler = Sample(TextureMinFilter.LinearMipmapLinear, TextureMagFilter.Linear);
     }
 
-    /// <summary>The game's shared <c>heatHaze</c> this frame (the caller moves it towards the weather's target); 0 skips the pass.</summary>
+    #endregion
+
+    #region Heat haze
+
+    /// <summary>
+    /// The game's shared <c>heatHaze</c> this frame (the caller moves it towards the weather's target); 0 skips the pass.
+    /// </summary>
     public float HeatHazeAmount { get; set; }
-    /// <summary>The game's <c>gameTime</c>: game hours since the load, which the haze's layers cycle on (× 100).</summary>
+    /// <summary>
+    /// The game's <c>gameTime</c>: game hours since the load, which the haze's layers cycle on (× 100).
+    /// </summary>
     public double HeatHazeHours { get; set; }
-    /// <summary>The game's far clip D, which its G-buffer depth is divided by.</summary>
+    /// <summary>
+    /// The game's far clip D, which its G-buffer depth is divided by.
+    /// </summary>
     public float HeatHazeFarClip { get; set; } = 10 * Data.World.HeatHaze.ViewDistanceSetting;
-    /// <summary>Whether the heat-haze textures were found (else the pass never runs).</summary>
+    /// <summary>
+    /// Whether the heat-haze textures were found (else the pass never runs).
+    /// </summary>
     public bool HasHeatHaze => _flowTexture is not null && _perturbationTexture is not null;
 
-    /// <summary>The heat-haze textures the game uses (<c>materials/FlowHAZE.dds</c>, <c>Perturber.dds</c>).</summary>
+    /// <summary>
+    /// The heat-haze textures the game uses (<c>materials/FlowHAZE.dds</c>, <c>Perturber.dds</c>).
+    /// </summary>
     public void LoadHeatHaze(AssetLocator assets)
     {
         try
@@ -140,8 +158,14 @@ sealed class PostComposite : IDisposable
         }
     }
 
-    /// <summary>The placed fog volumes, then SSAO, over the finished scene, before the temporal resolve. A separate native segment
-    /// or the caller's command list may record it; the passes load the scene colour instead of clearing it.</summary>
+    #endregion
+
+    #region Drawing
+
+    /// <summary>
+    /// The placed fog volumes, then SSAO, over the finished scene, before the temporal resolve. A separate native segment
+    /// or the caller's command list may record it; the passes load the scene colour instead of clearing it.
+    /// </summary>
     public void ApplyScene(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, in SceneInputs inputs, bool volumes, bool ssaoOn)
     {
         EnsureScene(scene.Desc.Width, scene.Desc.Height);
@@ -149,12 +173,15 @@ sealed class PostComposite : IDisposable
         if (ssaoOn) RunSsao(cmd, scene, depth, inputs);
     }
 
-    /// <summary>Draws the scene through exposure and the tone map, then FXAA and the heat haze, into <paramref name="target"/>.</summary>
+    /// <summary>
+    /// Draws the scene through exposure and the tone map, then FXAA and the heat haze, into <paramref name="target"/>.
+    /// </summary>
     public void Draw(IGpuCommandList cmd, GpuTexture scene, GpuTexture depth, GpuTexture target, PostOptions o, (float Min, float Max) band,
         in SceneInputs inputs, bool temporal = false)
     {
         EnsureDisplay(target.Desc.Width, target.Desc.Height);
         MakeTargets(o, temporal);
+
         // The luminance: 16 taps of the scene into 256², then the mip chain down to 1×1.
         _luminance.Bind(_lumSceneSlot, _sceneSampler with { View = scene.View() });
         _luminance.Set(_lumCell, 1f / LuminanceSize, 1f / LuminanceSize);
@@ -169,6 +196,7 @@ sealed class PostComposite : IDisposable
         long now = Stopwatch.GetTimestamp();
         float dt = _adaptClock == 0 ? 0 : (float)Stopwatch.GetElapsedTime(_adaptClock, now).TotalSeconds;
         _adaptClock = now;
+
         // Both history targets must be seeded before the smoothing starts: the second ping-pong target is read on
         // the next frame, and an undefined texture there makes the exposure alternate dark/bright as it converges.
         float blend = !_adaptedValid || _adaptedFrames < 2 ? 1 : 1 - MathF.Exp(-dt * AdaptationRate);
@@ -238,7 +266,9 @@ sealed class PostComposite : IDisposable
         }
     }
 
-    /// <summary>SMAA on the composite's LDR picture: edges, blending weights, then the blend into the heat haze's input or the target.</summary>
+    /// <summary>
+    /// SMAA on the composite's LDR picture: edges, blending weights, then the blend into the heat haze's input or the target.
+    /// </summary>
     void RunSmaa(IGpuCommandList cmd, GpuTexture target, bool haze)
     {
         var s = _smaa;
@@ -258,7 +288,8 @@ sealed class PostComposite : IDisposable
     /// itself reactive. The full-size particles write their own coverage; <see cref="PostTaa"/> calls this for the
     /// low-resolution accumulations after that pass.
     /// </summary>
-    public void ParticleCoverage(IGpuCommandList cmd, GpuTexture accum, GpuTexture lowDepth, GpuTexture accumFar, GpuTexture lowDepthFar, GpuTexture sceneDepth,
+    public void ParticleCoverage(IGpuCommandList cmd, GpuTexture accum, GpuTexture lowDepth, GpuTexture accumFar, GpuTexture lowDepthFar,
+            GpuTexture sceneDepth,
         GpuTexture target, int divisor, float near, float far, ColorMask mask)
     {
         var c = _particleCoverageP;
@@ -273,6 +304,7 @@ sealed class PostComposite : IDisposable
         c.P.Set(c.FullSize, (float)target.Desc.Width, (float)target.Desc.Height);
         c.P.Set(c.Limit, mask == ColorMask.A ? 2f : 1f);   // the TAA takes half the motion target's alpha, so 2 is "all current frame"
         var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);
+
         // The MetalFX reactive mask must stay in [0, 1]; several particle accumulations/overlaps must not add past
         // that. TAA's motion alpha keeps the additive 2 = all-current-frame convention.
         var blend = mask == ColorMask.R
@@ -281,6 +313,10 @@ sealed class PostComposite : IDisposable
         var state = DrawState.For(formats, false) with { Blend = blend, ColourMask = mask };
         Fullscreen(cmd, c.P, target, target.Desc.Width, target.Desc.Height, state, LoadOp.Load);
     }
+
+    #endregion
+
+    #region Light shafts, fog and SSAO
 
     /// <summary>
     /// The Meitou light shafts (docs/render-shafts.md): the shadow samples in a froxel grid, their sums front to back and
@@ -456,6 +492,10 @@ sealed class PostComposite : IDisposable
         Fullscreen(cmd, a.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
     }
 
+    #endregion
+
+    #region Targets
+
     SampledTexture Sample(TextureMinFilter min, TextureMagFilter mag) =>
         new(_ctx.Samplers.Get(SamplerDesc.FromGl(min, mag, TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge, TextureWrapMode.Repeat,
             false, DepthFunction.Lequal, false, 1, false, 0)), default);
@@ -465,6 +505,7 @@ sealed class PostComposite : IDisposable
         if (w == _sceneWidth && h == _sceneHeight) return;
         _sceneWidth = w;
         _sceneHeight = h;
+
         // SSAO targets are made at the first ApplyScene/End for this size.
         _aoA?.Dispose();
         _aoB?.Dispose();
@@ -489,11 +530,14 @@ sealed class PostComposite : IDisposable
         {
             _luminanceTarget = _ctx.CreateTexture(new TextureDesc(InternalFormat.R32F, LuminanceSize, LuminanceSize, LuminanceLevels,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc | TextureUse.TransferDst, Name: "post luminance"));
-            _adaptA = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg32F, 1, 1, Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "post exposure adapted"));
-            _adaptB = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg32F, 1, 1, Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "post exposure adapted"));
+            _adaptA = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg32F, 1, 1,
+                    Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "post exposure adapted"));
+            _adaptB = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rg32F, 1, 1,
+                    Use: TextureUse.ColourTarget | TextureUse.Sampled | TextureUse.TransferSrc, Name: "post exposure adapted"));
             (_adaptedValid, _adaptedFrames) = (false, 0);
         }
         if (_displayWidth <= 0 || _displayHeight <= 0) return;
+
         // LDR and FXAA targets only exist when the composite actually needs them: a temporal upscaler bypasses both, and SMAA is not allocated
         // unless it is the selected anti-aliasing path. This keeps MetalFX from carrying ~60 MiB of never-bound display-size textures.
         bool wantLdr = o.HeatHaze || (!temporal && (o.Fxaa || o.Smaa));
@@ -535,15 +579,21 @@ sealed class PostComposite : IDisposable
         return texture;
     }
 
-    /// <summary>One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/> (its uniforms and samplers set before).</summary>
-    void Fullscreen(IGpuCommandList cmd, LegacyProgram program, GpuTexture target, int w, int h, DrawState? state = null, LoadOp load = LoadOp.DontCare)
+    #endregion
+
+    #region Passes and particles
+
+    /// <summary>
+    /// One fullscreen triangle of <paramref name="program"/> into <paramref name="target"/> (its uniforms and samplers set before).
+    /// </summary>
+    void Fullscreen(IGpuCommandList cmd, LegacyProgram program, GpuTexture target, int w, int h, DrawState? state = null,
+            LoadOp load = LoadOp.DontCare)
     {
         var formats = new AttachmentFormats(target.Desc.Format, InternalFormat.None);
         var s = state ?? DrawState.For(formats, false);
         if (!_pipelines.TryGetValue((program.Program, formats.Colour, s), out var desc))
-        {
-            _pipelines[(program.Program, formats.Colour, s)] = desc = s.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles, formats, program.Name);
-        }
+            _pipelines[(program.Program, formats.Colour, s)] = desc = s.Pipeline(program.Program, program.VertexLayout([]), PrimitiveType.Triangles,
+                    formats, program.Name);
         cmd.BeginRendering(new RenderingDesc(new RenderTarget(target.Attachment(), load, default), default, w, h));
         cmd.SetViewport(new PixelViewport(0, 0, w, h, 0, 1));
         cmd.SetScissor(new PixelRect(0, 0, (uint)w, (uint)h));
@@ -574,8 +624,12 @@ sealed class PostComposite : IDisposable
         FullscreenDepth(cmd, d.P, target, colour, target.Desc.Width, target.Desc.Height);
     }
 
-    /// <summary>The low-resolution accumulations (drawn against each block's nearest and farthest depth) upsampled over the scene (depth-aware, as the Vulkan chain).</summary>
-    public void ParticleComposite(IGpuCommandList cmd, GpuTexture accum, GpuTexture lowDepth, GpuTexture accumFar, GpuTexture lowDepthFar, GpuTexture sceneDepth,
+    /// <summary>
+    /// The low-resolution accumulations (drawn against each block's nearest and farthest depth) upsampled over the scene (depth-aware, as the Vulkan
+    /// chain).
+    /// </summary>
+    public void ParticleComposite(IGpuCommandList cmd, GpuTexture accum, GpuTexture lowDepth, GpuTexture accumFar, GpuTexture lowDepthFar,
+            GpuTexture sceneDepth,
         GpuTexture scene, int divisor, float near, float far)
     {
         var c = _particleCompositeP;
@@ -598,7 +652,10 @@ sealed class PostComposite : IDisposable
         Fullscreen(cmd, c.P, scene, scene.Desc.Width, scene.Desc.Height, state, LoadOp.Load);
     }
 
-    /// <summary>A depth-only fullscreen triangle (the low-resolution particle depth pass); a colour target keeps Metal's pipeline valid (the shader writes black).</summary>
+    /// <summary>
+    /// A depth-only fullscreen triangle (the low-resolution particle depth pass); a colour target keeps Metal's pipeline valid (the shader writes
+    /// black).
+    /// </summary>
     void FullscreenDepth(IGpuCommandList cmd, LegacyProgram program, GpuTexture target, GpuTexture? colour, int w, int h)
     {
         var formats = new AttachmentFormats(colour?.Desc.Format ?? InternalFormat.None, target.Desc.Format);
@@ -619,6 +676,8 @@ sealed class PostComposite : IDisposable
         cmd.EndRendering();
         cmd.Order();
     }
+
+    #endregion
 
     public void Dispose()
     {
@@ -655,6 +714,8 @@ sealed class PostComposite : IDisposable
         _particleCoverageP.P.Dispose();
     }
 
+    #region Pass classes
+
     abstract class Pass(IGpuContext ctx, string vertex, string fragment, string name)
     {
         public readonly LegacyProgram P = LegacyProgram.Create(ctx, vertex, fragment, name);
@@ -666,7 +727,8 @@ sealed class PostComposite : IDisposable
         public readonly UniformHandle Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd, Right, Up, Back, Eye, CharacterOccluder, WaterY;
         public SsaoPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.Ssao, "post ssao")
         {
-            (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"), P.Uniform("uWaterY"));
+            (Depth, Mask, CharacterOccluder, WaterY) = (P.Sampler("uDepth"), P.Sampler("uMask"), P.Uniform("uCharacterOccluder"),
+                    P.Uniform("uWaterY"));
             (Tan, NearFar, Size, Radius, Strength, FadeStart, FadeEnd) = (P.Uniform("uTan"), P.Uniform("uNearFar"), P.Uniform("uSize"),
                 P.Uniform("uRadius"), P.Uniform("uStrength"), P.Uniform("uFadeStart"), P.Uniform("uFadeEnd"));
             (Right, Up, Back, Eye) = (P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uSsaoEye"));
@@ -699,7 +761,8 @@ sealed class PostComposite : IDisposable
             (NearPlanes, Tan, Right, Up, Back, WaterY) = (P.Uniform("uNearPlanes"), P.Uniform("uTan"),
                 P.Uniform("uRight"), P.Uniform("uUp"), P.Uniform("uBack"), P.Uniform("uWaterY"));
             ShaftInjected = P.Sampler("uShaftInjected");
-            (ShaftGrid, ShaftRange, ShaftTan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftTan"), P.Uniform("uShaftFog"));
+            (ShaftGrid, ShaftRange, ShaftTan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftTan"),
+                    P.Uniform("uShaftFog"));
             (ShaftRight, ShaftUp, ShaftBack) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
         }
     }
@@ -743,7 +806,8 @@ sealed class PostComposite : IDisposable
         public ShaftApplyPass(IGpuContext ctx, string vertex) : base(ctx, vertex, LightShaftShaders.Apply, "post shafts apply")
         {
             (NearDepth, Light, Scatter) = (P.Sampler("uNearDepth"), P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
-            (NearPlanes, WaterY, Atlas, Params) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uShaftAtlas"), P.Uniform("uShaftParams"));
+            (NearPlanes, WaterY, Atlas, Params) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uShaftAtlas"),
+                    P.Uniform("uShaftParams"));
             Air = P.Uniform("uShaftAir");
         }
     }
@@ -756,7 +820,9 @@ sealed class PostComposite : IDisposable
             (Image, Texel) = (P.Sampler("uImage"), P.Uniform("uTexel"));
     }
 
-    /// <summary>SMAA's three passes, with the seam's flipped vertex shader on Metal.</summary>
+    /// <summary>
+    /// SMAA's three passes, with the seam's flipped vertex shader on Metal.
+    /// </summary>
     sealed class SmaaPasses
     {
         public readonly LegacyProgram Edges, Weights, Blend;
@@ -789,14 +855,16 @@ sealed class PostComposite : IDisposable
         public readonly SamplerSlot Depth;
         public readonly UniformHandle FullSize, Div, Layer, Planes;
         public ParticleDepthPass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.ParticleDepth, "post particle depth") =>
-            (Depth, FullSize, Div, Layer, Planes) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"), P.Uniform("uPlanes"));
+            (Depth, FullSize, Div, Layer, Planes) = (P.Sampler("uDepth"), P.Uniform("uFullSize"), P.Uniform("uDiv"), P.Uniform("uLayer"),
+                    P.Uniform("uPlanes"));
     }
 
     sealed class ParticleCompositePass : Pass
     {
         public readonly SamplerSlot Accum, LowDepth, AccumFar, LowDepthFar, Depth;
         public readonly UniformHandle LowSize, NearPlanes, Div, Scale, Footprint;
-        public ParticleCompositePass(IGpuContext ctx, string vertex) : base(ctx, vertex, PostProcessShaders.ParticleComposite, "post particle composite")
+        public ParticleCompositePass(IGpuContext ctx, string vertex) : base(ctx, vertex,
+                PostProcessShaders.ParticleComposite, "post particle composite")
         {
             (Accum, LowDepth, Depth) = (P.Sampler("uAccum"), P.Sampler("uLowDepth"), P.Sampler("uDepth"));
             (AccumFar, LowDepthFar) = (P.Sampler("uAccumFar"), P.Sampler("uLowDepthFar"));
@@ -817,4 +885,6 @@ sealed class PostComposite : IDisposable
                 P.Uniform("uFullSize"), P.Uniform("uLimit"));
         }
     }
+
+    #endregion
 }

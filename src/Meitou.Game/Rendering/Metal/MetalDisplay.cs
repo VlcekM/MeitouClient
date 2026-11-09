@@ -15,18 +15,26 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 public sealed unsafe class MetalDisplay : IDisposable
 {
-    /// <summary>The window the game draws into.</summary>
+    /// <summary>
+    /// The window the game draws into.
+    /// </summary>
     public IWindow Window { get; }
 
-    /// <summary>The Metal device.</summary>
+    /// <summary>
+    /// The Metal device.
+    /// </summary>
     public MTLDevice Device { get; }
 
-    /// <summary>The queue the frames are committed to.</summary>
+    /// <summary>
+    /// The queue the frames are committed to.
+    /// </summary>
     public MTLCommandQueue Queue { get; }
 
     CAMetalLayer _layer;
 
-    /// <summary>The layer the drawables come from (a struct wrapper: callers read it, the display owns its mutation).</summary>
+    /// <summary>
+    /// The layer the drawables come from (a struct wrapper: callers read it, the display owns its mutation).
+    /// </summary>
     public CAMetalLayer Layer => _layer;
 
     public MetalDisplay(WindowOptions options, bool vsync = true)
@@ -57,9 +65,11 @@ public sealed unsafe class MetalDisplay : IDisposable
         layer.Device = Device;
         layer.PixelFormat = MTLPixelFormat.BGRA8Unorm;
         layer.FramebufferOnly = true;
+
         // Three drawables, matching MetalContext.FrameRingDepth: a fourth would let the CPU run further ahead than the
         // constants ring can safely retain, and a smaller ring (the layer's old default is also three) serialises present.
         layer.MaximumDrawableCount = MetalContext.FrameRingDepth;
+
         // The Metal path had no vsync switch of its own; it was always on. Follow the game's setting like VulkanDisplay.
         layer.DisplaySyncEnabled = vsync;
         layer.AllowsNextDrawableTimeout = true;
@@ -78,8 +88,10 @@ public sealed unsafe class MetalDisplay : IDisposable
 
     static readonly Selector ValueForKey = new("valueForKey:");
 
-    /// <summary>What AppKit sees right now; a zoom/fullscreen can change the content view or detach the layer without GLFW
-    /// reporting a framebuffer size.</summary>
+    /// <summary>
+    /// What AppKit sees right now; a zoom/fullscreen can change the content view or detach the layer without GLFW
+    /// reporting a framebuffer size.
+    /// </summary>
     public string NativeWindowState()
     {
         var view = ObjectiveC.IntPtr_objc_msgSend(_nsWindow, "contentView");
@@ -95,8 +107,10 @@ public sealed unsafe class MetalDisplay : IDisposable
             $"frame {frame}, zoomed {zoomed}, visible {visible}, style 0x{style:X}";
     }
 
-    /// <summary>CAMetalLayer's <c>drawableSize</c> is a CGSize (two doubles): SharpMetal models it as an IntPtr, so the
-    /// setter is called directly with the two doubles the ABI passes for the struct.</summary>
+    /// <summary>
+    /// CAMetalLayer's <c>drawableSize</c> is a CGSize (two doubles): SharpMetal models it as an IntPtr, so the
+    /// setter is called directly with the two doubles the ABI passes for the struct.
+    /// </summary>
     [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     static extern void SetDrawableSize(IntPtr layer, IntPtr selector, double width, double height);
 
@@ -127,18 +141,22 @@ public sealed unsafe class MetalDisplay : IDisposable
         if (!reattached && size.X == _layerWidth && size.Y == _layerHeight && pixels.X == _layerPixelWidth && pixels.Y == _layerPixelHeight) return;
         (_layerWidth, _layerHeight, _layerPixelWidth, _layerPixelHeight) = (size.X, size.Y, pixels.X, pixels.Y);
         if (size.X <= 0 || size.Y <= 0) return;
+
         // CAMetalLayer's drawable is bounds * contentsScale, not frame * contentsScale: setting only the frame during a
         // resize leaves the drawable at its old pixel size (a black or stale window after the drag).
         ObjectiveC.objc_msgSend(Layer.NativePtr, "setFrame:", new NSRect(0, 0, size.X, size.Y));
         ObjectiveC.objc_msgSend(Layer.NativePtr, "setBounds:", new NSRect(0, 0, size.X, size.Y));
         ObjectiveC.objc_msgSend(Layer.NativePtr, "setContentsScale:", pixels.X / (double)size.X);
+
         // CAMetalLayer keeps the drawableSize it first computed; setting bounds/contentsScale does not necessarily
         // recompute it, and a stale drawable is a black (or old-size) window after a drag.
         SetDrawableSize(Layer.NativePtr, DrawableSizeSelector.SelPtr, pixels.X, pixels.Y);
         Console.WriteLine($"metal     window {size.X}x{size.Y} points, {pixels.X}x{pixels.Y} pixels (scale {pixels.X / (double)size.X:0.##})");
     }
 
-    /// <summary>Brings the app to the front, so a screenshot of the screen shows the window.</summary>
+    /// <summary>
+    /// Brings the app to the front, so a screenshot of the screen shows the window.
+    /// </summary>
     public void Activate()
     {
         var app = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSApplication"), "sharedApplication");
@@ -152,6 +170,7 @@ public sealed unsafe class MetalDisplay : IDisposable
     public void SetFullScreenPresentation(bool fullScreen)
     {
         var app = ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("NSApplication"), "sharedApplication");
+
         // NSApplicationPresentationHideDock | NSApplicationPresentationHideMenuBar.
         SetPresentationOptions(app, PresentationOptionsSelector.SelPtr, fullScreen ? 10UL : 0UL);
     }
@@ -163,11 +182,15 @@ public sealed unsafe class MetalDisplay : IDisposable
 
     long _noDrawableStamp;
 
-    /// <summary>How long the last <see cref="TryBeginFrame"/> waited in <c>CAMetalLayer.nextDrawable</c> (ms). The trace
-    /// separates this present/swapchain stall from the CPU time spent recording the frame.</summary>
+    /// <summary>
+    /// How long the last <see cref="TryBeginFrame"/> waited in <c>CAMetalLayer.nextDrawable</c> (ms). The trace
+    /// separates this present/swapchain stall from the CPU time spent recording the frame.
+    /// </summary>
     public double LastDrawableWaitMilliseconds { get; private set; }
 
-    /// <summary>Begins a frame: the drawable to draw into and the command buffer to record it in.</summary>
+    /// <summary>
+    /// Begins a frame: the drawable to draw into and the command buffer to record it in.
+    /// </summary>
     public bool TryBeginFrame(out MTLCommandBuffer command, out CAMetalDrawable drawable)
     {
         SyncLayer();
@@ -191,18 +214,23 @@ public sealed unsafe class MetalDisplay : IDisposable
         return true;
     }
 
-    /// <summary>The layer's actual display-sync state (diagnostic and the game's settings).</summary>
+    /// <summary>
+    /// The layer's actual display-sync state (diagnostic and the game's settings).
+    /// </summary>
     public bool VSync
     {
         get => _layer.DisplaySyncEnabled;
         set => _layer.DisplaySyncEnabled = value;
     }
 
-    /// <summary>Opens the render pass for a frame: the drawable cleared to <paramref name="clear"/>.</summary>
+    /// <summary>
+    /// Opens the render pass for a frame: the drawable cleared to <paramref name="clear"/>.
+    /// </summary>
     public MTLRenderCommandEncoder BeginPass(MTLCommandBuffer command, CAMetalDrawable drawable, MTLClearColor clear)
     {
         var descriptor = new MTLRenderPassDescriptor(
             ObjectiveC.IntPtr_objc_msgSend(ObjectiveC.objc_getClass("MTLRenderPassDescriptor"), "renderPassDescriptor"));
+
         // The attachments come back as a struct copy, so a value-type property (the clear colour) has to be written back
         // into the array, or the pass clears to whatever the descriptor's memory held.
         var attachments = descriptor.ColorAttachments;
@@ -215,7 +243,9 @@ public sealed unsafe class MetalDisplay : IDisposable
         return command.RenderCommandEncoder(descriptor);
     }
 
-    /// <summary>Presents the frame and commits the command buffer.</summary>
+    /// <summary>
+    /// Presents the frame and commits the command buffer.
+    /// </summary>
     public void Present(MTLCommandBuffer command, CAMetalDrawable drawable)
     {
         command.PresentDrawable(drawable);

@@ -24,7 +24,9 @@ public sealed class MetalSky
     readonly MetalUniformBlock _block;
     readonly int _binding;
 
-    /// <summary>Builds the sky's pipeline from the engine's GLSL (a vertex shader and a fragment shader).</summary>
+    /// <summary>
+    /// Builds the sky's pipeline from the engine's GLSL (a vertex shader and a fragment shader).
+    /// </summary>
     public MetalSky(MTLDevice device, string vertexGlsl, string fragmentGlsl)
     {
         // The fragment stage's bindings start at 0: Metal gives the stages their own binding tables, so the Vulkan scheme
@@ -55,7 +57,9 @@ public sealed class MetalSky
         _uniforms = device.NewBuffer((ulong)_block.Size, MTLResourceOptions.ResourceStorageModeShared);
     }
 
-    /// <summary>Draws the sky into an open render pass.</summary>
+    /// <summary>
+    /// Draws the sky into an open render pass.
+    /// </summary>
     public void Render(MTLRenderCommandEncoder encoder, in Matrix4x4 inverseViewProjection, SkyColours colours)
     {
         _block.Set("uInverseViewProjection", inverseViewProjection);

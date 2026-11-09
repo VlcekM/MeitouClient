@@ -7,24 +7,38 @@ using Meitou.Game.Rendering.Terrain;
 
 namespace Meitou.Game.Rendering.Objects;
 
-/// <summary>A mesh as a worker thread decoded it: level 0's vertices and indices, the LOD levels, and the meshes of manual levels.</summary>
+/// <summary>
+/// A mesh as a worker thread decoded it: level 0's vertices and indices, the LOD levels, and the meshes of manual levels.
+/// </summary>
 sealed class DecodedObjectMesh
 {
     public required Model Model;
     public required List<MeshLodLevel> Levels;
-    /// <summary>Manual levels (an extra mesh file each) by level number.</summary>
+    /// <summary>
+    /// Manual levels (an extra mesh file each) by level number.
+    /// </summary>
     public required Dictionary<int, DecodedObjectMesh> Manual;
     public required Vector3 Centre;
     public required float Radius;
-    /// <summary>The mesh's highest local Y (the scaffold clip of an unfinished building scales with it).</summary>
+    /// <summary>
+    /// The mesh's highest local Y (the scaffold clip of an unfinished building scales with it).
+    /// </summary>
     public float Top;
-    /// <summary>The local bounding box: the file's bounds, else the vertices'.</summary>
+    /// <summary>
+    /// The local bounding box: the file's bounds, else the vertices'.
+    /// </summary>
     public Vector3 Min, Max;
-    /// <summary>How the levels are picked (<see cref="LodCurve"/>); null: the distances as they are.</summary>
+    /// <summary>
+    /// How the levels are picked (<see cref="LodCurve"/>); null: the distances as they are.
+    /// </summary>
     public LodCurve? Curve;
-    /// <summary>The finest level held (0: all of them): see <see cref="ObjectMeshCache.LevelFor"/>.</summary>
+    /// <summary>
+    /// The finest level held (0: all of them): see <see cref="ObjectMeshCache.LevelFor"/>.
+    /// </summary>
     public int MinLevel;
-    /// <summary>Index buffers with every level back to back, made on the worker.</summary>
+    /// <summary>
+    /// Index buffers with every level back to back, made on the worker.
+    /// </summary>
     public List<PreparedPart> Prepared { get; } = [];
 }
 
@@ -34,39 +48,60 @@ sealed class PreparedPart
     public required uint[] All;
     public required int[] Offset, Count;
     public uint[][]? Levels;
-    /// <summary>The vertices in the GPU's object layout (<see cref="GpuVertex"/>), packed on the decoding thread.</summary>
+    /// <summary>
+    /// The vertices in the GPU's object layout (<see cref="GpuVertex"/>), packed on the decoding thread.
+    /// </summary>
     public byte[] Packed = [];
-    /// <summary>World length per texture-coordinate unit that nearly all of the part's surface is at least as stretched as (<see cref="MeshTexelScale.Of"/>).</summary>
+    /// <summary>
+    /// World length per texture-coordinate unit that nearly all of the part's surface is at least as stretched as (<see cref="MeshTexelScale.Of"/>).
+    /// </summary>
     public float UvScale = float.PositiveInfinity;
 }
 
-/// <summary>One submesh on the GPU: one vertex buffer, one index buffer holding every LOD level back to back (native buffers, "object meshes").</summary>
+/// <summary>
+/// One submesh on the GPU: one vertex buffer, one index buffer holding every LOD level back to back (native buffers, "object meshes").
+/// </summary>
 sealed class GpuObjectPart
 {
     public required int SubMeshIndex;
     public required string MaterialName;
     public required bool HasTangents, HasColours;
     public required DeviceBuffer Vertices, Indices;
-    /// <summary>Bytes per vertex in <see cref="Vertices"/>: <see cref="GpuVertex.ObjectSize"/>, or <see cref="GpuVertex.CharacterSize"/> for a character's part.</summary>
+    /// <summary>
+    /// Bytes per vertex in <see cref="Vertices"/>: <see cref="GpuVertex.ObjectSize"/>, or <see cref="GpuVertex.CharacterSize"/> for a character's
+    /// part.
+    /// </summary>
     public int Stride = GpuVertex.ObjectSize;
-    /// <summary>The vertex attributes by location (<see cref="GpuVertex"/>; empty for a part without vertices).</summary>
+    /// <summary>
+    /// The vertex attributes by location (<see cref="GpuVertex"/>; empty for a part without vertices).
+    /// </summary>
     public LegacyProgram.Attribute?[] Attributes = [];
-    /// <summary>First index and index count of each level in <see cref="Indices"/> (a manual level has none: count 0).</summary>
+    /// <summary>
+    /// First index and index count of each level in <see cref="Indices"/> (a manual level has none: count 0).
+    /// </summary>
     public required int[] Offset, Count;
-    /// <summary>For the terrain shader's mesh path (which draws from index 0): the mesh per level, made when first asked for, and the index
-    /// buffers of the reduced levels.</summary>
+    /// <summary>
+    /// For the terrain shader's mesh path (which draws from index 0): the mesh per level, made when first asked for, and the index
+    /// buffers of the reduced levels.
+    /// </summary>
     public MeshBindings?[]? PlainMesh;
     public DeviceBuffer?[]? PlainEbo;
     public uint[][]? LevelIndices;
-    /// <summary>World length per texture-coordinate unit (<see cref="MeshTexelScale"/>): how large a texel is, which says how far away a
-    /// texture's top mips stop mattering (infinity: unknown, they always matter).</summary>
+    /// <summary>
+    /// World length per texture-coordinate unit (<see cref="MeshTexelScale"/>): how large a texel is, which says how far away a
+    /// texture's top mips stop mattering (infinity: unknown, they always matter).
+    /// </summary>
     public float UvScale = float.PositiveInfinity;
-    /// <summary>What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).</summary>
+    /// <summary>
+    /// What a native draw needs, per program (<see cref="WorldObjectRenderer"/>).
+    /// </summary>
     public ObjectNativeMesh ColourNative, DepthNative, ColourSolidNative;
 }
 
-/// <summary>A part's native state for one program: its vertex layout and own vertex buffers, its element buffer, and the pipelines for the
-/// last two segment states (the reflection's multisampled target alternates with the scene's).</summary>
+/// <summary>
+/// A part's native state for one program: its vertex layout and own vertex buffers, its element buffer, and the pipelines for the
+/// last two segment states (the reflection's multisampled target alternates with the scene's).
+/// </summary>
 struct ObjectNativeMesh
 {
     public VertexLayout? Layout;
@@ -80,47 +115,71 @@ sealed class GpuObjectMesh
 {
     public List<GpuObjectPart> Parts { get; } = [];
     public required float[] Distances;
-    /// <summary>How a draw picks among the levels (the merged list with the generated ones, or the file's only: <see cref="ObjectLodGen.Enabled"/>).</summary>
+    /// <summary>
+    /// How a draw picks among the levels (the merged list with the generated ones, or the file's only: <see cref="ObjectLodGen.Enabled"/>).
+    /// </summary>
     public LodCurve Curve { get => _curve ??= LodCurve.Of(Distances); set => _curve = value; }
     LodCurve? _curve;
-    /// <summary>For each level: the mesh to draw instead (manual levels), else null.</summary>
+    /// <summary>
+    /// For each level: the mesh to draw instead (manual levels), else null.
+    /// </summary>
     public required GpuObjectMesh?[] Manual;
     public required Vector3 Centre;
     public required float Radius;
-    /// <summary>The mesh's highest local Y (the scaffold clip of an unfinished building scales with it).</summary>
+    /// <summary>
+    /// The mesh's highest local Y (the scaffold clip of an unfinished building scales with it).
+    /// </summary>
     public float Top;
-    /// <summary>The local bounding box (<see cref="DecodedObjectMesh.Min"/>).</summary>
+    /// <summary>
+    /// The local bounding box (<see cref="DecodedObjectMesh.Min"/>).
+    /// </summary>
     public Vector3 Min, Max;
     public long Bytes;
-    /// <summary>The finest LOD level whose triangles are held (<see cref="ObjectMeshCache.LevelFor"/>): a draw at a finer level uses this one instead.</summary>
+    /// <summary>
+    /// The finest LOD level whose triangles are held (<see cref="ObjectMeshCache.LevelFor"/>): a draw at a finer level uses this one instead.
+    /// </summary>
     public int MinLevel;
     public int LevelCount => Distances.Length;
 }
 
-/// <summary>A mesh file of the world: loaded on demand, decoded on a worker thread, uploaded in steps on the render thread.</summary>
+/// <summary>
+/// A mesh file of the world: loaded on demand, decoded on a worker thread, uploaded in steps on the render thread.
+/// </summary>
 sealed class ObjectMesh
 {
     public required string Key;
-    /// <summary>A building's or town's distant mesh: vertex colours ×1.5 (the game's DistantTown shader multiplies by that).</summary>
+    /// <summary>
+    /// A building's or town's distant mesh: vertex colours ×1.5 (the game's DistantTown shader multiplies by that).
+    /// </summary>
     public bool Distant;
-    /// <summary>The mesh is also drawn through the terrain shader's mesh path, which needs per-level vertex arrays.</summary>
+    /// <summary>
+    /// The mesh is also drawn through the terrain shader's mesh path, which needs per-level vertex arrays.
+    /// </summary>
     public bool KeepLevelIndices;
     public State Status;
     public Task<DecodedObjectMesh?>? Job;
     public GpuObjectMesh? Gpu;
-    /// <summary>When the mesh was last drawn (or became resident), <see cref="Environment.TickCount64"/>; what <see cref="ObjectMeshCache.Trim"/> unloads by.</summary>
+    /// <summary>
+    /// When the mesh was last drawn (or became resident), <see cref="Environment.TickCount64"/>; what <see cref="ObjectMeshCache.Trim"/> unloads by.
+    /// </summary>
     public long LastUsed;
     public long Bytes;
     public bool EverLoaded;
-    /// <summary>Distance-based streaming of the finest LOD (<see cref="ObjectMeshCache.Retarget"/>): this pass's nearest user (LOD value before the bias), the
-    /// mark pass that found it, when the mesh started to be finer than needed, and the reshape decode in flight.</summary>
+    /// <summary>
+    /// Distance-based streaming of the finest LOD (<see cref="ObjectMeshCache.Retarget"/>): this pass's nearest user (LOD value before the bias), the
+    /// mark pass that found it, when the mesh started to be finer than needed, and the reshape decode in flight.
+    /// </summary>
     public float NearPass = float.PositiveInfinity;
     public int NearStamp;
     public long TooFineSince;
     public Task<DecodedObjectMesh?>? Reshape;
-    /// <summary>The reshape in flight is for finer levels (counted in <see cref="ObjectMeshCache.Upgrading"/>).</summary>
+    /// <summary>
+    /// The reshape in flight is for finer levels (counted in <see cref="ObjectMeshCache.Upgrading"/>).
+    /// </summary>
     public bool Upgrade;
-    /// <summary>The nearest placement wanted while it waited for its first decode (raw distance), for the level it is made with.</summary>
+    /// <summary>
+    /// The nearest placement wanted while it waited for its first decode (raw distance), for the level it is made with.
+    /// </summary>
     public float WantedNear = float.PositiveInfinity;
 
     public enum State { None, Loading, Uploading, Resident, Failed }
@@ -132,7 +191,9 @@ sealed class ObjectMesh
 /// </summary>
 sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets, UploadQueue uploads) : IDisposable
 {
-    /// <summary>The buffers' allocation name (the F12 VRAM pie groups by it).</summary>
+    /// <summary>
+    /// The buffers' allocation name (the F12 VRAM pie groups by it).
+    /// </summary>
     const string AllocationName = "object meshes";
 
     BufferUse RayInput => gpuContext.HasRayQuery ? BufferUse.RayInput : 0;
@@ -142,38 +203,60 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     readonly List<ObjectMesh> _running = [];
     int _frame;
 
-    /// <summary>Decodes running at once.</summary>
+    /// <summary>
+    /// Decodes running at once.
+    /// </summary>
     public int MaxJobs { get; set; } = 4;
     public List<string> Messages { get; } = [];
     public int Resident => _meshes.Values.Count(m => m.Status == ObjectMesh.State.Resident);
     public int Total => _meshes.Count;
     public long Bytes { get; private set; }
-    /// <summary>Decodes running or wanted, and meshes whose upload is queued.</summary>
+    /// <summary>
+    /// Decodes running or wanted, and meshes whose upload is queued.
+    /// </summary>
     public int Pending => _running.Count + _wanted.Count + _reshaping.Count + _reshapeQueued;
     public bool Idle => _running.Count == 0 && _wanted.Count == 0 && _reshaping.Count == 0 && _reshapeQueued == 0;
 
     // ---- distance-based streaming of the finest LOD level (docs/renderer-native.md 8.12) ----
 
     readonly List<ObjectMesh> _reshaping = [];
-    /// <summary>Reshaped meshes whose upload is queued (until the swap).</summary>
+    /// <summary>
+    /// Reshaped meshes whose upload is queued (until the swap).
+    /// </summary>
     int _reshapeQueued;
-    /// <summary>Meshes remade with another finest level held: finer (something came near), coarser (nothing near needs it), and the finer ones in flight.</summary>
+    /// <summary>
+    /// Meshes remade with another finest level held: finer (something came near), coarser (nothing near needs it), and the finer ones in flight.
+    /// </summary>
     public int Refined { get; private set; }
     public int Coarsened { get; private set; }
     public int Upgrading { get; private set; }
-    /// <summary>Seconds a mesh must have held finer levels than needed before it is remade without them (under the guard's pressure: no wait).</summary>
+    /// <summary>
+    /// Seconds a mesh must have held finer levels than needed before it is remade without them (under the guard's pressure: no wait).
+    /// </summary>
     public double CoarsenAfterSeconds { get; set; } = 10;
-    /// <summary>Reshape decodes at once (the worker threads are few and shared with the foliage's layouts).</summary>
+    /// <summary>
+    /// Reshape decodes at once (the worker threads are few and shared with the foliage's layouts).
+    /// </summary>
     public int MaxReshapes { get; set; } = 2;
-    /// <summary>The LOD bias the renderer draws with (the level a mesh is held at follows the LOD value times it).</summary>
+    /// <summary>
+    /// The LOD bias the renderer draws with (the level a mesh is held at follows the LOD value times it).
+    /// </summary>
     public float LodBias { get; set; } = 1;
-    /// <summary>The render's pixels per radian, which the generated levels' distances are worked out with when a mesh loads (<see cref="ObjectLodGen"/>); the 1080-line, 50 degree picture until the first frame.</summary>
+    /// <summary>
+    /// The render's pixels per radian, which the generated levels' distances are worked out with when a mesh loads (<see cref="ObjectLodGen"/>); the
+    /// 1080-line, 50 degree picture until the first frame.
+    /// </summary>
     public float PixelsPerRadian { get; set; } = 1080 / (2 * MathF.Tan(25 * MathF.PI / 180));
-    /// <summary>How far ahead of the camera a mesh is kept ready for (the renderer's <c>MeshMargin</c>: the camera's speed over 1.5 s), taken off the distance a new mesh is made for.</summary>
+    /// <summary>
+    /// How far ahead of the camera a mesh is kept ready for (the renderer's <c>MeshMargin</c>: the camera's speed over 1.5 s), taken off the distance
+    /// a new mesh is made for.
+    /// </summary>
     public float LookAhead { get; set; }
 
-    /// <summary>The nearest user's LOD value <paramref name="near"/> (before the LOD bias) of a resident mesh in this mark pass: remakes it with finer levels
-    /// when it needs them, or, after a while, without the finer ones nothing needs.</summary>
+    /// <summary>
+    /// The nearest user's LOD value <paramref name="near"/> (before the LOD bias) of a resident mesh in this mark pass: remakes it with finer levels
+    /// when it needs them, or, after a while, without the finer ones nothing needs.
+    /// </summary>
     public void Rebalance(ObjectMesh m, float near)
     {
         if (m.Status != ObjectMesh.State.Resident || m.Gpu is not { } gpu || m.Reshape is not null || m.Distant) return;
@@ -199,7 +282,10 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         else m.TooFineSince = 0;
     }
 
-    /// <summary>Starts a decode of a resident mesh that keeps the levels a user at LOD value <paramref name="near"/> can draw; false when not started (jobs busy, memory pressure, not resident).</summary>
+    /// <summary>
+    /// Starts a decode of a resident mesh that keeps the levels a user at LOD value <paramref name="near"/> can draw; false when not started (jobs
+    /// busy, memory pressure, not resident).
+    /// </summary>
     public bool Retarget(ObjectMesh m, float near)
     {
         if (m.Status != ObjectMesh.State.Resident || m.Reshape is not null || m.Distant) return false;
@@ -212,7 +298,9 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         return true;
     }
 
-    /// <summary>The reshape decodes that finished: the new parts are queued for upload, and swapped in place of the old once uploaded.</summary>
+    /// <summary>
+    /// The reshape decodes that finished: the new parts are queued for upload, and swapped in place of the old once uploaded.
+    /// </summary>
     void PumpReshapes()
     {
         for (int i = 0; i < _reshaping.Count; i++)
@@ -240,11 +328,15 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         return m;
     }
 
-    /// <summary>Asks for a mesh to be loaded; smaller <paramref name="priority"/> (distance) goes first.</summary>
+    /// <summary>
+    /// Asks for a mesh to be loaded; smaller <paramref name="priority"/> (distance) goes first.
+    /// </summary>
     public void Request(ObjectMesh mesh, float priority) => Request(mesh, priority, priority);
 
-    /// <summary>Asks for a mesh wanted from <paramref name="near"/> (the distance its levels are made for), loaded in the order of <paramref name="order"/>
-    /// (smaller first; <c>ObjectStreamer.Rank</c>, which puts a flight's arrival first).</summary>
+    /// <summary>
+    /// Asks for a mesh wanted from <paramref name="near"/> (the distance its levels are made for), loaded in the order of <paramref name="order"/>
+    /// (smaller first; <c>ObjectStreamer.Rank</c>, which puts a flight's arrival first).
+    /// </summary>
     public void Request(ObjectMesh mesh, float near, float order)
     {
         if (mesh.Status != ObjectMesh.State.None) return;
@@ -252,10 +344,14 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         mesh.WantedNear = Math.Min(mesh.WantedNear, near + WantedSlack);
     }
 
-    /// <summary>What <see cref="ObjectMesh.WantedNear"/> adds to a request's distance: the scan takes 600 off the camera's distance to the placement.</summary>
+    /// <summary>
+    /// What <see cref="ObjectMesh.WantedNear"/> adds to a request's distance: the scan takes 600 off the camera's distance to the placement.
+    /// </summary>
     const float WantedSlack = 600;
 
-    /// <summary>Starts decodes (nearest first) and queues the uploads of finished ones.</summary>
+    /// <summary>
+    /// Starts decodes (nearest first) and queues the uploads of finished ones.
+    /// </summary>
     public void Pump()
     {
         _frame++;
@@ -274,6 +370,7 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         }
         PumpReshapes();
         if (_wanted.Count == 0) return;
+
         // Memory pressure: only what is wanted within the guard's near reach is decoded, and nothing past its priority ceiling (the scan asks again).
         bool nearOnly = Guard is { Streaming: false };
         if (Guard is { StreamsNear: false }) { _wanted.Clear(); return; }
@@ -294,9 +391,9 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         }
     }
 
-    /// <param name="near">How near the mesh is wanted, for the finest LOD level worth holding (<see cref="LevelFor"/>): the camera's distance to the nearest
-    /// placement (<paramref name="nearIsPlacement"/>: the mesh's size is not known yet, six radii are taken off) or, else, the nearest LOD value
-    /// (before the LOD bias). Infinity: every level.</param>
+    /// <param name="near">How near the mesh is wanted, for the finest LOD level worth holding (<see cref="LevelFor"/>): the camera's distance to the
+    /// nearest placement (<paramref name="nearIsPlacement"/>: the mesh's size is not known yet, six radii are taken off) or, else, the nearest LOD
+    /// value (before the LOD bias). Infinity: every level.</param>
     DecodedObjectMesh? Decode(string name, bool distant, int depth, bool keep, float near, bool nearIsPlacement, float lodBias)
     {
         var path = assets.Find(name) ?? assets.Find(Path.GetFileName(name.Replace('\\', '/')));
@@ -314,47 +411,54 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         if (distant)
             foreach (var part in model.Parts)
                 for (int i = 0; i < part.Vertices.Length; i++)
-                    part.Vertices[i].Colour = new Vector4(part.Vertices[i].Colour.X * 1.5f, part.Vertices[i].Colour.Y * 1.5f, part.Vertices[i].Colour.Z * 1.5f, part.Vertices[i].Colour.W);
+                    part.Vertices[i].Colour = new Vector4(part.Vertices[i].Colour.X * 1.5f, part.Vertices[i].Colour.Y * 1.5f,
+                            part.Vertices[i].Colour.Z * 1.5f, part.Vertices[i].Colour.W);
         var centre = model.Center;
         float radius = model.Radius, top = centre.Y + radius;
         Vector3 min = new(float.MaxValue), max = new(float.MinValue);
-        if (mesh.Bounds is { } b && b.Max.X >= b.Min.X) { centre = (b.Min + b.Max) / 2; radius = Math.Max((b.Max - b.Min).Length() / 2, 1e-3f); top = b.Max.Y; (min, max) = (b.Min, b.Max); }
+        if (mesh.Bounds is { } b && b.Max.X >= b.Min.X) { centre = (b.Min + b.Max) / 2; radius = Math.Max((b.Max - b.Min).Length() / 2,
+                1e-3f); top = b.Max.Y; (min, max) = (b.Min, b.Max); }
         else
             foreach (var part in model.Parts)
                 foreach (var v in part.Vertices) { min = Vector3.Min(min, v.Position); max = Vector3.Max(max, v.Position); }
         var levels = MeshLod.Levels(mesh);
-        // Generated levels among the file's (docs/render-objects.md, "Generated levels"): a mesh drawn through the normal path, not a distant one, without a skeleton.
+
+        // Generated levels among the file's (docs/render-objects.md, "Generated levels"): a mesh drawn through the normal path, not a distant one,
+        // without a skeleton.
         LodCurve? curve = null;
-        if (depth == 0 && !distant && !keep && mesh.SkeletonName is null && ObjectLodGen.PlanFor(name + MeshWeld.CacheVariant(weld), path, model, radius, levels, PixelsPerRadian, MeshWeld.CacheVariant(weld)) is { } plan)
+        if (depth == 0 && !distant && !keep && mesh.SkeletonName is null && ObjectLodGen.PlanFor(name + MeshWeld.CacheVariant(weld), path, model,
+                radius, levels, PixelsPerRadian, MeshWeld.CacheVariant(weld)) is { } plan)
         {
             levels = ObjectLodGen.Apply(plan, model, levels);
             curve = plan.Curve;
         }
         curve ??= LodCurve.Of([.. levels.Select(l => l.Distance)]);
+
         // The finest level anything near enough can draw: the levels above it are not decoded or uploaded (the vertices only they use, and their
         // indices and manual meshes, stay out). Only a mesh drawn through the normal path (not the terrain shader's, which wants every level) and
         // not a distant one, and not an inner (manual) mesh, which is drawn at its level 0.
         int minLevel = 0;
         if (depth == 0 && !distant && !keep && float.IsFinite(near))
-        {
             minLevel = curve.LevelFor((nearIsPlacement ? near - 6 * radius : near) * lodBias);
-        }
         var manual = new Dictionary<int, DecodedObjectMesh>();
         for (int l = 1; l < levels.Count; l++)
         {
             if (levels[l].ManualMesh is not { } manualName) continue;
+
             // A manual level shows another mesh file; one that cannot be had ends the chain here.
             DecodedObjectMesh? inner = null;
             if (depth == 0)
             {
                 if (l >= minLevel) inner = Decode(manualName, distant, depth + 1, keep, float.PositiveInfinity, false, lodBias);
-                else if (assets.Find(manualName) is not null || assets.Find(Path.GetFileName(manualName.Replace('\\', '/'))) is not null) continue;   // a level above the finest wanted: its file is there, it is not read
+                // a level above the finest wanted: its file is there, it is not read
+                else if (assets.Find(manualName) is not null || assets.Find(Path.GetFileName(manualName.Replace('\\', '/'))) is not null) continue;
             }
             if (inner is null) { levels.RemoveRange(l, levels.Count - l); break; }
             manual[l] = inner;
         }
         if (minLevel >= levels.Count) minLevel = levels.Count - 1;   // the chain ended earlier than the distances said
-        var result = new DecodedObjectMesh { Model = model, Levels = levels, Manual = manual, Centre = centre, Radius = radius, Top = top, Min = min, Max = max, Curve = curve, MinLevel = minLevel };
+        var result = new DecodedObjectMesh { Model = model, Levels = levels, Manual = manual, Centre = centre, Radius = radius, Top = top, Min = min,
+                Max = max, Curve = curve, MinLevel = minLevel };
         foreach (var part in model.Parts) result.Prepared.Add(PreparePart(result, part, keep));
         foreach (var prepared in result.Prepared) prepared.Packed = GpuVertex.PackObject(prepared.Part.Vertices);
         return result;
@@ -465,7 +569,9 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
 
     const int SlabBytes = 512 << 10;
 
-    /// <summary>A part's upload as steps of at most about 512 KB: allocate the buffers, fill them in slabs, set up the vertex array.</summary>
+    /// <summary>
+    /// A part's upload as steps of at most about 512 KB: allocate the buffers, fill them in slabs, set up the vertex array.
+    /// </summary>
     void QueuePart(GpuObjectMesh gpu, PreparedPart prepared, string label)
     {
         var part = prepared.Part;
@@ -505,7 +611,8 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
             {
                 gpuContext.EnsureFrame();
                 using var batch = gpuContext.Uploads.Begin();
-                batch.Write(gp!.Indices, (ulong)start, System.Runtime.InteropServices.MemoryMarshal.AsBytes(prepared.All.AsSpan()).Slice(start, length));
+                batch.Write(gp!.Indices, (ulong)start,
+                        System.Runtime.InteropServices.MemoryMarshal.AsBytes(prepared.All.AsSpan()).Slice(start, length));
             }, label + " (indices)");
         }
         uploads.Add(() =>
@@ -543,22 +650,39 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
 
     public int Unloads { get; private set; }
     public int Reloads { get; private set; }
-    /// <summary>Unused for this long: unloaded.</summary>
+    /// <summary>
+    /// Unused for this long: unloaded.
+    /// </summary>
     public double IdleSeconds { get; set; } = 60;
-    /// <summary>Above this the least recently used meshes unused for <see cref="PressureIdleSeconds"/> go too, down to three quarters of it.</summary>
+    /// <summary>
+    /// Above this the least recently used meshes unused for <see cref="PressureIdleSeconds"/> go too, down to three quarters of it.
+    /// </summary>
     public double HighWaterMb { get; set; } = 768;
     public double PressureIdleSeconds { get; set; } = 8;
-    /// <summary>The high-water mark as a share of the driver's video memory budget (<see cref="WorldTextureCache.HighWaterShare"/>): 768 MB on the 11.4 GB card it was tuned on.</summary>
+    /// <summary>
+    /// The high-water mark as a share of the driver's video memory budget (<see cref="WorldTextureCache.HighWaterShare"/>): 768 MB on the 11.4 GB
+    /// card it was tuned on.
+    /// </summary>
     public double HighWaterShare { get; set; } = 768 / 11453.0;
     public double MarkMb => WorldTextureCache.EffectiveMark(HighWaterMb, HighWaterShare, Guard, Areas, MaxAreaShare);
-    /// <summary>Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the mark scales the same way, its share of the budget at most <see cref="MaxAreaShare"/>.</summary>
+    /// <summary>
+    /// Places kept loaded (<see cref="WorldTextureCache.Areas"/>): the mark scales the same way, its share of the budget at most
+    /// <see cref="MaxAreaShare"/>.
+    /// </summary>
     public int Areas { get; set; } = 1;
-    /// <summary>In proportion to the textures' half: the marks add up, and past the budget the guard's pressure blurs everything.</summary>
+    /// <summary>
+    /// In proportion to the textures' half: the marks add up, and past the budget the guard's pressure blurs everything.
+    /// </summary>
     const double MaxAreaShare = 0.2;
-    /// <summary>The memory-pressure guard (<see cref="VramGuard"/>): under pressure only meshes wanted within <see cref="VramGuard.NearReach"/> are decoded and meshes idle for <see cref="GuardIdleSeconds"/> go.</summary>
+    /// <summary>
+    /// The memory-pressure guard (<see cref="VramGuard"/>): under pressure only meshes wanted within <see cref="VramGuard.NearReach"/> are decoded
+    /// and meshes idle for <see cref="GuardIdleSeconds"/> go.
+    /// </summary>
     public VramGuard? Guard { get; set; }
     public double GuardIdleSeconds { get; set; } = 2;
-    /// <summary>Called with every GPU mesh (manual levels included) that was deleted, so users of it can forget it.</summary>
+    /// <summary>
+    /// Called with every GPU mesh (manual levels included) that was deleted, so users of it can forget it.
+    /// </summary>
     public Action<GpuObjectMesh>? Unloaded { get; set; }
     long _lastTrim;
 
@@ -597,7 +721,9 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         }
     }
 
-    /// <summary>Waits for every running decode (offscreen rendering).</summary>
+    /// <summary>
+    /// Waits for every running decode (offscreen rendering).
+    /// </summary>
     public void WaitForJobs()
     {
         foreach (var m in _running.ToArray()) { try { m.Job!.Wait(); } catch (AggregateException) { } }
@@ -618,7 +744,9 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
         foreach (var m in gpu.Manual) if (m is not null) Delete(m);
     }
 
-    /// <summary>The buffers of the mesh's own parts (freed after the frames in flight).</summary>
+    /// <summary>
+    /// The buffers of the mesh's own parts (freed after the frames in flight).
+    /// </summary>
     static void DeleteBuffers(GpuObjectMesh gpu)
     {
         foreach (var gp in gpu.Parts)
@@ -631,8 +759,8 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
 
     /// <summary>
     /// The new parts of a resident mesh remade with another finest level (<see cref="Retarget"/>) are uploaded like a new mesh's, then, in one step,
-    /// put in place of the old ones in the same <see cref="GpuObjectMesh"/> (the instances and batches that hold it keep drawing, the old parts until the
-    /// swap). The mesh is the same in every other way (bounds, distances), so nothing waits for it.
+    /// put in place of the old ones in the same <see cref="GpuObjectMesh"/> (the instances and batches that hold it keep drawing, the old parts until
+    /// the swap). The mesh is the same in every other way (bounds, distances), so nothing waits for it.
     /// </summary>
     void QueueReshape(ObjectMesh mesh, DecodedObjectMesh decoded)
     {
@@ -673,12 +801,16 @@ sealed unsafe class ObjectMeshCache(IGpuContext gpuContext, AssetLocator assets,
     }
 }
 
-/// <summary>A part's look: the resolved material and its textures (keys are 0 until decoded and uploaded: <see cref="WorldTexture.Key"/>).</summary>
+/// <summary>
+/// A part's look: the resolved material and its textures (keys are 0 until decoded and uploaded: <see cref="WorldTexture.Key"/>).
+/// </summary>
 sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse, WorldTexture? normal, WorldTexture? diffuse2, WorldTexture? normal2,
     float texelScale = float.PositiveInfinity, bool triplanar = false)
 {
     public SurfaceMaterial? Material => material;
-    /// <summary>The DUST define: a building part always has it (docs/formats/runtime-materials.md), a map feature when its material says so.</summary>
+    /// <summary>
+    /// The DUST define: a building part always has it (docs/formats/runtime-materials.md), a map feature when its material says so.
+    /// </summary>
     public bool Dust { get; init; }
     public uint Diffuse => diffuse?.Key ?? 0;
     public uint Normal => normal?.Key ?? 0;
@@ -686,16 +818,25 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
     public uint Normal2 => normal2?.Key ?? 0;
     public bool Swizzled => normal?.Swizzled ?? false;
 
-    /// <summary>World length one unit of the texture coordinates the material samples spans, before the instance's scale (the part's
+    /// <summary>
+    /// World length one unit of the texture coordinates the material samples spans, before the instance's scale (the part's
     /// <see cref="MeshTexelScale"/> over the material's tiling; for a triplanar material the world's own mapping): how large a texel is.
-    /// Infinity when unknown (the textures keep every mip).</summary>
+    /// Infinity when unknown (the textures keep every mip).
+    /// </summary>
     public float TexelScale => texelScale;
-    /// <summary>The coordinates come from the world position, not the mesh: the instance's scale does not enter.</summary>
+    /// <summary>
+    /// The coordinates come from the world position, not the mesh: the instance's scale does not enter.
+    /// </summary>
     public bool Triplanar => triplanar;
-    /// <summary>The part has a diffuse map (resident or not).</summary>
+    /// <summary>
+    /// The part has a diffuse map (resident or not).
+    /// </summary>
     public bool WantsDiffuse => diffuse is not null;
 
-    /// <summary>The textures' need (<see cref="WorldTexture.Offer"/>) for a user at <paramref name="distance"/> (already over the instance's scale unless triplanar).</summary>
+    /// <summary>
+    /// The textures' need (<see cref="WorldTexture.Offer"/>) for a user at <paramref name="distance"/> (already over the instance's scale unless
+    /// triplanar).
+    /// </summary>
     public void Offer(float distance)
     {
         float need = distance / texelScale;
@@ -705,7 +846,9 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
         normal2?.Offer(need);
     }
 
-    /// <summary>As <see cref="Offer"/> for a user that just appeared.</summary>
+    /// <summary>
+    /// As <see cref="Offer"/> for a user that just appeared.
+    /// </summary>
     public void OfferNow(float distance)
     {
         float need = distance / texelScale;
@@ -715,22 +858,31 @@ sealed class ObjectPartMaterial(SurfaceMaterial? material, WorldTexture? diffuse
         normal2?.OfferNow(need);
     }
 
-    /// <summary>Every texture is resident or known to be missing (a picture drawn now will not change as textures arrive).</summary>
+    /// <summary>
+    /// Every texture is resident or known to be missing (a picture drawn now will not change as textures arrive).
+    /// </summary>
     public bool TexturesSettled => Settled(diffuse) && Settled(normal) && Settled(diffuse2) && Settled(normal2);
 
     static bool Settled(WorldTexture? t) => t is null || t.Native is not null || t.State == WorldTexture.Residency.Missing;
 }
 
-/// <summary>The materials of a mesh's parts for one placement (parts in the mesh's order).</summary>
+/// <summary>
+/// The materials of a mesh's parts for one placement (parts in the mesh's order).
+/// </summary>
 sealed class ObjectMaterialSet(ObjectPartMaterial[] parts)
 {
     public ObjectPartMaterial[] Parts => parts;
     public int Stamp;
-    /// <summary>This mark pass's nearest user: its distance, and its distance over its scale (<see cref="ObjectPartMaterial.Triplanar"/> parts take the first).</summary>
+    /// <summary>
+    /// This mark pass's nearest user: its distance, and its distance over its scale (<see cref="ObjectPartMaterial.Triplanar"/> parts take the
+    /// first).
+    /// </summary>
     public float Near, NearScaled;
     public int NeedStamp;
 
-    /// <summary>Reading a texture key counts as using the texture (<see cref="WorldTexture.Key"/>); this keeps all of them from being unloaded.</summary>
+    /// <summary>
+    /// Reading a texture key counts as using the texture (<see cref="WorldTexture.Key"/>); this keeps all of them from being unloaded.
+    /// </summary>
     public void Touch()
     {
         foreach (var p in parts) _ = (p.Diffuse, p.Normal, p.Diffuse2, p.Normal2);

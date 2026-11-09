@@ -6,12 +6,15 @@ using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
-/// DLSS's exposure (docs/render-post.md "Frame contract"): the scale the composite gives the colour before its tone map, written into a 1 x 1 R32F ahead of the
-/// upscaler. The adaptation runs after the upscaler, so it is last frame's adapted luminance (it moves at 0.5 / s); DLSS's own measure is the fallback.
+/// DLSS's exposure (docs/render-post.md "Frame contract"): the scale the composite gives the colour before its tone map, written into a 1 x 1 R32F
+/// ahead of the upscaler. The adaptation runs after the upscaler, so it is last frame's adapted luminance (it moves at 0.5 / s); DLSS's own measure
+/// is the fallback.
 /// </summary>
 public sealed unsafe partial class PostProcess
 {
-    /// <summary>The composite's key over the adapted luminance (hdr.material's EXPOSURE_KEY, PostProcessShaders.Composite).</summary>
+    /// <summary>
+    /// The composite's key over the adapted luminance (hdr.material's EXPOSURE_KEY, PostProcessShaders.Composite).
+    /// </summary>
     const float ExposureKey = 0.55f;
 
     Target2D? _upscaleExposure;
@@ -24,7 +27,10 @@ public sealed unsafe partial class PostProcess
         public float Exposure, Key, Auto;
     }
 
-    /// <summary>The 1 x 1 exposure for the vendor upscaler, written in this frame's post segment; null where R32F cannot be a storage image (DLSS then measures its own).</summary>
+    /// <summary>
+    /// The 1 x 1 exposure for the vendor upscaler, written in this frame's post segment; null where R32F cannot be a storage image (DLSS then
+    /// measures its own).
+    /// </summary>
     Target2D? WriteUpscaleExposure()
     {
         if (!SupportsStorage(InternalFormat.R32F) || _adaptB is null) return null;

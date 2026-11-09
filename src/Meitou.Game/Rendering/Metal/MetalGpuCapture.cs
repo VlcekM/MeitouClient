@@ -19,7 +19,9 @@ public sealed class MetalGpuCapture
         _active = true;
     }
 
-    /// <summary>The trace file the capture is writing.</summary>
+    /// <summary>
+    /// The trace file the capture is writing.
+    /// </summary>
     public string OutputPath => _path;
 
     /// <summary>
@@ -49,6 +51,7 @@ public sealed class MetalGpuCapture
             error = "the GPU trace document destination is unavailable (launch with MTL_CAPTURE_ENABLED=1)";
             return null;
         }
+
         // The descriptor and URL retain what they need once StartCapture returns; dispose our wrappers afterwards.
         var descriptor = new MTLCaptureDescriptor();
         var url = NSURL.FileURLWithPath((NSString)path);
@@ -80,7 +83,9 @@ public sealed class MetalGpuCapture
         return started ? new MetalGpuCapture(path) : null;
     }
 
-    /// <summary>Stops the capture and leaves the trace for Xcode.</summary>
+    /// <summary>
+    /// Stops the capture and leaves the trace for Xcode.
+    /// </summary>
     public void Stop()
     {
         if (!_active) return;
@@ -88,7 +93,9 @@ public sealed class MetalGpuCapture
         MTLCaptureManager.SharedCaptureManager.StopCapture();
     }
 
-    /// <summary>Stops the capture and removes the partially written trace (the frame was skipped).</summary>
+    /// <summary>
+    /// Stops the capture and removes the partially written trace (the frame was skipped).
+    /// </summary>
     public void Abort()
     {
         if (!_active) return;
@@ -102,7 +109,9 @@ public sealed class MetalGpuCapture
         catch (UnauthorizedAccessException) { }
     }
 
-    /// <summary>The default trace folder: ~/Documents/Meitou Captures, with a timestamped name.</summary>
+    /// <summary>
+    /// The default trace folder: ~/Documents/Meitou Captures, with a timestamped name.
+    /// </summary>
     public static string DefaultPath()
     {
         string root = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);

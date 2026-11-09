@@ -25,8 +25,10 @@ public sealed class MetalFxUpscaler : IUpscaler
     public UpscalerKind Kind => UpscalerKind.MetalFx;
     public string Name => _inputWidth == 0 ? "metalfx" : $"metalfx {_inputWidth}x{_inputHeight} -> {_outputWidth}x{_outputHeight}";
 
-    /// <summary>Whether MetalFX can be loaded and created on this machine. The real scaler is made on the first dispatch,
-    /// when the render and display sizes are known.</summary>
+    /// <summary>
+    /// Whether MetalFX can be loaded and created on this machine. The real scaler is made on the first dispatch,
+    /// when the render and display sizes are known.
+    /// </summary>
     public static MetalFxUpscaler? TryCreate(MetalContext ctx)
     {
         if (!MetalFxRuntime.Available) return null;
@@ -45,6 +47,7 @@ public sealed class MetalFxUpscaler : IUpscaler
         s.MotionTexture = _ctx.TextureAt(i.Motion);
         s.OutputTexture = _ctx.TextureAt(i.Output);
         if (i.Reactive is { } reactive) s.ReactiveMaskTexture = _ctx.TextureAt(reactive);
+
         // Our motion is UV from current to previous; MetalFX takes render pixels towards the previous position.
         // MetalFX's motion space is y-down (the standard Metal framebuffer), while the velocity shader's NDC is y-up,
         // so X flips and Y does not. (Apple's example: a +1 NDC step uses motion scale (-width, +height).)
@@ -83,6 +86,7 @@ public sealed class MetalFxUpscaler : IUpscaler
         }
         if (_scaler.NativePtr != IntPtr.Zero && _inputWidth == width && _inputHeight == height &&
             _outputWidth == displayWidth && _outputHeight == displayHeight) return true;
+
         // A resize replaces the scaler while the previous frame ring may still name it. Disposing it here can
         // fault the GPU and make every following submission fail; hold it until the ring has passed.
         if (_scaler.NativePtr != IntPtr.Zero)
@@ -119,6 +123,7 @@ public sealed class MetalFxUpscaler : IUpscaler
             _failed = true;
             return false;
         }
+
         // The content region is the whole render target (no letterboxing); MetalFX otherwise leaves its content
         // scale at the descriptor's 0-sized default on the larger upscale ratios.
         _scaler.InputContentWidth = (ulong)width;
@@ -138,8 +143,10 @@ public sealed class MetalFxUpscaler : IUpscaler
     }
 }
 
-/// <summary>Loads the MetalFX framework once. SharpMetal's <c>ObjectiveC.LinkMetal()</c> links Metal, not MetalFX,
-/// so without this the descriptor's Objective-C class does not exist.</summary>
+/// <summary>
+/// Loads the MetalFX framework once. SharpMetal's <c>ObjectiveC.LinkMetal()</c> links Metal, not MetalFX,
+/// so without this the descriptor's Objective-C class does not exist.
+/// </summary>
 static class MetalFxRuntime
 {
     static nint s_framework;

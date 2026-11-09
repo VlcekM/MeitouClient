@@ -4,22 +4,34 @@ using Meitou.Data.World;
 namespace Meitou.Game.Rendering.Objects;
 
 /// <summary>
-/// The parts that turn by themselves (<see cref="RotorSpec"/>, the original's <c>RotatingEnt</c>; docs/game/buildings-production.md "Rotating parts", docs/render-objects.md "Rotating parts"). A part's state
-/// is made the first time one of its meshes is drawn (the original makes the entity with the building's physics) and dropped when none has been drawn for <see cref="RotorKeepFrames"/> frames.
-/// Each frame <see cref="AdvanceRotors"/> moves them all, before any is drawn, so a head and the blades hanging from it read the same angles.
+/// The parts that turn by themselves (<see cref="RotorSpec"/>, the original's <c>RotatingEnt</c>; docs/game/buildings-production.md "Rotating parts",
+/// docs/render-objects.md "Rotating parts"). A part's state is made the first time one of its meshes is drawn (the original makes the entity with the
+/// building's physics) and dropped when none has been drawn for <see cref="RotorKeepFrames"/> frames. Each frame <see cref="AdvanceRotors"/> moves
+/// them all, before any is drawn, so a head and the blades hanging from it read the same angles.
 /// </summary>
 public sealed partial class WorldObjectRenderer
 {
-    /// <summary>Frames a part's state outlives its last drawing (its zone unloaded: made again from its start when it comes back, as the original makes the entity again).</summary>
+    /// <summary>
+    /// Frames a part's state outlives its last drawing (its zone unloaded: made again from its start when it comes back, as the original makes the
+    /// entity again).
+    /// </summary>
     public const int RotorKeepFrames = 600;
 
-    /// <summary>The wind at a place (x, z): speed in units/s and the unit direction it blows along in (x, z). Null: no wind (wind parts stand still).</summary>
+    /// <summary>
+    /// The wind at a place (x, z): speed in units/s and the unit direction it blows along in (x, z). Null: no wind (wind parts stand still).
+    /// </summary>
     public Func<float, float, (float Speed, Vector2 Direction)>? RotorWind { get; set; }
 
-    /// <summary>What a building's ROTATION_OUTPUT parts turn by (<c>getOutputBasedRotationSpeedMult</c>), asked with one of its meshes. Null: 1, the plain building's.</summary>
+    /// <summary>
+    /// What a building's ROTATION_OUTPUT parts turn by (<c>getOutputBasedRotationSpeedMult</c>), asked with one of its meshes. Null: 1, the plain
+    /// building's.
+    /// </summary>
     public Func<PlacedMesh, float>? RotorOutput { get; set; }
 
-    /// <summary>Whether a building is not built (a construction site): its parts stand still, as the original turns them only in a built building's update. Null: all are built.</summary>
+    /// <summary>
+    /// Whether a building is not built (a construction site): its parts stand still, as the original turns them only in a built building's update.
+    /// Null: all are built.
+    /// </summary>
     public Func<PlacedMesh, bool>? RotorUnbuilt { get; set; }
 
     sealed class RotorState(RotorSpec spec, PlacedMesh placed, Vector3 pivot)
@@ -27,10 +39,14 @@ public sealed partial class WorldObjectRenderer
         public readonly RotorSpec Spec = spec;
         public readonly PlacedMesh Placed = placed;
         public readonly Vector3 Pivot = pivot;
-        /// <summary>Functions 1 to 3: the turn about the axis since the part first moved (the original sets the orientation to it, from 0); a head: its angle, from its start.</summary>
+        /// <summary>
+        /// Functions 1 to 3: the turn about the axis since the part first moved (the original sets the orientation to it, from 0); a head: its angle,
+        /// from its start.
+        /// </summary>
         public float Angle;
         public bool Moved;
         public bool Notified;
+
         // A head's turn in progress (the slerp's ends, its time so far and its length) and the wind it last heard.
         public float From, To, Elapsed, Duration;
         public float WindSpeed;
@@ -44,9 +60,10 @@ public sealed partial class WorldObjectRenderer
     long _rotorFrame;
 
     /// <summary>
-    /// One frame of every part's turning by <paramref name="dt"/> game seconds (0 while paused; <c>RotatingEnt::update</c> with the frame time <c>DAT_142133798</c>, <b>Verified</b>):
-    /// ROTATION_CONSTANT at its maximum speed, ROTATION_OUTPUT at (max − min) × the building's <see cref="RotorOutput"/>, ROTATION_WIND_SPEED at its wind speed, all from angle 0 once moving; a
-    /// ROTATION_WIND_DIRECTION head turns toward the wind (<see cref="RotorSpec.HeadAngle"/>) whenever the wind there changes, as described at <see cref="StepHead"/>.
+    /// One frame of every part's turning by <paramref name="dt"/> game seconds (0 while paused; <c>RotatingEnt::update</c> with the frame time
+    /// <c>DAT_142133798</c>, <b>Verified</b>): ROTATION_CONSTANT at its maximum speed, ROTATION_OUTPUT at (max − min) × the building's
+    /// <see cref="RotorOutput"/>, ROTATION_WIND_SPEED at its wind speed, all from angle 0 once moving; a ROTATION_WIND_DIRECTION head turns toward
+    /// the wind (<see cref="RotorSpec.HeadAngle"/>) whenever the wind there changes, as described at <see cref="StepHead"/>.
     /// </summary>
     public void AdvanceRotors(float dt)
     {
@@ -72,9 +89,10 @@ public sealed partial class WorldObjectRenderer
     }
 
     /// <summary>
-    /// A head's frame (<c>RotatingEnt::weatherUpdated</c> and <c>update</c>, <b>Verified</b>): the original tells it the weather when it is made and on every frame the region's wind is changing; each time
-    /// it starts a turn from where it is to the wind's angle, lasting |from − to| / max speed (the angles in (−π, π], not wrapped, so a turn across ±π takes longer than its short way). Each
-    /// frame it stands at the short-way interpolation by elapsed / length while that is below 1, then the time steps on. A head without speed never turns.
+    /// A head's frame (<c>RotatingEnt::weatherUpdated</c> and <c>update</c>, <b>Verified</b>): the original tells it the weather when it is made and
+    /// on every frame the region's wind is changing; each time it starts a turn from where it is to the wind's angle, lasting |from − to| / max speed
+    /// (the angles in (−π, π], not wrapped, so a turn across ±π takes longer than its short way). Each frame it stands at the short-way interpolation
+    /// by elapsed / length while that is below 1, then the time steps on. A head without speed never turns.
     /// </summary>
     void StepHead(RotorState r, float dt)
     {
@@ -96,13 +114,16 @@ public sealed partial class WorldObjectRenderer
         r.Elapsed += dt;
     }
 
-    /// <summary>The turn of a rotor joint from its placement (its angle less its start), making its state the first time.</summary>
+    /// <summary>
+    /// The turn of a rotor joint from its placement (its angle less its start), making its state the first time.
+    /// </summary>
     float RotorTurn(PlacedMesh placed, in TurnJoint joint)
     {
         var spec = joint.Rotor!;
         var key = (placed.PlacementId, joint.PartId, joint.Pivot);
         if (!_rotors.TryGetValue(key, out var r))
-            _rotors[key] = r = new RotorState(spec, placed, joint.Pivot) { Angle = spec.Function == RotorSpec.WindDirection ? spec.Start : 0, Seen = _rotorFrame };
+            _rotors[key] = r = new RotorState(spec, placed, joint.Pivot) { Angle = spec.Function == RotorSpec.WindDirection ? spec.Start : 0,
+                    Seen = _rotorFrame };
         r.Seen = _rotorFrame;
         bool shown = r.Moved || spec.Function == RotorSpec.WindDirection;
         return shown ? r.Angle - spec.Start : 0;

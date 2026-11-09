@@ -50,6 +50,7 @@ public sealed class MetalFxSpatialUpscaler : IUpscaler
     {
         if (_scaler.NativePtr != IntPtr.Zero && _inputWidth == width && _inputHeight == height &&
             _outputWidth == displayWidth && _outputHeight == displayHeight) return true;
+
         // A resize replaces the scaler while the previous frame ring may still name it. Disposing it here can
         // fault the GPU and make every following submission fail; hold it until the ring has passed.
         if (_scaler.NativePtr != IntPtr.Zero)

@@ -18,7 +18,10 @@ public sealed class MetalSamplers : IGpuSamplers
 
     public MetalSamplers(MTLDevice device) => this._device = device;
 
-    /// <summary>The Tab panel's anisotropic filtering: the most any sampler gets (a change bumps <see cref="Generation"/>, which the caches of sampler bindings compare to make theirs again).</summary>
+    /// <summary>
+    /// The Tab panel's anisotropic filtering: the most any sampler gets (a change bumps <see cref="Generation"/>, which the caches of sampler
+    /// bindings compare to make theirs again).
+    /// </summary>
     public int MaxAnisotropy
     {
         get => _maxAnisotropy;
@@ -27,10 +30,14 @@ public sealed class MetalSamplers : IGpuSamplers
     int _maxAnisotropy = 16;
     public int Generation { get; private set; }
 
-    /// <summary>The backend's object of a sampler handle.</summary>
+    /// <summary>
+    /// The backend's object of a sampler handle.
+    /// </summary>
     internal MTLSamplerState Backend(in GpuSampler sampler) => _samplers[sampler.Desc].State;
 
-    /// <summary>The description's LOD bias, applied where the sampler is bound (Metal's sampler has none).</summary>
+    /// <summary>
+    /// The description's LOD bias, applied where the sampler is bound (Metal's sampler has none).
+    /// </summary>
     internal static float LodBias(in GpuSampler sampler) => sampler.Desc.LodBias;
 
     public GpuSampler Get(in SamplerDesc desc)
@@ -45,6 +52,7 @@ public sealed class MetalSamplers : IGpuSamplers
         d.TAddressMode = MetalConventions.AddressMode(key.V);
         d.RAddressMode = MetalConventions.AddressMode(key.W);
         d.CompareFunction = key.Compare ? MetalConventions.Compare(key.Op) : MTLCompareFunction.Never;
+
         // A sampler in an argument buffer needs the descriptor's permission (the table's members are such samplers).
         d.SupportArgumentBuffers = true;
         d.LodMinClamp = 0;

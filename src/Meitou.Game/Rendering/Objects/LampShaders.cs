@@ -95,6 +95,8 @@ static class LampShaders
 
         """;
 
-    /// <summary>The defines <see cref="Lighting"/> needs, ahead of it.</summary>
+    /// <summary>
+    /// The defines <see cref="Lighting"/> needs, ahead of it.
+    /// </summary>
     public static string Defines => $"#define LAMP_INDEX_WIDTH {WorldLamps.IndexWidth}\n#define LAMP_DIFFUSE {(1 - Data.World.KenshiLighting.DielectricSpecular).ToString("0.0########", System.Globalization.CultureInfo.InvariantCulture)}\n";
 }

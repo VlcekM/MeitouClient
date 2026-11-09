@@ -7,27 +7,37 @@ using Vk = Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Post;
 
 /// <summary>
-/// The merged scene layers (docs/render-post.md "Merged scene layers"): with <see cref="MergeLayers"/> the light shafts' apply, the fog volumes and the
-/// SSAO's factor go onto the scene colour in one full-screen pass (<see cref="PostProcessShaders.SceneLayers"/>) instead of three, each reading the
-/// depth and the scene colour again; with <see cref="FogHalf"/> the fog volumes and with <see cref="ShaftsHalf"/> the shafts' apply are computed at half the
-/// render size (one texture, <see cref="PostProcessShaders.LayersHalf"/>) and upsampled by depth there.
+/// The merged scene layers (docs/render-post.md "Merged scene layers"): with <see cref="MergeLayers"/> the light shafts' apply, the fog volumes and
+/// the SSAO's factor go onto the scene colour in one full-screen pass (<see cref="PostProcessShaders.SceneLayers"/>) instead of three, each reading
+/// the depth and the scene colour again; with <see cref="FogHalf"/> the fog volumes and with <see cref="ShaftsHalf"/> the shafts' apply are computed
+/// at half the render size (one texture, <see cref="PostProcessShaders.LayersHalf"/>) and upsampled by depth there.
 /// <see cref="RunLightShafts"/> and <see cref="RunFogVolumes"/> then leave their layer pending, <see cref="ApplySsao"/> draws them all.
 /// </summary>
 public sealed unsafe partial class PostProcess
 {
-    /// <summary>Meitou: one pass for the shafts, the fog volumes and the occlusion (default on; <c>--ab layer-merge</c>).</summary>
+    /// <summary>
+    /// Meitou: one pass for the shafts, the fog volumes and the occlusion (default on; <c>--ab layer-merge</c>).
+    /// </summary>
     public bool MergeLayers { get; set; } = true;
-    /// <summary>Meitou: with <see cref="MergeLayers"/>, the fog volumes at half the render size (<c>--ab fog-half</c>).</summary>
+    /// <summary>
+    /// Meitou: with <see cref="MergeLayers"/>, the fog volumes at half the render size (<c>--ab fog-half</c>).
+    /// </summary>
     public bool FogHalf { get; set; } = true;
-    /// <summary>Meitou: with <see cref="MergeLayers"/> and fog volumes in view, the light shafts' apply at half the render size too, in the fog volumes' texture
-    /// (<c>--ab shafts-half</c>). Not for the shafts alone: a half-size pass and its upsample cost more than the apply they replace.</summary>
+    /// <summary>
+    /// Meitou: with <see cref="MergeLayers"/> and fog volumes in view, the light shafts' apply at half the render size too, in the fog volumes'
+    /// texture (<c>--ab shafts-half</c>). Not for the shafts alone: a half-size pass and its upsample cost more than the apply they replace.
+    /// </summary>
     public bool ShaftsHalf { get; set; } = true;
-    /// <summary>Meitou: when the half-size texture holds every pending layer, the merged pass is a lean one (the upsample and the occlusion) and a
-    /// second pass computes the few pixels no half-size texel fits at full size (<c>--ab layers-lean</c>).</summary>
+    /// <summary>
+    /// Meitou: when the half-size texture holds every pending layer, the merged pass is a lean one (the upsample and the occlusion) and a
+    /// second pass computes the few pixels no half-size texel fits at full size (<c>--ab layers-lean</c>).
+    /// </summary>
     public bool LeanLayers { get; set; } = true;
 
-    /// <summary>The ray and distance rebuild of the merged passes (<c>PostProcessShaders.SceneDistance</c>), the light shafts' camera and grid, and the
-    /// fog volumes' shadow from the shafts' first atlas.</summary>
+    /// <summary>
+    /// The ray and distance rebuild of the merged passes (<c>PostProcessShaders.SceneDistance</c>), the light shafts' camera and grid, and the
+    /// fog volumes' shadow from the shafts' first atlas.
+    /// </summary>
     class LayerPass : FullscreenProgram
     {
         public readonly SamplerSlot NearDepth, ShaftInjected, Light, Scatter;
@@ -36,7 +46,8 @@ public sealed unsafe partial class PostProcess
         {
             (NearDepth, ShaftInjected) = (P.Sampler("uNearDepth"), P.Sampler("uShaftInjected"));
             (NearPlanes, WaterY, FullSize) = (P.Uniform("uNearPlanes"), P.Uniform("uWaterY"), P.Uniform("uFullSize"));
-            (Grid, Range, Eye, Tan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftEye"), P.Uniform("uShaftTan"), P.Uniform("uShaftFog"));
+            (Grid, Range, Eye, Tan, ShaftFog) = (P.Uniform("uShaftGrid"), P.Uniform("uShaftRange"), P.Uniform("uShaftEye"), P.Uniform("uShaftTan"),
+                    P.Uniform("uShaftFog"));
             (Right, Up, Back) = (P.Uniform("uShaftRight"), P.Uniform("uShaftUp"), P.Uniform("uShaftBack"));
             (Light, Scatter) = (P.Sampler("uShaftLight"), P.Sampler("uShaftScatter"));
             (Atlas, Params, Air, Layers) = (P.Uniform("uShaftAtlas"), P.Uniform("uShaftParams"), P.Uniform("uShaftAir"), P.Uniform("uLayers"));
@@ -58,14 +69,16 @@ public sealed unsafe partial class PostProcess
     SceneLayersPass? _sceneLayers, _sceneLayersLean;
     Target2D? _layerHalf, _layerMask;
 
-    // What is pending for the merged pass this frame: the shafts' apply (its grid and parameters), the fog volumes, which of them the half-size texture holds
-    // (this frame), and the shafts' grid the fog's shadow reads.
+    // What is pending for the merged pass this frame: the shafts' apply (its grid and parameters), the fog volumes, which of them the half-size
+    // texture holds (this frame), and the shafts' grid the fog's shadow reads.
     bool _shaftsPending;
     (Vector4 Air, Vector4 Params) _shaftArgs;
     bool _fogPending, _halfHoldsShafts, _halfHoldsFog;
     (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) _fogShadow;
 
-    /// <summary>The uniforms both merged passes share; the grid and range those of this frame's shafts (unused while neither layer reads them).</summary>
+    /// <summary>
+    /// The uniforms both merged passes share; the grid and range those of this frame's shafts (unused while neither layer reads them).
+    /// </summary>
     void SetLayerCommon(LayerPass p, (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) shaft)
     {
         Bind(p.P, p.NearDepth, _sceneDepth);
@@ -83,6 +96,7 @@ public sealed unsafe partial class PostProcess
         p.P.Set(p.Range, shaft.Range);
         Bind(p.P, p.ShaftInjected, shaft.Darkening > 0 ? _shaftInjected : null);
         p.P.Set(p.ShaftFog, shaft.Darkening, _shaftInjected?.Width ?? 1, _shaftInjected?.Height ?? 1, 0);
+
         // The shafts' layer: its atlases and parameters (read only where the pass applies the shafts).
         Bind(p.P, p.Light, _shaftsPending ? _shaftLight : null);
         Bind(p.P, p.Scatter, _shaftsPending ? _shaftScatter : null);
@@ -91,8 +105,10 @@ public sealed unsafe partial class PostProcess
         p.P.Set(p.Air, _shaftArgs.Air);
     }
 
-    /// <summary>The fog volumes for the merged pass: at half size into the half-size texture now (with the shafts' apply when <see cref="ShaftsHalf"/>),
-    /// or left to the merged pass (full size).</summary>
+    /// <summary>
+    /// The fog volumes for the merged pass: at half size into the half-size texture now (with the shafts' apply when <see cref="ShaftsHalf"/>),
+    /// or left to the merged pass (full size).
+    /// </summary>
     void PrepareFogLayer()
     {
         _fogShadow = _shaftFrame;
@@ -100,7 +116,9 @@ public sealed unsafe partial class PostProcess
         PrepareHalfLayers(FogHalf, ShaftsHalf && _shaftsPending, _fogShadow);
     }
 
-    /// <summary>The half-size pass for the layers asked for (which the merged pass then upsamples), when there is any.</summary>
+    /// <summary>
+    /// The half-size pass for the layers asked for (which the merged pass then upsamples), when there is any.
+    /// </summary>
     void PrepareHalfLayers(bool fog, bool shafts, (Vector4 Grid, Vector4 Range, Vector2 Tan, float Darkening) grid)
     {
         if (!fog && !shafts) return;
@@ -119,14 +137,19 @@ public sealed unsafe partial class PostProcess
         (_halfHoldsShafts, _halfHoldsFog) = (shafts, fog);
     }
 
-    /// <summary>The pending layers and, with <paramref name="occlusion"/>, the SSAO (run here) in one pass over the scene colour. Nothing when no layer is pending.</summary>
+    /// <summary>
+    /// The pending layers and, with <paramref name="occlusion"/>, the SSAO (run here) in one pass over the scene colour. Nothing when no layer is
+    /// pending.
+    /// </summary>
     void ApplyLayers(bool occlusion)
     {
         if (occlusion) RunSsao();
         if (!_shaftsPending && !_fogPending && !occlusion) return;
+
         // The fog's shadow and the shafts' layer read the same grid when both ran; the fog's copy was taken before RunFogVolumes reset the frame's.
         var grid = _fogPending ? _fogShadow : _shaftFrame;
         bool half = _halfHoldsShafts || _halfHoldsFog;
+
         // Lean: the half-size texture holds every pending layer, so the pass only upsamples it; the pixels it cannot are drawn after.
         bool lean = LeanLayers && half && _halfHoldsShafts == _shaftsPending && _halfHoldsFog == _fogPending;
         if (lean)
@@ -144,6 +167,7 @@ public sealed unsafe partial class PostProcess
             Bind(l.P, l.Ao, occlusion ? _aoB : null);
             l.P.Set(l.Layers, _shaftsPending ? 1 : 0, _fogPending ? 1 : 0, occlusion ? 1 : 0, 0);
             l.P.ApplyGlobals();
+
             // The mask's own depth protocol (clear 0, the shader writes 0 or 1), not the scene's DepthConvention.
             DrawPass(l.P, _sceneColour!.Attachment, _sceneColour.Format,
                 _layerMask.Attachment with { Load = LoadOp.Clear, DepthClear = 0f }, _layerMask.Format,
@@ -158,7 +182,8 @@ public sealed unsafe partial class PostProcess
         p.P.Set(p.Half, half && !lean && _halfHoldsShafts ? 1 : 0, half && !lean && _halfHoldsFog ? 1 : 0, 0, 0);
         p.P.ApplyGlobals();
         if (lean)
-            DrawPass(p.P, _sceneColour!.Attachment, _sceneColour.Format, _layerMask!.Attachment, _layerMask.Format, _width, _height, _width, _height, FallbackState);
+            DrawPass(p.P, _sceneColour!.Attachment, _sceneColour.Format, _layerMask!.Attachment, _layerMask.Format, _width, _height, _width, _height,
+                    FallbackState);
         else
             Draw(p.P, _sceneColour!.Attachment, _sceneColour.Format, _width, _height, _width, _height, FogState);
         Stamp("layers");
@@ -169,9 +194,14 @@ public sealed unsafe partial class PostProcess
         if (occlusion) _aoApplied = true;
     }
 
-    /// <summary>The lean pass: the fog's blend, and the mask depth written (always passing) for the full pass to test.</summary>
+    /// <summary>
+    /// The lean pass: the fog's blend, and the mask depth written (always passing) for the full pass to test.
+    /// </summary>
     static readonly DrawState LeanState = FogState with { DepthTest = true, DepthWrite = true, Compare = DepthFunction.Always };
-    /// <summary>The full pass over the pixels the lean one marked (mask depth 1): the full-screen triangle (depth 0.5) is less than it, and not less than the 0 of the rest.</summary>
+    /// <summary>
+    /// The full pass over the pixels the lean one marked (mask depth 1): the full-screen triangle (depth 0.5) is less than it, and not less than the
+    /// 0 of the rest.
+    /// </summary>
     static readonly DrawState FallbackState = FogState with { DepthTest = true, DepthWrite = false, Compare = DepthFunction.Less };
 
     void DisposeSceneLayers()

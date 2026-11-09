@@ -19,10 +19,14 @@ public sealed unsafe class MetalUniformBlock
         _bytes = new byte[size];
     }
 
-    /// <summary>The block's size in bytes.</summary>
+    /// <summary>
+    /// The block's size in bytes.
+    /// </summary>
     public int Size => _bytes.Length;
 
-    /// <summary>The block's bytes, in the std140 layout the engine's reflection reports.</summary>
+    /// <summary>
+    /// The block's bytes, in the std140 layout the engine's reflection reports.
+    /// </summary>
     public byte[] Bytes => _bytes;
 
     public void Set(string name, in Matrix4x4 value) { fixed (Matrix4x4* p = &value) Scatter(name, (byte*)p, 4, 4); }

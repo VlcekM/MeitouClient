@@ -49,6 +49,7 @@ public sealed class MetalUploads : IGpuUploads
                 return;
             }
             uint maxWidth = (uint)Math.Max(desc.Width >> level, 1), maxHeight = (uint)Math.Max(desc.Height >> level, 1);
+
             // A cube's six faces are its type's slices, not array layers; the descriptor's Layers stays 1.
             uint layers = desc.Kind == TextureKind.Cube ? 6u * (uint)Math.Max(desc.Layers, 1) : (uint)desc.Layers;
             if (region.X < 0 || region.Y < 0 || (uint)region.X + region.Width > maxWidth ||
@@ -61,11 +62,13 @@ public sealed class MetalUploads : IGpuUploads
             _written.Add($"{desc.Name} L{level}");
             int block = MetalConventions.BlockWidth(desc.Format);
             int texel = MetalConventions.TexelBytes(desc.Format);
+
             // A block-compressed row is whole blocks (a tail mip's 1x1 level still strides one block).
             ulong bytesPerRow = (ulong)(((region.Width + block - 1) / block) * texel);
             ulong blockRows = (ulong)((region.Height + block - 1) / block);
             ulong bytesPerImage = bytesPerRow * blockRows;
             if ((ulong)data.Length < bytesPerImage) throw new ArgumentException($"the upload has {data.Length} bytes, the region needs {bytesPerImage}");
+
             // Metal's blit reads a source row from its start, then writes it at the destination origin. Repack a sub-rectangle
             // into full-width rows with the tile at offset zero; adding region.X to the source as well would shift it twice.
             // Metal's buffer-to-texture copy needs the source row stride 4-byte aligned. R16/R8 textures
@@ -119,7 +122,9 @@ public sealed class MetalUploads : IGpuUploads
             _ctx.CountUpload(data.Length);
         }
 
-        /// <summary>The staging room for <paramref name="bytes"/> more (a grown buffer when the current is full).</summary>
+        /// <summary>
+        /// The staging room for <paramref name="bytes"/> more (a grown buffer when the current is full).
+        /// </summary>
         MTLBuffer Reserve(int bytes, out ulong offset)
         {
             // Buffer-to-texture copies require a 4-byte-aligned source offset, and the staging ring mixes
@@ -129,6 +134,7 @@ public sealed class MetalUploads : IGpuUploads
             {
                 // The blits already recorded in this batch still name the old buffer: keep it until the command completes.
                 if (_staging.NativePtr != IntPtr.Zero) _ctx.RetireUpload(_command, _staging, string.Join(", ", _written));
+
                 // Many small batches (foliage meshes, textures) live until their command completes; a 1 MB floor each
                 // made the first foliage frame allocate several GB. Grow only to what this batch actually writes.
                 _stagingSize = Math.Max((ulong)bytes + 3, _stagingSize == 0 ? 64 << 10 : _stagingSize * 2);
@@ -145,6 +151,7 @@ public sealed class MetalUploads : IGpuUploads
         {
             _list.EndBlit();
             _command.Commit();
+
             // The GPU reads the staging buffer after commit; the context releases it once this command has completed.
             if (_staging.NativePtr != IntPtr.Zero) _ctx.RetireUpload(_command, _staging, string.Join(", ", _written));
         }

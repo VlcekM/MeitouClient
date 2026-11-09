@@ -16,8 +16,10 @@ namespace Meitou.Game.Rendering.Metal;
 /// </summary>
 sealed class MetalPostChain : IWorldPostChain, IDisposable
 {
-    /// <summary>Diagnostic A/B for TAA's particle coverage: MEITOU_METAL_NO_PARTICLE_COVERAGE=1 leaves the particle
-    /// colour draw in place but stops it invalidating TAA's motion alpha. MetalFX never receives particle coverage.</summary>
+    /// <summary>
+    /// Diagnostic A/B for TAA's particle coverage: MEITOU_METAL_NO_PARTICLE_COVERAGE=1 leaves the particle
+    /// colour draw in place but stops it invalidating TAA's motion alpha. MetalFX never receives particle coverage.
+    /// </summary>
     static readonly bool ParticleCoverageEnabled =
         Environment.GetEnvironmentVariable("MEITOU_METAL_NO_PARTICLE_COVERAGE") is not ("1" or "true");
 
@@ -39,7 +41,9 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
     sealed class LowTarget(int divisor)
     {
         public readonly int Divisor = divisor;
-        /// <summary>The draw tested against each block's nearest depth, and the one tested against its farthest.</summary>
+        /// <summary>
+        /// The draw tested against each block's nearest depth, and the one tested against its farthest.
+        /// </summary>
         public GpuTexture? Accum, Depth, AccumFar, DepthFar;
         public PassTargets Targets = null!, TargetsFar = null!;
         public bool Drawn;
@@ -113,14 +117,17 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
             _sceneColour = _ctx.CreateTexture(new TextureDesc(InternalFormat.Rgba16F, sceneWidth, sceneHeight,
                 Use: TextureUse.ColourTarget | TextureUse.Sampled, Name: "scene colour"));
         }
+
         // The scene targets are Metal's own depth and albedo (the GI resolve is off, but the lit programs always write albedo).
         SceneTargets = PassTargets.Of(_sceneColour, _ctx.Depth, _ctx.Albedo);
+
         // The full-size particles draw after the GI resolve and were built without the albedo attachment on Metal.
         SceneTargetsForParticles = PassTargets.Of(_sceneColour, _ctx.Depth);
         Target = _ctx.Backbuffer;
         foreach (var low in _lowTargets) low.Drawn = false;
         _frame++;
         JitterPixels = _jitter(_frame, sceneWidth, _displayWidth);
+
         // As the old Metal loop: mip bias only while a temporal reconstruction runs; spatial and native sample at full detail.
         _ctx.LodBias = Temporal ? MathF.Log2(sceneWidth / (float)_displayWidth) - 0.5f : 0f;
         AutoExposure = null;
@@ -136,7 +143,9 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         this._aspect = aspect;
     }
 
-    /// <summary>The scene's projection; the scene targets (one depth, ctx.Depth) are set by Begin.</summary>
+    /// <summary>
+    /// The scene's projection; the scene targets (one depth, ctx.Depth) are set by Begin.
+    /// </summary>
     public void BeginScene(float near, float far, float fieldOfView, float aspect)
     {
         _nearPlane = near;
@@ -161,8 +170,10 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
 
     public void RunFogVolumes(bool volumes) => _volumesPending = volumes;
 
-    /// <summary>Vulkan's fog shading-rate image has no Metal equivalent: fog, shafts and the scene render at full rate. This is a
-    /// performance difference, not a missing visual pass (MEP-1 decided not to expose a no-op FogRate setting on Metal).</summary>
+    /// <summary>
+    /// Vulkan's fog shading-rate image has no Metal equivalent: fog, shafts and the scene render at full rate. This is a
+    /// performance difference, not a missing visual pass (MEP-1 decided not to expose a no-op FogRate setting on Metal).
+    /// </summary>
     public void BuildShadingRate(Vector3 eye) { }
 
     public void ApplySsao()
@@ -202,11 +213,14 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
             low.DepthFar = _ctx.CreateTexture(new TextureDesc(InternalFormat.DepthComponent24, w, h,
                 Use: TextureUse.DepthTarget | TextureUse.Sampled, Name: $"post particle depth far 1/{div}"));
         }
+
         // Twice: each block's nearest depth, then its farthest; the particles are drawn against each (ParticleTargetsFar) and the composite takes
         // each pixel's own surface from either (PostProcessShaders.ParticleUpsample).
         var depthCmd = (MetalCommandList)_ctx.BeginNative("post particle depth");
-        _composite.ParticleDepth(depthCmd, _ctx.Depth, low.Depth!, _sceneColour.Desc.Width, _sceneColour.Desc.Height, div, low.Accum, layer: 1, near: _nearPlane, far: _farPlane);
-        _composite.ParticleDepth(depthCmd, _ctx.Depth, low.DepthFar!, _sceneColour.Desc.Width, _sceneColour.Desc.Height, div, low.AccumFar, layer: 2, near: _nearPlane, far: _farPlane);
+        _composite.ParticleDepth(depthCmd, _ctx.Depth, low.Depth!, _sceneColour.Desc.Width, _sceneColour.Desc.Height, div, low.Accum, layer: 1,
+                near: _nearPlane, far: _farPlane);
+        _composite.ParticleDepth(depthCmd, _ctx.Depth, low.DepthFar!, _sceneColour.Desc.Width, _sceneColour.Desc.Height, div, low.AccumFar, layer: 2,
+                near: _nearPlane, far: _farPlane);
         _ctx.EndNative(depthCmd);
         low.Drawn = false;
         var targets = PassTargets.Of(low.Accum, low.Depth);
@@ -220,7 +234,8 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         if (_sceneColour is null) return;
         var low = LowFor(divisor);
         var cmd = (MetalCommandList)_ctx.BeginNative("post particle composite");
-        _composite.ParticleComposite(cmd, low.Accum!, low.Depth!, low.AccumFar!, low.DepthFar!, _ctx.Depth, _sceneColour, low.Divisor, _nearPlane, _farPlane);
+        _composite.ParticleComposite(cmd, low.Accum!, low.Depth!, low.AccumFar!, low.DepthFar!, _ctx.Depth, _sceneColour, low.Divisor, _nearPlane,
+                _farPlane);
         _ctx.EndNative(cmd);
         low.Drawn = true;
     }
@@ -264,12 +279,14 @@ sealed class MetalPostChain : IWorldPostChain, IDisposable
         cmd.EndRendering();
         _ctx.EndHostPass(cmd);
         cmd.Order();
+
         // The low-resolution accumulations go to TAA's motion alpha. This path is never used for MetalFX, whose
         // reactive mask deliberately has no particle coverage.
         foreach (var low in _lowTargets)
         {
             if (!low.Drawn || low.Accum is null || low.Depth is null || low.AccumFar is null || low.DepthFar is null) continue;
-            _composite.ParticleCoverage(cmd, low.Accum, low.Depth, low.AccumFar, low.DepthFar, _ctx.Depth, target, low.Divisor, _nearPlane, _farPlane, mask);
+            _composite.ParticleCoverage(cmd, low.Accum, low.Depth, low.AccumFar, low.DepthFar, _ctx.Depth, target, low.Divisor, _nearPlane, _farPlane,
+                    mask);
         }
     }
 

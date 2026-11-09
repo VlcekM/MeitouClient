@@ -25,10 +25,14 @@ public sealed class MetalPipelines : IGpuPipelines
         this._shaders = shaders;
     }
 
-    /// <summary>The backend's object of a pipeline handle.</summary>
+    /// <summary>
+    /// The backend's object of a pipeline handle.
+    /// </summary>
     internal MTLRenderPipelineState Backend(in GpuPipeline pipeline) => _graphics[pipeline.Desc];
 
-    /// <summary>The backend's object of a compute pipeline handle.</summary>
+    /// <summary>
+    /// The backend's object of a compute pipeline handle.
+    /// </summary>
     internal MTLComputePipelineState Backend(in GpuComputePipeline pipeline) => _computes[pipeline.Desc];
 
     public GpuPipeline Get(in GraphicsPipelineDesc desc)
@@ -90,7 +94,9 @@ public sealed class MetalPipelines : IGpuPipelines
         return new GpuComputePipeline(desc);
     }
 
-    /// <summary>Drops a program's cached pipelines (the program is going away).</summary>
+    /// <summary>
+    /// Drops a program's cached pipelines (the program is going away).
+    /// </summary>
     public void Forget(GpuProgram program)
     {
         foreach (var (desc, _) in _graphics)
@@ -105,7 +111,9 @@ public sealed class MetalPipelines : IGpuPipelines
     internal void BindDepthClipMode(MTLRenderCommandEncoder encoder, bool depthClamp) =>
         encoder.SetDepthClipMode(depthClamp ? MTLDepthClipMode.Clamp : MTLDepthClipMode.Clip);
 
-    /// <summary>The vertex inputs of a pipeline: each location its own binding (binding = location, as VkGl), stride and step per binding.</summary>
+    /// <summary>
+    /// The vertex inputs of a pipeline: each location its own binding (binding = location, as VkGl), stride and step per binding.
+    /// </summary>
     static MTLVertexDescriptor VertexDescriptor(VertexLayout vertex)
     {
         var descriptor = new MTLVertexDescriptor();
