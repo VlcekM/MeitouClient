@@ -3,27 +3,44 @@ using Meitou.Data.Ui;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The colour of a DIALOGUE log line (the original's <c>MessageLogColor</c>: ML_NORMAL, ML_PLAYER, ML_SYSTEM).
-/// </summary>
-enum MessageTone { Normal, Player, System }
-
-/// <summary>
-/// The message panel (the original's MessageRoller, docs/game/ui-screens.md "Messages"): notices in turn, and the DIALOGUE log.
+/// The message panel (the original's MessageRoller, docs/game/ui-screens.md "Messages"): notices in turn, each also logged in the
+/// <see cref="DialogueLog"/>.
 /// </summary>
 sealed class MessageRoller(PlayerInterface player)
 {
-    #region Notices
-
     /// <summary>
     /// The seconds a message holds at full alpha, then the alpha it loses per second (<b>Verified</b>).
     /// </summary>
     const float NoticeHoldSeconds = 4, NoticeFadeRate = 3;
 
+    /// <summary>
+    /// The messages waiting for the panel, each with whether it is an error.
+    /// </summary>
     readonly Queue<(string Text, bool Error)> _noticeQueue = new();
+
+    /// <summary>
+    /// The message shown; null when none is.
+    /// </summary>
     (string Text, bool Error)? _notice;
+
+    /// <summary>
+    /// The shown message's seconds left at full alpha, and its alpha.
+    /// </summary>
     float _noticeHold, _noticeAlpha;
+
+    /// <summary>
+    /// The timestamp of the last poll; 0 before the first.
+    /// </summary>
     long _noticeAt;
+
+    /// <summary>
+    /// The game's <c>Kenshi_MessagePanel</c> layout; null when the install has none.
+    /// </summary>
     internal MyGuiLayout? MessageLayout;
+
+    /// <summary>
+    /// The name of the widget that draws the message text box's text (its template's client).
+    /// </summary>
     internal string? MessageClient;
 
     /// <summary>
@@ -32,7 +49,7 @@ sealed class MessageRoller(PlayerInterface player)
     internal void QueueNotice(string text, bool error, string? logText)
     {
         string line = Loc.Tr(text).ReplaceLineEndings(" ");
-        LogMessage("", logText?.ReplaceLineEndings(" ") ?? line, MessageTone.System);
+        player.DialogueLog.LogMessage("", logText?.ReplaceLineEndings(" ") ?? line, MessageTone.System);
         _noticeQueue.Enqueue((line, error));
     }
 
@@ -87,33 +104,4 @@ sealed class MessageRoller(PlayerInterface player)
         var arranged = MyGuiPresentation.Arrange(MessageLayout, player.Width, player.Height, b, player.UiResources.Layers);
         controls.AddRange(arranged.Select(c => c with { Pickable = false }));
     }
-
-    #endregion
-
-    #region Dialogue log
-
-    readonly List<(string Text, MessageTone Tone)> _uiMessages = [];
-
-    /// <summary>
-    /// Adds a line to the Overview's DIALOGUE log only ("owner: text", docs/game/ui-screens.md "Dialogue log"); the newest 200 are kept.
-    /// </summary>
-    public void LogMessage(string owner, string text, MessageTone tone)
-    {
-        _uiMessages.Add((owner.Length == 0 ? text : $"{owner}: {text}", tone));
-        if (_uiMessages.Count > 200) _uiMessages.RemoveAt(0);
-    }
-
-    /// <summary>
-    /// The DIALOGUE log as the text box's text: each line after the colour tag of its tone (the original's MessageLogColor: #000000,
-    /// <c>DialogueTextOption</c>, #c6ac6a), its own <c>#</c> doubled. The Meitou mode's dark panel takes the kit's text colour for the black.
-    /// </summary>
-    internal string MessagesText()
-    {
-        string normal = player.UiMode == UiMode.Meitou ? PlayerInterface.Tag(PlayerInterface.MainColour) : "#000000";
-        string own = PlayerInterface.Tag(MyGuiColours.Named("DialogueTextOption", "b3b3b3"));
-        return string.Join('\n', _uiMessages.Select(m => (m.Tone switch { MessageTone.Player => own, MessageTone.System => "#c6ac6a", _ => normal })
-            + m.Text.Replace("#", "##", StringComparison.Ordinal)));
-    }
-
-    #endregion
 }

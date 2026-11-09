@@ -31,6 +31,7 @@ namespace Meitou.Game;
 sealed partial class PlayerInterface(WorldSession session, Func<float, float, float> ground, Func<CharacterSnapshot, Vector3> where)
 {
     internal MessageRoller MessageRoller => field ??= new(this);
+    internal DialogueLog DialogueLog => field ??= new(this);
     internal HudPanels HudPanels => field ??= new(this);
     internal OrdersPanel OrdersPanel => field ??= new(this);
     internal MoveMarker MoveMarker => field ??= new(this);

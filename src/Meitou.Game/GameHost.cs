@@ -1118,7 +1118,7 @@ sealed partial class GameHost(
     internal void DrawWorld(int width, int height)
     {
         SyncPreviewLook();
-        if (!Player.CharacterEditor.EditorOpen) CharacterEditor.ClearEditorBar();
+        if (!Player.CharacterEditor.EditorOpen) CharacterEditor.Bar.ClearEditorBar();
 
         if (TitleScreen.TitleVisible)
         {
@@ -1127,7 +1127,7 @@ sealed partial class GameHost(
         }
         if (Player.CharacterEditor.EditorOpen)
         {
-            CharacterEditor.DrawEditorScene(width, height);
+            CharacterEditor.Bar.DrawEditorScene(width, height);
             return;
         }
 

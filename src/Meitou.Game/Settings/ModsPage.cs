@@ -6,12 +6,14 @@ using Meitou.Modding;
 namespace Meitou.Game.Settings;
 
 /// <summary>
-/// The MODS page: the loaded mods in load order, each with its code's settings under it, and the selected mod's author, description and data problems.
+/// The MODS page: the loaded mods in load order, each with its code's settings under it (<see cref="ModSettingsRows"/>), and the selected mod's
+/// author, description and data problems.
 /// </summary>
 sealed class ModsPage(SettingsMenu menu)
 {
-    #region Mod list
-
+    /// <summary>
+    /// A mod row's height, in the menu's units.
+    /// </summary>
     const float ModRowHeight = 26;
 
     /// <summary>
@@ -19,8 +21,20 @@ sealed class ModsPage(SettingsMenu menu)
     /// </summary>
     const int ModIssueCap = 200;
 
+    /// <summary>
+    /// The selected mod's row; -1 for none.
+    /// </summary>
     int _modsSelected = -1;
+
+    /// <summary>
+    /// How far the text area is scrolled, in the menu's units.
+    /// </summary>
     internal float ModsDetailScroll;
+
+    /// <summary>
+    /// The settings its code registered under each mod's row.
+    /// </summary>
+    internal readonly ModSettingsRows Settings = new(menu);
 
     /// <summary>
     /// The text area under the list (and its Copy buttons), in pixels.
@@ -41,11 +55,14 @@ sealed class ModsPage(SettingsMenu menu)
         menu.Hits.Add(new(at, () => menu.Navigate(SettingsMenu.ModsPageIndex)));
     }
 
+    /// <summary>
+    /// The page: the scrolled list of mods and their settings, the Copy buttons and the text area.
+    /// </summary>
     internal void DrawMods()
     {
         var report = menu.Player.TitleMenu.Mods;
         var rows = report?.Rows ?? [];
-        var lines = ModsLines(rows);
+        var lines = Settings.ModsLines(rows);
         menu.Viewport = menu.Canvas.R(212, 98, 888, 296);
         menu.MaxScroll = Math.Max(0, lines.Sum(LineHeight) * menu.Scale - menu.Viewport.Height);
         menu.Motion.AdvanceScroll();
@@ -62,8 +79,14 @@ sealed class ModsPage(SettingsMenu menu)
         DrawModsDetail(report);
     }
 
+    /// <summary>
+    /// A line's height: its settings row's, or a mod row's.
+    /// </summary>
     float LineHeight(ModsLine line) => line.Entry is { } entry ? menu.Canvas.EntryHeight(entry) : ModRowHeight;
 
+    /// <summary>
+    /// One line of the list at <paramref name="y"/>: a mod row, or a settings row under its mod.
+    /// </summary>
     void DrawModsLine(IReadOnlyList<ModRow> rows, ModsLine line, float y)
     {
         if (line.Entry is not { } entry)
@@ -77,6 +100,9 @@ sealed class ModsPage(SettingsMenu menu)
         menu.Canvas.DrawEntry(entry, y);
     }
 
+    /// <summary>
+    /// A mod's row (or a separator): its name, issue count and version, lit when hovered or selected; a click selects it.
+    /// </summary>
     void DrawModRow(ModRow row, int index, float y)
     {
         var at = menu.Canvas.R(212, y, 888, ModRowHeight);
@@ -124,6 +150,9 @@ sealed class ModsPage(SettingsMenu menu)
         }
     }
 
+    /// <summary>
+    /// The text area: the selected mod's text or the summary, scrolled, with its scroll bar.
+    /// </summary>
     void DrawModsDetail(ModReport? report)
     {
         var area = ModsDetail;
@@ -141,6 +170,9 @@ sealed class ModsPage(SettingsMenu menu)
         menu.Canvas.Rect(menu.Canvas.R(1092, 440 + (226 - thumb) * ModsDetailScroll / max, 3, thumb), SettingsCanvas.Brass with { W = 0.75f });
     }
 
+    /// <summary>
+    /// The selected mod's row; null when none is.
+    /// </summary>
     ModRow? SelectedMod(ModReport? report) =>
         report is not null && _modsSelected >= 0 && _modsSelected < report.Rows.Count ? report.Rows[_modsSelected] : null;
 
@@ -183,6 +215,9 @@ sealed class ModsPage(SettingsMenu menu)
         return string.Join('\n', lines);
     }
 
+    /// <summary>
+    /// The first <paramref name="cap"/> issue lines, then "... N more".
+    /// </summary>
     static void AddCapped(List<string> lines, IReadOnlyList<string> issues, int cap)
     {
         lines.AddRange(issues.Take(cap));
@@ -227,127 +262,4 @@ sealed class ModsPage(SettingsMenu menu)
         menu.Player.ClipboardWrite?.Invoke(string.Join('\n', lines));
         menu.Notice = "Copied to the clipboard.";
     }
-
-    #endregion
-
-    #region Mod settings
-
-    // The settings code mods registered with <c>ModContext.AddSettings</c> (docs/modding.md "Settings"), on the MODS page: a group under its mod's row,
-    // drawn with the page's own rows. A change sets the mod's property at once and is kept in UserConfig.ModSettings.
-
-    /// <summary>
-    /// Mod groups shown once already: a group starts open the first time it is shown.
-    /// </summary>
-    readonly HashSet<string> _modGroupsSeen = [];
-
-    /// <summary>
-    /// A line of the MODS list: the mod row <see cref="Row"/>, or a settings row (<see cref="Entry"/>).
-    /// </summary>
-    readonly record struct ModsLine(int Row, SettingsMenu.Entry? Entry);
-
-    /// <summary>
-    /// Restore defaults: every mod's settings back to their defaults, and no saved value kept (also of mods not loaded now).
-    /// </summary>
-    internal void ResetModSettings()
-    {
-        foreach (var group in menu.ModSettings()) ResetModGroup(group);
-        menu.Config.ModSettings.Clear();
-    }
-
-    /// <summary>
-    /// Each mod's row with its settings group under it; a group whose mod has no row (not in the list file) comes last, under its name.
-    /// </summary>
-    List<ModsLine> ModsLines(IReadOnlyList<ModRow> rows)
-    {
-        var groups = menu.ModSettings();
-        var placed = new HashSet<ModSettingsGroup>();
-        var lines = new List<ModsLine>();
-        for (int i = 0; i < rows.Count; i++)
-        {
-            lines.Add(new(i, null));
-            if (rows[i].Separator) continue;
-
-            foreach (var group in groups.Where(g => g.Name == rows[i].Name && placed.Add(g)))
-            {
-                AddModGroup(lines, group, "Settings");
-            }
-        }
-
-        foreach (var group in groups.Where(placed.Add)) AddModGroup(lines, group, group.Name);
-        return lines;
-    }
-
-    void AddModGroup(List<ModsLine> lines, ModSettingsGroup group, string label)
-    {
-        string id = "mod:" + group.ModId;
-        if (_modGroupsSeen.Add(id)) menu.Grouping.OpenGroups.Add(id);
-        bool open = menu.Grouping.OpenGroups.Contains(id);
-        bool changed = group.Settings.Any(s => !s.IsDefault);
-        Action? reset = changed ? () => ResetModGroup(group) : null;
-        lines.Add(new(-1, new(label, "", Changed: changed, Raw: id, Open: open, GroupId: id, Reset: reset)));
-        if (!open) return;
-
-        foreach (var setting in group.Settings) lines.Add(new(-1, ModSettingEntry(setting, id)));
-    }
-
-    SettingsMenu.Entry ModSettingEntry(ModSetting setting, string group)
-    {
-        string raw = $"{group}/{setting.Key}";
-        var entry = new SettingsMenu.Entry(setting.Label, setting.Hint, Changed: !setting.IsDefault, Raw: raw, Depth: 1,
-            Reset: () => ChangeModSetting(setting, setting.Reset));
-        return setting.Kind switch
-        {
-            ModSettingKind.Switch => entry with { Toggle = new Toggle(raw, () => setting.Get() is true, v => SetModSetting(setting, v)) },
-            ModSettingKind.Slider => entry with { Slider = ModSlider(setting, raw) },
-            _ => entry with { Choice = new(() => setting.Options, () => setting.Choice, i => SetModSetting(setting, setting.Options[i])) },
-        };
-    }
-
-    /// <summary>
-    /// A number setting's slider; its label is the row's key, so two mods' sliders of one name stay apart.
-    /// </summary>
-    Slider ModSlider(ModSetting setting, string raw)
-    {
-        string format = setting.Whole ? "0" : "0.##";
-        float Get() => Convert.ToSingle(setting.Get(), CultureInfo.InvariantCulture);
-        return new Slider(raw, (float)setting.Min, (float)setting.Max, Get, v => SetModSetting(setting, (double)v), format,
-            Faithful: Convert.ToSingle(setting.Default, CultureInfo.InvariantCulture), Step: (float)setting.Step);
-    }
-
-    void ResetModGroup(ModSettingsGroup group)
-    {
-        foreach (var setting in group.Settings) ChangeModSetting(setting, setting.Reset);
-    }
-
-    void SetModSetting(ModSetting setting, object value) => ChangeModSetting(setting, () => setting.Set(value));
-
-    /// <summary>
-    /// Runs a change of the mod's property and keeps the value it has then in the config (a default is not kept). The mod's setter and its
-    /// <see cref="ModSettingsGroup.Changed"/> handlers are its own code: a throw is logged and shown as the page's notice.
-    /// </summary>
-    void ChangeModSetting(ModSetting setting, Action change)
-    {
-        try
-        {
-            change();
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine($"mod       {setting.Group.ModId}: setting '{setting.Key}' failed: {e}");
-            menu.Notice = $"{setting.Group.Name}: {e.GetBaseException().Message}";
-        }
-
-        KeepModSetting(setting);
-    }
-
-    void KeepModSetting(ModSetting setting)
-    {
-        string mod = setting.Group.ModId;
-        if (!menu.Config.ModSettings.TryGetValue(mod, out var saved)) menu.Config.ModSettings[mod] = saved = [];
-        if (setting.IsDefault) saved.Remove(setting.Key);
-        else saved[setting.Key] = setting.Text;
-        if (saved.Count == 0) menu.Config.ModSettings.Remove(mod);
-    }
-
-    #endregion
 }

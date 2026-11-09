@@ -21,6 +21,8 @@ namespace Meitou.Game.DevTools.Agents;
 /// </summary>
 sealed class AgentOrders(PlayerInterface player)
 {
+    #region World view
+
     // The agent control channel's view of the world (docs/procedures/todo-faster-ingame-agent-tests.md; AgentWorld has the commands): entity lists, screen positions, picking and the selection and order calls.
     // Everything reads the published snapshot and the picking code the pointer uses; orders go out as the same SimCommands the player's input gives. Entity ids: <c>c:&lt;slot&gt;.&lt;generation&gt;</c> for a character,
     // <c>b:&lt;instance key&gt;</c> for a building (a site of the player's or a level-data building).
@@ -29,12 +31,11 @@ sealed class AgentOrders(PlayerInterface player)
     /// </summary>
     sealed record ControlBuilding(string Id, string Name, string? Record, Vector3 Position, Vector2[]? Hull);
 
-    readonly Dictionary<string, ControlBuilding> _controlBuildings = [];
     /// <summary>
-    /// The ids of the last select command, until the world applies it (an order given in the same breath still counts them).
+    /// The buildings seen by the control channel, by id.
     /// </summary>
-    IReadOnlyList<CharacterId> _controlSelectIssued = [];
-    long _controlSelectTick = -1;
+    readonly Dictionary<string, ControlBuilding> _controlBuildings = [];
+
 
     static string CharacterKey(CharacterId id) => $"c:{id.Slot}.{id.Generation}";
 
@@ -314,7 +315,24 @@ sealed class AgentOrders(PlayerInterface player)
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    // ---- selection and orders
+    #endregion
+
+    #region Selection and combat status
+
+    /// <summary>
+    /// The ids of the last select command, until the world applies it (an order given in the same breath still counts them).
+    /// </summary>
+    IReadOnlyList<CharacterId> _controlSelectIssued = [];
+
+    /// <summary>
+    /// The tick of the last select command.
+    /// </summary>
+    long _controlSelectTick = -1;
+
+    /// <summary>
+    /// The combat check's samples (<c>combat-status</c>, <c>observe --brief</c>).
+    /// </summary>
+    internal readonly AgentCombatWatch Combat = new(player);
 
     /// <summary>
     /// Selects characters like a click or box select would; false (with the reason) when an id names none.
@@ -414,115 +432,6 @@ sealed class AgentOrders(PlayerInterface player)
     /// </summary>
     public void ControlFocusCharacter(CharacterId id) => player.CentreOn(id);
 
-    // The agent-play combat check (<c>combat-status</c>, <c>observe --brief</c> field <c>combat</c>): stance flags, target, what the character is doing, damage dealt and taken over the last 5 s and 30 s, and the blow counters.
-    // Damage is <b>approximate</b>: sampled from the medical state at each control poll (4 per wall second), a drop in a character's summed part flesh counts as damage TAKEN by it, and as DEALT by the character
-    // in its combat slot's <c>HitFrom</c> (the last one that landed a blow on it); bleeding, fist recoil and a second attacker between two polls are attributed the same way, healing is not subtracted.
-    // The blow counters (<c>Thrown, Landed, Parried, Evaded, Taken, Blocks, Dodges</c>) are the combat system's own, exact.
-    sealed class CombatTrack
-    {
-        public float Hp = float.NaN;
-        public readonly List<(long Tick, float Amount)> Dealt = [], Taken = [];
-        public readonly List<(long Tick, int Thrown, int Landed, int Taken, int Blocks, int Parried, int Evaded, int Dodges)> Counts = [];
-    }
-
-    readonly Dictionary<CharacterId, CombatTrack> _combatTracks = [];
-    World? _combatWorld;
-    long _combatSampleTick = -1;
-
-    /// <summary>
-    /// One sample of everyone's hp and the squad's blow counters; called every control poll.
-    /// </summary>
-    public void ControlCombatSample()
-    {
-        var world = player.Session.World;
-        if (!ReferenceEquals(_combatWorld, world)) { _combatWorld = world; _combatTracks.Clear(); _combatSampleTick = -1; }
-        long tick = world.Tick;
-        if (tick == _combatSampleTick) return;
-        _combatSampleTick = tick;
-        var combat = world.Systems.OfType<CombatSystem>().FirstOrDefault();
-        var table = world.Characters;
-        long keep = tick - (long)(31 / world.TickSeconds);
-        foreach (var c in player.Session.CurrentSnapshot.Characters)
-        {
-            if (!table.TryResolveNext(c.Id, out int slot) || table.Cold(slot)?.Medical is not { } medical) continue;
-            float hp = 0;
-            foreach (var p in medical.Parts) hp += p.Flesh;
-            if (!_combatTracks.TryGetValue(c.Id, out var t)) _combatTracks[c.Id] = t = new CombatTrack();
-            if (!float.IsNaN(t.Hp) && hp < t.Hp - 0.001f)
-            {
-                float drop = t.Hp - hp;
-                t.Taken.Add((tick, drop));
-                if (combat is not null && combat.StateOf(c.Id).HitFrom is int from and >= 0 && from < table.Previous.Length
-                    && _combatTracks.TryGetValue(new CharacterId(from, table.Previous[from].Generation), out var attacker))
-                    attacker.Dealt.Add((tick, drop));
-            }
-            t.Hp = hp;
-            if (c.IsPlayer && combat is not null)
-            {
-                var s = combat.StateOf(c.Id);
-                t.Counts.Add((tick, s.Thrown, s.Landed, s.Taken, s.Blocks, s.Parried, s.Evaded, s.Dodges));
-            }
-            t.Dealt.RemoveAll(e => e.Tick < keep); t.Taken.RemoveAll(e => e.Tick < keep); t.Counts.RemoveAll(e => e.Tick < keep);
-        }
-    }
-
-    sealed record CombatReport(CharacterSnapshot C, string Status, List<string> Stance, CharacterId Target, string? TargetName, double? TargetDist, CharacterSnapshot? Hostile, double? HostileDist,
-        double Dealt5, double Dealt30, double Taken5, double Taken30, int[] Blows30, double Span, List<string> Warnings)
-    {
-        public string Line => $"blocking:{(Stance.Contains("block") ? "on" : "off")} dealt30:{Math.Round(Dealt30, 0)} taken30:{Math.Round(Taken30, 0)} target:{(TargetName is null ? "none" : TargetName)}";
-    }
-
-    CombatReport? CombatFor(CharacterSnapshot c)
-    {
-        var world = player.Session.World;
-        ControlCombatSample();
-        long tick = world.Tick;
-        _combatTracks.TryGetValue(c.Id, out var t);
-        double Sum(List<(long Tick, float Amount)>? l, double secs) => l is null ? 0 : l.Where(e => e.Tick > tick - (long)(secs / world.TickSeconds)).Sum(e => (double)e.Amount);
-        var combat = world.Systems.OfType<CombatSystem>().FirstOrDefault();
-        var s = combat?.StateOf(c.Id) ?? CombatSlot.Fresh(c.Id.Generation);
-        var stance = StanceNames.Where(n => (c.Orders & n.Order) != 0).Select(n => n.Name).ToList();
-        var at = player.Where(c);
-        var flat = new Vector2(at.X, at.Z);
-        CharacterSnapshot? hostile = null; double? hd = null;
-        foreach (var o in player.Session.CurrentSnapshot.Characters)
-        {
-            if (o.Id == c.Id || o.IsPlayer || o.Body is { Dead: true } or { Unconscious: true } || !(o.HostileToPlayer || o.FightsPlayer)) continue;
-            var p = player.Where(o);
-            double d = Vector2.Distance(new Vector2(p.X, p.Z), flat);
-            if (hd is null || d < hd) (hostile, hd) = (o, d);
-        }
-        CharacterId target = CharacterId.None; string? tName = null; double? tDist = null;
-        if (s.TargetSlot >= 0 && world.Characters.Previous.Length > s.TargetSlot && player.Session.CurrentSnapshot.Characters.FirstOrDefault(o => o.Id.Slot == s.TargetSlot && o.Id.Generation == s.TargetGeneration) is { } tc)
-        {
-            target = tc.Id; tName = tc.Name; var p = player.Where(tc); tDist = Vector2.Distance(new Vector2(p.X, p.Z), flat);
-        }
-        bool block = stance.Contains("block");
-        bool fighting = target != CharacterId.None || c.Task == CharacterTask.Attack || c.InCombat;
-        string status = c.Body is { Dead: true } ? "dead" : c.Body is { Unconscious: true } ? "ko"
-            : s.AttackTech >= 0 ? "attacking" : block && fighting ? "blocking" : fighting ? "fighting-between-blows" : "idle";
-        int[] blows = [0, 0, 0, 0, 0, 0, 0];
-        double span = 0;
-        if (t is { Counts.Count: > 0 })
-        {
-            var first = t.Counts.FirstOrDefault(e => e.Tick >= tick - (long)(30 / world.TickSeconds));
-            var last = t.Counts[^1];
-            span = (last.Tick - first.Tick) * world.TickSeconds;
-            blows = [last.Thrown - first.Thrown, last.Landed - first.Landed, last.Taken - first.Taken, last.Blocks - first.Blocks, last.Parried - first.Parried, last.Evaded - first.Evaded, last.Dodges - first.Dodges];
-        }
-        var warn = new List<string>();
-        if (block && fighting) warn.Add("block is on while attacking");
-        if (stance.Contains("passive") || stance.Contains("hold")) warn.Add("passive/hold set");
-        double dealt30 = Sum(t?.Dealt, 30);
-        if (dealt30 <= 0 && hd is < 30 && t is { Counts.Count: > 0 } && span >= 29) warn.Add("no damage dealt in 30 s while a hostile is within 30 m");
-        return new CombatReport(c, status, stance, target, tName, tDist, hostile, hd, Sum(t?.Dealt, 5), dealt30, Sum(t?.Taken, 5), Sum(t?.Taken, 30), blows, span, warn);
-    }
-
-    /// <summary>
-    /// The one-line summary for <c>observe --brief</c>.
-    /// </summary>
-    string ControlCombatLine(CharacterSnapshot lead) => CombatFor(lead)?.Line ?? "n/a";
-
     /// <summary>
     /// <c>combat-status</c>: JSON for one character (null id: the selected, else the first squad member).
     /// </summary>
@@ -532,7 +441,7 @@ sealed class AgentOrders(PlayerInterface player)
         var snap = player.Session.CurrentSnapshot;
         var c = id is { } want ? ControlCharacter(want) : player.Selected().FirstOrDefault() ?? snap.Characters.FirstOrDefault(x => x.IsPlayer);
         if (c is null) { error = id is null ? "no player character" : $"no character {CharacterKey(id.Value)}"; return null; }
-        var r = CombatFor(c)!;
+        var r = Combat.CombatFor(c)!;
         var ms = new MemoryStream();
         using (var w = new Utf8JsonWriter(ms))
         {
@@ -564,6 +473,16 @@ sealed class AgentOrders(PlayerInterface player)
         return Encoding.UTF8.GetString(ms.ToArray());
     }
 
+    #endregion
+
+    #region Play orders
+
+    /// <summary>
+    /// The stance flags by the names the play API uses.
+    /// </summary>
+    internal static readonly (string Name, CharacterOrders Order)[] StanceNames =
+        [("block", CharacterOrders.Block), ("hold", CharacterOrders.Hold), ("passive", CharacterOrders.Passive), ("ranged", CharacterOrders.Ranged), ("taunt", CharacterOrders.Taunt), ("sneak", CharacterOrders.Sneak), ("jobs", CharacterOrders.Jobs)];
+
     // The agent control channel's play API (docs/procedures/agent-play-api.md): <c>observe</c> (one JSON for a decision) and the thin wrappers that give the selection the game's own order commands
     // (stop, follow, stance, pick up, loot, first aid, build, operate, research, craft). Every action goes out through PlayerInterface.Say as the same SimCommand the player's input gives;
     // each returns false with the reason when the game would refuse it. Characters are selected with <c>select</c> first; the orders go to the selection.
@@ -591,9 +510,6 @@ sealed class AgentOrders(PlayerInterface player)
         if (t.Body is { Dead: true }) { message = $"refused: {t.Name} is dead"; return false; }
         return ControlOrder(w => new FollowOrder(w, target) { Guard = guard, Tick = player.Session.World.Tick }, $"{(guard ? "bodyguard" : "follow")} {t.Name} {CharacterKey(target)}", out message);
     }
-
-    static readonly (string Name, CharacterOrders Order)[] StanceNames =
-        [("block", CharacterOrders.Block), ("hold", CharacterOrders.Hold), ("passive", CharacterOrders.Passive), ("ranged", CharacterOrders.Ranged), ("taunt", CharacterOrders.Taunt), ("sneak", CharacterOrders.Sneak), ("jobs", CharacterOrders.Jobs)];
 
     public static IReadOnlyList<string> StanceWords => [.. StanceNames.Select(s => s.Name)];
 
@@ -659,7 +575,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    // ---- construction
+    #endregion
+
+    #region Construction
 
     BuildingBuildData? ControlBuildingData(string query, out string error)
     {
@@ -810,7 +728,9 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    // ---- production
+    #endregion
+
+    #region Production
 
     public bool ControlOperate(string site, out string message)
     {
@@ -895,7 +815,14 @@ sealed class AgentOrders(PlayerInterface player)
         return true;
     }
 
-    // ---- observe
+    #endregion
+
+    #region Observe
+
+    /// <summary>
+    /// The hostile characters seen dead, for observe's score.
+    /// </summary>
+    internal readonly AgentKillCounter Kills = new(player);
 
     static string StanceText(CharacterOrders o) => string.Join(',', StanceNames.Where(s => (o & s.Order) != 0).Select(s => s.Name));
 
@@ -1066,7 +993,7 @@ sealed class AgentOrders(PlayerInterface player)
                 if (threat is null || d < threat) threat = d;
             }
             f.Add(("threat", threat is { } t ? Math.Round(t, 1).ToString(inv) : "null"));
-            f.Add(("combat", Str(ControlCombatLine(lead))));
+            f.Add(("combat", Str(Combat.ControlCombatLine(lead))));
         }
         f.Add(("squad", Str($"{squad.Count(c => c.Body is { Dead: false, Unconscious: false })}/{squad.Count}")));
         f.Add(("money", world.Player.Money.ToString(inv)));
@@ -1096,22 +1023,13 @@ sealed class AgentOrders(PlayerInterface player)
         var squad = snap.Characters.Where(c => c.IsPlayer).ToList();
         var lead = squad.FirstOrDefault(c => c.Selected) ?? squad.FirstOrDefault();
         var from = lead is null ? player.Session.Camera.Current.Target : player.Where(lead);
-        var flat = new Vector2(from.X, from.Z);
-        float D(Vector3 p) => Vector2.Distance(new Vector2(p.X, p.Z), flat);
-        int listCap = full ? 40 : 12;
+        var area = new ObserveArea(from, new Vector2(from.X, from.Z), radius, full);
         using var stream = new MemoryStream();
         using (var w = new Utf8JsonWriter(stream))
         {
             w.WriteStartObject();
             w.WriteNumber("tick", world.Tick);
-            w.WriteStartObject("time");
-            double hour = player.Session.Clock.HourOfDay;
-            w.WriteNumber("day", (int)player.Session.Clock.Day);
-            w.WriteNumber("hour", R2(hour));
-            w.WriteString("clock", $"{(int)hour:00}:{(int)((hour - Math.Floor(hour)) * 60):00}");
-            w.WriteBoolean("daytime", world.Daytime);
-            w.WriteNumber("gameHours", R2(world.GameHours));
-            w.WriteEndObject();
+            WriteObserveTime(w, world);
             w.WriteBoolean("paused", player.Session.Simulation.IsPaused);
             w.WriteNumber("speed", player.Session.Simulation.Speed);
             WritePosition(w, "origin", from);
@@ -1124,173 +1042,248 @@ sealed class AgentOrders(PlayerInterface player)
             w.WriteEndArray();
             w.WriteNumber("money", world.Player.Money);
 
-            // Nearby characters
-            var threats = new List<(float D, CharacterSnapshot C)>();
-            var allies = new List<(float D, CharacterSnapshot C)>();
-            var neutrals = new List<(float D, CharacterSnapshot C)>();
-            var animals = new List<(float D, CharacterSnapshot C)>();
-            var traders = new List<(float D, CharacterSnapshot C)>();
-            var bodies = new List<(float D, CharacterSnapshot C)>();
-            foreach (var c in snap.Characters)
-            {
-                if (c.IsPlayer) continue;
-                float d = D(player.Where(c));
-                if (d > radius) continue;
-                if (c.Body is { Dead: true } or { Unconscious: true } || !c.CarriedBy.IsNone) bodies.Add((d, c));
-                else if (c.HostileToPlayer || c.FightsPlayer) threats.Add((d, c));   // the game's own flags: hostile by faction relation, or fighting the player's characters; animals too (Bonedogs)
-                else if (c.Animal) animals.Add((d, c));   // passive wildlife
-                else if (c.IsTrader) traders.Add((d, c));
-                else if (lead is not null && c.Faction == lead.Faction && c.Faction >= 0) allies.Add((d, c));
-                else neutrals.Add((d, c));
-            }
-            w.WriteStartObject("nearby");
-            void List(string name, List<(float D, CharacterSnapshot C)> list, bool threat)
-            {
-                w.WriteNumber(name + "Count", list.Count);
-                w.WriteStartArray(name);
-                foreach (var (_, c) in list.OrderBy(i => i.D).Take(listCap)) WriteNearby(w, c, from, threat);
-                w.WriteEndArray();
-            }
-            if (threats.Count > 0) w.WriteNumber("nearestThreat", R1(threats.Min(t => t.D))); else w.WriteNull("nearestThreat");
-            List("threats", threats, true);
-            List("allies", allies, false);
-            List("neutrals", neutrals, false);
-            List("animals", animals, true);
-            List("traders", traders, false);
-            List("bodies", bodies, false);
-            w.WriteEndObject();
-
-            // Loose items
-            var items = snap.GroundItems.Select(g => (D: D(g.Position), G: g)).Where(i => i.D <= radius).OrderBy(i => i.D).ToList();
-            w.WriteNumber("groundItemsCount", items.Count);
-            w.WriteStartArray("groundItems");
-            foreach (var (d, g) in items.Take(full ? 40 : 15))
-            {
-                w.WriteStartObject();
-                w.WriteNumber("id", g.Id);
-                w.WriteString("name", g.Name);
-                w.WriteNumber("dist", R1(d));
-                WriteXz(w, "pos", g.Position);
-                w.WriteEndObject();
-            }
-            w.WriteEndArray();
-
-            // Buildings
-            w.WriteStartObject("buildings");
-            var own = snap.Buildings.Where(b => b.Owner == world.Player.Faction && b.LevelPlacement is null).ToList();
-            w.WriteNumber("ownCount", own.Count);
-            w.WriteStartArray("own");
-            foreach (var b in own.OrderBy(b => D(b.Position)).Take(full ? 40 : 15))
-            {
-                w.WriteStartObject();
-                w.WriteString("id", "b:" + b.Id);
-                w.WriteString("name", player.Build.SiteName(b));
-                w.WriteString("record", b.Record);
-                WriteXz(w, "pos", b.Position);
-                w.WriteNumber("dist", R1(D(b.Position)));
-                w.WriteBoolean("complete", b.Complete);
-                w.WriteNumber("progress", b.Target > 0 ? R2(b.Progress / b.Target) : 1);
-                if (b.Destroyed) w.WriteBoolean("destroyed", true);
-                if (!b.Complete)
-                {
-                    w.WriteStartArray("materials");
-                    foreach (var m in b.Materials.Where(m => m.Delivered < m.Required).Take(6))
-                    {
-                        w.WriteStartObject();
-                        w.WriteString("item", player.Build.Services?.ItemName(m.Item) ?? m.Item);
-                        w.WriteNumber("required", R1(m.Required));
-                        w.WriteNumber("delivered", R1(m.Delivered));
-                        w.WriteEndObject();
-                    }
-                    w.WriteEndArray();
-                }
-                w.WriteEndObject();
-            }
-            w.WriteEndArray();
-            var near = new List<(float D, string Id, string Name, Vector3 At)>();
-            if (player.Build.Services is { } host)
-                foreach (var p in host.Placement.StaticPlacementsAround(flat, radius))
-                {
-                    if (player.LevelEditorPanel.Services?.IsCleared(p.Key) == true) continue;
-                    float y = p.WorldY ?? player.Ground(p.Position.X, p.Position.Z) + p.Position.Y;
-                    var at = new Vector3(p.Position.X, y, p.Position.Z);
-                    float d = D(at);
-                    if (d > radius) continue;
-                    near.Add((d, "b:" + p.Key, host.WorldInfo(p).Name, at));
-                }
-            w.WriteNumber("nearCount", near.Count);
-            w.WriteStartArray("near");
-            foreach (var n in near.OrderBy(n => n.D).Take(full ? 40 : 10))
-            {
-                w.WriteStartObject();
-                w.WriteString("id", n.Id);
-                w.WriteString("name", n.Name);
-                WriteXz(w, "pos", n.At);
-                w.WriteNumber("dist", R1(n.D));
-                w.WriteEndObject();
-            }
-            w.WriteEndArray();
-            w.WriteEndObject();
-
-            // Containers (fixture ids, for container-put / building-info)
-            var boxes = snap.Containers.Select(c => (D: D(c.Position), C: c)).Where(i => i.D <= radius).OrderBy(i => i.D).ToList();
-            w.WriteNumber("containersCount", boxes.Count);
-            w.WriteStartArray("containers");
-            foreach (var (d, c) in boxes.Take(full ? 30 : 8))
-            {
-                w.WriteStartObject();
-                w.WriteString("id", c.Id);
-                w.WriteString("record", c.Record);
-                WriteXz(w, "pos", c.Position);
-                w.WriteNumber("dist", R1(d));
-                w.WriteBoolean("locked", c.Locked);
-                w.WriteEndObject();
-            }
-            w.WriteEndArray();
-
-            // Machines of your complete buildings
-            w.WriteNumber("machinesCount", snap.Machines.Count(m => !m.IsContainer));
-            w.WriteStartArray("machines");
-            foreach (var m in snap.Machines.Where(m => !m.IsContainer).Take(full ? 40 : 12))
-            {
-                var bs = snap.Buildings.FirstOrDefault(b => b.Id == m.Site);
-                w.WriteStartObject();
-                w.WriteString("id", "b:" + m.Site);
-                w.WriteString("name", bs is null ? m.Record : player.Build.SiteName(bs));
-                w.WriteNumber("status", m.Status);
-                w.WriteNumber("operators", m.Operators);
-                w.WriteNumber("maxOperators", m.MaxOperators);
-                w.WriteBoolean("operable", m.Operable);
-                w.WriteBoolean("automatic", m.IsAutomatic);
-                if (bs is not null) w.WriteNumber("dist", R1(D(bs.Position)));
-                w.WriteEndObject();
-            }
-            w.WriteEndArray();
+            WriteObserveNearby(w, snap, lead, area);
+            WriteObserveItems(w, snap, area);
+            var own = WriteObserveBuildings(w, snap, world, area);
+            WriteObserveContainers(w, snap, area);
+            WriteObserveMachines(w, snap, area);
 
             w.WritePropertyName("research");
             WriteResearch(w, snap.Research, full ? 30 : 8);
-            if (ControlResourcesJson(flat) is { } resources) { w.WritePropertyName("resources"); w.WriteRawValue(resources); }
+            if (ControlResourcesJson(area.Flat) is { } resources) { w.WritePropertyName("resources"); w.WriteRawValue(resources); }
             else w.WriteNull("resources");   // null until 'prospect' has run in this world
 
-            // Score
-            int alive = squad.Count(c => c.Body is { Dead: false, Unconscious: false });
-            var parted = squad.Where(c => c.HealthParts.Count > 0).ToList();
-            w.WriteStartObject("score");
-            w.WriteNumber("alive", alive);
-            w.WriteNumber("squad", squad.Count);
-            if (parted.Count > 0) w.WriteNumber("hpFraction", R2(parted.Sum(c => c.HealthParts.Sum(p => Math.Max(0, p.Flesh))) / Math.Max(1, parted.Sum(c => c.HealthParts.Sum(p => p.Maximum)))));
-            else w.WriteNull("hpFraction");
-            w.WriteNumber("money", world.Player.Money);
-            w.WriteNumber("buildingsOwned", own.Count);
-            w.WriteNumber("buildingsBuilt", own.Count(b => b.Complete));
-            w.WriteNumber("kills", ControlKills());   // hostile characters seen dead since the load
-            w.WriteNumber("elapsedGameSeconds", R1(world.Tick * world.TickSeconds));
-            w.WriteNumber("tick", world.Tick);
-            w.WriteEndObject();
+            WriteObserveScore(w, squad, world, own);
             w.WriteEndObject();
         }
         return Encoding.UTF8.GetString(stream.ToArray());
     }
+
+    /// <summary>
+    /// What <see cref="ControlObserveJson"/> looks at: the place it is seen from (the lead, else the camera's target), its ground plane point, the
+    /// radius, and whether the lists are long.
+    /// </summary>
+    readonly record struct ObserveArea(Vector3 From, Vector2 Flat, float Radius, bool Full)
+    {
+        /// <summary>
+        /// The ground distance of <paramref name="p"/> from the place.
+        /// </summary>
+        public float D(Vector3 p) => Vector2.Distance(new Vector2(p.X, p.Z), Flat);
+    }
+
+    /// <summary>
+    /// observe's <c>time</c>: the day, the hour, the clock and whether it is day.
+    /// </summary>
+    void WriteObserveTime(Utf8JsonWriter w, World world)
+    {
+        w.WriteStartObject("time");
+        double hour = player.Session.Clock.HourOfDay;
+        w.WriteNumber("day", (int)player.Session.Clock.Day);
+        w.WriteNumber("hour", R2(hour));
+        w.WriteString("clock", $"{(int)hour:00}:{(int)((hour - Math.Floor(hour)) * 60):00}");
+        w.WriteBoolean("daytime", world.Daytime);
+        w.WriteNumber("gameHours", R2(world.GameHours));
+        w.WriteEndObject();
+    }
+
+    /// <summary>
+    /// observe's <c>nearby</c>: the characters within the radius by kind, nearest first.
+    /// </summary>
+    void WriteObserveNearby(Utf8JsonWriter w, WorldSnapshot snap, CharacterSnapshot? lead, ObserveArea area)
+    {
+        var (from, radius) = (area.From, area.Radius);
+        int listCap = area.Full ? 40 : 12;
+        var threats = new List<(float D, CharacterSnapshot C)>();
+        var allies = new List<(float D, CharacterSnapshot C)>();
+        var neutrals = new List<(float D, CharacterSnapshot C)>();
+        var animals = new List<(float D, CharacterSnapshot C)>();
+        var traders = new List<(float D, CharacterSnapshot C)>();
+        var bodies = new List<(float D, CharacterSnapshot C)>();
+        foreach (var c in snap.Characters)
+        {
+            if (c.IsPlayer) continue;
+            float d = area.D(player.Where(c));
+            if (d > radius) continue;
+            if (c.Body is { Dead: true } or { Unconscious: true } || !c.CarriedBy.IsNone) bodies.Add((d, c));
+            else if (c.HostileToPlayer || c.FightsPlayer) threats.Add((d, c));   // the game's own flags: hostile by faction relation, or fighting the player's characters; animals too (Bonedogs)
+            else if (c.Animal) animals.Add((d, c));   // passive wildlife
+            else if (c.IsTrader) traders.Add((d, c));
+            else if (lead is not null && c.Faction == lead.Faction && c.Faction >= 0) allies.Add((d, c));
+            else neutrals.Add((d, c));
+        }
+        w.WriteStartObject("nearby");
+        void List(string name, List<(float D, CharacterSnapshot C)> list, bool threat)
+        {
+            w.WriteNumber(name + "Count", list.Count);
+            w.WriteStartArray(name);
+            foreach (var (_, c) in list.OrderBy(i => i.D).Take(listCap)) WriteNearby(w, c, from, threat);
+            w.WriteEndArray();
+        }
+        if (threats.Count > 0) w.WriteNumber("nearestThreat", R1(threats.Min(t => t.D))); else w.WriteNull("nearestThreat");
+        List("threats", threats, true);
+        List("allies", allies, false);
+        List("neutrals", neutrals, false);
+        List("animals", animals, true);
+        List("traders", traders, false);
+        List("bodies", bodies, false);
+        w.WriteEndObject();
+    }
+
+    /// <summary>
+    /// observe's <c>groundItems</c>: the loose items within the radius, nearest first.
+    /// </summary>
+    void WriteObserveItems(Utf8JsonWriter w, WorldSnapshot snap, ObserveArea area)
+    {
+        var (radius, full) = (area.Radius, area.Full);
+        var items = snap.GroundItems.Select(g => (D: area.D(g.Position), G: g)).Where(i => i.D <= radius).OrderBy(i => i.D).ToList();
+        w.WriteNumber("groundItemsCount", items.Count);
+        w.WriteStartArray("groundItems");
+        foreach (var (d, g) in items.Take(full ? 40 : 15))
+        {
+            w.WriteStartObject();
+            w.WriteNumber("id", g.Id);
+            w.WriteString("name", g.Name);
+            w.WriteNumber("dist", R1(d));
+            WriteXz(w, "pos", g.Position);
+            w.WriteEndObject();
+        }
+        w.WriteEndArray();
+    }
+
+    /// <summary>
+    /// observe's <c>buildings</c>: your own sites, and the level's buildings within the radius; returns your own.
+    /// </summary>
+    List<BuildingSnapshot> WriteObserveBuildings(Utf8JsonWriter w, WorldSnapshot snap, World world, ObserveArea area)
+    {
+        var (flat, radius, full) = (area.Flat, area.Radius, area.Full);
+        w.WriteStartObject("buildings");
+        var own = snap.Buildings.Where(b => b.Owner == world.Player.Faction && b.LevelPlacement is null).ToList();
+        w.WriteNumber("ownCount", own.Count);
+        w.WriteStartArray("own");
+        foreach (var b in own.OrderBy(b => area.D(b.Position)).Take(full ? 40 : 15))
+        {
+            w.WriteStartObject();
+            w.WriteString("id", "b:" + b.Id);
+            w.WriteString("name", player.Build.SiteName(b));
+            w.WriteString("record", b.Record);
+            WriteXz(w, "pos", b.Position);
+            w.WriteNumber("dist", R1(area.D(b.Position)));
+            w.WriteBoolean("complete", b.Complete);
+            w.WriteNumber("progress", b.Target > 0 ? R2(b.Progress / b.Target) : 1);
+            if (b.Destroyed) w.WriteBoolean("destroyed", true);
+            if (!b.Complete)
+            {
+                w.WriteStartArray("materials");
+                foreach (var m in b.Materials.Where(m => m.Delivered < m.Required).Take(6))
+                {
+                    w.WriteStartObject();
+                    w.WriteString("item", player.Build.Services?.ItemName(m.Item) ?? m.Item);
+                    w.WriteNumber("required", R1(m.Required));
+                    w.WriteNumber("delivered", R1(m.Delivered));
+                    w.WriteEndObject();
+                }
+                w.WriteEndArray();
+            }
+            w.WriteEndObject();
+        }
+        w.WriteEndArray();
+        var near = new List<(float D, string Id, string Name, Vector3 At)>();
+        if (player.Build.Services is { } host)
+            foreach (var p in host.Placement.StaticPlacementsAround(flat, radius))
+            {
+                if (player.LevelEditorPanel.Services?.IsCleared(p.Key) == true) continue;
+                float y = p.WorldY ?? player.Ground(p.Position.X, p.Position.Z) + p.Position.Y;
+                var at = new Vector3(p.Position.X, y, p.Position.Z);
+                float d = area.D(at);
+                if (d > radius) continue;
+                near.Add((d, "b:" + p.Key, host.WorldInfo(p).Name, at));
+            }
+        w.WriteNumber("nearCount", near.Count);
+        w.WriteStartArray("near");
+        foreach (var n in near.OrderBy(n => n.D).Take(full ? 40 : 10))
+        {
+            w.WriteStartObject();
+            w.WriteString("id", n.Id);
+            w.WriteString("name", n.Name);
+            WriteXz(w, "pos", n.At);
+            w.WriteNumber("dist", R1(n.D));
+            w.WriteEndObject();
+        }
+        w.WriteEndArray();
+        w.WriteEndObject();        return own;
+    }
+
+    /// <summary>
+    /// observe's <c>containers</c>: the containers within the radius (fixture ids, for container-put / building-info).
+    /// </summary>
+    void WriteObserveContainers(Utf8JsonWriter w, WorldSnapshot snap, ObserveArea area)
+    {
+        var (radius, full) = (area.Radius, area.Full);
+        var boxes = snap.Containers.Select(c => (D: area.D(c.Position), C: c)).Where(i => i.D <= radius).OrderBy(i => i.D).ToList();
+        w.WriteNumber("containersCount", boxes.Count);
+        w.WriteStartArray("containers");
+        foreach (var (d, c) in boxes.Take(full ? 30 : 8))
+        {
+            w.WriteStartObject();
+            w.WriteString("id", c.Id);
+            w.WriteString("record", c.Record);
+            WriteXz(w, "pos", c.Position);
+            w.WriteNumber("dist", R1(d));
+            w.WriteBoolean("locked", c.Locked);
+            w.WriteEndObject();
+        }
+        w.WriteEndArray();
+    }
+
+    /// <summary>
+    /// observe's <c>machines</c>: the machines of your complete buildings.
+    /// </summary>
+    void WriteObserveMachines(Utf8JsonWriter w, WorldSnapshot snap, ObserveArea area)
+    {
+        bool full = area.Full;
+        w.WriteNumber("machinesCount", snap.Machines.Count(m => !m.IsContainer));
+        w.WriteStartArray("machines");
+        foreach (var m in snap.Machines.Where(m => !m.IsContainer).Take(full ? 40 : 12))
+        {
+            var bs = snap.Buildings.FirstOrDefault(b => b.Id == m.Site);
+            w.WriteStartObject();
+            w.WriteString("id", "b:" + m.Site);
+            w.WriteString("name", bs is null ? m.Record : player.Build.SiteName(bs));
+            w.WriteNumber("status", m.Status);
+            w.WriteNumber("operators", m.Operators);
+            w.WriteNumber("maxOperators", m.MaxOperators);
+            w.WriteBoolean("operable", m.Operable);
+            w.WriteBoolean("automatic", m.IsAutomatic);
+            if (bs is not null) w.WriteNumber("dist", R1(area.D(bs.Position)));
+            w.WriteEndObject();
+        }
+        w.WriteEndArray();
+    }
+
+    /// <summary>
+    /// observe's <c>score</c>: the squad alive and its health, the money, your buildings, the kills and the time played.
+    /// </summary>
+    void WriteObserveScore(Utf8JsonWriter w, List<CharacterSnapshot> squad, World world, List<BuildingSnapshot> own)
+    {
+        int alive = squad.Count(c => c.Body is { Dead: false, Unconscious: false });
+        var parted = squad.Where(c => c.HealthParts.Count > 0).ToList();
+        w.WriteStartObject("score");
+        w.WriteNumber("alive", alive);
+        w.WriteNumber("squad", squad.Count);
+        if (parted.Count > 0) w.WriteNumber("hpFraction", R2(parted.Sum(c => c.HealthParts.Sum(p => Math.Max(0, p.Flesh))) / Math.Max(1, parted.Sum(c => c.HealthParts.Sum(p => p.Maximum)))));
+        else w.WriteNull("hpFraction");
+        w.WriteNumber("money", world.Player.Money);
+        w.WriteNumber("buildingsOwned", own.Count);
+        w.WriteNumber("buildingsBuilt", own.Count(b => b.Complete));
+        w.WriteNumber("kills", Kills.ControlKills());   // hostile characters seen dead since the load
+        w.WriteNumber("elapsedGameSeconds", R1(world.Tick * world.TickSeconds));
+        w.WriteNumber("tick", world.Tick);
+        w.WriteEndObject();
+    }
+
+    #endregion
+
+    #region Work, prospecting, equipment and trade
 
     // More of the agent control channel's play API (docs/procedures/agent-play-api.md): work on a site, prospect (and the last prospecting as observe.resources), equip, carry, trade, and the kill counter.
     // Same rules as the rest of the play API: the game's own commands, to the selection, refused with a reason.
@@ -1522,25 +1515,5 @@ sealed class AgentOrders(PlayerInterface player)
     public IEnumerable<(CharacterId Id, float Dist, bool Down, bool Player)> ControlCharactersNear(float x, float z) =>
         player.Session.CurrentSnapshot.Characters.Select(c => (c.Id, Vector2.Distance(new Vector2(player.Where(c).X, player.Where(c).Z), new Vector2(x, z)), c.Body is { Dead: true } or { Unconscious: true }, c.IsPlayer));
 
-    // ---- kill counter
-
-    object? _killsWorld;
-    readonly HashSet<CharacterId> _hostileSeen = [], _hostileDead = [];
-
-    /// <summary>
-    /// Notes the hostile (non-player, non-animal, hostile to the player or fighting it) characters that are dead; a set of ids, reset when another
-    /// world is loaded.
-    /// </summary>
-    public int ControlKills()
-    {
-        if (!ReferenceEquals(_killsWorld, player.Session.World)) { _killsWorld = player.Session.World; _hostileSeen.Clear(); _hostileDead.Clear(); }
-        foreach (var c in player.Session.CurrentSnapshot.Characters)
-        {
-            if (c.IsPlayer || c.Animal) continue;
-            bool hostile = c.HostileToPlayer || c.FightsPlayer;
-            if (c.Body is { Dead: true }) { if (hostile || _hostileSeen.Contains(c.Id)) _hostileDead.Add(c.Id); }
-            else if (hostile) _hostileSeen.Add(c.Id);
-        }
-        return _hostileDead.Count;
-    }
+    #endregion
 }

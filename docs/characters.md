@@ -286,7 +286,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   `squat`), so the default `idle_stand_normal` is 6, as the original's screen shows. RANDOMISE never rolls it (**Verified**: no randomiser writes it).
   The stance clips are 1-frame poses (0.033 s, two keys) with `play speed` 0 (`squat` 0.01), **Verified** by probe on base data; looped at
   real time they flicker between the keys. The preview plays the chosen stance at its `play speed`, cross-faded at `animation blend rate`
-  (Meitou: `PlayerInterface.EditorIdle`, `GameHost.EditorStancePoses`; the original's fade is **Observed** smooth, its rate **Unknown**). In the
+  (Meitou: `PlayerInterface.EditorIdle`, `EditorStances.EditorStancePoses`; the original's fade is **Observed** smooth, its rate **Unknown**). In the
   world a character stands in its stance whenever it fits ([animation.md](animation.md#idle-stance)).
 - **Buttons** (randomisers **Verified** by decompilation, `FUN_1405efa50`, `FUN_1405ef930`): RANDOMISE rolls the current tab: FACE = head and face
   sliders, then face poses; BODY = body sliders and colours, no skin re-roll; HAIR = hair, no faction limits. RANDOMISE ALL = hair, face, body
@@ -323,7 +323,7 @@ exe decompile unless marked; Meitou: `CharacterDraft` (data), `EditCharacter` / 
   as the mix of the old and new values over 0.12 s, the interval of the throttled rebuild (`CharacterRenderer.Blend`): body shape, posture
   layers, face/body pose weights (morph set recomputed per frame in a scratch ring of `MorphArena`) and skin/hair colours; a look with another
   head, hair or clothes swaps at once. The original's own slider behaviour is **Unknown**.
-- **Meitou bar** (Meitou UI, both hosts; `EditorBar`, `CharacterEditorHost`): instead of the stage, the world's renderers draw a copy of The Hub's intact
+- **Meitou bar** (Meitou UI, both hosts; `EditorBar`, `EditorBarScene`): instead of the stage, the world's renderers draw a copy of The Hub's intact
   Storm House with interior layout `Bar` (parts, furniture, lamps; a runtime placement keyed `meitou:editor-bar` whose state and layouts are read from
   the source's zone, `BuildingPlacement.StateZone`) 3000 above the highest ground round the edited character, in the interior view with every floor, at
   23:00 under a clear sky without weather particles, the water and its reflection off and the frame cut at 2500 (`WorldFrame.Gpu.ViewCap`: far plane and

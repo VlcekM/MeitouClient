@@ -31,6 +31,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
     internal QualityTiers Tiers => field ??= new(this);
     internal LookPresets LookPresets => field ??= new(this);
     internal LookBar LookBar => field ??= new(this);
+    internal PresetNamingDialog PresetNaming => field ??= new(this);
     internal ModsPage ModsPage => field ??= new(this);
     internal SettingsCanvas Canvas => field ??= new(this);
 
@@ -203,7 +204,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             Rebinding = null;
             ActiveChoice = null;
             ResetPending = false;
-            LookBar.Naming = false;
+            PresetNaming.Open = false;
             Focus = -1;
             Notice = "";
             EditingNumber = null;
@@ -584,7 +585,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     public bool KeyDown(Key key, bool shift, bool ctrl)
     {
-        if (LookBar.Naming && Visible) return LookBar.NameKey(key);
+        if (PresetNaming.Open && Visible) return PresetNaming.OnKey(key);
         if (EditingNumber is null) return KeyDown(key, shift);
 
         switch (key)
@@ -634,9 +635,9 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
 
     public void TextInput(char value)
     {
-        if (LookBar.Naming && Visible)
+        if (PresetNaming.Open && Visible)
         {
-            LookBar.NameText(value);
+            PresetNaming.OnText(value);
             return;
         }
 
@@ -725,7 +726,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
             if (Values.Toggles[i].Get() != ToggleDefaults[i]) Values.Toggles[i].Set(ToggleDefaults[i]);
 
         frameLimit.Set(240);
-        ModsPage.ResetModSettings();
+        ModsPage.Settings.ResetModSettings();
         Config.SplashScreens = false;
         Config.MainMenuTransitions = true;
         Config.InGameTransitions = true;
@@ -805,7 +806,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Page = 1;
         GraphicsPage = tab;
         ActiveChoice = null;
-        LookBar.Naming = false;
+        PresetNaming.Open = false;
         ScrollOffset = ScrollTarget = 0;
     }
 
@@ -903,7 +904,7 @@ sealed class SettingsMenu(PlayerInterface player, SettingsPanel values, InputBin
         Canvas.Button("Save", Canvas.R(960, 684, 140, 32), () => Visible = false, primary: true);
         if (ActiveChoice is { } choice) Canvas.DrawChoice(choice);
         else Canvas.AnimatedChoice = null;
-        if (LookBar.Naming) LookBar.DrawNameDialog();
+        if (PresetNaming.Open) PresetNaming.Draw();
         if (Rebinding is { } binding)
             Canvas.DrawMessage("Assign a control", Notice.Length > 0 ? Notice : $"{ActionLabel(binding)}: press a key or mouse button.\nDelete clears the binding. Esc cancels.", () => Rebinding = null);
 

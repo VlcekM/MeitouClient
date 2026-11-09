@@ -111,8 +111,6 @@ sealed partial class GameHost
         // `--upscaler metalfx` is the command-line form; MEITOU_METALFX stays usable for launch scripts.
         bool metalFxRequested = !noTaaRequested && (WorldOptions.Post.Upscale.Kind == UpscalerKind.MetalFx ||
             Environment.GetEnvironmentVariable("MEITOU_METALFX") is "1" or "true");
-        bool noTaa = false;
-        bool spatial = false;
 
         // Safe Metal defaults while the foliage mesh path and the cloud-shadow path are being fixed: both are opt-in.
         bool metalFoliage = Environment.GetEnvironmentVariable("MEITOU_METAL_FOLIAGE") != "0";
@@ -174,93 +172,18 @@ sealed partial class GameHost
         else scale = Math.Clamp(scale, 0.33f, 1f);
         ctx.RenderScale = scale;
 
-        void ApplyMode(MetalUpscalerMode next)
-        {
-            mode = next;
-            noTaa = mode == MetalUpscalerMode.Native;
-            spatial = mode == MetalUpscalerMode.Spatial;
-            taa.External = mode switch
-            {
-                MetalUpscalerMode.Temporal => metalFx,
-                MetalUpscalerMode.Spatial => metalFxSpatial,
-                _ => null,
-            };
-            Config.MetalUpscaler = mode;
-        }
-        ApplyMode(mode);
-        if (noTaa) Console.WriteLine("metal     no TAA/upscaler: native scene, no jitter");
+        var upscaling = new MetalUpscaling(Config, ctx, taa, metalFx, metalFxSpatial);
+        upscaling.ApplyMode(mode);
+        if (upscaling.NoTaa) Console.WriteLine("metal     no TAA/upscaler: native scene, no jitter");
         // The seam's post chain for the shared WorldFrame.Draw: the scene effects and the composite are the same calls the local
         // loop used, with the jitter and temporal choice decided live as the settings change them.
         var postChain = new MetalPostChain(ctx, composite, taa, WorldOptions.Post,
-            noTaa: () => noTaa,
-            temporal: () => mode is MetalUpscalerMode.Temporal or MetalUpscalerMode.Taa,
-            jitter: (frame, sceneWidth, displayWidth) => noTaa || spatial ? Vector2.Zero : PostTaa.Offset(frame, sceneWidth, displayWidth));
+            noTaa: () => upscaling.NoTaa,
+            temporal: () => upscaling.Mode is MetalUpscalerMode.Temporal or MetalUpscalerMode.Taa,
+            jitter: (frame, sceneWidth, displayWidth) => upscaling.NoTaa || upscaling.Spatial ? Vector2.Zero : PostTaa.Offset(frame, sceneWidth, displayWidth));
 
-        int CurrentPresetIndex()
-        {
-            if (mode == MetalUpscalerMode.Native) return 0;
-            if (mode == MetalUpscalerMode.Temporal && MathF.Abs(ctx.RenderScale - 0.77f) < 0.005f) return 1;
-            if (mode == MetalUpscalerMode.Temporal && MathF.Abs(ctx.RenderScale - 0.67f) < 0.005f) return 2;
-            if (mode == MetalUpscalerMode.Temporal && MathF.Abs(ctx.RenderScale - 0.59f) < 0.005f) return 3;
-            if (mode == MetalUpscalerMode.Temporal && MathF.Abs(ctx.RenderScale - 0.50f) < 0.005f) return 4;
-            if (mode == MetalUpscalerMode.Temporal && MathF.Abs(ctx.RenderScale - 0.40f) < 0.005f) return 5;
-            if (mode == MetalUpscalerMode.Spatial && MathF.Abs(ctx.RenderScale - 0.50f) < 0.005f) return 6;
-            if (mode == MetalUpscalerMode.Spatial && MathF.Abs(ctx.RenderScale - 0.40f) < 0.005f) return 7;
-            if (mode == MetalUpscalerMode.Taa) return 8;
-            return 9;   // a legacy/custom scale; the preset row is the only way to change a MetalFX scale
-        }
-        void SetPreset(int index)
-        {
-            MetalUpscalerMode next = index switch
-            {
-                0 => MetalUpscalerMode.Native,
-                1 or 2 or 3 or 4 or 5 => MetalUpscalerMode.Temporal,
-                6 or 7 => MetalUpscalerMode.Spatial,
-                8 => MetalUpscalerMode.Taa,
-                _ => mode,
-            };
-            float nextScale = index switch
-            {
-                0 => 1f,
-                1 => 0.77f,
-                2 => 0.67f,
-                3 => 0.59f,
-                4 => 0.50f,
-                5 => 0.40f,
-                6 => 0.50f,
-                7 => 0.40f,
-                8 => 0.50f,
-                _ => ctx.RenderScale,
-            };
-            SetRenderScaleForPreset(next, nextScale);
-        }
-        void SetRenderScaleForPreset(MetalUpscalerMode next, float nextScale)
-        {
-            if (next == MetalUpscalerMode.Temporal && metalFx is null)
-            {
-                Console.WriteLine("metal     MetalFX temporal is unavailable on this device");
-                next = MetalUpscalerMode.Native;
-                nextScale = 1f;
-            }
-            if (next == MetalUpscalerMode.Spatial && metalFxSpatial is null)
-            {
-                Console.WriteLine("metal     MetalFX spatial is unavailable on this device");
-                next = metalFx is null ? MetalUpscalerMode.Native : MetalUpscalerMode.Temporal;
-                nextScale = next == MetalUpscalerMode.Native ? 1f : nextScale;
-            }
-            ApplyMode(next);
-            ctx.RenderScale = Math.Clamp(nextScale, next is MetalUpscalerMode.Temporal or MetalUpscalerMode.Spatial ? 0.4f : 0.33f, 1f);
-            Config.MetalRenderScale = ctx.RenderScale;
-        }
-        string UpscalerStatusText() => mode switch
-        {
-            MetalUpscalerMode.Native => "Native",
-            MetalUpscalerMode.Temporal => $"MetalFX temporal {ctx.RenderScale:0.00}",
-            MetalUpscalerMode.Spatial => $"MetalFX spatial {ctx.RenderScale:0.00}",
-            _ => $"TAA {ctx.RenderScale:0.00} (experimental)",
-        };
         bool openSettingsForStill = Environment.GetEnvironmentVariable("MEITOU_METAL_SETTINGS") is "1" or "true";
-        Console.WriteLine($"metal     upscaler {mode.ToString().ToLowerInvariant()} at {ctx.RenderScale:0.00}");
+        Console.WriteLine($"metal     upscaler {upscaling.Mode.ToString().ToLowerInvariant()} at {ctx.RenderScale:0.00}");
         // The text/quad painter, shared by the HUD and the optional frame-stats lines. It is created even for a screenshot:
         // the game's HUD is part of the picture. MEITOU_METAL_OVERLAY=1 adds the stats lines to a still.
         var overlay = DebugOverlay.TryCreate(ctx);
@@ -562,7 +485,7 @@ sealed partial class GameHost
                 new Slider("Frame limit", 0, 360, () => fpsLimit, v => fpsLimit = (int)MathF.Round(v / 5) * 5, "0",
                     Text: v => v <= 0 ? "Unlimited" : $"{v:0} fps"), Config)
             {
-                UpscalerStatus = UpscalerStatusText,
+                UpscalerStatus = upscaling.UpscalerStatusText,
                 GameplayChanged = Saves.ApplyGameplay,
                 ModSettings = () => Modding.Mods?.Settings ?? [],
                 AttackSlotsChanged = slots => { foreach (var combat in Session.World.Systems.OfType<Meitou.Simulation.Combat.CombatSystem>()) combat.UseAttackSlots(slots); },
@@ -668,10 +591,10 @@ sealed partial class GameHost
             sliders.Add(new Slider("Full screen", 0, 1, () => BorderlessFullScreen.IsOn(window) ? 1 : 0,
                 v => { if (v >= 0.5f != BorderlessFullScreen.IsOn(window)) ToggleFullScreen(); },
                 Text: v => v >= 0.5f ? "borderless" : "window"));
-            sliders.Add(new Slider(SettingsMenu.MetalPresetSlider, 0, 9, () => CurrentPresetIndex(), v =>
+            sliders.Add(new Slider(SettingsMenu.MetalPresetSlider, 0, 9, () => upscaling.CurrentPresetIndex(), v =>
             {
                 int index = (int)MathF.Round(v);
-                if (index is >= 0 and <= 8) SetPreset(index);
+                if (index is >= 0 and <= 8) upscaling.SetPreset(index);
             }, "0"));
             sliders.Add(new Slider(WorldFrame.FilteringSlider, 0, 4, () => MathF.Log2(ctx.Samplers.MaxAnisotropy),
                 v => ctx.Samplers.MaxAnisotropy = 1 << (int)MathF.Round(v), "0",
@@ -1312,7 +1235,7 @@ sealed partial class GameHost
                 // when it closes.
                 CharacterEditor.OpenPendingEditor();
                 CharacterEditor.ResumeAfterCreation();
-                if (hud is not { CharacterEditor.EditorOpen: true }) { CharacterEditor.ClearEditorStage(); CharacterEditor.ClearEditorBar(); }
+                if (hud is not { CharacterEditor.EditorOpen: true }) { CharacterEditor.ClearEditorStage(); CharacterEditor.Bar.ClearEditorBar(); }
                 if (!tourHolds && hud is not null) TitleScreen.ApplyTitleCamera();
                 // A flight puts the focus where it lands, so the towns there populate during the flight; otherwise the
                 // followed character's pivot is already in the rig.
@@ -1436,7 +1359,7 @@ sealed partial class GameHost
             var backbuffer = ctx.Backbuffer;
             // The editor's scene: in the Meitou UI the bar, drawn by the world pass below from the editor's camera (CharacterEditorHost); else the
             // original's stage, the character and its platform drawn into the stage texture the interface shows over the world.
-            var editorBarFrame = hud is { CharacterEditor.EditorOpen: true } ? CharacterEditor.BeginEditorBar(size.X, size.Y) : null;
+            var editorBarFrame = hud is { CharacterEditor.EditorOpen: true } ? CharacterEditor.Bar.BeginEditorBar(size.X, size.Y) : null;
             // The still's objects are all resident before the first picture, as the Vulkan screenshot path settles them (its Settle
             // opens its own frame; here the frame is the first one's).
             if (frames == 0)
@@ -1469,7 +1392,7 @@ sealed partial class GameHost
             // The frame's inputs, as WorldFrame.Draw prepares them: the weather at the camera, the atmosphere's tables for the sun and the
             // eye's height, the fog distance the light ends at, and the view distance that keeps the haze complete before the far plane.
             bool titleLook = hud is not null && TitleScreen.TitleVisible;
-            float hour = editorBarFrame is not null ? CharacterEditorHost.EditorBarHour
+            float hour = editorBarFrame is not null ? EditorBarScene.EditorBarHour
                 : PresentationHour ?? (titleLook ? TitleScreen.TitleHour : (float)Session.Clock.HourOfDay);
             var aspect = size.X / (float)Math.Max(size.Y, 1);
             var eye = Camera.Eye;
@@ -1537,7 +1460,7 @@ sealed partial class GameHost
                     fogVolumes.HidePlaced = savedHidePlaced;
                 }
             }
-            if (editorBarFrame is { } barFrame) CharacterEditor.EndEditorBar(barFrame, size.X, size.Y);
+            if (editorBarFrame is { } barFrame) CharacterEditor.Bar.EndEditorBar(barFrame, size.X, size.Y);
             // The feedback screenshot: the frame without the menus, the settings, the debug overlays and the pointer (FeedbackCapture).
             bool feedbackShot = FeedbackCapture.FeedbackShotRequested && hud is not null && !still;
             if (hud is not null) hud.FeedbackPanel.ShotWithoutMenus = feedbackShot;
@@ -1723,7 +1646,7 @@ sealed partial class GameHost
             Config.VSync = display.VSync;
             Config.FpsLimit = fpsLimit;
             Config.FullScreen = BorderlessFullScreen.IsOn(window);
-            Config.MetalUpscaler = mode;
+            Config.MetalUpscaler = upscaling.Mode;
             Config.MetalRenderScale = ctx.RenderScale;
             if (hud is not null && (!GameOptions.LowEnd || hud.UiMode != Meitou.Data.Ui.UiMode.Faithful))
                 Config.UiMode = hud.UiMode;   // --low-end's Faithful UI is for the run

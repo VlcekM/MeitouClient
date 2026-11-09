@@ -19,6 +19,8 @@ namespace Meitou.Game.Ui;
 /// </summary>
 sealed class TooltipRuntime(PlayerInterface player)
 {
+    #region Hover runtime
+
     /// <summary>
     /// The item records of the game data (for the item tooltip's lines); the host sets it.
     /// </summary>
@@ -360,7 +362,14 @@ sealed class TooltipRuntime(PlayerInterface player)
     UiRect HudTooltipAnchor() =>
         player.FaithfulHud.Find("TooltipPanel") is { } panel ? panel.Position.RelativeTo(new(0, 0, player.Width, player.Height), true) : new(0.319792f * player.Width, 0.712963f * player.Height, 0.208333f * player.Width, 0.0666667f * player.Height);
 
+    #endregion
+
+    #region HUD tooltips
+
     // ---- HUD tooltips (FUN_14072b540, FUN_14072d3b0: Verified) ----
+
+    // The colour tags of the bounty rows (kenshi_colours.xml Main, Title, Greyed; FUN_1405d2da0's static strings).
+    internal const string MainTag = "#afa68b", TitleTag = "#492620", GreyTag = "#444444";
 
     /// <summary>
     /// The texts the HUD's builders hand to the type 0 setter (<c>FUN_140920fe0</c>) per widget; the Sneak button's is two strings joined.
@@ -439,9 +448,6 @@ sealed class TooltipRuntime(PlayerInterface player)
             ? Loc.Tr("This machine is working fine, but due to low power is only operating at {1}{2,num}% {3}of its full potential.", TitleTag, (int)(s * 100), ProductionWindows.InkTag)
             : Loc.Tr("This machine is working fine.");
     }
-
-    // The colour tags of the bounty rows (kenshi_colours.xml Main, Title, Greyed; FUN_1405d2da0's static strings).
-    internal const string MainTag = "#afa68b", TitleTag = "#492620", GreyTag = "#444444";
 
     /// <summary>
     /// The bounty panel's tooltip rows (<c>FUN_1405d2da0</c>, docs/game/ui-screens.md section 4): per faction its name and <c>c.{1,num}</c> (Main for
@@ -611,6 +617,10 @@ sealed class TooltipRuntime(PlayerInterface player)
         }
         else if (player.Lead() is { Body: not null } lead) Add("HealthText", HudPanels.HealthWord(lead).Tip);
     }
+
+    #endregion
+
+    #region Item tooltips
 
     // ---- item tooltips (the Item classes' vfunc_79: FUN_1407ae130 and its callees) ----
 
@@ -843,8 +853,6 @@ sealed class TooltipRuntime(PlayerInterface player)
         // A bag's own weight, without its contents (Item +0x120, FUN_1407aa090).
         float unitWeight = type == Data.Fcs.FcsRecordType.Container ? record!.GetFloat("weight kg") : t.Quantity > 0 ? t.Weight / t.Quantity : t.Weight;
 
-        TooltipLine Row(string label, string value, TooltipTone valueTone = TooltipTone.Ink) => new("-" + label, value, TooltipTone.Ink, valueTone);
-
         // The kind markers in the original's order (FUN_1407ae130): Ammunition, Research Artifact (the record's artifact flag), Unique (the item's
         // flag; both Special, #14ffdc), Book, Food.
         if (function == 16) lines.Add(new("[Ammunition]", "", TooltipTone.Main));
@@ -886,120 +894,9 @@ sealed class TooltipRuntime(PlayerInterface player)
             lines.Add(new("-Shots", $"{(int)t.Charges}/{(int)t.MaxCharges}", TooltipTone.Main, TooltipTone.Main));
         }
 
-        string weightText;
-
-        string Fixed2(float v) => v.ToString("0.00", CultureInfo.InvariantCulture);
-
-        // Signed percent rows (FUN_14079f650): (int) of the value truncated, none at 0, +N% Good or N% Bad.
-        void Signed(string label, float value)
-        {
-            int n = (int)value;
-            if (n != 0)
-                lines.Add(Row(label, (n > 0 ? "+" : "") + n.ToString(CultureInfo.InvariantCulture) + "%", n > 0 ? TooltipTone.Good : TooltipTone.Bad));
-        }
-
-        if (type == Data.Fcs.FcsRecordType.Crossbow && combat?.Crossbow(t.Record) is { } bow)
-        {
-            // A crossbow's own rows (FUN_1407b0750, Observed): the gun's numbers at the item's level x 0.01 (CrossbowData.At), the weight whole kg
-            // truncated.
-            var gun = CrossbowInstance.Create(t.Level * 0.01f, bow, combat.Constants, RangedDamageMultiplier?.Invoke() ?? 1).Stats;
-
-            string I(float v) => ((int)v).ToString(CultureInfo.InvariantCulture);
-
-            lines.Add(new("Crossbow class", "", TooltipTone.Main));
-            lines.Add(Row("Damage:", I(gun.PierceMin) + "-" + I(gun.PierceMax), TooltipTone.Main));
-            lines.Add(Row("Accuracy deviation:", Fixed2(gun.AccuracyDeviation) + " degrees", TooltipTone.Main));
-            lines.Add(Row("Reload time:", Fixed2(gun.ReloadMin) + "-" + Fixed2(gun.ReloadMax) + "s", TooltipTone.Main));
-            lines.Add(Row("Range:", I(gun.Range * 0.1f) + "m", TooltipTone.Main));
-            lines.Add(Row("Velocity:", I(gun.ShotSpeed * 0.23f) + "m/s", TooltipTone.Main));
-            lines.Add(Row("Blood loss:", Fixed2(bow.BleedMult) + "x", TooltipTone.Main));
-            lines.Add(Row("Required skill:", bow.AccuracyPerfectSkill.ToString(CultureInfo.InvariantCulture), TooltipTone.Main));
-            lines.Add(new("---------------", "", TooltipTone.Grey));
-            lines.Add(Row("Ammunition type:", bow.AmmoId.Length > 0 && player.RecordName?.Invoke(bow.AmmoId) is { Length: > 0 } ammo ? ammo : "???",
-                TooltipTone.Main));
-            Signed("Damage vs robots", (bow.RobotDamageMult - 1) * 100);
-            Signed("Damage vs humans", (bow.HumanDamageMult - 1) * 100);
-            Signed("Damage vs animals", (bow.AnimalDamageMult - 1) * 100);
-            lines.Add(new("----------------", "", TooltipTone.Grey));
-            weightText = I(unitWeight) + " kg";
-            lines.Add(Row("Weight", weightText));
-        }
-        else if (type == Data.Fcs.FcsRecordType.Weapon && combat?.Weapon(t.Record) is { } weapon)
-        {
-            var maker = combat.Manufacturer(t.Company) ?? WeaponManufacturer.Neutral;
-            var stats = WeaponStats.Compute(t.Level * 0.01f, weapon, maker, combat.WeaponMaterial(t.Material) ?? WeaponMaterial.None, combat.Constants);
-            string? className = weapon.SkillCategory switch
-            {
-                (int)WeaponCategory.Katanas => "Katana class",
-                (int)WeaponCategory.Sabres => "Sabre class",
-                (int)WeaponCategory.Blunt => "Blunt weapon class",
-                (int)WeaponCategory.Heavy => "Heavy weapons class",
-                (int)WeaponCategory.Hackers => "Hacker class",
-                (int)WeaponCategory.Bow => "Crossbow class",
-                (int)WeaponCategory.Polearms => "Polearm class",
-                _ => null,
-            };
-            if (className is not null) lines.Add(new(className, "", TooltipTone.Main));
-
-            lines.Add(Row("Cutting damage", Fixed2(stats.CutMultiplier), TooltipTone.Main));
-            lines.Add(Row("Blunt damage", Fixed2(stats.BluntMultiplier), TooltipTone.Main));
-            lines.Add(Row("Blood loss", Fixed2(weapon.BleedMult), TooltipTone.Main));
-            Signed("Armour penetration", weapon.ArmourPenetration * 100);
-            Signed("Damage vs robots", (weapon.RobotDamageMult - 1) * 100);
-            Signed("Damage vs humans", (weapon.HumanDamageMult - 1) * 100);
-            Signed("Damage vs animals", (weapon.AnimalDamageMult - 1) * 100);
-
-            foreach (var (race, percent) in weapon.RaceDamage)
-            {
-                if (player.RecordName?.Invoke(race) is { Length: > 0 } raceName)
-                    Signed(Loc.Tr("Damage vs") + " " + raceName, percent - 100);
-            }
-
-            if (stats.AttackMod != 0)
-            {
-                lines.Add(Row("Attack bonus", stats.AttackMod.ToString(CultureInfo.InvariantCulture),
-                    stats.AttackMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
-            }
-
-            if (stats.DefenceMod != 0)
-            {
-                lines.Add(Row("Defence bonus", stats.DefenceMod.ToString(CultureInfo.InvariantCulture),
-                    stats.DefenceMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
-            }
-
-            if (stats.IndoorsMod != 0)
-            {
-                lines.Add(Row(stats.IndoorsMod < 0 ? "Indoors penalty" : "Indoors bonus", stats.IndoorsMod.ToString(CultureInfo.InvariantCulture),
-                    stats.IndoorsMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
-            }
-
-            lines.Add(new("----------------", "", TooltipTone.Grey));
-            weightText = ((int)stats.Weight).ToString(CultureInfo.InvariantCulture) + " kg";
-            lines.Add(Row("Weight", weightText));
-        }
-        else
-        {
-            // Armour: grade, class and material, resistances (ArmourTooltip; docs/game/ui-screens.md "Item tooltip").
-            if (armourHead is not null) lines.AddRange(armourHead);
-            if (limbRows is not null) lines.AddRange(limbRows);
-
-            // "{n} x {unit} kg ({total} kg)" for a stack.
-            // An armour piece and a backpack print whole kilograms, truncated (FUN_1407a1650, FUN_1407aa090, Observed).
-            bool wholeKg = armour is not null || type == Data.Fcs.FcsRecordType.Container;
-            weightText = wholeKg ? ((int)unitWeight).ToString(CultureInfo.InvariantCulture) + " kg"
-                : (t.Quantity > 1 ? $"{t.Quantity} x " : "") + Number(unitWeight) + " kg" + (t.Quantity > 1 ? $" ({Number(t.Weight)} kg)" : "");
-            lines.Add(Row("Weight", weightText));
-
-            // "[Weather Protections]" (Main), then per weather kind of the piece's set, in kind order, "-{kind}" and its weather protection amount as
-            // a whole percent, both Good (FUN_1407a1650).
-            if (armour is { WeatherProtection.Count: > 0 })
-            {
-                lines.Add(new("[" + Loc.Tr("Weather Protections") + "]", "", TooltipTone.Main));
-                string amount = Loc.Tr("{1,num}%", (int)(armour.WeatherProtectionAmount * 100));
-                foreach (var kind in armour.WeatherProtection.Distinct().Order())
-                    lines.Add(new("-" + Loc.Tr(WeatherKindName(kind)), amount, TooltipTone.Good, TooltipTone.Good));
-            }
-        }
+        if (type == Data.Fcs.FcsRecordType.Crossbow && combat?.Crossbow(t.Record) is { } bow) AddCrossbowRows(lines, t, bow, combat, unitWeight);
+        else if (type == Data.Fcs.FcsRecordType.Weapon && combat?.Weapon(t.Record) is { } weapon) AddWeaponRows(lines, t, weapon, combat);
+        else AddWeightRows(lines, t, type, armour, armourHead, limbRows, unitWeight);
 
         if (t.Trade is { } trade)
         {
@@ -1084,6 +981,141 @@ sealed class TooltipRuntime(PlayerInterface player)
     }
 
     /// <summary>
+    /// An item row: the label after a hyphen, in ink, and its value.
+    /// </summary>
+    static TooltipLine Row(string label, string value, TooltipTone valueTone = TooltipTone.Ink) => new("-" + label, value, TooltipTone.Ink, valueTone);
+
+    /// <summary>
+    /// A number with two decimals.
+    /// </summary>
+    static string Fixed2(float v) => v.ToString("0.00", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Signed percent rows (FUN_14079f650): (int) of the value truncated, none at 0, +N% Good or N% Bad.
+    /// </summary>
+    static void Signed(List<TooltipLine> lines, string label, float value)
+    {
+        int n = (int)value;
+        if (n != 0)
+            lines.Add(Row(label, (n > 0 ? "+" : "") + n.ToString(CultureInfo.InvariantCulture) + "%", n > 0 ? TooltipTone.Good : TooltipTone.Bad));
+    }
+
+    /// <summary>
+    /// A crossbow's class, gun numbers, ammunition, damage multipliers and weight.
+    /// </summary>
+    void AddCrossbowRows(List<TooltipLine> lines, ItemTip t, CrossbowData bow, CombatDatabase combat, float unitWeight)
+    {
+        // A crossbow's own rows (FUN_1407b0750, Observed): the gun's numbers at the item's level x 0.01 (CrossbowData.At), the weight whole kg
+        // truncated.
+        var gun = CrossbowInstance.Create(t.Level * 0.01f, bow, combat.Constants, RangedDamageMultiplier?.Invoke() ?? 1).Stats;
+
+        string I(float v) => ((int)v).ToString(CultureInfo.InvariantCulture);
+
+        lines.Add(new("Crossbow class", "", TooltipTone.Main));
+        lines.Add(Row("Damage:", I(gun.PierceMin) + "-" + I(gun.PierceMax), TooltipTone.Main));
+        lines.Add(Row("Accuracy deviation:", Fixed2(gun.AccuracyDeviation) + " degrees", TooltipTone.Main));
+        lines.Add(Row("Reload time:", Fixed2(gun.ReloadMin) + "-" + Fixed2(gun.ReloadMax) + "s", TooltipTone.Main));
+        lines.Add(Row("Range:", I(gun.Range * 0.1f) + "m", TooltipTone.Main));
+        lines.Add(Row("Velocity:", I(gun.ShotSpeed * 0.23f) + "m/s", TooltipTone.Main));
+        lines.Add(Row("Blood loss:", Fixed2(bow.BleedMult) + "x", TooltipTone.Main));
+        lines.Add(Row("Required skill:", bow.AccuracyPerfectSkill.ToString(CultureInfo.InvariantCulture), TooltipTone.Main));
+        lines.Add(new("---------------", "", TooltipTone.Grey));
+        lines.Add(Row("Ammunition type:", bow.AmmoId.Length > 0 && player.RecordName?.Invoke(bow.AmmoId) is { Length: > 0 } ammo ? ammo : "???",
+            TooltipTone.Main));
+        Signed(lines, "Damage vs robots", (bow.RobotDamageMult - 1) * 100);
+        Signed(lines, "Damage vs humans", (bow.HumanDamageMult - 1) * 100);
+        Signed(lines, "Damage vs animals", (bow.AnimalDamageMult - 1) * 100);
+        lines.Add(new("----------------", "", TooltipTone.Grey));
+        string weightText = I(unitWeight) + " kg";
+        lines.Add(Row("Weight", weightText));
+    }
+
+    /// <summary>
+    /// A weapon's class, damage, multipliers, bonuses and weight (<see cref="WeaponStats"/>).
+    /// </summary>
+    void AddWeaponRows(List<TooltipLine> lines, ItemTip t, WeaponData weapon, CombatDatabase combat)
+    {
+        var maker = combat.Manufacturer(t.Company) ?? WeaponManufacturer.Neutral;
+        var stats = WeaponStats.Compute(t.Level * 0.01f, weapon, maker, combat.WeaponMaterial(t.Material) ?? WeaponMaterial.None, combat.Constants);
+        string? className = weapon.SkillCategory switch
+        {
+            (int)WeaponCategory.Katanas => "Katana class",
+            (int)WeaponCategory.Sabres => "Sabre class",
+            (int)WeaponCategory.Blunt => "Blunt weapon class",
+            (int)WeaponCategory.Heavy => "Heavy weapons class",
+            (int)WeaponCategory.Hackers => "Hacker class",
+            (int)WeaponCategory.Bow => "Crossbow class",
+            (int)WeaponCategory.Polearms => "Polearm class",
+            _ => null,
+        };
+        if (className is not null) lines.Add(new(className, "", TooltipTone.Main));
+
+        lines.Add(Row("Cutting damage", Fixed2(stats.CutMultiplier), TooltipTone.Main));
+        lines.Add(Row("Blunt damage", Fixed2(stats.BluntMultiplier), TooltipTone.Main));
+        lines.Add(Row("Blood loss", Fixed2(weapon.BleedMult), TooltipTone.Main));
+        Signed(lines, "Armour penetration", weapon.ArmourPenetration * 100);
+        Signed(lines, "Damage vs robots", (weapon.RobotDamageMult - 1) * 100);
+        Signed(lines, "Damage vs humans", (weapon.HumanDamageMult - 1) * 100);
+        Signed(lines, "Damage vs animals", (weapon.AnimalDamageMult - 1) * 100);
+
+        foreach (var (race, percent) in weapon.RaceDamage)
+        {
+            if (player.RecordName?.Invoke(race) is { Length: > 0 } raceName)
+                Signed(lines, Loc.Tr("Damage vs") + " " + raceName, percent - 100);
+        }
+
+        if (stats.AttackMod != 0)
+        {
+            lines.Add(Row("Attack bonus", stats.AttackMod.ToString(CultureInfo.InvariantCulture),
+                stats.AttackMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
+        }
+
+        if (stats.DefenceMod != 0)
+        {
+            lines.Add(Row("Defence bonus", stats.DefenceMod.ToString(CultureInfo.InvariantCulture),
+                stats.DefenceMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
+        }
+
+        if (stats.IndoorsMod != 0)
+        {
+            lines.Add(Row(stats.IndoorsMod < 0 ? "Indoors penalty" : "Indoors bonus", stats.IndoorsMod.ToString(CultureInfo.InvariantCulture),
+                stats.IndoorsMod < 0 ? TooltipTone.Bad : TooltipTone.Good));
+        }
+
+        lines.Add(new("----------------", "", TooltipTone.Grey));
+        string weightText = ((int)stats.Weight).ToString(CultureInfo.InvariantCulture) + " kg";
+        lines.Add(Row("Weight", weightText));
+    }
+
+    /// <summary>
+    /// Any other item: an armour's or prosthetic's rows, the weight, and an armour's weather protections.
+    /// </summary>
+    static void AddWeightRows(List<TooltipLine> lines, ItemTip t, Data.Fcs.FcsRecordType? type, ArmourData? armour, List<TooltipLine>? armourHead,
+        List<TooltipLine>? limbRows, float unitWeight)
+    {
+        // Armour: grade, class and material, resistances (ArmourTooltip; docs/game/ui-screens.md "Item tooltip").
+        if (armourHead is not null) lines.AddRange(armourHead);
+        if (limbRows is not null) lines.AddRange(limbRows);
+
+        // "{n} x {unit} kg ({total} kg)" for a stack.
+        // An armour piece and a backpack print whole kilograms, truncated (FUN_1407a1650, FUN_1407aa090, Observed).
+        bool wholeKg = armour is not null || type == Data.Fcs.FcsRecordType.Container;
+        string weightText = wholeKg ? ((int)unitWeight).ToString(CultureInfo.InvariantCulture) + " kg"
+            : (t.Quantity > 1 ? $"{t.Quantity} x " : "") + Number(unitWeight) + " kg" + (t.Quantity > 1 ? $" ({Number(t.Weight)} kg)" : "");
+        lines.Add(Row("Weight", weightText));
+
+        // "[Weather Protections]" (Main), then per weather kind of the piece's set, in kind order, "-{kind}" and its weather protection amount as
+        // a whole percent, both Good (FUN_1407a1650).
+        if (armour is { WeatherProtection.Count: > 0 })
+        {
+            lines.Add(new("[" + Loc.Tr("Weather Protections") + "]", "", TooltipTone.Main));
+            string amount = Loc.Tr("{1,num}%", (int)(armour.WeatherProtectionAmount * 100));
+            foreach (var kind in armour.WeatherProtection.Distinct().Order())
+                lines.Add(new("-" + Loc.Tr(WeatherKindName(kind)), amount, TooltipTone.Good, TooltipTone.Good));
+        }
+    }
+
+    /// <summary>
     /// A weapon's closing rows after its description (<c>FUN_14079fe80</c>, <b>Observed</b>): a blank row, <c>[Model # {model}]</c> in its level's
     /// grade colour, then <c>[Manufactured by {company}]</c> and the company's description, or for a crafted weapon <c>[Crafted by {smith}]</c> and a
     /// sentence naming the smith and the player's faction (the masterful one from level 45).
@@ -1113,6 +1145,10 @@ sealed class TooltipRuntime(PlayerInterface player)
                 yield return new(about, "", TooltipTone.Ink, Paragraph: true);
         }
     }
+
+    #endregion
+
+    #region Medical tooltips
 
     // The medical panel's tooltips (the medical section <c>FUN_14088a8f0</c>, docs/game/ui-screens.md "Tooltips"): one on each row's
     // <c>LifeBarNTooltip</c> widget and one on the health word, as far as Meitou models the states they describe.
@@ -1228,4 +1264,6 @@ sealed class TooltipRuntime(PlayerInterface player)
         ArmourTooltip.LineKind.Effect => new(line.Label, line.Value, TooltipTone.Title, line.Grade < 0 ? TooltipTone.Bad : TooltipTone.Good),
         _ => new(line.Label, line.Value, TooltipTone.Main, TooltipTone.Main),
     };
+
+    #endregion
 }

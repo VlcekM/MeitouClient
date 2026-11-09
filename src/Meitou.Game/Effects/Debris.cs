@@ -107,7 +107,7 @@ sealed class Debris(GameHost host)
             }
         }
         var centre = m.Position + new Vector3(0, BurstHeight, 0);
-        host.Sound.CharacterSounds?.Burst(centre);
+        host.Sound.Characters.Sounds?.Burst(centre);
         if (bleeds && host.Gpu.Particles is { } particles)
         {
             var recolour = BloodDecals.BloodRecolour(m.Colour);
@@ -445,7 +445,7 @@ sealed class Debris(GameHost host)
                 host.BloodDecals.BloodRandom);
         if (!p.Landed && p.Flesh)
         {
-            host.Sound.CharacterSounds?.Splat(p.Position);
+            host.Sound.Characters.Sounds?.Splat(p.Position);
             if (p.Colour != 0) host.Gpu.Particles?.Burst(BurstSplash, p.Position, Quaternion.Identity, 0.15f, 1.3f, 1.5f, p.Recolour);
         }
         p.Landed = true;

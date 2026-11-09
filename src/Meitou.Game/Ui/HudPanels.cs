@@ -152,7 +152,7 @@ sealed class HudPanels(PlayerInterface player)
     /// </summary>
     static PlayerInterface.HudLine SkillLine(CurrentSkillView skill, SpeedUnit unit)
     {
-        string label = skill.Label is { } own ? Loc.Tr(own) : CharacterEditorPanel.EditorStatName(skill.Stat);
+        string label = skill.Label is { } own ? Loc.Tr(own) : EditorRaceStats.EditorStatName(skill.Stat);
         string? colour = skill.Penalised ? PlayerInterface.BadColour : null;
         string value = skill.Speed ? SpeedText(skill.Value, unit) : skill.Accuracy is not null ? Degrees(skill.Value) : Num(skill.Value);
 
