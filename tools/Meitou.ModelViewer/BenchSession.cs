@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Numerics;
 
 using Meitou.Game.Rendering.Bench;
+using Meitou.Game.Rendering.Display;
 using Meitou.Game.Rendering.Foliage;
 using Meitou.Game.Rendering.Frame;
 using Meitou.Game.Rendering.Gpu;
@@ -10,246 +11,493 @@ using Meitou.Game.Rendering.Objects;
 using Meitou.Game.Rendering.Post;
 using Meitou.Game.Rendering.Profiling;
 using Meitou.Game.Rendering.Shadows;
-using Meitou.Game.Rendering.Sky;
 using Meitou.Game.Rendering.Terrain;
 using static Meitou.Game.Rendering.Frame.WorldFrame;
 
 namespace Meitou.ModelViewer;
 
-static partial class WorldApp
+/// <summary>
+/// The benchmark harness (<c>--bench-frames</c>, <c>--ab</c>; docs/bench.md "Benchmark harness"): measures a fixed view, alternating the two
+/// sides of one switch when asked, and writes per-stage statistics (mean, median, p95, p99, max for each side and the paired difference) as a
+/// table and JSON.
+/// </summary>
+sealed class BenchSession
 {
-    /// <summary>
-    /// The benchmark harness (<c>--bench-frames</c>, <c>--ab</c>; docs/bench.md "Benchmark harness"): measures a fixed view, alternating the two
-    /// sides of one switch when asked, and writes per-stage statistics (mean, median, p95, p99, max for each side and the paired difference) as a
-    /// table and JSON.
-    /// </summary>
-    static int Bench(Game.Rendering.Display.VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render,
-            WorldOptions o, int w, int h)
-    {
-        var context = display.Context;
-        var post = gpu.Post!;
-        bool ab = o.Ab is not null;
-        int frames = o.BenchFrames > 0 ? o.BenchFrames : 600;
-        int period = ab ? o.AbPeriod : 1;
-        int drop = ab && period > 1 ? Math.Min(Math.Min(period / 4, 16), period - 1) : 0;
+    #region Run
 
-        // The runtime switches: the Faithful / Meitou ones under their ids (A = Meitou), then what can flip between two frames (A = on).
-        RegisterCullToggles(gpu, post, o, camera, render);
-        RegisterPostToggles(post);
-        RegisterShadowAndFoliageToggles(gpu);
-        RegisterSkyAndSceneToggles(gpu, render);
-        RegisterGiToggles(gpu);
-        RegisterTerrainObjectAndWaterToggles(gpu, render);
-        AbToggles.Toggle? toggle = null;
-        if (ab && !AbToggles.TryGet(o.Ab!, out toggle))
+    /// <summary>
+    /// The display the frames are drawn on, offscreen.
+    /// </summary>
+    readonly VulkanDisplay _display;
+
+    /// <summary>
+    /// The renderers.
+    /// </summary>
+    readonly Gpu _gpu;
+
+    /// <summary>
+    /// The loaded world.
+    /// </summary>
+    readonly WorldScene _scene;
+
+    /// <summary>
+    /// The view measured; the motion moves it.
+    /// </summary>
+    readonly WorldCamera _camera;
+
+    /// <summary>
+    /// The render switches (some A/B switches flip them).
+    /// </summary>
+    readonly WorldRenderOptions _render;
+
+    /// <summary>
+    /// The viewer's options.
+    /// </summary>
+    readonly WorldOptions _o;
+
+    /// <summary>
+    /// The picture's size in pixels.
+    /// </summary>
+    readonly int _w, _h;
+
+    /// <summary>
+    /// The display's GPU context.
+    /// </summary>
+    readonly GpuContext _context;
+
+    /// <summary>
+    /// The post-processing chain.
+    /// </summary>
+    readonly PostProcess _post;
+
+    /// <summary>
+    /// Whether two sides of a switch alternate (<c>--ab</c>).
+    /// </summary>
+    readonly bool _ab;
+
+    /// <summary>
+    /// The measured frames, the frames a side holds before the other takes over, and the frames dropped after each switch.
+    /// </summary>
+    readonly int _frames, _period, _drop;
+
+    /// <summary>
+    /// The switch <c>--ab</c> names; null for a single run.
+    /// </summary>
+    AbToggles.Toggle? _toggle;
+
+    /// <summary>
+    /// The start camera, for the still pictures.
+    /// </summary>
+    (Vector3 Target, float Yaw, float Pitch, float Distance) _snapshot;
+
+    /// <summary>
+    /// How the camera moves from frame to frame (<c>--bench-motion</c>).
+    /// </summary>
+    CameraMotion _motion = null!;
+
+    /// <summary>
+    /// The motion's step count.
+    /// </summary>
+    int _motionStep;
+
+    /// <summary>
+    /// Per measured frame: the series of every metric (NaN where a value never arrived).
+    /// </summary>
+    readonly Dictionary<string, double[]> _series = new();
+
+    /// <summary>
+    /// Per measured frame: its side and its block.
+    /// </summary>
+    readonly int[] _sideOf, _blockOf;
+
+    /// <summary>
+    /// Per measured frame: whether it counts (not dropped after a switch).
+    /// </summary>
+    readonly bool[] _keep;
+
+    /// <summary>
+    /// The stages' names, as the profiler reports their GPU times.
+    /// </summary>
+    string[] _stageNames = null!;
+
+    /// <summary>
+    /// The GPU stage timer, its frames tagged with the measured frame.
+    /// </summary>
+    FrameProfiler _profiler = null!;
+
+    /// <summary>
+    /// <c>--bench-serial</c>: every frame waited for.
+    /// </summary>
+    bool _serial;
+
+    /// <summary>
+    /// When the previous frame was submitted.
+    /// </summary>
+    long _lastSubmit;
+
+    /// <summary>
+    /// The frame clock's frame.
+    /// </summary>
+    int _clockFrame;
+
+    /// <summary>
+    /// Whether the frame clock runs (with weather particles).
+    /// </summary>
+    bool _clockRuns;
+
+    /// <summary>
+    /// A bench of the view <paramref name="camera"/> shows, at <paramref name="w"/> x <paramref name="h"/>.
+    /// </summary>
+    public BenchSession(VulkanDisplay display, Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, WorldOptions o, int w,
+            int h)
+    {
+        _display = display;
+        _gpu = gpu;
+        _scene = scene;
+        _camera = camera;
+        _render = render;
+        _o = o;
+        _w = w;
+        _h = h;
+        _context = display.Context;
+        _post = gpu.Post!;
+        _ab = o.Ab is not null;
+        _frames = o.BenchFrames > 0 ? o.BenchFrames : 600;
+        _period = _ab ? o.AbPeriod : 1;
+        _drop = _ab && _period > 1 ? Math.Min(Math.Min(_period / 4, 16), _period - 1) : 0;
+        _sideOf = new int[_frames];
+        _blockOf = new int[_frames];
+        _keep = new bool[_frames];
+    }
+
+    /// <summary>
+    /// Warms up, measures, adds the counts, the metadata and the pictures, prints and saves the results; 2 for an unknown switch.
+    /// </summary>
+    public int Run()
+    {
+        RegisterToggles();
+        if (_ab && !AbToggles.TryGet(_o.Ab!, out _toggle))
         {
-            Console.Error.WriteLine($"--ab {o.Ab}: unknown switch ({AbToggles.Names})");
+            Console.Error.WriteLine($"--ab {_o.Ab}: unknown switch ({AbToggles.Names})");
             return 2;
         }
-        void Side(int side) => toggle?.Set(side == 0);
+        TrackSeries();
+        StartFrameClock();
+        WarmUp();
 
-        var snapshot = (camera.Target, camera.Yaw, camera.Pitch, camera.Distance);
-        var motion = CameraMotion.For(o.BenchMotion, o, camera, gpu);
-        int motionStep = 0;
+        // ---- measure, holding the GPU lock ----
+        using var gpuLock = _o.NoGpuLock ? null : GpuLock.Acquire(Console.Out);
+        var (measuredSeconds, lockWaited) = Measure(gpuLock);
 
-        // Per measured frame: the series of every metric (NaN where a value never arrived), the side, the block and whether it counts.
-        var series = new Dictionary<string, double[]>();
-        var sideOf = new int[frames];
-        var blockOf = new int[frames];
-        var keep = new bool[frames];
-        void Set(string metric, long k, double v, bool add = false)
+        // ---- the results ----
+        var result = new BenchResult { Mode = _ab ? "ab" : "single", Ab = _o.Ab, Period = _period, Drop = _drop };
+        string[] labels = _ab ? ["A", "B"] : ["A"];
+        Summarize(result, labels);
+        CountSides(result, labels);
+        MeasureFogVrsShare(result);
+        WriteMeta(result.Meta, measuredSeconds, lockWaited);
+        MeasureSideTriangles(result, labels);
+        Save(result);
+        return 0;
+    }
+
+    /// <summary>
+    /// The runtime switches: the Faithful / Meitou ones under their ids (A = Meitou), then what can flip between two frames (A = on).
+    /// </summary>
+    void RegisterToggles()
+    {
+        RegisterCullToggles(_gpu, _post, _o, _camera, _render);
+        RegisterPostToggles(_post);
+        RegisterShadowAndFoliageToggles(_gpu);
+        RegisterSkyAndSceneToggles(_gpu, _render);
+        RegisterGiToggles(_gpu);
+        RegisterTerrainObjectAndWaterToggles(_gpu, _render);
+    }
+
+    /// <summary>
+    /// Side 0 (A) or 1 (B) of the switch, when there is one.
+    /// </summary>
+    void Side(int side) => _toggle?.Set(side == 0);
+
+    /// <summary>
+    /// The start camera and its motion; the profiler's GPU stage times and the post chain's section costs into the series.
+    /// </summary>
+    void TrackSeries()
+    {
+        _snapshot = (_camera.Target, _camera.Yaw, _camera.Pitch, _camera.Distance);
+        _motion = CameraMotion.For(_o.BenchMotion, _o, _camera, _gpu);
+        _motionStep = 0;
+        _stageNames = StageClock.Names;
+        _profiler = new FrameProfiler(_context, () => _context.GpuFrameMs);
+        _profiler.OnGpuFrame = OnGpuFrame;
+        _post.OnCost = (tag, name, ms) => Set("post:" + name, tag, ms, add: true);
+    }
+
+    /// <summary>
+    /// A metric's value for measured frame <paramref name="k"/> (added to what it has with <paramref name="add"/>); other frames are ignored.
+    /// </summary>
+    void Set(string metric, long k, double v, bool add = false)
+    {
+        if (k < 0 || k >= _frames) return;
+        if (!_series.TryGetValue(metric, out var s)) _series[metric] = s = Enumerable.Repeat(double.NaN, _frames).ToArray();
+        s[k] = add && !double.IsNaN(s[k]) ? s[k] + v : v;
+    }
+
+    /// <summary>
+    /// A tagged frame's GPU stage times, what no stage holds, and the total.
+    /// </summary>
+    void OnGpuFrame(long tag, double[] stages, double total)
+    {
+        double sum = 0;
+        for (int s = 0; s < _stageNames.Length; s++)
         {
-            if (k < 0 || k >= frames) return;
-            if (!series.TryGetValue(metric, out var s)) series[metric] = s = Enumerable.Repeat(double.NaN, frames).ToArray();
-            s[k] = add && !double.IsNaN(s[k]) ? s[k] + v : v;
+            if (StageClock.CpuOnly(s)) continue;
+            Set("gpu:" + _stageNames[s], tag, stages[s]);
+            sum += stages[s];
         }
-        string[] stageNames = StageClock.Names;
-        var profiler = new FrameProfiler(context, () => context.GpuFrameMs);
-        profiler.OnGpuFrame = (tag, stages, total) =>
-        {
-            double sum = 0;
-            for (int s = 0; s < stageNames.Length; s++)
-            {
-                if (StageClock.CpuOnly(s)) continue;
-                Set("gpu:" + stageNames[s], tag, stages[s]);
-                sum += stages[s];
-            }
-            Set("gpu:other", tag, Math.Max(total - sum, 0));
-            Set("gpu:total", tag, Math.Max(total, sum));
-        };
-        post.OnCost = (tag, name, ms) => Set("post:" + name, tag, ms, add: true);
+        Set("gpu:other", tag, Math.Max(total - sum, 0));
+        Set("gpu:total", tag, Math.Max(total, sum));
+    }
 
-        // One frame, as the viewer draws it. By default frames stay in flight (the next one is recorded while the GPU still draws this one; the stage
-        // times are read when the frame ring comes round, matched to their frame by the tag) and the returned wall time is the interval since the
-        // previous frame was submitted, so 1000 / mean is the viewer's fps. --bench-serial waits for every frame instead: the interval is then CPU +
-        // GPU added up. clock: the frame clock the weather particles and surfaces run on.
-        bool serial = o.BenchSerial;
-        long lastSubmit = Stopwatch.GetTimestamp();
-        int clockFrame = 0;
-        bool clockRuns = gpu.Particles is { Groups.Count: > 0 };
-        float Clock() => clockRuns ? (float)(clockFrame / 60.0 / 600) : 0;
-        double Frame(long tag, bool step = true)
+    /// <summary>
+    /// The frame mode (<c>--bench-serial</c>), the start of the first submit interval, and the frame clock the weather particles and surfaces
+    /// run on.
+    /// </summary>
+    void StartFrameClock()
+    {
+        _serial = _o.BenchSerial;
+        _lastSubmit = Stopwatch.GetTimestamp();
+        _clockFrame = 0;
+        _clockRuns = _gpu.Particles is { Groups.Count: > 0 };
+    }
+
+    /// <summary>
+    /// The frame clock in the draw's time units (600 s): 1/60 s a frame while it runs.
+    /// </summary>
+    float Clock() => _clockRuns ? (float)(_clockFrame / 60.0 / 600) : 0;
+
+    /// <summary>
+    /// One frame, as the viewer draws it. By default frames stay in flight (the next one is recorded while the GPU still draws this one; the stage
+    /// times are read when the frame ring comes round, matched to their frame by the tag) and the returned wall time is the interval since the
+    /// previous frame was submitted, so 1000 / mean is the viewer's fps. --bench-serial waits for every frame instead: the interval is then CPU +
+    /// GPU added up. A step moves the camera and the frame clock first.
+    /// </summary>
+    double Frame(long tag, bool step = true)
+    {
+        if (step)
         {
-            if (step)
-            {
-                if (motion.Moves) motion.Step(++motionStep);
-                clockFrame++;
-                if (o.SwayStep > 0 && gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + o.SwayStep;
-            }
-            context.EnsureFrame();
-            profiler.Tag = post.CostTag = tag;
-            profiler.BeginFrame();
-            Draw(gpu, scene, camera, render, w, h, o.Hour, Clock(), o.FogDistance);
-            EndFrame(context);
-            if (serial) context.Finish();
-            profiler.EndFrame();
-            long now = Stopwatch.GetTimestamp();
-            double interval = (now - lastSubmit) * 1000.0 / Stopwatch.Frequency;
-            lastSubmit = now;
-            return interval;
+            if (_motion.Moves) _motion.Step(++_motionStep);
+            _clockFrame++;
+            if (_o.SwayStep > 0 && _gpu.Foliage is { } swaying) swaying.SwaySeconds = (swaying.SwaySeconds ?? 0) + _o.SwayStep;
         }
+        _context.EnsureFrame();
+        _profiler.Tag = _post.CostTag = tag;
+        _profiler.BeginFrame();
+        Draw(_gpu, _scene, _camera, _render, _w, _h, _o.Hour, Clock(), _o.FogDistance);
+        WorldApp.EndFrame(_context);
+        if (_serial) _context.Finish();
+        _profiler.EndFrame();
+        long now = Stopwatch.GetTimestamp();
+        double interval = (now - _lastSubmit) * 1000.0 / Stopwatch.Frequency;
+        _lastSubmit = now;
+        return interval;
+    }
 
-        // ---- warm up: shaders, the temporal upscaler's history, streaming until nothing is pending (the screenshot path's Settle and FinishLoading
-        // came first) ----
+    /// <summary>
+    /// The warm-up: shaders, the temporal upscaler's history, streaming until nothing is pending (the screenshot path's Settle and FinishLoading
+    /// came first).
+    /// </summary>
+    void WarmUp()
+    {
         var loading = Stopwatch.StartNew();
-        for (int i = 0; i < Math.Max(post.WarmupFrames, 60); i++) Frame(-1, step: false);
+        for (int i = 0; i < Math.Max(_post.WarmupFrames, 60); i++) Frame(-1, step: false);
         int quiet = 0;
         while (quiet < 30 && loading.Elapsed.TotalSeconds < 60)
         {
             Frame(-1, step: false);
-            bool idle = (gpu.Streamer?.Idle ?? true) && (gpu.Objects?.Pending ?? 0) == 0 && (gpu.Foliage?.Pending ?? 0) == 0;
+            bool idle = (_gpu.Streamer?.Idle ?? true) && (_gpu.Objects?.Pending ?? 0) == 0 && (_gpu.Foliage?.Pending ?? 0) == 0;
             quiet = idle ? quiet + 1 : 0;
         }
         Console.WriteLine($"bench     warm-up {loading.Elapsed.TotalSeconds:0.0} s, streaming {(quiet >= 30 ? "idle" : "still busy after 60 s")}");
+    }
 
-        // ---- measure, holding the GPU lock ----
-        using var gpuLock = o.NoGpuLock ? null : GpuLock.Acquire(Console.Out);
+    /// <summary>
+    /// The timed frames, holding <paramref name="gpuLock"/> (released at the end): the seconds they took and the seconds spent waiting for the
+    /// lock.
+    /// </summary>
+    (double MeasuredSeconds, double LockWaited) Measure(GpuLock? gpuLock)
+    {
         if (gpuLock is not null)
             Console.WriteLine($"gpu-lock  waited {gpuLock.Waited.TotalSeconds:0.0} s{(gpuLock.StaleHolder is { } stale ? $" (took over a stale lock of PID {stale})" : "")}");
         double lockWaited = gpuLock?.Waited.TotalSeconds ?? 0;
-        var wall = new double[frames];
+        var wall = new double[_frames];
         var cpuStages = StageClock.Names.Length;
         var measured = Stopwatch.StartNew();
-        if (!ab) for (int i = 0; i < 16; i++) Frame(-1);   // the pipeline full and the first interval a frame's, not the set-up's
-        lastSubmit = Stopwatch.GetTimestamp();
-        if (ab)
+        Prime();
+        for (int k = 0; k < _frames; k++) MeasureFrame(k, wall, cpuStages);
+        double measuredSeconds = measured.Elapsed.TotalSeconds;
+        // The last frames' timestamps arrive when their slots come round: two empty frames bring them in.
+        for (int i = 0; i < 3; i++) { _context.EnsureFrame(); _context.Finish(); }
+        _profiler.Flush();
+        _post.Flush();
+        gpuLock?.Dispose();
+        return (measuredSeconds, lockWaited);
+    }
+
+    /// <summary>
+    /// The frames before the timed ones: the pipeline full, or with <c>--ab</c> both sides drawn in the run's pattern.
+    /// </summary>
+    void Prime()
+    {
+        if (!_ab) for (int i = 0; i < 16; i++) Frame(-1);   // the pipeline full and the first interval a frame's, not the set-up's
+        _lastSubmit = Stopwatch.GetTimestamp();
+        if (_ab)
         {
             // Both sides drawn once at least, in the pattern of the run, so the pipelines and caches of B exist before the numbers count.
-            int cycleFrames = period == 1 ? 16 : period;
+            int cycleFrames = _period == 1 ? 16 : _period;
             for (int cycle = 0; cycle < 4; cycle++)
             {
                 Side(cycle & 1);
                 for (int i = 0; i < cycleFrames; i++) Frame(-1);
             }
         }
-        for (int k = 0; k < frames; k++)
-        {
-            int block = k / period, side = ab ? block & 1 : 0;
-            if (ab && k % period == 0) Side(side);
-            sideOf[k] = side;
-            blockOf[k] = block;
-            keep[k] = k % period >= drop;
-            wall[k] = Frame(k);
-            Set("frame", k, wall[k]);
-            double cpuSum = 0;
-            for (int s = 0; s < cpuStages; s++)
-            {
-                Set("cpu:" + StageClock.Names[s], k, StageClock.Ms[s]);
-                if (s != StageClock.DriverWait) cpuSum += StageClock.Ms[s];
-            }
-            Set("cpu:total", k, cpuSum);
-            for (int p = 0; p < StageClock.PartNames.Length; p++) Set("cpu:upd-chars/" + StageClock.PartNames[p], k, StageClock.PartMs[p]);
-        }
-        double measuredSeconds = measured.Elapsed.TotalSeconds;
-        // The last frames' timestamps arrive when their slots come round: two empty frames bring them in.
-        for (int i = 0; i < 3; i++) { context.EnsureFrame(); context.Finish(); }
-        profiler.Flush();
-        post.Flush();
-        gpuLock?.Dispose();
+    }
 
-        // ---- the results ----
-        var result = new BenchResult { Mode = ab ? "ab" : "single", Ab = o.Ab, Period = period, Drop = drop };
-        string[] labels = ab ? ["A", "B"] : ["A"];
+    /// <summary>
+    /// Timed frame <paramref name="k"/>: its side, block and whether it counts, its wall time and the render thread's stage times.
+    /// </summary>
+    void MeasureFrame(int k, double[] wall, int cpuStages)
+    {
+        int block = k / _period, side = _ab ? block & 1 : 0;
+        if (_ab && k % _period == 0) Side(side);
+        _sideOf[k] = side;
+        _blockOf[k] = block;
+        _keep[k] = k % _period >= _drop;
+        wall[k] = Frame(k);
+        Set("frame", k, wall[k]);
+        double cpuSum = 0;
+        for (int s = 0; s < cpuStages; s++)
+        {
+            Set("cpu:" + StageClock.Names[s], k, StageClock.Ms[s]);
+            if (s != StageClock.DriverWait) cpuSum += StageClock.Ms[s];
+        }
+        Set("cpu:total", k, cpuSum);
+        for (int p = 0; p < StageClock.PartNames.Length; p++) Set("cpu:upd-chars/" + StageClock.PartNames[p], k, StageClock.PartMs[p]);
+    }
+
+    /// <summary>
+    /// Each side's statistics over its kept frames, and with <c>--ab</c> the paired differences.
+    /// </summary>
+    void Summarize(BenchResult result, string[] labels)
+    {
         for (int s = 0; s < labels.Length; s++)
         {
             var config = new BenchConfig { Label = labels[s] };
-            var idx = Enumerable.Range(0, frames).Where(k => sideOf[k] == s && keep[k]).ToArray();
+            var idx = Enumerable.Range(0, _frames).Where(k => _sideOf[k] == s && _keep[k]).ToArray();
             config.Frames = idx.Length;
-            foreach (var (metric, values) in series.OrderBy(m => MetricOrder(m.Key)).ThenBy(m => m.Key, StringComparer.Ordinal))
+            foreach (var (metric, values) in _series.OrderBy(m => MetricOrder(m.Key)).ThenBy(m => m.Key, StringComparer.Ordinal))
                 if (BenchStats.Summarize(idx.Select(k => values[k])) is { } stats) config.Metrics[metric] = stats;
             result.Configs[labels[s]] = config;
         }
-        if (ab)
-            foreach (var (metric, values) in series)
-                if (BenchStats.Pair(values, blockOf, keep) is { } delta) result.Deltas[metric] = delta;
+        if (_ab)
+            foreach (var (metric, values) in _series)
+                if (BenchStats.Pair(values, _blockOf, _keep) is { } delta) result.Deltas[metric] = delta;
+    }
 
-        // Triangle and draw counts of the main view per side (the F11 numbers), taken after the timing so their read-backs cost nothing there.
+    /// <summary>
+    /// Triangle and draw counts of the main view per side (the F11 numbers), taken after the timing so their read-backs cost nothing there.
+    /// </summary>
+    void CountSides(BenchResult result, string[] labels)
+    {
         for (int s = 0; s < labels.Length; s++)
         {
             Side(s);
-            result.Configs[labels[s]].Counts = MeasureCounts(gpu, Frame);
+            result.Configs[labels[s]].Counts = MeasureCounts(_gpu, Frame);
         }
+    }
 
-        // The share of the screen's shading rate tiles at each rate (side A; serial frames after the timing, with the rate image read back).
-        if (post.FogVrsSupported && (o.Ab == "fog-vrs" || post.FogVrs))
+    /// <summary>
+    /// The share of the screen's shading rate tiles at each rate (side A; serial frames after the timing, with the rate image read back).
+    /// </summary>
+    void MeasureFogVrsShare(BenchResult result)
+    {
+        if (_post.FogVrsSupported && (_o.Ab == "fog-vrs" || _post.FogVrs))
         {
             Side(0);
-            post.FogVrsStats = true;
-            post.ResetFogVrsStats();
+            _post.FogVrsStats = true;
+            _post.ResetFogVrsStats();
             for (int i = 0; i < 24; i++) Frame(-1, true);
-            for (int i = 0; i < 3; i++) { context.EnsureFrame(); context.Finish(); }
-            post.FogVrsStats = false;
-            if (post.FogVrsShare is { Frames: > 0 } share) result.Meta["fogVrsShare"] = string.Create(CultureInfo.InvariantCulture, $"1x1 {share.One * 100:0.0} %, 2x2 {share.Two * 100:0.0} %, 4x4 {share.Four * 100:0.0} % of the tiles ({share.Frames} frames)");
+            for (int i = 0; i < 3; i++) { _context.EnsureFrame(); _context.Finish(); }
+            _post.FogVrsStats = false;
+            if (_post.FogVrsShare is { Frames: > 0 } share) result.Meta["fogVrsShare"] = string.Create(CultureInfo.InvariantCulture, $"1x1 {share.One * 100:0.0} %, 2x2 {share.Two * 100:0.0} %, 4x4 {share.Four * 100:0.0} % of the tiles ({share.Frames} frames)");
         }
+    }
 
-        // ---- metadata ----
-        var meta = result.Meta;
-        meta["view"] = o.View ?? "(custom)";
+    /// <summary>
+    /// The metadata: the view, the build, the device, the settings and the run's own numbers.
+    /// </summary>
+    void WriteMeta(Dictionary<string, string> meta, double measuredSeconds, double lockWaited)
+    {
+        meta["view"] = _o.View ?? "(custom)";
         meta["args"] = string.Join(' ', Environment.GetCommandLineArgs().Skip(1));
         meta["commit"] = GitDescribe();
-        meta["gpu"] = context.Device.DeviceName;
-        meta["resolution"] = $"{w}x{h}";
-        meta["upscaler"] = o.Post.Upscale.Describe();
-        meta["renderScale"] = o.Post.Upscale.EffectiveScale.ToString("0.###", CultureInfo.InvariantCulture);
-        meta["motion"] = o.BenchMotion;
-        meta["frameMode"] = serial ? "serial (each frame waited for)" : "pipelined (frames in flight)";
-        meta["frames"] = frames.ToString(CultureInfo.InvariantCulture);
-        if (gpu.FogVolumes?.DescribeCull() is { } fogText) meta["fogCull"] = fogText;   // what the weather fog hides in this view, and from how far
-        if (gpu.Shadow is { Cascades: { } casc } shadowNow) meta["shadowRange"] = string.Create(CultureInfo.InvariantCulture, $"range {shadowNow.EffectiveRange:0} (setting {shadowNow.Settings.Range:0}), cascade view depths {string.Join(", ", casc.Select(c => $"{c.NearDepth:0}-{c.FarDepth:0}"))}");
-        meta["profilerStamps"] = profiler.StampsLastFrame.ToString(CultureInfo.InvariantCulture);   // timestamps a frame, the profiler's cost
+        meta["gpu"] = _context.Device.DeviceName;
+        meta["resolution"] = $"{_w}x{_h}";
+        meta["upscaler"] = _o.Post.Upscale.Describe();
+        meta["renderScale"] = _o.Post.Upscale.EffectiveScale.ToString("0.###", CultureInfo.InvariantCulture);
+        meta["motion"] = _o.BenchMotion;
+        meta["frameMode"] = _serial ? "serial (each frame waited for)" : "pipelined (frames in flight)";
+        meta["frames"] = _frames.ToString(CultureInfo.InvariantCulture);
+        if (_gpu.FogVolumes?.DescribeCull() is { } fogText) meta["fogCull"] = fogText;   // what the weather fog hides in this view, and from how far
+        if (_gpu.Shadow is { Cascades: { } casc } shadowNow) meta["shadowRange"] = string.Create(CultureInfo.InvariantCulture, $"range {shadowNow.EffectiveRange:0} (setting {shadowNow.Settings.Range:0}), cascade view depths {string.Join(", ", casc.Select(c => $"{c.NearDepth:0}-{c.FarDepth:0}"))}");
+        meta["profilerStamps"] = _profiler.StampsLastFrame.ToString(CultureInfo.InvariantCulture);   // timestamps a frame, the profiler's cost
         meta["date"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         meta["measuredSeconds"] = measuredSeconds.ToString("0.0", CultureInfo.InvariantCulture);
         meta["gpuLockWaitedSeconds"] = lockWaited.ToString("0.0", CultureInfo.InvariantCulture);
         foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
             if (e.Key is string key && key.StartsWith("MEITOU_", StringComparison.Ordinal)) meta["env." + key] = e.Value?.ToString() ?? "";
-        if (o.Post.Describe() is { } postText) meta["post"] = postText;
-        meta["sky"] = gpu.Sky.DescribeCost() + (gpu.Sky.FogCullDistance is { } skyFog ? string.Create(CultureInfo.InvariantCulture, $"; weather fog complete from {skyFog:0}") : "; weather fog never complete");
+        if (_o.Post.Describe() is { } postText) meta["post"] = postText;
+        meta["sky"] = _gpu.Sky.DescribeCost() + (_gpu.Sky.FogCullDistance is { } skyFog ? string.Create(CultureInfo.InvariantCulture, $"; weather fog complete from {skyFog:0}") : "; weather fog never complete");
+    }
 
-        // ---- --bench-tris: triangles per pass and the triangle size histogram (separate, serial counting frames after the timing) ----
-        if (o.BenchTris)
+    /// <summary>
+    /// <c>--bench-tris</c>: triangles per pass and the triangle size histogram (separate, serial counting frames after the timing).
+    /// </summary>
+    void MeasureSideTriangles(BenchResult result, string[] labels)
+    {
+        if (_o.BenchTris)
             for (int s = 0; s < labels.Length; s++)
             {
                 Side(s);
-                MeasureTriangles(context, gpu, render, Frame, result, labels[s]);
+                MeasureTriangles(_context, _gpu, _render, Frame, result, labels[s]);
             }
+    }
 
-        // ---- the still pictures of A and B ----
-        string outFile = o.BenchOut
-                ?? Path.Combine(Path.GetTempPath(), $"meitou-bench-{o.View ?? "custom"}-{o.Ab ?? "single"}-{DateTime.Now:yyyyMMdd-HHmmss}.json");
-        if (ab) result.Picture = StillPictures(display, gpu, scene, camera, render, o, w, h, toggle!, snapshot, motion.Moves, Clock(),
+    /// <summary>
+    /// The still pictures of A and B, then the results printed and saved as JSON, and every frame's metrics as CSV.
+    /// </summary>
+    void Save(BenchResult result)
+    {
+        string outFile = _o.BenchOut
+                ?? Path.Combine(Path.GetTempPath(), $"meitou-bench-{_o.View ?? "custom"}-{_o.Ab ?? "single"}-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+        if (_ab) result.Picture = StillPictures(_display, _gpu, _scene, _camera, _render, _o, _w, _h, _toggle!, _snapshot, _motion.Moves, Clock(),
                 Path.ChangeExtension(outFile, null), Frame);
 
         result.Print(Console.Out);
         result.Save(outFile);
         Console.WriteLine($"saved     {outFile}");
         string csvFile = Path.ChangeExtension(outFile, null) + "-frames.csv";
-        SaveFrames(csvFile, series, sideOf, keep);
+        SaveFrames(csvFile, _series, _sideOf, _keep);
         Console.WriteLine($"saved     {csvFile} (every metric per measured frame)");
-        return 0;
     }
 
+    #endregion
+
+    #region Switches
+
     /// <summary>
-    /// The runtime switches of <see cref="Bench"/>, first part: the Faithful / Meitou ones, the water, shadow and foliage culls and the fog volumes.
+    /// The runtime switches of <see cref="BenchSession"/>, first part: the Faithful / Meitou ones, the water, shadow and foliage culls and the
+    /// fog volumes.
     /// </summary>
     static void RegisterCullToggles(Gpu gpu, PostProcess post, WorldOptions o, WorldCamera camera, WorldRenderOptions render)
     {
@@ -447,7 +695,7 @@ static partial class WorldApp
                 "objects and buildings: generated coarser mesh levels among the file's, picked by the size of their triangles on the screen; B: the file's levels only");
         AbToggles.Register("solid-first", () => WorldObjectRenderer.SolidFirst, v => WorldObjectRenderer.SolidFirst = v,
                 "objects: the draws without a discard (early depth test) ahead of the dithered and cut-out ones");
-        RegisterTerrainAb();
+        WorldApp.RegisterTerrainAb();
         AbToggles.Register("normal-maps", () => render.NormalMaps, v => render.NormalMaps = v, "normal maps on terrain and objects (probe)");
         AbToggles.Register("water-draw", () => render.Water, v => render.Water = v, "the water pass (--no-water)");
         AbToggles.Register("reflections", () => render.Reflections, v => render.Reflections = v, "the water reflection pass (--water-reflection 0)");
@@ -467,38 +715,9 @@ static partial class WorldApp
         }
     }
 
-    /// <summary>
-    /// The per-frame series as CSV (frame, side, kept, then each metric in print order; empty where a value never arrived), for patterns the
-    /// summaries hide.
-    /// </summary>
-    static void SaveFrames(string path, Dictionary<string, double[]> series, int[] sideOf, bool[] keep)
-    {
-        var metrics = series.Keys.OrderBy(MetricOrder).ThenBy(k => k, StringComparer.Ordinal).ToArray();
-        using var csv = new StreamWriter(path);
-        csv.WriteLine("frame,side,kept," + string.Join(',', metrics));
-        for (int k = 0; k < sideOf.Length; k++)
-            csv.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{k},{(sideOf[k] == 0 ? 'A' : 'B')},{(keep[k] ? 1 : 0)},")
-                + string.Join(',', metrics.Select(m => double.IsNaN(series[m][k]) ? "" : series[m][k].ToString("0.####", CultureInfo.InvariantCulture))));
-    }
+    #endregion
 
-    // The stages in the order a frame runs them (as the profiler lists them).
-    static readonly int[] StageOrder = [0, 1, 2, StageClock.UpdChars, 3, StageClock.Uploads, StageClock.Cull, StageClock.Bake, 12, 14, 4, 5, 6, 7, 8,
-            StageClock.Characters, 9, StageClock.Shafts, StageClock.Fog, 13, 10, StageClock.Ui, StageClock.Submit, StageClock.DriverWait];
-
-    /// <summary>
-    /// Print order of the metrics: the frame, the GPU total and stages in frame order, the post sections, the render thread's total and stages.
-    /// </summary>
-    static int MetricOrder(string key)
-    {
-        int Stage(string prefix) => Array.IndexOf(StageOrder,
-                Array.IndexOf(StageClock.Names, key[prefix.Length..] == "present" ? "ui" : key[prefix.Length..]));
-        if (key == "frame") return 0;
-        if (key == "gpu:total") return 1;
-        if (key.StartsWith("gpu:", StringComparison.Ordinal)) return 10 + (Stage("gpu:") is var g and >= 0 ? g : 50);
-        if (key.StartsWith("post:", StringComparison.Ordinal)) return 100;
-        if (key == "cpu:total") return 200;
-        return 210 + (Stage("cpu:") is var c and >= 0 ? c : 50);
-    }
+    #region Counts and triangles
 
     /// <summary>
     /// The main view's draw counts per frame, from 20 frames after a settle (the foliage's triangles from its GPU cull's arguments, which need
@@ -567,79 +786,92 @@ static partial class WorldApp
         result.Meta["renderPixels"] = ((double)post.RenderWidth * post.RenderHeight).ToString("0", CultureInfo.InvariantCulture);
         result.Meta["passFrames"] = frames.ToString(CultureInfo.InvariantCulture);
 
-        if (PipelineStatsMeter.Supported(context))
-        {
-            int mode = Recording.Mode;
-            Recording.Mode = 0;
-            var previousStart = StageClock.OnStart;
-            var previousClose = StageClock.OnClose;
-            using var meter = new PipelineStatsMeter(context);
-            StageClock.OnStart = () => { previousStart?.Invoke(); meter.BeginFrame(); };
-            StageClock.OnClose = (label, sub) => { previousClose?.Invoke(label, sub); meter.OnClose(label, sub); };
-            try
-            {
-                for (int i = 0; i < settle; i++) { frame(-1, true); context.Finish(); }
-                var sum = new Dictionary<string, PassStat>();
-                var order = new List<string>();
-                var position = new Dictionary<string, (double Sum, int Seen)>();   // where in the frame a row came, to list them in frame order
-                for (int i = 0; i < frames; i++)
-                {
-                    frame(-1, true);
-                    context.Finish();
-                    var read = meter.Read();
-                    for (int k = 0; k < read.Count; k++)
-                    {
-                        var (key, stat) = read[k];
-                        if (!sum.TryGetValue(key, out var total))
-                        {
-                            sum[key] = total = new PassStat();
-                            order.Add(key);
-                        }
-                        var (psum, pseen) = position.GetValueOrDefault(key);
-                        position[key] = (psum + k / (double)read.Count, pseen + 1);
-                        total.Add(stat);
-                    }
-                }
-                foreach (var key in order.OrderBy(k => position[k].Sum / position[k].Seen))
-                {
-                    var mean = new PassStat();
-                    mean.Add(sum[key], 1.0 / frames);
-                    config.Passes[key] = mean;
-                }
-                if (meter.Lost > 0) Console.WriteLine($"bench     pipeline statistics: {meter.Lost} queries lost (pool full or closed in another command buffer); the pass numbers are incomplete");
-            }
-            finally
-            {
-                StageClock.OnStart = previousStart;
-                StageClock.OnClose = previousClose;
-                Recording.Mode = mode;
-            }
-        }
+        if (PipelineStatsMeter.Supported(context)) MeasurePasses(context, frame, config, frames, settle);
         else Console.WriteLine("bench     the device has no pipeline statistics queries: only the counts per frame are given");
 
-        if (TriangleCounter.Supported(context))
-        {
-            bool reflections = render.Reflections;
-            render.Reflections = false;
-            using var counter = new TriangleCounter(context);
-            try
-            {
-                counter.Begin();
-                for (int i = 0; i < settle; i++) { frame(-1, true); context.Finish(); }   // the counting pipelines are made at the first draws
-                counter.Clear();
-                for (int i = 0; i < frames; i++) frame(-1, true);
-                foreach (var (name, h) in counter.Read()) config.Sizes[name] = h.Scaled(1.0 / frames);
-                Console.WriteLine($"bench     triangle sizes: counting programs {string.Join(", ", counter.Counted)}");
-                if (counter.Skipped.Count > 0) Console.WriteLine($"bench     triangle sizes: not counted (no single main in the text): {string.Join(", ", counter.Skipped)}");
-                if (PipelineStatsMeter.Supported(context)) CrossCheck(context, counter, frame, result.Meta);
-            }
-            finally
-            {
-                counter.End();
-                render.Reflections = reflections;
-            }
-        }
+        if (TriangleCounter.Supported(context)) MeasureSizes(context, render, frame, result, config, frames, settle);
         else Console.WriteLine("bench     the device has no fragment shader barycentrics: no triangle size histogram");
+    }
+
+    /// <summary>
+    /// The pipeline statistics per pass: the mean over <paramref name="frames"/> serial frames drawn with <see cref="Recording.Mode"/> 0 after
+    /// <paramref name="settle"/> more, in the order the passes come in a frame.
+    /// </summary>
+    static void MeasurePasses(GpuContext context, Func<long, bool, double> frame, BenchConfig config, int frames, int settle)
+    {
+        int mode = Recording.Mode;
+        Recording.Mode = 0;
+        var previousStart = StageClock.OnStart;
+        var previousClose = StageClock.OnClose;
+        using var meter = new PipelineStatsMeter(context);
+        StageClock.OnStart = () => { previousStart?.Invoke(); meter.BeginFrame(); };
+        StageClock.OnClose = (label, sub) => { previousClose?.Invoke(label, sub); meter.OnClose(label, sub); };
+        try
+        {
+            for (int i = 0; i < settle; i++) { frame(-1, true); context.Finish(); }
+            var sum = new Dictionary<string, PassStat>();
+            var order = new List<string>();
+            var position = new Dictionary<string, (double Sum, int Seen)>();   // where in the frame a row came, to list them in frame order
+            for (int i = 0; i < frames; i++)
+            {
+                frame(-1, true);
+                context.Finish();
+                var read = meter.Read();
+                for (int k = 0; k < read.Count; k++)
+                {
+                    var (key, stat) = read[k];
+                    if (!sum.TryGetValue(key, out var total))
+                    {
+                        sum[key] = total = new PassStat();
+                        order.Add(key);
+                    }
+                    var (psum, pseen) = position.GetValueOrDefault(key);
+                    position[key] = (psum + k / (double)read.Count, pseen + 1);
+                    total.Add(stat);
+                }
+            }
+            foreach (var key in order.OrderBy(k => position[k].Sum / position[k].Seen))
+            {
+                var mean = new PassStat();
+                mean.Add(sum[key], 1.0 / frames);
+                config.Passes[key] = mean;
+            }
+            if (meter.Lost > 0) Console.WriteLine($"bench     pipeline statistics: {meter.Lost} queries lost (pool full or closed in another command buffer); the pass numbers are incomplete");
+        }
+        finally
+        {
+            StageClock.OnStart = previousStart;
+            StageClock.OnClose = previousClose;
+            Recording.Mode = mode;
+        }
+    }
+
+    /// <summary>
+    /// The main view's triangles by screen area per category over <paramref name="frames"/> frames, with the counting programs and the reflection
+    /// off; checked against the pipeline statistics where the device has them.
+    /// </summary>
+    static void MeasureSizes(GpuContext context, WorldRenderOptions render, Func<long, bool, double> frame, BenchResult result, BenchConfig config,
+            int frames, int settle)
+    {
+        bool reflections = render.Reflections;
+        render.Reflections = false;
+        using var counter = new TriangleCounter(context);
+        try
+        {
+            counter.Begin();
+            for (int i = 0; i < settle; i++) { frame(-1, true); context.Finish(); }   // the counting pipelines are made at the first draws
+            counter.Clear();
+            for (int i = 0; i < frames; i++) frame(-1, true);
+            foreach (var (name, h) in counter.Read()) config.Sizes[name] = h.Scaled(1.0 / frames);
+            Console.WriteLine($"bench     triangle sizes: counting programs {string.Join(", ", counter.Counted)}");
+            if (counter.Skipped.Count > 0) Console.WriteLine($"bench     triangle sizes: not counted (no single main in the text): {string.Join(", ", counter.Skipped)}");
+            if (PipelineStatsMeter.Supported(context)) CrossCheck(context, counter, frame, result.Meta);
+        }
+        finally
+        {
+            counter.End();
+            render.Reflections = reflections;
+        }
     }
 
     /// <summary>
@@ -692,8 +924,50 @@ static partial class WorldApp
         }
     }
 
+    /// <summary>
+    /// A count in millions (M), thousands (k) or as it is.
+    /// </summary>
     static string Big(double v) => v >= 1e6 ? (v / 1e6).ToString("0.00", CultureInfo.InvariantCulture) + "M" : v >= 1e3
             ? (v / 1e3).ToString("0.0", CultureInfo.InvariantCulture) + "k" : v.ToString("0", CultureInfo.InvariantCulture);
+
+    #endregion
+
+    #region Output
+
+    /// <summary>
+    /// The stages in the order a frame runs them (as the profiler lists them).
+    /// </summary>
+    static readonly int[] StageOrder = [0, 1, 2, StageClock.UpdChars, 3, StageClock.Uploads, StageClock.Cull, StageClock.Bake, 12, 14, 4, 5, 6, 7, 8,
+            StageClock.Characters, 9, StageClock.Shafts, StageClock.Fog, 13, 10, StageClock.Ui, StageClock.Submit, StageClock.DriverWait];
+
+    /// <summary>
+    /// The per-frame series as CSV (frame, side, kept, then each metric in print order; empty where a value never arrived), for patterns the
+    /// summaries hide.
+    /// </summary>
+    static void SaveFrames(string path, Dictionary<string, double[]> series, int[] sideOf, bool[] keep)
+    {
+        var metrics = series.Keys.OrderBy(MetricOrder).ThenBy(k => k, StringComparer.Ordinal).ToArray();
+        using var csv = new StreamWriter(path);
+        csv.WriteLine("frame,side,kept," + string.Join(',', metrics));
+        for (int k = 0; k < sideOf.Length; k++)
+            csv.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{k},{(sideOf[k] == 0 ? 'A' : 'B')},{(keep[k] ? 1 : 0)},")
+                + string.Join(',', metrics.Select(m => double.IsNaN(series[m][k]) ? "" : series[m][k].ToString("0.####", CultureInfo.InvariantCulture))));
+    }
+
+    /// <summary>
+    /// Print order of the metrics: the frame, the GPU total and stages in frame order, the post sections, the render thread's total and stages.
+    /// </summary>
+    static int MetricOrder(string key)
+    {
+        int Stage(string prefix) => Array.IndexOf(StageOrder,
+                Array.IndexOf(StageClock.Names, key[prefix.Length..] == "present" ? "ui" : key[prefix.Length..]));
+        if (key == "frame") return 0;
+        if (key == "gpu:total") return 1;
+        if (key.StartsWith("gpu:", StringComparison.Ordinal)) return 10 + (Stage("gpu:") is var g and >= 0 ? g : 50);
+        if (key.StartsWith("post:", StringComparison.Ordinal)) return 100;
+        if (key == "cpu:total") return 200;
+        return 210 + (Stage("cpu:") is var c and >= 0 ? c : 50);
+    }
 
     /// <summary>
     /// One still of each side from the start camera (no time advance: the frame clock stays where it was, the same number of frames is drawn for
@@ -723,7 +997,7 @@ static partial class WorldApp
             {
                 context.EnsureFrame();
                 Draw(gpu, scene, camera, render, w, h, o.Hour, clock, o.FogDistance);
-                EndFrame(context);
+                WorldApp.EndFrame(context);
                 context.Finish();
             }
             return FramebufferCapture.Read(context, target, w, h);
@@ -741,6 +1015,9 @@ static partial class WorldApp
         return diff;
     }
 
+    /// <summary>
+    /// The build's commit (<c>git describe</c>), "unknown" without git.
+    /// </summary>
     static string GitDescribe()
     {
         try
@@ -754,4 +1031,6 @@ static partial class WorldApp
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { return "unknown"; }
     }
+
+    #endregion
 }

@@ -554,7 +554,7 @@ why there is none: the host then runs silently. The `--quit-after` log's `audio`
 main theme or the remembered biome music, seconds until the timer next posts it, music voices (`AudioSystem.StatsLine`; paused shows). Both hosts feed
 `AudioSystem.Update` each frame (region under the pivot, weather, hour, sunrise and sunset, eye height).
 
-- **Viewer** (`WorldApp.Audio.cs`): pivot = the camera's target, eye = its position, the viewer's hour; no title screen, so no main theme.
+- **Viewer** (`InteractiveSession.UpdateAudio`): pivot = the camera's target, eye = its position, the viewer's hour; no title screen, so no main theme.
 - **Game** (`GameSound`): the audio is made on a worker while the window and the world load. Pivot = `camera.Target` and eye =
   `camera.Eye` (the strategy or free camera as drawn), hour, sunrise and sunset from the game clock (`session.Clock`), region and weather from the
   weather scheduler (`gpu.Weather`). Each frame it also sets the listener from the camera (`camera.Forward` and the true up) and `SetPaused(session.Simulation.IsPaused)`

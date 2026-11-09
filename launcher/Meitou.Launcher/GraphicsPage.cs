@@ -70,6 +70,9 @@ public sealed partial class MainWindow
             : $"Meitou {version} is older than the Graphics page: change its settings in the game's Tab panel, or play a newer version.");
     }
 
+    /// <summary>
+    /// The Graphics page made again from the settings file and the schema of the version Play starts (a pending save written first).
+    /// </summary>
     void ShowGraphics()
     {
         if (_graphicsSave?.IsEnabled == true) SaveGame();
@@ -77,6 +80,29 @@ public sealed partial class MainWindow
         GraphicsPanel.Children.Clear();
         GraphicsFooter.Child = null;
         GraphicsFooter.IsVisible = false;
+        ShowSettingsFile();
+        var (schema, missing) = PlaySchema();
+        if (schema is null)
+        {
+            GraphicsPanel.Children.Add(new TextBlock { Classes = { "desc" }, Text = missing });
+            LauncherText.TranslateTree(GraphicsPanel, _originalUiText);
+            return;
+        }
+        _schemaVersion = schema.SettingsVersion;
+        string? locked = Locked(schema);
+        ShowGraphicsNotes(locked);
+        var rows = GraphicsRows(schema, locked);
+        ShowGraphicsFooter(locked);
+        GraphicsPanel.Children.Add(rows);
+        LauncherText.TranslateTree(GraphicsPanel, _originalUiText);
+        LauncherText.TranslateTree(GraphicsFooter, _originalUiText);
+    }
+
+    /// <summary>
+    /// The settings file's name over the page (its path in the tooltip), and a note while the game has not written it yet.
+    /// </summary>
+    void ShowSettingsFile()
+    {
         bool found = _game.Version is not null;
         GraphicsFileText.Text = found ? GameSettings.FileName : Tr("No {1} found", GameSettings.FileName);
         ToolTip.SetTip(GraphicsFileText, GameSettings.FilePath);
@@ -87,16 +113,14 @@ public sealed partial class MainWindow
                 Text = $"No {GameSettings.FileName} in {LauncherConfig.DataDirectory} yet: the game writes it when it first saves its settings "
                     + "(started with Play), and a change here creates it. Until then the game uses its defaults.",
             });
-        var (schema, missing) = PlaySchema();
-        if (schema is null)
-        {
-            GraphicsPanel.Children.Add(new TextBlock { Classes = { "desc" }, Text = missing });
-            LauncherText.TranslateTree(GraphicsPanel, _originalUiText);
-            return;
-        }
-        _schemaVersion = schema.SettingsVersion;
+    }
+
+    /// <summary>
+    /// The warnings over the settings: why they are <paramref name="locked"/>, the game running, launch arguments that override them.
+    /// </summary>
+    void ShowGraphicsNotes(string? locked)
+    {
         var notes = new List<string>();
-        string? locked = Locked(schema);
         if (locked is not null) notes.Add(locked);
         if (_running is { HasExited: false })
             notes.Add("The game is running: it saves its settings when it closes, over changes made here.");
@@ -112,7 +136,13 @@ public sealed partial class MainWindow
             };
             GraphicsPanel.Children.Add(warning);
         }
+    }
 
+    /// <summary>
+    /// The settings' rows (off while <paramref name="locked"/>): the look, the preset, then the sections' tabs and the chosen one's settings.
+    /// </summary>
+    StackPanel GraphicsRows(SettingsSchema schema, string? locked)
+    {
         var rows = new StackPanel { IsEnabled = locked is null };
         _presets = schema.Presets is { Names.Count: > 0, Key.Length: > 0 } p ? p : null;
         _presetBox = null;
@@ -120,8 +150,15 @@ public sealed partial class MainWindow
         _settingByKey = schema.Sections.SelectMany(x => x.Settings).GroupBy(x => x.Key).ToDictionary(g => g.Key, g => g.First());
         if (_looks is not null) rows.Children.Add(LookRow(_looks));
         if (_presets is not null) rows.Children.Add(PresetRow(_presets));
+        AddSectionTabs(rows, schema);
+        return rows;
+    }
 
-        // One tab per section (the game's pages); the chosen one stays while the page is shown again.
+    /// <summary>
+    /// One tab per section (the game's pages); the chosen one stays while the page is shown again.
+    /// </summary>
+    void AddSectionTabs(StackPanel rows, SettingsSchema schema)
+    {
         var sections = schema.Sections.Where(section => section.Settings.Any(Shown)).ToList();
         if (sections.Count > 0)
         {
@@ -143,6 +180,13 @@ public sealed partial class MainWindow
             rows.Children.Add(content);
             FillSection(content, section);
         }
+    }
+
+    /// <summary>
+    /// The footer: Reset graphics, every graphics setting back to the game's defaults (off while <paramref name="locked"/>).
+    /// </summary>
+    void ShowGraphicsFooter(string? locked)
+    {
         var reset = new Button { Content = "Reset", HorizontalAlignment = HorizontalAlignment.Stretch };
         reset.Click += (_, _) =>
         {
@@ -163,9 +207,6 @@ public sealed partial class MainWindow
         GraphicsFooter.Child = footer;
         GraphicsFooter.IsEnabled = locked is null;
         GraphicsFooter.IsVisible = true;
-        GraphicsPanel.Children.Add(rows);
-        LauncherText.TranslateTree(GraphicsPanel, _originalUiText);
-        LauncherText.TranslateTree(GraphicsFooter, _originalUiText);
     }
 
     // Why the file may not be changed for this schema (null: it may).
@@ -343,6 +384,12 @@ public sealed partial class MainWindow
     sealed record LookChoice(SettingsLook Look, string? File, string Source);
 
     /// <summary>
+    /// What the look row's actions read: the looks, every look offered (<see cref="AllLooks"/>), whether the look is Faithful, the active one,
+    /// how many look settings differ from it, and the folder of the player's presets.
+    /// </summary>
+    readonly record struct LookRowState(SettingsLooks Looks, List<LookChoice> All, bool Faithful, LookChoice Active, int Changes, string Folder);
+
+    /// <summary>
     /// The look, as the game's settings menu shows it (docs/native-ui.md "Settings"): Faithful | Meitou, the Meitou preset, its changes from the look
     /// (Revert; Save for the player's own), Save as, Share (a code on the clipboard), Paste, Delete. The presets are the game's files
     /// (<see cref="LookPresetFile"/>); choosing a look writes its values, which the game reads as that look with no change.
@@ -356,23 +403,57 @@ public sealed partial class MainWindow
         string folder = Path.Combine(LauncherConfig.DataDirectory, l.Folder);
 
         var controls = new WrapPanel { Margin = new(0, 6, 0, 0), ItemSpacing = 6, LineSpacing = 6 };
+        AddLookSides(controls, l, faithful, active);
+        if (!faithful) controls.Children.Add(LookPicker(l, all, active));
+        controls.Children.Add(LookStatus(faithful, changes, active));
+        AddLookActions(controls, new LookRowState(l, all, faithful, active, changes, folder));
+        var panel = new StackPanel
+        {
+            Children =
+            {
+                new TextBlock { Classes = { "name" }, Text = Tr(l.Name) },
+                new TextBlock { Classes = { "desc" }, Text = Tr(l.Description) },
+                controls,
+            },
+        };
+        if (_namingLook is { } naming) AddLookNaming(panel, l, naming, folder);
+        return new Border { Classes = { "row" }, Child = panel };
+    }
+
+    /// <summary>
+    /// Faithful | Meitou, the active side lit.
+    /// </summary>
+    void AddLookSides(WrapPanel controls, SettingsLooks l, bool faithful, LookChoice active)
+    {
         foreach (var (text, side) in new[] { ("Faithful", true), ("Meitou", false) })
         {
             var button = new ToggleButton { Content = Tr(text), IsChecked = faithful == side, MinWidth = 90 };
             button.Click += (_, _) => ApplyLook(l, side, active);
             controls.Children.Add(button);
         }
-        if (!faithful)
+    }
+
+    /// <summary>
+    /// The Meitou preset: the built-in, the examples and the player's own; choosing one applies it.
+    /// </summary>
+    ComboBox LookPicker(SettingsLooks l, List<LookChoice> all, LookChoice active)
+    {
+        var names = all.Select(x => x.Source == "built in" ? Tr(x.Look.Name) : x.Look.Name).ToList();
+        var box = new ComboBox { MinWidth = 220, ItemsSource = names, SelectedIndex = all.IndexOf(active) };
+        box.SelectionChanged += (_, _) =>
         {
-            var names = all.Select(x => x.Source == "built in" ? Tr(x.Look.Name) : x.Look.Name).ToList();
-            var box = new ComboBox { MinWidth = 220, ItemsSource = names, SelectedIndex = all.IndexOf(active) };
-            box.SelectionChanged += (_, _) =>
-            {
-                if (box.SelectedIndex >= 0 && all[box.SelectedIndex] != active)
-                    ApplyLook(l, false, all[box.SelectedIndex]);
-            };
-            controls.Children.Add(box);
-        }
+            if (box.SelectedIndex >= 0 && all[box.SelectedIndex] != active)
+                ApplyLook(l, false, all[box.SelectedIndex]);
+        };
+        return box;
+    }
+
+    /// <summary>
+    /// The look's state: its changes from the game (Faithful) or from the preset (in brass while there are some), else where the preset is
+    /// from.
+    /// </summary>
+    TextBlock LookStatus(bool faithful, int changes, LookChoice active)
+    {
         string status = faithful
             ? changes == 0 ? Tr("As the game ships") : changes == 1 ? Tr("1 change from the game") : Tr("{1} changes from the game", changes)
             : changes > 0 ? changes == 1 ? Tr("1 unsaved change") : Tr("{1} unsaved changes", changes)
@@ -384,7 +465,16 @@ public sealed partial class MainWindow
         };
         if (changes > 0 && Avalonia.Application.Current?.FindResource("BrassLight") is Avalonia.Media.IBrush brass)
             statusText.Foreground = brass;
-        controls.Children.Add(statusText);
+        return statusText;
+    }
+
+    /// <summary>
+    /// The look's buttons: Revert while it has changes; on Meitou, Save (the player's own, changed) or Delete (the player's own), Save as,
+    /// Share and Paste.
+    /// </summary>
+    void AddLookActions(WrapPanel controls, LookRowState look)
+    {
+        var (l, all, faithful, active, changes, folder) = look;
         Button Action(string text, Action run)
         {
             var button = new Button { Content = Tr(text) };
@@ -393,116 +483,117 @@ public sealed partial class MainWindow
             return button;
         }
         if (changes > 0) Action("Revert", () => ApplyLook(l, faithful, active));
-        if (!faithful)
+        if (faithful) return;
+        if (active.Source == "mine" && changes > 0) Action("Save", () => SaveLook(l, active.Look.Name, folder));
+        else if (active.Source == "mine")
         {
-            if (active.Source == "mine" && changes > 0) Action("Save", () => SaveLook(l, active.Look.Name, folder));
-            else if (active.Source == "mine")
-            {
-                var delete = Action("Delete", () => { });
-                delete.Click += (_, _) =>
-                {
-                    // Two clicks: a preset file is not removed by a stray one.
-                    if (delete.Tag is null)
-                    {
-                        delete.Tag = true;
-                        delete.Content = Tr("Click again");
-                        return;
-                    }
-                    try
-                    {
-                        if (active.File is { } file) File.Delete(file);
-                    }
-                    catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                    {
-                        Status(Tr("Could not delete the preset: {1}", e.Message));
-                    }
+            var delete = Action("Delete", () => { });
+            delete.Click += (_, _) => DeleteLook(delete, l, all, active);
+        }
+        Action("Save as", () =>
+        {
+            _namingLook = LookPresetFile.FreeName("My look", all.Select(x => x.Look.Name));
+            ShowGraphics();
+        });
+        Action("Share", async () =>
+        {
+            if (GetTopLevel(this)?.Clipboard is not { } clipboard) return;
+            await clipboard.SetValueAsync(DataFormat.Text, LookPresetFile.ShareCode(new(active.Look.Name, MadeOf(active), active.Look.Values)));
+            Status(Tr("{1}'s code is on the clipboard: paste it on Discord, or with Paste.", active.Look.Name));
+        });
+        Action("Paste", () => PasteLook(l, all, folder));
+    }
 
-                    ApplyLook(l, false, all[0]);
-                    Status(Tr("{1} deleted; the look is Meitou.", active.Look.Name));
-                };
-            }
-            Action("Save as", () =>
-            {
-                _namingLook = LookPresetFile.FreeName("My look", all.Select(x => x.Look.Name));
-                ShowGraphics();
-            });
-            Action("Share", async () =>
-            {
-                if (GetTopLevel(this)?.Clipboard is not { } clipboard) return;
-                await clipboard.SetValueAsync(DataFormat.Text, LookPresetFile.ShareCode(new(active.Look.Name, MadeOf(active), active.Look.Values)));
-                Status(Tr("{1}'s code is on the clipboard: paste it on Discord, or with Paste.", active.Look.Name));
-            });
-            Action("Paste", async () =>
-            {
-                string? code = GetTopLevel(this)?.Clipboard is { } clipboard ? await clipboard.TryGetTextAsync() : null;
-                if (LookPresetFile.FromShareCode(code) is not { } pasted)
-                {
-                    Status("The clipboard holds no preset code (MT1:...). Copy one with Share first.");
-                    return;
-                }
-                var saved = pasted with { Name = LookPresetFile.FreeName(pasted.Name, all.Select(x => x.Look.Name)) };
-                try
-                {
-                    LookPresetFile.Save(folder, saved);
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                {
-                    Status(Tr("Could not write the preset: {1}", e.Message));
-                    return;
-                }
-                ApplyLook(l, false, new LookChoice(new SettingsLook { Name = saved.Name, Values = saved.Values }, null, "mine"));
-                Status(Tr("{1} pasted and loaded (made on Meitou {2}).", saved.Name, saved.Made));
-            });
-        }
-        var panel = new StackPanel
+    /// <summary>
+    /// Delete, clicked: the first click asks again, the second removes the player's preset file and goes back to Meitou.
+    /// </summary>
+    void DeleteLook(Button delete, SettingsLooks l, List<LookChoice> all, LookChoice active)
+    {
+        // Two clicks: a preset file is not removed by a stray one.
+        if (delete.Tag is null)
         {
-            Children =
+            delete.Tag = true;
+            delete.Content = Tr("Click again");
+            return;
+        }
+        try
+        {
+            if (active.File is { } file) File.Delete(file);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Status(Tr("Could not delete the preset: {1}", e.Message));
+        }
+
+        ApplyLook(l, false, all[0]);
+        Status(Tr("{1} deleted; the look is Meitou.", active.Look.Name));
+    }
+
+    /// <summary>
+    /// Paste: the preset code on the clipboard saved as the player's own (under a free name) and applied.
+    /// </summary>
+    async void PasteLook(SettingsLooks l, List<LookChoice> all, string folder)
+    {
+        string? code = GetTopLevel(this)?.Clipboard is { } clipboard ? await clipboard.TryGetTextAsync() : null;
+        if (LookPresetFile.FromShareCode(code) is not { } pasted)
+        {
+            Status("The clipboard holds no preset code (MT1:...). Copy one with Share first.");
+            return;
+        }
+        var saved = pasted with { Name = LookPresetFile.FreeName(pasted.Name, all.Select(x => x.Look.Name)) };
+        try
+        {
+            LookPresetFile.Save(folder, saved);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Status(Tr("Could not write the preset: {1}", e.Message));
+            return;
+        }
+        ApplyLook(l, false, new LookChoice(new SettingsLook { Name = saved.Name, Values = saved.Values }, null, "mine"));
+        Status(Tr("{1} pasted and loaded (made on Meitou {2}).", saved.Name, saved.Made));
+    }
+
+    /// <summary>
+    /// Save as: the name, then Save or Cancel (Enter / Esc).
+    /// </summary>
+    void AddLookNaming(StackPanel panel, SettingsLooks l, string naming, string folder)
+    {
+        var name = new TextBox { Text = naming, Width = 260, MaxLength = LookPresetFile.MaxNameLength };
+        var save = new Button { Content = Tr("Save") };
+        var cancel = new Button { Content = Tr("Cancel") };
+        void Done(bool keep)
+        {
+            string chosen = (name.Text ?? "").Trim();
+            _namingLook = null;
+            if (keep && chosen.Length > 0) SaveLook(l, chosen, folder);
+            else ShowGraphics();
+        }
+        save.Click += (_, _) => Done(true);
+        cancel.Click += (_, _) => Done(false);
+        name.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
             {
-                new TextBlock { Classes = { "name" }, Text = Tr(l.Name) },
-                new TextBlock { Classes = { "desc" }, Text = Tr(l.Description) },
-                controls,
-            },
+                Done(true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                Done(false);
+                e.Handled = true;
+            }
         };
-        if (_namingLook is { } naming)
+        var label = new TextBlock { Classes = { "desc" }, Text = Tr("Preset name"), VerticalAlignment = VerticalAlignment.Center };
+        panel.Children.Add(new StackPanel
         {
-            // Save as: the name, then Save or Cancel (Enter / Esc).
-            var name = new TextBox { Text = naming, Width = 260, MaxLength = LookPresetFile.MaxNameLength };
-            var save = new Button { Content = Tr("Save") };
-            var cancel = new Button { Content = Tr("Cancel") };
-            void Done(bool keep)
-            {
-                string chosen = (name.Text ?? "").Trim();
-                _namingLook = null;
-                if (keep && chosen.Length > 0) SaveLook(l, chosen, folder);
-                else ShowGraphics();
-            }
-            save.Click += (_, _) => Done(true);
-            cancel.Click += (_, _) => Done(false);
-            name.KeyDown += (_, e) =>
-            {
-                if (e.Key == Key.Enter)
-                {
-                    Done(true);
-                    e.Handled = true;
-                }
-                else if (e.Key == Key.Escape)
-                {
-                    Done(false);
-                    e.Handled = true;
-                }
-            };
-            var label = new TextBlock { Classes = { "desc" }, Text = Tr("Preset name"), VerticalAlignment = VerticalAlignment.Center };
-            panel.Children.Add(new StackPanel
-            {
-                Orientation = Orientation.Horizontal, Spacing = 6, Margin = new(0, 6, 0, 0), Children = { label, name, save, cancel },
-            });
-            Dispatcher.UIThread.Post(() =>
-            {
-                name.Focus();
-                name.SelectAll();
-            });
-        }
-        return new Border { Classes = { "row" }, Child = panel };
+            Orientation = Orientation.Horizontal, Spacing = 6, Margin = new(0, 6, 0, 0), Children = { label, name, save, cancel },
+        });
+        Dispatcher.UIThread.Post(() =>
+        {
+            name.Focus();
+            name.SelectAll();
+        });
     }
 
     /// <summary>
@@ -1005,25 +1096,20 @@ public sealed partial class MainWindow
     /// </summary>
     Border SliderRow(SettingDescription s)
     {
-        bool log = s.Logarithmic && s.Min > 0;
-        float step = s.Step > 0 ? s.Step : 1;
-
-        // A reversed setting's value is mirrored onto the slider (Min + Max - value; on a logarithmic one Min x Max / value), so right is always the
-        // better end.
-        float Mirror(float v) => !s.Reversed ? v : log ? s.Min * s.Max / v : s.Min + s.Max - v;
-        float ToSlider(float v) => log ? MathF.Log(Mirror(v)) : Mirror(v);
-        float Snap(float v) => Math.Clamp(MathF.Round(v / step) * step, s.Min, s.Max);
-        float FromSlider(double x) => Snap(Mirror(log ? MathF.Exp((float)x) : (float)x));
+        var scale = new SliderScale(s);
 
         // The range itself is not mirrored: Min..Max either way.
-        var slider = new Slider { Minimum = log ? MathF.Log(s.Min) : s.Min, Maximum = log ? MathF.Log(s.Max) : s.Max, Margin = new(0, 0, 10, 0) };
+        var slider = new Slider
+        {
+            Minimum = scale.Log ? MathF.Log(s.Min) : s.Min, Maximum = scale.Log ? MathF.Log(s.Max) : s.Max, Margin = new(0, 0, 10, 0),
+        };
         var text = new TextBox { Width = 120, VerticalAlignment = VerticalAlignment.Center, TextWrapping = Avalonia.Media.TextWrapping.NoWrap };
         bool loading = false;
         void Show()
         {
             loading = true;
             float v = CurrentValue(s);
-            slider.Value = ToSlider(Math.Clamp(v, s.Min, s.Max));
+            slider.Value = scale.ToSlider(Math.Clamp(v, s.Min, s.Max));
             text.Text = Tr(s.Text(v));
             loading = false;
         }
@@ -1043,12 +1129,20 @@ public sealed partial class MainWindow
         slider.ValueChanged += (_, e) =>
         {
             if (loading) return;
-            float v = FromSlider(e.NewValue);
+            float v = scale.FromSlider(e.NewValue);
             text.Text = Tr(s.Text(v));
             Write(v);
             SaveGameSoon();
         };
+        WireTypedValue(s, scale, text, Show, Write);
+        return row;
+    }
 
+    /// <summary>
+    /// The slider row's value box: a value typed into it is written on Enter or when it loses focus; Esc puts the row back.
+    /// </summary>
+    void WireTypedValue(SettingDescription s, SliderScale scale, TextBox text, Action show, Action<float> write)
+    {
         // A value typed as the row shows it: the suffix may stay, the off text is the left end, a comma counts as a decimal point.
         float? Parse(string input)
         {
@@ -1059,17 +1153,17 @@ public sealed partial class MainWindow
             if (suffix.Length > 0 && input.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 input = input[..^suffix.Length].Trim();
             bool parsed = float.TryParse(input.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out float n);
-            return parsed && float.IsFinite(n) ? Snap(n / s.Scale) : null;
+            return parsed && float.IsFinite(n) ? scale.Snap(n / s.Scale) : null;
         }
         void Commit()
         {
             // Anything unreadable, or the shown text left as it was, puts the row back.
-            if (Parse((text.Text ?? "").Trim()) is { } v && MathF.Abs(v - CurrentValue(s)) > step / 2)
+            if (Parse((text.Text ?? "").Trim()) is { } v && MathF.Abs(v - CurrentValue(s)) > scale.Step / 2)
             {
-                Write(v);
+                write(v);
                 SaveGame();
             }
-            Show();
+            show();
         }
         text.KeyDown += (_, e) =>
         {
@@ -1080,12 +1174,11 @@ public sealed partial class MainWindow
             }
             else if (e.Key == Key.Escape)
             {
-                Show();
+                show();
                 e.Handled = true;
             }
         };
         text.LostFocus += (_, _) => Commit();
-        return row;
     }
 
     // Dragging a slider writes the file once it rests, not on every step.
