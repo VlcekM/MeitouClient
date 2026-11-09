@@ -27,13 +27,20 @@ public sealed class PuEmitterDef
     public PuDynamic Rate { get; init; } = PuDynamic.Fixed(10);
     public PuDynamic Life { get; init; } = PuDynamic.Fixed(3);
     public PuDynamic Velocity { get; init; } = PuDynamic.Fixed(100);
-    /// <summary>Half-angle of the cone round <see cref="Direction"/> the particles leave in, degrees.</summary>
+    /// <summary>
+    /// Half-angle of the cone round <see cref="Direction"/> the particles leave in, degrees.
+    /// </summary>
     public PuDynamic Angle { get; init; } = PuDynamic.Fixed(0);
     public PuDynamic Mass { get; init; } = PuDynamic.Fixed(1);
-    /// <summary>How long the emitter works after it starts (null: for ever); then it rests for <see cref="RepeatDelay"/> and starts again (null: never).</summary>
+    /// <summary>
+    /// How long the emitter works after it starts (null: for ever); then it rests for <see cref="RepeatDelay"/> and starts again (null: never).
+    /// </summary>
     public PuDynamic? Duration { get; init; }
     public PuDynamic? RepeatDelay { get; init; }
-    /// <summary>The particle's size when the emitter sets it: <c>all_particle_dimensions</c> for the three (it wins when both are given), else <c>particle_width</c> / <c>particle_height</c> / <c>particle_depth</c>.</summary>
+    /// <summary>
+    /// The particle's size when the emitter sets it: <c>all_particle_dimensions</c> for the three (it wins when both are given), else
+    /// <c>particle_width</c> / <c>particle_height</c> / <c>particle_depth</c>.
+    /// </summary>
     public PuDynamic? Width { get; init; }
     public PuDynamic? Height { get; init; }
     public PuDynamic? Depth { get; init; }
@@ -41,22 +48,34 @@ public sealed class PuEmitterDef
     public Vector3 Position { get; init; }
     public Vector3 Direction { get; init; } = Vector3.UnitY;
     public Vector4 Colour { get; init; } = Vector4.One;
-    /// <summary>The emitted colour is picked at random between these when either is given (the missing one is <see cref="Colour"/>).</summary>
+    /// <summary>
+    /// The emitted colour is picked at random between these when either is given (the missing one is <see cref="Colour"/>).
+    /// </summary>
     public Vector4? ColourStart { get; init; }
     public Vector4? ColourEnd { get; init; }
-    /// <summary>Box: the extent along x, y and z.</summary>
+    /// <summary>
+    /// Box: the extent along x, y and z.
+    /// </summary>
     public Vector3 BoxSize { get; init; } = new(100, 100, 100);
     public float Radius { get; init; } = 100;
-    /// <summary>Circle: the angle step (radians) between emissions when not random.</summary>
+    /// <summary>
+    /// Circle: the angle step (radians) between emissions when not random.
+    /// </summary>
     public float Step { get; init; } = 0.1f;
     public bool EmitRandom { get; init; } = true;
-    /// <summary>Circle / sphere: particles leave along the radius (the direction attribute is ignored).</summary>
+    /// <summary>
+    /// Circle / sphere: particles leave along the radius (the direction attribute is ignored).
+    /// </summary>
     public bool AutoDirection { get; init; }
     public bool ForceEmission { get; init; }
     public bool KeepLocal { get; init; }
-    /// <summary>Line: the end point (the line runs from <see cref="Position"/> to it).</summary>
+    /// <summary>
+    /// Line: the end point (the line runs from <see cref="Position"/> to it).
+    /// </summary>
     public Vector3 End { get; init; }
-    /// <summary><c>emits technique_particle|emitter_particle|system_particle name</c>: what an emitted particle becomes (not simulated in part one).</summary>
+    /// <summary>
+    /// <c>emits technique_particle|emitter_particle|system_particle name</c>: what an emitted particle becomes (not simulated in part one).
+    /// </summary>
     public string? EmitsKind { get; init; }
     public string? EmitsName { get; init; }
     public required PuNode Source { get; init; }
@@ -79,7 +98,9 @@ public sealed class PuAffectorDef
     public PuDynamic? ScaleY { get; init; }
     public PuDynamic? ScaleZ { get; init; }
     public PuDynamic? ScaleXyz { get; init; }
-    /// <summary>Scale: the rates are read at the system's age instead of the particle's life fraction.</summary>
+    /// <summary>
+    /// Scale: the rates are read at the system's age instead of the particle's life fraction.
+    /// </summary>
     public bool SinceStartSystem { get; init; }
     // TextureRotator
     public PuDynamic? Rotation { get; init; }
@@ -105,7 +126,9 @@ public sealed class PuObserverDef
     public required string TypeName { get; init; }
     public bool Enabled { get; init; } = true;
     public float Interval { get; init; }
-    /// <summary>OnPosition: which axis (0 x, 1 y, 2 z), how it compares and with what. OnTime: the time in <see cref="Value"/>.</summary>
+    /// <summary>
+    /// OnPosition: which axis (0 x, 1 y, 2 z), how it compares and with what. OnTime: the time in <see cref="Value"/>.
+    /// </summary>
     public int Axis { get; init; } = -1;
     public PuCompare Compare { get; init; }
     public float Value { get; init; }
@@ -118,11 +141,17 @@ public sealed class PuRendererDef
 {
     public required string TypeName { get; init; }
     public bool IsBillboard => TypeName == "Billboard";
-    /// <summary>point (default), oriented_common, oriented_self, oriented_shape, perpendicular_common, perpendicular_self.</summary>
+    /// <summary>
+    /// point (default), oriented_common, oriented_self, oriented_shape, perpendicular_common, perpendicular_self.
+    /// </summary>
     public string BillboardType { get; init; } = "point";
-    /// <summary>center (default), bottom_center, top_center, center_left, center_right, bottom_left...</summary>
+    /// <summary>
+    /// center (default), bottom_center, top_center, center_left, center_right, bottom_left...
+    /// </summary>
     public string Origin { get; init; } = "center";
-    /// <summary>"texcoord" (default) or "vertex": which of the quad's rotations the TextureRotator drives. Drawn the same here.</summary>
+    /// <summary>
+    /// "texcoord" (default) or "vertex": which of the quad's rotations the TextureRotator drives. Drawn the same here.
+    /// </summary>
     public string RotationType { get; init; } = "texcoord";
     public Vector3 CommonDirection { get; init; } = Vector3.UnitZ;
     public Vector3 CommonUp { get; init; } = Vector3.UnitY;
@@ -155,18 +184,27 @@ public sealed class PuSystemDef
     public required string Name { get; init; }
     public string File { get; init; } = "";
     public string Category { get; init; } = "";
-    /// <summary>The system's scale: it multiplies emitter extents, positions and particle sizes (Observed).</summary>
+    /// <summary>
+    /// The system's scale: it multiplies emitter extents, positions and particle sizes (Observed).
+    /// </summary>
     public Vector3 Scale { get; init; } = Vector3.One;
-    /// <summary>It multiplies the emitted velocities (Observed).</summary>
+    /// <summary>
+    /// It multiplies the emitted velocities (Observed).
+    /// </summary>
     public float ScaleVelocity { get; init; } = 1;
-    /// <summary><c>fast_forward time interval</c>: when the system starts it is stepped for <c>time</c> seconds in steps of <c>interval</c>.</summary>
+    /// <summary>
+    /// <c>fast_forward time interval</c>: when the system starts it is stepped for <c>time</c> seconds in steps of <c>interval</c>.
+    /// </summary>
     public (float Time, float Interval)? FastForward { get; init; }
     public float IterationInterval { get; init; }
     public bool KeepLocal { get; init; }
     public IReadOnlyList<PuTechniqueDef> Techniques { get; init; } = [];
     public required PuNode Source { get; init; }
 
-    /// <summary>The largest extent of the Box emitters (width, height, depth) and the Circle emitters' diameter, times the scale's largest component (the EFFECT loader's size measure; docs/formats/weather.md).</summary>
+    /// <summary>
+    /// The largest extent of the Box emitters (width, height, depth) and the Circle emitters' diameter, times the scale's largest component (the
+    /// EFFECT loader's size measure; docs/formats/weather.md).
+    /// </summary>
     public float LargestEmitterExtent
     {
         get
@@ -174,7 +212,8 @@ public sealed class PuSystemDef
             float m = 0;
             foreach (var e in Techniques.SelectMany(t => t.Emitters))
             {
-                if (e.Type == PuEmitterType.Box) m = Math.Max(m, Math.Max(e.BoxSize.X * Scale.X, Math.Max(e.BoxSize.Y * Scale.Y, e.BoxSize.Z * Scale.Z)));
+                if (e.Type == PuEmitterType.Box)
+                    m = Math.Max(m, Math.Max(e.BoxSize.X * Scale.X, Math.Max(e.BoxSize.Y * Scale.Y, e.BoxSize.Z * Scale.Z)));
                 else if (e.Type == PuEmitterType.Circle) m = Math.Max(m, e.Radius * 2 * Math.Max(Scale.X, Scale.Z));
             }
             return m;
@@ -182,9 +221,9 @@ public sealed class PuSystemDef
     }
 
     /// <summary>
-    /// A bound on how far from the system's node a particle can get (Observed, a viewer measure for culling): the emitter's extent, plus the
-    /// speed times the life, plus the linear forces' reach, plus the particle's largest size (with the scale affectors' growth), times the scale.
-    /// The camera and global groups (wrapped round the camera) do not use it.
+    /// A bound on how far from the system's node a particle can get (Observed, a viewer measure for culling): the emitter's extent, plus the speed
+    /// times the life, plus the linear forces' reach, plus the particle's largest size (with the scale affectors' growth), times the scale. The
+    /// camera and global groups (wrapped round the camera) do not use it.
     /// </summary>
     public float BoundingRadius
     {
@@ -197,7 +236,9 @@ public sealed class PuSystemDef
                 if (!t.Enabled) continue;
                 float growth = 0;
                 foreach (var a in t.Affectors.Where(a => a.Type == PuAffectorType.Scale))
-                    growth += (a.ScaleXyz is not null ? [a.ScaleXyz] : new[] { a.ScaleX, a.ScaleY, a.ScaleZ }).Where(d => d is not null).Select(d => Math.Max(Math.Abs(d!.Range.Min), Math.Abs(d.Range.Max))).DefaultIfEmpty(0).Max() * scale;
+                    growth += (a.ScaleXyz is not null ? [a.ScaleXyz] : new[] { a.ScaleX, a.ScaleY, a.ScaleZ })
+                        .Where(d => d is not null).Select(d => Math.Max(Math.Abs(d!.Range.Min), Math.Abs(d.Range.Max)))
+                            .DefaultIfEmpty(0).Max() * scale;
                 float force = t.Affectors.Where(a => a.Type == PuAffectorType.LinearForce).Select(a => a.Force.Length()).DefaultIfEmpty(0).Sum();
                 foreach (var e in t.Emitters)
                 {
@@ -210,8 +251,10 @@ public sealed class PuSystemDef
                         _ => 0,
                     };
                     float speed = Math.Max(Math.Abs(e.Velocity.Range.Min), Math.Abs(e.Velocity.Range.Max)) * ScaleVelocity;
-                    float size = (e.AllDimensions is not null ? [e.AllDimensions] : new[] { e.Width, e.Height }).Where(d => d is not null).Select(d => d!.Range.Max).DefaultIfEmpty(Math.Max(t.DefaultWidth, t.DefaultHeight)).Max() * scale;
-                    float reach = (t.Position + e.Position * Scale).Length() + extent + speed * life + 0.5f * force * life * life + size + growth * life;
+                    float size = (e.AllDimensions is not null ? [e.AllDimensions] : new[] { e.Width, e.Height })
+                        .Where(d => d is not null).Select(d => d!.Range.Max).DefaultIfEmpty(Math.Max(t.DefaultWidth, t.DefaultHeight)).Max() * scale;
+                    float reach = (t.Position + e.Position * Scale).Length() + extent + speed * life
+                        + 0.5f * force * life * life + size + growth * life;
                     radius = Math.Max(radius, reach);
                 }
             }
@@ -219,11 +262,15 @@ public sealed class PuSystemDef
         }
     }
 
-    /// <summary>Builds the typed system from a parsed <c>system</c> block.</summary>
+    /// <summary>
+    /// Builds the typed system from a parsed <c>system</c> block.
+    /// </summary>
     public static PuSystemDef From(PuNode system, string file = "")
     {
         var scale = system.Vec3("scale") ?? Vector3.One;
-        (float, float)? ff = system.Find("fast_forward") is { Values.Length: >= 2 } f && PuProperty.TryFloat(f.Values[0], out float ft) && PuProperty.TryFloat(f.Values[1], out float fi) ? (ft, fi) : null;
+        (float, float)? ff = system.Find("fast_forward") is { Values.Length: >= 2 } f
+            && PuProperty.TryFloat(f.Values[0], out float ft) && PuProperty.TryFloat(f.Values[1], out float fi)
+            ? (ft, fi) : null;
         return new PuSystemDef
         {
             Name = system.Name,
@@ -346,7 +393,8 @@ public sealed class PuSystemDef
         };
         var colours = new List<(float, Vector4)>();
         foreach (var p in a.All("time_colour"))
-            if (p.Values.Length >= 5 && PuProperty.TryFloat(p.Values[0], out float t) && PuProperty.TryFloat(p.Values[1], out float r) && PuProperty.TryFloat(p.Values[2], out float g)
+            if (p.Values.Length >= 5 && PuProperty.TryFloat(p.Values[0], out float t)
+                && PuProperty.TryFloat(p.Values[1], out float r) && PuProperty.TryFloat(p.Values[2], out float g)
                 && PuProperty.TryFloat(p.Values[3], out float b) && PuProperty.TryFloat(p.Values[4], out float al))
                 colours.Add((t, new Vector4(r, g, b, al)));
         colours.Sort((x, y) => x.Item1.CompareTo(y.Item1));

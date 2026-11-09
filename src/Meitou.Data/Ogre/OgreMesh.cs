@@ -7,42 +7,53 @@ namespace Meitou.Data.Ogre;
 /// </summary>
 public sealed class OgreMesh
 {
-    /// <summary>Serializer version from the file header, e.g. <c>[MeshSerializer_v1.100]</c>.</summary>
+    /// <summary>
+    /// Serializer version from the file header, e.g. <c>[MeshSerializer_v1.100]</c>.
+    /// </summary>
     public string Version { get; set; } = "";
 
     public bool SkeletallyAnimated { get; set; }
 
-    /// <summary>Vertices shared by submeshes with <see cref="OgreSubMesh.UseSharedVertices"/>.</summary>
+    /// <summary>
+    /// Vertices shared by submeshes with <see cref="OgreSubMesh.UseSharedVertices"/>.
+    /// </summary>
     public OgreVertexData? SharedVertexData { get; set; }
 
     public List<OgreSubMesh> SubMeshes { get; } = [];
 
-    /// <summary>Name of the <c>.skeleton</c> file, if the mesh is skinned.</summary>
+    /// <summary>
+    /// Name of the <c>.skeleton</c> file, if the mesh is skinned.
+    /// </summary>
     public string? SkeletonName { get; set; }
 
-    /// <summary>Bone weights for <see cref="SharedVertexData"/>.</summary>
+    /// <summary>
+    /// Bone weights for <see cref="SharedVertexData"/>.
+    /// </summary>
     public List<OgreBoneAssignment> BoneAssignments { get; } = [];
 
     public OgreBounds? Bounds { get; set; }
 
-    /// <summary>Submesh names by submesh index.</summary>
+    /// <summary>
+    /// Submesh names by submesh index.
+    /// </summary>
     public Dictionary<int, string> SubMeshNames { get; } = [];
 
     public OgreLod? Lod { get; set; }
 
-    /// <summary>Poses (morph targets) in file order (chunk 0xC000; docs/formats/ogre-mesh.md).</summary>
+    /// <summary>
+    /// Poses (morph targets) in file order (chunk 0xC000; docs/formats/ogre-mesh.md).
+    /// </summary>
     public List<OgrePose> Poses { get; } = [];
 
     /// <summary>
-    /// Chunks the reader steps over without decoding: edge lists (for stencil shadows), vertex
-    /// animations and per-submesh extremes. Id and count.
+    /// Chunks the reader steps over without decoding: edge lists (for stencil shadows), vertex animations and per-submesh extremes. Id and count.
     /// </summary>
     public Dictionary<OgreMeshChunk, int> SkippedChunks { get; } = [];
 }
 
 /// <summary>
-/// A pose: per-vertex position (and optionally normal) offsets for one vertex set. <see cref="Target"/> is 0 for the
-/// shared vertices, otherwise submesh index + 1 (Ogre's convention).
+/// A pose: per-vertex position (and optionally normal) offsets for one vertex set. <see cref="Target"/> is 0 for the shared vertices, otherwise
+/// submesh index + 1 (Ogre's convention).
 /// </summary>
 public sealed class OgrePose
 {
@@ -52,7 +63,9 @@ public sealed class OgrePose
     public List<OgrePoseVertex> Vertices { get; } = [];
 }
 
-/// <summary>One vertex of a pose: index into the target's vertices, position offset, normal offset (zero if none).</summary>
+/// <summary>
+/// One vertex of a pose: index into the target's vertices, position offset, normal offset (zero if none).
+/// </summary>
 public readonly record struct OgrePoseVertex(uint Index, Vector3 Offset, Vector3 Normal);
 
 public sealed class OgreSubMesh
@@ -61,7 +74,9 @@ public sealed class OgreSubMesh
     public bool UseSharedVertices { get; set; }
     public OgreIndexBuffer Indices { get; set; } = OgreIndexBuffer.Empty;
 
-    /// <summary>The submesh's own vertices; null when it uses the mesh's shared vertices.</summary>
+    /// <summary>
+    /// The submesh's own vertices; null when it uses the mesh's shared vertices.
+    /// </summary>
     public OgreVertexData? VertexData { get; set; }
 
     public OgreOperationType Operation { get; set; } = OgreOperationType.TriangleList;
@@ -69,7 +84,9 @@ public sealed class OgreSubMesh
     public Dictionary<string, string> TextureAliases { get; } = [];
 }
 
-/// <summary>Indices as stored (16- or 32-bit), widened to <see cref="uint"/>.</summary>
+/// <summary>
+/// Indices as stored (16- or 32-bit), widened to <see cref="uint"/>.
+/// </summary>
 public sealed record OgreIndexBuffer(bool Is32Bit, uint[] Indices)
 {
     public static readonly OgreIndexBuffer Empty = new(false, []);
@@ -80,15 +97,17 @@ public sealed class OgreVertexData
     public uint VertexCount { get; set; }
     public List<OgreVertexElement> Elements { get; } = [];
 
-    /// <summary>Raw vertex buffers by bind index.</summary>
+    /// <summary>
+    /// Raw vertex buffers by bind index.
+    /// </summary>
     public Dictionary<ushort, OgreVertexBuffer> Buffers { get; } = [];
 
     public OgreVertexElement? Find(OgreVertexSemantic semantic, int index = 0) =>
         Elements.FirstOrDefault(e => e.Semantic == semantic && e.Index == index);
 
     /// <summary>
-    /// Reads one element as floats per vertex (e.g. 3 per vertex for <see cref="OgreVertexElementType.Float3"/>).
-    /// Supports the float, short/ushort (unnormalized), byte-4 and colour types.
+    /// Reads one element as floats per vertex (e.g. 3 per vertex for <see cref="OgreVertexElementType.Float3"/>). Supports the float, short/ushort
+    /// (unnormalized), byte-4 and colour types.
     /// </summary>
     public float[] ReadFloats(OgreVertexElement element)
     {
@@ -113,7 +132,9 @@ public sealed class OgreVertexData
         return result;
     }
 
-    /// <summary>Vertex positions, or null if there is no position element.</summary>
+    /// <summary>
+    /// Vertex positions, or null if there is no position element.
+    /// </summary>
     public Vector3[]? ReadPositions()
     {
         if (Find(OgreVertexSemantic.Position) is not { } e) return null;
@@ -138,19 +159,27 @@ public sealed class OgreLod
 {
     public string Strategy { get; set; } = "";
 
-    /// <summary>Levels after the full-detail level 0 (which isn't stored).</summary>
+    /// <summary>
+    /// Levels after the full-detail level 0 (which isn't stored).
+    /// </summary>
     public List<OgreLodLevel> Levels { get; } = [];
 }
 
 public sealed class OgreLodLevel
 {
-    /// <summary>The distance (or other strategy value) at which this level starts.</summary>
+    /// <summary>
+    /// The distance (or other strategy value) at which this level starts.
+    /// </summary>
     public float UserValue { get; set; }
 
-    /// <summary>Another mesh file to use for this level, for manual LODs.</summary>
+    /// <summary>
+    /// Another mesh file to use for this level, for manual LODs.
+    /// </summary>
     public string? ManualMesh { get; set; }
 
-    /// <summary>Reduced indices per submesh, for generated LODs.</summary>
+    /// <summary>
+    /// Reduced indices per submesh, for generated LODs.
+    /// </summary>
     public List<OgreLodFaces> Faces { get; } = [];
 }
 
@@ -209,7 +238,9 @@ public static class OgreVertexElementTypeExtensions
         _ => throw new ArgumentOutOfRangeException(nameof(t), t, null),
     };
 
-    /// <summary>Size of one element in bytes.</summary>
+    /// <summary>
+    /// Size of one element in bytes.
+    /// </summary>
     public static int Size(this OgreVertexElementType t) => t switch
     {
         OgreVertexElementType.Colour or OgreVertexElementType.ColourArgb or OgreVertexElementType.ColourAbgr
@@ -222,7 +253,9 @@ public static class OgreVertexElementTypeExtensions
     };
 }
 
-/// <summary>Chunk ids of the <c>.mesh</c> format.</summary>
+/// <summary>
+/// Chunk ids of the <c>.mesh</c> format.
+/// </summary>
 public enum OgreMeshChunk : ushort
 {
     Header = 0x1000,

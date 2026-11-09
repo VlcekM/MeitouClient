@@ -2,80 +2,114 @@ namespace Meitou.Data.Gameplay.Bodies;
 
 /// <summary>One entry of a race's <c>combat anatomy</c>: a part, how likely it is to be struck, and its base HP.</summary>
 /// <param name="Part">The LOCATIONAL_DAMAGE record.</param>
-/// <param name="HitWeight">The reference's value 0: a relative chance to be struck (<b>Observed</b>; the assignment of the two integers is inferred, character-stats.md).</param>
+/// <param name="HitWeight">The reference's value 0: a relative chance to be struck (<b>Observed</b>; the assignment of the two integers is inferred,
+/// character-stats.md).</param>
 /// <param name="BaseHp">The reference's value 1: the part's base HP (100 for humans); 100 when the data says less than 1.</param>
 public readonly record struct AnatomyEntry(BodyPartTemplate Part, int HitWeight, float BaseHp);
 
-/// <summary>A reference with a slot number: RACE <c>severed limbs</c> (the item a lost limb drops) and <c>limb replacement</c> (the default prosthetic) per limb slot.</summary>
+/// <summary>
+/// A reference with a slot number: RACE <c>severed limbs</c> (the item a lost limb drops) and <c>limb replacement</c> (the default prosthetic) per
+/// limb slot.
+/// </summary>
 public readonly record struct SlotReference(int Slot, string TargetStringId);
 
 /// <summary>
-/// A RACE as the body code uses it (docs/game/character-stats.md "Races", <b>Verified</b> field by field). The properties can be set directly, so tests
-/// and tools can build a race without a database; <see cref="From"/> reads one from a record.
+/// A RACE as the body code uses it (docs/game/character-stats.md "Races", <b>Verified</b> field by field). The properties can be set directly, so
+/// tests and tools can build a race without a database; <see cref="From"/> reads one from a record.
 /// </summary>
 public sealed class RaceData
 {
     public string StringId { get; init; } = "";
     public string Name { get; init; } = "";
 
-    /// <summary><c>heal rate</c>: multiplier of part healing and blood recovery.</summary>
+    /// <summary>
+    /// <c>heal rate</c>: multiplier of part healing and blood recovery.
+    /// </summary>
     public float HealRate { get; init; } = 1;
-    /// <summary><c>bleed rate</c>: multiplier of blood loss (0 = bloodless).</summary>
+    /// <summary>
+    /// <c>bleed rate</c>: multiplier of blood loss (0 = bloodless).
+    /// </summary>
     public float BleedRate { get; init; } = 1;
-    /// <summary><c>blood colour</c> (0xRRGGBB, the editor default #800000): the colour of its blood decals on the ground (docs/game/blood-decals.md).</summary>
+    /// <summary>
+    /// <c>blood colour</c> (0xRRGGBB, the editor default #800000): the colour of its blood decals on the ground (docs/game/blood-decals.md).
+    /// </summary>
     public uint BloodColour { get; init; } = 0x800000;
-    /// <summary><c>heal stat</c>: the skill used to treat this race (Medic 9, Hive medic 14, Vet 15, Robotics 6).</summary>
+    /// <summary>
+    /// <c>heal stat</c>: the skill used to treat this race (Medic 9, Hive medic 14, Vet 15, Robotics 6).
+    /// </summary>
     public StatsEnumerated HealStat { get; init; } = StatsEnumerated.Medic;
-    /// <summary><c>hunger rate</c>: multiplier of starvation speed; 0 never starves.</summary>
+    /// <summary>
+    /// <c>hunger rate</c>: multiplier of starvation speed; 0 never starves.
+    /// </summary>
     public float HungerRate { get; init; } = 1;
     public float MinBlood { get; init; } = 75;
     public float MaxBlood { get; init; } = 150;
-    /// <summary><c>speed min skill</c>: run speed at athletics 0.</summary>
+    /// <summary>
+    /// <c>speed min skill</c>: run speed at athletics 0.
+    /// </summary>
     public float SpeedMinSkill { get; init; } = 70;
-    /// <summary><c>speed max skill</c>: run speed at athletics 100.</summary>
+    /// <summary>
+    /// <c>speed max skill</c>: run speed at athletics 100.
+    /// </summary>
     public float SpeedMaxSkill { get; init; } = 120;
     public float WalkSpeed { get; init; } = 15;
     public float SwimSpeedMult { get; init; } = 1;
     public float SwimOffset { get; init; } = 1;
-    /// <summary>The data's <c>water avoidance</c> (-10 to 10).</summary>
+    /// <summary>
+    /// The data's <c>water avoidance</c> (-10 to 10).
+    /// </summary>
     public float WaterAvoidanceRaw { get; init; }
-    /// <summary>The pathfinder's value: a becomes a + 1 if a >= 0, else 1 / (1 - a) (<b>Observed</b>, character-stats.md).</summary>
+    /// <summary>
+    /// The pathfinder's value: a becomes a + 1 if a >= 0, else 1 / (1 - a) (<b>Observed</b>, character-stats.md).
+    /// </summary>
     public float WaterAvoidance => WaterAvoidanceRaw >= 0 ? WaterAvoidanceRaw + 1 : 1 / (1 - WaterAvoidanceRaw);
     public float VisionRangeMult { get; init; } = 1;
     public float CombatMoveSpeedMult { get; init; } = 1;
-    /// <summary><c>pathfind footprint radius</c>: the clearance a path query needs (4 humans, 7 Garru, 40 Leviathan).</summary>
+    /// <summary>
+    /// <c>pathfind footprint radius</c>: the clearance a path query needs (4 humans, 7 Garru, 40 Leviathan).
+    /// </summary>
     public float PathfindFootprintRadius { get; init; } = 4;
     public float PathfindAcceleration { get; init; } = 20;
     /// <summary>
-    /// <c>hull size X</c>, <c>Y</c>, <c>Z</c> ("size of the click hull", fcs.def defaults 5, 20, 5; humans 5, 17, 5): the box the physics rays hit, bolts and the line of fire
-    /// included (docs/game/combat.md "Line of fire and the hit shape").
+    /// <c>hull size X</c>, <c>Y</c>, <c>Z</c> ("size of the click hull", fcs.def defaults 5, 20, 5; humans 5, 17, 5): the box the physics rays hit,
+    /// bolts and the line of fire included (docs/game/combat.md "Line of fire and the hit shape").
     /// </summary>
     public float HullX { get; init; } = 5;
     public float HullY { get; init; } = 20;
     public float HullZ { get; init; } = 5;
     public int ExtraAttackSlots { get; init; }
     /// <summary>
-    /// <c>buy value</c> (fcs.def default 100, "percentage of normal value when bought or sold as a slave"): the factor of a slave's price (docs/game/economy.md section 12).
+    /// <c>buy value</c> (fcs.def default 100, "percentage of normal value when bought or sold as a slave"): the factor of a slave's price
+    /// (docs/game/economy.md section 12).
     /// </summary>
     public float BuyValue { get; init; } = 100;
 
     public bool IsRobot { get; init; }
-    /// <summary><c>weather immunity0</c>, <c>1</c>...: the <see cref="World.WeatherAffecting"/> kinds that do nothing to the race (docs/formats/weather.md "Effects on characters").</summary>
+    /// <summary>
+    /// <c>weather immunity0</c>, <c>1</c>...: the <see cref="World.WeatherAffecting"/> kinds that do nothing to the race (docs/formats/weather.md
+    /// "Effects on characters").
+    /// </summary>
     public IReadOnlyList<World.WeatherAffecting> WeatherImmunity { get; init; } = [];
     public bool ImmuneTo(World.WeatherAffecting kind) => WeatherImmunity.Contains(kind);
     public bool Swims { get; init; }
     public bool Carriable { get; init; }
     public bool SingleGender { get; init; }
     public bool Gigantic { get; init; }
-    /// <summary>The factor a gigantic race multiplies the draw distance by (Ogre rendering distance D x 7, <c>FUN_140539020</c>, Verified).</summary>
+    /// <summary>
+    /// The factor a gigantic race multiplies the draw distance by (Ogre rendering distance D x 7, <c>FUN_140539020</c>, Verified).
+    /// </summary>
     public const float GiganticDrawScale = 7;
     public bool Vampiric { get; init; }
     public bool NoHats { get; init; }
     public bool NoShirts { get; init; }
     public bool NoShoes { get; init; }
-    /// <summary>The inverse of the data's <c>cant enter buildings</c>.</summary>
+    /// <summary>
+    /// The inverse of the data's <c>cant enter buildings</c>.
+    /// </summary>
     public bool CanEnterBuildings { get; init; } = true;
-    /// <summary><c>self healing</c>: untreated damage turns slowly into treated damage (animals and a few robots).</summary>
+    /// <summary>
+    /// <c>self healing</c>: untreated damage turns slowly into treated damage (animals and a few robots).
+    /// </summary>
     public bool SelfHealing { get; init; }
 
     /// <summary>
@@ -84,14 +118,16 @@ public sealed class RaceData
     /// </summary>
     public float[] StatMultipliers { get; init; } = NewStatMap();
 
-    /// <summary>The parts, in the order of the race's <c>combat anatomy</c> list (which differs from the saves' usual order).</summary>
+    /// <summary>
+    /// The parts, in the order of the race's <c>combat anatomy</c> list (which differs from the saves' usual order).
+    /// </summary>
     public IReadOnlyList<AnatomyEntry> Anatomy { get; init; } = [];
 
     public IReadOnlyList<SlotReference> SeveredLimbs { get; init; } = [];
     public IReadOnlyList<SlotReference> LimbReplacements { get; init; } = [];
     /// <summary>
-    /// <c>special food</c>: the ITEM records (string ids) of <c>item function</c> 15 ("Possibly Edible", raw meat) this race eats (<c>FUN_14042ee50</c>, docs/game/character-stats.md
-    /// "Eating"); ordinary food (function 3) every race eats.
+    /// <c>special food</c>: the ITEM records (string ids) of <c>item function</c> 15 ("Possibly Edible", raw meat) this race eats
+    /// (<c>FUN_14042ee50</c>, docs/game/character-stats.md "Eating"); ordinary food (function 3) every race eats.
     /// </summary>
     public IReadOnlySet<string> SpecialFood { get; init; } = new HashSet<string>();
 
@@ -99,10 +135,12 @@ public sealed class RaceData
 
     /// <summary>A map with every entry 1.</summary>
     /// <summary>
-    /// The order the original's race stat map iterates (a boost map of every <see cref="StatsEnumerated"/> 0-38 inserted in order, <c>FUN_14042efa0</c>,
+    /// The order the original's race stat map iterates (a boost map of every <see cref="StatsEnumerated"/> 0-38 inserted in order,
+    /// <c>FUN_14042efa0</c>,
     /// docs/formats/boost-unordered.md): the RACE STATS panel lists the bonuses, then the penalties, in it.
     /// </summary>
-    public static readonly IReadOnlyList<StatsEnumerated> StatMapOrder = [.. BoostHashOrder.Of(Enumerable.Range(0, StatsInfo.Count).Select(i => (long)i)).Select(k => (StatsEnumerated)k)];
+    public static readonly IReadOnlyList<StatsEnumerated> StatMapOrder =
+        [.. BoostHashOrder.Of(Enumerable.Range(0, StatsInfo.Count).Select(i => (long)i)).Select(k => (StatsEnumerated)k)];
 
     public static float[] NewStatMap()
     {
@@ -112,8 +150,8 @@ public sealed class RaceData
     }
 
     /// <summary>
-    /// The race's stat map (<c>FUN_14042efa0</c>, <b>Verified</b>): goods first (1.2), then bads (0.8), then RACE <c>strength</c> and <c>dexterity</c> over
-    /// entries 1 and 18. A stat in both lists ends at 0.8; 0 (STAT_NONE) entries and numbers out of range are skipped.
+    /// The race's stat map (<c>FUN_14042efa0</c>, <b>Verified</b>): goods first (1.2), then bads (0.8), then RACE <c>strength</c> and
+    /// <c>dexterity</c> over entries 1 and 18. A stat in both lists ends at 0.8; 0 (STAT_NONE) entries and numbers out of range are skipped.
     /// </summary>
     public static float[] BuildStatMap(IEnumerable<int> goods, IEnumerable<int> bads, float strength = 1, float dexterity = 1)
     {
@@ -125,7 +163,9 @@ public sealed class RaceData
         return map;
     }
 
-    /// <summary>Reads a RACE record; the anatomy references resolve through <paramref name="db"/> (a missing LOCATIONAL_DAMAGE record is left out).</summary>
+    /// <summary>
+    /// Reads a RACE record; the anatomy references resolve through <paramref name="db"/> (a missing LOCATIONAL_DAMAGE record is left out).
+    /// </summary>
     public static RaceData From(GameRecord r, GameDatabase db)
     {
         // "stats good0", "stats good1"...: the scan stops at the first key that is missing, but a stored 0 only skips.

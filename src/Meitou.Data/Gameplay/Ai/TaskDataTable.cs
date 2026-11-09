@@ -2,24 +2,41 @@ using static Meitou.Data.Gameplay.Ai.TaskDataFlags;
 
 namespace Meitou.Data.Gameplay.Ai;
 
-/// <summary>A state of a TaskData list and the value wanted (false for the doc's <c>!</c> entries).</summary>
+/// <summary>
+/// A state of a TaskData list and the value wanted (false for the doc's <c>!</c> entries).
+/// </summary>
 public readonly record struct TaskCondition(StateType State, bool Holds);
 
-/// <summary>The planner fields of a TaskData row beyond its lists (docs/game/ai-tasks.md "Planner", Observed; <see cref="Acts"/> and <see cref="NeedsTarget"/> Verified).</summary>
+/// <summary>
+/// The planner fields of a TaskData row beyond its lists (docs/game/ai-tasks.md "Planner", Observed; <see cref="Acts"/> and <see cref="NeedsTarget"/>
+/// Verified).
+/// </summary>
 [Flags]
 public enum TaskDataFlags : byte
 {
-    /// <summary>A task of its own the plan can end in (+0x134): set by the registration, cleared by an effect.</summary>
+    /// <summary>
+    /// A task of its own the plan can end in (+0x134): set by the registration, cleared by an effect.
+    /// </summary>
     Acts = 1,
-    /// <summary>Taken as a provider only when a target is known (+0x48).</summary>
+    /// <summary>
+    /// Taken as a provider only when a target is known (+0x48).
+    /// </summary>
     NeedsTarget = 2,
-    /// <summary>Has a target finder (+0x160): never a plan's last step, it hands its effect a target.</summary>
+    /// <summary>
+    /// Has a target finder (+0x160): never a plan's last step, it hands its effect a target.
+    /// </summary>
     Finder = 4,
-    /// <summary>Not listed as a provider of the states its list A holds (+0x40).</summary>
+    /// <summary>
+    /// Not listed as a provider of the states its list A holds (+0x40).
+    /// </summary>
     NotProvider = 8,
-    /// <summary>A provider only for a flagged search or a character without a squad (+0x41).</summary>
+    /// <summary>
+    /// A provider only for a flagged search or a character without a squad (+0x41).
+    /// </summary>
     Restricted = 16,
-    /// <summary>A failed plan for it keeps the queue (+0x23).</summary>
+    /// <summary>
+    /// A failed plan for it keeps the queue (+0x23).
+    /// </summary>
     KeepsQueue = 32,
 }
 
@@ -28,12 +45,15 @@ public enum TaskDataFlags : byte
 /// <see cref="Needs"/> list B (what it needs, at most 11), <see cref="Effect"/> the state a goal row wants another row to achieve;
 /// <see cref="Category"/> the registration flag bits (the category registries it is listed in).
 /// </summary>
-public sealed record TaskDataRow(TaskType Type, string Text, int Category, TaskDataFlags Flags, TaskCondition[] Done, TaskCondition[] Needs, TaskCondition? Effect)
+public sealed record TaskDataRow(
+    TaskType Type, string Text, int Category, TaskDataFlags Flags, TaskCondition[] Done, TaskCondition[] Needs, TaskCondition? Effect)
 {
     public bool Is(TaskDataFlags flag) => (Flags & flag) != 0;
 }
 
-/// <summary>The original's 253 TaskData rows in registration order (docs/game/ai-tasks.md), and the providers of each state per category.</summary>
+/// <summary>
+/// The original's 253 TaskData rows in registration order (docs/game/ai-tasks.md), and the providers of each state per category.
+/// </summary>
 public static class TaskDataTable
 {
     public static IReadOnlyList<TaskDataRow> Rows { get; } =
@@ -295,15 +315,19 @@ public static class TaskDataTable
 
     static readonly TaskDataRow?[] ByType = BuildByType();
 
-    /// <summary>The row of a type; null for the 37 named types without one.</summary>
+    /// <summary>
+    /// The row of a type; null for the 37 named types without one.
+    /// </summary>
     public static TaskDataRow? Of(TaskType type) => (uint)type < (uint)ByType.Length ? ByType[(int)type] : null;
 
     /// <summary>
-    /// The rows of a category (a registration flag bit) whose list A holds a state with the wanted value, in ascending task type (the original fills them from its registry map keyed by type), not
-    /// <see cref="TaskDataFlags.NotProvider"/> ones (docs/game/ai-tasks.md "Planner": the provider maps).
+    /// The rows of a category (a registration flag bit) whose list A holds a state with the wanted value, in ascending task type (the original fills
+    /// them from its registry map keyed by type), not <see cref="TaskDataFlags.NotProvider"/> ones (docs/game/ai-tasks.md "Planner": the provider
+    /// maps).
     /// </summary>
     public static IReadOnlyList<TaskDataRow> Providers(int category, TaskCondition state) =>
-        ProviderCache.GetOrAdd((category, state), static k => [.. Rows.Where(r => (r.Category & k.Item1) != 0 && !r.Is(NotProvider) && r.Done.Contains(k.Item2)).OrderBy(r => (int)r.Type)]);
+        ProviderCache.GetOrAdd((category, state), static k =>
+            [.. Rows.Where(r => (r.Category & k.Item1) != 0 && !r.Is(NotProvider) && r.Done.Contains(k.Item2)).OrderBy(r => (int)r.Type)]);
 
     static readonly System.Collections.Concurrent.ConcurrentDictionary<(int, TaskCondition), TaskDataRow[]> ProviderCache = new();
 
@@ -318,5 +342,6 @@ public static class TaskDataTable
         new((TaskType)type, text, category, flags, List(done), List(needs), effect is null ? null : List(effect)[0]);
 
     static TaskCondition[] List(string s) =>
-        [.. s.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(e => e[0] == '!' ? new TaskCondition((StateType)int.Parse(e[1..]), false) : new TaskCondition((StateType)int.Parse(e), true))];
+        [.. s.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(e =>
+            e[0] == '!' ? new TaskCondition((StateType)int.Parse(e[1..]), false) : new TaskCondition((StateType)int.Parse(e), true))];
 }

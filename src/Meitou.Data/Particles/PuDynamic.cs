@@ -5,23 +5,31 @@ namespace Meitou.Data.Particles;
 public enum PuDynamicKind { Fixed, Random, CurvedLinear, CurvedSpline, Oscillate }
 
 /// <summary>
-/// A ParticleUniverse "dynamic attribute" (docs/formats/particle-universe.md): a number, or <c>dyn_random</c> (uniform between
-/// <c>min</c> and <c>max</c>, drawn when read), <c>dyn_curved_linear</c> / <c>dyn_curved_spline</c> (control points (x, y), read at
-/// an x such as the particle's life fraction) or <c>dyn_oscillate</c> (<c>base + amplitude · wave(frequency · x + phase)</c>).
-/// Immutable; <see cref="Evaluate"/> takes the random source so a seeded simulation stays deterministic.
+/// A ParticleUniverse "dynamic attribute" (docs/formats/particle-universe.md): a number, or <c>dyn_random</c> (uniform between <c>min</c> and
+/// <c>max</c>, drawn when read), <c>dyn_curved_linear</c> / <c>dyn_curved_spline</c> (control points (x, y), read at an x such as the particle's life
+/// fraction) or <c>dyn_oscillate</c> (<c>base + amplitude · wave(frequency · x + phase)</c>). Immutable; <see cref="Evaluate"/> takes the random
+/// source so a seeded simulation stays deterministic.
 /// </summary>
 public sealed class PuDynamic
 {
     public PuDynamicKind Kind { get; }
-    /// <summary>Fixed: the value. Random: the minimum. Oscillate: the base.</summary>
+    /// <summary>
+    /// Fixed: the value. Random: the minimum. Oscillate: the base.
+    /// </summary>
     public float A { get; }
-    /// <summary>Random: the maximum. Oscillate: the amplitude.</summary>
+    /// <summary>
+    /// Random: the maximum. Oscillate: the amplitude.
+    /// </summary>
     public float B { get; }
-    /// <summary>The control points, sorted by x.</summary>
+    /// <summary>
+    /// The control points, sorted by x.
+    /// </summary>
     public IReadOnlyList<Vector2> Points { get; }
     public float Frequency { get; }
     public float Phase { get; }
-    /// <summary>Oscillate: a square wave instead of a sine.</summary>
+    /// <summary>
+    /// Oscillate: a square wave instead of a sine.
+    /// </summary>
     public bool Square { get; }
 
     PuDynamic(PuDynamicKind kind, float a, float b, Vector2[]? points = null, float frequency = 0, float phase = 0, bool square = false)
@@ -38,7 +46,9 @@ public sealed class PuDynamic
 
     public bool IsFixed => Kind == PuDynamicKind.Fixed;
 
-    /// <summary>The smallest and largest value the attribute can take (random: its range; curves: their control points; oscillate: base ± amplitude).</summary>
+    /// <summary>
+    /// The smallest and largest value the attribute can take (random: its range; curves: their control points; oscillate: base ± amplitude).
+    /// </summary>
     public (float Min, float Max) Range => Kind switch
     {
         PuDynamicKind.Fixed => (A, A),
@@ -47,7 +57,10 @@ public sealed class PuDynamic
         _ => Points.Count == 0 ? (0, 0) : (Points.Min(p => p.Y), Points.Max(p => p.Y)),
     };
 
-    /// <summary>The value at <paramref name="x"/> (ignored by fixed and random values); <paramref name="random"/> is read by <c>dyn_random</c> only (null: the middle).</summary>
+    /// <summary>
+    /// The value at <paramref name="x"/> (ignored by fixed and random values); <paramref name="random"/> is read by <c>dyn_random</c> only (null: the
+    /// middle).
+    /// </summary>
     public float Evaluate(float x, Random? random = null)
     {
         switch (Kind)

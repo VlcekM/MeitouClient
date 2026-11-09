@@ -1,6 +1,8 @@
 namespace Meitou.Data.Gameplay;
 
-/// <summary>Reading a field that the data may hold as a float or as an int; a null record reads as an empty one (every field missing).</summary>
+/// <summary>
+/// Reading a field that the data may hold as a float or as an int; a null record reads as an empty one (every field missing).
+/// </summary>
 internal static class RecordReading
 {
     public static float Float(GameRecord? r, string key, float fallback) =>
@@ -13,10 +15,15 @@ internal static class RecordReading
         r is null ? fallback : r.Bools.TryGetValue(key, out bool v) ? v : r.Ints.TryGetValue(key, out int n) ? n != 0 : fallback;
 }
 
-/// <summary>Where the game's CONSTANTS live, for the readers of <see cref="GameConstants"/> and <see cref="Combat.CombatConstants"/>.</summary>
+/// <summary>
+/// Where the game's CONSTANTS live, for the readers of <see cref="GameConstants"/> and <see cref="Combat.CombatConstants"/>.
+/// </summary>
 internal static class ConstantsRecord
 {
-    /// <summary>The record named <c>GLOBAL CONSTANTS</c>, else the first CONSTANTS record, else null.</summary>
+    /// <summary>
+    /// The record named <c>GLOBAL CONSTANTS</c>, else the first CONSTANTS record, else null.
+    /// </summary>
     public static GameRecord? Find(GameDatabase db) =>
-        db.OfType(Fcs.FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS") ?? db.OfType(Fcs.FcsRecordType.Constants).FirstOrDefault();
+        db.OfType(Fcs.FcsRecordType.Constants).FirstOrDefault(r => r.BaseName == "GLOBAL CONSTANTS")
+        ?? db.OfType(Fcs.FcsRecordType.Constants).FirstOrDefault();
 }

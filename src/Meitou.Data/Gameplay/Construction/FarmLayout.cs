@@ -5,35 +5,49 @@ using Meitou.Data.World;
 namespace Meitou.Data.Gameplay.Construction;
 
 /// <summary>
-/// A FARM_PART of a farm's <c>plants</c> list (docs/game/buildings-production.md "Farm plants"): a crop mesh, its share of the plants (<paramref name="Group"/> v0,
-/// <paramref name="Weight"/> v1) and how it grows: scale and height offset run from start to end over the plant's growth after <paramref name="Delay"/>.
+/// A FARM_PART of a farm's <c>plants</c> list (docs/game/buildings-production.md "Farm plants"): a crop mesh, its share of the plants
+/// (<paramref name="Group"/> v0, <paramref name="Weight"/> v1) and how it grows: scale and height offset run from start to end over the plant's
+/// growth after <paramref name="Delay"/>.
 /// </summary>
-public sealed record FarmPart(GameRecord Record, string Mesh, GameRecord? Material, int Group, int Weight, float ScaleStart, float ScaleEnd, float ScaleVariance,
+public sealed record FarmPart(
+    GameRecord Record, string Mesh, GameRecord? Material, int Group, int Weight, float ScaleStart, float ScaleEnd, float ScaleVariance,
     float OffsetStart, float OffsetEnd, float Delay)
 {
-    /// <summary>Neither scale nor offset changes: the part stays when harvested, does not sink or tint when dying and is darkened rather than lightened.</summary>
+    /// <summary>
+    /// Neither scale nor offset changes: the part stays when harvested, does not sink or tint when dying and is darkened rather than lightened.
+    /// </summary>
     public bool Static => ScaleStart == ScaleEnd && OffsetStart == OffsetEnd;
 
-    public static FarmPart From(GameDatabase db, GameRecord part, int group, int weight) => new(part, part.Filenames.GetValueOrDefault("mesh") ?? "",
-        part.GetReferences("material") is [var m, ..] ? WorldObjectLayout.ResolveCollection(db, db.Find(m.TargetStringId) is { Type: FcsRecordType.MaterialSpec } spec ? spec : null, part.StringId) : null,
-        group, weight, part.GetFloat("scale start"), part.GetFloat("scale end"), part.GetFloat("scale variance"), part.GetFloat("offset start"), part.GetFloat("offset end"), part.GetFloat("delay"));
+    public static FarmPart From(GameDatabase db, GameRecord part, int group, int weight) => new(
+        part, part.Filenames.GetValueOrDefault("mesh") ?? "",
+        part.GetReferences("material") is [var m, ..]
+            ? WorldObjectLayout.ResolveCollection(
+                db, db.Find(m.TargetStringId) is { Type: FcsRecordType.MaterialSpec } spec ? spec : null, part.StringId)
+            : null,
+        group, weight, part.GetFloat("scale start"), part.GetFloat("scale end"), part.GetFloat("scale variance"),
+        part.GetFloat("offset start"), part.GetFloat("offset end"), part.GetFloat("delay"));
 }
 
-/// <summary>One mesh of a plant: the plant's index, the <see cref="FarmData.Parts"/> index and the plant's roll U[0, 1] (its yaw and size variance).</summary>
+/// <summary>
+/// One mesh of a plant: the plant's index, the <see cref="FarmData.Parts"/> index and the plant's roll U[0, 1] (its yaw and size variance).
+/// </summary>
 public readonly record struct FarmSubPlant(int Plant, int Part, float Random);
 
-/// <summary>A farm's plants: their world positions and meshes (one per <c>plants</c> group).</summary>
+/// <summary>
+/// A farm's plants: their world positions and meshes (one per <c>plants</c> group).
+/// </summary>
 public sealed record FarmPlants(Vector3[] Positions, FarmSubPlant[] Meshes);
 
 /// <summary>
-/// Where a farm's plants stand and how they look as they grow (docs/game/buildings-production.md "Farm plants"; <b>Observed</b>, <c>FarmBuilding</c> layout <c>FUN_1400e6230</c>,
-/// part counts <c>FUN_1400e7a70</c>, growth <c>FUN_1400df360</c>, shader <c>farm_vs</c>). The game rolls unseeded; here a seed keeps a farm's layout stable.
+/// Where a farm's plants stand and how they look as they grow (docs/game/buildings-production.md "Farm plants"; <b>Observed</b>, <c>FarmBuilding</c>
+/// layout <c>FUN_1400e6230</c>, part counts <c>FUN_1400e7a70</c>, growth <c>FUN_1400df360</c>, shader <c>farm_vs</c>). The game rolls unseeded; here
+/// a seed keeps a farm's layout stable.
 /// </summary>
 public static class FarmLayout
 {
     /// <summary>
-    /// The number of plants: a grid (layout 0) has <c>across</c> = round(sqrt(amount) x aspect) (at least 1) columns of amount / across plants, which can be fewer than
-    /// <c>amount</c>; the other layouts have <c>amount</c>.
+    /// The number of plants: a grid (layout 0) has <c>across</c> = round(sqrt(amount) x aspect) (at least 1) columns of amount / across plants, which
+    /// can be fewer than <c>amount</c>; the other layouts have <c>amount</c>.
     /// </summary>
     public static int Count(FarmData farm)
     {
@@ -44,7 +58,10 @@ public static class FarmLayout
 
     static int Across(FarmData farm) => Math.Max(1, (int)(MathF.Sqrt(farm.Plants) * farm.Aspect + 0.5));
 
-    /// <summary>How many plants each part gets: amount x weight / (its group's total weight), rounded; what rounding leaves over goes to the group's last part with more than one.</summary>
+    /// <summary>
+    /// How many plants each part gets: amount x weight / (its group's total weight), rounded; what rounding leaves over goes to the group's last part
+    /// with more than one.
+    /// </summary>
     public static int[] PartCounts(FarmData farm)
     {
         var counts = new int[farm.Parts.Count];
@@ -66,8 +83,8 @@ public static class FarmLayout
     }
 
     /// <summary>
-    /// Lays out the plants of a farm at <paramref name="position"/> turned by <paramref name="rotation"/>; outdoors each stands on <paramref name="ground"/> (x, z).
-    /// Every plant gets one mesh per group, drawn without replacement from the <see cref="PartCounts"/>.
+    /// Lays out the plants of a farm at <paramref name="position"/> turned by <paramref name="rotation"/>; outdoors each stands on
+    /// <paramref name="ground"/> (x, z). Every plant gets one mesh per group, drawn without replacement from the <see cref="PartCounts"/>.
     /// </summary>
     public static FarmPlants Plant(FarmData farm, Vector3 position, Quaternion rotation, Func<float, float, float> ground, uint seed)
     {
@@ -104,12 +121,15 @@ public static class FarmLayout
         else
         {
             float w = MathF.Sqrt(n) * farm.Aspect * s, d = MathF.Sqrt(n) / farm.Aspect * s;
-            for (int i = 0; i < n; i++) positions.Add(position + new Vector3(U() * w - w * 0.5f, 0, U() * d - d * 0.5f));
+            for (int i = 0; i < n; i++)
+                positions.Add(position + new Vector3(U() * w - w * 0.5f, 0, U() * d - d * 0.5f));
         }
         if (!farm.Inside)
-            for (int i = 0; i < positions.Count; i++) positions[i] = positions[i] with { Y = ground(positions[i].X, positions[i].Z) };
+            for (int i = 0; i < positions.Count; i++)
+                positions[i] = positions[i] with { Y = ground(positions[i].X, positions[i].Z) };
 
-        // Each plant, per group: a roll in [0, amount) walks the parts (from the first, round twice at most) taking off their counts; the first part of the group
+        // Each plant, per group: a roll in [0, amount) walks the parts (from the first, round twice at most) taking off their counts; the first part
+        // of the group
         // the roll has gone below 0 at that still has plants to give is chosen.
         int[] counts = PartCounts(farm), left = (int[])counts.Clone();
         var groups = farm.Parts.Select(p => p.Group).Distinct().Where(g => counts.Where((_, i) => farm.Parts[i].Group == g).Sum() != 0).ToArray();
@@ -130,10 +150,11 @@ public static class FarmLayout
     }
 
     /// <summary>
-    /// A plant mesh's world transform at <paramref name="growth"/> (the plant's) and <paramref name="death"/> (the farm's <c>plant death</c>), or null when it is not drawn
-    /// (harvested, growth below -1, unless the part is <see cref="FarmPart.Static"/>). f = (clamp01(growth) - delay) / (1 - delay); scale = lerp(scale start, scale end, f)
-    /// x (1 + (U - 0.5) x scale variance); height offset = lerp(offset start, offset end, f), less death² x <paramref name="height"/> (the tallest part mesh's top) when it is not static.
-    /// The yaw is the roll x 37 radians, the game's basis (sin, 0, cos).
+    /// A plant mesh's world transform at <paramref name="growth"/> (the plant's) and <paramref name="death"/> (the farm's <c>plant death</c>), or
+    /// null when it is not drawn (harvested, growth below -1, unless the part is <see cref="FarmPart.Static"/>). f = (clamp01(growth) - delay) / (1 -
+    /// delay); scale = lerp(scale start, scale end, f) x (1 + (U - 0.5) x scale variance); height offset = lerp(offset start, offset end, f), less
+    /// death² x <paramref name="height"/> (the tallest part mesh's top) when it is not static. The yaw is the roll x 37 radians, the game's basis
+    /// (sin, 0, cos).
     /// </summary>
     public static Matrix4x4? Transform(FarmPart part, Vector3 position, float random, float growth, float death, float height)
     {
@@ -154,8 +175,8 @@ public static class FarmLayout
     }
 
     /// <summary>
-    /// A plant mesh's colour (<c>farm_vs</c>): lerp(white, <c>death colour</c>, saturate(d / <c>death threshold</c> x 0.8)) plus 0.1 x the roll, for a
-    /// <see cref="FarmPart.Static"/> part white less 0.1 x the roll with no death tint.
+    /// A plant mesh's colour (<c>farm_vs</c>): lerp(white, <c>death colour</c>, saturate(d / <c>death threshold</c> x 0.8)) plus 0.1 x the roll, for
+    /// a <see cref="FarmPart.Static"/> part white less 0.1 x the roll with no death tint.
     /// </summary>
     public static Vector3 Tint(FarmData farm, FarmPart part, float random, float death)
     {

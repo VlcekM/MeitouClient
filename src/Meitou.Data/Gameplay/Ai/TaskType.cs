@@ -3,8 +3,8 @@ namespace Meitou.Data.Gameplay.Ai;
 /// <summary>
 /// The game's <c>taskType</c>: the <c>enum</c> field of an AI_TASK record and the number the AI, the Tasker factory and the player's context-menu
 /// verbs key on (docs/game/ai-tasks.md "taskType to Task class", Verified: names from <c>fcs_enums.def</c>, numbers as the record values and the
-/// exe's tables use them). 0 is the enum's first entry, which no record uses and no table names here (<see cref="None"/>); 289 and 290 exist in
-/// the exe's tables without a name (Unknown why).
+/// exe's tables use them). 0 is the enum's first entry, which no record uses and no table names here (<see cref="None"/>); 289 and 290 exist in the
+/// exe's tables without a name (Unknown why).
 /// </summary>
 public enum TaskType
 {

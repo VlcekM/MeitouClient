@@ -3,9 +3,13 @@ namespace Meitou.Data.Ogre;
 public enum OgreScriptTokenType
 {
     Word,
-    /// <summary>A quoted phrase; the lexeme still includes the quotes.</summary>
+    /// <summary>
+    /// A quoted phrase; the lexeme still includes the quotes.
+    /// </summary>
     Quote,
-    /// <summary>A <c>$name</c> variable reference; the lexeme includes the <c>$</c>.</summary>
+    /// <summary>
+    /// A <c>$name</c> variable reference; the lexeme includes the <c>$</c>.
+    /// </summary>
     Variable,
     LeftBrace,
     RightBrace,
@@ -18,7 +22,9 @@ public sealed record OgreScriptToken(OgreScriptTokenType Type, string Lexeme, st
     public override string ToString() => $"{Type} '{Lexeme}' ({File}:{Line})";
 }
 
-/// <summary>A script error that stops a whole file, as an exception in Ogre does (lexer and parser errors).</summary>
+/// <summary>
+/// A script error that stops a whole file, as an exception in Ogre does (lexer and parser errors).
+/// </summary>
 public sealed class OgreScriptException(string message, string file, int line)
     : FormatException($"{file}({line}): {message}")
 {
@@ -27,16 +33,16 @@ public sealed class OgreScriptException(string message, string file, int line)
 }
 
 /// <summary>
-/// Splits an Ogre script (<c>.material</c>, <c>.program</c>, <c>.compositor</c>...) into tokens. Follows the
-/// state machine of Ogre's ScriptLexer (MIT), including its quirks; see docs/formats/ogre-material.md.
+/// Splits an Ogre script (<c>.material</c>, <c>.program</c>, <c>.compositor</c>...) into tokens. Follows the state machine of Ogre's ScriptLexer
+/// (MIT), including its quirks; see docs/formats/ogre-material.md.
 /// </summary>
 public static class OgreScriptLexer
 {
     enum State { Ready, Comment, MultiComment, Word, Quote, Variable, PossibleComment }
 
     /// <summary>
-    /// Script files are read byte for byte (Latin-1), as Ogre does: no encoding or BOM handling. A few
-    /// base-game files contain non-ASCII bytes in comments.
+    /// Script files are read byte for byte (Latin-1), as Ogre does: no encoding or BOM handling. A few base-game files contain non-ASCII bytes in
+    /// comments.
     /// </summary>
     public static string ReadText(string path) => System.Text.Encoding.Latin1.GetString(File.ReadAllBytes(Content.GameFiles.Resolve(path)));
 
@@ -82,10 +88,26 @@ public static class OgreScriptLexer
             switch (state)
             {
                 case State.Ready:
-                    if (c == '/' && lastc == '/') { lexeme.Clear(); state = State.Comment; }
-                    else if (c == '*' && lastc == '/') { lexeme.Clear(); state = State.MultiComment; }
-                    else if (c == '"') { lexeme.Clear().Append(c); state = State.Quote; }
-                    else if (c == '$') { lexeme.Clear().Append(c); state = State.Variable; }
+                    if (c == '/' && lastc == '/')
+                    {
+                        lexeme.Clear();
+                        state = State.Comment;
+                    }
+                    else if (c == '*' && lastc == '/')
+                    {
+                        lexeme.Clear();
+                        state = State.MultiComment;
+                    }
+                    else if (c == '"')
+                    {
+                        lexeme.Clear().Append(c);
+                        state = State.Quote;
+                    }
+                    else if (c == '$')
+                    {
+                        lexeme.Clear().Append(c);
+                        state = State.Variable;
+                    }
                     else if (IsNewline(c)) EmitChar(c);
                     else if (!IsWhitespace(c))
                     {
@@ -96,15 +118,29 @@ public static class OgreScriptLexer
                     }
                     break;
                 case State.Comment:
-                    if (IsNewline(c)) { EmitChar(c); state = State.Ready; }
+                    if (IsNewline(c))
+                    {
+                        EmitChar(c);
+                        state = State.Ready;
+                    }
                     break;
                 case State.MultiComment:
                     // Newlines inside a block comment produce no token.
                     if (c == '/' && lastc == '*') state = State.Ready;
                     break;
                 case State.PossibleComment:
-                    if (c == '/' && lastc == '/') { lexeme.Clear(); state = State.Comment; break; }
-                    if (c == '*' && lastc == '/') { lexeme.Clear(); state = State.MultiComment; break; }
+                    if (c == '/' && lastc == '/')
+                    {
+                        lexeme.Clear();
+                        state = State.Comment;
+                        break;
+                    }
+                    if (c == '*' && lastc == '/')
+                    {
+                        lexeme.Clear();
+                        state = State.MultiComment;
+                        break;
+                    }
                     state = State.Word;
                     WordOrVariable(c);
                     break;
@@ -116,7 +152,12 @@ public static class OgreScriptLexer
                     if (c != '\\')
                     {
                         if (c == '"' && lastc == '\\') lexeme.Append(c);
-                        else if (c == '"') { lexeme.Append(c); Emit(); state = State.Ready; }
+                        else if (c == '"')
+                        {
+                            lexeme.Append(c);
+                            Emit();
+                            state = State.Ready;
+                        }
                         else if (lastc == '\\') lexeme.Append('\\').Append(c);
                         else lexeme.Append(c);
                     }
