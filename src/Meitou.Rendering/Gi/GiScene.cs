@@ -205,6 +205,7 @@ internal sealed unsafe class GiScene : IDisposable
         objectCasters.Clear();
         MovingObjects = 0;
         movingNames.Clear();
+        movingSpheres.Clear();
         BuiltThisFrame = 0;
         seg = null;
         // With the pass meter (MEITOU_PASS_STATS=1) the native list is cut after its barrier and before the top level, to time the barrier, the bottom-level builds and the top level apart.
@@ -372,6 +373,15 @@ internal sealed unsafe class GiScene : IDisposable
     /// <summary>How many objects of this frame's scene have moved in the last second, and (debug) their meshes.</summary>
     public int MovingObjects { get; private set; }
     readonly List<string> movingNames = [];
+    readonly List<(Vector3 Centre, float Radius)> movingSpheres = [];
+
+    /// <summary>What moves in this frame's scene, characters and objects, as the spheres it fits in.</summary>
+    public void CollectMovers(List<(Vector3 Centre, float Radius)> into)
+    {
+        people?.CollectSpheres(into);
+        into.AddRange(movingSpheres);
+    }
+
     public string MovingDescribe => string.Join(", ", movingNames.GroupBy(n => n).OrderByDescending(g => g.Count()).Take(6).Select(g => $"{g.Key} x{g.Count()}"));
 
     /// <summary>How many characters the traced scene holds this frame.</summary>
@@ -414,6 +424,7 @@ internal sealed unsafe class GiScene : IDisposable
         if (moving)
         {
             MovingObjects++;
+            movingSpheres.Add((inst.Centre, inst.Radius));
             if (movingNames.Count < 64) movingNames.Add(System.IO.Path.GetFileName(inst.Placed.MeshPath));
         }
         else objectCasters.Add((casterHash, inst.Centre, inst.Radius));

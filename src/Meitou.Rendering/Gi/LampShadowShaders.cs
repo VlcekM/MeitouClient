@@ -88,7 +88,7 @@ static class LampShadowShaders
     /// One ray per picked lamp, to its centre: the same every frame (no noise for the upscaler to average, nothing to trail). A lamp is a point of about a decimetre, so its
     /// shadows are near hard.
     /// </summary>
-    static readonly string Rays = $$"""
+    static readonly string BlockerRays = $$"""
         // How far along the ray its blocker is (0: nothing between the surface and the lamp). Ends short of the lamp (its fixture) and at its reach; a lamp's owner is passed through.
         float lampBlocker(vec3 from, vec3 target, float reach, uint emitter)
         {
@@ -128,6 +128,9 @@ static class LampShadowShaders
             g /= len;
             return dot(g, n) < 0.0 ? -g : g;
         }
+        """;
+
+    static readonly string Rays = BlockerRays + $$"""
         // Per traced lamp, in the lamps' index order so a slot means one lamp across the neighbouring pixels: whether occluders block it (r, g; the filter softens these) and its light per
         // unit of albedo (totals), and the penumbra their blockers leave (a: world units, 0 none; PenumbraFilter). Each lamp is filtered apart: a mean of the light, or of one share of two
         // lamps together, follows the slopes of the ground and left them lit or mottled inside a shadow (a thin orange line along a wall's foot, a pale trail moving with a character).
@@ -182,6 +185,110 @@ static class LampShadowShaders
             return vec4(blocked, float(((pickLamp[0] + 1) * 37 + (picked > 1 ? (pickLamp[1] + 1) * 101 : 0)) % 1021), spread);
         }
 
+        """;
+
+    /// <summary>
+    /// One lamp's rays over an area of the screen (<c>uRect</c>: first x, y, one past the last x, y): whether what moves blocks it (<c>uLost</c> r; a the penumbra's radius at the receiver in world units, -1 no receiver) and
+    /// the light it gives per unit of albedo after the still world (<c>uTotal</c>). One lamp a pass: nothing limits how many a pixel takes, and the filter reads one lamp's flags.
+    /// </summary>
+    public static readonly string TraceOne = $$"""
+        #version 460
+        #extension GL_EXT_ray_query : require
+        #extension GL_EXT_buffer_reference : require
+        #extension GL_EXT_buffer_reference_uvec2 : require
+        #extension GL_EXT_scalar_block_layout : require
+        layout(local_size_x = 8, local_size_y = 8) in;
+        {{Meitou.Rendering.Gpu.BindlessTable.Declarations(1)}}
+
+        layout(set = 0, binding = 0) uniform sampler2D uNearDepth;
+        layout(set = 0, binding = 1) uniform usampler2D uAlbedo;
+        layout(set = 0, binding = 2) uniform accelerationStructureEXT uScene;
+        {{GiShaders.GeometryStruct}}
+        layout(set = 0, binding = 3, std430) readonly buffer Geometries { Geometry geometries[]; };
+        layout(set = 0, binding = 4, std140) uniform Params
+        {
+            vec4 uLightGrid;
+            vec3 uRight;    float uFootprint;   // a pixel's width at depth 1
+            vec3 uUp;       float uPhase;
+            vec3 uBack;     float pad0;
+            vec3 uGiEye;    float pad1;
+            vec3 uOrigin;   float pad2;         // of the traced scene
+            vec2 uNearPlanes;
+            vec2 uTan;
+            vec2 uFullSize;
+            vec2 uRayMask;      // x: the instances the rays see, y: the lamp
+            vec4 uRect;
+        };
+        layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D uLost;
+        layout(set = 0, binding = 9, rgba16f) uniform writeonly image2D uTotal;
+        layout(set = 0, binding = 11) uniform sampler2D uLampTiles;
+        layout(set = 0, binding = 6) uniform sampler2D uLightCells;
+        layout(set = 0, binding = 7) uniform sampler2D uLightIndex;
+        layout(set = 0, binding = 8) uniform sampler2D uLightData;
+        {{Constants}}{{LampShaders.Defines}}{{LampShaders.TileMapping}}{{LampShaders.TileVisibility}}
+        vec3 rankPlane;
+        vec3 oneLight = vec3(0.0);
+        uint oneEmitter = 0u;
+        float lampOneNote(int lamp, vec3 light, vec3 toLamp, float d, uint emitter)
+        {
+            oneEmitter = emitter;
+            oneLight = light * lampTileVisibility(lamp, toLamp, d, rankPlane);
+            return 1.0;
+        }
+        #define LAMP_ONLY int(uRayMask.y)
+        #define LAMP_VISIBILITY(world, n, toLamp, indoor, emitter) lampOneNote(lamp, radiance * diffuseNl, toLamp, d, emitter)
+        {{LampShaders.Lighting}}{{GiResolveShaders.ReconstructFunctions}}
+        {{GiShaders.OctDirection}}
+        {{GiShaders.HitBuffers}}
+        {{TracedSunShaders.CasterCutout}}
+        {{BlockerRays}}
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(uRect.xy);
+            if (px.x >= int(uRect.z) || px.y >= int(uRect.w)) return;
+            vec4 lost = vec4(0.0, 0.0, 0.0, -1.0);
+            vec3 total = vec3(0.0);
+            uvec4 surface = texelFetch(uAlbedo, px, 0);
+            float z = (surface.w & 256u) == 0u ? 0.0 : depthAt(px);
+            if (z > 0.0)
+            {
+                vec3 world = positionAt(px, z);
+                vec3 n = giOctDir(vec2(surface.xy) / 65535.0 * 2.0 - 1.0);
+                vec3 diffuse = vec3(0.0), specular = vec3(0.0);
+                rankPlane = lampPlane(px, world, n);
+                lampLight(world, n, normalize(uGiEye - world), 1.0, 1.0, diffuse, specular);
+                if (dot(oneLight, vec3(1.0)) > 0.0)
+                {
+                    int lamp = int(uRayMask.y);
+                    vec3 from = world - uOrigin + rankPlane * max(LAMP_MIN_BIAS, 2.0 * z * uFootprint);
+                    vec4 p = texelFetch(uLightData, ivec2(0, lamp), 0);
+                    vec3 target = p.xyz - uOrigin;
+                    float t = lampBlocker(from, target, p.w, oneEmitter);
+                    lost = t <= 0.0 ? vec4(0.0) : vec4(1.0, 0.0, 0.0, texelFetch(uLightData, ivec2(5, lamp), 0).x * t / max(length(target - from) - t, 1.0));
+                    total = oneLight * 3.14159265358979 * LAMP_DIFFUSE;
+                }
+            }
+            imageStore(uLost, px, lost);
+            imageStore(uTotal, px, vec4(total, 0.0));
+        }
+        """;
+
+    /// <summary>A lamp's filtered flag times its light, added to the sum of the lamps (<c>uSum</c>) over the area.</summary>
+    public const string TraceSum = """
+        #version 460
+        layout(local_size_x = 8, local_size_y = 8) in;
+        layout(set = 0, binding = 0) uniform sampler2D uFlag;
+        layout(set = 0, binding = 1) uniform sampler2D uLight;
+        layout(set = 0, binding = 2, rgba16f) uniform image2D uSum;
+        layout(set = 0, binding = 3, std140) uniform Params { vec4 uRect; };
+        void main()
+        {
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(uRect.xy);
+            if (px.x >= int(uRect.z) || px.y >= int(uRect.w)) return;
+            float flag = texelFetch(uFlag, px, 0).r;
+            if (flag <= 0.0) return;
+            imageStore(uSum, px, imageLoad(uSum, px) + vec4(flag * texelFetch(uLight, px, 0).rgb, 0.0));
+        }
         """;
 
     /// <summary>

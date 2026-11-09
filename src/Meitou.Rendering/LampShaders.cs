@@ -163,6 +163,9 @@ static class LampShaders
             {
                 int k = first + i;
                 int lamp = int(texelFetch(uLightIndex, ivec2(k % LAMP_INDEX_WIDTH, k / LAMP_INDEX_WIDTH), 0).r);
+                #ifdef LAMP_ONLY
+                if (lamp != LAMP_ONLY) continue;
+                #endif
                 vec4 p = texelFetch(uLightData, ivec2(0, lamp), 0);
                 vec3 toLamp = p.xyz - world;
                 float d = length(toLamp);

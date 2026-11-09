@@ -17,6 +17,9 @@ internal sealed partial class CharacterRenderer
     {
         public long Key;
         public Vector3 Anchor;
+        /// <summary>The sphere the character's pose fits in (the areas of the lamps' per-pixel rays).</summary>
+        public Vector3 Centre;
+        public float Radius;
         public uint BoneBase;
         public float Distance;
         public readonly List<RayPart> Parts = [];
@@ -61,7 +64,7 @@ internal sealed partial class CharacterRenderer
 
     void RayCharacterOf(in Live l, float distance, RayCharacter c)
     {
-        (c.Key, c.Anchor, c.BoneBase, c.Distance) = (l.Key, l.World.Translation, (uint)l.BoneBase, distance);
+        (c.Key, c.Anchor, c.BoneBase, c.Distance, c.Centre, c.Radius) = (l.Key, l.World.Translation, (uint)l.BoneBase, distance, l.Centre, l.Radius);
         c.Parts.Clear();
         // The parts are placed relative to the update's eye; relative to the anchor here, so the character's structure keeps its precision and its shape while it walks.
         var shift = partOrigin - c.Anchor;

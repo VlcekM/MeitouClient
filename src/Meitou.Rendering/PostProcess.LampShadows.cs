@@ -36,7 +36,6 @@ public sealed unsafe partial class PostProcess
         var (colour, depth, surface) = (sceneColour, sceneDepth, giAlbedo);
         if (!Options.LampShadows || GiResolve <= 0 || surface is null || colour is null || depth is null || !haveScene) return;
         if (scene?.Top is null || lamps is null || lamps.Grid.W <= 0 || !SupportsStorage(InternalFormat.Rgba16f)) return;
-        if (lamps.Tiles is not null && scene.CharactersShown == 0 && scene.MovingObjects == 0) return;   // with the tiles the rays are for what moves alone
 
         MarkScene();
         var lost = lampLost ??= MakeLampLost();
@@ -46,12 +45,18 @@ public sealed unsafe partial class PostProcess
         var filtered = lampFiltered ??= MakeLampLost();
         CloseSegment();
         var trace = lampShadowTrace ??= new Gi.LampShadowPass(Gpu, Options.LampShadowLamps);
-        trace.Run(scene, lamps, depth.Texture, surface.Texture, lost.Texture, total.Texture, total1.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye);
+        // With the tiles the rays are for what moves alone, a lamp at a time: total1 sums their lost light, filtered ends as 1.
+        bool perLamp = lamps.Tiles is not null;
+        if (perLamp)
+        {
+            if (!trace.RunPerLamp(scene, lamps, depth.Texture, surface.Texture, lost.Texture, total.Texture, total1.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye)) return;
+        }
+        else trace.Run(scene, lamps, depth.Texture, surface.Texture, lost.Texture, total.Texture, total1.Texture, scratch.Texture, filtered.Texture, LampShadowViewNow(), SceneToEye);
 
         var a = lampShadowApply ??= new LampShadowApplyPass(Gpu);
         SetGiView(a);
         Bind(a.P, a.Lost, filtered);
-        Bind(a.P, a.Total, total);
+        Bind(a.P, a.Total, perLamp ? total1 : total);
         Bind(a.P, a.Total1, total1);
         a.P.ApplyGlobals();   // the haze's uniforms
         Draw(a.P, colour.Attachment, colour.Format, width, height, width, height, LampShadowState);

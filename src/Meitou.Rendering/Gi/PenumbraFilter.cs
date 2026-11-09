@@ -37,6 +37,7 @@ sealed unsafe class PenumbraFilter : IDisposable
             mat4 inverse;      // NDC, jittered as the frame was -> position relative to the eye
             vec4 size;         // width, height, a pixel's width per unit of depth, the pass (0 along rows, then 1 along columns)
             vec4 options;      // x: the blue channel names what the channels hold; only taps with the pixel's own name are read
+            vec4 area;         // the pixels filtered: first x, y, one past the last x, y
         } p;
 
         vec3 pointAt(ivec2 px)
@@ -98,8 +99,8 @@ sealed unsafe class PenumbraFilter : IDisposable
 
         void main()
         {
-            ivec2 px = ivec2(gl_GlobalInvocationID.xy);
-            if (!inside(px)) return;
+            ivec2 px = ivec2(gl_GlobalInvocationID.xy) + ivec2(p.area.xy);
+            if (!inside(px) || px.x >= int(p.area.z) || px.y >= int(p.area.w)) return;
             vec4 c = texelFetch(uIn, px, 0);
             ownName = c.b;
             bool rows = p.size.w < 0.5;
@@ -139,7 +140,7 @@ sealed unsafe class PenumbraFilter : IDisposable
     struct Params
     {
         public Matrix4x4 Inverse;
-        public Vector4 Size, Options;
+        public Vector4 Size, Options, Area;
     }
 
     readonly GpuContext ctx;
@@ -167,15 +168,31 @@ sealed unsafe class PenumbraFilter : IDisposable
     /// <param name="named">The blue channel names what the others hold (the lamps' pair): only taps with the pixel's name are read.</param>
     public void Run(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, bool named = false)
     {
-        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, named);
+        var all = new Vector4(0, 0, t.Width, t.Height);
+        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, named, all);
         cmd.Barrier(BarrierBatch.Full);
-        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, named);
+        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, named, all);
         cmd.Barrier(BarrierBatch.Full);
     }
 
-    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named)
+    /// <summary>How far past a filtered area the rows' pass reads (the search and the widest radius), and the columns' pass.</summary>
+    public const int RowMargin = (int)(Search + MaxRadius) + 2, ColumnMargin = (int)MaxRadius;
+
+    /// <summary>
+    /// Both passes over <paramref name="area"/> alone (first x, y, one past the last x, y): the raw result must hold <see cref="RowMargin"/> + <see cref="ColumnMargin"/> pixels round it; the output holds only the area.
+    /// </summary>
+    public void RunArea(CommandList cmd, in PenumbraTargets t, in Matrix4x4 inverse, float pixelSlope, Vector4 area)
     {
-        var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, 0, 0, 0) };
+        var rows = new Vector4(MathF.Max(area.X - ColumnMargin, 0), MathF.Max(area.Y - ColumnMargin, 0), MathF.Min(area.Z + ColumnMargin, t.Width), MathF.Min(area.W + ColumnMargin, t.Height));
+        Pass(cmd, t, t.Raw, t.Scratch, inverse, pixelSlope, 0, false, rows);
+        cmd.Barrier(BarrierBatch.Full);
+        Pass(cmd, t, t.Scratch, t.Filtered, inverse, pixelSlope, 1, false, area);
+        cmd.Barrier(BarrierBatch.Full);
+    }
+
+    void Pass(CommandList cmd, in PenumbraTargets t, GpuTexture input, GpuTexture output, in Matrix4x4 inverse, float pixelSlope, int pass, bool named, Vector4 area)
+    {
+        var parameters = new Params { Inverse = inverse, Size = new Vector4(t.Width, t.Height, pixelSlope, pass), Options = new Vector4(named ? 1 : 0, 0, 0, 0), Area = area };
         var constants = ctx.Frame.Constants.Write<Params>(new ReadOnlySpan<Params>(&parameters, 1), 256);
         DescriptorImageInfo Sampled(GpuTexture texture) => new(ctx.Device.SamplerAt(sampler.Index), ctx.Device.ViewAt(texture.View().Index), ImageLayout.General);
         var images = stackalloc DescriptorImageInfo[4];
@@ -190,7 +207,7 @@ sealed unsafe class PenumbraFilter : IDisposable
         writes[4] = new WriteDescriptorSet { SType = StructureType.WriteDescriptorSet, DstBinding = 5, DescriptorCount = 1, DescriptorType = DescriptorType.UniformBuffer, PBufferInfo = &uniform };
         cmd.BindPipeline(pipeline);
         cmd.PushDescriptors(program, 0, new ReadOnlySpan<WriteDescriptorSet>(writes, 5), GpuBindPoint.Compute);
-        cmd.Dispatch((uint)((t.Width + 7) / 8), (uint)((t.Height + 7) / 8));
+        cmd.Dispatch((uint)(((int)(area.Z - area.X) + 7) / 8), (uint)(((int)(area.W - area.Y) + 7) / 8));
     }
 
     static WriteDescriptorSet Image(uint binding, DescriptorType type, DescriptorImageInfo* info) =>

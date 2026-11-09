@@ -109,6 +109,8 @@ internal sealed class WorldLamps : IDisposable
     /// <summary>The textures of this frame's slot, for a compute pass that binds them itself (the probe trace).</summary>
     internal (GpuTexture Cells, GpuTexture Index, GpuTexture Data) Current => (cells[slot], index[slot], data[slot]);
     internal GpuSampler NearestSampler => nearest;
+    /// <summary>The lamp in row <paramref name="k"/> of this frame's data (<see cref="InGrid"/> rows).</summary>
+    internal WorldLight RowLamp(int k) => Lamp(near[k].Lamp);
     /// <summary>The lamps' tiles, for a compute pass that binds them itself.</summary>
     internal GpuTexture TilesTexture => Tiles?.Atlas ?? noTiles;
     /// <summary>This frame's <c>uLightGrid</c> (w 0: no lamps).</summary>
