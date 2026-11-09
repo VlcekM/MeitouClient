@@ -17,9 +17,9 @@ namespace Meitou.Simulation.Combat;
 public static class RangedTuning
 {
     /// <summary>
-    /// Height of the barrel above the feet and how far ahead of the body it is (units): the original fires from the crossbow's <c>barrel pos</c> on the posed
-    /// hands (docs/game/combat.md "Shot origin"), which the simulation does not pose; a human's in-hand muzzle measured 13 to 15 up and 6 to 9 ahead in Meitou's
-    /// renderer.
+    /// Height of the barrel above the feet and how far ahead of the body it is (units): the original fires from the crossbow's <c>barrel pos</c> on
+    /// the posed hands (docs/game/combat.md "Shot origin"), which the simulation does not pose; a human's in-hand muzzle measured 13 to 15 up and 6
+    /// to 9 ahead in Meitou's renderer.
     /// </summary>
     public const float BarrelHeight = 15, BarrelForward = 8;
 
@@ -29,8 +29,8 @@ public static class RangedTuning
     public const float AimHeight = 13;
 
     /// <summary>
-    /// While closing in, the ray towards the target must meet the terrain or a building beyond the target this long (seconds) before the shooter stops and aims
-    /// again (<c>FUN_140438c70</c>, <c>DAT_14168955c</c> 0.3).
+    /// While closing in, the ray towards the target must meet the terrain or a building beyond the target this long (seconds) before the shooter
+    /// stops and aims again (<c>FUN_140438c70</c>, <c>DAT_14168955c</c> 0.3).
     /// </summary>
     public const float ClearToAim = 0.3f;
 
@@ -45,8 +45,8 @@ public static class RangedTuning
     public const float ClosingRayHeight = 5;
 
     /// <summary>
-    /// How far the closing ray looks (units): the original's physics ray is unbounded (<c>raycastClosestShape</c> to <c>FLT_MAX</c>), Meitou's terrain and
-    /// buildings end somewhere.
+    /// How far the closing ray looks (units): the original's physics ray is unbounded (<c>raycastClosestShape</c> to <c>FLT_MAX</c>), Meitou's
+    /// terrain and buildings end somewhere.
     /// </summary>
     public const float RayReach = 2000;
 
@@ -71,8 +71,8 @@ public static class RangedTuning
     public const float MaxBodyRadius = 30;
 
     /// <summary>
-    /// The largest horizontal reach of a click hull from its feet the grid queries allow for (the biggest hulls, Leviathan and Big-Bones, are 75 square: 53 corner
-    /// to centre; an animal's size factor can grow it).
+    /// The largest horizontal reach of a click hull from its feet the grid queries allow for (the biggest hulls, Leviathan and Big-Bones, are 75
+    /// square: 53 corner to centre; an animal's size factor can grow it).
     /// </summary>
     public const float MaxHullReach = 80;
 }
@@ -230,8 +230,8 @@ public sealed partial class CombatSystem : IProjectileSource
         c.Position + new Vector3(MathF.Sin(c.Yaw) * RangedTuning.BarrelForward, RangedTuning.BarrelHeight, MathF.Cos(c.Yaw) * RangedTuning.BarrelForward);
 
     /// <summary>
-    /// The aim point (<c>FUN_140436d10</c>): the target's spine (here <see cref="RangedTuning.AimHeight"/> above its feet) plus its velocity times the bolt's
-    /// flight time over the distance from the barrel (the lead, <b>Verified</b> in the disassembly).
+    /// The aim point (<c>FUN_140436d10</c>): the target's spine (here <see cref="RangedTuning.AimHeight"/> above its feet) plus its velocity times
+    /// the bolt's flight time over the distance from the barrel (the lead, <b>Verified</b> in the disassembly).
     /// </summary>
     static Vector3 AimPoint(Vector3 barrel, in CharacterHot target, float shotSpeed)
     {
@@ -242,9 +242,10 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Half the size of a character's click hull (<c>CharMovement +0x3b0</c>, a kinematic PhysX box in collision group 0 that the rays of bolts and of the line of
-    /// fire hit; built by <c>FUN_140661a70</c>, docs/game/combat.md "Line of fire and the hit shape"): the race's <c>hull size X, Y, Z</c>, Y = max(X, Z) while
-    /// it is not upright (prone state not 0), all times half the size factor (slot 0x390), Y also times the look's height (the appearance's
+    /// Half the size of a character's click hull (<c>CharMovement +0x3b0</c>, a kinematic PhysX box in collision group 0 that the rays of bolts and
+    /// of the line of fire hit; built by <c>FUN_140661a70</c>, docs/game/combat.md "Line of fire and the hit shape"): the race's <c>hull size X, Y,
+    /// Z</c>, Y = max(X, Z) while it is not upright (prone state not 0), all times half the size factor (slot 0x390), Y also times the look's height
+    /// (the appearance's
     /// <c>characterHeight</c>). The box is not turned with the character.
     /// </summary>
     internal static Vector3 HullHalf(CharacterCold c)
@@ -260,8 +261,8 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Where a segment from <paramref name="from"/> along <paramref name="seg"/> first enters a click hull standing on <paramref name="feet"/> (an axis-aligned box
-    /// of half size <paramref name="half"/>, its bottom at the feet), as a fraction of the segment in [0, 1].
+    /// Where a segment from <paramref name="from"/> along <paramref name="seg"/> first enters a click hull standing on <paramref name="feet"/> (an
+    /// axis-aligned box of half size <paramref name="half"/>, its bottom at the feet), as a fraction of the segment in [0, 1].
     /// </summary>
     internal static bool HitHull(Vector3 from, Vector3 seg, Vector3 feet, Vector3 half, out float t)
     {
@@ -276,8 +277,8 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Narrows [<paramref name="t0"/>, <paramref name="t1"/>] to where the segment's coordinate (start <paramref name="o"/>, change <paramref name="d"/>) is within
-    /// [lo, hi].
+    /// Narrows [<paramref name="t0"/>, <paramref name="t1"/>] to where the segment's coordinate (start <paramref name="o"/>, change
+    /// <paramref name="d"/>) is within [lo, hi].
     /// </summary>
     static bool Slab(float o, float d, float lo, float hi, ref float t0, ref float t1)
     {
@@ -304,8 +305,8 @@ public sealed partial class CombatSystem : IProjectileSource
         var oc = table.Cold(other);
         if (oc is null) return false;
 
-        // The original asks the character's enemy test (Character slot 125); the engine uses the faction relations, and without a table (hand-built worlds)
-        // another faction.
+        // The original asks the character's enemy test (Character slot 125); the engine uses the faction relations, and without a table (hand-built
+        // worlds) another faction.
         return CharacterFacts.RegardsEnemy(Relations, faction, oc.Faction);
     }
 
@@ -319,8 +320,9 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <summary>
     /// The fire decision's line of fire (<c>FUN_140437ad0</c>, docs/game/combat.md "Line of fire and the hit shape"): a ray from <paramref name="from"/> through
     /// <paramref name="to"/> (the original's is unbounded; here <paramref name="reach"/> long at least) and the first thing it meets of the click hulls, the terrain
-    /// and the buildings. A hull of one the shooter does not count an enemy holds the shot (2), any enemy's lets it go (1), the target's included; the terrain lets
-    /// it go (it names no object); a building closes in (0) when it is nearer the shooter than the target is (feet to feet), else lets it go; nothing met fires.
+    /// and the buildings. A hull of one the shooter does not count an enemy holds the shot (2), any enemy's lets it go (1), the target's included;
+    /// the terrain lets it go (it names no object); a building closes in (0) when it is nearer the shooter than the target is (feet to feet), else
+    /// lets it go; nothing met fires.
     /// </summary>
     int LineOfFire(World world, int self, int target, Vector3 from, Vector3 to, int faction, float reach)
     {
@@ -344,9 +346,9 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// The character whose click hull the segment enters first (the shooter's own left out), -1 for none, and where (<paramref name="at"/>, a fraction of the
-    /// segment). The grid is queried piece by piece from the start; a piece's query finds every hull entered within it, so a hull entered within the pieces done
-    /// ends the search.
+    /// The character whose click hull the segment enters first (the shooter's own left out), -1 for none, and where (<paramref name="at"/>, a
+    /// fraction of the segment). The grid is queried piece by piece from the start; a piece's query finds every hull entered within it, so a hull
+    /// entered within the pieces done ends the search.
     /// </summary>
     int FirstHull(World world, int self, Vector3 from, Vector3 seg, float length, out float at)
     {
@@ -389,8 +391,8 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <summary>
     /// A threat within <see cref="RetaliationSystem.ImmediateReach"/> (the planner's <c>iAmBeingMeleeAttacked immediate</c>, Character +0x2b0, recomputed by
     /// <c>FUN_1404378f0</c> over the threats list, <b>Verified</b>; docs/game/combat.md "Fight lifecycle and orders"): one of the senses' threats
-    /// (<see cref="SenseBlock.Threats"/>) by full 3D squared distance (strictly under the reach squared), not down (staying low or crawling still count), not in a
-    /// bed or cage, not carried, not getting up, and not behind a gate that is not open between them (<c>FUN_140598450</c>,
+    /// (<see cref="SenseBlock.Threats"/>) by full 3D squared distance (strictly under the reach squared), not down (staying low or crawling still
+    /// count), not in a bed or cage, not carried, not getting up, and not behind a gate that is not open between them (<c>FUN_140598450</c>,
     /// <see cref="Locks.LockSystem.NotBlocked"/>).
     /// </summary>
     internal bool ImmediateThreat(World world, int self)
@@ -424,10 +426,11 @@ public sealed partial class CombatSystem : IProjectileSource
         f.Weapon is { } w && !f.Unarmed ? HandHold.OfCategory(w.Data.AnimationCategory).Weapon : WeaponKinds.None;
 
     /// <summary>
-    /// Chooses crossbow or melee for a fighting character that carries a crossbow (the planner's desires, docs/game/combat.md "Fight lifecycle and orders",
-    /// melee or shooting): in Ranged mode (on for every NPC, the player's toggle for its characters) the crossbow while it has shots or ammunition and no threat is
-    /// within <see cref="RetaliationSystem.ImmediateReach"/>, melee otherwise; out of Ranged mode never the crossbow. A character without a crossbow is left alone.
-    /// A reload in progress is paused, not abandoned, when the controller stops or the fighter turns to melee: the original's reload timer and flag (controller
+    /// Chooses crossbow or melee for a fighting character that carries a crossbow (the planner's desires, docs/game/combat.md "Fight lifecycle and
+    /// orders", melee or shooting): in Ranged mode (on for every NPC, the player's toggle for its characters) the crossbow while it has shots or
+    /// ammunition and no threat is within <see cref="RetaliationSystem.ImmediateReach"/>, melee otherwise; out of Ranged mode never the crossbow. A
+    /// character without a crossbow is left alone. A reload in progress is paused, not abandoned, when the controller stops or the fighter turns to
+    /// melee: the original's reload timer and flag (controller
     /// <c>+0x78</c>, <c>+0x80</c>) are written only by the reload step and the constructor, so it resumes where it was the next time the crossbow is used
     /// (docs/game/combat.md "Turrets", fire gate). A fight without a target keeps the crossbow and the controller (its reload counts on); the fight's end stops it.
     /// </summary>
@@ -438,8 +441,8 @@ public sealed partial class CombatSystem : IProjectileSource
 
         if (!fighting)
         {
-            // Still in the fight without a target (the controller's state 3): the controller runs on, its reload with it (FUN_140438c70 sets the fire gate's flag
-            // before it looks for a target).
+            // Still in the fight without a target (the controller's state 3): the controller runs on, its reload with it (FUN_140438c70 sets the fire
+            // gate's flag before it looks for a target).
             if (s.Ranged && cold.InCombat && CanShoot(s, cold, x)) return;
             if (s.Ranged || s.RangedState != 0 || s.ClearTime != 0 || s.Steady != 0)
             {
@@ -457,8 +460,8 @@ public sealed partial class CombatSystem : IProjectileSource
         bool can = CanShoot(s, cold, x);
         if (s.Dry == can) s.Dry = !can;
 
-        // Ranged mode takes the crossbow however close the target is (between swings): melee is x0.1 against shooting's 1, and a threat within 40 refuses the
-        // shooting rows.
+        // Ranged mode takes the crossbow however close the target is (between swings): melee is x0.1 against shooting's 1, and a threat within 40
+        // refuses the shooting rows.
         bool rangedMode = Orders.RangedMode(cold);
 
         // Block does not stop it: neither the shooting desire (FUN_140598260) nor the gate reads isDefensiveMode.
@@ -485,11 +488,12 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// One tick of the ranged controller (<c>FUN_140438c70</c>, the reload <c>FUN_140437ce0</c>, the fire decision <c>FUN_140437ad0</c>; docs/game/combat.md
-    /// "Turrets" and "Line of fire and the hit shape"): reload when empty (one bolt taken at the end, through <see cref="ReloadEffect"/>), with a target or without
-    /// one (state 3, the reload runs on); out of range or with a building in the way, close in (the pursuit system walks) until the ray towards the target meets
-    /// something beyond it for <see cref="RangedTuning.ClearToAim"/>; in range, hold the aim for the steady time and fire (<see cref="FireEffect"/>) unless one it
-    /// does not count an enemy is first on the line. XP: crossbows and dexterity while reloading, crossbows and perception while aiming.
+    /// One tick of the ranged controller (<c>FUN_140438c70</c>, the reload <c>FUN_140437ce0</c>, the fire decision <c>FUN_140437ad0</c>;
+    /// docs/game/combat.md "Turrets" and "Line of fire and the hit shape"): reload when empty (one bolt taken at the end, through
+    /// <see cref="ReloadEffect"/>), with a target or without one (state 3, the reload runs on); out of range or with a building in the way, close in
+    /// (the pursuit system walks) until the ray towards the target meets something beyond it for <see cref="RangedTuning.ClearToAim"/>; in range,
+    /// hold the aim for the steady time and fire (<see cref="FireEffect"/>) unless one it does not count an enemy is first on the line. XP: crossbows
+    /// and dexterity while reloading, crossbows and perception while aiming.
     /// </summary>
     void TickRanged(World world, int i, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, int now, float dt)
     {
@@ -530,8 +534,9 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// The reload (<c>FUN_140437ce0</c>): an empty crossbow starts one of <see cref="RangedFormulas.ReloadTime"/> (none without ammunition: dry), counts it down
-    /// with crossbows and dexterity XP and at its end holds <c>num shots</c>, the aim steadied again; a reload cut off resumes where it stopped.
+    /// The reload (<c>FUN_140437ce0</c>): an empty crossbow starts one of <see cref="RangedFormulas.ReloadTime"/> (none without ammunition: dry),
+    /// counts it down with crossbows and dexterity XP and at its end holds <c>num shots</c>, the aim steadied again; a reload cut off resumes where
+    /// it stopped.
     /// </summary>
     void Reload(int i, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, float dt)
     {
@@ -597,9 +602,10 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// The closing ray (<c>FUN_140438c70</c> → <c>FUN_140435b40</c> with mask <c>0x87f9e04</c>: the terrain and the buildings, no characters): from the barrel
-    /// along the line between the two feet (both raised <see cref="RangedTuning.ClosingRayHeight"/>), it passes when it meets something farther from the shooter
-    /// than the target is (<c>FUN_1404346d0</c>). A ray that meets nothing does not pass. The original's ray is unbounded; here it ends
+    /// The closing ray (<c>FUN_140438c70</c> → <c>FUN_140435b40</c> with mask <c>0x87f9e04</c>: the terrain and the buildings, no characters): from
+    /// the barrel along the line between the two feet (both raised <see cref="RangedTuning.ClosingRayHeight"/>), it passes when it meets something
+    /// farther from the shooter than the target is (<c>FUN_1404346d0</c>). A ray that meets nothing does not pass. The original's ray is unbounded;
+    /// here it ends
     /// <see cref="RangedTuning.RayReach"/> on.
     /// </summary>
     bool ClosingRayPasses(World world, int i, int t, Vector3 barrel)
@@ -617,8 +623,8 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// Aiming in range (state 0): crossbows and perception XP, the steady time, then the line of fire (<see cref="LineOfFire"/>): clear fires, one not counted an
-    /// enemy first on it holds, a nearer building sends the shooter closer (<see cref="StartClosing"/>).
+    /// Aiming in range (state 0): crossbows and perception XP, the steady time, then the line of fire (<see cref="LineOfFire"/>): clear fires, one
+    /// not counted an enemy first on it holds, a nearer building sends the shooter closer (<see cref="StartClosing"/>).
     /// </summary>
     void Aim(World world, int i, int t, ref CombatSlot s, CharacterCold cold, EffectBuffer effects, Vector3 barrel, int now, float dt)
     {
@@ -663,9 +669,9 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// A shot (<c>FUN_14043a730</c>): from the barrel towards the aim point, tilted by u x D degrees (D the deviation cone); damage U[min, max) x h, range x h,
-    /// speed x (0.8 h + 0.2) with h the height factor; the friendly-fire avoidance from the shooter's skill. The bolt joins the list (flown from the next tick's
-    /// schedule).
+    /// A shot (<c>FUN_14043a730</c>): from the barrel towards the aim point, tilted by u x D degrees (D the deviation cone); damage U[min, max) x h,
+    /// range x h, speed x (0.8 h + 0.2) with h the height factor; the friendly-fire avoidance from the shooter's skill. The bolt joins the list
+    /// (flown from the next tick's schedule).
     /// </summary>
     void ApplyFire(World world, in Effect e)
     {
@@ -713,8 +719,8 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// The target of a shot notices the shooter (<c>FUN_14043a730</c> → <c>FUN_140999d50</c>): one of the player's characters that senses meets the shooter's
-    /// faction at once (docs/game/factions-squads-towns.md "Factions met").
+    /// The target of a shot notices the shooter (<c>FUN_14043a730</c> → <c>FUN_140999d50</c>): one of the player's characters that senses meets the
+    /// shooter's faction at once (docs/game/factions-squads-towns.md "Factions met").
     /// </summary>
     static void ShotAt(World world, int target, int faction)
     {
@@ -728,8 +734,8 @@ public sealed partial class CombatSystem : IProjectileSource
     /// <summary>
     /// Advances every bolt one tick, in the order they were fired (serial, against the last tick's positions, which is what the grid holds;
     /// <c>FUN_1404380e0</c>): a straight line while range is left, then the nose pitching down 8 degrees a second; the first click hull
-    /// (<see cref="HullHalf"/>) or the ground on the step is hit. A friend in the way is passed with the shooter's avoidance chance; the ground or a building
-    /// sticks the bolt (a grazing hit on the ground drops it). Stuck bolts stay up to <see cref="StuckLimit"/>.
+    /// (<see cref="HullHalf"/>) or the ground on the step is hit. A friend in the way is passed with the shooter's avoidance chance; the ground or a
+    /// building sticks the bolt (a grazing hit on the ground drops it). Stuck bolts stay up to <see cref="StuckLimit"/>.
     /// </summary>
     void FlyProjectiles(World world)
     {
@@ -849,8 +855,9 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// A bolt of <paramref name="mesh"/> has just stuck at index <paramref name="k"/>: over <see cref="StuckLimit"/> stuck bolts of that mesh, the one that flew
-    /// longest (the first of equals, the new bolt included) is removed (<c>FUN_14043acf0</c>). Returns the index the loop continues from.
+    /// A bolt of <paramref name="mesh"/> has just stuck at index <paramref name="k"/>: over <see cref="StuckLimit"/> stuck bolts of that mesh, the
+    /// one that flew longest (the first of equals, the new bolt included) is removed (<c>FUN_14043acf0</c>). Returns the index the loop continues
+    /// from.
     /// </summary>
     int TrimStuck(int k, string mesh)
     {
@@ -896,9 +903,9 @@ public sealed partial class CombatSystem : IProjectileSource
     #region Bolt hits
 
     /// <summary>
-    /// The bolt stays in the character it hit (<c>FUN_1406508d0</c>, <b>Observed</b>): on the struck part's <c>bone name</c>, or its <c>bone name 2</c> half the
-    /// time when it has one (<c>FUN_140649fd0</c>), keeping its flight direction (here in the character's frame; the renderer fixes it to the bone,
-    /// docs/game/combat.md "Bolt visuals").
+    /// The bolt stays in the character it hit (<c>FUN_1406508d0</c>, <b>Observed</b>): on the struck part's <c>bone name</c>, or its <c>bone name
+    /// 2</c> half the time when it has one (<c>FUN_140649fd0</c>), keeping its flight direction (here in the character's frame; the renderer fixes it
+    /// to the bone, docs/game/combat.md "Bolt visuals").
     /// </summary>
     static void StickBolt(World world, in Projectile p, int v, CharacterCold dc, int part)
     {
@@ -913,9 +920,10 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// A bolt in a body (<c>FUN_140439c90</c>): a packet of pierce = the bolt's damage, bleed 2, no penetration, through the hit pipeline with hit direction 6 (the
-    /// part by its <c>hit</c> weight alone), armour and toughness, the global damage multiplier applied once more there (<b>Observed</b>, so bolts scale with its
-    /// square). No block, no dodge. The victim takes "hit taken" XP; the shooter gains none for a hit. A heavy hit staggers as a melee one does.
+    /// A bolt in a body (<c>FUN_140439c90</c>): a packet of pierce = the bolt's damage, bleed 2, no penetration, through the hit pipeline with hit
+    /// direction 6 (the part by its <c>hit</c> weight alone), armour and toughness, the global damage multiplier applied once more there
+    /// (<b>Observed</b>, so bolts scale with its square). No block, no dodge. The victim takes "hit taken" XP; the shooter gains none for a hit. A
+    /// heavy hit staggers as a melee one does.
     /// </summary>
     void BoltHit(World world, in Projectile p, int v, bool intended)
     {
@@ -1030,8 +1038,8 @@ public sealed partial class CombatSystem : IProjectileSource
     #region Animation and panel
 
     /// <summary>
-    /// What a character's crossbow is doing for its animation (the last finished tick): reloading (the progress of the reload), aiming (the steady time held), or
-    /// just shot (for <see cref="ShotSeconds"/> after a shot); null when it is not fighting with the crossbow.
+    /// What a character's crossbow is doing for its animation (the last finished tick): reloading (the progress of the reload), aiming (the steady
+    /// time held), or just shot (for <see cref="ShotSeconds"/> after a shot); null when it is not fighting with the crossbow.
     /// </summary>
     public (RangedPose Pose, float Progress)? RangedPoseOf(CharacterId id, long tick, float tickSeconds)
     {
@@ -1050,8 +1058,8 @@ public sealed partial class CombatSystem : IProjectileSource
     }
 
     /// <summary>
-    /// The ranged controller's State line (<c>FUN_140438640</c>, shown while <c>Character::isInCombatMode(0, 1)</c> holds, <see cref="IsInCombatMode"/>): the gun
-    /// of the turret the character mans, else its crossbow; null otherwise.
+    /// The ranged controller's State line (<c>FUN_140438640</c>, shown while <c>Character::isInCombatMode(0, 1)</c> holds,
+    /// <see cref="IsInCombatMode"/>): the gun of the turret the character mans, else its crossbow; null otherwise.
     /// </summary>
     public RangedLineView? RangedLineOf(World world, CharacterId id, CharacterCold cold)
     {

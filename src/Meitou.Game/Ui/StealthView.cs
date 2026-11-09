@@ -8,7 +8,8 @@ namespace Meitou.Game.Ui;
 
 /// <summary>
 /// The stealth indicators of a sneaking player character (docs/game/perception.md "Spotting a sneaker"): a 3D arrow towards each hostile NPC noticing
-/// (yellow) or detecting (red) it, and a tag over its head tinted by its state, the original's name-tag colours (hidden blue, almost seen yellow, seen red).
+/// (yellow) or detecting (red) it, and a tag over its head tinted by its state, the original's name-tag colours (hidden blue, almost seen yellow,
+/// seen red).
 /// </summary>
 sealed class StealthView(PlayerInterface player)
 {
@@ -87,8 +88,9 @@ sealed class StealthView(PlayerInterface player)
     public Func<CharacterId, Vector3?>? DrawnHead { get; set; }
 
     /// <summary>
-    /// The name tag over each of the player's characters within the original's range: the <c>Kenshi_CharacterNamePanel</c> layout (<b>Verified</b>), 0.1057 x
-    /// 0.0296 of the screen, the name centred in <c>Kenshi_StandardFont_Large</c> with a shadow in the middle 0.655, and while the character sneaks the
+    /// The name tag over each of the player's characters within the original's range: the <c>Kenshi_CharacterNamePanel</c> layout (<b>Verified</b>),
+    /// 0.1057 x 0.0296 of the screen, the name centred in <c>Kenshi_StandardFont_Large</c> with a shadow in the middle 0.655, and while the character
+    /// sneaks the
     /// <c>Stealth</c> icon on the left in the state's tag colour. The name is white and in square brackets when the character is selected, grey and bare
     /// otherwise (<c>NameTagSelected</c> / <c>NameTagUnselected</c>, the brackets from a screenshot of the original; <b>Observed</b>);
     /// while it sneaks, also the <c>LightLevel</c> icon on the right from its light level. The panel stands on the head like a speech bubble does (the
@@ -171,8 +173,9 @@ sealed class StealthView(PlayerInterface player)
     }
 
     /// <summary>
-    /// The point a name tag, task bar or speech bubble stands on (Meitou's: the original's anchor is not mapped): over a standing character's height, or just
-    /// over the drawn head of one lying down, whose body its clip may lay away from its feet (a sleeper's from the bed's use node onto the mattress).
+    /// The point a name tag, task bar or speech bubble stands on (Meitou's: the original's anchor is not mapped): over a standing character's height,
+    /// or just over the drawn head of one lying down, whose body its clip may lay away from its feet (a sleeper's from the bed's use node onto the
+    /// mattress).
     /// </summary>
     internal Vector3 TagAnchor(CharacterSnapshot c, Vector3 feet)
     {

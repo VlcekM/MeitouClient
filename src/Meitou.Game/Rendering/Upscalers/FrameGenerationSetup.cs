@@ -81,9 +81,9 @@ static class FrameGenerationSetup
     #endregion
 
     /// <summary>
-    /// The game's pointer as the window's cursor (a custom cursor image of the pointer at its drawn size, its hot spot on the mouse), set again only when
-    /// the pointer changes, or a system cursor. While frame generation runs the window system draws it: in a frame it would reach the screen a held-back
-    /// frame late and, as part of the interface, be interpolated between frames.
+    /// The game's pointer as the window's cursor (a custom cursor image of the pointer at its drawn size, its hot spot on the mouse), set again only
+    /// when the pointer changes, or a system cursor. While frame generation runs the window system draws it: in a frame it would reach the screen a
+    /// held-back frame late and, as part of the interface, be interpolated between frames.
     /// </summary>
     internal sealed class SystemPointer
     {

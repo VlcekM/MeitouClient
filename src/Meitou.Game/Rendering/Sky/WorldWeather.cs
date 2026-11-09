@@ -59,9 +59,8 @@ public sealed class WorldWeather
         Times = times;
         var now = new WeatherTime(Day, hour);
         // The schedule runs from the world's creation (day 0, 00:00; the seasons count from there, as `meitou-tools weather --days 0 ..` prints them)
-        // in game minutes, so a
-        // start at --day 50 or a jump forward (the step keys, the time slider) passes through every change before it; a jump of more than an hour
-        // then snaps everything.
+        // in game minutes, so a start at --day 50 or a jump forward (the step keys, the time slider) passes through every change before it; a jump of
+        // more than an hour then snaps everything.
         double from = _last?.Minutes ?? 0;
         for (double m = Math.Floor(from) + 1; m <= now.Minutes; m++)
         {

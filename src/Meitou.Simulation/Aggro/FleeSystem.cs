@@ -19,11 +19,11 @@ namespace Meitou.Simulation.Aggro;
 /// <see cref="FirstRun"/> + up to <see cref="RunSpread"/> units from the centre of the enemies it can see, on the far side of it; when it gets there (or within
 /// <see cref="Arrived"/> of it, or its path fails) it runs <see cref="Hop"/> + up to <see cref="RunSpread"/> units in a random direction.</item>
 /// <item><b>Until</b> (the task's end conditions, <c>isNoEnemiesInVicinity</c> and not <c>isAggressionTowardsMe</c>): no enemy standing within its sight
-/// range and nobody attacking it. It then goes back to wandering. A fleeing character neither looks for fights (<see cref="AggroSystem"/>) nor answers
-/// attacks (<see cref="RetaliationSystem"/>). The player's characters never flee by themselves.</item>
+/// range and nobody attacking it. It then goes back to wandering. A fleeing character neither looks for fights (<see cref="AggroSystem"/>) nor
+/// answers attacks (<see cref="RetaliationSystem"/>). The player's characters never flee by themselves.</item>
 /// <item><b>On the AI's request</b> (<see cref="Ai.AiMind.FleeRequest"/>, the same run): an NPC whose Self preservation goes to Running away (a crippled
-/// one, or one with no working arm, under attack: <see cref="Ai.SelfPreservation"/>) runs from the centre of its threats and stops when none attacks it
-/// within reach (<see cref="CharacterCold.FleesAlone"/>); a goal 35 of its lists starts the squads' run for one character.</item>
+/// one, or one with no working arm, under attack: <see cref="Ai.SelfPreservation"/>) runs from the centre of its threats and stops when none attacks
+/// it within reach (<see cref="CharacterCold.FleesAlone"/>); a goal 35 of its lists starts the squads' run for one character.</item>
 /// </list>
 /// </summary>
 public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, float sightRange = AggroSystem.OutdoorSight) : ITickSystem, IStateHashed
@@ -51,8 +51,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     public float SightRange { get; } = sightRange;
 
     /// <summary>
-    /// Whether a squad in a fight that is not intact runs (Meitou's addition, off: the original's squads do not, docs/game/perception.md "Squad not intact":
-    /// only a package with the retreat signal acts on it, and no squad template lists one). The AI's own requests (a lone flight, a goal 35) run either way.
+    /// Whether a squad in a fight that is not intact runs (Meitou's addition, off: the original's squads do not, docs/game/perception.md "Squad not
+    /// intact": only a package with the retreat signal acts on it, and no squad template lists one). The AI's own requests (a lone flight, a goal 35)
+    /// run either way.
     /// </summary>
     public bool SquadBreak { get; init; }
 
@@ -173,8 +174,7 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
         foreach (var m in squad.Members)
         {
             if (!table.TryResolveNext(m, out int s) || table.Cold(s) is not { } c) continue;
-            // A member running alone (Self preservation) does not stop its squad from breaking; it counts as the others do and is not
-            // started again.
+            // A member running alone (Self preservation) does not stop its squad from breaking; it counts as the others do and is not started again.
             if (c.IsPlayer || c.Fleeing && !c.FleesAlone) return;
             size++;
             if (SquadIntact.Able(world, c, home)) able++;
@@ -183,9 +183,9 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
             _standing.Add(s);
             if (c.InCombat || table.Next[s].Task == (byte)CharacterTask.Attack) fighting = true;
         }
-        // The squad-intact test (Ai.SquadIntact, FUN_14079acf0, docs/game/perception.md "Fleeing"): a member caged or carried off by a non-ally keeps it
-        // intact; else it needs a leader and someone able; under 4 members it holds while the leader is up, from 4 while those able to fight are a share
-        // of the squad. No enemy is counted.
+        // The squad-intact test (Ai.SquadIntact, FUN_14079acf0, docs/game/perception.md "Fleeing"): a member caged or carried off by a non-ally keeps
+        // it intact; else it needs a leader and someone able; under 4 members it holds while the leader is up, from 4 while those able to fight are a
+        // share of the squad. No enemy is counted.
         if (!fighting || _standing.Count == 0 || SquadIntact.Held(table, squad, Relations)) return;
         if (SquadIntact.Decide(able, size, !squad.Leader.IsNone, SquadIntact.Down(table, squad.Leader), home)) return;
         Broken++;
@@ -257,8 +257,8 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     }
 
     /// <summary>
-    /// A lone runner is safe when no threat attacks it within reach any more, or its body no longer takes the choice to running (the AI's goal 32 is not
-    /// wanted then, <see cref="Ai.SelfPreservation.Runs"/>): the other goals take it over.
+    /// A lone runner is safe when no threat attacks it within reach any more, or its body no longer takes the choice to running (the AI's goal 32 is
+    /// not wanted then, <see cref="Ai.SelfPreservation.Runs"/>): the other goals take it over.
     /// </summary>
     bool Unthreatened(World world, int s, CharacterCold cold)
     {
@@ -271,11 +271,11 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     #region Centre
 
     /// <summary>
-    /// The centre <c>Task_Runaway</c> runs from (<c>FUN_14034b440</c>, <b>Verified</b>): the sum of the positions and the count of the runner's sense entries
-    /// tagged NEUTRAL or ENEMY (include mask 6) and neither KO, bit 4 nor imprisoned (exclude 0x218; <c>FUN_140853960</c>), neutrals included, that intend
-    /// aggression: the status float +0xac, the intended aggression of the entry's current goal (<see cref="Ai.TaskAggression.OfGoal"/>), must be above 0. The
-    /// original adds the running task's +0xa0 when the entry's target matches a handle of the sense record (which one: <b>Unknown</b>, not modelled). A runner
-    /// without senses falls back to the enemies standing in its sight range.
+    /// The centre <c>Task_Runaway</c> runs from (<c>FUN_14034b440</c>, <b>Verified</b>): the sum of the positions and the count of the runner's sense
+    /// entries tagged NEUTRAL or ENEMY (include mask 6) and neither KO, bit 4 nor imprisoned (exclude 0x218; <c>FUN_140853960</c>), neutrals
+    /// included, that intend aggression: the status float +0xac, the intended aggression of the entry's current goal
+    /// (<see cref="Ai.TaskAggression.OfGoal"/>), must be above 0. The original adds the running task's +0xa0 when the entry's target matches a handle
+    /// of the sense record (which one: <b>Unknown</b>, not modelled). A runner without senses falls back to the enemies standing in its sight range.
     /// </summary>
     (Vector3 Centre, int Count) Centre(World world, CharacterTable table, int s)
     {
@@ -367,8 +367,8 @@ public sealed class FleeSystem(FactionRelations relations, CombatSystem combat, 
     }
 
     /// <summary>
-    /// Whether a character standing anywhere this check (<see cref="StandingFactions"/>) is an enemy of <paramref name="faction"/>: when none is, no scan
-    /// can find one.
+    /// Whether a character standing anywhere this check (<see cref="StandingFactions"/>) is an enemy of <paramref name="faction"/>: when none is, no
+    /// scan can find one.
     /// </summary>
     bool AnyEnemy(int faction) => EnemiesOf(faction).Count > 0;
 

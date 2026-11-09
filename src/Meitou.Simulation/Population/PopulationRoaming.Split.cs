@@ -17,10 +17,11 @@ public sealed partial class PopulationSystem
     const string SlaveOnlyPackage = "5344-gamedata.base";
 
     /// <summary>
-    /// The split at unload (<c>FUN_14079c1c0</c>, <b>Verified</b>; a platoon with 2 or more members): each imprisoned member goes into a squad and platoon of its
-    /// own, same faction and template, at its place, loaded (it then keeps or loses its zone by its own test), with the captured NPC package (the slave-only one
-    /// for a slave); persistent when the old platoon is or the member is unique. A persistent platoon left with just that member keeps it (reused). The
-    /// original's skip of a chained slave whose owner exists and its carried clause (partly <b>Unknown</b>) are not modelled. Serial.
+    /// The split at unload (<c>FUN_14079c1c0</c>, <b>Verified</b>; a platoon with 2 or more members): each imprisoned member goes into a squad and
+    /// platoon of its own, same faction and template, at its place, loaded (it then keeps or loses its zone by its own test), with the captured NPC
+    /// package (the slave-only one for a slave); persistent when the old platoon is or the member is unique. A persistent platoon left with just that
+    /// member keeps it (reused). The original's skip of a chained slave whose owner exists and its carried clause (partly <b>Unknown</b>) are not
+    /// modelled. Serial.
     /// </summary>
     void SplitPrisoners(World world, Platoon p, Squad squad)
     {

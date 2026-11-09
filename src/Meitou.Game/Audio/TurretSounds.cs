@@ -17,10 +17,9 @@ public readonly record struct TurretAim(string Key, TurretMount Mount, Vector3? 
 
 /// <summary>
 /// The turrets' movement sounds (docs/audio.md "Other world-side events"). The exe turns a turret's parts toward the aim point every frame
-/// (<c>RotatingEnt::vfunc_2</c>) and posts <c>Turret_Mvt_Start</c> / <c>Turret_Mvt_Stop</c> from <c>TurretBuilding::vfunc_28</c>
-/// by how far they still
-/// had to turn. This keeps each manned turret's turning parts (display only: nothing draws them or reads them back), turns them by the exe's rule and
-/// posts the same events. Verified in the exe unless marked:
+/// (<c>RotatingEnt::vfunc_2</c>) and posts <c>Turret_Mvt_Start</c> / <c>Turret_Mvt_Stop</c> from <c>TurretBuilding::vfunc_28</c> by how far they
+/// still had to turn. This keeps each manned turret's turning parts (display only: nothing draws them or reads them back), turns them by the exe's
+/// rule and posts the same events. Verified in the exe unless marked:
 /// <list type="bullet">
 /// <item>Each part, in order, takes the aim point into its own frame (its parent's orientation, then its own turn so far): a yaw part's error is
 /// <c>atan2(x, z)</c>, a pitch part's <c>atan2(-y, √(x² + z²))</c>, and it turns by that error limited to ± the turning speed × (game-speed-scaled

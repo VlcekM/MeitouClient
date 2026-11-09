@@ -2,10 +2,8 @@ namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// The <c>weld</c> switch's Meitou side: meshes are welded as they load (<see cref="Meitou.Data.Ogre.OgreMeshWeld"/>): the corners split only by
-/// per-face
-/// tangents become one vertex with the averaged tangent, smoother normal-mapped shading and about 60% fewer vertices; off: the meshes as the game
-/// stores
-/// them. Read when a mesh is decoded, so a change applies to meshes loaded after it.
+/// per-face tangents become one vertex with the averaged tangent, smoother normal-mapped shading and about 60% fewer vertices; off: the meshes as the
+/// game stores them. Read when a mesh is decoded, so a change applies to meshes loaded after it.
 /// </summary>
 public static class MeshWeld
 {

@@ -217,8 +217,7 @@ public class JailSaveTests
         var squadA = population.StartPlayer(a.World, NewGameStart.From(data.Db.Find("40-t")!));
 
         // The home is locked up (the lock round's flag read from a loaded state, as the round's own is private), its door locked, one member caged in
-        // the interior cage with a bounty,
-        // another free and escaped.
+        // the interior cage with a bounty, another free and escaped.
         a.World.Fixtures.Saved = new Dictionary<string, FcsRecord> { [HouseKey] = HouseState((LockSystem.HouseLockedKey, true)) };
         a.World.Fixtures.RegisterSite(a.World, data, 0);
         a.World.Fixtures.SetDoorsLocked(HouseKey, true);

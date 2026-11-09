@@ -13,17 +13,18 @@ namespace Meitou.Simulation.Navigation;
 internal enum PathMode { Ignore = 0, Projected = 1, Obstacle = 2, Walkable = 3 }
 
 /// <summary>
-/// Gathers the navmesh input of one zone from the game data as the original's generator does (docs/game/pathfinding.md, "Inputs"; collision files and groups in
-/// docs/formats/collision.md): terrain triangles with the water clamp, building and foliage collision placed and filtered by collision group, per-triangle
-/// walkable areas, carvers, door painters and seed points. One instance per thread (it owns a heightmap handle); the collision cache may be shared.
+/// Gathers the navmesh input of one zone from the game data as the original's generator does (docs/game/pathfinding.md, "Inputs"; collision files and
+/// groups in docs/formats/collision.md): terrain triangles with the water clamp, building and foliage collision placed and filtered by collision
+/// group, per-triangle walkable areas, carvers, door painters and seed points. One instance per thread (it owns a heightmap handle); the collision
+/// cache may be shared.
 /// </summary>
 internal sealed partial class ZoneGeometryGatherer : IDisposable
 {
     #region Inputs
 
     /// <summary>
-    /// Collision groups the original's generator includes (mask 0x809de40): foliage 6 and 14, building parts 9..12, stairs 15 and 16, furniture 19, unwalkable
-    /// roofs 27.
+    /// Collision groups the original's generator includes (mask 0x809de40): foliage 6 and 14, building parts 9..12, stairs 15 and 16, furniture 19,
+    /// unwalkable roofs 27.
     /// </summary>
     public const uint IncludedGroupMask = 0x809de40;
 
@@ -103,8 +104,8 @@ internal sealed partial class ZoneGeometryGatherer : IDisposable
     public (double Terrain, double Buildings, double Foliage) Phases { get; private set; }
 
     /// <summary>
-    /// Gathers the zone. <paramref name="buildingHash"/> is <see cref="BuildingHash"/> of the zone when the caller has it already (it is the cache key), so that it
-    /// is not computed twice.
+    /// Gathers the zone. <paramref name="buildingHash"/> is <see cref="BuildingHash"/> of the zone when the caller has it already (it is the cache
+    /// key), so that it is not computed twice.
     /// </summary>
     public ZoneGeometry Gather(ZoneCoordinate zone, float margin = DefaultMargin, uint? buildingHash = null)
     {

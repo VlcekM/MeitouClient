@@ -6,9 +6,10 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// What GL reads where nothing is bound, shared by VkGl and the native API (docs/renderer-native.md 3.2): a vertex buffer holding GL's current generic
-/// attribute value (0, 0, 0, 1) as floats at offset 0 and as integers at <see cref="DummyIntOffset"/> (bound with stride 0 for disabled attributes), and
-/// 1×1 stand-in textures per kind: (0, 0, 0, 1) for colour samplers, a depth of 1 for shadow samplers. Images are in GENERAL layout. Render thread only.
+/// What GL reads where nothing is bound, shared by VkGl and the native API (docs/renderer-native.md 3.2): a vertex buffer holding GL's current
+/// generic attribute value (0, 0, 0, 1) as floats at offset 0 and as integers at <see cref="DummyIntOffset"/> (bound with stride 0 for disabled
+/// attributes), and 1×1 stand-in textures per kind: (0, 0, 0, 1) for colour samplers, a depth of 1 for shadow samplers. Images are in GENERAL layout.
+/// Render thread only.
 /// </summary>
 public sealed unsafe class GpuDefaults : IDisposable
 {

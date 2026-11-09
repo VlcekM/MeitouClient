@@ -30,8 +30,8 @@ public sealed class Fighter
     #region Weapons and arms
 
     /// <summary>
-    /// The weapon in hand (docs/game/combat.md "Arms"): with both arms working the <see cref="BackWeapon"/>, else the hip one; with only the right arm the hip
-    /// one; without the right arm none (fists). An animal's natural weapon always.
+    /// The weapon in hand (docs/game/combat.md "Arms"): with both arms working the <see cref="BackWeapon"/>, else the hip one; with only the right
+    /// arm the hip one; without the right arm none (fists). An animal's natural weapon always.
     /// </summary>
     public WeaponInstance? Weapon =>
         IsAnimal ? _hip
@@ -55,8 +55,8 @@ public sealed class Fighter
     public WeaponInstance? HipWeapon => _hip;
 
     /// <summary>
-    /// The <c>length</c> of the weapon in hand, the <see cref="Fists"/>' for fists (CharStats +0x200, set from the weapon bound, the fists item with nothing in
-    /// hand).
+    /// The <c>length</c> of the weapon in hand, the <see cref="Fists"/>' for fists (CharStats +0x200, set from the weapon bound, the fists item with
+    /// nothing in hand).
     /// </summary>
     public float WeaponLength => Weapon?.Data.Length ?? Fists?.Data.Length ?? 0;
 
@@ -72,8 +72,8 @@ public sealed class Fighter
     public WeaponInstance? FistsItem => Weapon ?? Fists;
 
     /// <summary>
-    /// The crossbow carried in a weapon section (back or hip), if any: the ranged weapon (docs/simulation.md "Combat", ranged). The melee <see cref="Weapon"/>
-    /// stays what it was.
+    /// The crossbow carried in a weapon section (back or hip), if any: the ranged weapon (docs/simulation.md "Combat", ranged). The melee
+    /// <see cref="Weapon"/> stays what it was.
     /// </summary>
     public CrossbowInstance? Crossbow { get; init; }
 
@@ -83,14 +83,15 @@ public sealed class Fighter
     public bool IsAnimal { get; init; }
 
     /// <summary>
-    /// The creature kind its techniques are picked by (COMBAT_TECHNIQUE <c>animal</c>): its natural weapon's <c>skill category</c> (9 to 20), 0 for a person
-    /// (docs/game/animals.md).
+    /// The creature kind its techniques are picked by (COMBAT_TECHNIQUE <c>animal</c>): its natural weapon's <c>skill category</c> (9 to 20), 0 for a
+    /// person (docs/game/animals.md).
     /// </summary>
     public int AnimalCategory => IsAnimal && Weapon is { } w ? w.Data.SkillCategory : 0;
 
     /// <summary>
-    /// The weapon category a technique's <c>animal</c> value is compared with (<see cref="TechniqueChooser.Fits"/>): the weapon's <c>skill category</c>, 5
-    /// (unarmed) for fists. The martial arts techniques have <c>animal</c> 5, the creature ones 9 to 20, the weapon ones 0 (docs/game/animals.md).
+    /// The weapon category a technique's <c>animal</c> value is compared with (<see cref="TechniqueChooser.Fits"/>): the weapon's <c>skill
+    /// category</c>, 5 (unarmed) for fists. The martial arts techniques have <c>animal</c> 5, the creature ones 9 to 20, the weapon ones 0
+    /// (docs/game/animals.md).
     /// </summary>
     public int TechniqueCategory => Weapon?.Data.SkillCategory ?? (int)WeaponCategory.Unarmed;
 
@@ -182,21 +183,21 @@ public sealed class Fighter
     public float DodgeMult => Naked ? NakedBonus : _dodgeMult;
 
     /// <summary>
-    /// The gear's stealth factor (CharStats <c>+0x3c</c>, <c>FUN_140887030</c>, <b>Verified</b>): the backpack's <c>stealth mult</c> (1 without one) times each
-    /// piece's <see cref="ArmourPiece.Stealth"/>; 1.2 when <see cref="Naked"/>. The backpack's value also seeds <see cref="DodgeMult"/>.
+    /// The gear's stealth factor (CharStats <c>+0x3c</c>, <c>FUN_140887030</c>, <b>Verified</b>): the backpack's <c>stealth mult</c> (1 without one)
+    /// times each piece's <see cref="ArmourPiece.Stealth"/>; 1.2 when <see cref="Naked"/>. The backpack's value also seeds <see cref="DodgeMult"/>.
     /// </summary>
     public float StealthMult => Naked ? NakedStealth : _stealth;
 
     /// <summary>
-    /// The gear factors of the stat multiplier (<see cref="StatFactors"/>, <c>CharStats</c> +0x40 to +0x50 as <c>FUN_140887030</c> writes them, <b>Verified</b>):
-    /// the products of <c>asassination mult</c>, <c>dexterity mult</c>, <c>damage output mult</c> and <c>ranged skill mult</c>. No dust storm here (its factor
-    /// is 1).
+    /// The gear factors of the stat multiplier (<see cref="StatFactors"/>, <c>CharStats</c> +0x40 to +0x50 as <c>FUN_140887030</c> writes them,
+    /// <b>Verified</b>): the products of <c>asassination mult</c>, <c>dexterity mult</c>, <c>damage output mult</c> and <c>ranged skill mult</c>. No
+    /// dust storm here (its factor is 1).
     /// </summary>
     public StatFactors Factors => new(_assassin, DexterityMult, DamageOutput, _ranged, 1);
 
     /// <summary>
-    /// Wearing no armour and no backpack: the gear refresh then puts 1.1 for dodge and dexterity and 1.2 for stealth (<c>FUN_140887030</c>, <b>Verified</b>
-    /// literals). Never for an animal (engine choice: whether the refresh runs for animals is <b>Unknown</b>).
+    /// Wearing no armour and no backpack: the gear refresh then puts 1.1 for dodge and dexterity and 1.2 for stealth (<c>FUN_140887030</c>,
+    /// <b>Verified</b> literals). Never for an animal (engine choice: whether the refresh runs for animals is <b>Unknown</b>).
     /// </summary>
     public bool Naked => !IsAnimal && _armour.Length == 0 && !_backpack;
 
@@ -206,8 +207,9 @@ public sealed class Fighter
     public float CombatSpeed { get; }
 
     /// <summary>
-    /// The gear's run speed factor (CharStats <c>+0x18</c>, <c>FUN_140887030</c>, <b>Verified</b>): the largest piece factor (at least 1) times the smallest, the
-    /// backpack's <c>athletics mult</c> (1 without one) seeding the smallest; <see cref="Bodies.Speed.Run"/> scales the run speed by it.
+    /// The gear's run speed factor (CharStats <c>+0x18</c>, <c>FUN_140887030</c>, <b>Verified</b>): the largest piece factor (at least 1) times the
+    /// smallest, the backpack's <c>athletics mult</c> (1 without one) seeding the smallest; <see cref="Bodies.Speed.Run"/> scales the run speed by
+    /// it.
     /// </summary>
     public float AthleticsFactor { get; }
 

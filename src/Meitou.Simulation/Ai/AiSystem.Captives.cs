@@ -9,8 +9,9 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Ai;
 
 /// <summary>
-/// The rules of the prisoner and slaver package classes (docs/game/ai.md "Prisoner and slaver packages", <b>Observed</b> by decompilation of each class's
-/// start test, finished test and activation; what the squads do while one runs is <see cref="CaptiveSystem"/>'s and <see cref="KidnapSystem"/>'s).
+/// The rules of the prisoner and slaver package classes (docs/game/ai.md "Prisoner and slaver packages", <b>Observed</b> by decompilation of each
+/// class's start test, finished test and activation; what the squads do while one runs is <see cref="CaptiveSystem"/>'s and
+/// <see cref="KidnapSystem"/>'s).
 /// </summary>
 public sealed partial class AiSystem
 {
@@ -55,10 +56,10 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The town whose cages a gathering squad takes prisoners from (<c>PrisonerGathering</c> slot 19, <c>FUN_140290b70</c> / <c>FUN_140295b10</c>): the
-    /// leader's town, else the nearest town of its faction within 3062 (squared 9.375e6); not a slave camp or prison. It has a prisoner when a cage of the
-    /// town whose owner is not the player's faction and is its own or an ally holds an awake live character (the unholy kind: a woman, or one of another
-    /// race than the leader). -1: none.
+    /// The town whose cages a gathering squad takes prisoners from (<c>PrisonerGathering</c> slot 19, <c>FUN_140290b70</c> / <c>FUN_140295b10</c>):
+    /// the leader's town, else the nearest town of its faction within 3062 (squared 9.375e6); not a slave camp or prison. It has a prisoner when a
+    /// cage of the town whose owner is not the player's faction and is its own or an ally holds an awake live character (the unholy kind: a woman, or
+    /// one of another race than the leader). -1: none.
     /// </summary>
     int GatherTown(World world, Squad squad, bool unholy)
     {
@@ -96,8 +97,8 @@ public sealed partial class AiSystem
         PackageClass.CannibalRetreat => world.Characters.IsAlive(squad.Leader)
             && LeaderTown(world, squad).Faction != squad.Faction && AnyCarrying(world, squad),
 
-        // Package_CannibalsAtHome slot 12 (FUN_140291ef0): in its home town, or in a town of a faction not hostile to it that has a bar (town vfunc 0x2d0
-        // with BD_BAR).
+        // Package_CannibalsAtHome slot 12 (FUN_140291ef0): in its home town, or in a town of a faction not hostile to it that has a bar (town vfunc
+        // 0x2d0 with BD_BAR).
         PackageClass.CannibalsAtHome => LeaderTown(world, squad) is var (site, owner) && site >= 0
             && (site == board.Town
                 || !(squad.Faction >= 0 && owner >= 0 && data.Relations.IsHostile(squad.Faction, owner)) && Places(site).Bars.Count > 0),
@@ -126,10 +127,10 @@ public sealed partial class AiSystem
     };
 
     /// <summary>
-    /// The activation: a cannibal retreat (1) goes to the squad's home town, else the nearest town of its faction (<c>FUN_140288580</c>); the nearest-nest kind
-    /// (25) always to the nearest (<c>FUN_140289b50</c>). Slave shipping goes to the nearest slave camp of a faction not hostile to the squad
-    /// (<c>FUN_1402873a0</c>); the anywhere kind (28) takes a nearer town (a TOWN within 0.7 x that squared distance, <c>FUN_140289f90</c>) only when its flag
-    /// bit 10 is set, whose meaning is <b>Unknown</b>: Meitou takes the camp.
+    /// The activation: a cannibal retreat (1) goes to the squad's home town, else the nearest town of its faction (<c>FUN_140288580</c>); the
+    /// nearest-nest kind (25) always to the nearest (<c>FUN_140289b50</c>). Slave shipping goes to the nearest slave camp of a faction not hostile to
+    /// the squad (<c>FUN_1402873a0</c>); the anywhere kind (28) takes a nearer town (a TOWN within 0.7 x that squared distance, <c>FUN_140289f90</c>)
+    /// only when its flag bit 10 is set, whose meaning is <b>Unknown</b>: Meitou takes the camp.
     /// </summary>
     internal void CaptiveStarted(World world, Squad squad, Blackboard board, AiPackage package, PackageClass kind)
     {

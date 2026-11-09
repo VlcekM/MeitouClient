@@ -28,8 +28,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// A worker of goal 189 at its building: with row 87 first in its plan it operates the machine, with row 92 first it empties the output, with row 93
-    /// it fills the inputs from what it carries. Goal 190 (221) only pretends: nothing for the production system.
+    /// A worker of goal 189 at its building: with row 87 first in its plan it operates the machine, with row 92 first it empties the output, with row
+    /// 93 it fills the inputs from what it carries. Goal 190 (221) only pretends: nothing for the production system.
     /// </summary>
     static void WorkAtMachine(AiMind mind, TaskType goal, TownBuilding? building)
     {

@@ -103,32 +103,26 @@ public sealed class TownDuty
 
 /// <summary>
 /// Goals of a squad's town the AI's act-outs do not cover (docs/game/carry-loot.md 3.2, ai-tasks.md "Finders of the jobs"), for the members of the
-/// squads the AI runs whose running
-/// package lists them for the member's role in the hour (<see cref="PopulationSystem.GoalDuty"/>). All serial, in <c>SlowWorld</c> after the carry
-/// system.
+/// squads the AI runs whose running package lists them for the member's role in the hour (<see cref="PopulationSystem.GoalDuty"/>). All serial, in
+/// <c>SlowWorld</c> after the carry system.
 /// <list type="bullet">
 /// <item><b>273 Remove Intruder</b> (finder <c>FUN_14099c250</c>, <b>Verified</b> by decompile): only while the member stands in a town that is its
-/// home town, the town its occupation holds,
-/// or a town of its faction (<c>Ownerships::isMyTown</c>, KenshiLib names); the intruder is knocked out, in that town, not carried or caged, and (an
-/// engine reading of the sensed-list classes)
-/// not of the member's faction or an ally. The original's last test, <c>amInsideTownWalls</c>, is read as the town's built-up area
-/// (<see cref="BuiltUp"/>). The member lifts it, then</item>
+/// home town, the town its occupation holds, or a town of its faction (<c>Ownerships::isMyTown</c>, KenshiLib names); the intruder is knocked out, in
+/// that town, not carried or caged, and (an engine reading of the sensed-list classes) not of the member's faction or an ally. The original's last
+/// test, <c>amInsideTownWalls</c>, is read as the town's built-up area (<see cref="BuiltUp"/>). The member lifts it, then</item>
 /// <item><b>112 Find and put in cage</b> (a living body) or <b>281</b> (any body), while the package lists it: the best free cage in the town (the
-/// original's finder; an occupier may use the occupied town's, its use test passing
-/// for that town, <c>FUN_140621230</c>), where the intruder is locked up with the put-in's usual sentence (from a bounty with the cage owner's
-/// faction,
-/// docs/game/economy.md 11.5; none: served, so the jailer frees it); else</item>
+/// original's finder; an occupier may use the occupied town's, its use test passing for that town, <c>FUN_140621230</c>), where the intruder is
+/// locked up with the put-in's usual sentence (from a bounty with the cage owner's faction, docs/game/economy.md 11.5; none: served, so the jailer
+/// frees it); else</item>
 /// <item><b>274 Throwing out</b> (<c>Task_TakeIntruderOutsideTown</c>): carried to the town's point outside its gates (<see cref="TownExit"/>, the
 /// same for every carrier) and put down.</item>
 /// <item><b>223 Remove Home Intruder</b> (finder <c>FUN_14099c110</c>): a knocked-out character in the squad's home building
-/// (<see cref="HomeIntruder"/>) is lifted, then with <b>224</b>
-/// (<c>Task_TakeIntruderOutside</c>) carried past the home's first door (<see cref="AiSystem.LeavePoint"/>) and put down; without 224 it goes on as
-/// 273's body does.</item>
+/// (<see cref="HomeIntruder"/>) is lifted, then with <b>224</b> (<c>Task_TakeIntruderOutside</c>) carried past the home's first door
+/// (<see cref="AiSystem.LeavePoint"/>) and put down; without 224 it goes on as 273's body does.</item>
 /// <item><b>243 Getting food</b> (finder <c>FUN_1408cb650</c>, <c>BuildingFinder_LootFoodAndStuff</c>; then 244 <c>Task_grabOneFood</c>): a member
-/// holding no food walks to the nearest store with
-/// food in the town and takes one item of it (the goal holds while it has food, list A <c>gotAFoodItem</c>). The finder searches the blackboard's
-/// target town (<c>Blackboard.Destination</c>), else the town the member stands in,
-/// else the 3 x 3 zone cells round it; it need not be the squad's own, and a player-side member takes only from its faction's stores.</item>
+/// holding no food walks to the nearest store with food in the town and takes one item of it (the goal holds while it has food, list A
+/// <c>gotAFoodItem</c>). The finder searches the blackboard's target town (<c>Blackboard.Destination</c>), else the town the member stands in, else
+/// the 3 x 3 zone cells round it; it need not be the squad's own, and a player-side member takes only from its faction's stores.</item>
 /// </list>
 /// </summary>
 public sealed class TownDutySystem(PopulationData data, PopulationSystem population, CarrySystem carry, TownDutySettings? settings = null)
@@ -1005,8 +999,7 @@ public sealed class TownDutySystem(PopulationData data, PopulationSystem populat
         if (!table.TryResolveNext(d.Member, out int g) || table.Cold(g) is not { Medical.Incapacitated: false } gc)
             return End(world, d);
         // A fight (a reaction, or what a shoo's dialogue turned into) beats the errand: its walks would end it (a new task drops the fight task), so
-        // it waits for the fight to be over.
-        // a player character's food run is a goal its fight replaced: the decision step chooses again
+        // it waits for the fight to be over. a player character's food run is a goal its fight replaced: the decision step chooses again
         if (gc.InCombat) return d.PlayerSide && gc.IsPlayer ? End(world, d) : true;
         ref var gn = ref table.Next[g];
         if (d.Kind is TownDutyKind.Food or TownDutyKind.LootFood) return StepFood(world, d, g, gc);

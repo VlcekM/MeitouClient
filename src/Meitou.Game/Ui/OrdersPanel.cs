@@ -89,9 +89,9 @@ sealed class OrdersPanel(PlayerInterface player)
     #region Jobs list
 
     /// <summary>
-    /// The jobs list (<c>JobsPanel</c>, docs/game/ui-screens.md section 4): the lead's jobs, one <c>Kenshi_OrdersPanelOrder</c> row each, int(24 x height / 1080)
-    /// tall (<see cref="AddJobRowParts"/>), numbered from 1, with an X that removes it from that character; with none, the layout's hint. Rows are dragged to
-    /// reorder.
+    /// The jobs list (<c>JobsPanel</c>, docs/game/ui-screens.md section 4): the lead's jobs, one <c>Kenshi_OrdersPanelOrder</c> row each, int(24 x
+    /// height / 1080) tall (<see cref="AddJobRowParts"/>), numbered from 1, with an X that removes it from that character; with none, the layout's
+    /// hint. Rows are dragged to reorder.
     /// </summary>
     internal void BindJobs(UiBindings b, Simulation.CharacterSnapshot? lead)
     {
@@ -200,8 +200,8 @@ sealed class OrdersPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// Each jobs row's text and X over its bar (the original's cell layout <c>Kenshi_OrdersPanelOrder</c>; the X's tutorial: "remove a job at any time by
-    /// pressing the X button"). The row keeps the list's picking (selection, drag); only the X takes a click of its own.
+    /// Each jobs row's text and X over its bar (the original's cell layout <c>Kenshi_OrdersPanelOrder</c>; the X's tutorial: "remove a job at any
+    /// time by pressing the X button"). The row keeps the list's picking (selection, drag); only the X takes a click of its own.
     /// </summary>
     internal void AddJobRowParts(List<UiControl> controls)
     {
@@ -219,8 +219,9 @@ sealed class OrdersPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// The row layout's text and X at <paramref name="row"/>: the layout is 300 x 20 px and sized to the row, so the text keeps its 10 px left and 35 px right
-    /// margins and the X (Right VStretch) stays 30 px wide at the right end, a pixel short of the row's height. The text is the Main colour (the original's
+    /// The row layout's text and X at <paramref name="row"/>: the layout is 300 x 20 px and sized to the row, so the text keeps its 10 px left and 35
+    /// px right margins and the X (Right VStretch) stays 30 px wide at the right end, a pixel short of the row's height. The text is the Main colour
+    /// (the original's
     /// <c>#afa68b</c> prefix).
     /// </summary>
     List<UiControl> JobRowParts(UiControl row, bool dimmed)

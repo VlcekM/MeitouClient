@@ -7,14 +7,15 @@ namespace Meitou.Simulation.Population;
 
 /// <summary>
 /// The camps (docs/game/factions-squads-towns.md "Nest furniture"): what a nest, or a town with <c>spawn in town centre</c>, scatters at its place
-/// (<see cref="NestFurniture"/>). A nest's stands while its zone is loaded; a town's once it is first made, for good (its fixtures stay registered as the town's
-/// do). The items go down once per camp, and only in a zone the loaded save has no file of (the original lays them only in a zone loaded fresh).
+/// (<see cref="NestFurniture"/>). A nest's stands while its zone is loaded; a town's once it is first made, for good (its fixtures stay registered as
+/// the town's do). The items go down once per camp, and only in a zone the loaded save has no file of (the original lays them only in a zone loaded
+/// fresh).
 /// </summary>
 public sealed partial class PopulationSystem
 {
     /// <summary>
-    /// A camp's buildings and meshes go up (the old ones of the camp come down first), their cages and locks registered as its faction's, and its items laid
-    /// when due.
+    /// A camp's buildings and meshes go up (the old ones of the camp come down first), their cages and locks registered as its faction's, and its
+    /// items laid when due.
     /// </summary>
     void StandCamp(World world, int camp, NestLayout layout, int owner, Vector2 centre, string record, int site)
     {
@@ -36,8 +37,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A town with <c>spawn in town centre</c> scatters at its own position when made (<c>Town::setup</c> queues it), again only when its TOWN record changed
-    /// since. Any town also lays the items of its residents' nests (<see cref="ResidentNestDrops"/>) once, in a fresh zone.
+    /// A town with <c>spawn in town centre</c> scatters at its own position when made (<c>Town::setup</c> queues it), again only when its TOWN record
+    /// changed since. Any town also lays the items of its residents' nests (<see cref="ResidentNestDrops"/>) once, in a fresh zone.
     /// </summary>
     void StandTownCamp(World world, TownSite site)
     {
@@ -59,8 +60,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The residents' nest items of a town that stands no camp of its own, as the town's camp's items (kept past the dropped-item limit, saved with the town's
-    /// handle).
+    /// The residents' nest items of a town that stands no camp of its own, as the town's camp's items (kept past the dropped-item limit, saved with
+    /// the town's handle).
     /// </summary>
     void LayResidentNests(World world, TownSite site, int camp, int owner, Vector2 at)
     {
@@ -71,9 +72,9 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The items (<c>loot spawn</c>, and <c>debris</c> with physics) of each TOWN a resident template of the town names as its <c>nest</c>, rolled round the
-    /// town's centre (docs/formats/zones.md "Nest debris and loot": <b>Observed</b> in an original save; ruins such as the Old Empire Watchtowers' have no lists
-    /// of their own). The nest's buildings and meshes are not stood up (<b>Unknown</b> whether the original does).
+    /// The items (<c>loot spawn</c>, and <c>debris</c> with physics) of each TOWN a resident template of the town names as its <c>nest</c>, rolled
+    /// round the town's centre (docs/formats/zones.md "Nest debris and loot": <b>Observed</b> in an original save; ruins such as the Old Empire
+    /// Watchtowers' have no lists of their own). The nest's buildings and meshes are not stood up (<b>Unknown</b> whether the original does).
     /// </summary>
     List<NestDrop> ResidentNestDrops(World world, TownSite site, Vector2 at)
     {
@@ -94,8 +95,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// The camp's items on the ground: a <c>debris</c> item as it is, a <c>loot spawn</c> entry rolled from its VENDOR_LIST as an item slot's is
-    /// (<see cref="Items.ItemSlots.Roll"/>, with the camp's faction for the grade). Loose, owned by nobody, tagged as the camp's (kept past the dropped-item
-    /// limit, saved with its <c>persist</c> handle).
+    /// (<see cref="Items.ItemSlots.Roll"/>, with the camp's faction for the grade). Loose, owned by nobody, tagged as the camp's (kept past the
+    /// dropped-item limit, saved with its <c>persist</c> handle).
     /// </summary>
     void LayItems(World world, int camp, List<NestDrop> drops, int owner, Vector2 centre)
     {

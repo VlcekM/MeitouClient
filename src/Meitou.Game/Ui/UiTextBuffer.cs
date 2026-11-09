@@ -11,9 +11,9 @@ public enum UiEditKey
 }
 
 /// <summary>
-/// Selection, caret and undo history of one edit box, independent of windowing or rendering APIs. Follows MyGUI 3.2.2's <c>EditBox</c> (<b>Verified</b>
-/// against its source, docs/game/ui-input.md "Edit boxes"): no word jumps, Ctrl+Home/End to the ends, Up/Down in a single-line box to the ends, 128 undo
-/// steps, typed text and pastes truncated from the end at <see cref="MaxLength"/>.
+/// Selection, caret and undo history of one edit box, independent of windowing or rendering APIs. Follows MyGUI 3.2.2's <c>EditBox</c>
+/// (<b>Verified</b> against its source, docs/game/ui-input.md "Edit boxes"): no word jumps, Ctrl+Home/End to the ends, Up/Down in a single-line box
+/// to the ends, 128 undo steps, typed text and pastes truncated from the end at <see cref="MaxLength"/>.
 /// </summary>
 public sealed class UiTextBuffer(string text = "")
 {
@@ -252,8 +252,8 @@ public sealed class UiTextBuffer(string text = "")
     }
 
     /// <summary>
-    /// MyGUI's <c>TextIterator</c> on inserted text: CR+LF is one line break, and a box without lines turns each break into a space. Meitou drops the other
-    /// control characters and turns a tab into a space (MyGUI lets both through; Meitou's font draws neither).
+    /// MyGUI's <c>TextIterator</c> on inserted text: CR+LF is one line break, and a box without lines turns each break into a space. Meitou drops the
+    /// other control characters and turns a tab into a space (MyGUI lets both through; Meitou's font draws neither).
     /// </summary>
     string Filter(string value)
     {

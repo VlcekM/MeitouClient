@@ -255,8 +255,7 @@ public sealed class CoarseRoute
     public List<Vector3> Find(Vector3 from, Vector3 to, WaterCost water)
     {
         // A goal the slope test cuts off (a narrow ramp the coarse grid smooths into a cliff) is still routed to, over every slope: the navmesh near
-        // the
-        // walker finds the real way up.
+        // the walker finds the real way up.
         var route = Find(from, to, water, slopes: true);
         return route.Count > 0 ? route : Find(from, to, water, slopes: false);
     }

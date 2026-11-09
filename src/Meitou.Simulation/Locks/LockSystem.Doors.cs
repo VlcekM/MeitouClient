@@ -52,16 +52,13 @@ public sealed class DoorLockJob(string door, bool locking)
 /// get their doors registered (<see cref="FixtureRegistry.RegisterPlayerBuilding"/>) and the player's door orders are applied. Serial phases only.
 /// <list type="bullet">
 /// <item><b>Engine choice</b>: the original's walk needs its destination and location "accessible" (states 59, 60), which Task_OpenDoor (84, 85)
-/// makes true by opening the door
-/// (the walker faces the door, a locked one fails the task); here the walk itself opens it: a walker within <see cref="OpenReach"/> of a closed door
-/// whose current or next path leg
-/// crosses the leaf's plane within its width (plus <see cref="DoorSlack"/>). At a locked one the walker stops, within <see cref="LockedReach"/> on
-/// its current leg. The walker does not
-/// wait for the leaf (the navmesh lets paths through closed unlocked doors).</item>
+/// makes true by opening the door (the walker faces the door, a locked one fails the task); here the walk itself opens it: a walker within
+/// <see cref="OpenReach"/> of a closed door whose current or next path leg crosses the leaf's plane within its width (plus <see cref="DoorSlack"/>).
+/// At a locked one the walker stops, within <see cref="LockedReach"/> on its current leg. The walker does not wait for the leaf (the navmesh lets
+/// paths through closed unlocked doors).</item>
 /// <item>The original closes no door behind a walker (<b>Observed</b>: only Task_CloseDoor, Task_LockDoor and the door panel start a close, and only
-/// the lock tasks need a closed door).
-/// Meitou (<see cref="DoorsCloseBehind"/>): a door a walker opened closes <see cref="AutoCloseSeconds"/> after the last character went through or
-/// stood in it, unless it wants its lock.</item>
+/// the lock tasks need a closed door). Meitou (<see cref="DoorsCloseBehind"/>): a door a walker opened closes <see cref="AutoCloseSeconds"/> after
+/// the last character went through or stood in it, unless it wants its lock.</item>
 /// </list>
 /// </summary>
 public sealed partial class LockSystem
@@ -95,8 +92,7 @@ public sealed partial class LockSystem
                     if (doors.Count == 0) break;
 
                     // Meitou: a door still moving counts by where it is heading and turns back (the original's open and close act only from closed /
-                    // open, so a
-                    // slow gate ignored the button for seconds).
+                    // open, so a slow gate ignored the button for seconds).
                     bool anyOpen = doors.Any(d => d.Motion is DoorMotion.Open or DoorMotion.Opening);
                     foreach (var d in doors)
                     {

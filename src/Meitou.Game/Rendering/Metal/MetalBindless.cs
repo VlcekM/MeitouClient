@@ -5,10 +5,9 @@ using SharpMetal.Metal;
 namespace Meitou.Game.Rendering.Metal;
 
 /// <summary>
-/// One stage's argument buffer layout, read from the MSL: the members' offsets in entries (8 bytes each) and the arrays each kind got.
-/// Metal packs the members sequentially in declaration order — the MSL's <c>[[id]]</c> decorations do not move them (verified with the
-/// pipeline reflection) — and a compiler drops an array a stage never reads, so the offsets differ per program: a program's buffer is
-/// filled to its own layout.
+/// One stage's argument buffer layout, read from the MSL: the members' offsets in entries (8 bytes each) and the arrays each kind got. Metal packs
+/// the members sequentially in declaration order — the MSL's <c>[[id]]</c> decorations do not move them (verified with the pipeline reflection) — and
+/// a compiler drops an array a stage never reads, so the offsets differ per program: a program's buffer is filled to its own layout.
 /// </summary>
 internal sealed class MetalTableLayout
 {

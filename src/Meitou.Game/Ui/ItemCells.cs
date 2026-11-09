@@ -76,8 +76,8 @@ sealed class ItemCells(PlayerInterface player)
     }
 
     /// <summary>
-    /// A white line over a black track along the cell's bottom edge, as long as what is left (the vanilla inventory and trader screenshots show it under
-    /// food stacks).
+    /// A white line over a black track along the cell's bottom edge, as long as what is left (the vanilla inventory and trader screenshots show it
+    /// under food stacks).
     /// </summary>
     void AddCharge(List<UiControl> controls, string name, UiRect area, float fill, UiRect? clip)
     {

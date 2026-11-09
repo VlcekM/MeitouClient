@@ -65,8 +65,9 @@ public readonly record struct TargetCandidate
 }
 
 /// <summary>
-/// The fight target score (<c>AI::chooseBestAttackTarget</c>, docs/game/combat.md "Attack slots and circling", Target score): the CharStats weights are the same
-/// constants for every character (<b>Verified</b> literals of <c>CharStats::init</c>). The candidate lists and the Hold post test are the caller's.
+/// The fight target score (<c>AI::chooseBestAttackTarget</c>, docs/game/combat.md "Attack slots and circling", Target score): the CharStats weights
+/// are the same constants for every character (<b>Verified</b> literals of <c>CharStats::init</c>). The candidate lists and the Hold post test are
+/// the caller's.
 /// </summary>
 public static class TargetScore
 {
@@ -84,8 +85,8 @@ public static class TargetScore
     public const float HoldNear = 40;
 
     /// <summary>
-    /// The range term's reach by the chooser's manoeuvre mode (<c>AI::scoreTargetRange</c>, <b>Verified</b>): HOLD_GROUND 2 x (meiDistance + tolerance),
-    /// STAY_CLOSE meiDistance + 200 + tolerance, ROAM_FAR 200; the weight is 2 in every mode.
+    /// The range term's reach by the chooser's manoeuvre mode (<c>AI::scoreTargetRange</c>, <b>Verified</b>): HOLD_GROUND 2 x (meiDistance +
+    /// tolerance), STAY_CLOSE meiDistance + 200 + tolerance, ROAM_FAR 200; the weight is 2 in every mode.
     /// </summary>
     public static float RangeOf(ManoeuvreMode mode) => mode switch
     {
@@ -95,8 +96,8 @@ public static class TargetScore
     };
 
     /// <summary>
-    /// The score of <paramref name="c"/> (higher is better), null when dropped. <paramref name="prone"/>: the chooser crawls (stubbornness x4, range term x20).
-    /// The range term is the chooser's manoeuvre mode's (<see cref="RangeOf"/>).
+    /// The score of <paramref name="c"/> (higher is better), null when dropped. <paramref name="prone"/>: the chooser crawls (stubbornness x4, range
+    /// term x20). The range term is the chooser's manoeuvre mode's (<see cref="RangeOf"/>).
     /// </summary>
     public static float? Score(in TargetCandidate c, bool player, bool hold, bool prone, bool animal, ManoeuvreMode mode = ManoeuvreMode.RoamFar)
     {

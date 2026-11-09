@@ -6,8 +6,8 @@ using Meitou.Simulation.Factions;
 namespace Meitou.Simulation.Population;
 
 /// <summary>
-/// A population pool of a town or nest (docs/game/factions-squads-towns.md "Off-screen world"): its desired max (save key <c>popd</c> / <c>popd2</c>), its current
-/// max (<c>pop</c> / <c>pop2</c>) and the game hour it last grew at (not saved: the original stamps it at load too).
+/// A population pool of a town or nest (docs/game/factions-squads-towns.md "Off-screen world"): its desired max (save key <c>popd</c> /
+/// <c>popd2</c>), its current max (<c>pop</c> / <c>pop2</c>) and the game hour it last grew at (not saved: the original stamps it at load too).
 /// </summary>
 public sealed class PoolState
 {
@@ -16,8 +16,8 @@ public sealed class PoolState
     public double Stamp { get; set; }
 
     /// <summary>
-    /// The original's growth (<c>FUN_1408f4c20</c>): the current max rises 3600 / 33 x 0.5 x 0.004 = 0.21818 per game hour since the last growth, up to the
-    /// desired max, whenever it is looked at.
+    /// The original's growth (<c>FUN_1408f4c20</c>): the current max rises 3600 / 33 x 0.5 x 0.004 = 0.21818 per game hour since the last growth, up
+    /// to the desired max, whenever it is looked at.
     /// </summary>
     public void Grow(double nowHours)
     {
@@ -43,8 +43,8 @@ public sealed class SitePools
     public float DiedAt { get; set; }
 
     /// <summary>
-    /// Both pools as the original grows them (<c>FUN_1408f6760</c>): residents, then roaming once the residents are within 1 of full. A roaming pool not grown
-    /// keeps its stamp, so the time it waited is credited when it grows again (<b>Verified</b>, <c>FUN_1408f4c20</c>).
+    /// Both pools as the original grows them (<c>FUN_1408f6760</c>): residents, then roaming once the residents are within 1 of full. A roaming pool
+    /// not grown keeps its stamp, so the time it waited is credited when it grows again (<b>Verified</b>, <c>FUN_1408f4c20</c>).
     /// </summary>
     public void Grow(double nowHours)
     {
@@ -87,8 +87,8 @@ public sealed class SitePools
 }
 
 /// <summary>
-/// The pools of the towns and nests (docs/simulation.md "Off-screen tier"): grown on the game clock for every town and nest, loaded or not; a town made once
-/// makes no residents again; on a town's load its squads that lost at least 60 % are made afresh within its residents' budget.
+/// The pools of the towns and nests (docs/simulation.md "Off-screen tier"): grown on the game clock for every town and nest, loaded or not; a town
+/// made once makes no residents again; on a town's load its squads that lost at least 60 % are made afresh within its residents' budget.
 /// </summary>
 public sealed partial class PopulationSystem
 {
@@ -151,8 +151,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A town made: <c>started</c>, and each resident squad's size (one with a home; bar squads are not counted) into the residents' desired and current max
-    /// (as the original's resident maker, <c>FUN_14057f820</c>).
+    /// A town made: <c>started</c>, and each resident squad's size (one with a home; bar squads are not counted) into the residents' desired and
+    /// current max (as the original's resident maker, <c>FUN_14057f820</c>).
     /// </summary>
     void MadeTown(World world, int site, IEnumerable<int> sizes)
     {
@@ -166,8 +166,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The town wipe-out gates (<c>TownPopulationManager::vfunc_4</c>, <b>Verified</b>): a roaming pool over this many keeps the town, and so do more living
-    /// roamers than <see cref="WipeRoamingLiving"/>.
+    /// The town wipe-out gates (<c>TownPopulationManager::vfunc_4</c>, <b>Verified</b>): a roaming pool over this many keeps the town, and so do more
+    /// living roamers than <see cref="WipeRoamingLiving"/>.
     /// </summary>
     public const float WipeRoamingPool = 3;
 
@@ -177,11 +177,11 @@ public sealed partial class PopulationSystem
     public const int WipeRoamingLiving = 25;
 
     /// <summary>
-    /// Town wipe-out (<c>TownPopulationManager::vfunc_4</c> <c>FUN_1408f7a80</c>, docs/game/factions-squads-towns.md "Town wipe"): a started town in a loaded zone
-    /// that is not yet <c>ded</c>, whose roaming pool is at most 3 and whose roaming platoons have at most 25 living, and none of whose resident squads (any
-    /// with a home; engine reading of the resident pool) is intact (<see cref="ResidentIntact"/>: the platoon's flag, which a squad with a member held keeps
-    /// true), is <c>ded</c> for good: it remakes no depleted squads (<see cref="CheckRegeneration"/>) and its <c>regenerates</c> squads die. Nothing is posted
-    /// (the town's <c>setDead</c> is empty).
+    /// Town wipe-out (<c>TownPopulationManager::vfunc_4</c> <c>FUN_1408f7a80</c>, docs/game/factions-squads-towns.md "Town wipe"): a started town in
+    /// a loaded zone that is not yet <c>ded</c>, whose roaming pool is at most 3 and whose roaming platoons have at most 25 living, and none of whose
+    /// resident squads (any with a home; engine reading of the resident pool) is intact (<see cref="ResidentIntact"/>: the platoon's flag, which a
+    /// squad with a member held keeps true), is <c>ded</c> for good: it remakes no depleted squads (<see cref="CheckRegeneration"/>) and its
+    /// <c>regenerates</c> squads die. Nothing is posted (the town's <c>setDead</c> is empty).
     /// </summary>
     void CheckTownWipes(World world)
     {
@@ -238,17 +238,17 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A template with <c>roaming military</c> is made in squad mode 2 even from a town's resident list (<c>FUN_140583a10</c>, <b>Verified</b>): the mode only picks
-    /// the town pool set the platoon is registered in (<c>FUN_1407ec8d0</c>), so it still has its home and stands in the town. Meitou takes it into account at
-    /// the town wipe: it is no resident there and counts with the roaming living.
+    /// A template with <c>roaming military</c> is made in squad mode 2 even from a town's resident list (<c>FUN_140583a10</c>, <b>Verified</b>): the
+    /// mode only picks the town pool set the platoon is registered in (<c>FUN_1407ec8d0</c>), so it still has its home and stands in the town. Meitou
+    /// takes it into account at the town wipe: it is no resident there and counts with the roaming living.
     /// </summary>
     bool RoamingMilitary(string templateId) => _data.Db.Find(templateId)?.GetBool("roaming military") == true;
 
     /// <summary>
-    /// Whether a resident platoon keeps its town from being wiped: <c>Platoon::isIntact</c> (<c>FUN_1407ac7b0</c>, <b>Verified</b>), false once declared dead,
-    /// else its flag, which a loaded squad's AI keeps current (<see cref="Ai.Blackboard.Intact"/>, the rule of <c>FUN_1407a5be0</c>) and an unloaded platoon holds
-    /// as it was at unload (or in the save). Meitou also needs someone alive in a platoon not in the world: its off-screen fights can kill members the flag never
-    /// saw.
+    /// Whether a resident platoon keeps its town from being wiped: <c>Platoon::isIntact</c> (<c>FUN_1407ac7b0</c>, <b>Verified</b>), false once
+    /// declared dead, else its flag, which a loaded squad's AI keeps current (<see cref="Ai.Blackboard.Intact"/>, the rule of <c>FUN_1407a5be0</c>)
+    /// and an unloaded platoon holds as it was at unload (or in the save). Meitou also needs someone alive in a platoon not in the world: its
+    /// off-screen fights can kill members the flag never saw.
     /// </summary>
     bool ResidentIntact(World world, Platoon p)
     {
@@ -261,8 +261,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// SQUAD_TEMPLATE <c>regenerates</c> (<c>Platoon::declareDead</c>, <b>Verified</b>): a squad of it whose last member dies is not declared dead while its town
-    /// is not <c>ded</c>; it is made afresh on its next activation.
+    /// SQUAD_TEMPLATE <c>regenerates</c> (<c>Platoon::declareDead</c>, <b>Verified</b>): a squad of it whose last member dies is not declared dead
+    /// while its town is not <c>ded</c>; it is made afresh on its next activation.
     /// </summary>
     bool Regenerates(Platoon p) => p.Pinned && TownAlive(p.Origin) && _data.Db.Find(p.TemplateId)?.GetBool("regenerates") == true;
 
@@ -271,8 +271,9 @@ public sealed partial class PopulationSystem
     bool TownAlive(int site) => site >= 0 && site < _townPools.Length && _townPools[site] is not { Ded: true };
 
     /// <summary>
-    /// The original's regeneration check at a town's load (<c>0x14092a020</c>): each of its own squads (in platoon id order) that lost at least 60 % of its size,
-    /// while the losses so far fit the residents' current max less the living, is marked to be made afresh from its template when it next comes into the world.
+    /// The original's regeneration check at a town's load (<c>0x14092a020</c>): each of its own squads (in platoon id order) that lost at least 60 %
+    /// of its size, while the losses so far fit the residents' current max less the living, is marked to be made afresh from its template when it
+    /// next comes into the world.
     /// </summary>
     void CheckRegeneration(World world, int site)
     {
@@ -326,8 +327,9 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A town's squad marked for regeneration comes into the world made afresh from its template at its place, homed where it was; its old characters are gone
-    /// (a save's platoon leaves the save, the new one is written as the town's). Returns the new platoon's squad (null when the template plans no one).
+    /// A town's squad marked for regeneration comes into the world made afresh from its template at its place, homed where it was; its old characters
+    /// are gone (a save's platoon leaves the save, the new one is written as the town's). Returns the new platoon's squad (null when the template
+    /// plans no one).
     /// </summary>
     Squad? Regenerate(World world, Platoon p)
     {
@@ -391,9 +393,10 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A save's never-made town squad (<see cref="Platoon.Unmade"/>) comes into the world made from its template into the same platoon, as the original builds the
-    /// platoon object it has (<c>FUN_1404ffad0</c>, +0x114 set): homed at its <c>homebuilding</c>, it keeps the save's record, which the next save writes back with
-    /// its characters and <c>never been activated</c> false (<c>FUN_140372ef0</c>). Returns its squad (null when the template plans no one).
+    /// A save's never-made town squad (<see cref="Platoon.Unmade"/>) comes into the world made from its template into the same platoon, as the
+    /// original builds the platoon object it has (<c>FUN_1404ffad0</c>, +0x114 set): homed at its <c>homebuilding</c>, it keeps the save's record,
+    /// which the next save writes back with its characters and <c>never been activated</c> false (<c>FUN_140372ef0</c>). Returns its squad (null when
+    /// the template plans no one).
     /// </summary>
     Squad? MakeUnmade(World world, Platoon p)
     {
@@ -420,9 +423,9 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A town's roamer leaves the world for good (<c>FUN_1406bab60</c> -&gt; <c>FUN_140796b30</c>, <b>Verified</b>): one not intact and not regenerating takes its
-    /// living members out of its town's roaming pool, only while the pool is above 0 and with no floor. Its faction's prosperity drops by 10 (floor 0) with it,
-    /// pool or not (<c>FUN_1406bab60</c>; platoon +0xa4 read as the member count).
+    /// A town's roamer leaves the world for good (<c>FUN_1406bab60</c> -&gt; <c>FUN_140796b30</c>, <b>Verified</b>): one not intact and not
+    /// regenerating takes its living members out of its town's roaming pool, only while the pool is above 0 and with no floor. Its faction's
+    /// prosperity drops by 10 (floor 0) with it, pool or not (<c>FUN_1406bab60</c>; platoon +0xa4 read as the member count).
     /// </summary>
     void PayRoamerDespawn(World world, Platoon p, Squad squad)
     {
@@ -441,8 +444,8 @@ public sealed partial class PopulationSystem
     readonly Dictionary<int, SitePools> _nestPools = [];
 
     /// <summary>
-    /// The squared distance within which the camera focus stops a nest making squads (<c>FUN_1408f8740</c>:154-170, 1250 = 35.4 units; before any candidate is
-    /// drawn).
+    /// The squared distance within which the camera focus stops a nest making squads (<c>FUN_1408f8740</c>:154-170, 1250 = 35.4 units; before any
+    /// candidate is drawn).
     /// </summary>
     public const float NestFocusBlockSquared = 1250;
 
@@ -510,8 +513,9 @@ public sealed partial class PopulationSystem
         && Vector3.DistanceSquared(f, new Vector3(centre.X, world.Walkability.GroundHeight(centre.X, centre.Y), centre.Y)) < NestFocusBlockSquared;
 
     /// <summary>
-    /// One nest a tick, in turn over every nest (<c>TownList::vfunc_4</c>'s nest cursor, <b>Verified</b>; the original's frame is the tick here): when loaded and
-    /// its pool has room it makes one more squad (built on the population thread): not a wiped-out nest, not one with a player character within
+    /// One nest a tick, in turn over every nest (<c>TownList::vfunc_4</c>'s nest cursor, <b>Verified</b>; the original's frame is the tick here):
+    /// when loaded and its pool has room it makes one more squad (built on the population thread): not a wiped-out nest, not one with a player
+    /// character within
     /// <see cref="NestGuardRadius"/> (it is only weighed then, so a nest left with nothing to make is still found wiped out). The turn is the tick modulo the
     /// nest count, so it needs no saved cursor.
     /// </summary>
@@ -627,8 +631,9 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A wild site's squads leave the world: one that is not intact (the squad-intact rule, <see cref="SquadIntact"/>, <b>Verified</b>) takes its living members
-    /// out of the pool while it is above 0, with no floor (<c>FUN_140796b30</c>, the original's despawn of a damaged squad it does not keep).
+    /// A wild site's squads leave the world: one that is not intact (the squad-intact rule, <see cref="SquadIntact"/>, <b>Verified</b>) takes its
+    /// living members out of the pool while it is above 0, with no floor (<c>FUN_140796b30</c>, the original's despawn of a damaged squad it does not
+    /// keep).
     /// </summary>
     void PayNestDespawn(World world, WildSite site, SiteState state)
     {
@@ -640,8 +645,8 @@ public sealed partial class PopulationSystem
 
             int living = squad.Members.Count(m => Living(world, m));
 
-            // Every non-persistent platoon taken out of the world while not intact lowers its faction's prosperity (FUN_1406bab60), nest squads and homeless ones
-            // too.
+            // Every non-persistent platoon taken out of the world while not intact lowers its faction's prosperity (FUN_1406bab60), nest squads and
+            // homeless ones too.
             if (squad.Members.Count > 0) LowerProsperity(world, squad.Faction, DamagedDespawnProsperity);
             if (site.Kind == WildKind.Nest && pools is not null && pools.Roaming.Current > 0) pools.Roaming.Current -= living;
         }

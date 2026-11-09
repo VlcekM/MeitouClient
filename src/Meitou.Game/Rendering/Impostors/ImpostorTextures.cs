@@ -7,16 +7,16 @@ using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
-/// An atlas on the GPU (phase 8 stage 2, docs/impostors.md "Runtime"): one native texture per map with the baked levels (the chain stops at 4 × 4 pixels a
-/// frame), named "impostor atlas albedo / normal" (the F12 VRAM pie groups them), sampled trilinear and clamped through one bindless entry per map
-/// (<see cref="Index"/>). Made empty by the constructor; the levels are written by <see cref="Upload"/> (all at once) or step by step
+/// An atlas on the GPU (phase 8 stage 2, docs/impostors.md "Runtime"): one native texture per map with the baked levels (the chain stops at 4 × 4
+/// pixels a frame), named "impostor atlas albedo / normal" (the F12 VRAM pie groups them), sampled trilinear and clamped through one bindless entry
+/// per map (<see cref="Index"/>). Made empty by the constructor; the levels are written by <see cref="Upload"/> (all at once) or step by step
 /// (<see cref="UploadStep"/>, <see cref="StepCount"/>), so a large atlas can be spread over frames. Render thread only.
 /// </summary>
 public sealed class ImpostorTextures : IDisposable
 {
     /// <summary>
-    /// The most one <see cref="UploadStep"/> writes: a level is cut into slabs of whole rows (of blocks, for the compressed maps) of about this size. A level
-    /// was one step before, up to 9 MB (a 3072² BC1 albedo): the copy into staging alone took 2 to 3 ms of the render thread.
+    /// The most one <see cref="UploadStep"/> writes: a level is cut into slabs of whole rows (of blocks, for the compressed maps) of about this size.
+    /// A level was one step before, up to 9 MB (a 3072² BC1 albedo): the copy into staging alone took 2 to 3 ms of the render thread.
     /// </summary>
     public const int SlabBytes = 1 << 20;
 
@@ -84,9 +84,9 @@ public sealed class ImpostorTextures : IDisposable
     };
 
     /// <summary>
-    /// The maps for the constructor with the same skips, made on a worker (<see cref="IGpuContext.CreateTextureOffThread"/>: their memory, and a new block
-    /// for it, costs no frame); an entry is null where it could not be made there (the backend has no such path, or no memory now), and the constructor
-    /// makes that one. Any thread; what is returned is the render thread's to pass on or dispose.
+    /// The maps for the constructor with the same skips, made on a worker (<see cref="IGpuContext.CreateTextureOffThread"/>: their memory, and a new
+    /// block for it, costs no frame); an entry is null where it could not be made there (the backend has no such path, or no memory now), and the
+    /// constructor makes that one. Any thread; what is returned is the render thread's to pass on or dispose.
     /// </summary>
     public static GpuTexture?[] MakeOffThread(IGpuContext gpu, ImpostorAtlas atlas, int skip, int surfaceSkip)
     {
@@ -241,8 +241,8 @@ public sealed class ImpostorTextures : IDisposable
     }
 
     /// <summary>
-    /// The two maps' textures for <paramref name="skip"/> and <paramref name="surfaceSkip"/>, and the skips in effect into <paramref name="skips"/>. Streamed
-    /// (atlases come and go with the view).
+    /// The two maps' textures for <paramref name="skip"/> and <paramref name="surfaceSkip"/>, and the skips in effect into <paramref name="skips"/>.
+    /// Streamed (atlases come and go with the view).
     /// </summary>
     static TextureDesc[] Shape(ImpostorAtlas atlas, int skip, int surfaceSkip, int[] skips)
     {

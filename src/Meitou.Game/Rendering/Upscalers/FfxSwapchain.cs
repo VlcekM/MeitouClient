@@ -6,9 +6,9 @@ using Semaphore = Silk.NET.Vulkan.Semaphore;
 namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
-/// The swapchain of AMD's FSR 3 frame-interpolation layer (<c>ffxProvider_FrameGenerationSwapChain_VK</c> of <c>amd_fidelityfx_vk.dll</c>, FidelityFX SDK
-/// 1.1.x, MIT; <c>ffx_api_vk.h</c> and <c>ffx_provider_framegenerationswapchain_vk.cpp</c> give the struct layouts and the call order), standing in for
-/// the plain <c>vkCreateSwapchainKHR</c> / acquire / present of <see cref="Gpu.VulkanPresenter"/>. Frames are generated on top of it by
+/// The swapchain of AMD's FSR 3 frame-interpolation layer (<c>ffxProvider_FrameGenerationSwapChain_VK</c> of <c>amd_fidelityfx_vk.dll</c>, FidelityFX
+/// SDK 1.1.x, MIT; <c>ffx_api_vk.h</c> and <c>ffx_provider_framegenerationswapchain_vk.cpp</c> give the struct layouts and the call order), standing
+/// in for the plain <c>vkCreateSwapchainKHR</c> / acquire / present of <see cref="Gpu.VulkanPresenter"/>. Frames are generated on top of it by
 /// <see cref="FrameGeneration"/>; without that context the layer presents every rendered frame as it is. The first <see cref="Create"/> makes the FFX
 /// context (it makes the swapchain); later ones (a resize, a vsync change) destroy the old swapchain and create the next through the context's own
 /// replacements, as the header says.
@@ -57,8 +57,8 @@ public sealed unsafe class FfxSwapchain : IDisposable
     delegate* unmanaged<Queue, PresentInfoKHR*, Result> _present;
 
     /// <summary>
-    /// Raised at the start of <see cref="Dispose"/>, while the swapchain still exists: a frame-generation context on it is destroyed then, first, as the FFX
-    /// API requires.
+    /// Raised at the start of <see cref="Dispose"/>, while the swapchain still exists: a frame-generation context on it is destroyed then, first, as
+    /// the FFX API requires.
     /// </summary>
     internal event Action? Disposing;
 
@@ -225,8 +225,9 @@ public sealed unsafe class FfxSwapchain : IDisposable
     }
 
     /// <summary>
-    /// Makes the swapchain described by <paramref name="info"/> (its <c>OldSwapchain</c> is ignored: the old one is <paramref name="old"/>, destroyed here).
-    /// The first call makes the FFX context; a later one destroys <paramref name="old"/> through the replacement and creates the next. False with
+    /// Makes the swapchain described by <paramref name="info"/> (its <c>OldSwapchain</c> is ignored: the old one is <paramref name="old"/>, destroyed
+    /// here). The first call makes the FFX context; a later one destroys <paramref name="old"/> through the replacement and creates the next. False
+    /// with
     /// <paramref name="why"/> on any failure; the layer is then unusable (call <see cref="Dispose"/>).
     /// </summary>
     public bool Create(SwapchainCreateInfoKHR info, SwapchainKHR old, out SwapchainKHR swapchain, out string? why)

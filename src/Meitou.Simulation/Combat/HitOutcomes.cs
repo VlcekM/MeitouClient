@@ -44,22 +44,22 @@ public static class HitOutcomes
     public const float DodgeFrom = 0.1f, DodgeTo = 0.98f;
 
     /// <summary>
-    /// The direction a blow from <paramref name="behind"/> the defender is met as (<b>Verified</b>, <c>FUN_1404356c0</c>, used by the defence pick and the
-    /// outcome): down (1) becomes the rear up block 7, left and right (2, 3) the rear side 9; the others are unchanged.
+    /// The direction a blow from <paramref name="behind"/> the defender is met as (<b>Verified</b>, <c>FUN_1404356c0</c>, used by the defence pick
+    /// and the outcome): down (1) becomes the rear up block 7, left and right (2, 3) the rear side 9; the others are unchanged.
     /// </summary>
     public static int Facing(int direction, bool behind) => !behind ? direction : direction switch { 1 => 7, 2 or 3 => 9, _ => direction };
 
     /// <summary>
-    /// Whether an attacker at <paramref name="attacker"/> is behind a defender at <paramref name="defender"/> facing <paramref name="yaw"/> (more than 90 degrees
-    /// off its heading).
+    /// Whether an attacker at <paramref name="attacker"/> is behind a defender at <paramref name="defender"/> facing <paramref name="yaw"/> (more
+    /// than 90 degrees off its heading).
     /// </summary>
     public static bool Behind(System.Numerics.Vector3 attacker, System.Numerics.Vector3 defender, float yaw) =>
         (attacker.X - defender.X) * MathF.Sin(yaw) + (attacker.Z - defender.Z) * MathF.Cos(yaw) < 0;
 
     /// <summary>
-    /// Blocked (code 5) if the defender's technique is a block, its direction equals the blow's and its animation is past 50 per cent; dodged (code 0) if it is
-    /// a dodge and the progress is in [0.1, 0.98]; otherwise a hit (code 2). A technique flagged both (the base game's "Dodge back" rows) is a dodge: a block
-    /// needs <c>is dodge</c> 0 (<b>Verified</b>, docs/game/combat.md).
+    /// Blocked (code 5) if the defender's technique is a block, its direction equals the blow's and its animation is past 50 per cent; dodged (code
+    /// 0) if it is a dodge and the progress is in [0.1, 0.98]; otherwise a hit (code 2). A technique flagged both (the base game's "Dodge back" rows)
+    /// is a dodge: a block needs <c>is dodge</c> 0 (<b>Verified</b>, docs/game/combat.md).
     /// </summary>
     public static BlowOutcome Decide(CombatTechnique? reaction, float progress, int blowDirection)
     {

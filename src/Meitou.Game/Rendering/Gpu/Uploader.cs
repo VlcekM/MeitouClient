@@ -35,8 +35,8 @@ public sealed unsafe class Uploader : IGpuUploads
     }
 
     /// <summary>
-    /// Writes <paramref name="data"/>'s <paramref name="stride"/>-byte records each to its own offset of <paramref name="offsets"/> (in order): one staging
-    /// copy and one copy command.
+    /// Writes <paramref name="data"/>'s <paramref name="stride"/>-byte records each to its own offset of <paramref name="offsets"/> (in order): one
+    /// staging copy and one copy command.
     /// </summary>
     public void WriteScattered(DeviceBuffer target, ReadOnlySpan<byte> data, int stride, ReadOnlySpan<ulong> offsets)
     {
@@ -88,10 +88,10 @@ public sealed unsafe class Uploader : IGpuUploads
     }
 
     /// <summary>
-    /// (Added in phase 8 stage 1, terrain.) Uploads and the commands that belong with them (a new texture's layout transition, its mip generation) for
-    /// resources made outside the frame's passes, whether or not a frame is open: while one is, into the frame's upload command buffer
-    /// (<see cref="GpuFrame.PreFrame"/>, as <see cref="Write(Texture, int, int, in PixelRect, ReadOnlySpan{byte})"/>); otherwise (at load, before the first
-    /// frame: VkGl opened a frame for such uploads, the native API does not) into a one-shot command buffer with staging of its own, which
+    /// (Added in phase 8 stage 1, terrain.) Uploads and the commands that belong with them (a new texture's layout transition, its mip generation)
+    /// for resources made outside the frame's passes, whether or not a frame is open: while one is, into the frame's upload command buffer
+    /// (<see cref="GpuFrame.PreFrame"/>, as <see cref="Write(Texture, int, int, in PixelRect, ReadOnlySpan{byte})"/>); otherwise (at load, before the
+    /// first frame: VkGl opened a frame for such uploads, the native API does not) into a one-shot command buffer with staging of its own, which
     /// <see cref="UploadBatch.Dispose"/> submits and waits for. Render thread only.
     /// </summary>
     public IGpuUploadBatch Begin() => new UploadBatch(_ctx);

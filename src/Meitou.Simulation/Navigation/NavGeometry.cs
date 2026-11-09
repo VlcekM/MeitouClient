@@ -3,8 +3,8 @@ using System.Numerics;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The small plane geometry the gatherer, builder, pruner and queries share. Each expression is evaluated exactly as it was where it lived before (float
-/// evaluation order decides the built meshes bit for bit, and paths follow from them).
+/// The small plane geometry the gatherer, builder, pruner and queries share. Each expression is evaluated exactly as it was where it lived before
+/// (float evaluation order decides the built meshes bit for bit, and paths follow from them).
 /// </summary>
 internal static class NavGeometry
 {
@@ -19,9 +19,9 @@ internal static class NavGeometry
     public const float NearMissGap = 1.5f;
 
     /// <summary>
-    /// Twice the signed area of a polygon on (X, Z); positive when it winds counter-clockwise with X right and Z up. Summed from the first vertex in double: at
-    /// world coordinates (~1e5) the float products round by hundreds of square units, more than a door painter's whole area, so its winding came out at random
-    /// (docs/game/pathfinding.md, "Door painters").
+    /// Twice the signed area of a polygon on (X, Z); positive when it winds counter-clockwise with X right and Z up. Summed from the first vertex in
+    /// double: at world coordinates (~1e5) the float products round by hundreds of square units, more than a door painter's whole area, so its
+    /// winding came out at random (docs/game/pathfinding.md, "Door painters").
     /// </summary>
     public static float SignedArea(Vector2[] p)
     {

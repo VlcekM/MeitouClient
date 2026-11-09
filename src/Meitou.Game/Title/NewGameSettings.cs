@@ -83,8 +83,8 @@ internal sealed record NewGameSettings
     });
 
     /// <summary>
-    /// Writes the options into a save. <c>bl</c> is the world's too (<c>PlayerState.BanditsLoot</c>, which the capture writes): both hold the same value,
-    /// and an import needs it here.
+    /// Writes the options into a save. <c>bl</c> is the world's too (<c>PlayerState.BanditsLoot</c>, which the capture writes): both hold the same
+    /// value, and an import needs it here.
     /// </summary>
     public void Write(SaveCamera camera)
     {
@@ -97,8 +97,8 @@ internal sealed record NewGameSettings
     }
 
     /// <summary>
-    /// As the original's loader: without <c>cod</c> every option keeps its default; with it <c>cod gdm ps rs bs ep</c> are read as they are (a missing one is
-    /// 0 / false), <c>ht nnm bl</c> only when present. Values are not clamped.
+    /// As the original's loader: without <c>cod</c> every option keeps its default; with it <c>cod gdm ps rs bs ep</c> are read as they are (a
+    /// missing one is 0 / false), <c>ht nnm bl</c> only when present. Values are not clamped.
     /// </summary>
     public static NewGameSettings Read(SaveCamera camera)
     {

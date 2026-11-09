@@ -17,8 +17,9 @@ public sealed record NavBuildSettings
     public float CellHeight { get; init; } = 0.5f;
 
     /// <summary>
-    /// Tile edge in cells (576 units, 8 tiles a zone side); the zone's cells per side must be a multiple of it. Polygons end at tile edges, so large tiles keep
-    /// open ground in few polygons (the original's mesh has none: one tile a zone) and a search expands fewer (docs/game/pathfinding.md "Search cost").
+    /// Tile edge in cells (576 units, 8 tiles a zone side); the zone's cells per side must be a multiple of it. Polygons end at tile edges, so large
+    /// tiles keep open ground in few polygons (the original's mesh has none: one tile a zone) and a search expands fewer (docs/game/pathfinding.md
+    /// "Search cost").
     /// </summary>
     public int TileCells { get; init; } = 288;
 

@@ -24,8 +24,7 @@ public sealed class MipStreaming
 
     /// <summary>
     /// Never drop to a top level whose larger side is smaller than this (also keeps the level the normal-map swizzle test reads, the first within
-    /// 256,
-    /// in the chain).
+    /// 256, in the chain).
     /// </summary>
     public const int MinSize = 512;
 

@@ -22,8 +22,8 @@ public sealed class NavRuntimeBuildings
     public bool IsEmpty => _byZone.Count == 0;
 
     /// <summary>
-    /// Raised after a placement is added, replaced or removed, with the zone it was placed in (both zones when a replacement moves it): what else keeps
-    /// zone-wide results (the ragdolls' collision) drops them.
+    /// Raised after a placement is added, replaced or removed, with the zone it was placed in (both zones when a replacement moves it): what else
+    /// keeps zone-wide results (the ragdolls' collision) drops them.
     /// </summary>
     public event Action<ZoneCoordinate>? Changed;
 

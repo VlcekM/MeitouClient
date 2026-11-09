@@ -18,11 +18,10 @@ public readonly record struct BindlessHandle(BindlessKind Kind, uint Index);
 /// The bindless texture table: combined image samplers in seven partially bound, update-after-bind arrays (<c>sampler2D textures2D[]</c>,
 /// <c>sampler2DArray textures2DArray[]</c>, <c>samplerCube texturesCube[]</c>, <c>sampler2DShadow shadowTextures[]</c>,
 /// <c>usampler2D utextures2D[]</c>, <c>isampler2D itextures2D[]</c>, <c>sampler2DArrayShadow shadowArrays[]</c>; <see cref="GlslDeclarations"/>), one
-/// descriptor set per frame slot so a
-/// slot is never written while a frame in flight reads it. Registrations and rewrites go into a journal that is replayed into a slot's set
-/// when that slot's frame begins, and into the open frame's own set when that frame ends (before it is submitted): an index registered or
-/// updated while a frame is open is valid in that frame. A freed index is reused once the frames that could read it have finished. The
-/// sampler is part of the entry, as GL's per-texture sampler state is. Render thread only.
+/// descriptor set per frame slot so a slot is never written while a frame in flight reads it. Registrations and rewrites go into a journal that is
+/// replayed into a slot's set when that slot's frame begins, and into the open frame's own set when that frame ends (before it is submitted): an
+/// index registered or updated while a frame is open is valid in that frame. A freed index is reused once the frames that could read it have
+/// finished. The sampler is part of the entry, as GL's per-texture sampler state is. Render thread only.
 /// </summary>
 /// <remarks>
 /// Update-after-bind descriptors are read when the command buffer executes, so an <see cref="Update(BindlessKind, uint, in SampledTexture)"/>

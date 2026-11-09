@@ -10,8 +10,8 @@ namespace Meitou.Game.Rendering.Terrain;
 /// <summary>
 /// GL work cut into steps (a slab of a texture, a swap) that run a few at a time on the render thread, so streaming data in never costs a frame more
 /// than the budget (a step is at most about 2 MB of upload). The first step of a <see cref="Run"/> always runs; after it, a step starts only if the
-/// budget has not passed and what steps of its label have cost lately (<see cref="StepCosts"/>) still fits in what is left, so a step known to be heavy
-/// waits for a frame of its own instead of running on top of others.
+/// budget has not passed and what steps of its label have cost lately (<see cref="StepCosts"/>) still fits in what is left, so a step known to be
+/// heavy waits for a frame of its own instead of running on top of others.
 /// </summary>
 public sealed class UploadQueue
 {
@@ -37,8 +37,8 @@ public sealed class UploadQueue
     public void Add(Action step, string label = "step") => _steps.Enqueue((step, label));
 
     /// <summary>
-    /// Runs queued steps until <paramref name="budgetMs"/> has passed or the next one is expected to end more than <see cref="StepCosts.Slack"/> past it
-    /// (always at least one, if any).
+    /// Runs queued steps until <paramref name="budgetMs"/> has passed or the next one is expected to end more than <see cref="StepCosts.Slack"/> past
+    /// it (always at least one, if any).
     /// </summary>
     public void Run(double budgetMs)
     {
@@ -80,8 +80,8 @@ public sealed class TerrainStreamer : IDisposable
     const double RecentreFraction = 0.15;
 
     /// <summary>
-    /// A kept point this near the drawn window's centre (a fraction of its width) needs no standby: a jump there keeps the window's fine heights in view
-    /// while the window moves.
+    /// A kept point this near the drawn window's centre (a fraction of its width) needs no standby: a jump there keeps the window's fine heights in
+    /// view while the window moves.
     /// </summary>
     const double CoverFraction = 0.3;
 
@@ -164,8 +164,8 @@ public sealed class TerrainStreamer : IDisposable
     public float GroundUnderEye { get; set; } = float.NegativeInfinity;
 
     /// <summary>
-    /// At most this many standby windows (about 5 MB of video memory and 5 MB of memory each at step 1): one per kept place (<see cref="Areas"/> less the
-    /// eye's), at least 3, at most <see cref="StandbyCeiling"/>.
+    /// At most this many standby windows (about 5 MB of video memory and 5 MB of memory each at step 1): one per kept place (<see cref="Areas"/> less
+    /// the eye's), at least 3, at most <see cref="StandbyCeiling"/>.
     /// </summary>
     int MaxStandbys => Math.Clamp(Areas - 1, 3, StandbyCeiling);
 

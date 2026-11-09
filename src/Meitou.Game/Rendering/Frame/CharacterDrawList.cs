@@ -109,8 +109,7 @@ public readonly record struct CharacterInstance(
 
     /// <summary>
     /// Holds the bones of the character with this key as it was last posed, taken the first time this one is drawn and never posed again (a cut-off
-    /// head keeps the pose of the
-    /// moment it was cut); <see cref="Poses"/> are then ignored.
+    /// head keeps the pose of the moment it was cut); <see cref="Poses"/> are then ignored.
     /// </summary>
     public long? FreezeFrom { get; init; }
 }
@@ -129,10 +128,9 @@ public sealed class CharacterDrawList
 
     /// <summary>
     /// The characters beyond the renderer's reach (<see cref="Characters.CharacterRenderer.InReach"/>), with only their look, place and what loading
-    /// reads: kept across
-    /// frames and filled again by the host when its simulation snapshot changes (<see cref="BeginDistant"/>), as nothing in them moves between ticks.
-    /// Read only to build
-    /// looks ahead and to keep the textures round kept points; a character that came within reach since is in <see cref="Items"/> as well.
+    /// reads: kept across frames and filled again by the host when its simulation snapshot changes (<see cref="BeginDistant"/>), as nothing in them
+    /// moves between ticks. Read only to build looks ahead and to keep the textures round kept points; a character that came within reach since is in
+    /// <see cref="Items"/> as well.
     /// </summary>
     public List<CharacterInstance> Distant { get; } = [];
 

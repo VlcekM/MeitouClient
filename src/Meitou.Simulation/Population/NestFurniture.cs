@@ -11,8 +11,8 @@ namespace Meitou.Simulation.Population;
 public sealed record NestPiece(string Id, string Record, Vector3 Position, Quaternion Rotation);
 
 /// <summary>
-/// What a nest scatters at its place: its buildings, its <c>debris</c> meshes (drawn only) and the items it lays down in a fresh zone (<c>debris</c> with
-/// physics, <c>loot spawn</c>).
+/// What a nest scatters at its place: its buildings, its <c>debris</c> meshes (drawn only) and the items it lays down in a fresh zone (<c>debris</c>
+/// with physics, <c>loot spawn</c>).
 /// </summary>
 public sealed record NestLayout(List<NestPiece> Pieces, List<NestMesh> Meshes, List<NestDrop> Drops)
 {
@@ -20,12 +20,12 @@ public sealed record NestLayout(List<NestPiece> Pieces, List<NestMesh> Meshes, L
 }
 
 /// <summary>
-/// A nest's <c>debris building</c> scatter (docs/game/factions-squads-towns.md "Nest furniture"; the original's <c>TownBase::_nestUpThisSpot</c> and its
-/// building placer <c>FUN_140930120</c>): <c>num centrepoints</c> centres within <c>size radius</c> of the nest, each 190 from the earlier ones it came within 140
-/// of, and round each centre every entry's count of its BUILDING at v1 to v2 from it, pushed to 25 from a piece of the same entry within 17, dropped with no
-/// navmesh within 60 of the centre's height (the original's nearest-point query, a box of half-size 60) or within 12 of one, stood on the ground tilted to it up
-/// to the BUILDING's <c>max slope</c>. Pure; the rolls are keyed by the nest's place (the original seeds from its X/Z). The <c>debris</c> and <c>loot spawn</c>
-/// lists are in <c>NestDebris.cs</c>.
+/// A nest's <c>debris building</c> scatter (docs/game/factions-squads-towns.md "Nest furniture"; the original's <c>TownBase::_nestUpThisSpot</c> and
+/// its building placer <c>FUN_140930120</c>): <c>num centrepoints</c> centres within <c>size radius</c> of the nest, each 190 from the earlier ones
+/// it came within 140 of, and round each centre every entry's count of its BUILDING at v1 to v2 from it, pushed to 25 from a piece of the same entry
+/// within 17, dropped with no navmesh within 60 of the centre's height (the original's nearest-point query, a box of half-size 60) or within 12 of
+/// one, stood on the ground tilted to it up to the BUILDING's <c>max slope</c>. Pure; the rolls are keyed by the nest's place (the original seeds
+/// from its X/Z). The <c>debris</c> and <c>loot spawn</c> lists are in <c>NestDebris.cs</c>.
 /// </summary>
 public static partial class NestFurniture
 {
@@ -39,8 +39,8 @@ public static partial class NestFurniture
     const float NormalStep = 5;
 
     /// <summary>
-    /// What <paramref name="nest"/> scatters at <paramref name="at"/>, in the original's order: <c>debris</c>, the buildings (ids are <paramref name="idPrefix"/>
-    /// and a number), <c>loot spawn</c>.
+    /// What <paramref name="nest"/> scatters at <paramref name="at"/>, in the original's order: <c>debris</c>, the buildings (ids are
+    /// <paramref name="idPrefix"/> and a number), <c>loot spawn</c>.
     /// </summary>
     public static NestLayout Scatter(GameDatabase db, TownData nest, Vector2 at, IWalkability walk, ulong seed, string idPrefix)
     {
@@ -149,8 +149,8 @@ public static partial class NestFurniture
     static float Between(ref RandomStream rolls, float min, float max) => min + rolls.NextFloat() * (max - min);
 
     /// <summary>
-    /// A turn of <paramref name="yaw"/> about up, tilted to the ground's slope; a tilt past <paramref name="maxSlope"/> degrees is brought back to it (the
-    /// original's slerp).
+    /// A turn of <paramref name="yaw"/> about up, tilted to the ground's slope; a tilt past <paramref name="maxSlope"/> degrees is brought back to it
+    /// (the original's slerp).
     /// </summary>
     static Quaternion Stand(IWalkability walk, Vector3 p, float yaw, float maxSlope)
     {
@@ -174,9 +174,10 @@ public static partial class NestFurniture
 }
 
 /// <summary>
-/// The buildings and debris meshes the loaded nests (and the towns with <c>spawn in town centre</c>) stood up (<see cref="NestFurniture"/>), by camp: a wild
-/// site, or a town site (<see cref="TownCamp"/>). Not saved: a nest stands them up again from its place each time it loads, as the original (its nest buildings
-/// are never in a save); the items it lays down are ground items, saved as such, laid once per camp in a fresh zone (<see cref="Stock"/>). Serial phases only.
+/// The buildings and debris meshes the loaded nests (and the towns with <c>spawn in town centre</c>) stood up (<see cref="NestFurniture"/>), by camp:
+/// a wild site, or a town site (<see cref="TownCamp"/>). Not saved: a nest stands them up again from its place each time it loads, as the original
+/// (its nest buildings are never in a save); the items it lays down are ground items, saved as such, laid once per camp in a fresh zone
+/// (<see cref="Stock"/>). Serial phases only.
 /// </summary>
 public sealed class NestBuildings
 {

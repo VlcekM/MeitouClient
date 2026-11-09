@@ -24,8 +24,8 @@ internal sealed unsafe class FreeTypeFace
     readonly Dictionary<long, int> _kerning = [];
 
     /// <summary>
-    /// Whether the TrueType interpreter was set to version 35, the full bytecode interpreter of the FreeType the original used (2.13 defaults to version
-    /// 40, which ignores most horizontal hinting). False if FreeType refused the property; the default interpreter is used then.
+    /// Whether the TrueType interpreter was set to version 35, the full bytecode interpreter of the FreeType the original used (2.13 defaults to
+    /// version 40, which ignores most horizontal hinting). False if FreeType refused the property; the default interpreter is used then.
     /// </summary>
     public static bool Interpreter35 { get; private set; }
 

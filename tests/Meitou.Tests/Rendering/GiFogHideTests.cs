@@ -14,8 +14,7 @@ public class GiFogHideTests
     public void The_reach_box_holds_every_point_that_can_read_the_probes_of_the_column()
     {
         // giCascade reads a point q = p + offset (offset at most 0.3 of the smaller spacing) from the probes of the cells around q: a probe at column
-        // x
-        // is read from p within one spacing across. Layer l is read from base + (l - 0.5) sy to base + (l + 1.5) sy.
+        // x is read from p within one spacing across. Layer l is read from base + (l - 0.5) sy to base + (l + 1.5) sy.
         const float x = 10240, z = -20480, baseY = 100;
         for (int layers = 1; layers <= 7; layers++)
         {

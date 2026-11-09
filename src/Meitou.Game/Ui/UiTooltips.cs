@@ -5,8 +5,8 @@ using Meitou.Data.Ui;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The colour a tooltip text takes: the palette the original's inline colour tags name (<c>data/gui/colours/kenshi_colours.xml</c>); the host maps each to
-/// its UI mode's colour.
+/// The colour a tooltip text takes: the palette the original's inline colour tags name (<c>data/gui/colours/kenshi_colours.xml</c>); the host maps
+/// each to its UI mode's colour.
 /// </summary>
 public enum TooltipTone { Default, Main, Ink, Title, Bad, BadBright, Good, Grey, GreyBright, Cyan, Grade0, Grade1, Grade2, Grade3, Grade4 }
 
@@ -38,8 +38,9 @@ public readonly record struct TooltipRow(UiRect Area);
 public sealed record TooltipLayout(UiRect Panel, IReadOnlyList<TooltipRow> Rows, float Offset);
 
 /// <summary>
-/// The tooltip runtime's data and layout (docs/game/ui-screens.md "Tooltips"). A widget carries the original's MyGUI user strings as control properties
-/// (<c>tooltip_type</c> 0 text, 1 rows, 2 data record, 4 map place; <c>tooltip_text</c>, <c>tooltip_size</c>, <c>tooltip_key_N</c>, <c>tooltip_val_N</c>,
+/// The tooltip runtime's data and layout (docs/game/ui-screens.md "Tooltips"). A widget carries the original's MyGUI user strings as control
+/// properties (<c>tooltip_type</c> 0 text, 1 rows, 2 data record, 4 map place; <c>tooltip_text</c>, <c>tooltip_size</c>, <c>tooltip_key_N</c>,
+/// <c>tooltip_val_N</c>,
 /// <c>tooltip_data</c>) plus Meitou's <c>tooltip_class</c> (<c>fixed</c> / <c>inventory</c>).
 /// </summary>
 public static class UiTooltips
@@ -75,8 +76,8 @@ public static class UiTooltips
             : (text, TooltipTone.Default);
 
     /// <summary>
-    /// The rows a widget's own user strings give (type 0: one row of <c>tooltip_text</c>; type 1: <c>tooltip_size</c> key/value pairs); empty for the other
-    /// types and for empty text.
+    /// The rows a widget's own user strings give (type 0: one row of <c>tooltip_text</c>; type 1: <c>tooltip_size</c> key/value pairs); empty for the
+    /// other types and for empty text.
     /// </summary>
     public static IReadOnlyList<TooltipLine> Lines(IReadOnlyDictionary<string, string> properties)
     {
@@ -143,10 +144,11 @@ public static class UiTooltips
     public const float FixedBoxFraction = 0.972222f;
 
     /// <summary>
-    /// Lays out a tooltip. The original's metrics (<b>Observed</b>, <c>FUN_140920d10</c>, <c>FUN_1409208d0</c>, <c>FUN_140922680</c>, the <c>vfunc_9</c>s):
-    /// the widget starts 0.25 x 0.2 of the screen; each row sits <c>0.025</c> (<c>0.04</c> for the inventory's) x UI scale of that width in from the left,
-    /// as wide as its key text plus its value text plus two such offsets, as high as its tallest text; the first row is round(0.1 x widget height) from the
-    /// top, the next ones round(0.01 x widget height) under the one before, and the panel ends round(0.1 x widget height) under the last row.
+    /// Lays out a tooltip. The original's metrics (<b>Observed</b>, <c>FUN_140920d10</c>, <c>FUN_1409208d0</c>, <c>FUN_140922680</c>, the
+    /// <c>vfunc_9</c>s): the widget starts 0.25 x 0.2 of the screen; each row sits <c>0.025</c> (<c>0.04</c> for the inventory's) x UI scale of that
+    /// width in from the left, as wide as its key text plus its value text plus two such offsets, as high as its tallest text; the first row is
+    /// round(0.1 x widget height) from the top, the next ones round(0.01 x widget height) under the one before, and the panel ends round(0.1 x widget
+    /// height) under the last row.
     /// <paramref name="measure"/> gives a text's size wrapped to a width (0: unwrapped).
     /// </summary>
     public static TooltipLayout Arrange(IReadOnlyList<TooltipLine> lines, TooltipKind kind, int screenWidth, int screenHeight, Vector2 pointer,
@@ -159,8 +161,8 @@ public static class UiTooltips
         // A tooltip given a widget of its own (the overview's AI panel) measures its margins from that widget.
         if (kind == TooltipKind.Static && anchor is { } given) (widgetWidth, widgetHeight) = (given.Width, given.Height);
 
-        // The HUD's fixed one is built on the anchor panel's first child, the parchment box of 97.2 % of the panel's height (FUN_14072d3b0 passes it to
-        // FUN_140921440).
+        // The HUD's fixed one is built on the anchor panel's first child, the parchment box of 97.2 % of the panel's height (FUN_14072d3b0 passes it
+        // to FUN_140921440).
         if (kind == TooltipKind.Fixed && anchor is { } box) (widgetWidth, widgetHeight) = (box.Width, box.Height * FixedBoxFraction);
 
         float offset = MathF.Round((kind == TooltipKind.Inventory ? 0.04f : 0.025f) * scale * widgetWidth);
@@ -206,15 +208,16 @@ public static class UiTooltips
         if (kind == TooltipKind.Static && anchor is { } staticAnchor) panelHeight = staticAnchor.Height;
 
         // Placement: bottom right corner at the pointer, an axis that would leave the screen taking the pointer itself instead (ToolTip /
-        // ToolTipDynamic); fixed: the anchor's left, its bottom edge (grown upwards); inventory: from the pointer. Kept on the screen (engine choice).
+        // ToolTipDynamic); fixed: the anchor's left, its bottom edge (grown upwards); inventory: from the pointer. Kept on the screen (engine
+        // choice).
         float x, top;
         switch (kind)
         {
             case TooltipKind.Fixed when anchor is { } a: (x, top) = (a.X, a.Y + a.Height - panelHeight); break;
             case TooltipKind.Static when anchor is { } s: (x, top) = (s.X, s.Y); break;
 
-            // ToolTipInventory::vfunc_6 (Verified): top left at the item window's top right, or its right edge at the window's left when it would pass the
-            // screen's right edge.
+            // ToolTipInventory::vfunc_6 (Verified): top left at the item window's top right, or its right edge at the window's left when it would
+            // pass the screen's right edge.
             case TooltipKind.Inventory when anchor is { } w:
                 (x, top) = (w.X + w.Width + width > screenWidth ? w.X - width : w.X + w.Width, w.Y);
                 break;

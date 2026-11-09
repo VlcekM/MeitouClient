@@ -189,8 +189,7 @@ public static class GlConventions
     #region Pipeline state
 
     /// <summary>
-    /// GL's counter-clockwise front faces are clockwise in Vulkan's framebuffer space (same pixel rows, opposite sign of the
-    /// area).
+    /// GL's counter-clockwise front faces are clockwise in Vulkan's framebuffer space (same pixel rows, opposite sign of the area).
     /// </summary>
     public static FrontFace VkFrontFace(FrontFaceDirection f) => f == FrontFaceDirection.Ccw ? FrontFace.Clockwise : FrontFace.CounterClockwise;
 

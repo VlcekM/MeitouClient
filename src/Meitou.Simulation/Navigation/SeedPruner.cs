@@ -4,9 +4,9 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The original generator keeps only the regions within 4 units of a seed point (regionPruningSettings, minRegionArea 1e8 makes every region "too small"
-/// otherwise), and the largest region when none qualifies. This is that pass over the polygon graph: roofs, closed yards and cliff tops without a seed are
-/// dropped (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`).
+/// The original generator keeps only the regions within 4 units of a seed point (regionPruningSettings, minRegionArea 1e8 makes every region "too
+/// small" otherwise), and the largest region when none qualifies. This is that pass over the polygon graph: roofs, closed yards and cliff tops
+/// without a seed are dropped (docs/game/pathfinding.md, Generator "Seeds" and `regionPruningSettings`).
 /// </summary>
 internal static class SeedPruner
 {
@@ -22,10 +22,10 @@ internal static class SeedPruner
     public const float BorderGroundSlack = 30;
 
     /// <summary>
-    /// The narrowest portal (units) the kept set spreads through between exterior polygons (engine choice; docs/game/pathfinding.md "Narrow portals"). The
-    /// original joins faces only over shared edges, so two walkable terrain triangles touching at a corner stay apart; Recast's cells join them by a neck a cell
-    /// or two wide, and the region behind it stayed kept though no walker fits through. Links (tile seams, inner seams, door joins) and interior edges are not
-    /// tested.
+    /// The narrowest portal (units) the kept set spreads through between exterior polygons (engine choice; docs/game/pathfinding.md "Narrow
+    /// portals"). The original joins faces only over shared edges, so two walkable terrain triangles touching at a corner stay apart; Recast's cells
+    /// join them by a neck a cell or two wide, and the region behind it stayed kept though no walker fits through. Links (tile seams, inner seams,
+    /// door joins) and interior edges are not tested.
     /// </summary>
     public const float MinPortalWidth = 9;
 
@@ -76,9 +76,10 @@ internal static class SeedPruner
     }
 
     /// <summary>
-    /// The pruning of a destroyed building's interior: the regions its seed reaches (the original's ray onto its floor, ZoneGeometryGatherer.OriginRaySeed), and
-    /// its ground floor, every region starting within <see cref="DestroyedFloorBand"/> of the lowest polygon (engine choice: our mesh can split a ruin's floor
-    /// that the original keeps whole, the Hub L-House 4645-). Its largest region can be an upper floor or wall tops under a roof whose intact collision stays.
+    /// The pruning of a destroyed building's interior: the regions its seed reaches (the original's ray onto its floor,
+    /// ZoneGeometryGatherer.OriginRaySeed), and its ground floor, every region starting within <see cref="DestroyedFloorBand"/> of the lowest polygon
+    /// (engine choice: our mesh can split a ruin's floor that the original keeps whole, the Hub L-House 4645-). Its largest region can be an upper
+    /// floor or wall tops under a roof whose intact collision stays.
     /// </summary>
     static int PruneDestroyed(ZoneNavMesh mesh, bool[] keep, Queue<int> queue, int matched, int portalsBelow)
     {
@@ -137,12 +138,13 @@ internal static class SeedPruner
     }
 
     /// <summary>
-    /// Marks in <paramref name="keep"/> the regions with an open edge on the zone's border line toward (<paramref name="dx"/>, <paramref name="dz"/>) at ground
-    /// level (the terrain, or the water's height over it, within <see cref="BorderGroundSlack"/>): the stand-in for the neighbour's seeds while that zone is not
-    /// loaded. The original seeds each zone from its built neighbours' open border edges and ships every tile built, so a region that goes on into the next
-    /// zone is kept wherever its seed is; pruned by its own seeds alone, a zone with few of them (Fog Islands 14.26: 1) kept 3 % of the original's area. Roofs
-    /// and walkways crossing the border stay pruned, and so, once the neighbour is loaded and reaches nothing there, does ground enclosed by a building that
-    /// straddles the line (World's End's Ancient Citadel, issue #144; docs/game/pathfinding.md, "Zone borders"). True when a polygon was added.
+    /// Marks in <paramref name="keep"/> the regions with an open edge on the zone's border line toward (<paramref name="dx"/>, <paramref name="dz"/>)
+    /// at ground level (the terrain, or the water's height over it, within <see cref="BorderGroundSlack"/>): the stand-in for the neighbour's seeds
+    /// while that zone is not loaded. The original seeds each zone from its built neighbours' open border edges and ships every tile built, so a
+    /// region that goes on into the next zone is kept wherever its seed is; pruned by its own seeds alone, a zone with few of them (Fog Islands
+    /// 14.26: 1) kept 3 % of the original's area. Roofs and walkways crossing the border stay pruned, and so, once the neighbour is loaded and
+    /// reaches nothing there, does ground enclosed by a building that straddles the line (World's End's Ancient Citadel, issue #144;
+    /// docs/game/pathfinding.md, "Zone borders"). True when a polygon was added.
     /// </summary>
     public static bool ExtendBorder(ZoneNavMesh mesh, bool[] keep, int dx, int dz)
     {
@@ -283,8 +285,8 @@ internal static class SeedPruner
     }
 
     /// <summary>
-    /// Keeps what the queued polygons reach, not through edges narrower than <see cref="MinPortalWidth"/> of the polygons below <paramref name="portalsBelow"/>
-    /// (the exterior's).
+    /// Keeps what the queued polygons reach, not through edges narrower than <see cref="MinPortalWidth"/> of the polygons below
+    /// <paramref name="portalsBelow"/> (the exterior's).
     /// </summary>
     static void Spread(ZoneNavMesh mesh, bool[] keep, Queue<int> queue, int portalsBelow)
     {

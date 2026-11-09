@@ -6,15 +6,15 @@ using Meitou.Game.Rendering.Terrain;
 namespace Meitou.Game.Rendering.Water;
 
 /// <summary>
-/// The shore distance field round the camera (docs/render-water.md "Shore distance field"): a <see cref="Size"/>² RG32F texture of (signed distance to
-/// the waterline, exposure), baked on a worker thread by <see cref="ShoreBake"/> from a <see cref="HeightSnapshot"/> and rebaked when the eye has moved
-/// more than a quarter of the field's width from its centre. Sampled with linear filtering, clamped to the edge, at uv = (p.xz − Rect.xy) / (Rect.zw −
-/// Rect.xy). Render thread only (<see cref="Update"/>, <see cref="Sampled"/>, <see cref="Dispose"/>).
+/// The shore distance field round the camera (docs/render-water.md "Shore distance field"): a <see cref="Size"/>² RG32F texture of (signed distance
+/// to the waterline, exposure), baked on a worker thread by <see cref="ShoreBake"/> from a <see cref="HeightSnapshot"/> and rebaked when the eye has
+/// moved more than a quarter of the field's width from its centre. Sampled with linear filtering, clamped to the edge, at uv = (p.xz − Rect.xy) /
+/// (Rect.zw − Rect.xy). Render thread only (<see cref="Update"/>, <see cref="Sampled"/>, <see cref="Dispose"/>).
 /// <para>
-/// A rebake costs the render thread next to nothing (2026-10-10; before, 4 to 6 ms and 8 MB of staging in one frame, up to four times a second at 9000
-/// units a second): the worker also lays the texels out (and reuses the arrays of the bake, the interleaved texels and the textures themselves from one
-/// bake to the next), a field with no waterline in it at all is one texel, and the rest is written <see cref="RowsPerFrame"/> rows a frame into a
-/// texture nothing samples yet, which replaces the shown one, with <see cref="Rect"/>, once whole.
+/// A rebake costs the render thread next to nothing (2026-10-10; before, 4 to 6 ms and 8 MB of staging in one frame, up to four times a second at
+/// 9000 units a second): the worker also lays the texels out (and reuses the arrays of the bake, the interleaved texels and the textures themselves
+/// from one bake to the next), a field with no waterline in it at all is one texel, and the rest is written <see cref="RowsPerFrame"/> rows a frame
+/// into a texture nothing samples yet, which replaces the shown one, with <see cref="Rect"/>, once whole.
 /// </para>
 /// </summary>
 internal sealed class ShoreField : IDisposable
@@ -104,8 +104,8 @@ internal sealed class ShoreField : IDisposable
 
     /// <summary>
     /// Once a frame on the render thread, with a snapshot taken on it (<see cref="TerrainRenderer.Snapshot"/>): writes the next rows of a field being
-    /// uploaded, takes a finished bake, then starts the next when nothing has been baked yet or the eye is more than size·texel/4 from the centre in X
-    /// or Z.
+    /// uploaded, takes a finished bake, then starts the next when nothing has been baked yet or the eye is more than size·texel/4 from the centre in
+    /// X or Z.
     /// </summary>
     public void Update(Vector3 eye, HeightSnapshot heights)
     {

@@ -53,8 +53,8 @@ public sealed class UniformBlockInfo
 }
 
 /// <summary>
-/// A sampled image (a GLSL sampler). <see cref="ArrayLength"/>: 0 for a single sampler, the length of a sized array, -1 for a runtime-sized array (the
-/// bindless arrays of the native model).
+/// A sampled image (a GLSL sampler). <see cref="ArrayLength"/>: 0 for a single sampler, the length of a sized array, -1 for a runtime-sized array
+/// (the bindless arrays of the native model).
 /// </summary>
 public sealed record SamplerInfo(string Name, int Set, int Binding, SamplerDimension Dimension, bool Arrayed, bool Multisampled, bool Depth,
     ScalarKind SampledKind, int ArrayLength);
@@ -115,8 +115,8 @@ public sealed class ShaderReflection
     public SamplerInfo? FindSampler(string name) => Samplers.FirstOrDefault(s => s.Name == name);
 
     /// <summary>
-    /// Finds a uniform by the name GL would use: <c>uName</c>, <c>uName[0]</c>, <c>uName[3]</c>, a member of a named block or <c>Block.member</c>. Null when
-    /// absent or the element is out of range.
+    /// Finds a uniform by the name GL would use: <c>uName</c>, <c>uName[0]</c>, <c>uName[3]</c>, a member of a named block or <c>Block.member</c>.
+    /// Null when absent or the element is out of range.
     /// </summary>
     public UniformLookup? FindUniform(string glName)
     {

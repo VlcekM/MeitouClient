@@ -462,8 +462,7 @@ public class KidnapInstallTests(ITestOutputHelper output)
                 IEnumerable<CharacterId> ids) => ids.Count(h => w.Characters.TryResolveNext(h, out int s) && w.Characters.Cold(s)!.IsImprisoned);
 
         // The assault is won once nobody fights 0.2 h in, which the lifts themselves can bring about, so not every hero need be downed; the leader's
-        // captive goes to the campaign's
-        // home, which has no free cage. The carriers of the rest walk home and cage them.
+        // captive goes to the campaign's home, which has no free cage. The carriers of the rest walk home and cage them.
         for (int i = 0; i < 60 && Caged(world, heroes) < 2; i++) world.RunTicks(150);
         output.WriteLine($"tick {world.Tick}: caged {Caged(world, heroes)}, lifted {set.Kidnap!.Log.Count(e => e.Kind == KidnapEventKind.Lifted)}");
 

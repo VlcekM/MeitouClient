@@ -45,8 +45,7 @@ public class FormulaTests
     [InlineData(95, "0.29", "0.94")]
     public void Heavy_metal_plate_tooltip_effects_follow_the_observed_samurai_armour_grades(int level, string stealth, string combatSpeed)
     {
-        // The Samurai Armour at its six grades (docs/game/ui-screens.md "Item tooltip"):
-        // stealth mult 1, combat speed mult 0.94, metal plate, heavy.
+        // The Samurai Armour at its six grades (docs/game/ui-screens.md "Item tooltip"): stealth mult 1, combat speed mult 0.94, metal plate, heavy.
         var armour = BodyPlate with
         {
             Class = ArmourClass.Heavy, Material = ArmourType.MetalPlate, StealthMult = 1, CombatSpeedMult = 0.94f, LevelBonus = 0,
@@ -83,8 +82,7 @@ public class FormulaTests
     [Fact]
     public void Samurai_legplates_resistances_at_level_80_read_as_the_original_prints_them()
     {
-        // The original prints the level-80 Legplates as 52 %, 63 % and 71 pts
-        // (not 72: 90 x (80 x 0.01f) is just below 72 in single precision).
+        // The original prints the level-80 Legplates as 52 %, 63 % and 71 pts (not 72: 90 x (80 x 0.01f) is just below 72 in single precision).
         var legplates = BodyPlate with
         {
             Class = ArmourClass.Heavy, Material = ArmourType.MetalPlate, Slot = 6, BluntDefBonus = 0.05f, CutDefBonus = -0.081f,

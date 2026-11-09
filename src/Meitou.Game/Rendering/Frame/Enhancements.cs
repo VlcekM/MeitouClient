@@ -43,11 +43,10 @@ public static class Enhancements
     public const float MeitouHazeStrength = 0.93f;
 
     /// <summary>
-    /// The Meitou <c>planetshine</c> switch's strength: a multiple of the physical value
-    /// (<see cref="Meitou.Data.World.Planetshine"/>; the Tab slider moves it).
-    /// The physical light is a hundredth of a percent to a fifth of a percent of the game's noon sun, against a game night ambient
-    /// that is a quarter of the noon sun's: 60 brings the planet's light on a face turned to it to about the ambient's level at the
-    /// brightest part of the night (docs/formats/sky.md).
+    /// The Meitou <c>planetshine</c> switch's strength: a multiple of the physical value (<see cref="Meitou.Data.World.Planetshine"/>; the Tab slider
+    /// moves it). The physical light is a hundredth of a percent to a fifth of a percent of the game's noon sun, against a game night ambient that is
+    /// a quarter of the noon sun's: 60 brings the planet's light on a face turned to it to about the ambient's level at the brightest part of the
+    /// night (docs/formats/sky.md).
     /// </summary>
     public const float MeitouPlanetshineStrength = 60f;
 

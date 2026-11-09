@@ -8,8 +8,7 @@ namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// Reads a target back into a picture file (screenshots; always PNG). Native (docs/renderer-native.md 7.5, 8.9): the frame so far is submitted and
-/// waited for
-/// (<see cref="GpuContext.Finish"/>), then the target's image is copied to host memory. The target is RGBA8 with one sample, at least
+/// waited for (<see cref="GpuContext.Finish"/>), then the target's image is copied to host memory. The target is RGBA8 with one sample, at least
 /// <c>w</c> × <c>h</c>.
 /// </summary>
 public static unsafe class FramebufferCapture

@@ -9,8 +9,9 @@ using Meitou.Simulation.Production;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The machines of the player's buildings in a save (docs/simulation.md "Production"): the production and farm keys of each building's GAMESTATE_BUILDING
-/// (docs/game/buildings-production.md "Production", "Farming" and "Power": <c>production amount</c>, <c>resource mult</c>, <c>power on</c>,
+/// The machines of the player's buildings in a save (docs/simulation.md "Production"): the production and farm keys of each building's
+/// GAMESTATE_BUILDING (docs/game/buildings-production.md "Production", "Farming" and "Power": <c>production amount</c>, <c>resource mult</c>,
+/// <c>power on</c>,
 /// <c>gets battery</c>, <c>batterycharge</c>, <c>consumption amount-&lt;k&gt;</c>, <c>plant growth</c>, <c>plant death</c>, <c>plant start</c>,
 /// <c>plants harvested</c>, <c>save time</c>), and its items in an INVENTORY_STATE named first by the building's instance states (docs/formats/save.md "Zone
 /// files"). The items' sections are <c>in&lt;k&gt;</c>, <c>out</c> and, for the storage grid, <c>main</c> (the original's storage section name is
@@ -185,8 +186,8 @@ public static class MachineSave
     }
 
     /// <summary>
-    /// Reads the machines of the player buildings the world holds (after <see cref="BuildingSave.Read"/>); an unfinished one keeps its stock too (an upgrade
-    /// being built).
+    /// Reads the machines of the player buildings the world holds (after <see cref="BuildingSave.Read"/>); an unfinished one keeps its stock too (an
+    /// upgrade being built).
     /// </summary>
     public static void Read(SaveGame save, World world, ProductionSystem production, ItemFactory factory)
     {
@@ -251,8 +252,8 @@ public static class MachineSave
             {
                 if (m.Data.IsFurnace) item.Section = "main";   // its in1 is Meitou's storage grid
 
-                // A grid that is now smaller (a storage sized from its one item) gets an item that no longer fits at the next free cell, as the original's
-                // loader does.
+                // A grid that is now smaller (a storage sized from its one item) gets an item that no longer fits at the next free cell, as the
+                // original's loader does.
                 bool fits = item.X >= 0 && item.Y >= 0 && item.X + item.Width <= grid.Width && item.Y + item.Height <= grid.Height
                     && grid.IsFree(item.Section, item.X, item.Y, item.Width, item.Height);
                 if (fits || grid.Add(item) is false && item.Quantity > 0) grid.Items.Add(item);

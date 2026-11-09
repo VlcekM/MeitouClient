@@ -10,14 +10,14 @@ namespace Meitou.Game.Rendering.Gpu.Shaders;
 
 /// <summary>
 /// Compiles the renderers' GLSL 3.30 programs (a vertex and a fragment shader linked by name, loose uniforms) to SPIR-V for Vulkan 1.3 with shaderc:
-/// interface locations injected so the stages agree, the stages' resource bindings kept apart (vertex 0.., fragment 32.., descriptor set 0), the depth
-/// convention's define, in-memory and on-disk caches. Names are kept in the SPIR-V for <see cref="SpirvReflection"/>.
+/// interface locations injected so the stages agree, the stages' resource bindings kept apart (vertex 0.., fragment 32.., descriptor set 0), the
+/// depth convention's define, in-memory and on-disk caches. Names are kept in the SPIR-V for <see cref="SpirvReflection"/>.
 /// </summary>
 public sealed partial class GlslProgramCompiler
 {
     /// <summary>
-    /// The shaderc this assembly ships (NuGet <c>Silk.NET.Shaderc.Native</c>), not whichever <c>shaderc_shared</c> comes first on the library search path: a
-    /// Vulkan SDK's <c>Bin</c> on PATH carries a newer one, and a different glslang can change the output.
+    /// The shaderc this assembly ships (NuGet <c>Silk.NET.Shaderc.Native</c>), not whichever <c>shaderc_shared</c> comes first on the library search
+    /// path: a Vulkan SDK's <c>Bin</c> on PATH carries a newer one, and a different glslang can change the output.
     /// </summary>
     static readonly Lazy<Shaderc> Api = new(LoadApi);
 
@@ -79,8 +79,8 @@ public sealed partial class GlslProgramCompiler
     }
 
     /// <summary>
-    /// A GLSL 450 compute shader for Vulkan (strict rules: explicit sets and bindings, no loose uniforms; no interface location injection, no binding shift).
-    /// Cached under <see cref="NativeCacheVersion"/>, so legacy entries are untouched.
+    /// A GLSL 450 compute shader for Vulkan (strict rules: explicit sets and bindings, no loose uniforms; no interface location injection, no binding
+    /// shift). Cached under <see cref="NativeCacheVersion"/>, so legacy entries are untouched.
     /// </summary>
     public byte[] CompileCompute(string glsl, ShaderCompileOptions? options = null) => CompileNativeStage(glsl, ShaderKind.ComputeShader, "compute", options);
 

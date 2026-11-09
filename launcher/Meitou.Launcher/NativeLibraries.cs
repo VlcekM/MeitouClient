@@ -30,8 +30,8 @@ static class NativeLibraries
     }
 
     /// <summary>
-    /// Resolves the launcher's own imports (news videos) to the embedded libraries: OpenAL Soft by its file names, libvpx (linked in when published) by
-    /// the system's.
+    /// Resolves the launcher's own imports (news videos) to the embedded libraries: OpenAL Soft by its file names, libvpx (linked in when published)
+    /// by the system's.
     /// </summary>
     static void RegisterImportResolver(Assembly assembly, Dictionary<string, IntPtr> handles)
     {

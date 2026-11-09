@@ -71,8 +71,8 @@ public readonly record struct AttackQuery
 }
 
 /// <summary>
-/// Picking a technique, pure given the rolls. The attack side is the original's (<c>FUN_140888030</c> / <c>FUN_1408876d0</c>, docs/game/combat.md "Attack
-/// technique choice"); the defence side is <c>FUN_140887970</c>.
+/// Picking a technique, pure given the rolls. The attack side is the original's (<c>FUN_140888030</c> / <c>FUN_1408876d0</c>, docs/game/combat.md
+/// "Attack technique choice"); the defence side is <c>FUN_140887970</c>.
 /// </summary>
 public static class TechniqueChooser
 {
@@ -82,11 +82,11 @@ public static class TechniqueChooser
     public const int FirstCreatureCategory = 9;
 
     /// <summary>
-    /// The attack technique to start, by weighted pick (<paramref name="roll"/> in [0, 1)); -1 when none. Up to three passes over the attack techniques (not
-    /// disabled, not a block or dodge): the weapon's category and skill; then, for a person only, the unarmed techniques at
+    /// The attack technique to start, by weighted pick (<paramref name="roll"/> in [0, 1)); -1 when none. Up to three passes over the attack
+    /// techniques (not disabled, not a block or dodge): the weapon's category and skill; then, for a person only, the unarmed techniques at
     /// <see cref="AttackQuery.UnarmedSkill"/>; then those again accepting hurt limbs. <paramref name="maxReach"/> is the longest reach (<c>attack distance</c> +
-    /// L / 2, at least 1) among the techniques the filters let through, whatever the distance: the original's CharStats +0x150, which sets how close the fighter
-    /// walks in.
+    /// L / 2, at least 1) among the techniques the filters let through, whatever the distance: the original's CharStats +0x150, which sets how close
+    /// the fighter walks in.
     /// </summary>
     public static int ChooseAttack(IReadOnlyList<CombatTechnique> all, in AttackQuery q, float roll, out float maxReach)
     {
@@ -118,8 +118,9 @@ public static class TechniqueChooser
     }
 
     /// <summary>
-    /// Whether a technique is for weapon category <paramref name="category"/> (the technique's per-category table, <c>FUN_1406684c0</c>, <b>Verified</b>): a
-    /// creature technique (<c>animal</c> 9 and up) for that category only; any other by its flags, <c>katanas</c> 0, <c>sabre</c> 1, <c>blunt</c> 2,
+    /// Whether a technique is for weapon category <paramref name="category"/> (the technique's per-category table, <c>FUN_1406684c0</c>,
+    /// <b>Verified</b>): a creature technique (<c>animal</c> 9 and up) for that category only; any other by its flags, <c>katanas</c> 0, <c>sabre</c>
+    /// 1, <c>blunt</c> 2,
     /// <c>heavy weapons</c> 3, <c>hackers</c> 4, <c>unarmed</c> 5, <c>bow</c> 6 and <c>polearm</c> 8 (the <c>1 handed</c> flag is not read; a category 7 or a
     /// creature one never fits).
     /// </summary>
@@ -148,17 +149,18 @@ public static class TechniqueChooser
     public static float ReachOf(CombatTechnique t, float weaponLength) => t.AttackDistance + weaponLength * 0.5f;
 
     /// <summary>
-    /// The front directions (1 down, 2 left, 3 right, 4 thrust, 5 up, 6 pierced, 0 default) and the rear ones (7 to 9) are two classes; a wrong-direction block
-    /// stays in the blow's class.
+    /// The front directions (1 down, 2 left, 3 right, 4 thrust, 5 up, 6 pierced, 0 default) and the rear ones (7 to 9) are two classes; a
+    /// wrong-direction block stays in the blow's class.
     /// </summary>
     internal static bool SameClass(int a, int b) => (a >= 7) == (b >= 7);
 
     /// <summary>
-    /// The defender's reaction (<c>FUN_140887970</c>, <b>Observed</b>), given the block roll and the pick roll. Candidates are the block or dodge techniques of
-    /// the defender's weapon category (<see cref="Fits"/>) and posture. A fighter with a weapon that can block rolls to block: on success the candidates are the
-    /// block techniques that are not dodges (<b>Verified</b>, the block pool needs <c>is dodge</c> 0, so the "Dodge back" rows flagged as blocks too are out)
-    /// whose direction equals the blow's, on failure those of a different direction in the same class, so the blow passes. A fighter without one is
-    /// dodge-capable only when the roll against <paramref name="dodgeChancePercent"/> succeeds, and then picks among the dodge techniques. The pick is weighted on
+    /// The defender's reaction (<c>FUN_140887970</c>, <b>Observed</b>), given the block roll and the pick roll. Candidates are the block or dodge
+    /// techniques of the defender's weapon category (<see cref="Fits"/>) and posture. A fighter with a weapon that can block rolls to block: on
+    /// success the candidates are the block techniques that are not dodges (<b>Verified</b>, the block pool needs <c>is dodge</c> 0, so the "Dodge
+    /// back" rows flagged as blocks too are out) whose direction equals the blow's, on failure those of a different direction in the same class, so
+    /// the blow passes. A fighter without one is dodge-capable only when the roll against <paramref name="dodgeChancePercent"/> succeeds, and then
+    /// picks among the dodge techniques. The pick is weighted on
     /// <c>chance</c>. -1 when there is no reaction.
     /// </summary>
     public static int ChooseReaction(
@@ -209,8 +211,9 @@ public static class TechniqueChooser
     }
 
     /// <summary>
-    /// The limb factor (<c>FUN_140886030</c>): the product over the blows of 1 for the weapon (limb 4), 0.001 for an arm (limb 0 left, 1 right) that does not
-    /// work, x0.25 for a leg (2, 3) while a leg is down; a kick while prone rules the technique out (0), and so does a product with no blow above 0.01.
+    /// The limb factor (<c>FUN_140886030</c>): the product over the blows of 1 for the weapon (limb 4), 0.001 for an arm (limb 0 left, 1 right) that
+    /// does not work, x0.25 for a leg (2, 3) while a leg is down; a kick while prone rules the technique out (0), and so does a product with no blow
+    /// above 0.01.
     /// </summary>
     static float LimbFactor(CombatTechnique t, in AttackQuery q)
     {

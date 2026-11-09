@@ -342,9 +342,8 @@ public sealed partial class CombatSystem
             ulong key = Rng.Key(table.IdOf(i));
 
             // 2. Helpless in a hit reaction until its clip ends; every BreakOutSeconds of it the character may break out (the original's
-            // +0x124, FUN_1406085e0): a roll of its
-            // unarmed dodge chance against the strongest fighter swinging at it at 10 to 99 per cent of the swing; on success the stumble ends in a
-            // stumble-dodge row.
+            // +0x124, FUN_1406085e0): a roll of its unarmed dodge chance against the strongest fighter swinging at it at 10 to 99 per cent of the
+            // swing; on success the stumble ends in a stumble-dodge row.
             if (now < s.StunUntil)
             {
                 s.AttackTech = -1;
@@ -525,9 +524,8 @@ public sealed partial class CombatSystem
             }
 
             // 5. Deciding tries attacking first (asking the target, StartAttack); only when that fails does a fighter defend against the blows
-            // coming at it,
-            // from anyone (docs/game/combat.md "Pacing"). Being attacked cuts the pause after an attack short; an opponent that lost the initiative
-            // to it may be swung at at once.
+            // coming at it, from anyone (docs/game/combat.md "Pacing"). Being attacked cuts the pause after an attack short; an opponent that lost
+            // the initiative to it may be swung at at once.
             if (s.ReactTech < 0 && s.AttackTech < 0)
             {
                 // Deciding, it first asks to be one of the fighters its target lets close in (FUN_140666e20); a fighter left out circles

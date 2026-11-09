@@ -24,8 +24,8 @@ sealed class ScrollBars(PlayerInterface player)
 
     /// <summary>
     /// A vertical scrollbar as the original's <c>Kenshi_ScrollBarV</c> template draws it in <paramref name="bar"/>: arrows at both ends, the track
-    /// between them and a thumb <c>MinTrackSize</c> (10) or more tall, sized to the visible share of the canvas. The arrows scroll by steps, a click on
-    /// the track beside the thumb by a page, the thumb drags.
+    /// between them and a thumb <c>MinTrackSize</c> (10) or more tall, sized to the visible share of the canvas. The arrows scroll by steps, a click
+    /// on the track beside the thumb by a page, the thumb drags.
     /// </summary>
     internal void AddScrollBar(string id, List<UiControl> controls, UiRect bar, float visible, float canvas, float scroll, float maximum,
         UiRect? clip, string prefix = "inventory-scroll")

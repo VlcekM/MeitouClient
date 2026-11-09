@@ -244,8 +244,7 @@ public sealed record MachineData
         bool wind = fn == GeneratorFunction && inputs.Count == 0;
         if (maxOperators <= 0) maxOperators = Math.Max(1, function?.GetInt("max operators", 1) ?? 1);
         // Every machine's rate is shared by its operators: / the raw max operators when above 1, so a machine whose BUILDING says 0 is never divided
-        // (Verified, FUN_14029e460,
-        // FUN_14029e7b0, FUN_1402b9aa0; each operator then adds the divided rate).
+        // (Verified, FUN_14029e460, FUN_14029e7b0, FUN_1402b9aa0; each operator then adds the divided rate).
         if (rawOperators > 1) rate /= rawOperators;
         var craft = function is not null ? CraftBench.From(db, function) : null;
         // A bench gets a section per ingredient of its widest recipe when it lists fewer (engine choice: the original's section count for such

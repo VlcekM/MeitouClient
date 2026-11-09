@@ -4,9 +4,9 @@ using Meitou.Simulation.Movement;
 namespace Meitou.Simulation.Construction;
 
 /// <summary>
-/// How near a worker must stand to a building to build, operate or mine it (docs/game/buildings-production.md "Work distance"): within the building's reach of
-/// it, twice that once the worker has stopped (the original's <c>isMoving</c> doubling). Engine choice: the gap is to the building's footprint hull (the
-/// original measures to its position marker and also counts a worker touching its collision), else to its position.
+/// How near a worker must stand to a building to build, operate or mine it (docs/game/buildings-production.md "Work distance"): within the building's
+/// reach of it, twice that once the worker has stopped (the original's <c>isMoving</c> doubling). Engine choice: the gap is to the building's
+/// footprint hull (the original measures to its position marker and also counts a worker touching its collision), else to its position.
 /// </summary>
 public static class SiteReach
 {
@@ -40,8 +40,8 @@ public static class SiteReach
     public static float HeightLimit(bool door, bool inBuilding) => door ? 130 : inBuilding ? 15 : 45;
 
     /// <summary>
-    /// Whether the worker is at the site's height: Meitou has no floor id, so a height difference below <see cref="HeightLimit"/> stands for "the same floor, or
-    /// close enough" (the original passes the same floor whatever the difference).
+    /// Whether the worker is at the site's height: Meitou has no floor id, so a height difference below <see cref="HeightLimit"/> stands for "the
+    /// same floor, or close enough" (the original passes the same floor whatever the difference).
     /// </summary>
     public static bool AtHeight(in CharacterHot n, BuildSite site, bool door) => MathF.Abs(n.Position.Y - site.Position.Y) < HeightLimit(door, site.Parent is not null);
 }

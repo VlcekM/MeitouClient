@@ -85,24 +85,21 @@ public sealed class Round
 /// meanwhile (<see cref="CharacterCold.Engaged"/>). The work at a lock is the owner's lock/unlock time, 0.3 per second (<b>Verified</b>).
 /// <list type="bullet">
 /// <item><b>Release</b> (211 "police free prisoners", economy.md 11.5): an awake prisoner whose sentence is served is freed by an NPC of the cage's
-/// faction whose role list holds goal 211 in
-/// its hours (the finder <c>FUN_1408cf3c0</c> has no booking test and only that goal frees, <b>Verified</b>), the first such jailer to find a cage of
-/// its town and faction within one zone cell: it walks there, unlocks the cage
-/// and lets the prisoner out (<see cref="FixtureRegistry.Release"/> in its faction's name). <b>Engine choice</b>: in a cage of a faction that books
-/// bounties, when no NPC of the faction holds the goal, or after
+/// faction whose role list holds goal 211 in its hours (the finder <c>FUN_1408cf3c0</c> has no booking test and only that goal frees,
+/// <b>Verified</b>), the first such jailer to find a cage of its town and faction within one zone cell: it walks there, unlocks the cage and lets the
+/// prisoner out (<see cref="FixtureRegistry.Release"/> in its faction's name). <b>Engine choice</b>: in a cage of a faction that books bounties, when
+/// no NPC of the faction holds the goal, or after
 /// <see cref="ReleaseTimeout"/>, the system frees it in the jail faction's name; cages of factions that book none (slavers, bandits, the player's)
 /// are freed by a 211 holder or nobody.</item>
 /// <item><b>Lock-up</b> (155, 197): while a member's role list holds the goal in its hours, a free member that has it locks every door of the squad's
-/// home, door by door; 155 only
-/// once every member is inside (engine: within the home's extent) and, for both, no stranger is (<c>!strangers in house</c>). When no member's goal
-/// is in its hours any more,
-/// a free member with goal 86 walks to each door of the locked home, unlocks it and opens it.</item>
+/// home, door by door; 155 only once every member is inside (engine: within the home's extent) and, for both, no stranger is (<c>!strangers in
+/// house</c>). When no member's goal is in its hours any more, a free member with goal 86 walks to each door of the locked home, unlocks it and opens
+/// it.</item>
 /// <item><b>Wardens</b> (195): a free member with the goal in its hours locks the occupied, unlocked cages of its faction in its town (not one whose
 /// prisoner is being freed).</item>
 /// <item><b>Keys</b> (<b>engine choice</b>): a worker whose target is in a building shut by its own faction's (or its home's) locked doors unlocks
-/// them before it walks, standing,
-/// as the simulation does not know where a door is. An arrest's guard carrying a captive to a cage behind its own faction's shut doors has them
-/// opened at once.</item>
+/// them before it walks, standing, as the simulation does not know where a door is. An arrest's guard carrying a captive to a cage behind its own
+/// faction's shut doors has them opened at once.</item>
 /// </list>
 /// </summary>
 public sealed partial class LockSystem : IStateHashed
@@ -657,8 +654,7 @@ public sealed partial class LockSystem : IStateHashed
                 world.Fixtures.SetLocked(f, true);
 
                 // Each locked door of the home whose lock is the worker's faction's sets the house flag while no door of it is open or opening
-                // (Task_LockDoor's
-                // FUN_1407933a0, Verified): one locked door is enough, the others may just be closed.
+                // (Task_LockDoor's FUN_1407933a0, Verified): one locked door is enough, the others may just be closed.
                 if (r.Building is { } home && worker.Faction == f.Owner
                     && !world.Fixtures.OfBuilding(home).Any(d => d.Kind == FixtureKind.Door && d.Motion is DoorMotion.Open or DoorMotion.Opening))
                     _houseLocked.Add(home);

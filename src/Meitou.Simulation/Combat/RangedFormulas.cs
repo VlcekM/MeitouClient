@@ -54,8 +54,8 @@ public sealed class CrossbowInstance(CrossbowData data, float quality, CrossbowS
 }
 
 /// <summary>
-/// The formulas of the crossbow (docs/game/combat.md "Ranged and turrets"; all <b>Observed</b> in the decompile of <c>kenshi_x64.exe</c> unless the doc says
-/// otherwise). Pure functions, tested against the doc.
+/// The formulas of the crossbow (docs/game/combat.md "Ranged and turrets"; all <b>Observed</b> in the decompile of <c>kenshi_x64.exe</c> unless the
+/// doc says otherwise). Pure functions, tested against the doc.
 /// </summary>
 public static class RangedFormulas
 {
@@ -95,14 +95,15 @@ public static class RangedFormulas
     public const float FriendlyPassXp = 20, FriendlyHitXp = 100;
 
     /// <summary>
-    /// The general skill blend <c>FUN_140885ce0</c>: 0.01 x (0.6 x skill + 0.4 x dexterity x m), with both stats already times their injury multipliers and m the
-    /// stats multiplier (<c>CharStats +0x34</c>, taken as the gear's dexterity product here). The reload uses it with the crossbow skill.
+    /// The general skill blend <c>FUN_140885ce0</c>: 0.01 x (0.6 x skill + 0.4 x dexterity x m), with both stats already times their injury
+    /// multipliers and m the stats multiplier (<c>CharStats +0x34</c>, taken as the gear's dexterity product here). The reload uses it with the
+    /// crossbow skill.
     /// </summary>
     public static float SkillBlend(float skill, float dexterity, float m = 1) => 0.01f * (0.6f * skill + 0.4f * dexterity * m);
 
     /// <summary>
-    /// Reload seconds (<c>FUN_140436010</c>): clamp(lerp(s, reload max, reload min), reload min, reload max). Spring Bat's max above its min at high quality is
-    /// clamped the same way.
+    /// Reload seconds (<c>FUN_140436010</c>): clamp(lerp(s, reload max, reload min), reload min, reload max). Spring Bat's max above its min at high
+    /// quality is clamped the same way.
     /// </summary>
     public static float ReloadTime(float s, float reloadMin, float reloadMax)
     {
@@ -113,8 +114,8 @@ public static class RangedFormulas
     }
 
     /// <summary>
-    /// The half-angle of the deviation cone in degrees (<c>FUN_14043a730</c>, the same <c>0.005 x (skill + perception)</c> as <c>FUN_140435160</c> and the turret
-    /// tooltip, <b>Verified</b>): max(0, deviation x (1 - t)), t = 0.005 (skill + perception). 0 at skill + perception 200.
+    /// The half-angle of the deviation cone in degrees (<c>FUN_14043a730</c>, the same <c>0.005 x (skill + perception)</c> as <c>FUN_140435160</c>
+    /// and the turret tooltip, <b>Verified</b>): max(0, deviation x (1 - t)), t = 0.005 (skill + perception). 0 at skill + perception 200.
     /// </summary>
     public static float Deviation(float deviationAtZero, float skill, float perception) => MathF.Max(0, Lerp(0.005f * (skill + perception), deviationAtZero, 0));
 
@@ -152,9 +153,9 @@ public static class RangedFormulas
     public static float FriendlyAvoidance(float friendlyFire) => MathF.Min(1, MathF.Max(0, friendlyFire) * 0.015f);
 
     /// <summary>
-    /// A direction tilted off <paramref name="dir"/> (unit) by <paramref name="degrees"/> about an axis perpendicular to it, turned by <paramref name="spin"/>
-    /// (0 to 1 of a turn) round <paramref name="dir"/> (Ogre's <c>Vector3::randomDeviant</c>). With a tilt of u x D degrees for a uniform u the shots fill a cone
-    /// of half-angle D, denser in the middle.
+    /// A direction tilted off <paramref name="dir"/> (unit) by <paramref name="degrees"/> about an axis perpendicular to it, turned by
+    /// <paramref name="spin"/> (0 to 1 of a turn) round <paramref name="dir"/> (Ogre's <c>Vector3::randomDeviant</c>). With a tilt of u x D degrees
+    /// for a uniform u the shots fill a cone of half-angle D, denser in the middle.
     /// </summary>
     public static Vector3 Deviate(Vector3 dir, float degrees, float spin)
     {
@@ -172,8 +173,8 @@ public static class RangedFormulas
 }
 
 /// <summary>
-/// The formulas of a turret's gun (<c>GunClassTurret</c>, docs/game/combat.md "Turrets"; <b>Observed</b> in the decompile of <c>kenshi_x64.exe</c>). Pure
-/// functions. A crossbow is the same controller and shot with all the building factors 1 (<see cref="RangedFormulas.Bolt"/>).
+/// The formulas of a turret's gun (<c>GunClassTurret</c>, docs/game/combat.md "Turrets"; <b>Observed</b> in the decompile of <c>kenshi_x64.exe</c>).
+/// Pure functions. A crossbow is the same controller and shot with all the building factors 1 (<see cref="RangedFormulas.Bolt"/>).
 /// </summary>
 public static class TurretFormulas
 {
@@ -209,8 +210,8 @@ public static class TurretFormulas
     public static float MountFactor(float mountOutput) => mountOutput * 0.01f + 1;
 
     /// <summary>
-    /// The pierce ends of a turret of damage <paramref name="damage"/> (gun slots 22 and 23, <c>FUN_140435320</c>, <c>FUN_140435350</c>): trunc(0.75 D),
-    /// trunc(1.25 D).
+    /// The pierce ends of a turret of damage <paramref name="damage"/> (gun slots 22 and 23, <c>FUN_140435320</c>, <c>FUN_140435350</c>): trunc(0.75
+    /// D), trunc(1.25 D).
     /// </summary>
     public static (int Min, int Max) PierceEnds(float damage) => ((int)(damage * 0.75f), (int)(damage * 1.25f));
 
@@ -252,8 +253,9 @@ public static class TurretFormulas
     }
 
     /// <summary>
-    /// The turret's own weight of a target (gun slot 6 <c>FUN_1404348e0</c>, <b>Observed</b>): 1 in front of it (positive dot product with its facing); behind,
-    /// 0.1 for one outdoors or on a roof and for one inside the turret's own building on its floor (<paramref name="indoors"/> false), 0 for one inside elsewhere.
+    /// The turret's own weight of a target (gun slot 6 <c>FUN_1404348e0</c>, <b>Observed</b>): 1 in front of it (positive dot product with its
+    /// facing); behind, 0.1 for one outdoors or on a roof and for one inside the turret's own building on its floor (<paramref name="indoors"/>
+    /// false), 0 for one inside elsewhere.
     /// </summary>
     public static float Arc(Vector3 facing, Vector3 toTarget, bool indoors = false) => Vector3.Dot(facing, toTarget) > 0 ? 1 : indoors ? 0 : 0.1f;
 }
@@ -282,9 +284,9 @@ public static class Ammunition
     }
 
     /// <summary>
-    /// Uses one charge (one bolt) of the first matching item (<c>FUN_140437ce0</c>: charges minus 1, the item removed at 0). A stack of several units refills
-    /// from <see cref="ItemInstance.MaxCharges"/> and loses one unit instead (<b>engine</b>: how charges and stacks combine is <b>Unknown</b>). False when there
-    /// is none.
+    /// Uses one charge (one bolt) of the first matching item (<c>FUN_140437ce0</c>: charges minus 1, the item removed at 0). A stack of several units
+    /// refills from <see cref="ItemInstance.MaxCharges"/> and loses one unit instead (<b>engine</b>: how charges and stacks combine is
+    /// <b>Unknown</b>). False when there is none.
     /// </summary>
     public static bool UseOne(Inventory? inventory, string ammoId)
     {

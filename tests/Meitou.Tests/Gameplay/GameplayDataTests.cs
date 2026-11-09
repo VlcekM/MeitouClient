@@ -88,8 +88,7 @@ public class GameplayDataTests
 [Slow]
 public class GameplayInstallTests
 {
-    // The base game load order: the numbers of the docs' probes (factions-squads-towns.md, game-loop.md)
-    // hold for it and for the full order.
+    // The base game load order: the numbers of the docs' probes (factions-squads-towns.md, game-loop.md) hold for it and for the full order.
     static GameDatabase Database()
     {
         Assert.SkipWhen(InstallData.Install is null, "Kenshi install not found");

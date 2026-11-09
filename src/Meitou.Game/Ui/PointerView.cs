@@ -17,12 +17,12 @@ sealed class PointerView(PlayerInterface player)
     // Whether the mouse was over a control in the last arranged UI (ArrangeUi), so the pointer needs no arrange of its own.
     internal bool PointerOverUi;
 
-    // Whether that control is one a click acts on (an enabled button, or a control with an action: as UiClickables takes them), for the enhanced Hardware
-    // mouse's hand.
+    // Whether that control is one a click acts on (an enabled button, or a control with an action: as UiClickables takes them), for the enhanced
+    // Hardware mouse's hand.
     internal bool PointerOverButton;
 
-    // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and every
-    // RepickTicks ticks while only the world moves (the picks walk every character, item and building near the ray: 0.5 ms).
+    // The pointer, the character it is over and the building (when no character), chosen again when the mouse, the camera or a modifier changed, and
+    // every RepickTicks ticks while only the world moves (the picks walk every character, item and building near the ray: 0.5 ms).
     (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) _pointer =
         (-1, default, false, false, "arrow", null, null);
 
@@ -42,8 +42,8 @@ sealed class PointerView(PlayerInterface player)
     internal static readonly Vector4 WhiteOutline = new(0.95f, 0.93f, 0.85f, 0.85f);
 
     /// <summary>
-    /// Where the enhanced Hardware mouse puts the middle of the action pointer's left edge, from the mouse at 1080: just clear of the Windows arrow (engine
-    /// choice).
+    /// Where the enhanced Hardware mouse puts the middle of the action pointer's left edge, from the mouse at 1080: just clear of the Windows arrow
+    /// (engine choice).
     /// </summary>
     static readonly Vector2 BesideOffset = new(14, 14);
 
@@ -57,16 +57,16 @@ sealed class PointerView(PlayerInterface player)
     #region Pointer and hover
 
     /// <summary>
-    /// The mouse pointer (kenshi_pointers.xml) for what the right button would do under the cursor (docs/game/ui-input.md, pointers): the quick order's pointer
-    /// (<see cref="PlayerInterface.QuickOrder"/>: talk, attk, med, lift, search), with Ctrl lift and with Alt search over a downed character; over the
-    /// interface, while dragging or with no selection, the arrow.
+    /// The mouse pointer (kenshi_pointers.xml) for what the right button would do under the cursor (docs/game/ui-input.md, pointers): the quick
+    /// order's pointer (<see cref="PlayerInterface.QuickOrder"/>: talk, attk, med, lift, search), with Ctrl lift and with Alt search over a downed
+    /// character; over the interface, while dragging or with no selection, the arrow.
     /// </summary>
     public string PointerName => Point().Name;
 
     /// <summary>
-    /// The character under the cursor (within <see cref="OutlineReach"/> of the eye) for the hover outline and its colour: the one a right click would act on,
-    /// in the colour of that order (attack red, treat green, talk gold, carry or loot blue), else any character under the cursor in white; null over the
-    /// interface or nobody.
+    /// The character under the cursor (within <see cref="OutlineReach"/> of the eye) for the hover outline and its colour: the one a right click
+    /// would act on, in the colour of that order (attack red, treat green, talk gold, carry or loot blue), else any character under the cursor in
+    /// white; null over the interface or nobody.
     /// </summary>
     public (CharacterId Id, Vector4 Colour)? HoverTarget => Point() is { Target: { } id } p && WithinOutlineReach(id) ? (id, PointerColour(p.Name)) : null;
 
@@ -78,8 +78,9 @@ sealed class PointerView(PlayerInterface player)
     }
 
     /// <summary>
-    /// The building under the cursor within <see cref="OutlineReach"/> along the ray (no character there, as a left click picks it) for the building outline:
-    /// its placement key, floor and the colour of what a right click on it would do, as <see cref="HoverTarget"/>'s; null over the interface or none.
+    /// The building under the cursor within <see cref="OutlineReach"/> along the ray (no character there, as a left click picks it) for the building
+    /// outline: its placement key, floor and the colour of what a right click on it would do, as <see cref="HoverTarget"/>'s; null over the interface
+    /// or none.
     /// </summary>
     public (string Key, float Floor, Vector4 Colour)? HoverBuilding =>
         Point() is { Building: { } b } p && b.T <= OutlineReach ? (b.Building.Instance, b.Building.Position.Y, PointerColour(p.Name)) : null;
@@ -166,8 +167,8 @@ sealed class PointerView(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether the character's faction is hostile to the player's, or it is fighting one of the player's characters (a neutral squad robbing them): only a
-    /// hostile one gets the attack pointer, the red outline and the quick-attack right click.
+    /// Whether the character's faction is hostile to the player's, or it is fighting one of the player's characters (a neutral squad robbing them):
+    /// only a hostile one gets the attack pointer, the red outline and the quick-attack right click.
     /// </summary>
     bool Hostile(CharacterId id) => player.Session.CurrentSnapshot.Characters.FirstOrDefault(c => c.Id == id) is not { } c || Hostile(c);
 
@@ -208,9 +209,9 @@ sealed class PointerView(PlayerInterface player)
     #region Chance label
 
     /// <summary>
-    /// The chance label over the <c>knockout</c> and <c>lockpick</c> pointers (docs/game/ui-input.md "Pointer chance label", <c>FUN_1406ea070</c>): the chance f,
-    /// clamped to 0..1, as int(f x 100) "%", coloured (1 - f, f, 0), its middle on the mouse's x and its bottom 32 pixels at 1080 above it. Shown whatever
-    /// draws the pointer (the Hardware mouse too).
+    /// The chance label over the <c>knockout</c> and <c>lockpick</c> pointers (docs/game/ui-input.md "Pointer chance label", <c>FUN_1406ea070</c>):
+    /// the chance f, clamped to 0..1, as int(f x 100) "%", coloured (1 - f, f, 0), its middle on the mouse's x and its bottom 32 pixels at 1080 above
+    /// it. Shown whatever draws the pointer (the Hardware mouse too).
     /// </summary>
     internal void AddPointerChance(List<UiControl> controls)
     {
@@ -230,8 +231,8 @@ sealed class PointerView(PlayerInterface player)
     }
 
     /// <summary>
-    /// The pointed chance (0..1) the label shows: the stealth KO chance / 100 of the pointed character under <c>knockout</c> (published only while a selected
-    /// character sneaks), the pick chance under <c>lockpick</c> (<see cref="PointedLockChance"/>); null for any other pointer.
+    /// The pointed chance (0..1) the label shows: the stealth KO chance / 100 of the pointed character under <c>knockout</c> (published only while a
+    /// selected character sneaks), the pick chance under <c>lockpick</c> (<see cref="PointedLockChance"/>); null for any other pointer.
     /// </summary>
     float? PointerChance(
         (long Tick, Vector2 Mouse, bool Ctrl, bool Alt, string Name, CharacterId? Target, (BuildingSelection.SelectedBuilding Building, float T)? Building) p) =>
@@ -281,8 +282,8 @@ sealed class PointerView(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether the enhanced Hardware mouse shows the hand for the pointer <paramref name="name"/>: an order a right click would give (not the walk, the map's
-    /// pan or ground the characters cannot reach), or an enabled button under the mouse.
+    /// Whether the enhanced Hardware mouse shows the hand for the pointer <paramref name="name"/>: an order a right click would give (not the walk,
+    /// the map's pan or ground the characters cannot reach), or an enabled button under the mouse.
     /// </summary>
     public bool PointsAtClickable(string name) => name is not ("arrow" or "hand" or "invalidmove") || player.UiVisible && PointerOverButton;
 

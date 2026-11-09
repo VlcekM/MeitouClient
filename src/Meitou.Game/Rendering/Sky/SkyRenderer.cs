@@ -197,8 +197,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
             StarHaloShare = 0.25f, StarHaloMax = 0.5f;
 
     // The Meitou night sky (the `stars` switch; docs/formats/sky.md "Meitou night sky"): procedural point stars on the celestial sphere, evaluated
-    // per pixel.
-    // StarField / NightAtmosphere (Meitou.Data) are the reference for every number here.
+    // per pixel. StarField / NightAtmosphere (Meitou.Data) are the reference for every number here.
 
     static readonly string StarShader = $$"""
 
@@ -831,8 +830,7 @@ public sealed unsafe partial class SkyRenderer : IDisposable
         try
         {
             // The whole 4096² file (BC1, 13 levels), repeating: the dome's coordinates wrap as the starfield shifts. The game samples its top level
-            // only
-            // (`filtering linear linear none`); the viewer filters trilinearly, which takes the top level at the game's screen sizes and keeps a
+            // only (`filtering linear linear none`); the viewer filters trilinearly, which takes the top level at the game's screen sizes and keeps a
             // smaller view from sparkling.
             if (assets.Find("SkyX_Starfield.dds") is { } stars) _starsTexture = SampledImage.FromDds(Gpu, DdsReader.ReadFile(stars), repeat: true,
                     "sky stars");
@@ -1009,12 +1007,11 @@ public sealed unsafe partial class SkyRenderer : IDisposable
     }
 
     /// <summary>
-    /// Meitou planetshine (docs/formats/sky.md "Planetshine"): from the end of the sun's light the planet is the light, its colour in the sun
-    /// light's own unit (the sun at the zenith, undimmed by the air in between, is the reference), added to the sun's, the direction weighted by
-    /// their brightness.
-    /// What the water's glint is lit by (WorldLighting.GlintDirection / GlintColour): the sun's own radiance and the planet disc's radiance as the
-    /// sky pass draws it (unboosted: the strength-scaled light below is an irradiance made 60 times brighter than the disc, which blew the glint
-    /// out). Left default (the sun's) by day.
+    /// Meitou planetshine (docs/formats/sky.md "Planetshine"): from the end of the sun's light the planet is the light, its colour in the sun light's
+    /// own unit (the sun at the zenith, undimmed by the air in between, is the reference), added to the sun's, the direction weighted by their
+    /// brightness. What the water's glint is lit by (WorldLighting.GlintDirection / GlintColour): the sun's own radiance and the planet disc's
+    /// radiance as the sky pass draws it (unboosted: the strength-scaled light below is an irradiance made 60 times brighter than the disc, which
+    /// blew the glint out). Left default (the sun's) by day.
     /// </summary>
     (Vector3 LightDirection, Vector3 SunLight, Vector3 CloudPlanet, bool PlanetLit, Vector3 GlintDirection, Vector3 GlintColour) ApplyPlanetshine(
         Vector3 sun, Vector3 lightDir, Vector3 sunLight, float reference)

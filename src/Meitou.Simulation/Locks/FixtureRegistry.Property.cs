@@ -181,8 +181,7 @@ public sealed partial class FixtureRegistry
     }
 
     // The buildings a town override reset to the level, with their level owner then: their saved record (patched, not rewritten, by a save) must not
-    // bring the old state back.
-    // A building the player buys afterwards leaves it.
+    // bring the old state back. A building the player buys afterwards leaves it.
     readonly Dictionary<string, (TownBuilding Building, PopulationData Data, int Owner)> _resetBuildings = new(StringComparer.Ordinal);
 
     /// <summary>

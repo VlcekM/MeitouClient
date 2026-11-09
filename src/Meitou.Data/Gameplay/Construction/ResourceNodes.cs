@@ -215,8 +215,7 @@ public sealed class FoliageResourceNodes(FoliageWorld world, GameDatabase db, Fu
                 if (instance.Mesh.BuildingType is { } building && ResourceOf(building) is > 0 and var resource)
                 {
                     // The rock's size is its mesh's bounds scaled by the instance (at least NodeRadius), centred on the bounds' middle, not on the
-                    // origin the mesh sits on; it is picked by
-                    // the mesh's triangles where the instance places them.
+                    // origin the mesh sits on; it is picked by the mesh's triangles where the instance places them.
                     var bounds = Bounds(instance.Mesh.MeshPath);
                     float radius = bounds is { } b ? Math.Max(NodeRadius, b.Radius * instance.Scale) : NodeRadius;
                     list.Add(bounds is { } c

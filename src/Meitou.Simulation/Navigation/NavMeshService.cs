@@ -18,11 +18,11 @@ public enum NavMeshOrigin { Cache, Built }
 public sealed record NavZoneReady(ZoneCoordinate Zone, NavMeshOrigin Origin, double Milliseconds, int Polygons);
 
 /// <summary>
-/// Builds zone meshes off the simulation thread and publishes them to a <see cref="NavmeshWalkability"/> (docs/simulation.md: path queries and navmesh building
-/// run on their own threads). A finished mesh goes live at once, whenever that is: the walkability's world is swapped atomically, so a query sees the old world
-/// or the new one, and the simulation can see a zone appear in the middle of a tick. <see cref="Request"/> queues a zone; a worker takes it from the cache
-/// (keyed by the zone's building hash and the settings) or gathers, builds, prunes and caches it. Several zones queued together are built one after another,
-/// each using all cores.
+/// Builds zone meshes off the simulation thread and publishes them to a <see cref="NavmeshWalkability"/> (docs/simulation.md: path queries and
+/// navmesh building run on their own threads). A finished mesh goes live at once, whenever that is: the walkability's world is swapped atomically, so
+/// a query sees the old world or the new one, and the simulation can see a zone appear in the middle of a tick. <see cref="Request"/> queues a zone;
+/// a worker takes it from the cache (keyed by the zone's building hash and the settings) or gathers, builds, prunes and caches it. Several zones
+/// queued together are built one after another, each using all cores.
 /// </summary>
 internal sealed class NavMeshService : IDisposable
 {
@@ -73,9 +73,9 @@ internal sealed class NavMeshService : IDisposable
     public NavBuildSettings Settings { get; }
 
     /// <summary>
-    /// A loading screen covers the game (the host sets it): a zone's tiles are built on every core but one. Uncovered, on a quarter of them: the tile builds run
-    /// on the shared pool at normal priority and allocate gigabytes a zone, and on every core they starved the simulation and the render thread for 100-200 ms
-    /// frames.
+    /// A loading screen covers the game (the host sets it): a zone's tiles are built on every core but one. Uncovered, on a quarter of them: the tile
+    /// builds run on the shared pool at normal priority and allocate gigabytes a zone, and on every core they starved the simulation and the render
+    /// thread for 100-200 ms frames.
     /// </summary>
     public bool Covered { get; set; } = true;
 
@@ -114,8 +114,9 @@ internal sealed class NavMeshService : IDisposable
     }
 
     /// <summary>
-    /// Builds a zone again although its mesh is loaded (the buildings round it changed, <see cref="NavRuntimeBuildings"/>): the new mesh replaces the old one when
-    /// it is published, which is when the task completes. A zone not loaded is not built (it is built with the overlay when it is asked for).
+    /// Builds a zone again although its mesh is loaded (the buildings round it changed, <see cref="NavRuntimeBuildings"/>): the new mesh replaces the
+    /// old one when it is published, which is when the task completes. A zone not loaded is not built (it is built with the overlay when it is asked
+    /// for).
     /// </summary>
     public Task<NavZoneReady> Rebuild(ZoneCoordinate zone)
     {
@@ -138,9 +139,10 @@ internal sealed class NavMeshService : IDisposable
     }
 
     /// <summary>
-    /// Keeps the region of a loaded zone's pruned polygons that <paramref name="at"/> stands on, and what it reaches across the loaded borders, and publishes it:
-    /// a walker on ground its zone's own seeds do not reach, whose way to a seed leads through a zone that is not loaded (a save loaded in the middle of a zone,
-    /// docs/game/pathfinding.md "Zone borders"). Not cached: the cache holds the zone's own pruning. True when the kept set grew.
+    /// Keeps the region of a loaded zone's pruned polygons that <paramref name="at"/> stands on, and what it reaches across the loaded borders, and
+    /// publishes it: a walker on ground its zone's own seeds do not reach, whose way to a seed leads through a zone that is not loaded (a save loaded
+    /// in the middle of a zone, docs/game/pathfinding.md "Zone borders"). Not cached: the cache holds the zone's own pruning. True when the kept set
+    /// grew.
     /// </summary>
     public bool KeepAt(Vector3 at)
     {
@@ -179,8 +181,8 @@ internal sealed class NavMeshService : IDisposable
     }
 
     /// <summary>
-    /// Drops a zone's mesh from the loaded world (the cache file stays). A queued build of it is skipped and a running one is cached but not published; their
-    /// task is cancelled.
+    /// Drops a zone's mesh from the loaded world (the cache file stays). A queued build of it is skipped and a running one is cached but not
+    /// published; their task is cancelled.
     /// </summary>
     public void Unload(ZoneCoordinate zone) => Unload([zone]);
 

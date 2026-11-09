@@ -231,33 +231,27 @@ public readonly record struct CaptiveEvent(long Tick, CaptiveEventKind Kind, Cap
 
 /// <summary>
 /// What captors do with their captives (docs/simulation.md "Captives"; facts in docs/game/ai-tasks.md "Prisoner fate" and "Slave rows"). The original
-/// runs these as package goals planned
-/// down to their tasks; Meitou runs each as a job of one worker, started by a sweep for every member of an AI squad whose current role list holds the
-/// goal in its hours and who is
-/// free (the AI's, awake, not fighting, not in another job), worked serially in <c>SlowWorld</c> while the AI leaves the worker alone
-/// (<see cref="CharacterCold.Engaged"/>). The cages
-/// a worker uses are those of the town its squad belongs to.
+/// runs these as package goals planned down to their tasks; Meitou runs each as a job of one worker, started by a sweep for every member of an AI
+/// squad whose current role list holds the goal in its hours and who is free (the AI's, awake, not fighting, not in another job), worked serially in
+/// <c>SlowWorld</c> while the AI leaves the worker alone (<see cref="CharacterCold.Engaged"/>). The cages a worker uses are those of the town its
+/// squad belongs to.
 /// <list type="bullet">
 /// <item><b>Kill</b> (135 "Kill random prisoner"; 282 "Dinner time" eats instead): wanted when the town's kill timer has run out or all the faction's
-/// cages there are full
-/// (<b>Observed</b>, AI slot 20 <c>FUN_14032e9b0</c>; the timer is set to now + uniform[1, 15) game hours when the town is first asked about and
-/// whenever a captive dies of a
-/// kill or a meal, <c>FUN_14034a810</c>). The target is the best occupied cage (the cage finder's weights and usable test, <c>FUN_1408d0770</c>,
+/// cages there are full (<b>Observed</b>, AI slot 20 <c>FUN_14032e9b0</c>; the timer is set to now + uniform[1, 15) game hours when the town is first
+/// asked about and whenever a captive dies of a kill or a meal, <c>FUN_14034a810</c>). The target is the best occupied cage (the cage finder's
+/// weights and usable test, <c>FUN_1408d0770</c>,
 /// <see cref="FateTarget"/>), its occupant alive; when that best cage holds a robot there is no target this ask;
 /// the occupant says event 10 MARKED_FOR_DEATH to the worker. Its plan draws a weapon first (B list hasWeaponEquipped, <see cref="DrawWeapon"/>);
 /// with none to draw the goal does not plan. At the cage it plays <c>chop down static</c> and strikes once per clip at
 /// 0.55 of it (<see cref="CombatSystem.Execute"/>), the occupant crying event 11 SCREAMING_TORTURE each time, until it dies.</item>
 /// <item><b>Eat</b> (139 "Eat random prisoner", wanted always; 282 at the kill rate): the same target; the eater sheathes its weapon (B list
-/// !hasWeaponEquipped), plays <c>eat</c>,
-/// says event 52 EATING_SOMETHING_SOUNDS while the captive says 11, and the captive is eaten (<see cref="MedicalState.BeingEaten"/>) until it
-/// dies.</item>
+/// !hasWeaponEquipped), plays <c>eat</c>, says event 52 EATING_SOMETHING_SOUNDS while the captive says 11, and the captive is eaten
+/// (<see cref="MedicalState.BeingEaten"/>) until it dies.</item>
 /// <item><b>Process</b> (260 "Watching for new slaves": an awake occupant of a cage of the town, not a slave, <c>FUN_1408cc110</c>; 183 "Watching
-/// slaves": an occupant within 180 that
-/// needs processing, <c>FUN_1408cd630</c>; both only in cages of non-player factions): the worker kneels 3 s (<c>medic</c>), then strips the
-/// captive's weapons and armour
-/// into its own inventory (locked shackles stay), dresses it in its faction's <c>slave clothing</c> where the slot is free, says event 35
-/// INTRODUCING_NEW_SLAVE (37 RECAPTURED_A_SLAVE for
-/// one whose head is shaven already), makes it its faction's slave and shaves its head (<c>Task_ProcessNewSlave</c>, <b>Observed</b>; the head
+/// slaves": an occupant within 180 that needs processing, <c>FUN_1408cd630</c>; both only in cages of non-player factions): the worker kneels 3 s
+/// (<c>medic</c>), then strips the captive's weapons and armour into its own inventory (locked shackles stay), dresses it in its faction's <c>slave
+/// clothing</c> where the slot is free, says event 35 INTRODUCING_NEW_SLAVE (37 RECAPTURED_A_SLAVE for one whose head is shaven already), makes it
+/// its faction's slave and shaves its head (<c>Task_ProcessNewSlave</c>, <b>Observed</b>; the head
 /// <b>Verified</b>).</item>
 /// <item><b>Capture / Carry / Shout</b> (167, 168, 188): see <c>CaptiveSystem.Capture.cs</c>. The slaves' own work (189, 190) is not a job but the
 /// AI's <see cref="AiBehaviour.Work"/>.</item>
@@ -323,10 +317,8 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
         OfferAfterJobs(world);
 
         // Each character is looked at once in SweepEveryTicks, on its slot's turn (slot mod the period), so the sweep spreads over the ticks instead
-        // of
-        // landing on one (8-11 ms a sweep with ~1,400 characters loaded, docs/simulation.md "Spread sweeps"; the original runs its AI updates 8
-        // characters
-        // a frame in turn, FUN_140786e30).
+        // of landing on one (8-11 ms a sweep with ~1,400 characters loaded, docs/simulation.md "Spread sweeps"; the original runs its AI updates 8
+        // characters a frame in turn, FUN_140786e30).
         int every = world.Every(Settings.SweepEveryTicks), phase = (int)(world.Tick % every);
         if (phase == 0) ExpireWaits(world.GameHours);
         Sweep(world, every);
@@ -1467,8 +1459,7 @@ public sealed partial class CaptiveSystem(PopulationData data, CombatSystem? com
                 + 1 });
 
         // The owner is set only when it had none that resolves (FUN_14032e430 behind FUN_14035aa20): a recaptured slave keeps its owner and its
-        // master squad. Meitou's owner is a faction,
-        // and the master squad (runtime only) stands for the handle when it is known.
+        // master squad. Meitou's owner is a faction, and the master squad (runtime only) stands for the handle when it is known.
         bool owned = cc.SlaveOwner >= 0 && (cc.SlaveMaster < 0 || world.Squads.Find(cc.SlaveMaster) is not null);
         if (owned) FixtureRegistry.Enslave(world, cc, cc.SlaveOwner);
         else FixtureRegistry.Enslave(world, cc, wc.Faction, wc.SquadId);

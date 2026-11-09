@@ -347,8 +347,7 @@ public sealed unsafe partial class TerrainDecalRenderer
             return;
         }
         // At the cap with every decal a pool still bleeding (more bleeders than decals): this one bleeds on the terrain only, rather than each new
-        // pool pushing out another
-        // bleeder's, which made one again the next tick (thousands a frame, none growing).
+        // pool pushing out another bleeder's, which made one again the next tick (thousands a frame, none growing).
         if (_surfaces.Count >= MaxSurfaces && !MakeRoom()) return;
         pool = Make(TerrainDecalType.Pool, at, random.Next(variants), random.NextSingle() * MathF.Tau, grow, abgr);
         (pool.Who, pool.Bled) = (who, _surfaceClock);

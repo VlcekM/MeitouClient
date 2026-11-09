@@ -8,15 +8,16 @@ namespace Meitou.Simulation.Combat;
 public static class CombatTuning
 {
     /// <summary>
-    /// Seconds a fighter waits after its attack by how its last blow ended (<b>Verified</b>, FUN_14060a2f0, docs/game/combat.md "Pacing"): 0.6 after a hit,
-    /// 0.3 blocked, 0.2 dodged; a swing that finds nobody in its attack zone keeps the 0.5 s deciding set (+0x148). A hit that finds no reaction clip still
-    /// cancels the swing and waits <see cref="InterruptPause"/>.
+    /// Seconds a fighter waits after its attack by how its last blow ended (<b>Verified</b>, FUN_14060a2f0, docs/game/combat.md "Pacing"): 0.6 after
+    /// a hit, 0.3 blocked, 0.2 dodged; a swing that finds nobody in its attack zone keeps the 0.5 s deciding set (+0x148). A hit that finds no
+    /// reaction clip still cancels the swing and waits <see cref="InterruptPause"/>.
     /// </summary>
     public const float HitPause = 0.6f, BlockedPause = 0.3f, DodgedPause = 0.2f, MissedPause = 0.5f, InterruptPause = 0.2f;
 
     /// <summary>
-    /// The clip progress past which a swing is finished and the wait after it starts (<b>Verified</b>, 0.98 read from the binary: <c>FUN_14060a590</c> arms
-    /// +0x144 once <c>FUN_1405b4c00</c> reports the clip done); the wait runs only while no clip is busy (<c>FUN_1405b34b0</c>: progress under the technique's
+    /// The clip progress past which a swing is finished and the wait after it starts (<b>Verified</b>, 0.98 read from the binary:
+    /// <c>FUN_14060a590</c> arms +0x144 once <c>FUN_1405b4c00</c> reports the clip done); the wait runs only while no clip is busy
+    /// (<c>FUN_1405b34b0</c>: progress under the technique's
     /// <c>acceptable end time</c>, a 0 there is never busy), so it starts at the later of the two. A data 0 (many mods) does not end the swing at once.
     /// </summary>
     public const float SwingFinished = 0.98f;
@@ -32,15 +33,15 @@ public static class CombatTuning
     public const float BreakOutFrom = 0.1f, BreakOutTo = 0.99f;
 
     /// <summary>
-    /// Seconds without any defence after a defence roll found nothing (<b>Verified</b>, the original's +0x14c), and the wait after a block ends with nothing
-    /// coming (+0x148, 0.2 s).
+    /// Seconds without any defence after a defence roll found nothing (<b>Verified</b>, the original's +0x14c), and the wait after a block ends with
+    /// nothing coming (+0x148, 0.2 s).
     /// </summary>
     public const float NoDefenceSeconds = 1.2f, AfterBlockPause = 0.2f;
 
     /// <summary>
     /// A defence starts once the swing furthest on is this far to its blow (<b>Verified</b>, <c>FUN_140609290</c>); before that it tries again in
-    /// EarlyDefenceSeconds (+0x14c 0.1 s). A started defence sets +0x14c to DefenceStartedSeconds, and the defence update looks at the blow's side again every
-    /// DefenceRecheckSeconds (+0x274, <c>FUN_1408862c0</c> 1.0).
+    /// EarlyDefenceSeconds (+0x14c 0.1 s). A started defence sets +0x14c to DefenceStartedSeconds, and the defence update looks at the blow's side
+    /// again every DefenceRecheckSeconds (+0x274, <c>FUN_1408862c0</c> 1.0).
     /// </summary>
     public const float DefenceStartProgress = 0.1f, EarlyDefenceSeconds = 0.1f, DefenceStartedSeconds = 0.2f, DefenceRecheckSeconds = 1f;
 
@@ -55,8 +56,8 @@ public static class CombatTuning
     public const float AbortOwnProgress = 0.5f, AbortIncomingProgress = 0.5f;
 
     /// <summary>
-    /// Seconds a fighter that lost the initiative roll leaves its opponent free to swing at it (<b>Verified</b>, FUN_14060c8b0: the loser waits its deadTimer,
-    /// at most 0.5 s, and decides again; the winner turns on it at once).
+    /// Seconds a fighter that lost the initiative roll leaves its opponent free to swing at it (<b>Verified</b>, FUN_14060c8b0: the loser waits its
+    /// deadTimer, at most 0.5 s, and decides again; the winner turns on it at once).
     /// </summary>
     public const float YieldSeconds = 0.5f;
 
@@ -76,9 +77,9 @@ public static class CombatTuning
     public const float CloseInGap = 3;
 
     /// <summary>
-    /// A fighter runs at its target out of the combat stance (plain run clips, full speed) once the gap between the two bodies is over <see cref="RunGap"/>, and
-    /// goes back to its footwork once it is under <see cref="FootworkGap"/> (<b>Observed</b>, the fight steering FUN_1402af1e0, docs/game/combat.md "Combat
-    /// stance").
+    /// A fighter runs at its target out of the combat stance (plain run clips, full speed) once the gap between the two bodies is over
+    /// <see cref="RunGap"/>, and goes back to its footwork once it is under <see cref="FootworkGap"/> (<b>Observed</b>, the fight steering
+    /// FUN_1402af1e0, docs/game/combat.md "Combat stance").
     /// </summary>
     public const float RunGap = 90, FootworkGap = 70;
 
@@ -94,8 +95,9 @@ public static class CombatTuning
     public const float FleeingSpeed = 9, FleeingSeconds = 1.5f;
 
     /// <summary>
-    /// After a fleeing target a fighter aims at the target's position plus its velocity times (1 − r) <see cref="LeadSlope"/> + <see cref="LeadBase"/> seconds,
-    /// r its attack play rate (<b>Observed</b>, FUN_1402af1e0 / FUN_1404354d0, the rate is CharStats +0x188; docs/game/combat.md "Combat stance").
+    /// After a fleeing target a fighter aims at the target's position plus its velocity times (1 − r) <see cref="LeadSlope"/> +
+    /// <see cref="LeadBase"/> seconds, r its attack play rate (<b>Observed</b>, FUN_1402af1e0 / FUN_1404354d0, the rate is CharStats +0x188;
+    /// docs/game/combat.md "Combat stance").
     /// </summary>
     public const float LeadBase = 1.2f, LeadSlope = 2;
 
@@ -150,8 +152,8 @@ public static class CombatTuning
     /// <summary>
     /// The gap between the bodies (footprints) a fighter walks in to (<b>Observed</b>, <c>FUN_1402b4570</c> moving to <c>FUN_14060cd20</c> through the steering's
     /// <c>FUN_1402ae320</c>): its longest reach (<see cref="CombatSlot.Reach"/>) less a quarter of its weapon's length, at least 6 (the steering keeps the far
-    /// end 5 beyond its near end of 1), +<see cref="RunningGap"/> while it runs (<c>FUN_1402aebf0</c> in <c>CircleStateAI</c>); <see cref="CloseInGap"/> before
-    /// its first choice.
+    /// end 5 beyond its near end of 1), +<see cref="RunningGap"/> while it runs (<c>FUN_1402aebf0</c> in <c>CircleStateAI</c>);
+    /// <see cref="CloseInGap"/> before its first choice.
     /// </summary>
     public static float StandGap(float reach, float weaponLength, bool running) =>
         reach > 0 ? MathF.Max(6, reach - weaponLength * 0.25f + (running ? RunningGap : 0)) : CloseInGap;

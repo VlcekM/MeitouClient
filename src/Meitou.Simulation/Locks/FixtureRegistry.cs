@@ -15,16 +15,13 @@ namespace Meitou.Simulation.Locks;
 
 /// <summary>
 /// The world's doors, lockable containers, cages and beds (docs/simulation.md "Cages, beds and locks"; the original's rules in docs/game/locks.md and
-/// docs/game/economy.md 11.5).
-/// A town's fixtures are registered once, when the population first spawns it (<see cref="RegisterSite"/>), in building order, and stay when the town
-/// unloads. Lock levels are
-/// rolled from the world seed and the fixture's id, so the order towns load in never changes them. Everything here runs in serial phases (or before
-/// the first tick).
+/// docs/game/economy.md 11.5). A town's fixtures are registered once, when the population first spawns it (<see cref="RegisterSite"/>), in building
+/// order, and stay when the town unloads. Lock levels are rolled from the world seed and the fixture's id, so the order towns load in never changes
+/// them. Everything here runs in serial phases (or before the first tick).
 /// <list type="bullet">
 /// <item><b>Locks</b>: level = owner faction's <c>doors lock level</c> + uniform int in [-r, r] (<c>lock level random</c>) + the record's <c>lock
-/// level bonus</c> (a door's own,
-/// its hardness the parent's), doors at least 1, others at least 0, at most 100; locks start unlocked; the owner is the placement's <c>owner faction
-/// ID</c>, else the town's.</item>
+/// level bonus</c> (a door's own, its hardness the parent's), doors at least 1, others at least 0, at most 100; locks start unlocked; the owner is
+/// the placement's <c>owner faction ID</c>, else the town's.</item>
 /// <item><b>Doors</b>: the squad's <c>initial door state</c> applies when its home is assigned (<see cref="ApplyInitialDoorState"/>).
 /// <see cref="Doors"/> hears a building as
 /// blocked for paths while every one of its doors is effectively locked and none broken (<b>engine choice</b>: the navmesh has one door state per
@@ -32,8 +29,7 @@ namespace Meitou.Simulation.Locks;
 /// <item><b>Cages</b>: <see cref="FindCage"/> (the original's weights, cages a carrier cannot reach left out), <see cref="Imprison"/> (recorded in
 /// <see cref="CagingsOf"/> and <see cref="Caged"/>),
 /// <see cref="Release"/>, <see cref="GetOut"/>, <see cref="LiftOut"/>; beds <see cref="FindBed"/> (the original's bed search), <see cref="EnterBed"/>
-/// / <see cref="LeaveBed"/> (orders and
-/// trips: <see cref="BedSystem"/>).</item>
+/// / <see cref="LeaveBed"/> (orders and trips: <see cref="BedSystem"/>).</item>
 /// </list>
 /// </summary>
 public sealed partial class FixtureRegistry
@@ -733,9 +729,8 @@ public sealed partial class FixtureRegistry
             if (c.Save is { } loaded && loaded.InWhat == what) loaded.InWhat = f.Id;
 
             // A loaded sleeper is put at its lie spot again (engine choice: a save from before LieSpot holds it at the bed's origin, half off the
-            // mattress),
-            // still sleeping: a task other than Sleep would get it up (BedSystem). It plays the bed's clip as one laid in does (EnterBed); the clip
-            // is not saved.
+            // mattress), still sleeping: a task other than Sleep would get it up (BedSystem). It plays the bed's clip as one laid in does (EnterBed);
+            // the clip is not saved.
             if (c.InSomething == HeldState.Bed)
             {
                 var (at, yaw) = LieSpot(f, next[s].Position, world.GameHours);
@@ -1423,15 +1418,13 @@ public sealed partial class FixtureRegistry
         Clear(c);
 
         // Task_ReleasePrisoner adds the leave task 133 (flag 0, which clears the escaped flag for a real cage owner, FUN_1403554b0) only for a
-        // releaser whose faction books bounties or is
-        // the player's (FUN_1403570a0); another NPC's release leaves the flag as it was. Releases that are no task of the jailer's (bail, trade,
-        // recruit, liberators) clear it as before.
+        // releaser whose faction books bounties or is the player's (FUN_1403570a0); another NPC's release leaves the flag as it was. Releases that
+        // are no task of the jailer's (bail, trade, recruit, liberators) clear it as before.
         bool leaves = releaserFaction < 0 || releaserFaction == world.Player.Faction || crimes is null || crimes.Factions.Books(releaserFaction);
         if (leaves && !(cage is not null && crimes?.Factions.NotReal(cage.Owner) == true)) c.Escaped = false;
 
         // The release leaves slavery as it is (FUN_1403570a0 never sets the slave state; bail and buy-free clear it themselves, Verified); a releaser
-        // that is not the player's
-        // takes a slave over (FUN_14032e430: the owner changes, the state stays).
+        // that is not the player's takes a slave over (FUN_14032e430: the owner changes, the state stays).
         if (releaserFaction >= 0 && releaserFaction != world.Player.Faction && c.SlaveState != 0)
             c.SlaveOwner = releaserFaction;
         if (c.IsPlayer) world.Post(Loc.Tr("{1} has been released from prison.", c.Name));

@@ -4,14 +4,11 @@ namespace Meitou.Data.Gameplay.Combat;
 
 /// <summary>
 /// The combat rows of the <c>GLOBAL CONSTANTS</c> record as the hit code uses them (docs/game/combat.md "Global tuning"), with the loader's
-/// rescalings
-/// applied once (<c>FUN_14086b2b0</c>, <b>Verified</b>): the <c>damage multiplier</c> D (0.65) is multiplied into the blunt and cut damage at skill 1
-/// and 99,
-/// the pierce multiplier and the stumble maximum; the block increase and reduction are stored x0.1. A property is the <i>stored</i> number the
-/// formulas use.
+/// rescalings applied once (<c>FUN_14086b2b0</c>, <b>Verified</b>): the <c>damage multiplier</c> D (0.65) is multiplied into the blunt and cut damage
+/// at skill 1 and 99, the pierce multiplier and the stumble maximum; the block increase and reduction are stored x0.1. A property is the
+/// <i>stored</i> number the formulas use.
 /// <para>Unlike <see cref="GameConstants"/> (whose fallbacks are the editor's defaults), a field the record lacks takes the <b>base game's value</b>,
-/// so a
-/// missing record still tunes like the base game; <see cref="BaseGame"/> is that, and the install test checks it against the real record.</para>
+/// so a missing record still tunes like the base game; <see cref="BaseGame"/> is that, and the install test checks it against the real record.</para>
 /// The remaining rows the combat code uses (knockout, bleeding, XP...) are in <see cref="GameConstants"/>.
 /// </summary>
 public sealed record CombatConstants

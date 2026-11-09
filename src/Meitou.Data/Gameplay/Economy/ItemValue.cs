@@ -89,8 +89,7 @@ public static class ItemValue
         if (ingredients.Count > 0)
         {
             // The item's own value is ignored: each ingredient at the same quality and with the category rows, scaled by its share (v0 percent of one
-            // unit)
-            // and the margin.
+            // unit) and the margin.
             if (find is null || depth >= MaxIngredientDepth) return 0;
 
             float profit = RecordReading.Float(r, "profitability", 0) + 1;

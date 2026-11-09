@@ -145,8 +145,8 @@ public sealed unsafe class NgxDlssUpscaler : IUpscaler
             NgxParameters.SetFloat(p, "FrameTimeDeltaInMsec\0"u8, i.DeltaSeconds * 1000);
             int rc = _ngx.EvaluateFeature(cb, _feature, p, 0);
 
-            // The map keeps what it was given: the images' descriptions are this call's locals, so they do not outlive it (a later CreateFeature1 reads
-            // the map).
+            // The map keeps what it was given: the images' descriptions are this call's locals, so they do not outlive it (a later CreateFeature1
+            // reads the map).
             NgxParameters.SetPointer(p, "Color\0"u8, null);
             NgxParameters.SetPointer(p, "Depth\0"u8, null);
             NgxParameters.SetPointer(p, "MotionVectors\0"u8, null);

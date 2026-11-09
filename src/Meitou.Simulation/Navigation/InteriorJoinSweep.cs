@@ -58,10 +58,10 @@ internal static class InteriorJoinSweep
         group.Polygons.Where(p => p.Length >= 3).Select(p => p.Aggregate(Vector3.Zero, (a, i) => a + group.Vertices[i]) / p.Length);
 
     /// <summary>
-    /// The interiors of a zone's build reached from the street: the zone's kept set resolved alone (its seeds and the border rule, as with no neighbour loaded)
-    /// or with its neighbours (<paramref name="resolved"/>), walked over kept polygons, joins and links from its exterior's kept polygons; an interior counts
-    /// when a polygon its own pruning kept is reached (any of it when that kept nothing: a doorway strip kept only through a join is not the room). Keys are the
-    /// interiors' building keys (<see cref="InteriorMesh.Key"/>).
+    /// The interiors of a zone's build reached from the street: the zone's kept set resolved alone (its seeds and the border rule, as with no
+    /// neighbour loaded) or with its neighbours (<paramref name="resolved"/>), walked over kept polygons, joins and links from its exterior's kept
+    /// polygons; an interior counts when a polygon its own pruning kept is reached (any of it when that kept nothing: a doorway strip kept only
+    /// through a join is not the room). Keys are the interiors' building keys (<see cref="InteriorMesh.Key"/>).
     /// </summary>
     public static HashSet<string> Reached(
         ZoneCoordinate zone,
@@ -126,8 +126,8 @@ internal static class InteriorJoinSweep
     }
 
     /// <summary>
-    /// Scores each group: <paramref name="joined"/> holds the interiors this zone's build reaches; one not in it is looked up in the eight neighbours' builds,
-    /// each resolved alone (its door may lie over the border), built once on the first such lookup.
+    /// Scores each group: <paramref name="joined"/> holds the interiors this zone's build reaches; one not in it is looked up in the eight
+    /// neighbours' builds, each resolved alone (its door may lie over the border), built once on the first such lookup.
     /// </summary>
     public static List<Join> Compare(
         ZoneGeometryGatherer gatherer,

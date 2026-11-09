@@ -25,10 +25,8 @@ public sealed class FeedSettings
 /// <see cref="FeedSettings.CheckEveryTicks"/> ticks, each living character (knocked out too) with an inventory looks for a bite:
 /// <list type="bullet">
 /// <item><b>Who</b>: a character of the player's faction or a slave wants food at any hunger, anyone else below <see cref="NpcWantsBelow"/>; it eats
-/// when it wants food, its stomach is
-/// empty and its hunger is below <see cref="HungryBelow"/>. An animal does not while the squad option Feed Animals is off. NPCs are kept fed by their
-/// free food
-/// (<see cref="MedicalContext.HungerFloor"/>), so they rarely get this hungry.</item>
+/// when it wants food, its stomach is empty and its hunger is below <see cref="HungryBelow"/>. An animal does not while the squad option Feed Animals
+/// is off. NPCs are kept fed by their free food (<see cref="MedicalContext.HungerFloor"/>), so they rarely get this hungry.</item>
 /// <item><b>Where</b>: its own items, then its backpack; failing both, a character of the player's side whose hunger is below
 /// <see cref="ShareBelow"/> eats from the backpack of a squad mate
 /// within <see cref="ShareReach"/> while the squad option Share Food is on.</item>

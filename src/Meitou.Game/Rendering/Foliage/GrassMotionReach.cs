@@ -25,8 +25,7 @@ public static class GrassMotionReach
 
     /// <summary>
     /// The factor a patch's sway length is multiplied by to get its reach in world units (the cull's <c>motionScale</c>); 0 when nothing moves (no
-    /// step)
-    /// or the focal length is unknown, the caller then draws nothing or everything respectively.
+    /// step) or the focal length is unknown, the caller then draws nothing or everything respectively.
     /// </summary>
     public static float Scale(float phaseStep, float focalPixels, float thresholdPixels) =>
         phaseStep > 0 && focalPixels > 0 && thresholdPixels > 0 ? phaseStep * focalPixels / thresholdPixels : 0;

@@ -8,8 +8,8 @@ using Meitou.Simulation.Production;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The Prospect button and the Prospecting Results window (docs/game/ui-screens.md "Prospecting"): the button gives the selected character nearest the
-/// camera the prospecting task, the window shows what <see cref="World.Prospected"/> found, with its map.
+/// The Prospect button and the Prospecting Results window (docs/game/ui-screens.md "Prospecting"): the button gives the selected character nearest
+/// the camera the prospecting task, the window shows what <see cref="World.Prospected"/> found, with its map.
 /// </summary>
 sealed class ProspectingPanel(PlayerInterface player)
 {
@@ -28,8 +28,8 @@ sealed class ProspectingPanel(PlayerInterface player)
     #region Button and window
 
     /// <summary>
-    /// The HUD's Prospect action (<c>FUN_140721800</c>): with the window open it closes it; else the selected character nearest the camera pivot starts
-    /// prospecting, unless it already does, and the click sounds. The sound is not part of an order's Right_Click: the exe posts it here.
+    /// The HUD's Prospect action (<c>FUN_140721800</c>): with the window open it closes it; else the selected character nearest the camera pivot
+    /// starts prospecting, unless it already does, and the click sounds. The sound is not part of an order's Right_Click: the exe posts it here.
     /// </summary>
     internal void ProspectAction()
     {
@@ -97,8 +97,8 @@ sealed class ProspectingPanel(PlayerInterface player)
     #region Results
 
     /// <summary>
-    /// The two data panels and the resource rows (<c>FUN_14049d850</c>): panel 1 the zone, altitude, the prospector's skill and the area size; panel 2 the wind
-    /// and the environment; each resource a radio row with its value in the original's colours (above 0.75 good, below 0.5 bad).
+    /// The two data panels and the resource rows (<c>FUN_14049d850</c>): panel 1 the zone, altitude, the prospector's skill and the area size; panel
+    /// 2 the wind and the environment; each resource a radio row with its value in the original's colours (above 0.75 good, below 0.5 bad).
     /// </summary>
     internal void AddProspectContent(List<UiControl> controls)
     {
@@ -119,8 +119,8 @@ sealed class ProspectingPanel(PlayerInterface player)
             new("Area Size:", Loc.Tr("{1,num} m", r.AreaMetres)),
         ], row, pixels);
 
-        // The wind of the spot's region when it finished (140785f50) in mph; the environment lists its coverages, "Dead" when there are none, the first on the
-        // label's line.
+        // The wind of the spot's region when it finished (140785f50) in mph; the environment lists its coverages, "Dead" when there are none, the
+        // first on the label's line.
         double wind = Math.Round(r.WindSpeed * 0.22369362f, 1);
         var panel = new List<PlayerInterface.HudLine> { new("Wind Speed:", Loc.Tr("{1,num} mph", wind)) };
         var environment = r.Environment.Count == 0 ? [Loc.Tr("Dead")] : r.Environment.Select(l => $"{Loc.Tr(l.Name)} {N(l.Percent)}%").ToArray();
@@ -165,9 +165,9 @@ sealed class ProspectingPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// The <c>Map</c> box shows the checked resource over the ground round the spot, and the layout's camera marker (hidden for this copy) sits every frame on
-    /// the camera's pivot (the original's <c>CameraClass</c> centre node), turned by the level direction from the eye to the pivot (<c>FUN_14048c970</c>), a
-    /// tenth of the box (the layout's size), cut to the box.
+    /// The <c>Map</c> box shows the checked resource over the ground round the spot, and the layout's camera marker (hidden for this copy) sits every
+    /// frame on the camera's pivot (the original's <c>CameraClass</c> centre node), turned by the level direction from the eye to the pivot
+    /// (<c>FUN_14048c970</c>), a tenth of the box (the layout's size), cut to the box.
     /// </summary>
     void AddProspectMap(List<UiControl> controls, ProspectReport r)
     {
@@ -202,9 +202,9 @@ sealed class ProspectingPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// The map's picture (<b>Verified</b>, <c>FUN_14049cd60</c>): the ground grey, black up to 500 and brightening to white at 10000; a field resource above
-    /// 0.01 at a cell adds v² of white to green and (1 - v) v to red; a rock paints its cell (2 x 2 cells on a map over 40 a side) red (1 - v) v, green v²,
-    /// blue the ground's grey.
+    /// The map's picture (<b>Verified</b>, <c>FUN_14049cd60</c>): the ground grey, black up to 500 and brightening to white at 10000; a field
+    /// resource above 0.01 at a cell adds v² of white to green and (1 - v) v to red; a rock paints its cell (2 x 2 cells on a map over 40 a side) red
+    /// (1 - v) v, green v², blue the ground's grey.
     /// </summary>
     static Data.Textures.RgbaImage DrawProspectMap(ProspectMap map, int row)
     {

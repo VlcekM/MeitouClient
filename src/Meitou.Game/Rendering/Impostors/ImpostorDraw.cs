@@ -9,9 +9,9 @@ namespace Meitou.Game.Rendering.Impostors;
 internal enum ImpostorProgram { Plain, Caster, Rock, Prepass, AfterPrepass }
 
 /// <summary>
-/// The impostor program in the native model (<see cref="ImpostorShaders.VertexNative"/>, <see cref="ImpostorShaders.FragmentNative"/>): six vertices per
-/// instance through a shared six-entry index buffer (<see cref="Quad"/>: <c>gl_VertexIndex</c> is the index, 0 to 5, so the quad's corners are the GL
-/// text's <c>gl_VertexID % 6</c>), the instance rows at locations 7 to 10 (the foliage's ABI, row 0 w the fade), the atlas and sphere in
+/// The impostor program in the native model (<see cref="ImpostorShaders.VertexNative"/>, <see cref="ImpostorShaders.FragmentNative"/>): six vertices
+/// per instance through a shared six-entry index buffer (<see cref="Quad"/>: <c>gl_VertexIndex</c> is the index, 0 to 5, so the quad's corners are
+/// the GL text's <c>gl_VertexID % 6</c>), the instance rows at locations 7 to 10 (the foliage's ABI, row 0 w the fade), the atlas and sphere in
 /// <see cref="ImpostorPush"/>. Pipelines per (program, segment state, formats), kept for the last two states as the foliage meshes keep theirs. Used by
 /// the foliage renderer and the preview.
 /// </summary>

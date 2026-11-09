@@ -6,12 +6,11 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The zone files of a save (docs/formats/save.md "Zone files"). The original writes a file for every zone it has loaded
-/// (on unload and at save time) that holds any record, and a zone file marks the zone as visited: the original then makes no town
-/// residents for it at load (they come from the save's platoons). A Meitou save does the same for the zones its population has had active
-/// (<see cref="World.VisitedZones"/>): a zone the loaded save has a file of keeps it (the building locks and doors and the player's
-/// buildings are written into it by <see cref="SaveCapture"/>), one it has none of gets one made from the level data
-/// (<see cref="SaveZoneBuilder.FromLevel"/>), whose buildings name their town by the save's town handle.
+/// The zone files of a save (docs/formats/save.md "Zone files"). The original writes a file for every zone it has loaded (on unload and at save time)
+/// that holds any record, and a zone file marks the zone as visited: the original then makes no town residents for it at load (they come from the
+/// save's platoons). A Meitou save does the same for the zones its population has had active (<see cref="World.VisitedZones"/>): a zone the loaded
+/// save has a file of keeps it (the building locks and doors and the player's buildings are written into it by <see cref="SaveCapture"/>), one it has
+/// none of gets one made from the level data (<see cref="SaveZoneBuilder.FromLevel"/>), whose buildings name their town by the save's town handle.
 /// </summary>
 public static class ZoneSave
 {

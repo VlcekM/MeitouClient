@@ -9,11 +9,9 @@ namespace Meitou.Simulation.Factions;
 /// The WORLD_EVENT_STATEs answered live, as the original's <c>FUN_1409a7e00</c> (docs/game/factions-squads-towns.md "Unique characters", queries): a
 /// state holds when every
 /// <c>NPC is</c> unique has its state (and, with <c>player involvement</c>, one other than alive has the player flag), no <c>NPC is NOT</c> unique
-/// has its state (with the player
-/// flag needed for an alive one), and each <c>player ally</c> / <c>player enemy</c> faction is or is not the player's ally (relation ≥ 50) /
-/// hostile to it (≤ -30) as the entry
-/// says. A unique with no entry is alive and the player not involved, so a new game answers by the data alone. Nothing is saved: the unique table and
-/// the relations are.
+/// has its state (with the player flag needed for an alive one), and each <c>player ally</c> / <c>player enemy</c> faction is or is not the player's
+/// ally (relation ≥ 50) / hostile to it (≤ -30) as the entry says. A unique with no entry is alive and the player not involved, so a new game answers
+/// by the data alone. Nothing is saved: the unique table and the relations are.
 /// <para>The population refreshes the unique states it reads every tick (<see cref="Refresh"/>, serial; a look's own changes to the table are taken
 /// again at once); a query reads that copy, so the build threads may ask at any time.</para>
 /// </summary>

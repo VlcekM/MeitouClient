@@ -52,9 +52,8 @@ public sealed partial class World
         SystemOf<Dialogue.DialogueSystem>() is not { } dialogue ? true : dialogue.ArrivalResult is var (done, forget) && done == serial ? forget : null;
 
     /// <summary>
-    /// Whether <paramref name="who"/> regards <paramref name="of"/> as friendly
-    /// (Character slot 126, <see cref="Dialogue.DialogueSystem.RegardsFriendly(World, int, int)"/>); the host asks between ticks.
-    /// False without a dialogue system.
+    /// Whether <paramref name="who"/> regards <paramref name="of"/> as friendly (Character slot 126,
+    /// <see cref="Dialogue.DialogueSystem.RegardsFriendly(World, int, int)"/>); the host asks between ticks. False without a dialogue system.
     /// </summary>
     public bool RegardsFriendly(CharacterId who, CharacterId of) =>
         Characters.Phase == TablePhase.Outside

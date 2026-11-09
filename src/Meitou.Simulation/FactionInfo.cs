@@ -14,8 +14,8 @@ public enum FactionInfoKind : byte
 }
 
 /// <summary>
-/// A row of the Faction tab's Active Contracts or Upcoming Events: a label and a value, and for a time the game hours left (<see cref="Hours"/>, NaN: none; the
-/// interface prints it as <c>TimeOfDay::getTotalTimeString</c> does).
+/// A row of the Faction tab's Active Contracts or Upcoming Events: a label and a value, and for a time the game hours left (<see cref="Hours"/>, NaN:
+/// none; the interface prints it as <c>TimeOfDay::getTotalTimeString</c> does).
 /// </summary>
 public readonly record struct FactionInfoLine(FactionInfoKind Kind, string Label, string Value = "", double Hours = double.NaN);
 
@@ -27,9 +27,9 @@ public sealed partial class World
     const int HiredAllySignal = 12, DefendBaseSignal = 15;
 
     /// <summary>
-    /// Active Contracts (<c>FUN_1404927f0</c>, <c>getGUIData</c> of the two contract packages): per squad running one for a player character, "Bodyguard
-    /// Contract" or "Base Defence Contract" with the hired squad's faction, "-Protecting:" and the target's name, "-Expires in:" and the time left, then a rule.
-    /// One entry per hired squad (the original lists each hired character's package; Meitou's packages are the squad's).
+    /// Active Contracts (<c>FUN_1404927f0</c>, <c>getGUIData</c> of the two contract packages): per squad running one for a player character,
+    /// "Bodyguard Contract" or "Base Defence Contract" with the hired squad's faction, "-Protecting:" and the target's name, "-Expires in:" and the
+    /// time left, then a rule. One entry per hired squad (the original lists each hired character's package; Meitou's packages are the squad's).
     /// </summary>
     public List<FactionInfoLine> ActiveContracts(Func<int, string?> factionName)
     {

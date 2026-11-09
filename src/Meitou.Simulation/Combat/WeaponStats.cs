@@ -44,8 +44,8 @@ public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
     public WeaponStats Stats { get; } = stats;
 
     /// <summary>
-    /// The skill the weapon's category uses (<c>FUN_140897f30</c>, <b>Observed</b>): katanas, sabres, hackers, heavy weapons, blunt, polearms; martial arts for
-    /// fists and creature attacks.
+    /// The skill the weapon's category uses (<c>FUN_140897f30</c>, <b>Observed</b>): katanas, sabres, hackers, heavy weapons, blunt, polearms;
+    /// martial arts for fists and creature attacks.
     /// </summary>
     public StatsEnumerated Skill { get; } = SkillOf(data.SkillCategory);
 
@@ -73,8 +73,8 @@ public sealed class WeaponInstance(WeaponData data, WeaponStats stats)
     };
 
     /// <summary>
-    /// The weapon type bit of a category, what a technique's validity flags are matched with (a technique's "1 handed" flag is not tested: how it splits one-
-    /// and two-handed weapons is <b>Unknown</b>).
+    /// The weapon type bit of a category, what a technique's validity flags are matched with (a technique's "1 handed" flag is not tested: how it
+    /// splits one- and two-handed weapons is <b>Unknown</b>).
     /// </summary>
     public static WeaponKinds KindOf(int category) => WeaponCategories.TechniqueKind(category);
 }

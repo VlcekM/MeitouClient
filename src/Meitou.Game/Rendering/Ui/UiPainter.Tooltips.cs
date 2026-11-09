@@ -14,8 +14,9 @@ public sealed partial class UiPainter
     public readonly record struct TextSize(float Width, float Height);
 
     /// <summary>
-    /// The font a TrueType font resource (<c>Kenshi_StandardFont_Medium</c> ...) is drawn with at <paramref name="scale"/> (the control's <c>TextScale</c>,
-    /// else the viewport height over 1080), baked at the em pixel size the original resizes it to; null when <paramref name="fontName"/> is no such resource.
+    /// The font a TrueType font resource (<c>Kenshi_StandardFont_Medium</c> ...) is drawn with at <paramref name="scale"/> (the control's
+    /// <c>TextScale</c>, else the viewport height over 1080), baked at the em pixel size the original resizes it to; null when
+    /// <paramref name="fontName"/> is no such resource.
     /// </summary>
     DebugOverlay? ResourceFont(string fontName, float scale, float minimumTextPixels)
     {
@@ -77,8 +78,8 @@ public sealed partial class UiPainter
     /// <summary>
     /// The lines <paramref name="text"/> wraps to at <paramref name="wrapWidth"/> and their size, in font resource <paramref name="fontName"/> as
     /// <see cref="Draw"/> paints a caption with <c>TextScale</c> <paramref name="textScale"/> and a nonzero <paramref name="minimumTextPixels"/> (a panel
-    /// fitted to its text before it is drawn). The lines are plain text: colour tags are measured as the drawn text shows them, without their markup, and
-    /// dropped.
+    /// fitted to its text before it is drawn). The lines are plain text: colour tags are measured as the drawn text shows them, without their markup,
+    /// and dropped.
     /// </summary>
     public (IReadOnlyList<string> Lines, TextSize Size) WrapCaption(string fontName, string text, float textScale, float wrapWidth, float minimumTextPixels)
     {

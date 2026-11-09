@@ -381,9 +381,8 @@ public sealed class ParticleSimulation
 
     /// <summary>
     /// The width, height and depth of a new particle: <c>all_particle_dimensions</c> is one draw for the three and wins over the per-axis sizes; each
-    /// per-axis one draws its own. A size of 0 is not set (the plugin's setOwnDimensions): the game's pooled particle then keeps its last
-    /// one, here the
-    /// technique's default.
+    /// per-axis one draws its own. A size of 0 is not set (the plugin's setOwnDimensions): the game's pooled particle then keeps its last one, here
+    /// the technique's default.
     /// </summary>
     (float Width, float Height, float Depth) SpawnDimensions(TechniqueState t, PuEmitterDef e)
     {
@@ -824,8 +823,7 @@ public sealed class ParticleSimulation
     /// <paramref name="worldOffset"/> is added to every position (the sim keeps small numbers near its own origin; the caller adds where that origin
     /// is).</summary>
     /// <param name="ahead">Seconds the particles are drawn ahead along their velocity (time queued but not yet simulated, so a unit stepped at a
-    /// lower rate
-    /// still moves every frame).</param>
+    /// lower rate still moves every frame).</param>
     public int Collect(int index, Span<ParticleInstance> destination, Vector3 tint, float alpha, Vector3 worldOffset = default, float ahead = 0)
     {
         var t = _techniques[index];

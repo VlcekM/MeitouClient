@@ -23,8 +23,8 @@ public static class OceanSpectrum
     public const float BandStart = 6;
 
     /// <summary>
-    /// The dispersion is quantised to whole multiples of 2π / <see cref="RepeatSeconds"/>, so the surface repeats exactly after that time and the GPU's
-    /// phases stay small (the clock is taken modulo it).
+    /// The dispersion is quantised to whole multiples of 2π / <see cref="RepeatSeconds"/>, so the surface repeats exactly after that time and the
+    /// GPU's phases stay small (the clock is taken modulo it).
     /// </summary>
     public const double RepeatSeconds = 600;
 
@@ -63,8 +63,8 @@ public static class OceanSpectrum
 
     /// <summary>
     /// The initial amplitudes of <paramref name="n"/>² waves per cascade: texel (x, y) is the wave vector 2π (x − n/2, y − n/2) / L, and holds
-    /// (h0(k), conj(h0(−k))) as (re, im, re, im) in units. Zero at k = 0, on the Nyquist row and column (x or y = 0, which have no partner) and outside
-    /// the cascade's band.
+    /// (h0(k), conj(h0(−k))) as (re, im, re, im) in units. Zero at k = 0, on the Nyquist row and column (x or y = 0, which have no partner) and
+    /// outside the cascade's band.
     /// </summary>
     /// <param name="windDirection">Where the wind blows to (world x, z).</param>
     /// <param name="wind">The wind speed in m/s (<see cref="WindMetres"/>).</param>

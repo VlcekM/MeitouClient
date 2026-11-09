@@ -286,10 +286,10 @@ public static class RiverFlowBake
     }
 
     /// <summary>
-    /// The sense of the axes. One stretch's sense has to be the same all along it, but the bank's height is noisy from texel to texel, so the senses are
-    /// made consistent first (spreading from a texel to its neighbours, each turned to agree with the one before it) and the fall decides once for the
-    /// whole connected river: the sum of the bank's slope along its flow. A river whose sum is not clearly downhill, or which is a few texels long, is no
-    /// river.
+    /// The sense of the axes. One stretch's sense has to be the same all along it, but the bank's height is noisy from texel to texel, so the senses
+    /// are made consistent first (spreading from a texel to its neighbours, each turned to agree with the one before it) and the fall decides once
+    /// for the whole connected river: the sum of the bank's slope along its flow. A river whose sum is not clearly downhill, or which is a few texels
+    /// long, is no river.
     /// </summary>
     static void AssignSenses(float[] fx, float[] fz, float[] slope, float[] weight, int n)
     {
@@ -358,8 +358,8 @@ public static class RiverFlowBake
     }
 
     /// <summary>
-    /// Smooths the directions: each texel's axis was fitted on its own, so neighbours (and neighbouring rivers, each with its own vote) can differ by a lot,
-    /// which showed as hard seams along the texel grid. A few passes of weighted averaging over 3 × 3 river texels.
+    /// Smooths the directions: each texel's axis was fitted on its own, so neighbours (and neighbouring rivers, each with its own vote) can differ by
+    /// a lot, which showed as hard seams along the texel grid. A few passes of weighted averaging over 3 × 3 river texels.
     /// </summary>
     static void SmoothDirections(float[] fx, float[] fz, float[] weight, int n)
     {
@@ -394,8 +394,8 @@ public static class RiverFlowBake
     }
 
     /// <summary>
-    /// The weight fades where the directions within 2 texels still disagree (a pond or junction where the fitted axes fan out radially, two rivers voting
-    /// head-on into each other): there the water is still rather than spinning.
+    /// The weight fades where the directions within 2 texels still disagree (a pond or junction where the fitted axes fan out radially, two rivers
+    /// voting head-on into each other): there the water is still rather than spinning.
     /// </summary>
     static float[] AgreeingWeights(float[] fx, float[] fz, float[] weight, int n)
     {

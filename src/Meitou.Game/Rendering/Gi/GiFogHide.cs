@@ -6,13 +6,10 @@ namespace Meitou.Game.Rendering.Gi;
 /// <summary>
 /// Which probes the fog hides (docs/render-gi.md "Probes in the fog"). A probe only matters through the surfaces that read it: a pixel's or a
 /// bounce's lookup reads the 8 probes around <c>q = p + offset</c> (<c>giCascade</c>), the offset at most 0.3 of the smaller spacing, so probe
-/// (column, layer)
-/// is read from p within one spacing across (the trilinear weight is 0 beyond) and, up and down, from <c>base + (l - 0.5) sy</c> to <c>base + (l +
-/// 1.5) sy</c>
-/// (the bottom layer from below too, the top layer from above too: the layer index is clamped). When the fog cull proves everything in that box
-/// hidden
-/// (<see cref="FogVolumes.Covers"/>: wholly inside the eye's fog block and past its hide distance, or past the weather fog's), no pixel reads the
-/// probe.
+/// (column, layer) is read from p within one spacing across (the trilinear weight is 0 beyond) and, up and down, from <c>base + (l - 0.5) sy</c> to
+/// <c>base + (l + 1.5) sy</c> (the bottom layer from below too, the top layer from above too: the layer index is clamped). When the fog cull proves
+/// everything in that box hidden (<see cref="FogVolumes.Covers"/>: wholly inside the eye's fog block and past its hide distance, or past the weather
+/// fog's), no pixel reads the probe.
 /// </summary>
 internal static class GiFogHide
 {
@@ -48,8 +45,7 @@ internal static class GiFogHide
     /// <summary>
     /// A frame's probe list: every <paramref name="phases"/>-th probe from <paramref name="phase"/> in ascending order (the shaders' old
     /// <c>gid * phases + phase</c>), but a probe whose layer is below its column's entry of <paramref name="hiddenLayers"/> (per tile, cascade-major,
-    /// the
-    /// column's toroidal row and column) only on one of every <paramref name="period"/> of its own rounds (<paramref name="round"/> counts this
+    /// the column's toroidal row and column) only on one of every <paramref name="period"/> of its own rounds (<paramref name="round"/> counts this
     /// phase's updates), with <see cref="SlowBit"/> set. <paramref name="period"/> 0: no probe is hidden and the list is the old one. Offsets are the
     /// cascades' toroidal offsets of window column 0 (x, z, in <paramref name="offsets"/> as x0, z0, x1, z1). Returns the entries written.
     /// </summary>
@@ -110,8 +106,7 @@ internal static class GiFogHide
 
     /// <summary>
     /// How many of a column's lowest probes no surface that the fog leaves visible can read: the largest L (0 to <paramref name="layerCount"/> - 1)
-    /// whose
-    /// reach box (<see cref="ReachBox"/>) <paramref name="covers"/> says is hidden. The top layer is never counted: its reach has no upper end.
+    /// whose reach box (<see cref="ReachBox"/>) <paramref name="covers"/> says is hidden. The top layer is never counted: its reach has no upper end.
     /// </summary>
     public static int HiddenLayers(Func<Vector3, Vector3, bool> covers, float x, float z, float baseY, float spacing, float spacingY, int layerCount,
             float floorY, float slack)

@@ -33,11 +33,11 @@ sealed class FeedbackSettings
 }
 
 /// <summary>
-/// Meitou's feedback button, always at the top right in both UI modes, and the form it opens: a title, the text, and ticks for a screenshot
-/// (taken when the button is pressed, without the menus), a save made when sending and log.txt. The player's Discord name goes along unless unticked; the
-/// ticks and the name are remembered (<see cref="FeedbackSettings"/>). The host (FeedbackCapture) takes the picture, makes the files and sends them to the
-/// reports service, which opens a GitHub issue (docs/play-reports.md "Feedback").
-/// The feedback button and form (docs/play-reports.md): the button over the interface, the form's fields and ticks, and the screenshot taken without the menus.
+/// Meitou's feedback button, always at the top right in both UI modes, and the form it opens: a title, the text, and ticks for a screenshot (taken
+/// when the button is pressed, without the menus), a save made when sending and log.txt. The player's Discord name goes along unless unticked; the
+/// ticks and the name are remembered (<see cref="FeedbackSettings"/>). The host (FeedbackCapture) takes the picture, makes the files and sends them
+/// to the reports service, which opens a GitHub issue (docs/play-reports.md "Feedback"). The feedback button and form (docs/play-reports.md): the
+/// button over the interface, the form's fields and ticks, and the screenshot taken without the menus.
 /// </summary>
 sealed class FeedbackPanel(PlayerInterface player)
 {
@@ -168,8 +168,8 @@ sealed class FeedbackPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// A press on the feedback button, before anything else (it is over every screen): the host takes the screenshot on the next frame and then opens the
-    /// form.
+    /// A press on the feedback button, before anything else (it is over every screen): the host takes the screenshot on the next frame and then opens
+    /// the form.
     /// </summary>
     internal bool FeedbackButtonDown(System.Numerics.Vector2 p)
     {

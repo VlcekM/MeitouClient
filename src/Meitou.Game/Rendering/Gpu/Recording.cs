@@ -22,8 +22,8 @@ public abstract class RecordJob
     public abstract void Record(IGpuCommandList cmd);
 
     /// <summary>
-    /// About how many draws <see cref="Record"/> records (read on the render thread when queued): a pass with little work is recorded on the render thread
-    /// rather than waking the job threads (<see cref="Recording.MinThreadedDraws"/>).
+    /// About how many draws <see cref="Record"/> records (read on the render thread when queued): a pass with little work is recorded on the render
+    /// thread rather than waking the job threads (<see cref="Recording.MinThreadedDraws"/>).
     /// </summary>
     public virtual int Size => 1;
 
@@ -51,9 +51,9 @@ public sealed class JobPool<T> where T : RecordJob, new()
 public static class Recording
 {
     /// <summary>
-    /// 0: every segment inline into the frame's command buffer, as before wave 4 (the single-threaded command stream). 1: the hosts' rendering instances
-    /// take secondary command buffers, recorded one after the other on the render thread (the multithreaded commands, serially: tells a secondary-buffer
-    /// difference from a race). 2 (the default; any other value): the secondaries are recorded on the job threads.
+    /// 0: every segment inline into the frame's command buffer, as before wave 4 (the single-threaded command stream). 1: the hosts' rendering
+    /// instances take secondary command buffers, recorded one after the other on the render thread (the multithreaded commands, serially: tells a
+    /// secondary-buffer difference from a race). 2 (the default; any other value): the secondaries are recorded on the job threads.
     /// </summary>
     public static int Mode { get; set; } = 2;
 
@@ -63,16 +63,17 @@ public static class Recording
     public static bool Secondaries => Mode > 0;
 
     /// <summary>
-    /// In mode 2, a pass whose jobs record fewer draws than this (<see cref="RecordJob.Size"/> summed) is recorded on the render thread as in mode 1: waking
-    /// the job threads costs more than a few draws (32; 0 always threads).
+    /// In mode 2, a pass whose jobs record fewer draws than this (<see cref="RecordJob.Size"/> summed) is recorded on the render thread as in mode 1:
+    /// waking the job threads costs more than a few draws (32; 0 always threads).
     /// </summary>
     public static int MinThreadedDraws { get; set; } = 32;
 }
 
 /// <summary>
-/// A native host's rendering instance whose contents are secondary command buffers (docs/renderer-native.md 6.1 and 6.4, wave 4): the host opens it on
-/// its primary with <see cref="Begin"/>, its guests add their prepared segments in the frame's order (<see cref="Add"/>, or <see cref="BeginInline"/> for
-/// code that records on the render thread at once: an unported guest, a timestamp), and <see cref="End"/> records the jobs (on the job threads in
+/// A native host's rendering instance whose contents are secondary command buffers (docs/renderer-native.md 6.1 and 6.4, wave 4): the host opens it
+/// on its primary with <see cref="Begin"/>, its guests add their prepared segments in the frame's order (<see cref="Add"/>, or
+/// <see cref="BeginInline"/> for code that records on the render thread at once: an unported guest, a timestamp), and <see cref="End"/> records the
+/// jobs (on the job threads in
 /// <see cref="Recording.Mode"/> 2) and executes every secondary in that order. The command stream inside each secondary is what the single-threaded code
 /// recorded for that segment, so the picture is the same.
 /// </summary>
@@ -176,9 +177,9 @@ public sealed class ParallelPass
     }
 
     /// <summary>
-    /// Records the jobs (<see cref="Recording.Mode"/> 2: on the job threads; 1, or while a draw log is written: here, in order), executes every secondary in
-    /// order on the host's primary, adds their counters to the frame's and their CPU time to <see cref="StageClock.JobMs"/>, and releases the jobs. The host
-    /// then ends its rendering.
+    /// Records the jobs (<see cref="Recording.Mode"/> 2: on the job threads; 1, or while a draw log is written: here, in order), executes every
+    /// secondary in order on the host's primary, adds their counters to the frame's and their CPU time to <see cref="StageClock.JobMs"/>, and
+    /// releases the jobs. The host then ends its rendering.
     /// </summary>
     public void End()
     {

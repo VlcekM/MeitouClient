@@ -227,8 +227,8 @@ internal static class ShoreBake
     }
 
     /// <summary>
-    /// Labels every land mass (4-connected land texels) with its id, and returns its area by id (index 0 unused); a mass touching the grid's edge counts
-    /// as <see cref="float.MaxValue"/>.
+    /// Labels every land mass (4-connected land texels) with its id, and returns its area by id (index 0 unused); a mass touching the grid's edge
+    /// counts as <see cref="float.MaxValue"/>.
     /// </summary>
     static List<float> LabelLandMasses(float[] s, int n, float texel, int[] label, int[] stack)
     {

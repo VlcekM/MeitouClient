@@ -5,8 +5,8 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The navigation of a running game in one object, for the simulation host: the <see cref="Walkability"/> to hand to the simulation (replacing the open-ground
-/// stand-in), the <see cref="Doors"/> table, and the zone load/unload calls that feed the background builder.
+/// The navigation of a running game in one object, for the simulation host: the <see cref="Walkability"/> to hand to the simulation (replacing the
+/// open-ground stand-in), the <see cref="Doors"/> table, and the zone load/unload calls that feed the background builder.
 /// <para>Thread-safety: <see cref="Walkability"/> (<c>IsWalkable</c>, <c>GroundHeight</c>, <c>FindPath</c>) and <see cref="Doors"/> may be used from any thread at
 /// any time; a zone's mesh appears in a path query when its build finishes (never half), until then the stand-in answers for that zone.
 /// <see cref="LoadZone"/>, <see cref="LoadRing"/> and <see cref="UnloadZone"/> may be called from any thread and return at once.</para>
@@ -138,8 +138,8 @@ public sealed class NavSystem : IDisposable
     readonly object _playerRouteGate = new();
 
     /// <summary>
-    /// A building the player placed (or finished) takes part in the navmesh from the next build of the zones it reaches; the zones loaded now are built again,
-    /// and <see cref="ZoneReady"/> fires for each when it goes live.
+    /// A building the player placed (or finished) takes part in the navmesh from the next build of the zones it reaches; the zones loaded now are
+    /// built again, and <see cref="ZoneReady"/> fires for each when it goes live.
     /// </summary>
     public void AddRuntimeBuilding(BuildingPlacement placement)
     {
@@ -151,8 +151,8 @@ public sealed class NavSystem : IDisposable
     }
 
     /// <summary>
-    /// The level data's buildings changed near <paramref name="position"/> (the level editor placed or cleared one): the zones it reaches are built again from
-    /// the level data as it is now.
+    /// The level data's buildings changed near <paramref name="position"/> (the level editor placed or cleared one): the zones it reaches are built
+    /// again from the level data as it is now.
     /// </summary>
     public void LevelChanged(System.Numerics.Vector3 position)
     {
@@ -199,8 +199,8 @@ public sealed class NavSystem : IDisposable
     (int Revision, Dictionary<string, string> Map)? _levelRecords;
 
     /// <summary>
-    /// The gate codes of the meshes loaded now (<see cref="NavGateRegions"/>). Slow (a flood over the walled regions): call it off the simulation thread. One
-    /// labelling at a time; each reads the world and the player's buildings as they are then.
+    /// The gate codes of the meshes loaded now (<see cref="NavGateRegions"/>). Slow (a flood over the walled regions): call it off the simulation
+    /// thread. One labelling at a time; each reads the world and the player's buildings as they are then.
     /// </summary>
     public NavGateRegions LabelGates()
     {

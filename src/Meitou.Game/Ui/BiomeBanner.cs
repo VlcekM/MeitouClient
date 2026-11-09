@@ -6,9 +6,9 @@ using Meitou.Data.World;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The biome banner (docs/game/ui-screens.md "Biome banner", <c>MainBarGUI::vfunc_10</c>): the HUD's <c>BiomeTextPanel</c> fades in with the name of the
-/// BIOME_GROUP under the camera pivot when it changes, holds 5 s and fades out, at most once in 30 s, with the <c>New_Biome</c> sound. Real time, like the
-/// original's frame clock; it only follows the pivot and changes nothing in the game.
+/// The biome banner (docs/game/ui-screens.md "Biome banner", <c>MainBarGUI::vfunc_10</c>): the HUD's <c>BiomeTextPanel</c> fades in with the name of
+/// the BIOME_GROUP under the camera pivot when it changes, holds 5 s and fades out, at most once in 30 s, with the <c>New_Biome</c> sound. Real time,
+/// like the original's frame clock; it only follows the pivot and changes nothing in the game.
 /// </summary>
 sealed class BiomeBanner(PlayerInterface player)
 {
@@ -34,8 +34,8 @@ sealed class BiomeBanner(PlayerInterface player)
     float _pendingBiomeCooldown;
 
     /// <summary>
-    /// Once a frame: the banner's timers, its fade and the group it tracks. A new world only takes the group under the pivot (the original does so while its
-    /// loading window is up).
+    /// Once a frame: the banner's timers, its fade and the group it tracks. A new world only takes the group under the pivot (the original does so
+    /// while its loading window is up).
     /// </summary>
     internal void PollBiome()
     {
@@ -128,8 +128,8 @@ sealed class BiomeBanner(PlayerInterface player)
     }
 
     /// <summary>
-    /// Every frame (<c>FUN_140801540</c>): the stored group is dropped when the group under the pivot is another, or when the last try's result says to forget
-    /// it; else after more than 10 s of real time since the last try the banter is tried again.
+    /// Every frame (<c>FUN_140801540</c>): the stored group is dropped when the group under the pivot is another, or when the last try's result says
+    /// to forget it; else after more than 10 s of real time since the last try the banter is tried again.
     /// </summary>
     void RetryArrival(string here)
     {
@@ -145,8 +145,8 @@ sealed class BiomeBanner(PlayerInterface player)
     #region Save
 
     /// <summary>
-    /// Into a save's CAMERA record (<c>FUN_140728af0</c>, <c>FUN_140375360</c>): the cooldown (the original writes its raw, ever falling value; here never
-    /// below 0), the group tracked and the name of the group under the pivot, empty for NONE.
+    /// Into a save's CAMERA record (<c>FUN_140728af0</c>, <c>FUN_140375360</c>): the cooldown (the original writes its raw, ever falling value; here
+    /// never below 0), the group tracked and the name of the group under the pivot, empty for NONE.
     /// </summary>
     public void WriteBiome(SaveCamera camera)
     {

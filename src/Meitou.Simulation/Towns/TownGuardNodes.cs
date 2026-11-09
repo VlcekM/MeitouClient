@@ -6,13 +6,12 @@ using Meitou.Simulation.Locks;
 namespace Meitou.Simulation.Towns;
 
 /// <summary>
-/// The town node map the original's bar squads are put at (<c>FUN_1409fcd20</c> via <c>FUN_14038b000</c>): per door of a building
-/// two "Node Guardpost" nodes (<c>FUN_14038b650</c>, called from the door's point update <c>FUN_14029cc90</c>, <b>Verified</b>).
-/// The door's outer point is pushed out by 1.1 times the distance between its two points (<see cref="DoorPoints"/>),
-/// the node's Y lies 10 under the point's before it is dropped to the ground (a ray from 100 above), and it is shifted 19 along
-/// the door's side axis (the way through x up) and, as a second node, 19 to the other side. Nothing is made when a node of the list
-/// lies within 1 of the first position. The order of the original's list is the order its doors were first updated, which is
-/// not reproducible; here buildings in the town's order, doors by index (<b>engine choice</b>).
+/// The town node map the original's bar squads are put at (<c>FUN_1409fcd20</c> via <c>FUN_14038b000</c>): per door of a building two "Node
+/// Guardpost" nodes (<c>FUN_14038b650</c>, called from the door's point update <c>FUN_14029cc90</c>, <b>Verified</b>). The door's outer point is
+/// pushed out by 1.1 times the distance between its two points (<see cref="DoorPoints"/>), the node's Y lies 10 under the point's before it is
+/// dropped to the ground (a ray from 100 above), and it is shifted 19 along the door's side axis (the way through x up) and, as a second node, 19 to
+/// the other side. Nothing is made when a node of the list lies within 1 of the first position. The order of the original's list is the order its
+/// doors were first updated, which is not reproducible; here buildings in the town's order, doors by index (<b>engine choice</b>).
 /// </summary>
 public static class TownGuardNodes
 {

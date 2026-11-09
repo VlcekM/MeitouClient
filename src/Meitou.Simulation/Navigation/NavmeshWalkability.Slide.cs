@@ -20,11 +20,11 @@ public sealed partial class NavmeshWalkability
     readonly record struct Wall(Vector2 A, Vector2 B, Vector2 Inward);
 
     /// <summary>
-    /// The part of a free move (root motion, combat footwork) that a body of <paramref name="radius"/> at <paramref name="from"/> can make: as the original's nav
-    /// agent, a circle swept against the walls of the walkable surface round it (the polygon edges that lead nowhere: a wall, a drop, a hole furniture cuts, a
-    /// closed door) stops where it would first touch one, and the rest of the step slides along that wall and is swept once more (docs/game/pathfinding.md
-    /// "Walls"). Only walls the move closes on stop it, so a body already nearer than its radius can still move along or away. Off the loaded zones: the whole
-    /// step.
+    /// The part of a free move (root motion, combat footwork) that a body of <paramref name="radius"/> at <paramref name="from"/> can make: as the
+    /// original's nav agent, a circle swept against the walls of the walkable surface round it (the polygon edges that lead nowhere: a wall, a drop,
+    /// a hole furniture cuts, a closed door) stops where it would first touch one, and the rest of the step slides along that wall and is swept once
+    /// more (docs/game/pathfinding.md "Walls"). Only walls the move closes on stop it, so a body already nearer than its radius can still move along
+    /// or away. Off the loaded zones: the whole step.
     /// </summary>
     public Vector2 Slide(Vector3 from, Vector2 step, float radius)
     {
@@ -185,8 +185,8 @@ public sealed partial class NavmeshWalkability
     }
 
     /// <summary>
-    /// Whether a walker can cross edge <paramref name="k"/> of polygon <paramref name="p"/>: into a kept polygon that is not a closed door, over a tile link, or
-    /// over the zone's border.
+    /// Whether a walker can cross edge <paramref name="k"/> of polygon <paramref name="p"/>: into a kept polygon that is not a closed door, over a
+    /// tile link, or over the zone's border.
     /// </summary>
     static bool Open(ZoneNavMesh m, int p, int k, NavDoors doors)
     {

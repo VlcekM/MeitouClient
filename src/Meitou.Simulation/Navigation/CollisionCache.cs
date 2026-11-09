@@ -106,8 +106,8 @@ internal sealed class CollisionCache(GameInstall install)
     internal enum Winding { Open, Outward, Flipped }
 
     /// <summary>
-    /// A closed triangle mesh (every edge has its reverse) with negative signed volume is inside out: flip it so that its faces point outward. An open mesh is
-    /// kept as stored. Our own rule (docs/formats/collision.md, "Findings").
+    /// A closed triangle mesh (every edge has its reverse) with negative signed volume is inside out: flip it so that its faces point outward. An
+    /// open mesh is kept as stored. Our own rule (docs/formats/collision.md, "Findings").
     /// </summary>
     internal static Winding FixClosedWinding(Vector3[] v, int[] idx)
     {

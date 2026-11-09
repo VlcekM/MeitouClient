@@ -7,10 +7,11 @@ namespace Meitou.Simulation.Navigation;
 /// <summary>
 /// The gate codes of a <see cref="NavWorld"/> (docs/game/pathfinding.md "Gate codes"; the original's gate-code pass floods its navmesh from the gates,
 /// <c>FUN_1402ed460</c>). From each polygon beside a gate's door polygons a flood spreads over the walkable polygons without entering any gate's door; a flood
-/// that stays within <see cref="OutsideExtent"/> of where it started, never reaches the edge of the loaded world and stays under <see cref="PolygonBudget"/>
-/// is a walled region and gets the next code from 1; any other is the open world, 0, as is every polygon no flood reached. Gates are visited by instance id,
-/// so the same world gives the same codes. Engine choices: the extent, the budget and the loaded world's edge stand in for the original's face limit
-/// ("FloodFill ... LIMIT REACHED"), whose value is <b>Unknown</b>. Immutable once made; safe from any thread.
+/// that stays within <see cref="OutsideExtent"/> of where it started, never reaches the edge of the loaded world and stays under
+/// <see cref="PolygonBudget"/> is a walled region and gets the next code from 1; any other is the open world, 0, as is every polygon no flood
+/// reached. Gates are visited by instance id, so the same world gives the same codes. Engine choices: the extent, the budget and the loaded world's
+/// edge stand in for the original's face limit ("FloodFill ... LIMIT REACHED"), whose value is <b>Unknown</b>. Immutable once made; safe from any
+/// thread.
 /// </summary>
 public sealed class NavGateRegions : IGateRegions
 {
@@ -150,8 +151,8 @@ public sealed class NavGateRegions : IGateRegions
     }
 
     /// <summary>
-    /// Floods from <paramref name="seed"/> over kept polygons, not into gate doors; true when the region is walled in (bounded, under budget, not at the loaded
-    /// world's edge). <paramref name="visited"/> holds what it reached (all of it when walled in; a part when not).
+    /// Floods from <paramref name="seed"/> over kept polygons, not into gate doors; true when the region is walled in (bounded, under budget, not at
+    /// the loaded world's edge). <paramref name="visited"/> holds what it reached (all of it when walled in; a part when not).
     /// </summary>
     static bool Flood(NavWorld world, NavRef seed, Dictionary<long, string> gateOf, List<NavRef> visited, Queue<NavRef> queue, HashSet<long> seen)
     {

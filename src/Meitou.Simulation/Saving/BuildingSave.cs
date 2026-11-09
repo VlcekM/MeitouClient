@@ -9,9 +9,10 @@ using Meitou.Simulation.Construction;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The player's buildings and construction sites in a save (docs/formats/zones.md "Placement keys", docs/formats/save.md). Each is an instance of its zone
-/// file's <c>0-buildinglist</c>, id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, with a GAMESTATE_BUILDING state <c>&lt;id&gt;-S23</c> in the keys of the
-/// original's writer (<c>FUN_1405547f0</c>, <b>Verified</b> by code): <c>name</c>, <c>owner faction ID</c>, <c>floornum</c>, <c>destroyed</c>, <c>flags</c>,
+/// The player's buildings and construction sites in a save (docs/formats/zones.md "Placement keys", docs/formats/save.md). Each is an instance of its
+/// zone file's <c>0-buildinglist</c>, id <c>&lt;n&gt;-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c>, with a GAMESTATE_BUILDING state <c>&lt;id&gt;-S23</c> in
+/// the keys of the original's writer (<c>FUN_1405547f0</c>, <b>Verified</b> by code): <c>name</c>, <c>owner faction ID</c>, <c>floornum</c>,
+/// <c>destroyed</c>, <c>flags</c>,
 /// <c>is complete</c>, <c>pause</c>, <c>construction progress</c>, <c>&lt;i&gt;construction mats</c> (delivered of entry i), <c>world Y pos</c> (absolute),
 /// <c>player furniture Y offset</c> (relative to the parent's origin) and the handles <c>handle</c>, <c>isInsideBuilding</c>, <c>town</c>, <c>residents</c>.
 /// Instance Y is written relative to terrain outdoors, to the parent indoors (docs/formats/save.md); reading takes <c>world Y pos</c>. Meitou's own key
@@ -52,8 +53,8 @@ public static class BuildingSave
     #region Reading
 
     /// <summary>
-    /// Reserves the ids of every <c>-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> building of the save (generated interiors share the pattern) and reads the player
-    /// faction's into the world's registry, in zone and list order. Returns how many sites it made.
+    /// Reserves the ids of every <c>-zone&lt;X&gt;.&lt;Y&gt;-INGAME</c> building of the save (generated interiors share the pattern) and reads the
+    /// player faction's into the world's registry, in zone and list order. Returns how many sites it made.
     /// </summary>
     public static int Read(SaveGame save, World world, GameDatabase db, string playerFactionId, int playerIndex)
     {
@@ -139,8 +140,8 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// The id each building state's record stands for: a player building's instance id, else its zone-qualified runtime identity (how an interior's parent is
-    /// named).
+    /// The id each building state's record stands for: a player building's instance id, else its zone-qualified runtime identity (how an interior's
+    /// parent is named).
     /// </summary>
     static Dictionary<FcsRecord, string> ParentIds(SaveGame save, Dictionary<string, FcsRecord> states, string playerFactionId)
     {
@@ -174,8 +175,8 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// The player's outposts: the entries of <c>quick.save</c>'s town list whose GAMESTATE_TOWN is not a nest and is the player faction's, in list order.
-    /// Returns their numbers by the handle's C and CS parts (how a building's <c>town</c> handle names them).
+    /// The player's outposts: the entries of <c>quick.save</c>'s town list whose GAMESTATE_TOWN is not a nest and is the player faction's, in list
+    /// order. Returns their numbers by the handle's C and CS parts (how a building's <c>town</c> handle names them).
     /// </summary>
     static Dictionary<(int C, int CS), int> ReadTowns(SaveGame save, World world, string playerFactionId, int playerIndex)
     {
@@ -212,9 +213,9 @@ public static class BuildingSave
     #region Writing
 
     /// <summary>
-    /// Writes the registry into the save: every site's instance and state in its zone file (a zone without a file gets one), and removes the player-built
-    /// entries the world no longer has (a dismantled building). Everything else in the zone files is left as it was. Returns the town handle each player town
-    /// (by number) was written with.
+    /// Writes the registry into the save: every site's instance and state in its zone file (a zone without a file gets one), and removes the
+    /// player-built entries the world no longer has (a dismantled building). Everything else in the zone files is left as it was. Returns the town
+    /// handle each player town (by number) was written with.
     /// </summary>
     public static IReadOnlyDictionary<int, Hand> Write(SaveGame game, World world, string playerFactionId, ulong seed = 0)
     {
@@ -258,8 +259,8 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// Writes the parent of each site inside a building, and the height of the site above its parent's floor (the parent pass runs last, as the parents may be
-    /// sites written before it).
+    /// Writes the parent of each site inside a building, and the height of the site above its parent's floor (the parent pass runs last, as the
+    /// parents may be sites written before it).
     /// </summary>
     static void WriteParents(SaveGame game, World world)
     {
@@ -341,8 +342,8 @@ public static class BuildingSave
     }
 
     /// <summary>
-    /// The handle of a site's state: kept while the state has one in this zone, else the next free one of the zone's slot list. The slot is recorded in the
-    /// zone's list.
+    /// The handle of a site's state: kept while the state has one in this zone, else the next free one of the zone's slot list. The slot is recorded
+    /// in the zone's list.
     /// </summary>
     static Hand WriteSlot(SaveFile file, SaveZone zone, FcsRecord state, BuildSite site, ulong seed)
     {

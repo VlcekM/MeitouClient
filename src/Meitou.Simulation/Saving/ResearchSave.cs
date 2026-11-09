@@ -6,11 +6,11 @@ using Meitou.Simulation.Construction;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The player's research in <c>quick.save</c> (docs/formats/save.md "Research"; writer <c>FUN_1408310b0</c>, reader <c>FUN_1408360f0</c>): the RESEARCH record
-/// holds the floats <c>num finished</c> and <c>num currents</c>, the strings <c>finished&lt;k&gt;</c> (finished ids in order), <c>current&lt;k&gt;</c> with the
-/// floats <c>current prog&lt;k&gt;</c> (the queue and its seconds) and <c>paid&lt;k&gt;</c> (the ids already paid for). <b>Verified</b>: the five sample saves
-/// hold <c>num finished</c> 1, <c>finished0</c> <c>5359-gamedata.base</c> and <c>num currents</c> 0; the rest <b>Observed</b> by code. The progress of research
-/// taken off the queue is not saved (as the original).
+/// The player's research in <c>quick.save</c> (docs/formats/save.md "Research"; writer <c>FUN_1408310b0</c>, reader <c>FUN_1408360f0</c>): the
+/// RESEARCH record holds the floats <c>num finished</c> and <c>num currents</c>, the strings <c>finished&lt;k&gt;</c> (finished ids in order),
+/// <c>current&lt;k&gt;</c> with the floats <c>current prog&lt;k&gt;</c> (the queue and its seconds) and <c>paid&lt;k&gt;</c> (the ids already paid
+/// for). <b>Verified</b>: the five sample saves hold <c>num finished</c> 1, <c>finished0</c> <c>5359-gamedata.base</c> and <c>num currents</c> 0; the
+/// rest <b>Observed</b> by code. The progress of research taken off the queue is not saved (as the original).
 /// </summary>
 public static class ResearchSave
 {

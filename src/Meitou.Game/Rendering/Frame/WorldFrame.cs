@@ -172,8 +172,7 @@ sealed class WorldOptions
     /// The shadow distance for the shadows switch's mode: <c>--shadow-range</c> when given, else the game's default (5000) in Faithful and
     /// <see cref="Enhancements.MeitouShadowRange"/> in Meitou. The game's slider ends at 9000 (<see cref="KenshiShadows.MaxRange"/>); with the
     /// Meitou shadows the option may go to <see cref="Enhancements.MeitouShadowRangeMax"/> (the cascades are fitted to the view, and far foliage
-    /// casts
-    /// through impostors; the Tab slider goes further, at the user's risk of running out of video memory).
+    /// casts through impostors; the Tab slider goes further, at the user's risk of running out of video memory).
     /// </summary>
     public float ShadowRangeFor(bool meitou) => meitou
         ? Math.Clamp(ShadowRange ?? Enhancements.MeitouShadowRange, KenshiShadows.MinRange, Enhancements.MeitouShadowRangeMax)
@@ -242,8 +241,7 @@ sealed class WorldOptions
     public double? ImpostorBudgetMb;
     public bool MeitouHaze = true; // the Meitou haze switch (default): the haze at HazeStrength; Faithful: the game's (1)
     public float HazeStrength = Enhancements.MeitouHazeStrength; // the Meitou haze's strength (a Tab slider), kept while the switch is Faithful
-    // the Meitou night switch (default): the night air, a faint glow the haze fades into and the sky shows above the horizon
-    // (SkyRenderer.NightAir)
+    // the Meitou night switch (default): the night air, a faint glow the haze fades into and the sky shows above the horizon (SkyRenderer.NightAir)
     public bool NightAir = true;
     public bool Planetshine = true; // the Meitou planetshine switch (default): the big planet lights the night (SkyRenderer.Planetshine)
     public float PlanetshineStrength = Enhancements.MeitouPlanetshineStrength; // x the physical value (a Tab slider)
@@ -437,10 +435,8 @@ sealed class WorldOptions
     /// <summary>
     /// <c>--benchmark-baseline</c>: the parts of the benchmark baseline that must be set before the device and the post chain exist, where it stands
     /// among the options (the game sets them again after the command line): a 1920x1080 window (not full screen or maximised), no ray-traced GI (the
-    /// device
-    /// is made without ray queries), no ground parallax or tessellation, no upscaler, SMAA at full size, texture quality 1. The game sets the rest of
-    /// the
-    /// Medium tier through the settings (SettingsMenu.ApplyBenchmarkBaseline).
+    /// device is made without ray queries), no ground parallax or tessellation, no upscaler, SMAA at full size, texture quality 1. The game sets the
+    /// rest of the Medium tier through the settings (SettingsMenu.ApplyBenchmarkBaseline).
     /// </summary>
     void ApplyBenchmarkBaseline()
     {
@@ -796,11 +792,10 @@ sealed class WorldOptions
 }
 
 /// <summary>
-/// The scene's passes as a native host (wave 4, docs/renderer-native.md 4.5 and 6; phase 8 stage 3, 8.9): <see cref="Open"/> begins a rendering
-/// of the scene's targets whose contents are secondaries, clearing them by load ops where asked, and hands the guests the targets and the scene's
-/// state (the scene depth's convention, <see cref="DepthConvention"/>); their segments are queued (<see cref="GpuContext.Record"/>) or recorded at
-/// once into secondaries of their own (sky, water, the grass, timestamps); <see cref="Close"/> records the queued jobs on the job threads and
-/// executes
+/// The scene's passes as a native host (wave 4, docs/renderer-native.md 4.5 and 6; phase 8 stage 3, 8.9): <see cref="Open"/> begins a rendering of
+/// the scene's targets whose contents are secondaries, clearing them by load ops where asked, and hands the guests the targets and the scene's state
+/// (the scene depth's convention, <see cref="DepthConvention"/>); their segments are queued (<see cref="GpuContext.Record"/>) or recorded at once
+/// into secondaries of their own (sky, water, the grass, timestamps); <see cref="Close"/> records the queued jobs on the job threads and executes
 /// everything in order.
 /// </summary>
 sealed class SceneHost(IGpuContext ctx)
@@ -992,8 +987,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// The heights of the window round (<paramref name="x"/>, <paramref name="z"/>), <c>--radius</c> zones each way: a whole number of 64-cell blocks
-    /// per
-    /// side, every <c>step</c>-th sample, the smallest power of two that keeps the window to 2048 cells a side.
+    /// per side, every <c>step</c>-th sample, the smallest power of two that keeps the window to 2048 cells a side.
     /// </summary>
     static (HeightWindow Window, int Cells, int Step) ReadWindow(TerrainHeightmap map, WorldOptions o, double x, double z)
     {
@@ -1011,8 +1005,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// A flat world for the game's animation sandbox: the whole terrain at one height (a 256² window of heights round the origin and a flat
-    /// whole-world grid),
-    /// no heightmap file, no objects. The caller turns textures, objects, foliage and water off in <paramref name="o"/>.
+    /// whole-world grid), no heightmap file, no objects. The caller turns textures, objects, foliage and water off in <paramref name="o"/>.
     /// </summary>
     /// <summary>
     /// A load's data problems (a missing mod, a record defined twice or with another type, a level file left out...) to the log: a count by kind,
@@ -1162,8 +1155,7 @@ static partial class WorldFrame
 
         /// <summary>
         /// A presentation cap on how far the frame reaches (the Meitou editor's bar, high above the world): the far plane and the shadow cascades end
-        /// there, so the world below
-        /// leaves the view; null in play.
+        /// there, so the world below leaves the view; null in play.
         /// </summary>
         public float? ViewCap;
 
@@ -1258,8 +1250,7 @@ static partial class WorldFrame
         public IReadOnlyList<Vector3> Kept = [];
 
         /// <summary>Places kept loaded: the eye's and each merged kept point's, held at its highest for <see cref="AreasHoldMs"/> (the merge flickers
-        /// near
-        /// its distance, and the grass store and terrain arrays reallocate when it grows). The texture, mesh and grass budgets scale with
+        /// near its distance, and the grass store and terrain arrays reallocate when it grows). The texture, mesh and grass budgets scale with
         /// it.</summary>
         public int Areas = 1;
         public long AreasAt;
@@ -1354,8 +1345,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// Feeds the particle renderer the weather state's effect list, strength and wind (the renderer is made the first time a weather has effects; a
-    /// weather
-    /// without any empties it again). The effect groups are rebuilt only when the weather's list changes.
+    /// weather without any empties it again). The effect groups are rebuilt only when the weather's list changes.
     /// </summary>
     static void UpdateParticles(Gpu gpu, WorldCamera camera)
     {
@@ -1463,8 +1453,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// The game's texture quality, set before any texture loads (the world's texture caches read it as they decode), and the terrain layers' size:
-    /// their
-    /// arrays have one size, so the Landscape group's drop (the game's textures are 2048²) lowers it instead of dropping mips per file.
+    /// their arrays have one size, so the Landscape group's drop (the game's textures are 2048²) lowers it instead of dropping mips per file.
     /// </summary>
     static int TerrainLayerSize(WorldOptions o)
     {
@@ -2093,8 +2082,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// The shadows' range, map size and filter, and the Meitou fifth cascade's switch (returned for the toggles). The game's <c>Shadow Range</c>
-    /// slider goes
-    /// 1000 to 9000; the viewer allows more (the cascades stretch over it), and its left end (0) turns the shadows off (low-end GPUs).
+    /// slider goes 1000 to 9000; the viewer allows more (the cascades stretch over it), and its left end (0) turns the shadows off (low-end GPUs).
     /// </summary>
     static Toggle? AddShadowSliders(List<Slider> sliders, ShadowPass shadow)
     {
@@ -2189,8 +2177,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// Ours, not the game's (docs/render-post.md "Tone map and grading"): the Meitou tone curve (the tone map switch's Faithful side is the game's
-    /// clamp),
-    /// the saturation / contrast grade, scales on the heat haze, bloom and night grade, and the light shafts.
+    /// clamp), the saturation / contrast grade, scales on the heat haze, bloom and night grade, and the light shafts.
     /// </summary>
     static void AddLookSliders(List<Slider> sliders, PostOptions options)
     {
@@ -2226,8 +2213,7 @@ static partial class WorldFrame
     /// <summary>
     /// The Faithful / Meitou switches as checkboxes (ticked: Meitou), the F-key toggles' state (the displacement switch only where the device has
     /// tessellation shaders), then the optional effects: the fifth cascade, bloom (off in both looks, docs/render-post.md "Bloom"; a look preset may
-    /// turn
-    /// it on), and with tessellation the rock smoothing and outline refinement.
+    /// turn it on), and with tessellation the rock smoothing and outline refinement.
     /// </summary>
     static List<Toggle> SettingsToggles(Gpu g, IReadOnlyList<Enhancement>? switches, Toggle? fifthCascade)
     {
@@ -2274,9 +2260,8 @@ static partial class WorldFrame
 
     /// <summary>
     /// The third column: textures. The game's <c>texture resolution gimping</c> (docs/formats/settings.md): the object, foliage and character
-    /// textures
-    /// are loaded again at the new level as the slider moves; the terrain's layer arrays keep the size they were made with (--texture-quality at
-    /// start).
+    /// textures are loaded again at the new level as the slider moves; the terrain's layer arrays keep the size they were made with
+    /// (--texture-quality at start).
     /// </summary>
     static List<Slider> TextureSliders()
     {
@@ -2397,17 +2382,15 @@ static partial class WorldFrame
     }
 
     /// <summary>How overcast the sky is, 0..1, for what fades under clouds (the light shafts, the Meitou water's glint): the sky's cloud density c,
-    /// or the
-    /// weather's <c>rainAmount</c> (saturate(rain / 50)) where that is more, since rain falls from a covered sky whatever c the weather lists
+    /// or the weather's <c>rainAmount</c> (saturate(rain / 50)) where that is more, since rain falls from a covered sky whatever c the weather lists
     /// (<c>swamp rain no wind</c> has c 0.5 and rain 40).</summary>
     internal static float Overcast(float cloudDensity, float rain) => MathF.Max(Math.Clamp(cloudDensity, 0, 1), WeatherSurfaces.RainAmount(rain));
 
     static float Overcast(Gpu gpu) => Overcast(gpu.Sky.CloudDensity, gpu.Surfaces?.Rain ?? 0);
 
     /// <summary>What is left of the light shafts under the cloud layer (docs/render-shafts.md "Cloud cover"): the game's sun shines through any
-    /// weather, but
-    /// crisp shafts under a full overcast in the rain read wrong, so the darkening loses <c>ShaftCloudShade</c> of itself as the cloud density c goes
-    /// from
+    /// weather, but crisp shafts under a full overcast in the rain read wrong, so the darkening loses <c>ShaftCloudShade</c> of itself as the cloud
+    /// density c goes from
     /// <c>ShaftCloudFrom</c> to 1 (smoothstep).</summary>
     internal static float ShaftCloudFade(float cloudDensity)
     {
@@ -2426,9 +2409,8 @@ static partial class WorldFrame
         float dt = (float)Math.Min(gpu.HeatHazeClock.Elapsed.TotalSeconds, 0.25);
         bool first = !gpu.HeatHazeClock.IsRunning;
         gpu.HeatHazeClock.Restart();
-        // With the scheduler the value is the state's own (the weather's field × the strength × the sun factor, ramped on the settling time,
-        // snapped on a
-        // teleport); without a scheduler (no database) it is the old forced path at strength 1, ramped here.
+        // With the scheduler the value is the state's own (the weather's field × the strength × the sun factor, ramped on the settling time, snapped
+        // on a teleport); without a scheduler (no database) it is the old forced path at strength 1, ramped here.
         var weather = gpu.Weather;
         float field = weather?.State.Weather.HeatHaze ?? gpu.Sky.Weather.HeatHaze;
         gpu.HeatHazeTarget = HeatHaze.Target(field, weather?.State.Strength ?? 1, sunY);
@@ -2563,8 +2545,7 @@ static partial class WorldFrame
 
         /// <summary>
         /// Characters take the far cascades' floor in both shadow modes: their levels are Meitou's own, and every character is in every cascade that
-        /// holds
-        /// the crowd. In Meitou's coarse cascades a part under a texel across casts nothing (ShadowPass.MinCharacterCasterTexels).
+        /// holds the crowd. In Meitou's coarse cascades a part under a texel across casts nothing (ShadowPass.MinCharacterCasterTexels).
         /// </summary>
         (float LodFloor, float MinRadius) CharacterCasting(ShadowCascade cascade)
         {

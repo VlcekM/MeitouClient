@@ -105,9 +105,9 @@ sealed class PortraitBar(PlayerInterface player)
     }
 
     /// <summary>
-    /// The characters whose portraits the host draws, each into the atlas cell of its index: the squad bar's first, then, while the squads screen is open, the
-    /// other squads' members in order. As many as there are cells before the conversation's (30, CONSTANTS <c>max faction size</c>); a modded faction past
-    /// that shows nameless cells.
+    /// The characters whose portraits the host draws, each into the atlas cell of its index: the squad bar's first, then, while the squads screen is
+    /// open, the other squads' members in order. As many as there are cells before the conversation's (30, CONSTANTS <c>max faction size</c>); a
+    /// modded faction past that shows nameless cells.
     /// </summary>
     public IReadOnlyList<CharacterSnapshot> PortraitMembers()
     {
@@ -216,9 +216,9 @@ sealed class PortraitBar(PlayerInterface player)
     }
 
     /// <summary>
-    /// The page's ItemBox (docs/game/ui-screens.md "Squad bar"): square cells 0.9 of its height, or of its width over the members (counted up to 10), 60 to
-    /// 128 px at 1080p and even, filled left to right in rows; rows past the page are cut off. Returns the cell size, the columns, the rows and the scroll
-    /// maximum.
+    /// The page's ItemBox (docs/game/ui-screens.md "Squad bar"): square cells 0.9 of its height, or of its width over the members (counted up to 10),
+    /// 60 to 128 px at 1080p and even, filled left to right in rows; rows past the page are cut off. Returns the cell size, the columns, the rows and
+    /// the scroll maximum.
     /// </summary>
     static (float Size, int Columns, int Rows, float Maximum) SquadGrid(UiRect page, int count, float scale)
     {
@@ -269,9 +269,9 @@ sealed class PortraitBar(PlayerInterface player)
 
     #region Portrait states
 
-    // The squad portraits' states (docs/game/ui-screens.md "Portrait cells"): the original's per-cell flags and how its <c>Kenshi_PortraitCharacter</c> cell
-    // shows them, the <c>Background</c> (Normal, or a flashing Hurt), the <c>BackOverlay</c> (Combat, Hunger), the <c>FrontOverlay</c> (Slave, Prison) and the
-    // faded portrait.
+    // The squad portraits' states (docs/game/ui-screens.md "Portrait cells"): the original's per-cell flags and how its
+    // <c>Kenshi_PortraitCharacter</c> cell shows them, the <c>Background</c> (Normal, or a flashing Hurt), the <c>BackOverlay</c> (Combat, Hunger),
+    // the <c>FrontOverlay</c> (Slave, Prison) and the faded portrait.
     [Flags]
     enum PortraitState
     {
@@ -301,8 +301,9 @@ sealed class PortraitBar(PlayerInterface player)
     }
 
     /// <summary>
-    /// The original's flags (<c>FUN_140414dc0</c>). Its danger test reads a float of the character's AI that is not decoded (eating also waits while it is
-    /// above 0); Meitou takes "in a fight" for it. Being eaten (<c>+0x279 &amp; 7</c>, <see cref="BodyStatus.BeingEaten"/>) also flashes, and sets
+    /// The original's flags (<c>FUN_140414dc0</c>). Its danger test reads a float of the character's AI that is not decoded (eating also waits while
+    /// it is above 0); Meitou takes "in a fight" for it. Being eaten (<c>+0x279 &amp; 7</c>, <see cref="BodyStatus.BeingEaten"/>) also flashes, and
+    /// sets
     /// <c>Eaten</c>.
     /// </summary>
     PortraitState PortraitStateOf(CharacterSnapshot m, Vector3 eye, Vector3 focus)

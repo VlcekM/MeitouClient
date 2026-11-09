@@ -20,8 +20,9 @@ public sealed partial class CombatSystem
     #region Blow
 
     /// <summary>
-    /// Whether a blocked blow rings as a parry and throws sparks (the take-hit <c>FUN_1404394f0</c>, outcome 5, <b>Verified</b>): not when the attacker fights with
-    /// fists (weapon category 5) and <c>FUN_140436980</c> is false. That test is true when the attacker's race is a robot (race byte +0x7c), or when the
+    /// Whether a blocked blow rings as a parry and throws sparks (the take-hit <c>FUN_1404394f0</c>, outcome 5, <b>Verified</b>): not when the
+    /// attacker fights with fists (weapon category 5) and <c>FUN_140436980</c> is false. That test is true when the attacker's race is a robot (race
+    /// byte +0x7c), or when the
     /// <i>defender's</i> own limb of the number the blow strikes with (technique <c>limb N</c>: 0 left arm, 1 right arm, 2 left leg, 3 right leg, 4 weapon: never)
     /// is a fitted prosthetic (limb state 2): the original reads its own medical object there, not the attacker's.
     /// </summary>
@@ -39,8 +40,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Applies one resolved blow effect: the outcome against the defender's reaction (a miss, a block or a dodge ends there), then the hit's damage, medical
-    /// events, reactions, sounds and records.
+    /// Applies one resolved blow effect: the outcome against the defender's reaction (a miss, a block or a dodge ends there), then the hit's damage,
+    /// medical events, reactions, sounds and records.
     /// </summary>
     public void Apply(World world, in Effect e)
     {
@@ -76,9 +77,9 @@ public sealed partial class CombatSystem
         ref var aSlot = ref _write[a];
         ref var dSlot = ref _write[d];
 
-        // A blow thrown in Act lands even when Act then ended or restarted the swing on the same tick (the original resolves it inside the swing update); only a
-        // hit, knock-out or kill applied earlier this tick takes the swing away from its attacker. It carries its technique, and touches the attacker's swing only
-        // while that is still the one.
+        // A blow thrown in Act lands even when Act then ended or restarted the swing on the same tick (the original resolves it inside the swing
+        // update); only a hit, knock-out or kill applied earlier this tick takes the swing away from its attacker. It carries its technique, and
+        // touches the attacker's swing only while that is still the one.
         if (aSlot.CancelTick == now) return;
 
         bool live = aSlot.AttackSeq == seq && aSlot.AttackTech >= 0;
@@ -100,8 +101,9 @@ public sealed partial class CombatSystem
         if (live) aSlot.LastOutcome = outcome;
         else if (aSlot.AttackSeq == seq) Pause(world, ref aSlot, outcome, now);
 
-        // A blow that lands or is blocked takes the defender off the attacker's list of fighters it lets close in (attackImpactCheck → CombatClass::removeAttackerH
-        // on the attacker's own list, docs/game/combat.md "Attack slots and circling"): a defender fighting the attacker asks again before its next swing.
+        // A blow that lands or is blocked takes the defender off the attacker's list of fighters it lets close in (attackImpactCheck →
+        // CombatClass::removeAttackerH on the attacker's own list, docs/game/combat.md "Attack slots and circling"): a defender fighting the attacker
+        // asks again before its next swing.
         if (outcome is BlowOutcome.Hit or BlowOutcome.Blocked && dSlot.TargetSlot == a && dSlot.TargetGeneration == prev[a].Generation) dSlot.Engaged = false;
 
         switch (outcome)
@@ -114,8 +116,8 @@ public sealed partial class CombatSystem
                 dSlot.Blocks++;
                 GainCombatXp(ac, dc, XpEvent.GlancingHit, XpEvent.Defended);
 
-                // A dodge technique that counts as a block (the base game's "Dodge back" rows are flagged both) is silent: it looks like a dodge, and the block
-                // impact sounds like a hit.
+                // A dodge technique that counts as a block (the base game's "Dodge back" rows are flagged both) is silent: it looks like a dodge, and
+                // the block impact sounds like a hit.
                 bool parry = IsParry(ac, dc, tech, blow);
                 if (!_techniques[dSlot.ReactTech].IsDodge) Sound(world, SoundKind.Blocked, d, a, prev[d].Position, unarmed: !parry, robot: false);
 
@@ -199,8 +201,8 @@ public sealed partial class CombatSystem
             }
         }
 
-        // A shackled defender is knocked out instead of staggered a quarter of the time (Character::_startStumble: MedicalSystem::knockout with factor 0.002,
-        // the floor of 3 s).
+        // A shackled defender is knocked out instead of staggered a quarter of the time (Character::_startStumble: MedicalSystem::knockout with
+        // factor 0.002, the floor of 3 s).
         if (!dc.Medical.Incapacitated && Meitou.Simulation.Locks.LockSystem.WornShackles(dc) is not null
             && CombatRolls.Float(world.Seed, Rng.Key(table.IdOf(d)), CombatRoll.Shackled, CombatRolls.BlowCounter(a, seq, blow, 0)) < ShackledKnockout)
         {
@@ -253,12 +255,12 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The martial artist's own limb takes its blow (<c>MedicalSystem::punchSomething</c> <c>FUN_140666780</c>, <b>Verified</b>, docs/game/combat.md "Punch
-    /// self-damage"), at the end of every take-hit: <paramref name="material"/> is the hit material, 5 blocked, 0 dodged, 2 hit, and 1 (metal) against a robot
-    /// race. Only a person fighting with fists whose race is not a robot, on the limb of the blow's impact point (<c>limb N</c>; 4, the weapon, takes none)
-    /// unless a prosthetic is fitted there. Packet: cut 2 and blunt 2 on metal, cut 5 and blunt 1 blocked, else blunt 1; times (1 - 0.5 x (fist rating + toughness
-    /// x scale) / 100), unclamped, x the Global damage multiplier x the gear's <c>fist injury mult</c>. The punch then pays the puncher's toughness XP
-    /// (<see cref="XpService.ToughnessFromDamage"/>).
+    /// The martial artist's own limb takes its blow (<c>MedicalSystem::punchSomething</c> <c>FUN_140666780</c>, <b>Verified</b>, docs/game/combat.md
+    /// "Punch self-damage"), at the end of every take-hit: <paramref name="material"/> is the hit material, 5 blocked, 0 dodged, 2 hit, and 1 (metal)
+    /// against a robot race. Only a person fighting with fists whose race is not a robot, on the limb of the blow's impact point (<c>limb N</c>; 4,
+    /// the weapon, takes none) unless a prosthetic is fitted there. Packet: cut 2 and blunt 2 on metal, cut 5 and blunt 1 blocked, else blunt 1;
+    /// times (1 - 0.5 x (fist rating + toughness x scale) / 100), unclamped, x the Global damage multiplier x the gear's <c>fist injury mult</c>. The
+    /// punch then pays the puncher's toughness XP (<see cref="XpService.ToughnessFromDamage"/>).
     /// </summary>
     void Punch(World world, int a, CharacterCold ac, CharacterCold dc, CombatTechnique tech, int blow, int material)
     {
@@ -276,8 +278,9 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// A blow's packet times its impact point's <c>power N</c> (stored x0.01): cut, blunt, pierce and extra stun (<b>Verified</b>, <c>attackImpactCheck</c>
-    /// FUN_14060a2f0 scales the first four <c>Damages</c> fields; base data: 60 / 40 on <c>Downward combo</c>, 180 on <c>ma mega kick</c>).
+    /// A blow's packet times its impact point's <c>power N</c> (stored x0.01): cut, blunt, pierce and extra stun (<b>Verified</b>,
+    /// <c>attackImpactCheck</c> FUN_14060a2f0 scales the first four <c>Damages</c> fields; base data: 60 / 40 on <c>Downward combo</c>, 180 on <c>ma
+    /// mega kick</c>).
     /// </summary>
     internal static DamagePacket Powered(in DamagePacket p, CombatTechnique tech, int blow)
     {
@@ -321,16 +324,17 @@ public sealed partial class CombatSystem
     #region Reactions
 
     /// <summary>
-    /// A hit's reaction (<b>Verified</b>, FUN_1404391f0 / FUN_140665490, docs/game/combat.md "Hit reactions"): a stumble clip is picked unless the hit is light
-    /// and one is already playing; it is big when heavy and none was playing. A picked clip cancels the defender's own swing (that blow never lands) and its
-    /// reaction, and holds it helpless until the clip ends (the knockback is the clip's root motion). With no clip to play the swing is still cancelled, with a
-    /// short pause. Takes effect at the next Act. A <paramref name="bolt"/> leaves one getting up alone with no knock-down roll (its shot handler
+    /// A hit's reaction (<b>Verified</b>, FUN_1404391f0 / FUN_140665490, docs/game/combat.md "Hit reactions"): a stumble clip is picked unless the
+    /// hit is light and one is already playing; it is big when heavy and none was playing. A picked clip cancels the defender's own swing (that blow
+    /// never lands) and its reaction, and holds it helpless until the clip ends (the knockback is the clip's root motion). With no clip to play the
+    /// swing is still cancelled, with a short pause. Takes effect at the next Act. A <paramref name="bolt"/> leaves one getting up alone with no
+    /// knock-down roll (its shot handler
     /// <c>FUN_140999d50</c> has none).
     /// </summary>
     void Stagger(World world, ref CombatSlot dSlot, int d, CharacterCold dc, bool heavy, int now, ulong counter, bool bolt = false)
     {
-        // Outside a fight (docs/game/combat.md "Stagger outside a fight"): one getting up is left alone; any other drops its task, which is planned again from
-        // its start, unless it mans a turret (shooting at a live target).
+        // Outside a fight (docs/game/combat.md "Stagger outside a fight"): one getting up is left alone; any other drops its task, which is planned
+        // again from its start, unless it mans a turret (shooting at a live target).
         bool outsideFight = dSlot.TargetSlot < 0 && !dc.InCombat;
         if (outsideFight)
         {
@@ -383,9 +387,9 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// A task cut off by a hit is planned again from its start (the original ends it and queues it behind Stumbling): its timer and any lift or knock-out swing
-    /// start over, and a walk asks for a new path from where the hit left it. What each task keeps of its progress (a lock's pick time, a site's or a machine's
-    /// work) stays with its object.
+    /// A task cut off by a hit is planned again from its start (the original ends it and queues it behind Stumbling): its timer and any lift or
+    /// knock-out swing start over, and a walk asks for a new path from where the hit left it. What each task keeps of its progress (a lock's pick
+    /// time, a site's or a machine's work) stays with its object.
     /// </summary>
     static void Restart(CharacterTable table, int slot, CharacterCold cold)
     {
@@ -400,8 +404,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The pause after a swing whose last blow was resolved after Act ended the swing (on the same tick): Act chose it from the blow before, so it is chosen
-    /// again from this outcome.
+    /// The pause after a swing whose last blow was resolved after Act ended the swing (on the same tick): Act chose it from the blow before, so it is
+    /// chosen again from this outcome.
     /// </summary>
     void Pause(World world, ref CombatSlot attacker, BlowOutcome outcome, int now)
     {

@@ -165,10 +165,9 @@ public readonly unsafe struct Transient(GpuBuffer handle, ulong offset, byte* po
 }
 
 /// <summary>
-/// Per-frame host-visible memory: a pointer bump in 8 MB chunks (larger requests get a chunk of their own, freed at the next reset).
-/// Regular chunks live as long as the allocator (unless <see cref="Reset"/> trims them), so descriptor sets made for them stay valid. One per frame
-/// slot (and, in wave 4, per
-/// recording thread); <see cref="Reset"/> when the slot comes round. Not thread-safe.
+/// Per-frame host-visible memory: a pointer bump in 8 MB chunks (larger requests get a chunk of their own, freed at the next reset). Regular chunks
+/// live as long as the allocator (unless <see cref="Reset"/> trims them), so descriptor sets made for them stay valid. One per frame slot (and, in
+/// wave 4, per recording thread); <see cref="Reset"/> when the slot comes round. Not thread-safe.
 /// </summary>
 public sealed unsafe class LinearAllocator : IDisposable
 {

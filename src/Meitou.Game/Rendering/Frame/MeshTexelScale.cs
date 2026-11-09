@@ -3,14 +3,12 @@ using System.Numerics;
 namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
-/// How stretched a mesh part's texture is: the world length one unit of texture coordinate spans, taken where it is at its largest
-/// (a stretched triangle shows few texels per unit of surface, so it needs the finest mip first). Per triangle it is the larger singular
-/// value of the map from texture space to the surface: a pixel's footprint in texture space has its short axis along the direction the surface is
-/// most
-/// stretched in, and the sampler's level follows the short axis (anisotropic filtering), which is the one this bounds. The part's value is the one
-/// 0.5% of its area (weighted by world area) exceeds, so a few collapsed or sliver triangles do not decide it, and a part with more
-/// than 0.5% of its area at collapsed texture coordinates has none (infinity: its textures always keep every mip).
-/// Docs: renderer-native.md 8.12.
+/// How stretched a mesh part's texture is: the world length one unit of texture coordinate spans, taken where it is at its largest (a stretched
+/// triangle shows few texels per unit of surface, so it needs the finest mip first). Per triangle it is the larger singular value of the map from
+/// texture space to the surface: a pixel's footprint in texture space has its short axis along the direction the surface is most stretched in, and
+/// the sampler's level follows the short axis (anisotropic filtering), which is the one this bounds. The part's value is the one 0.5% of its area
+/// (weighted by world area) exceeds, so a few collapsed or sliver triangles do not decide it, and a part with more than 0.5% of its area at collapsed
+/// texture coordinates has none (infinity: its textures always keep every mip). Docs: renderer-native.md 8.12.
 /// </summary>
 static class MeshTexelScale
 {

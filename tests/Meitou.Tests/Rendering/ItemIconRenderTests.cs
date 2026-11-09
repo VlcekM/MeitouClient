@@ -101,8 +101,7 @@ public class ItemIconRenderTests
         var cache = Path.Combine(install!.DataDirectory, "icons");
 
         // Saved pictures of vanilla meshes (a modded install's pictures of weapons are often of a mod's mesh): a bag, a hat, three armours, the
-        // starter loincloth with its torn
-        // cut-outs, a basket and bolts, each skipped when the install has not saved it.
+        // starter loincloth with its torn cut-outs, a basket and bolts, each skipped when the install has not saved it.
         var wanted = new List<(IconKey Key, string File)>();
         foreach (var (item, material) in new[]
         {

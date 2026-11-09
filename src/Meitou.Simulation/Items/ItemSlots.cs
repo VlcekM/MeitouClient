@@ -12,14 +12,12 @@ namespace Meitou.Simulation.Items;
 
 /// <summary>
 /// The loose-item slots of the towns' interiors (docs/game/factions-squads-towns.md "Loose items in buildings"; docs/simulation.md "Ground items"):
-/// each ITEM_PLACEMENT_GROUP object
-/// of a building's interior layout keeps one item of its group lying at its place. Registered with the town's fixtures (<see cref="RegisterSite"/>)
-/// and kept when the town unloads.
+/// each ITEM_PLACEMENT_GROUP object of a building's interior layout keeps one item of its group lying at its place. Registered with the town's
+/// fixtures (<see cref="RegisterSite"/>) and kept when the town unloads.
 /// <list type="bullet">
 /// <item>A slot starts empty and due, so it fills as soon as its zone is active. An empty slot whose time has come and whose zone is active gets one
-/// item; when that item leaves
-/// the ground (picked up, used up), the next is due an int in [<c>min respawn time</c>, <c>max respawn time</c>] game hours later (the original's
-/// timer, <b>Verified</b>).</item>
+/// item; when that item leaves the ground (picked up, used up), the next is due an int in [<c>min respawn time</c>, <c>max respawn time</c>] game
+/// hours later (the original's timer, <b>Verified</b>).</item>
 /// <item>A placed item of a type the slot does not keep (<see cref="Kept"/>: a blueprint) is a loose item at once, and the slot is due again after
 /// the same timer.</item>
 /// <item>The item is a weighted pick from the group's lists (as <see cref="ShopFiller"/>'s); armour's quality is

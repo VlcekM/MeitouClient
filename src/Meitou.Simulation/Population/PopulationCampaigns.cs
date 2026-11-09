@@ -641,9 +641,8 @@ public sealed partial class PopulationSystem : IStateHashed
     /// A player town's level (Town +0x388, the save's <c>plevel</c>; <c>FUN_14048c200</c>, Verified by code, recomputed by the original when towns
     /// merge and at other calls): over its finished buildings, H = those with an interior that are neither a part nor a gate, T = turrets (function
     /// 12), G = gates (21), R = the highest research <c>tech level</c> (function 3). 1 when R &gt; 1, H &gt; 1, G &gt; 0 or T &gt; 3; with a gate, 2
-    /// when R &gt; 3, H &gt; 4 or T &gt; 4, and 3 when R &gt; 3, H &gt; 4 and T &gt; 6.
-    /// Engine readings: "an interior" is the BUILDING's <c>interior</c>
-    /// list (the original's Building +0x1f0), a part is a site with a parent.
+    /// when R &gt; 3, H &gt; 4 or T &gt; 4, and 3 when R &gt; 3, H &gt; 4 and T &gt; 6. Engine readings: "an interior" is the BUILDING's
+    /// <c>interior</c> list (the original's Building +0x1f0), a part is a site with a parent.
     /// </summary>
     internal int TownLevel(World world, int number)
     {
@@ -1235,9 +1234,8 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Phase 0 of <see cref="UpdateCampaign"/>: a loaded campaign at its target is defeated when the town has hostile occupiers,
-    /// else the leader's arrival is noted,
-    /// its announcement waited for, and the campaign moves on to phase 1 (or 2 without a <c>pt2</c>).
+    /// Phase 0 of <see cref="UpdateCampaign"/>: a loaded campaign at its target is defeated when the town has hostile occupiers, else the leader's
+    /// arrival is noted, its announcement waited for, and the campaign moves on to phase 1 (or 2 without a <c>pt2</c>).
     /// </summary>
     bool UpdateArrival(World world, WarManager m, CampaignData c, CampaignInstance inst, Platoon leader, double now)
     {
@@ -1260,9 +1258,8 @@ public sealed partial class PopulationSystem : IStateHashed
             inst.ArrivedAt = now;
         }
 
-        // With an announcement, a loaded leader waits for it, then while its negotiation is pending
-        // (engine choice for the Unknown event-2 state: up to
-        // AnnouncementPatience hours from arriving); off screen nobody can hear it, so it goes on.
+        // With an announcement, a loaded leader waits for it, then while its negotiation is pending (engine choice for the Unknown event-2 state: up
+        // to AnnouncementPatience hours from arriving); off screen nobody can hear it, so it goes on.
         if (c.DialogAnnouncement is not null && leader.State == PlatoonState.Loaded && Announcer is not null
             && now - inst.ArrivedAt < AnnouncementPatience
             && (inst.AnnouncedAt < 0 || PendingTalk?.Invoke(inst.Announcer) == true || AnnouncementHeard(world, inst, leader.Position)))
@@ -1275,9 +1272,8 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Phase 1 of <see cref="UpdateCampaign"/>: the leader back in the home town wins, a cannibal retreat ends the phase,
-    /// else the campaign's key decides the win, and
-    /// too few intact platoons lose it.
+    /// Phase 1 of <see cref="UpdateCampaign"/>: the leader back in the home town wins, a cannibal retreat ends the phase, else the campaign's key
+    /// decides the win, and too few intact platoons lose it.
     /// </summary>
     bool UpdateAssault(World world, WarManager m, CampaignData c, CampaignInstance inst, CampaignTown leaderTown, double hours, double now)
     {
@@ -1393,16 +1389,14 @@ public sealed partial class PopulationSystem : IStateHashed
     /// Whether the members of a squad run the "find, kidnap and put in a cage" goal now
     /// (task 254, <see cref="TaskType.FinalKidnapperCageJob"/>): the goals of
     /// <paramref name="role"/> in the package their campaign is in the phase of (a loaded campaign squad is driven by the campaign, not the AI),
-    /// or in the squad's
-    /// running AI package, in the hour's window.
+    /// or in the squad's running AI package, in the hour's window.
     /// </summary>
     public bool KidnapDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role) =>
         GoalDuty(world, squad, role, Meitou.Data.Gameplay.Ai.TaskType.FinalKidnapperCageJob);
 
     /// <summary>
-    /// As <see cref="KidnapDuty"/> for any goal type: whether <paramref name="role"/>'s goals in the package the squad runs now
-    /// hold <paramref name="type"/> in the
-    /// hour's window.
+    /// As <see cref="KidnapDuty"/> for any goal type: whether <paramref name="role"/>'s goals in the package the squad runs now hold
+    /// <paramref name="type"/> in the hour's window.
     /// </summary>
     public bool GoalDuty(World world, Squad squad, Meitou.Data.Gameplay.Ai.AiRole role, Meitou.Data.Gameplay.Ai.TaskType type)
     {
@@ -1458,9 +1452,8 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// One follow-up draw (<c>FUN_1409d27a0</c>): r = uniform[0, 100); below the sum of the V2 percents the entry whose share holds r is queued,
-    /// due after
-    /// uniform[V0, V1) hours.
+    /// One follow-up draw (<c>FUN_1409d27a0</c>): r = uniform[0, 100); below the sum of the V2 percents the entry whose share holds r is queued, due
+    /// after uniform[V0, V1) hours.
     /// </summary>
     void FollowUp(World world, WarManager m, IReadOnlyList<CampaignLink> list, CampaignInstance inst, double now, ulong which)
     {
@@ -1485,9 +1478,8 @@ public sealed partial class PopulationSystem : IStateHashed
     #region Players and fights
 
     /// <summary>
-    /// Loaded fights (the original's are loaded only; the assault's fight timer is armed in <c>Update</c>'s phase 1):
-    /// a leader-platoon member fighting within 300 of a
-    /// player character marks a fight with the player (engine test for the <b>Unknown</b> one).
+    /// Loaded fights (the original's are loaded only; the assault's fight timer is armed in <c>Update</c>'s phase 1): a leader-platoon member
+    /// fighting within 300 of a player character marks a fight with the player (engine test for the <b>Unknown</b> one).
     /// </summary>
     void TrackFights(World world, CampaignInstance inst)
     {
@@ -1542,8 +1534,7 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// The platoon's intact flag (<b>Verified</b>, <c>FUN_1407ac7b0</c>): while loaded the squad-intact rule (<c>FUN_1407a5be0</c>,
-    /// docs/game/perception.md: a member held
-    /// keeps it intact; under 4 members the leader is up; else at least 20 % up, 40 % with the leader down),
+    /// docs/game/perception.md: a member held keeps it intact; under 4 members the leader is up; else at least 20 % up, 40 % with the leader down),
     /// stored; unloaded, the value it had at unload.
     /// </summary>
     bool Intact(World world, Platoon p)
@@ -1607,11 +1598,9 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// More than 2 player characters in the town that are not sneaking out of a fight (the original's A, <c>FUN_1405c9750</c>),
-    /// and more than half of A is B: the
-    /// characters of the town in posture 0 (not staying low, crawling, playing dead or knocked out; vfunc <c>0x368</c>)
-    /// or in a bed (<c>+0x2f8</c> 1), stealthed ones
-    /// included (<b>Verified</b>, <c>FUN_1409c70f0</c>): an assault keeps going.
+    /// More than 2 player characters in the town that are not sneaking out of a fight (the original's A, <c>FUN_1405c9750</c>), and more than half of
+    /// A is B: the characters of the town in posture 0 (not staying low, crawling, playing dead or knocked out; vfunc <c>0x368</c>) or in a bed
+    /// (<c>+0x2f8</c> 1), stealthed ones included (<b>Verified</b>, <c>FUN_1409c70f0</c>): an assault keeps going.
     /// </summary>
     bool PlayersHold(World world, CampaignTown t)
     {
@@ -1629,9 +1618,8 @@ public sealed partial class PopulationSystem : IStateHashed
     bool PlayersStanding(World world, CampaignTown t) => PlayersIn(world, t).Up > 0;
 
     /// <summary>
-    /// The first door fixture of each of a town's buildings (a placed town's by site, a player town's by its buildings):
-    /// the slots 92 and 96 read only the building's
-    /// first door (<c>Building</c> slot 124).
+    /// The first door fixture of each of a town's buildings (a placed town's by site, a player town's by its buildings): the slots 92 and 96 read
+    /// only the building's first door (<c>Building</c> slot 124).
     /// </summary>
     static IEnumerable<Locks.Fixture> TownDoors(World world, CampaignTown t) =>
         world.Fixtures.All.Where(f => f.Kind == Locks.FixtureKind.Door && f.DoorIndex == 0
@@ -1670,8 +1658,7 @@ public sealed partial class PopulationSystem : IStateHashed
     /// Sets every campaign platoon's goal (the leader's: the target, or home once ended; the others': the leader)
     /// and moves the unloaded ones in straight lines at the
     /// <c>travel speed unloaded</c> speeds (leader TRAVEL_TARGET, others TRAVEL_TARGET_FAST: WALK 25, JOG 55, RUN 90;
-    /// GROUPED and NO_SPEED_CHANGE leader 25, others 60
-    /// or 90 beyond 25000; all capped at 70). Serial: followers read their leader's place.
+    /// GROUPED and NO_SPEED_CHANGE leader 25, others 60 or 90 beyond 25000; all capped at 70). Serial: followers read their leader's place.
     /// </summary>
     void MoveCampaigns(World world, float dt)
     {
@@ -1709,11 +1696,9 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Whom a loaded campaign platoon fights besides its faction's enemies (docs/game/factions-squads-towns.md "Campaigns", enemies):
-    /// in phase 1, everyone in the target
-    /// town or in none (<c>AggroSystem.WarEnemy</c>) when its <c>pt2</c> package is a Package_WarAssault (signal 20 or 32),
-    /// else the target faction when the campaign is
-    /// hostile; nobody in the other phases.
+    /// Whom a loaded campaign platoon fights besides its faction's enemies (docs/game/factions-squads-towns.md "Campaigns", enemies): in phase 1,
+    /// everyone in the target town or in none (<c>AggroSystem.WarEnemy</c>) when its <c>pt2</c> package is a Package_WarAssault (signal 20 or 32),
+    /// else the target faction when the campaign is hostile; nobody in the other phases.
     /// </summary>
     WarTargets AssaultTargets(World world, CampaignInstance inst, bool leads)
     {
@@ -1739,8 +1724,7 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// The squads' memories (the dialogue system's): a squad that leaves the world hands its memory to its platoon
-    /// (<see cref="StoredSquad.Memory"/>), and gets it back
-    /// when it returns; null: none kept.
+    /// (<see cref="StoredSquad.Memory"/>), and gets it back when it returns; null: none kept.
     /// </summary>
     public Dialogue.SquadMemory? Memory { get; set; }
 
@@ -1869,9 +1853,8 @@ public sealed partial class PopulationSystem : IStateHashed
     };
 
     /// <summary>
-    /// The leader keeps its loaded speed while every intact platoon is within this of it (<b>Verified</b>),
-    /// else it stops within <see cref="WaitNearTarget"/> of its
-    /// target, else walks.
+    /// The leader keeps its loaded speed while every intact platoon is within this of it (<b>Verified</b>), else it stops within
+    /// <see cref="WaitNearTarget"/> of its target, else walks.
     /// </summary>
     const float ColumnRange = 6000, WaitNearTarget = 8294.4f;
 
@@ -1905,9 +1888,8 @@ public sealed partial class PopulationSystem : IStateHashed
 
         if (MillAtGoal(world, p, squad, table, slot, goal)) return;
 
-        // The column (task 215, Verified): followers jog to their trail points; the leader marching out keeps its loaded speed
-        // while every intact platoon is
-        // within 6000, else it waits near the target or walks.
+        // The column (task 215, Verified): followers jog to their trail points; the leader marching out keeps its loaded speed while every intact
+        // platoon is within 6000, else it waits near the target or walks.
         var inst = p.Campaign!;
         bool leads = inst.Leader == p.Id;
         ref var n = ref table.Next[slot];
@@ -1939,9 +1921,8 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// Retreating, members the column does not move (a carrier, whom the AI leaves alone) mill round their own town again,
-    /// not round the raid target the squad
-    /// last milled at, so a kidnapper takes its captive home (engine choice; the arrival below still mills them round the goal).
+    /// Retreating, members the column does not move (a carrier, whom the AI leaves alone) mill round their own town again, not round the raid target
+    /// the squad last milled at, so a kidnapper takes its captive home (engine choice; the arrival below still mills them round the goal).
     /// </summary>
     void RetreatHome(Platoon p, Squad squad, Vector2 goal)
     {
@@ -1956,8 +1937,7 @@ public sealed partial class PopulationSystem : IStateHashed
 
     /// <summary>
     /// The arrival of a campaign platoon at its goal (task 215): a leader, or a follower in phase 1, within its arrival radius mills round the goal
-    /// (its home
-    /// centre and radius are set); true when it has arrived, which ends the step.
+    /// (its home centre and radius are set); true when it has arrived, which ends the step.
     /// </summary>
     bool MillAtGoal(World world, Platoon p, Squad squad, CharacterTable table, int slot, Vector2 goal)
     {
@@ -1981,8 +1961,7 @@ public sealed partial class PopulationSystem : IStateHashed
         squad.HomeCentre = goal;
 
         // The mill at the target is an engine choice, sized as a roaming squad's at a town (PopulationRoaming.cs): the size radius of a placed town,
-        // a player
-        // town's own.
+        // a player town's own.
         float mill = inst.Target.Site >= 0
             ? _data.Sites[inst.Target.Site].Town.SizeRadius * _data.Sites[inst.Target.Site].Town.TownRadiusMult
             : RadiusOf(world, inst.Target);
@@ -1991,17 +1970,15 @@ public sealed partial class PopulationSystem : IStateHashed
     }
 
     /// <summary>
-    /// The movement mode of a follower inside its trail point's reach: inside 100 it takes its leader's mode and, as a cap, the leader's speed now
-    /// (x 0.9 inside
-    /// 70, FUN_140349e70); otherwise the run mode.
+    /// The movement mode of a follower inside its trail point's reach: inside 100 it takes its leader's mode and, as a cap, the leader's speed now (x
+    /// 0.9 inside 70, FUN_140349e70); otherwise the run mode.
     /// </summary>
     byte FollowerPace(World world, CampaignInstance inst, bool leads, CharacterTable table, CharacterCold cold, float d)
     {
         byte mode = SpeedMode.Run;
 
-        // Inside 100 a follower takes the campaign leader's current speed, x 0.9 inside 70 (FUN_140349e70): its leader's mode and, as a cap,
-        // the leader's
-        // speed now.
+        // Inside 100 a follower takes the campaign leader's current speed, x 0.9 inside 70 (FUN_140349e70): its leader's mode and, as a cap, the
+        // leader's speed now.
         if (!leads && d < CampaignFollowDistance && world.Platoons.Find(inst.Leader) is { } head && world.Squads.Find(head.SquadId) is { } headSquad
             && table.TryResolveNext(headSquad.Leader, out int hs))
         {
@@ -2018,9 +1995,8 @@ public sealed partial class PopulationSystem : IStateHashed
     #region State hash
 
     /// <summary>
-    /// The war managers once any faction has started or queued a campaign, the kept wild squads while there are any,
-    /// the towns' artifacts while any are left and
-    /// the prosperity of the factions below their cap (so worlds without them hash as before).
+    /// The war managers once any faction has started or queued a campaign, the kept wild squads while there are any, the towns' artifacts while any
+    /// are left and the prosperity of the factions below their cap (so worlds without them hash as before).
     /// </summary>
     public void Hash(ref StateHasher h)
     {

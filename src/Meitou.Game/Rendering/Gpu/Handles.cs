@@ -31,8 +31,8 @@ public readonly record struct GpuSwizzle(GpuSwizzleComponent R = GpuSwizzleCompo
 }
 
 /// <summary>
-/// A sampler the renderers hold: the backend's identity and the description it was made from (docs/resource-layer.md). The Vulkan sampler itself is the
-/// backend's; index 0 is the null one.
+/// A sampler the renderers hold: the backend's identity and the description it was made from (docs/resource-layer.md). The Vulkan sampler itself is
+/// the backend's; index 0 is the null one.
 /// </summary>
 public readonly record struct GpuSampler(int Index, SamplerDesc Desc)
 {
@@ -59,9 +59,9 @@ public readonly record struct GpuView(int Index)
 }
 
 /// <summary>
-/// What a program is, besides its backend's compiled objects (docs/resource-layer.md): the engine's own compile result. The GLSL it came from, the SPIR-V
-/// the engine's compiler made (the backend's input: Vulkan's modules and layouts come from it, Metal's MSL is translated from it), the SPIR-V's reflection
-/// and the program's sets in the engine's words. Created once at compile; never mutated afterwards.
+/// What a program is, besides its backend's compiled objects (docs/resource-layer.md): the engine's own compile result. The GLSL it came from, the
+/// SPIR-V the engine's compiler made (the backend's input: Vulkan's modules and layouts come from it, Metal's MSL is translated from it), the
+/// SPIR-V's reflection and the program's sets in the engine's words. Created once at compile; never mutated afterwards.
 /// </summary>
 public sealed class ProgramInfo
 {
@@ -107,8 +107,8 @@ public sealed class ProgramInfo
 
 /// <summary>
 /// A program the renderers hold: the backend's identity (the index into the backend's programs) and the engine's own compile result
-/// (<see cref="ProgramInfo"/>) (docs/resource-layer.md). What the backend made of it (Vulkan: the shader modules and the pipeline layout; Metal: the MSL
-/// libraries) is reached through the shader library.
+/// (<see cref="ProgramInfo"/>) (docs/resource-layer.md). What the backend made of it (Vulkan: the shader modules and the pipeline layout; Metal: the
+/// MSL libraries) is reached through the shader library.
 /// </summary>
 public readonly record struct GpuProgram(int Index, ProgramInfo Info)
 {
@@ -155,10 +155,10 @@ public readonly record struct GpuProgram(int Index, ProgramInfo Info)
 }
 
 /// <summary>
-/// A graphics pipeline the renderers hold: the description it was made from (docs/resource-layer.md) — it is the pipeline's identity (the backend caches by
-/// it). The pipeline state is the backend's (Vulkan: a VkPipeline; Metal: an MTLRenderPipelineState). <c>Native</c> is the backend's own handle when it has
-/// one to carry (Vulkan's VkPipeline: a bind needs no lookup, and the bench's counting variant of the same description is told apart by it); 0 makes the
-/// backend look it up by the description.
+/// A graphics pipeline the renderers hold: the description it was made from (docs/resource-layer.md) — it is the pipeline's identity (the backend
+/// caches by it). The pipeline state is the backend's (Vulkan: a VkPipeline; Metal: an MTLRenderPipelineState). <c>Native</c> is the backend's own
+/// handle when it has one to carry (Vulkan's VkPipeline: a bind needs no lookup, and the bench's counting variant of the same description is told
+/// apart by it); 0 makes the backend look it up by the description.
 /// </summary>
 public readonly record struct GpuPipeline(GraphicsPipelineDesc Desc, ulong Native = 0)
 {
@@ -208,8 +208,8 @@ public readonly record struct GpuSet(int Index)
 }
 
 /// <summary>
-/// A buffer the renderers hold: the backend's identity (the index into the backend's buffers) and its size (docs/resource-layer.md). The buffer itself is
-/// the backend's.
+/// A buffer the renderers hold: the backend's identity (the index into the backend's buffers) and its size (docs/resource-layer.md). The buffer
+/// itself is the backend's.
 /// </summary>
 public readonly record struct GpuBuffer(int Index, ulong Size)
 {

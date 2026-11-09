@@ -10,19 +10,19 @@ namespace Meitou.Simulation.Population;
 public sealed record NestMesh(string Record, string Mesh, Vector3 Position, float Yaw, float Scale);
 
 /// <summary>
-/// An item a nest lays down in a fresh zone: a <c>debris</c> item with a <c>physics file</c> (<paramref name="List"/> false), or a roll of a <c>loot spawn</c>
-/// VENDOR_LIST.
+/// An item a nest lays down in a fresh zone: a <c>debris</c> item with a <c>physics file</c> (<paramref name="List"/> false), or a roll of a <c>loot
+/// spawn</c> VENDOR_LIST.
 /// </summary>
 public sealed record NestDrop(string Record, bool List, Vector3 Position, float Yaw);
 
 /// <summary>
-/// A nest's <c>debris</c> and <c>loot spawn</c> (docs/game/factions-squads-towns.md "Nest furniture"; <c>TownBase::spawnDebris</c> <c>FUN_140937510</c> and the
-/// loot loop of <c>FUN_140938440</c>). Each <c>debris</c> entry: v0 to v1 clusters (the original's clamped int range) at scale v2 / 100 (0: 1), each at a random
-/// point within <c>size radius</c>. A NEST_ITEM without a <c>physics file</c> is <c>cluster min</c> to <c>cluster max</c> meshes, each within <c>cluster range</c>
-/// x scale of the one before (a walk), its <c>ground mesh</c> (else <c>mesh</c>) or, with <c>number of meshes</c> above 1, a numbered one of them, scaled by the
-/// scale ± 0.1; one with a physics file is that many items within <c>cluster range</c> of the cluster's point. Its own <c>cluster</c> list follows from the last
-/// one placed (v0 to v1 clusters within v2). <c>loot spawn</c>: v0 to v1 rolls of the list, each at a point within <c>size radius</c> on the navmesh, none below
-/// height 1.
+/// A nest's <c>debris</c> and <c>loot spawn</c> (docs/game/factions-squads-towns.md "Nest furniture"; <c>TownBase::spawnDebris</c>
+/// <c>FUN_140937510</c> and the loot loop of <c>FUN_140938440</c>). Each <c>debris</c> entry: v0 to v1 clusters (the original's clamped int range) at
+/// scale v2 / 100 (0: 1), each at a random point within <c>size radius</c>. A NEST_ITEM without a <c>physics file</c> is <c>cluster min</c> to
+/// <c>cluster max</c> meshes, each within <c>cluster range</c> x scale of the one before (a walk), its <c>ground mesh</c> (else <c>mesh</c>) or, with
+/// <c>number of meshes</c> above 1, a numbered one of them, scaled by the scale ± 0.1; one with a physics file is that many items within <c>cluster
+/// range</c> of the cluster's point. Its own <c>cluster</c> list follows from the last one placed (v0 to v1 clusters within v2). <c>loot spawn</c>:
+/// v0 to v1 rolls of the list, each at a point within <c>size radius</c> on the navmesh, none below height 1.
 /// </summary>
 public static partial class NestFurniture
 {
@@ -101,8 +101,8 @@ public static partial class NestFurniture
     }
 
     /// <summary>
-    /// The mesh of one debris piece: <c>ground mesh</c>, else <c>mesh</c>; with <c>number of meshes</c> n above 1, its bare name less its last character and a
-    /// number in [1, n] (<c>FUN_14092bdc0</c>: <c>bone1.mesh</c> with 6 is one of <c>bone1</c> to <c>bone6</c>).
+    /// The mesh of one debris piece: <c>ground mesh</c>, else <c>mesh</c>; with <c>number of meshes</c> n above 1, its bare name less its last
+    /// character and a number in [1, n] (<c>FUN_14092bdc0</c>: <c>bone1.mesh</c> with 6 is one of <c>bone1</c> to <c>bone6</c>).
     /// </summary>
     static string MeshOf(GameRecord item, ref RandomStream rolls)
     {
@@ -141,8 +141,8 @@ public static partial class NestFurniture
     }
 
     /// <summary>
-    /// The original's int range (<c>Rand_IntInRange</c>): <paramref name="lo"/> + a uniform step over [lo, hi], clamped to it, and <paramref name="lo"/> when it is
-    /// above <paramref name="hi"/>.
+    /// The original's int range (<c>Rand_IntInRange</c>): <paramref name="lo"/> + a uniform step over [lo, hi], clamped to it, and
+    /// <paramref name="lo"/> when it is above <paramref name="hi"/>.
     /// </summary>
     static int IntIn(ref RandomStream rolls, int lo, int hi)
     {

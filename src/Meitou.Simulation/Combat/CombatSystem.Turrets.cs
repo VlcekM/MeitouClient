@@ -20,12 +20,13 @@ namespace Meitou.Simulation.Combat;
 public readonly record struct TurretView(string BuildingId, string GunId, Vector3 Position, float Yaw, Vector3? Aim, float[]? Angles = null);
 
 /// <summary>
-/// The gun numbers a selected turret's Stats 1 lines read (<c>GunClassTurret</c> slot 14 <c>FUN_14030d620</c>, docs/game/ui-screens.md "Production building"):
-/// the GUN_DATA <c>range</c>, <c>aim speed</c> and <c>accuracy deviation at 0 skill</c>, the mount factor M (gun slot 18), the height factor h from the building to
-/// its last aim point (gun <c>+0x118</c>, 1 before any), the last gunner's Turrets level x 0.01 (gun <c>+0x2c</c>, 0 for a turret never manned) and that gunner's
-/// perception level while it exists (null: none). For the Height rows (<c>FUN_14030c2a0</c> section 3) the height above the last aim point in metres (null before
-/// any aim); for the Loaded bar (<c>GunClass</c> slot 14 <c>FUN_14030ce20</c> section 4) the loaded and full shots, the share of the running reload still to go (1
-/// while none runs), the GUN_DATA reload times and the gunner's Crossbows level (null: none).
+/// The gun numbers a selected turret's Stats 1 lines read (<c>GunClassTurret</c> slot 14 <c>FUN_14030d620</c>, docs/game/ui-screens.md "Production
+/// building"): the GUN_DATA <c>range</c>, <c>aim speed</c> and <c>accuracy deviation at 0 skill</c>, the mount factor M (gun slot 18), the height
+/// factor h from the building to its last aim point (gun <c>+0x118</c>, 1 before any), the last gunner's Turrets level x 0.01 (gun <c>+0x2c</c>, 0
+/// for a turret never manned) and that gunner's perception level while it exists (null: none). For the Height rows (<c>FUN_14030c2a0</c> section 3)
+/// the height above the last aim point in metres (null before any aim); for the Loaded bar (<c>GunClass</c> slot 14 <c>FUN_14030ce20</c> section 4)
+/// the loaded and full shots, the share of the running reload still to go (1 while none runs), the GUN_DATA reload times and the gunner's Crossbows
+/// level (null: none).
 /// </summary>
 public readonly record struct TurretPanelView(string Instance, float Range, float AimSpeed, float Deviation, float Mount, float Height, float UserSkill, float? Perception)
 {
@@ -45,12 +46,12 @@ public readonly record struct TurretPanelView(string Instance, float Range, floa
 }
 
 /// <summary>
-/// The turrets (docs/game/combat.md "Turrets", docs/simulation.md "Combat", turrets). The original runs a turret through its gunner's ranged controller
-/// (<c>Task_UseTurret</c> <c>FUN_1403474f0</c> hands the controller the building and the Turrets skill, then ticks it): the controller picks the target, reloads,
-/// holds the aim and fires the building's gun, whose shots, turn and loaded harpoons live on the building. Here one serial step of the <see cref="Schedule"/>
-/// phase does the same for every manned turret, in key order: gunners are found (a player character operating its turret, an NPC standing at the turret its
-/// squad gave it), then each turret chooses, reloads, turns and fires. Harpoons are bolts (<see cref="Projectile"/>): they fly, hit and wound as a crossbow's,
-/// from the next tick.
+/// The turrets (docs/game/combat.md "Turrets", docs/simulation.md "Combat", turrets). The original runs a turret through its gunner's ranged
+/// controller (<c>Task_UseTurret</c> <c>FUN_1403474f0</c> hands the controller the building and the Turrets skill, then ticks it): the controller
+/// picks the target, reloads, holds the aim and fires the building's gun, whose shots, turn and loaded harpoons live on the building. Here one serial
+/// step of the <see cref="Schedule"/> phase does the same for every manned turret, in key order: gunners are found (a player character operating its
+/// turret, an NPC standing at the turret its squad gave it), then each turret chooses, reloads, turns and fires. Harpoons are bolts
+/// (<see cref="Projectile"/>): they fly, hit and wound as a crossbow's, from the next tick.
 /// </summary>
 public sealed partial class CombatSystem
 {
@@ -124,8 +125,9 @@ public sealed partial class CombatSystem
         public bool Manned;
 
         /// <summary>
-        /// The last gunner (the gun's user hand <c>+0x30</c>) and its Turrets level x 0.01 (<c>+0x2c</c>), both set by gun slot 16 <c>FUN_140446ef0</c> every frame
-        /// the reload step runs and on each shot; kept when the gunner leaves. Only the panel reads them (not hashed; the original does not save them).
+        /// The last gunner (the gun's user hand <c>+0x30</c>) and its Turrets level x 0.01 (<c>+0x2c</c>), both set by gun slot 16
+        /// <c>FUN_140446ef0</c> every frame the reload step runs and on each shot; kept when the gunner leaves. Only the panel reads them (not
+        /// hashed; the original does not save them).
         /// </summary>
         public int User = -1, UserGeneration;
         public float UserSkill;
@@ -158,8 +160,8 @@ public sealed partial class CombatSystem
             : null;
 
     /// <summary>
-    /// The gun numbers of the turret building <paramref name="instance"/> for its panel (<see cref="TurretPanelView"/>); a turret nobody has manned yet has the
-    /// gun's fresh state. Null for a building that is not a turret.
+    /// The gun numbers of the turret building <paramref name="instance"/> for its panel (<see cref="TurretPanelView"/>); a turret nobody has manned
+    /// yet has the gun's fresh state. Null for a building that is not a turret.
     /// </summary>
     public TurretPanelView? TurretPanelOf(World world, string? instance)
     {
@@ -211,8 +213,8 @@ public sealed partial class CombatSystem
             : 0;
 
     /// <summary>
-    /// Writes the loaded harpoons of every turret manned since loading into its building's state (<paramref name="buildings"/>, by <see cref="BuildingKey"/>); the
-    /// others keep the loaded record's value. The reload, aim and turn are not saved, as in the original.
+    /// Writes the loaded harpoons of every turret manned since loading into its building's state (<paramref name="buildings"/>, by
+    /// <see cref="BuildingKey"/>); the others keep the loaded record's value. The reload, aim and turn are not saved, as in the original.
     /// </summary>
     public void WriteTurretShots(World world, IReadOnlyDictionary<string, Data.Fcs.FcsRecord> buildings)
     {
@@ -242,8 +244,8 @@ public sealed partial class CombatSystem
     /// The turret a character mans now, or null. Any gunner must be awake, free (not fighting, carrying, carried or caged) and have a working arm (task 146's
     /// <c>hasOneWorkingArm</c>). A player character operates a turret of its own (<see cref="CharacterTask.Operate"/> at the site,
     /// <see cref="Production.ProductionSystem"/>); its efficiency is the machine's power grant (0 unpowered) and its damage takes the research multiplier of the
-    /// building. An NPC stands at the turret of its town its squad gave it (the AI's turret goals, <see cref="Ai.AiBehaviour.Turret"/>); <b>engine choice</b>:
-    /// efficiency 1 (NPC towns have no power grid here).
+    /// building. An NPC stands at the turret of its town its squad gave it (the AI's turret goals, <see cref="Ai.AiBehaviour.Turret"/>); <b>engine
+    /// choice</b>: efficiency 1 (NPC towns have no power grid here).
     /// </summary>
     Post? Manning(World world, int i, CharacterCold cold)
     {
@@ -288,8 +290,8 @@ public sealed partial class CombatSystem
         if (!board.TurretClaims.TryGetValue(i, out int claimed) || (uint)claimed >= (uint)board.Turrets.Count) return null;
         if (board.Turrets[claimed] is not { Turret: { } post } building) return null;
 
-        // A town turret is a TurretBuilding like the player's: its saved `broken` (FUN_1402a1750) stops manning as well. Nothing at run time breaks a town's own
-        // turret (only a player owner may dismantle, slot 79; hits never damage machines, slot 62), so the zone state is its only source
+        // A town turret is a TurretBuilding like the player's: its saved `broken` (FUN_1402a1750) stops manning as well. Nothing at run time breaks a
+        // town's own turret (only a player owner may dismantle, slot 79; hits never damage machines, slot 62), so the zone state is its only source
         // (docs/game/buildings-production.md "Broken machines").
         if (world.Fixtures.Saved?.GetValueOrDefault(building.Key)?.Bools.GetValueOrDefault("broken") == true) return null;
 
@@ -386,10 +388,10 @@ public sealed partial class CombatSystem
     #region Turret fire
 
     /// <summary>
-    /// One tick of a manned turret (the controller <c>FUN_140438c70</c> with a turret, its fire gate <c>FUN_14043aee0</c>, which the controller triggers every tick):
-    /// choose the target, reload when empty (no ammunition: GUN_DATA has none), set the aim point while loaded, turn the parts, and with a target in range, the
-    /// parts within 1 degree, the steady time held and the line along the barrel clear, fire. A turret never walks its gunner closer: out of range or blocked it
-    /// only waits.
+    /// One tick of a manned turret (the controller <c>FUN_140438c70</c> with a turret, its fire gate <c>FUN_14043aee0</c>, which the controller
+    /// triggers every tick): choose the target, reload when empty (no ammunition: GUN_DATA has none), set the aim point while loaded, turn the parts,
+    /// and with a target in range, the parts within 1 degree, the steady time held and the line along the barrel clear, fire. A turret never walks
+    /// its gunner closer: out of range or blocked it only waits.
     /// </summary>
     void TickTurret(World world, TurretState t)
     {
@@ -448,9 +450,9 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The reload (<c>FUN_140437ce0</c>): an empty gun starts one of clamp(lerp(s, reload max, reload min)) seconds, s = 0.01 (0.6 Turrets + 0.4 dexterity)
-    /// (<see cref="RangedFormulas.SkillBlend"/>); while it runs the gunner gains Turrets and dexterity XP; at its end the gun holds <c>num shots</c> and the aim is
-    /// steadied again. True when the gun is loaded and not reloading.
+    /// The reload (<c>FUN_140437ce0</c>): an empty gun starts one of clamp(lerp(s, reload max, reload min)) seconds, s = 0.01 (0.6 Turrets + 0.4
+    /// dexterity) (<see cref="RangedFormulas.SkillBlend"/>); while it runs the gunner gains Turrets and dexterity XP; at its end the gun holds <c>num
+    /// shots</c> and the aim is steadied again. True when the gun is loaded and not reloading.
     /// </summary>
     bool TurretReload(TurretState t, CharacterCold cold, float dt)
     {
@@ -487,8 +489,9 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Target <paramref name="o"/> is inside a building other than the turret's or on another floor of it (<see cref="TurretFormulas.Arc"/>'s 0 case). Engine
-    /// reading: the turret's building and floor are its gunner's (<see cref="SightMap.BuildingOf"/>, within <see cref="SameFloorHeight"/>).
+    /// Target <paramref name="o"/> is inside a building other than the turret's or on another floor of it (<see cref="TurretFormulas.Arc"/>'s 0
+    /// case). Engine reading: the turret's building and floor are its gunner's (<see cref="SightMap.BuildingOf"/>, within
+    /// <see cref="SameFloorHeight"/>).
     /// </summary>
     static bool Indoors(World world, int g, int o)
     {
@@ -501,11 +504,12 @@ public sealed partial class CombatSystem
     /// <summary>
     /// The target choice (<c>FUN_140437f40</c>, <c>FUN_1404374d0</c>, the score <c>FUN_140435d70</c>): every candidate within 1.5 x range of the gunner scores
     /// <see cref="TurretFormulas.Closeness"/> x <see cref="TurretFormulas.Arc"/>, x 1.5 when it fights the gunner, + 0.1 for the current target, and the current
-    /// target's score is x 1.5 again in the pass; the best above 1e-6 wins, else the current one is kept. The first pass takes the gunner's enemies (the faction
-    /// relations, or anyone fighting it). With none, an NPC gunner's turret takes characters of default-hostile factions (own default relation below -30) and
-    /// anyone fighting a member of the gunner's faction. Not targets: the dead, the carried, the caged; a target down scores 0 for an NPC gunner and x 0.01 for the
-    /// player's. <b>Engine choices</b>: every candidate counts as seen (the original's sense list and its seen flag), the 1.5 for "fights the gunner"
-    /// (<c>FUN_1405ca6f0</c>), the candidate radius. A player gunner with Shoot first then takes the neutrals of <see cref="SquadAiRules.ShootsFirstAt"/>.
+    /// target's score is x 1.5 again in the pass; the best above 1e-6 wins, else the current one is kept. The first pass takes the gunner's enemies
+    /// (the faction relations, or anyone fighting it). With none, an NPC gunner's turret takes characters of default-hostile factions (own default
+    /// relation below -30) and anyone fighting a member of the gunner's faction. Not targets: the dead, the carried, the caged; a target down scores
+    /// 0 for an NPC gunner and x 0.01 for the player's. <b>Engine choices</b>: every candidate counts as seen (the original's sense list and its seen
+    /// flag), the 1.5 for "fights the gunner" (<c>FUN_1405ca6f0</c>), the candidate radius. A player gunner with Shoot first then takes the neutrals
+    /// of <see cref="SquadAiRules.ShootsFirstAt"/>.
     /// </summary>
     int ChooseTurretTarget(World world, TurretState t, int g, CharacterCold gc)
     {
@@ -545,8 +549,8 @@ public sealed partial class CombatSystem
             var there = table.Previous[o].Position;
             float distance = Vector3.Distance(at, there);
 
-            // x0.1 for a crippled target and x0.1 more for one not upright (FUN_140435d70, Verified; "crippled" is the engine reading of vfunc 0x360: crawling or
-            // unable to attack).
+            // x0.1 for a crippled target and x0.1 more for one not upright (FUN_140435d70, Verified; "crippled" is the engine reading of vfunc 0x360:
+            // crawling or unable to attack).
             float f = (med.Crawling || oc.Fighter is { CanAttack: false } ? 0.1f : 1) * (med.Prone ? 0.1f : 1);
             float s = TurretFormulas.Closeness(distance, range, rangeFactor, f);
             if (distance >= rangeFactor * range) return s;
@@ -560,9 +564,9 @@ public sealed partial class CombatSystem
             return s;
         }
 
-        // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it scores above 0 (closeness x arc: in range and not blocked) and the gunner does
-        // not regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does. A target out of range still scores 0.001 (kept,
-        // never fired at); one blocked (inside elsewhere) scores 0.
+        // Shoot At (FUN_140437f40, Verified): the ordered target is kept while it scores above 0 (closeness x arc: in range and not blocked) and the
+        // gunner does not regard it as friendly; otherwise the order is dropped and the gunner chooses as it always does. A target out of range still
+        // scores 0.001 (kept, never fired at); one blocked (inside elsewhere) scores 0.
         if (!gc.TurretTarget.IsNone)
         {
             var talk = world.SystemOf<Dialogue.DialogueSystem>();
@@ -599,8 +603,8 @@ public sealed partial class CombatSystem
 
         if (gc.IsPlayer)
         {
-            // Shoot first (the squad AI option): with no enemy in its sights a player gunner also takes dangerous neutrals, scored at range factor 0.6 (no extra
-            // weight).
+            // Shoot first (the squad AI option): with no enemy in its sights a player gunner also takes dangerous neutrals, scored at range factor
+            // 0.6 (no extra weight).
             if ((world.Player.SquadAi & SquadAi.ShootFirst) == 0) return best;
 
             foreach (int o in found)
@@ -677,8 +681,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// A target every turret scores 0 (<c>FUN_140435d70</c>, <b>Verified</b>): down for every gunner (out, dead, playing dead, carried), in a bed or cage, and for a
-    /// gunner not of the player's faction one that is not upright. An ordered target that scores 0 is dropped (<c>FUN_140437f40</c>).
+    /// A target every turret scores 0 (<c>FUN_140435d70</c>, <b>Verified</b>): down for every gunner (out, dead, playing dead, carried), in a bed or
+    /// cage, and for a gunner not of the player's faction one that is not upright. An ordered target that scores 0 is dropped (<c>FUN_140437f40</c>).
     /// </summary>
     static bool ScoresZero(World world, CharacterCold gunner, CharacterCold? target) =>
         target?.Medical is not { } med || med.Incapacitated || med.PlayingDead || !target.CarriedBy.IsNone

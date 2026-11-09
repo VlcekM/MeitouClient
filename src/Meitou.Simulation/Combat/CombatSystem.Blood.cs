@@ -5,9 +5,9 @@ namespace Meitou.Simulation.Combat;
 public sealed partial class CombatSystem
 {
     /// <summary>
-    /// The splash a hit leaves on the ground (<c>FUN_140793b20</c>, docs/game/blood-decals.md): flung along the blow's <paramref name="direction"/> (X/Z) turned
-    /// by up to 50 degrees either way, up to 20 units from the victim, sized by the damage (cut + blunt + pierce over 100, between 0.05 and 0.5). None in the
-    /// water or from a bloodless race. Display only (<see cref="World.BloodMarks"/>).
+    /// The splash a hit leaves on the ground (<c>FUN_140793b20</c>, docs/game/blood-decals.md): flung along the blow's <paramref name="direction"/>
+    /// (X/Z) turned by up to 50 degrees either way, up to 20 units from the victim, sized by the damage (cut + blunt + pierce over 100, between 0.05
+    /// and 0.5). None in the water or from a bloodless race. Display only (<see cref="World.BloodMarks"/>).
     /// </summary>
     static void Splash(World world, int victim, CharacterCold vc, Vector2 direction, float damage)
     {

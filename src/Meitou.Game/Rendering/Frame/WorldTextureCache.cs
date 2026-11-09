@@ -102,8 +102,7 @@ public sealed class WorldTexture
     internal bool Refine;
 
     /// <summary>The image was loaded lean (<see cref="WorldTextureCache.LeanSize"/>) under the guard's pressure: <see
-    /// cref="WorldTextureCache.Rebalance"/>
-    /// refines it once the pressure ends, whether or not its need is known.</summary>
+    /// cref="WorldTextureCache.Rebalance"/> refines it once the pressure ends, whether or not its need is known.</summary>
     internal bool Lean;
 
     /// <summary>
@@ -151,14 +150,12 @@ public sealed class WorldTexture
 
 /// <summary>
 /// GpuTexture cache for the world view: files are decoded on worker threads and uploaded on the render thread by <see cref="Pump"/> into native
-/// textures (through the <see cref="Uploader"/>), so loading a town's few hundred textures uses every core and never stalls a frame for long.
-/// Same lookup, sampling and swizzle detection as <see cref="Renderer"/>, and the images, levels, views and samplers the GL textures had
-/// through VkGl (docs/renderer-native.md 8, phase 8 stage 1).
-/// Textures nobody has read the key of for <see cref="IdleSeconds"/> are deleted (<see cref="Trim"/>), earlier when the cache, with the caches it
-/// shares
-/// images with (<see cref="TextureShare"/>), holds more than <see cref="HighWaterMb"/>: the least recently used go first, down to three quarters of
-/// it. A deleted texture comes back by itself
-/// (decode and upload again) the next time something asks for its key.
+/// textures (through the <see cref="Uploader"/>), so loading a town's few hundred textures uses every core and never stalls a frame for long. Same
+/// lookup, sampling and swizzle detection as <see cref="Renderer"/>, and the images, levels, views and samplers the GL textures had through VkGl
+/// (docs/renderer-native.md 8, phase 8 stage 1). Textures nobody has read the key of for <see cref="IdleSeconds"/> are deleted (<see cref="Trim"/>),
+/// earlier when the cache, with the caches it shares images with (<see cref="TextureShare"/>), holds more than <see cref="HighWaterMb"/>: the least
+/// recently used go first, down to three quarters of it. A deleted texture comes back by itself (decode and upload again) the next time something
+/// asks for its key.
 /// </summary>
 public sealed unsafe class WorldTextureCache : IDisposable
 {
@@ -261,8 +258,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public double IdleSeconds { get; set; } = 20;
 
     /// <summary>Above this the least recently used textures that were unused for <see cref="PressureIdleSeconds"/> go too. With a <see cref="Share"/>
-    /// the mark is for
-    /// all the sharing caches together (<see cref="TextureShare.ResidentBytes"/>), not for each.</summary>
+    /// the mark is for all the sharing caches together (<see cref="TextureShare.ResidentBytes"/>), not for each.</summary>
     public double HighWaterMb { get; set; } = TextureQuality.MemoryBudgetMb(TextureQuality.Level);
     public double PressureIdleSeconds { get; set; } = 8;
 
@@ -277,8 +273,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     public double MarkMb => EffectiveMark(HighWaterMb, HighWaterShare, Guard, Areas);
 
     /// <summary>Places kept loaded ("Keep textures at characters": the eye's and each merged kept point's, docs/render-objects.md "Kept points"): the
-    /// mark is
-    /// this many times larger, its share of the memory budget at most <see cref="MaxAreaShare"/> (never below the unscaled share).</summary>
+    /// mark is this many times larger, its share of the memory budget at most <see cref="MaxAreaShare"/> (never below the unscaled share).</summary>
     public int Areas { get; set; } = 1;
 
     /// <summary>
@@ -416,9 +411,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     /// <summary>
     /// <see cref="MayStart(WorldTexture)"/> for a texture something reads now: refused the whole image, it may still load <paramref name="lean"/>
-    /// (top side
-    /// at most <see cref="LeanSize"/>) while that fits under the guard's <see cref="VramGuard.AllowsLean"/>, so what is drawn is never left without
-    /// one.
+    /// (top side at most <see cref="LeanSize"/>) while that fits under the guard's <see cref="VramGuard.AllowsLean"/>, so what is drawn is never left
+    /// without one.
     /// </summary>
     bool MayStart(WorldTexture t, out bool lean, bool wanted = true)
     {
@@ -484,8 +478,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
     #region Streaming
 
     /// <summary>Loads started while this is set go ahead of the other streaming work (<see cref="BackgroundWork.RunUrgent"/>): the owner sets it
-    /// while it
-    /// touches what a flight's arrival view uses (docs/render-objects.md "Arrival prefetch").</summary>
+    /// while it touches what a flight's arrival view uses (docs/render-objects.md "Arrival prefetch").</summary>
     public bool Urgent { get; set; }
 
     void Start(WorldTexture t, bool replacing = false, bool lean = false)
@@ -526,9 +519,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     /// <summary>
     /// An image of <paramref name="t"/>'s file another user already holds at the current quality level, with no more top levels dropped than mip
-    /// streaming
-    /// would drop at <paramref name="need"/> (exactly as many when <paramref name="exact"/>), the one with the most dropped of those; null when none
-    /// (or no <see cref="Share"/>).
+    /// streaming would drop at <paramref name="need"/> (exactly as many when <paramref name="exact"/>), the one with the most dropped of those; null
+    /// when none (or no <see cref="Share"/>).
     /// </summary>
     TextureShare.Image? Shared(WorldTexture t, float need, bool exact)
     {
@@ -748,9 +740,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
     /// <summary>
     /// Mip streaming: after <see cref="CommitNeeds"/>, a resident texture whose image has more top levels dropped than it may now (something came
     /// near) is loaded again with fewer, and the old image drawn until the new one is in (<see cref="BeginSwap"/>); one that is finer than it needs
-    /// to be
-    /// for <see cref="CoarsenAfterSeconds"/> (at once under the guard's pressure) is replaced by a coarser. Only the textures this has been told the
-    /// need of are touched (<see cref="WorldTexture.KeepAllMips"/> never).
+    /// to be for <see cref="CoarsenAfterSeconds"/> (at once under the guard's pressure) is replaced by a coarser. Only the textures this has been
+    /// told the need of are touched (<see cref="WorldTexture.KeepAllMips"/> never).
     /// </summary>
     public void Rebalance()
     {
@@ -836,10 +827,9 @@ public sealed unsafe class WorldTextureCache : IDisposable
         if (RandomAccess.Read(file, magic, 0) == 4 && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(magic) == DdsReader.Magic)
         {
             // GpuTexture quality: the game drops top mips as it loads (docs/formats/settings.md); mip streaming drops more where nothing near uses
-            // them.
-            // Only the mips that are kept are read: a dropped top level is three quarters of the file, and was read, held and thrown away
-            // (docs/renderer-native.md 8.14).
-            // The file's bytes are pooled (docs/engine.md, pooled buffers): an RGBA8 decode returns them here, a stored upload after its last step.
+            // them. Only the mips that are kept are read: a dropped top level is three quarters of the file, and was read, held and thrown away
+            // (docs/renderer-native.md 8.14). The file's bytes are pooled (docs/engine.md, pooled buffers): an RGBA8 decode returns them here, a
+            // stored upload after its last step.
             var dds = DdsReader.ReadKept(file, w => TextureQuality.DropTopMips(w, Math.Max(Math.Max(dropMips, MipStreaming.Drop(w.Width, w.Height,
                     need, streaming, perDistance, bias, extra)),
                 LevelsAbove(w.Width, w.Height, leanSize))), out var whole, ArrayPool<byte>.Shared);
@@ -921,8 +911,7 @@ public sealed unsafe class WorldTextureCache : IDisposable
 
     /// <summary>
     /// The image for <paramref name="t"/>'s upload in GENERAL layout (the transition in the frame's upload commands, before the copies): the one the
-    /// worker
-    /// made (<see cref="IGpuContext.CreateTextureOffThread"/>), else a new one.
+    /// worker made (<see cref="IGpuContext.CreateTextureOffThread"/>), else a new one.
     /// </summary>
     GpuTexture Create(WorldTexture t, TextureData data)
     {
@@ -1056,9 +1045,8 @@ public sealed unsafe class WorldTextureCache : IDisposable
     }
 
     /// <summary>The new image is about to replace the one the texture has (a reload with another number of top levels, <see cref="Rebalance"/>): the
-    /// old
-    /// one goes (its bindless entries after the frames in flight, as an unload) and its bytes leave the count; <see cref="Resident"/> adds the new.
-    /// Records the levels the new image lacks.</summary>
+    /// old one goes (its bindless entries after the frames in flight, as an unload) and its bytes leave the count; <see cref="Resident"/> adds the
+    /// new. Records the levels the new image lacks.</summary>
     void BeginSwap(WorldTexture t, int dropped, bool droppable, int fileWidth, int fileHeight, bool replaced = false)
     {
         if (t.Native is not null)
@@ -1123,8 +1111,7 @@ sealed record TextureData(LoadedTexture Rgba, DdsFile? Compressed, int Dropped =
 
 /// <summary>
 /// The images the world's texture caches share (<see cref="WorldTextureCache.Share"/>): a file the objects, the foliage and the characters all draw
-/// is
-/// in video memory once at a given number of dropped levels (the VRAM dump of 2026-11-01 held about 150 MB of such copies). An image goes when its
+/// is in video memory once at a given number of dropped levels (the VRAM dump of 2026-11-01 held about 150 MB of such copies). An image goes when its
 /// last user releases it. Each cache still counts the image's bytes as its own. Render thread only.
 /// </summary>
 public sealed class TextureShare

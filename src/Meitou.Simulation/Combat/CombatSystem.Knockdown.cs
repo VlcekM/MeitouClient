@@ -61,8 +61,8 @@ public sealed partial class CombatSystem
     internal const float BlastMaxSpeed = 400;
 
     /// <summary>
-    /// The explosion's lift, as a share of the throw speed (gravity is 98.1 units/s², so 100 out and 15 up at the centre flies about 0.3 s, about 30 units
-    /// before the ground slows it; flight range is 2 x lift x speed² / 98.1).
+    /// The explosion's lift, as a share of the throw speed (gravity is 98.1 units/s², so 100 out and 15 up at the centre flies about 0.3 s, about 30
+    /// units before the ground slows it; flight range is 2 x lift x speed² / 98.1).
     /// </summary>
     const float BlastLift = 0.15f;
 

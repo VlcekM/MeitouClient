@@ -30,8 +30,8 @@ public enum CharacterTask : byte
     Attack = 4,
 
     /// <summary>
-    /// Walks to <see cref="CharacterCold.TreatTarget"/> and bandages it with a first aid kit (<see cref="FirstAid.FirstAidSystem"/> owns it; the movement system
-    /// leaves it alone).
+    /// Walks to <see cref="CharacterCold.TreatTarget"/> and bandages it with a first aid kit (<see cref="FirstAid.FirstAidSystem"/> owns it; the
+    /// movement system leaves it alone).
     /// </summary>
     Treat = 5,
 
@@ -107,8 +107,8 @@ public enum CharacterTask : byte
     FetchMaterials = 17,
 
     /// <summary>
-    /// Walks to a bed and lies in it, then lies there (<see cref="Locks.BedSystem"/>; the original's <c>Task_UseBed</c>, orders 98, 100, 258). Lying in a bed
-    /// (<see cref="Locks.HeldState.Bed"/>) with any other task, the character gets up: another order replaced it.
+    /// Walks to a bed and lies in it, then lies there (<see cref="Locks.BedSystem"/>; the original's <c>Task_UseBed</c>, orders 98, 100, 258). Lying
+    /// in a bed (<see cref="Locks.HeldState.Bed"/>) with any other task, the character gets up: another order replaced it.
     /// </summary>
     Sleep = 18,
 }
@@ -164,8 +164,8 @@ public enum WalkEnd : byte
 }
 
 /// <summary>
-/// Speed modes (docs/game/pathfinding.md "Speed"), also the HUD speed icon's index (Walk, Jog, Run, Group): 0 caps at the race walk speed, 1 at 55, 2 does
-/// not cap, 3 keeps to the slowest of the squad.
+/// Speed modes (docs/game/pathfinding.md "Speed"), also the HUD speed icon's index (Walk, Jog, Run, Group): 0 caps at the race walk speed, 1 at 55, 2
+/// does not cap, 3 keeps to the slowest of the squad.
 /// </summary>
 public static class SpeedMode
 {
@@ -181,8 +181,8 @@ public static class SpeedMode
     public static float Cap(byte mode, float walkSpeed) => mode switch { Walk => walkSpeed, Run => RunCap, _ => 999 };
 
     /// <summary>
-    /// The speed above which a move toward a character runs: Task_Move's update (<c>FUN_140354600</c>, <c>DAT_141683188</c>, <b>Verified</b>) sets its mover
-    /// to run each frame while its target character's current speed is above this.
+    /// The speed above which a move toward a character runs: Task_Move's update (<c>FUN_140354600</c>, <c>DAT_141683188</c>, <b>Verified</b>) sets
+    /// its mover to run each frame while its target character's current speed is above this.
     /// </summary>
     public const float ChaseRunAbove = 20;
 

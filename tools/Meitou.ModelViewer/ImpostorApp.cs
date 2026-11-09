@@ -289,8 +289,7 @@ static class ImpostorApp
         Field(frames, preview, meshes, mesh, $"{stem}-field", o, sun, 1500 * scale, 4000 * scale, 160, scale);
         Field(frames, preview, meshes, mesh, $"{stem}-near", o, sun, 1500 * scale, 2000 * scale, 40, scale);
 
-        // Around the distance the bake's texture detail is matched to (ImpostorClass.ReferenceDistance):
-        // where mesh and impostor should look alike.
+        // Around the distance the bake's texture detail is matched to (ImpostorClass.ReferenceDistance): where mesh and impostor should look alike.
         Field(frames, preview, meshes, mesh, $"{stem}-t4k", o, sun, 3500 * scale, 4500 * scale, 120, scale);
         Console.WriteLine($"saved     {stem}-*.png");
         return 0;

@@ -4,9 +4,9 @@ using System.Runtime.InteropServices;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// Building interiors: each building with an interior mask is built as its own small mesh (<see cref="ZoneGeometryGatherer.GatherInterior"/>) and put into the
-/// zone's mesh as extra polygons, joined to the exterior along the door polygons (docs/game/pathfinding.md, "Interiors"). To the queries an interior is part of
-/// the zone: the door is an ordinary link.
+/// Building interiors: each building with an interior mask is built as its own small mesh (<see cref="ZoneGeometryGatherer.GatherInterior"/>) and put
+/// into the zone's mesh as extra polygons, joined to the exterior along the door polygons (docs/game/pathfinding.md, "Interiors"). To the queries an
+/// interior is part of the zone: the door is an ordinary link.
 /// </summary>
 internal static class NavInteriors
 {
@@ -21,14 +21,15 @@ internal static class NavInteriors
     public const float ApproachReach = 32;
 
     /// <summary>
-    /// How close (units) a doorless interior's open edges and the exterior's have to be to be joined: both are cut on the hull's line, a cell or so apart
-    /// (engine choice).
+    /// How close (units) a doorless interior's open edges and the exterior's have to be to be joined: both are cut on the hull's line, a cell or so
+    /// apart (engine choice).
     /// </summary>
     public const float HullJoinDistance = 2.5f;
 
     /// <summary>
-    /// The same for a ruin (a destroyed interior): the original stitches edges up to 2 apart (FUN_1403c5830, maxSeparation 0.2 Havok), both cut exactly on the
-    /// hull; ours come out off that line by up to a cell and the contour error (1.3 cells) each (engine choice; docs/game/pathfinding.md "Destroyed interiors").
+    /// The same for a ruin (a destroyed interior): the original stitches edges up to 2 apart (FUN_1403c5830, maxSeparation 0.2 Havok), both cut
+    /// exactly on the hull; ours come out off that line by up to a cell and the contour error (1.3 cells) each (engine choice;
+    /// docs/game/pathfinding.md "Destroyed interiors").
     /// </summary>
     public const float RuinHullJoinDistance = 5f;
 
@@ -159,9 +160,10 @@ internal static class NavInteriors
         int ExteriorCount);
 
     /// <summary>
-    /// An interior is joined whatever its own pruning kept (it may have no seed: an Ancient Lab or Ash Dome without doors or nodes), to exterior polygons the
-    /// exterior's pruning kept, and the regions joined to a kept polygon are kept too (engine choice; the original connects these interiors,
-    /// docs/game/pathfinding.md "Door joins"). Between exterior polygons it stops at edges the seed flood does not pass (<see cref="SeedPruner.MinPortalWidth"/>).
+    /// An interior is joined whatever its own pruning kept (it may have no seed: an Ancient Lab or Ash Dome without doors or nodes), to exterior
+    /// polygons the exterior's pruning kept, and the regions joined to a kept polygon are kept too (engine choice; the original connects these
+    /// interiors, docs/game/pathfinding.md "Door joins"). Between exterior polygons it stops at edges the seed flood does not pass
+    /// (<see cref="SeedPruner.MinPortalWidth"/>).
     /// </summary>
     static void CarryKeep(KeptSet m)
     {
@@ -245,8 +247,8 @@ internal static class NavInteriors
             if (Link(openInside, OpenEdges(outside), doorIds[door]) > 0)
                 continue;
 
-            // A door leaf set back inside the interior hull paints nothing outside it (the exterior is carved to the hull): the doorway's interior polygons meet
-            // the exterior's ground along the hull's edge (Observed: the L-House 13-rebirth-INGAME, zone 18.35).
+            // A door leaf set back inside the interior hull paints nothing outside it (the exterior is carved to the hull): the doorway's interior
+            // polygons meet the exterior's ground along the hull's edge (Observed: the L-House 13-rebirth-INGAME, zone 18.35).
             var lo = new Vector2(float.MaxValue);
             var hi = new Vector2(float.MinValue);
             foreach (int p in inside)
@@ -346,8 +348,8 @@ internal static class NavInteriors
     }
 
     /// <summary>
-    /// Two edges that run along each other: their midpoints and both ends within <paramref name="distance"/> in plan and <see cref="JoinHeight"/> in height,
-    /// overlapping.
+    /// Two edges that run along each other: their midpoints and both ends within <paramref name="distance"/> in plan and <see cref="JoinHeight"/> in
+    /// height, overlapping.
     /// </summary>
     static bool Facing(Vector3 a0, Vector3 a1, Vector3 b0, Vector3 b1, float distance = JoinDistance)
     {
@@ -374,7 +376,8 @@ internal static class NavInteriors
 }
 
 /// <summary>
-/// One built interior for <see cref="NavInteriors.Combine"/>: its mesh, its building's placement key (labels the join log and names it in the tool), whether it
-/// is joined along its hull (an intact building without doors, or a ruin) and whether it is a ruin (joined within <see cref="NavInteriors.RuinHullJoinDistance"/>).
+/// One built interior for <see cref="NavInteriors.Combine"/>: its mesh, its building's placement key (labels the join log and names it in the tool),
+/// whether it is joined along its hull (an intact building without doors, or a ruin) and whether it is a ruin (joined within
+/// <see cref="NavInteriors.RuinHullJoinDistance"/>).
 /// </summary>
 internal sealed record InteriorMesh(ZoneNavMesh Mesh, string? Key = null, bool Doorless = false, bool Ruin = false);

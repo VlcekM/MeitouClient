@@ -9,8 +9,8 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The ticks of the import window, as the bits <c>SaveManager::importGame</c> (<c>FUN_140378a30</c>) tests in its flags (docs/formats/save.md "Importing a
-/// game"). Bit 0x2 is always added by the window and tested by nothing.
+/// The ticks of the import window, as the bits <c>SaveManager::importGame</c> (<c>FUN_140378a30</c>) tests in its flags (docs/formats/save.md
+/// "Importing a game"). Bit 0x2 is always added by the window and tested by nothing.
 /// </summary>
 [Flags]
 public enum ImportOptions
@@ -52,8 +52,8 @@ public enum ImportOptions
 /// Importing a game (docs/formats/save.md "Importing a game", <c>FUN_140378a30</c>): a new world that keeps only what the player brought from an old save.
 /// <see cref="Filter"/> cuts a loaded <see cref="SaveGame"/> down to that part, in the shape the loader and the capture already work with;
 /// <see cref="SaveLoader"/> then makes the world from it as from any save, so the characters, their items, medical state and stats are the old platoon files'
-/// unchanged. The original does the same work with its own containers: the save is read into the save container, the world is reset, and each part is copied
-/// across.
+/// unchanged. The original does the same work with its own containers: the save is read into the save container, the world is reset, and each part is
+/// copied across.
 /// </summary>
 public static class SaveImport
 {
@@ -65,10 +65,11 @@ public static class SaveImport
     public static readonly Vector3 ResetPosition = new(-43500, 0, -6625);
 
     /// <summary>
-    /// The part of <paramref name="game"/> an import with <paramref name="options"/> keeps, as a new save (<paramref name="game"/> itself is cut down by it and
-    /// not to be used afterwards): the player's squads with their platoon files, the clock, money, camera and squad settings, the towns' discovery, and by the
-    /// ticks the player's building and town records, research, the dead and imprisoned uniques and the factions' relations. Everything else (other factions'
-    /// platoons, nests, the weather, the war states, loose items, others' buildings) is left out, and the world makes it new.
+    /// The part of <paramref name="game"/> an import with <paramref name="options"/> keeps, as a new save (<paramref name="game"/> itself is cut down
+    /// by it and not to be used afterwards): the player's squads with their platoon files, the clock, money, camera and squad settings, the towns'
+    /// discovery, and by the ticks the player's building and town records, research, the dead and imprisoned uniques and the factions' relations.
+    /// Everything else (other factions' platoons, nests, the weather, the war states, loose items, others' buildings) is left out, and the world
+    /// makes it new.
     /// </summary>
     public static SaveGame Filter(SaveGame game, ImportOptions options, PopulationData data)
     {
@@ -94,8 +95,8 @@ public static class SaveImport
     }
 
     /// <summary>
-    /// Puts the squads of a save <see cref="Filter"/> moved to <see cref="ResetPosition"/> (and their members) on the ground there: the original's position has
-    /// no height.
+    /// Puts the squads of a save <see cref="Filter"/> moved to <see cref="ResetPosition"/> (and their members) on the ground there: the original's
+    /// position has no height.
     /// </summary>
     public static void PlaceOnGround(SaveGame game, Func<float, float, float> groundAt)
     {
@@ -161,8 +162,9 @@ public static class SaveImport
     }
 
     /// <summary>
-    /// The ticks that apply to a save of <paramref name="version"/>: for one older than 0.90.0 the window disables and unticks Reset squad positions, Buildings,
-    /// Research and Dead NPCs (its row selection, <c>FUN_14047cee0</c>, <b>Verified</b> by disassembly), leaving Relations. Meitou applies the same mask here.
+    /// The ticks that apply to a save of <paramref name="version"/>: for one older than 0.90.0 the window disables and unticks Reset squad positions,
+    /// Buildings, Research and Dead NPCs (its row selection, <c>FUN_14047cee0</c>, <b>Verified</b> by disassembly), leaving Relations. Meitou applies
+    /// the same mask here.
     /// </summary>
     public static ImportOptions AllowedFor(ImportOptions options, string version) =>
         PackedVersion(version) < TicksFromVersion
@@ -174,8 +176,8 @@ public static class SaveImport
     #region Squads and uniques
 
     /// <summary>
-    /// Keeps the player's squads (in squad-index order, renumbered from 0), drops the other platoon records, and moves the squads when the reset is ticked.
-    /// Returns the kept squads.
+    /// Keeps the player's squads (in squad-index order, renumbered from 0), drops the other platoon records, and moves the squads when the reset is
+    /// ticked. Returns the kept squads.
     /// </summary>
     static List<SavePlatoon> KeepSquads(SaveGame game, string playerId, ImportOptions options)
     {
@@ -198,8 +200,8 @@ public static class SaveImport
             var at = ResetPosition + new Vector3(i, 0, i);
             platoon.Position = at;
 
-            // The members stand with their squad (engine choice: the original moves the squad and the members follow on activation; here each stands 2 units
-            // from the last).
+            // The members stand with their squad (engine choice: the original moves the squad and the members follow on activation; here each stands
+            // 2 units from the last).
             for (int m = 0; m < platoon.Characters.Count; m++) platoon.Characters[m].Position = at + new Vector3(2 * m, 0, 0);
         }
 
@@ -207,9 +209,9 @@ public static class SaveImport
     }
 
     /// <summary>
-    /// The unique-character table (<c>FUN_1409aa270</c>): with "Dead NPCs" the entries of dead uniques stay; imprisoned ones stay only when they are among the
-    /// player's squads (the original unclaims the others, whose characters this world does not have). Every unique in a kept squad is entered, alive, with its
-    /// character's own handle.
+    /// The unique-character table (<c>FUN_1409aa270</c>): with "Dead NPCs" the entries of dead uniques stay; imprisoned ones stay only when they are
+    /// among the player's squads (the original unclaims the others, whose characters this world does not have). Every unique in a kept squad is
+    /// entered, alive, with its character's own handle.
     /// </summary>
     static void FilterUniques(SaveGame game, List<SavePlatoon> keep, ImportOptions options, PopulationData data)
     {
@@ -271,8 +273,8 @@ public static class SaveImport
     static readonly string[] KnowledgeBools = ["is nest", "discovered", "explored", "recently discovered"];
 
     /// <summary>
-    /// The factions' state: with "Relations" the relation tables, ranks and the factions met stay, without them the factions start from their FACTION records.
-    /// War states never stay (their campaigns name platoons this world lacks).
+    /// The factions' state: with "Relations" the relation tables, ranks and the factions met stay, without them the factions start from their FACTION
+    /// records. War states never stay (their campaigns name platoons this world lacks).
     /// </summary>
     static void FilterFactions(SaveGame game, ImportOptions options)
     {
@@ -288,9 +290,9 @@ public static class SaveImport
     }
 
     /// <summary>
-    /// The towns (<c>FUN_1403722d0</c>, <c>FUN_140372560</c>): nests go. With "Buildings" the non-nest towns of the player faction that were discovered stay whole
-    /// (the outposts the player made are in the town instance list); every other town keeps what the player knew of it. "Dead NPCs" also keeps the town that
-    /// replaces a destroyed one.
+    /// The towns (<c>FUN_1403722d0</c>, <c>FUN_140372560</c>): nests go. With "Buildings" the non-nest towns of the player faction that were
+    /// discovered stay whole (the outposts the player made are in the town instance list); every other town keeps what the player knew of it. "Dead
+    /// NPCs" also keeps the town that replaces a destroyed one.
     /// </summary>
     static void FilterTowns(SaveGame game, string playerId, ImportOptions options, PopulationData data)
     {
@@ -363,9 +365,9 @@ public static class SaveImport
     }
 
     /// <summary>
-    /// "Town too close. Removing" (<c>FUN_14092ae80</c>, <b>Verified</b>): in list order, a town of the player's whose centre lies inside the radius of the nearest
-    /// other player town that is not a nest marker is removed, and is no longer a neighbour for the towns after it, so of two overlapping towns the earlier one
-    /// goes.
+    /// "Town too close. Removing" (<c>FUN_14092ae80</c>, <b>Verified</b>): in list order, a town of the player's whose centre lies inside the radius
+    /// of the nearest other player town that is not a nest marker is removed, and is no longer a neighbour for the towns after it, so of two
+    /// overlapping towns the earlier one goes.
     /// </summary>
     static List<FcsRecord> TooCloseTowns(SaveGame game, string playerId, List<FcsRecord> dropped, PopulationData data)
     {
@@ -396,8 +398,8 @@ public static class SaveImport
     static Vector2 Flat(Vector3 v) => new(v.X, v.Z);
 
     /// <summary>
-    /// The towns get their artifacts as in a new game (docs/game/economy.md "Artifacts"): a town of the player's kept whole adds them to its saved list, the others
-    /// had theirs cut.
+    /// The towns get their artifacts as in a new game (docs/game/economy.md "Artifacts"): a town of the player's kept whole adds them to its saved
+    /// list, the others had theirs cut.
     /// </summary>
     static void AddArtifacts(SaveGame game, PopulationData data)
     {
@@ -419,8 +421,9 @@ public static class SaveImport
     #region Zones
 
     /// <summary>
-    /// The zone files (<c>FUN_140377710</c>): with "Buildings" each keeps the building instances that are removals or whose state is owned by the player faction,
-    /// with their states; a zone that keeps none has no file. Without the tick no zone file stays. The loose items and every other building are the new world's.
+    /// The zone files (<c>FUN_140377710</c>): with "Buildings" each keeps the building instances that are removals or whose state is owned by the
+    /// player faction, with their states; a zone that keeps none has no file. Without the tick no zone file stays. The loose items and every other
+    /// building are the new world's.
     /// </summary>
     static void FilterZones(SaveGame game, string playerId, ImportOptions options)
     {

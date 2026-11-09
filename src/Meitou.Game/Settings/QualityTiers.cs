@@ -13,10 +13,10 @@ sealed class QualityTiers(SettingsMenu menu)
     internal const int LowPreset = 0, MediumPreset = 1, HighPreset = 2, CustomPreset = 4;
 
     /// <summary>
-    /// A preset's slider: its value at Low, Medium and Ultra (High is the start default; NaN: the start default too), either fixed or a multiple of the
-    /// start default. <see cref="Mode"/> names the switch whose side picks the base instead (the slider's Meitou or Faithful mark), so High reads High in
-    /// both looks. <see cref="LowFixed"/>: Low's value is fixed even where the others are multiples. Low is <c>--low-end</c> (WorldOptions.ApplyLowEnd): a
-    /// slider it leaves alone stays at High.
+    /// A preset's slider: its value at Low, Medium and Ultra (High is the start default; NaN: the start default too), either fixed or a multiple of
+    /// the start default. <see cref="Mode"/> names the switch whose side picks the base instead (the slider's Meitou or Faithful mark), so High reads
+    /// High in both looks. <see cref="LowFixed"/>: Low's value is fixed even where the others are multiples. Low is <c>--low-end</c>
+    /// (WorldOptions.ApplyLowEnd): a slider it leaves alone stays at High.
     /// </summary>
     internal sealed record PresetSlider(string Label, float Low, float Medium, float Ultra, bool Scale = false, string? Mode = null, float? High = null,
         bool LowFixed = false);
@@ -75,8 +75,8 @@ sealed class QualityTiers(SettingsMenu menu)
     ];
 
     /// <summary>
-    /// The Meitou effects Low sets Faithful, as <c>--low-end</c> does. The look's ones (docs/native-ui.md "Settings") are held off without changing the
-    /// preset, unless kept on (<see cref="UserConfig.KeepAtLow"/>).
+    /// The Meitou effects Low sets Faithful, as <c>--low-end</c> does. The look's ones (docs/native-ui.md "Settings") are held off without changing
+    /// the preset, unless kept on (<see cref="UserConfig.KeepAtLow"/>).
     /// </summary>
     internal static readonly string[] LowOffSwitches =
         ["Ambient occlusion", "Light shafts", "Water", "Shadows", "Ground parallax", "Ground displacement (tessellation)"];

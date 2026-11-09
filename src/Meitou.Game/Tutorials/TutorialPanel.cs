@@ -9,10 +9,10 @@ using Meitou.Simulation.Movement;
 namespace Meitou.Game.Tutorials;
 
 /// <summary>
-/// The tutorial panel and window (<c>TutorialGUI</c>, docs/game/ui-screens.md "Tutorials"): a line per active tutorial stacked up from the bottom of the
-/// top-left list panel (25 px x the UI scale each, the newest lowest), a new line flashing white for a second; its name opens the window on it, its X
-/// dismisses it. The window shows the item's current page with PREVIOUS, SKIP / CONTINUE / FINISH and DISMISS, and runs the page's own advance while it
-/// is open.
+/// The tutorial panel and window (<c>TutorialGUI</c>, docs/game/ui-screens.md "Tutorials"): a line per active tutorial stacked up from the bottom of
+/// the top-left list panel (25 px x the UI scale each, the newest lowest), a new line flashing white for a second; its name opens the window on it,
+/// its X dismisses it. The window shows the item's current page with PREVIOUS, SKIP / CONTINUE / FINISH and DISMISS, and runs the page's own advance
+/// while it is open.
 /// </summary>
 sealed class TutorialPanel(PlayerInterface player)
 {

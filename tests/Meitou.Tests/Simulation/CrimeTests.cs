@@ -27,8 +27,7 @@ namespace Meitou.Tests.Simulation;
 public class CrimeTests
 {
     // Factions: 0 the city (offers bounties; its police book crimes), 1 bandits (lawless), 2 the player (Nameless), 3 farmers (allied with the city
-    // both ways, book nothing),
-    // 4 wildlife (not real), 5 rivals (hostile to the city both ways).
+    // both ways, book nothing), 4 wildlife (not real), 5 rivals (hostile to the city both ways).
     const int City = 0, Bandits = 1, Player = 2, Farmers = 3, Wildlife = 4, Rivals = 5;
 
     static readonly Vector2 O = new(2000, 2000);

@@ -11,12 +11,10 @@ public readonly record struct VendorEntry(string Id, FcsRecordType Type, int Wei
 /// A VENDOR_LIST (docs/game/economy.md sections 9.2 and 13): the weighted items a shop, a container or a nest's loot is rolled from, and the money
 /// roll.
 /// <para>The names of its reference lists are not written down in the docs (<c>items</c>, <c>weapons</c>, <c>clothing</c>, ...), so every list is
-/// read and its
-/// entries kept by the type of the record they point at: item kinds become <see cref="Entries"/>, WEAPON_MANUFACTURERs <see cref="Manufacturers"/>.
-/// The game
-/// merges a list's entries into one weighted table (the item-group picker of factions-squads-towns.md section 8, <b>Observed</b>). The weight is the
-/// entry's
-/// v0, "relative chance" in the editor; a v0 of 0 counts as 100 as in the generic weighted pick (the vendor lists' own reading of 0 is
+/// read and its entries kept by the type of the record they point at: item kinds become <see cref="Entries"/>, WEAPON_MANUFACTURERs
+/// <see cref="Manufacturers"/>. The game merges a list's entries into one weighted table (the item-group picker of factions-squads-towns.md section
+/// 8, <b>Observed</b>). The weight is the entry's v0, "relative chance" in the editor; a v0 of 0 counts as 100 as in the generic weighted pick (the
+/// vendor lists' own reading of 0 is
 /// <b>Unknown</b>,
 /// docs/game/economy.md Unknowns: 472 entries are (0, 100, 0)).</para>
 /// </summary>
@@ -72,8 +70,7 @@ public sealed record VendorList
                 AddEntry(db, list, e, entries, makers);
 
         // A weapon is stocked only when it is a `weapon types` entry of one of the list's manufacturers (<b>Verified</b>, `FUN_140956ba0`: "No valid
-        // manufacturer
-        // found for weapon" otherwise); no manufacturer or manufacturers without weapon types skip the weapons altogether.
+        // manufacturer found for weapon" otherwise); no manufacturer or manufacturers without weapon types skip the weapons altogether.
         var makable = makers
             .Where(m => db.Find(m.Id) is { Type: FcsRecordType.WeaponManufacturer })
             .SelectMany(m => db.Find(m.Id)!.GetReferences("weapon types"))

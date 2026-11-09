@@ -288,8 +288,8 @@ internal sealed unsafe class UiFont : IDisposable
 
     /// <summary>
     /// Loads a glyph with the hinting it is asked for. A font whose bytecode this FreeType rejects (ume-pgs5.ttf: Invalid_Opcode at every size) is
-    /// tried with the auto-hinter, then with no hinting, for the glyph; and for the font from the third failure on (a font whose hinting fails once is
-    /// not tried at every glyph). Called with the FreeType lock held.
+    /// tried with the auto-hinter, then with no hinting, for the glyph; and for the font from the third failure on (a font whose hinting fails once
+    /// is not tried at every glyph). Called with the FreeType lock held.
     /// </summary>
     FT_Error LoadGlyph(uint index)
     {

@@ -48,21 +48,18 @@ public sealed class ConstructionSettings
 /// <see cref="CharacterTask.Dismantle"/> and
 /// <see cref="CharacterCold.BuildSite"/> (an unfinished site, or a damaged complete building to repair: <see cref="BuildSite.NeedsWork"/>);
 /// <c>Schedule</c> walks the character to the site (the
-/// first-aid pattern), <c>SlowWorld</c> works it, all serial. At the site the builder pushes build work
-/// each tick until the site stalls (<c>sum(min(delivered, required)) &lt;= progress</c>); then, if it carries a missing material, it fills the 5 s
-/// delivery bar
+/// first-aid pattern), <c>SlowWorld</c> works it, all serial. At the site the builder pushes build work each tick until the site stalls
+/// (<c>sum(min(delivered, required)) &lt;= progress</c>); then, if it carries a missing material, it fills the 5 s delivery bar
 /// (<see cref="CharacterTask.DeliverMaterials"/>), hands over one unit per missing type and goes on building; empty-handed it fetches a missing
-/// material (<see cref="CharacterTask.FetchMaterials"/>,
-/// task 247: <see cref="Source"/>) and comes back, or stops when there is none.</item>
+/// material (<see cref="CharacterTask.FetchMaterials"/>, task 247: <see cref="Source"/>) and comes back, or stops when there is none.</item>
 /// <item><b>Work</b> per tick (<b>Verified</b>): <c>lerp(0.3, 2, engineering/100) x dt x Building speed x CONSTANTS build speed x 0.75^k</c>, k the
 /// builders that have worked the site this tick
 /// (capped at 15; the reset is <b>Unknown</b>, per tick is the engine reading), progress += <c>build speed mult / (1200/11)</c> x that. Dismantling:
 /// <c>dt x lerp(0.05, 4, engineering/100) x 4</c> x rate
 /// off the progress; at 0 the delivered materials (60 to 100 %, at least 1 each) fall on the ground, one item per unit.</item>
 /// <item><b>Engineer job</b> (125, run by the production system's job lists): <see cref="EngineerSite"/> picks the best-scoring unpaused site
-/// (<c>max(2 (1 - d^2/9000^2), 0.0001) / (n + 1)</c>,
-/// n builders on it), skipping a stalled site the character carries nothing for and no material source can feed; <see cref="StartBuilding"/> sends
-/// the character there.</item>
+/// (<c>max(2 (1 - d^2/9000^2), 0.0001) / (n + 1)</c>, n builders on it), skipping a stalled site the character carries nothing for and no material
+/// source can feed; <see cref="StartBuilding"/> sends the character there.</item>
 /// </list>
 /// Placed after the carry system and before combat. Everything here is serial and reads only the world's state and the command order.
 /// </summary>

@@ -91,8 +91,8 @@ static class MenuArt
     }
 
     /// <summary>
-    /// The vignette behind the stack (kit: radial-gradient(ellipse 620px 470px at 4% 100%, .93 at 25%, .6 at 55%, clear at 80%) in #080605), baked for the
-    /// area it covers: the ellipse's 80% extent from its centre at the image's bottom left, scaled to the frame by the caller.
+    /// The vignette behind the stack (kit: radial-gradient(ellipse 620px 470px at 4% 100%, .93 at 25%, .6 at 55%, clear at 80%) in #080605), baked
+    /// for the area it covers: the ellipse's 80% extent from its centre at the image's bottom left, scaled to the frame by the caller.
     /// </summary>
     public static RgbaImage Vignette(int width, int height)
     {
@@ -113,8 +113,8 @@ static class MenuArt
     }
 
     /// <summary>
-    /// Signed distance from the edge of a <paramref name="w"/>×<paramref name="h"/> rectangle at the origin with corners rounded to <paramref name="r"/>
-    /// (negative inside).
+    /// Signed distance from the edge of a <paramref name="w"/>×<paramref name="h"/> rectangle at the origin with corners rounded to
+    /// <paramref name="r"/> (negative inside).
     /// </summary>
     static float RoundedDistance(float x, float y, float w, float h, float r)
     {

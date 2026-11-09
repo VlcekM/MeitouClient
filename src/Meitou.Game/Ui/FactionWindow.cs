@@ -7,8 +7,8 @@ using Meitou.Simulation.Player;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The Overview's faction tab (<c>FactionsScreen</c>, docs/game/ui-screens.md "Faction tab"): the player faction's name, a <c>Kenshi_FactionRelationsLine</c>
-/// per faction with the relation's number and its bar, and the information panel's two headings.
+/// The Overview's faction tab (<c>FactionsScreen</c>, docs/game/ui-screens.md "Faction tab"): the player faction's name, a
+/// <c>Kenshi_FactionRelationsLine</c> per faction with the relation's number and its bar, and the information panel's two headings.
 /// </summary>
 sealed class FactionWindow(PlayerInterface player)
 {
@@ -34,8 +34,8 @@ sealed class FactionWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// A time left as <c>TimeOfDay::getTotalTimeString</c> (<c>FUN_1407a6940</c>) prints it: below 0 "Expired", above a day "{d} Days, {h}hrs", above an hour
-    /// "{h}hrs", else "{m} mins" (each part floored, the day branch's hours as (uint)h % 24).
+    /// A time left as <c>TimeOfDay::getTotalTimeString</c> (<c>FUN_1407a6940</c>) prints it: below 0 "Expired", above a day "{d} Days, {h}hrs", above
+    /// an hour "{h}hrs", else "{m} mins" (each part floored, the day branch's hours as (uint)h % 24).
     /// </summary>
     static string TotalTime(double hours) =>
         hours < 0 ? Loc.Tr("Expired")
@@ -173,8 +173,9 @@ sealed class FactionWindow(PlayerInterface player)
     public Func<string, bool>? FactionNameTaken { get; set; }
 
     /// <summary>
-    /// The player faction's name in the tab's name box (the original's text is the player interface's faction name). The box takes typing; accepting it or
-    /// losing the key focus renames (<see cref="UpdateFactionName"/>, <c>FUN_1404923d0</c>), and a box not being typed in shows the faction's current name.
+    /// The player faction's name in the tab's name box (the original's text is the player interface's faction name). The box takes typing; accepting
+    /// it or losing the key focus renames (<see cref="UpdateFactionName"/>, <c>FUN_1404923d0</c>), and a box not being typed in shows the faction's
+    /// current name.
     /// </summary>
     internal void BindFactionTab(UiBindings b)
     {
@@ -192,8 +193,9 @@ sealed class FactionWindow(PlayerInterface player)
     }
 
     /// <summary>
-    /// Once a frame: a draft whose box no longer has the key focus is sent as <see cref="RenameFactionCommand"/>; a name another faction has opens the original's
-    /// Ok box "Faction Name" / "This faction name already exists" instead (<c>FUN_1404923d0</c>, button mask 1), and the box shows the old name again.
+    /// Once a frame: a draft whose box no longer has the key focus is sent as <see cref="RenameFactionCommand"/>; a name another faction has opens
+    /// the original's Ok box "Faction Name" / "This faction name already exists" instead (<c>FUN_1404923d0</c>, button mask 1), and the box shows the
+    /// old name again.
     /// </summary>
     internal void UpdateFactionName()
     {

@@ -8,8 +8,7 @@ namespace Meitou.Game.Rendering.Frame;
 /// so what samples neighbours has them at the tile's border). In the NDC of a frame drawn with the whole view's field of view and the drawn size's
 /// aspect, a tile's NDC is <c>ndc' = Scale * ndc - Offset</c>; <see cref="Current"/> is the tile being drawn (<see cref="Whole"/> otherwise).
 /// Everything that builds a projection (<see cref="WorldCamera.Projection"/>) or rebuilds a view ray from <c>right</c>, <c>up</c>, <c>back</c> and
-/// the
-/// tangents of half the field of view goes through here: <see cref="Tan"/> and <see cref="Back"/> keep
+/// the tangents of half the field of view goes through here: <see cref="Tan"/> and <see cref="Back"/> keep
 /// <c>ray = right * ndc.x * tan.x + up * ndc.y * tan.y - back</c> true in the tile's NDC; <see cref="ToTile"/> is the other way.
 /// </summary>
 public readonly record struct ViewWindow(float Scale, float OffsetX, float OffsetY)

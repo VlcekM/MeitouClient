@@ -11,8 +11,8 @@ using Meitou.Simulation.Items;
 namespace Meitou.Simulation.Population;
 
 /// <summary>
-/// The zones the original keeps loaded (docs/game/character-stats.md "Corpses", <b>Verified</b>): the camera's 3 x 3 block and the box round the player's
-/// characters.
+/// The zones the original keeps loaded (docs/game/character-stats.md "Corpses", <b>Verified</b>): the camera's 3 x 3 block and the box round the
+/// player's characters.
 /// </summary>
 public static class ZoneActivation
 {
@@ -44,8 +44,8 @@ public static class ZoneActivation
     public const float ActivationTrim = 170;
 
     /// <summary>
-    /// A zone's test box (<c>FUN_140a09770</c>, <b>Verified</b>): its bounds widened by 10 on every side, then each side facing one of its four neighbours (not
-    /// diagonals) that exists and is not active moved in by <paramref name="trim"/>.
+    /// A zone's test box (<c>FUN_140a09770</c>, <b>Verified</b>): its bounds widened by 10 on every side, then each side facing one of its four
+    /// neighbours (not diagonals) that exists and is not active moved in by <paramref name="trim"/>.
     /// </summary>
     public static (float MinX, float MinZ, float MaxX, float MaxZ) TrimmedBox(ZoneCoordinate zone, Func<ZoneCoordinate, bool> isActive, float trim)
     {
@@ -61,8 +61,8 @@ public static class ZoneActivation
     }
 
     /// <summary>
-    /// Whether a position is inside the loaded box (<c>FUN_140a09770</c> as used by the relevance test <c>FUN_1404febd0</c>, <b>Verified</b>): the zone at the
-    /// position is active and the position lies in that zone's <see cref="TrimmedBox"/> (trim <see cref="ActivationTrim"/>, inclusive).
+    /// Whether a position is inside the loaded box (<c>FUN_140a09770</c> as used by the relevance test <c>FUN_1404febd0</c>, <b>Verified</b>): the
+    /// zone at the position is active and the position lies in that zone's <see cref="TrimmedBox"/> (trim <see cref="ActivationTrim"/>, inclusive).
     /// </summary>
     public static bool InLoadedBox(float x, float z, HashSet<ZoneCoordinate> active)
     {

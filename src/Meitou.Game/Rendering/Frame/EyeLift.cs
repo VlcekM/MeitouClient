@@ -4,8 +4,7 @@ namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
 /// How loading measures distance from a free camera high above the land (engine choice, docs/renderer-streaming.md "Eye height"): the eye's height
-/// over
-/// the ground beyond the game's highest camera (<see cref="Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot"/>) is added as a third side to a
+/// over the ground beyond the game's highest camera (<see cref="Meitou.Data.World.KenshiCamera.MaxHeightAbovePivot"/>) is added as a third side to a
 /// distance across the ground, so the game's own camera heights load as before and a camera flying high loads only what can be seen from there.
 /// Drawing still measures as it did.
 /// </summary>

@@ -11,10 +11,10 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Combat;
 
 /// <summary>
-/// Walks an attacker to its target through the path service (docs/simulation.md "Combat"). The combat system is run with <c>SelfApproach</c> off, so a character
-/// with the <see cref="CharacterTask.Attack"/> task would stand still; this system, placed before the movement system, asks for a path to the target, or to a
-/// point ahead of a fleeing target (a new one when the goal has moved more than <see cref="RepathDistance"/>, at most every <see cref="RepathSeconds"/>) and drops
-/// the path once the target is in reach or a swing is on.
+/// Walks an attacker to its target through the path service (docs/simulation.md "Combat"). The combat system is run with <c>SelfApproach</c> off, so
+/// a character with the <see cref="CharacterTask.Attack"/> task would stand still; this system, placed before the movement system, asks for a path to
+/// the target, or to a point ahead of a fleeing target (a new one when the goal has moved more than <see cref="RepathDistance"/>, at most every
+/// <see cref="RepathSeconds"/>) and drops the path once the target is in reach or a swing is on.
 /// </summary>
 public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 {
@@ -99,19 +99,20 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         if (!cold.CombatRunning) cold.FaceSlot = t;
         n.TaskTime -= dt;
 
-        // Its swings are measured to where a target that is not fighting will be (CombatSystem.StartAttack's aim, AimLeadSeconds ahead), so standing and the run
-        // past are too: stood within reach of the target itself, a runner's aim point would be out of reach and the chaser would stand there idle while the
-        // runner got away.
+        // Its swings are measured to where a target that is not fighting will be (CombatSystem.StartAttack's aim, AimLeadSeconds ahead), so standing
+        // and the run past are too: stood within reach of the target itself, a runner's aim point would be out of reach and the chaser would stand
+        // there idle while the runner got away.
         var aim = tc is { InCombat: false } ? next[t].Position + tv * CombatTuning.AimLeadSeconds : next[t].Position;
         var da = aim - n.Position;
         float aimGap = MathF.Sqrt(da.X * da.X + da.Z * da.Z) - CombatTuning.Footprint(cold) - CombatTuning.Footprint(tc);
 
-        // After a fleeing target it aims ahead of it (CombatTuning.LeadBase), so a faster chaser runs past; the lead follows the target's velocity, so it swings
-        // round when the target turns. Engine rules: the lead and the run past hold only while the chaser is behind the nearer of the lead and aim points; once
-        // level with it it turns on the target and stops with the aim point within reach, so the runner comes into its swing. A path's goal is reached and
-        // stopped at, and a fighter's speed ramps up again slowly, so the goal is put RepathSeconds of the runner's way past the lead (the lead moves that far
-        // before the next path). Bodies are solid here (the original's chaser runs through its runner), so the goal is also put PassWidth beside the runner's
-        // track, on the chaser's side (by slot when dead behind), for the chaser to pass the runner rather than push it along.
+        // After a fleeing target it aims ahead of it (CombatTuning.LeadBase), so a faster chaser runs past; the lead follows the target's velocity,
+        // so it swings round when the target turns. Engine rules: the lead and the run past hold only while the chaser is behind the nearer of the
+        // lead and aim points; once level with it it turns on the target and stops with the aim point within reach, so the runner comes into its
+        // swing. A path's goal is reached and stopped at, and a fighter's speed ramps up again slowly, so the goal is put RepathSeconds of the
+        // runner's way past the lead (the lead moves that far before the next path). Bodies are solid here (the original's chaser runs through its
+        // runner), so the goal is also put PassWidth beside the runner's track, on the chaser's side (by slot when dead behind), for the chaser to
+        // pass the runner rather than push it along.
         var goal = new Vector2(next[t].Position.X, next[t].Position.Z);
         float lead = fleeing && cold.Fighter is not null && cold.Stats is not null && cold.Medical is not null
             ? (1 - combat.AttackRate(world, i, cold)) * CombatTuning.LeadSlope + CombatTuning.LeadBase
@@ -151,9 +152,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
             return;
         }
 
-        // A path that ends short of the target is no path to it (the walkability answers an unreachable goal with the way to the reachable point nearest it, an
-        // engine choice): the way the original's chase reports it, the target goes into the path failures and the fighter stands to be given another
-        // (FUN_14060d6a0 -> FUN_140796ed0, docs/game/combat.md "Target score").
+        // A path that ends short of the target is no path to it (the walkability answers an unreachable goal with the way to the reachable point
+        // nearest it, an engine choice): the way the original's chase reports it, the target goes into the path failures and the fighter stands to be
+        // given another (FUN_14060d6a0 -> FUN_140796ed0, docs/game/combat.md "Target score").
         if (!behind && (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) == 0 && (n.Flags & (ushort)MoveFlags.HasPath) != 0
             && cold.Path.Length > 0 && cold.PursuitGoal.X == n.Goal.X && cold.PursuitGoal.Z == n.Goal.Y && EndsShort(cold.Path[^1], cold.PursuitGoal, cold, tc, endReach))
         {
@@ -185,8 +186,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// The point past a runner that a chaser behind it aims at: beside the runner's track on the chaser's side (by slot when dead behind), RepathSeconds of the
-    /// runner's way past the lead. <paramref name="goal"/> stays when that point is off the navmesh (a wall, a cliff): the chaser then goes for the target itself.
+    /// The point past a runner that a chaser behind it aims at: beside the runner's track on the chaser's side (by slot when dead behind),
+    /// RepathSeconds of the runner's way past the lead. <paramref name="goal"/> stays when that point is off the navmesh (a wall, a cliff): the
+    /// chaser then goes for the target itself.
     /// </summary>
     static Vector2 PassPoint(World world, int i, CharacterCold cold, CharacterCold? tc, CharacterHot target, Vector3 d, Vector3 tv, float lead, Vector2 goal)
     {
@@ -201,10 +203,11 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// Hands fighter <paramref name="i"/> to the fight steering (<see cref="CombatSteering"/>) when it is in its footwork, melee, not holding and not down, and the
-    /// line to its target is clear (<see cref="CombatSystem.SteersAt"/>, checked every <see cref="RepathSeconds"/>, every tick on a path chase, which a blocked
-    /// line starts for <see cref="PathChaseSeconds"/> at least): its paths are dropped and its fight state sets the band (<c>combatMovementOffensive</c>'s
-    /// callers, docs/game/combat.md "Fight steering"). A stumble holds it still (engine choice: the hit reaction carries it). False: it walks paths.
+    /// Hands fighter <paramref name="i"/> to the fight steering (<see cref="CombatSteering"/>) when it is in its footwork, melee, not holding and not
+    /// down, and the line to its target is clear (<see cref="CombatSystem.SteersAt"/>, checked every <see cref="RepathSeconds"/>, every tick on a
+    /// path chase, which a blocked line starts for <see cref="PathChaseSeconds"/> at least): its paths are dropped and its fight state sets the band
+    /// (<c>combatMovementOffensive</c>'s callers, docs/game/combat.md "Fight steering"). A stumble holds it still (engine choice: the hit reaction
+    /// carries it). False: it walks paths.
     /// </summary>
     bool Steer(World world, int i, ref CharacterHot n, CharacterCold cold, in CombatSlot st, int t, bool holding)
     {
@@ -213,13 +216,14 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
         steer.Active = false;
         steer.Face = LookAt(world, in st, t, steer.Face);
 
-        // A swing has no steering: the movement is animation driven (the attack start and every swing tick set the movement's lock, FUN_14065e240; CharMovement
-        // update FUN_14065ffa0 then moves it by the clip's root motion only), so it stands in its place (MovementSystem turns it, CombatSystem.SwingAim).
+        // A swing has no steering: the movement is animation driven (the attack start and every swing tick set the movement's lock, FUN_14065e240;
+        // CharMovement update FUN_14065ffa0 then moves it by the clip's root motion only), so it stands in its place (MovementSystem turns it,
+        // CombatSystem.SwingAim).
         if (cold.CombatRunning || st.Ranged || holding || st.Down || st.AttackTech >= 0) return false;
 
-        // A fighter on a path chase tests the line every tick (CombatClassAI update FUN_14060d6a0, in the chase states); one in its footwork only when it decides
-        // again, about every RepathSeconds. A blocked line met at a new pick or in the footwork starts a chase of at least PathChaseSeconds (FUN_14060c8b0, timer
-        // +0x14c), a holder's not.
+        // A fighter on a path chase tests the line every tick (CombatClassAI update FUN_14060d6a0, in the chase states); one in its footwork only
+        // when it decides again, about every RepathSeconds. A blocked line met at a new pick or in the footwork starts a chase of at least
+        // PathChaseSeconds (FUN_14060c8b0, timer +0x14c), a holder's not.
         bool chasing = steer.ChaseTarget == t;
         int band = BandTarget(world, in st, t);
         if (chasing || world.Tick >= steer.LineTick || steer.Target != band)
@@ -285,8 +289,8 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// Whom the band is kept to (<c>FUN_14060a190</c>): a defender's is the swing its defence follows, unless it has a focused target (the player's pick,
-    /// CombatClassAI +0x2c8); in every other state the fight target.
+    /// Whom the band is kept to (<c>FUN_14060a190</c>): a defender's is the swing its defence follows, unless it has a focused target (the player's
+    /// pick, CombatClassAI +0x2c8); in every other state the fight target.
     /// </summary>
     static int BandTarget(World world, in CombatSlot st, int t)
     {
@@ -297,9 +301,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// Whether a path ending at <paramref name="end"/> leaves the fighter farther from <paramref name="goal"/> than a swing reaches (<paramref name="reach"/>, the 3D
-    /// gap of <see cref="CombatTuning.Gap"/>, as the attack start measures it): the walkability answers an unreachable goal with the way to the reachable point
-    /// nearest it, so such a path is no path to the target (engine reading).
+    /// Whether a path ending at <paramref name="end"/> leaves the fighter farther from <paramref name="goal"/> than a swing reaches
+    /// (<paramref name="reach"/>, the 3D gap of <see cref="CombatTuning.Gap"/>, as the attack start measures it): the walkability answers an
+    /// unreachable goal with the way to the reachable point nearest it, so such a path is no path to the target (engine reading).
     /// </summary>
     internal static bool EndsShort(Vector3 end, Vector3 goal, CharacterCold me, CharacterCold? target, float reach) =>
         CombatTuning.Gap(end, goal, me, target) > reach;
@@ -309,8 +313,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     #region Path failures
 
     /// <summary>
-    /// Lapses the path failures and, after a path request that found no way, adds <paramref name="target"/> (<see cref="CharacterCold.Ignored"/>). A lapsed one is
-    /// armed for another <see cref="PathFailureSeconds"/> while there is still no path to its target, else dropped (<c>AITaskSytem::update4Frame</c>,
+    /// Lapses the path failures and, after a path request that found no way, adds <paramref name="target"/> (<see cref="CharacterCold.Ignored"/>). A
+    /// lapsed one is armed for another <see cref="PathFailureSeconds"/> while there is still no path to its target, else dropped
+    /// (<c>AITaskSytem::update4Frame</c>,
     /// <b>Observed</b>; at most one dropped per call).
     /// </summary>
     internal static void NotePathFailure(World world, int i, CharacterCold cold, CharacterId target, float endReach)
@@ -347,8 +352,9 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
     }
 
     /// <summary>
-    /// Whether fighter <paramref name="i"/> has a path to <paramref name="target"/> (<c>Character::pathExists</c>): a gone target counts as one (the entry is
-    /// dropped). Engine reading: asked of the walkability on the spot, with the fighter's footprint and water costs, as its own path requests are.
+    /// Whether fighter <paramref name="i"/> has a path to <paramref name="target"/> (<c>Character::pathExists</c>): a gone target counts as one (the
+    /// entry is dropped). Engine reading: asked of the walkability on the spot, with the fighter's footprint and water costs, as its own path
+    /// requests are.
     /// </summary>
     static bool PathExists(World world, int i, CharacterCold cold, CharacterId target, float endReach)
     {
@@ -387,19 +393,20 @@ public sealed class PursuitSystem(CombatSystem combat) : ITickSystem
 }
 
 /// <summary>
-/// The answer to being attacked: at once when an attacker takes it as its target and that alerts it (<see cref="CombatSystem.Alerts"/>: not through a wall or from
-/// another floor for the player's side, until a blow lands; the alert ends its sneaking, puts the attacker in its senses as a threat
-/// (<see cref="AggroSystem.Force"/>) and, with the target's fight off, asks it to be decided again unless it gets up or is player-side and moving). An NPC with a
-/// mind defends itself by its 32 Self preservation in the AI's chooser (row 13 on its own attacker, <see cref="Ai.AiSystem.SelfDefencePick"/>), which the alert
-/// asks to think at the next tick. One without a mind (no squad: scripted and test worlds) gets the engine's answer here: at the alert and again every
+/// The answer to being attacked: at once when an attacker takes it as its target and that alerts it (<see cref="CombatSystem.Alerts"/>: not through a
+/// wall or from another floor for the player's side, until a blow lands; the alert ends its sneaking, puts the attacker in its senses as a threat
+/// (<see cref="AggroSystem.Force"/>) and, with the target's fight off, asks it to be decided again unless it gets up or is player-side and moving).
+/// An NPC with a mind defends itself by its 32 Self preservation in the AI's chooser (row 13 on its own attacker,
+/// <see cref="Ai.AiSystem.SelfDefencePick"/>), which the alert asks to think at the next tick. One without a mind (no squad: scripted and test
+/// worlds) gets the engine's answer here: at the alert and again every
 /// <see cref="CheckEveryTicks"/> ticks, awake, armed with a <see cref="Fighter"/>, not crawling and not fighting already, it fights its attacker at any distance
-/// (<b>engine choice</b>). Nobody else joins here: squad mates and allies come by their own protect goals in the chooser (AiSystem.Fights.cs), which the alert asks
-/// to think (<see cref="AskProtectors"/>). A player character's own defence is the decision step's 32 Self preservation (<see cref="DecisionSystem"/>; this system
-/// offers the attacker, <see cref="SelfFoe"/>), except a bodyguard's against an attacker within 40 (row 45's <c>!39</c>); followers and bodyguards fight their
-/// target's attacker within 40 of it (rows 31 / 45 / 289's <c>!16</c>, <see cref="Guards"/>). Passive keeps a character from helping others, not from defending
-/// itself. The orders go into the world's deferred list for the next tick (<see cref="World.Defer"/>) and are marked <see cref="AttackOrder.Defensive"/>. A player
-/// character's help for others (squad mates, with <see cref="SquadAi.Help"/> allied factions) is the decision step's 15 Protect allies
-/// (<see cref="JoinFight"/>), not this pass.
+/// (<b>engine choice</b>). Nobody else joins here: squad mates and allies come by their own protect goals in the chooser (AiSystem.Fights.cs), which
+/// the alert asks to think (<see cref="AskProtectors"/>). A player character's own defence is the decision step's 32 Self preservation
+/// (<see cref="DecisionSystem"/>; this system offers the attacker, <see cref="SelfFoe"/>), except a bodyguard's against an attacker within 40 (row
+/// 45's <c>!39</c>); followers and bodyguards fight their target's attacker within 40 of it (rows 31 / 45 / 289's <c>!16</c>, <see cref="Guards"/>).
+/// Passive keeps a character from helping others, not from defending itself. The orders go into the world's deferred list for the next tick
+/// (<see cref="World.Defer"/>) and are marked <see cref="AttackOrder.Defensive"/>. A player character's help for others (squad mates, with
+/// <see cref="SquadAi.Help"/> allied factions) is the decision step's 15 Protect allies (<see cref="JoinFight"/>), not this pass.
 /// </summary>
 public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecisionOwner
 {
@@ -409,8 +416,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     public const int CheckEveryTicks = 15;
 
     /// <summary>
-    /// A player's character defends itself only against an attacker within this (Self preservation's desire is 0 beyond squared 33000, docs/game/combat.md
-    /// "Fight lifecycle and orders").
+    /// A player's character defends itself only against an attacker within this (Self preservation's desire is 0 beyond squared 33000,
+    /// docs/game/combat.md "Fight lifecycle and orders").
     /// </summary>
     public static readonly float SelfDefenceReach = MathF.Sqrt(33000);
 
@@ -456,13 +463,13 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     #region Protect allies
 
     /// <summary>
-    /// 15 Protect allies of a player character (the player faction's <c>AI Goals</c>: priority 3, weight 1, so it comes after the orders and the urgent jobs and
-    /// before every job; the chooser's step 4, docs/game/ai-tasks.md "Precedence"). Desire <c>FUN_140599b90</c>, <b>Verified</b>: 0 while Passive or sneaking
-    /// outside a fight and for a slave holding job 187; else the finder's best ally, x0.5 while carrying. The finder <c>FUN_14099ca10</c>
-    /// (<see cref="BestAlly"/>) values the player's sensed allies by their fight threat, weighted by their distance; the plan is 13 Attacking attackers of
-    /// (<c>AI::findAttackerOf</c>, <see cref="CombatSystem.BestAttackerOf"/>), so the goal needs an attacker within <see cref="ProtectReach"/> of the ally. Listed
-    /// before Self preservation (a tie goes to the later goal). It runs while a defence (row 13) is its fight; with no ally left the desire stays at Self
-    /// preservation's 0.7 (engine: the fight task ends by itself).
+    /// 15 Protect allies of a player character (the player faction's <c>AI Goals</c>: priority 3, weight 1, so it comes after the orders and the
+    /// urgent jobs and before every job; the chooser's step 4, docs/game/ai-tasks.md "Precedence"). Desire <c>FUN_140599b90</c>, <b>Verified</b>: 0
+    /// while Passive or sneaking outside a fight and for a slave holding job 187; else the finder's best ally, x0.5 while carrying. The finder
+    /// <c>FUN_14099ca10</c> (<see cref="BestAlly"/>) values the player's sensed allies by their fight threat, weighted by their distance; the plan is
+    /// 13 Attacking attackers of (<c>AI::findAttackerOf</c>, <see cref="CombatSystem.BestAttackerOf"/>), so the goal needs an attacker within
+    /// <see cref="ProtectReach"/> of the ally. Listed before Self preservation (a tie goes to the later goal). It runs while a defence (row 13) is
+    /// its fight; with no ally left the desire stays at Self preservation's 0.7 (engine: the fight task ends by itself).
     /// </summary>
     sealed class JoinFight(RetaliationSystem owner) : IDecisionSource
     {
@@ -507,13 +514,14 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// The finder of 15 / 288 for a player character (<c>FUN_14099ca10</c>, <b>Verified</b>): over the sensed entries tagged ALLY (not down or imprisoned) that were
-    /// seen or heard at the last look, each ally is worth its fight threat (<c>FUN_14099a190</c>, <see cref="CombatSystem.FightThreat"/>: above 0 while it is
-    /// attacked, threatened or fighting) x <c>clamp((1000 - d^2) / 990, 0.1, 1)</c> by the squared distance d^2 between the two (<c>FUN_1409b2380</c>: 1 within
-    /// 3.2 units, 0.1 from 30); an ally of another faction counts only with <see cref="SquadAi.Help"/> and then the value is squared; a slave or escaped slave
-    /// only where the looker may help one (<see cref="SlaveHelpAllowed(World, CharacterCold, Vector3)"/>, tested once, for the first slave met). The best, the
-    /// first in slot order on a tie, capped at 1.2; x0.5 while the looker carries someone (<c>FUN_140599b90</c>). 0 when there is none; <paramref name="ally"/> is
-    /// that one's slot (-1 for none).
+    /// The finder of 15 / 288 for a player character (<c>FUN_14099ca10</c>, <b>Verified</b>): over the sensed entries tagged ALLY (not down or
+    /// imprisoned) that were seen or heard at the last look, each ally is worth its fight threat (<c>FUN_14099a190</c>,
+    /// <see cref="CombatSystem.FightThreat"/>: above 0 while it is attacked, threatened or fighting) x <c>clamp((1000 - d^2) / 990, 0.1, 1)</c> by
+    /// the squared distance d^2 between the two (<c>FUN_1409b2380</c>: 1 within 3.2 units, 0.1 from 30); an ally of another faction counts only with
+    /// <see cref="SquadAi.Help"/> and then the value is squared; a slave or escaped slave only where the looker may help one
+    /// (<see cref="SlaveHelpAllowed(World, CharacterCold, Vector3)"/>, tested once, for the first slave met). The best, the first in slot order on a
+    /// tie, capped at 1.2; x0.5 while the looker carries someone (<c>FUN_140599b90</c>). 0 when there is none; <paramref name="ally"/> is that one's
+    /// slot (-1 for none).
     /// </summary>
     float BestAlly(World world, int slot, out int ally, out float first)
     {
@@ -536,8 +544,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// The score of 15 for a player character: the desire (the finder's first ally above 0, uncapped, x0.5 while carrying; <c>FUN_140599b90</c>) times the
-    /// finder's factor (the best, capped).
+    /// The score of 15 for a player character: the desire (the finder's first ally above 0, uncapped, x0.5 while carrying; <c>FUN_140599b90</c>)
+    /// times the finder's factor (the best, capped).
     /// </summary>
     float ProtectDesire(World world, int slot)
     {
@@ -546,8 +554,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// The finder <c>FUN_14099ca10</c> shared by both kinds of looker (<b>Verified</b>): over the sensed entries tagged ALLY and not <paramref name="exclude"/>,
-    /// seen or heard at the last look, alive, a slave or escaped slave only where <paramref name="slaveOk"/> says (asked once, for the first), each worth
+    /// The finder <c>FUN_14099ca10</c> shared by both kinds of looker (<b>Verified</b>): over the sensed entries tagged ALLY and not
+    /// <paramref name="exclude"/>, seen or heard at the last look, alive, a slave or escaped slave only where <paramref name="slaveOk"/> says (asked
+    /// once, for the first), each worth
     /// <paramref name="weigh"/> of its fight threat (0 or less skips it). The best (the first on a tie), and the first above 0, which the desire
     /// <c>FUN_140599b90</c> takes (the finder called to stop at it, uncapped).
     /// </summary>
@@ -590,8 +599,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// 13 Attacking attackers of for 15 (<c>AI::findAttackerOf</c>, <see cref="CombatSystem.BestAttackerOf"/>): the attacker of <see cref="BestAlly"/>'s ally the
-    /// player character <paramref name="slot"/> fights, -1 for none. A character on Hold takes it only where its post test passes (<see cref="Orders.HoldPost"/>).
+    /// 13 Attacking attackers of for 15 (<c>AI::findAttackerOf</c>, <see cref="CombatSystem.BestAttackerOf"/>): the attacker of
+    /// <see cref="BestAlly"/>'s ally the player character <paramref name="slot"/> fights, -1 for none. A character on Hold takes it only where its
+    /// post test passes (<see cref="Orders.HoldPost"/>).
     /// </summary>
     int Plan(World world, int slot, out int ally)
     {
@@ -615,10 +625,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     #region Self defence
 
     /// <summary>
-    /// The attacker player character <paramref name="slot"/> defends itself against this tick, -1 for none (a pure read): the first, in slot order, that took it as
-    /// its target and alerted it, still awake, within <see cref="SelfDefenceReach"/> (Self preservation's desire is 0 beyond, docs/game/combat.md
-    /// "Self-defence"), not shooting at a gunner (146 leaves its turret only for a melee attacker) and, on Hold, passing its post test
-    /// (<see cref="Orders.HoldPost"/>).
+    /// The attacker player character <paramref name="slot"/> defends itself against this tick, -1 for none (a pure read): the first, in slot order,
+    /// that took it as its target and alerted it, still awake, within <see cref="SelfDefenceReach"/> (Self preservation's desire is 0 beyond,
+    /// docs/game/combat.md "Self-defence"), not shooting at a gunner (146 leaves its turret only for a melee attacker) and, on Hold, passing its post
+    /// test (<see cref="Orders.HoldPost"/>).
     /// </summary>
     public int SelfFoe(World world, int slot)
     {
@@ -648,9 +658,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// 32 Self preservation for a player character (priority 3, weight 1; desire <c>FUN_140599d20</c>: 1 with the attacker within <see cref="ImmediateReach"/>,
-    /// else 0.7 within <see cref="SelfDefenceReach"/>): it fights its attacker (<see cref="SelfFoe"/>) as row 13, a defence. It runs while a defence (row 13) is
-    /// its fight.
+    /// 32 Self preservation for a player character (priority 3, weight 1; desire <c>FUN_140599d20</c>: 1 with the attacker within
+    /// <see cref="ImmediateReach"/>, else 0.7 within <see cref="SelfDefenceReach"/>): it fights its attacker (<see cref="SelfFoe"/>) as row 13, a
+    /// defence. It runs while a defence (row 13) is its fight.
     /// </summary>
     sealed class SelfPreservation(RetaliationSystem owner) : IDecisionSource
     {
@@ -696,9 +706,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     #region Alerts
 
     /// <summary>
-    /// The answer to being attacked (<c>AI::underMeleeAttack</c>, <see cref="Alert"/>): the first sweep's attacks that alert, then the periodic look at every
-    /// attacker whose target was alerted, the defenders it has in the attacked character's squad and friends (<see cref="Guards"/>, the attacker's own
-    /// defence in <see cref="SelfDefends"/>), each joining the fight of the attacker the finder scores best for it.
+    /// The answer to being attacked (<c>AI::underMeleeAttack</c>, <see cref="Alert"/>): the first sweep's attacks that alert, then the periodic look
+    /// at every attacker whose target was alerted, the defenders it has in the attacked character's squad and friends (<see cref="Guards"/>, the
+    /// attacker's own defence in <see cref="SelfDefends"/>), each joining the fight of the attacker the finder scores best for it.
     /// </summary>
     public void SlowWorld(World world)
     {
@@ -773,8 +783,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// The defenders of one attacker's alerted target join its fight this pass: the target's own defence, its bodyguards and the Hold order's post test, then one
-    /// attack order per attacker the finder scores best for each joiner (<c>FUN_14099c3b0</c>, grouped in the order first chosen).
+    /// The defenders of one attacker's alerted target join its fight this pass: the target's own defence, its bodyguards and the Hold order's post
+    /// test, then one attack order per attacker the finder scores best for each joiner (<c>FUN_14099c3b0</c>, grouped in the order first chosen).
     /// </summary>
     void JoinAttack(World world, CharacterTable table, int a, bool periodic, HashSet<int> taken)
     {
@@ -806,8 +816,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             taken.Add(t);
         }
 
-        // Squad mates and allies come only by their own goals (143, 15, 288 in the AI's chooser, AiSystem.Fights.cs; a player character's 15, JoinFight). Bodyguards
-        // of the attacked character come too (Bodyguard, order 45).
+        // Squad mates and allies come only by their own goals (143, 15, 288 in the AI's chooser, AiSystem.Fights.cs; a player character's 15,
+        // JoinFight). Bodyguards of the attacked character come too (Bodyguard, order 45).
         Guards(world, table, t, a, defenders, taken, _guards);
 
         // The Hold order takes on only an attacker its post test accepts (Orders.HoldPost).
@@ -847,9 +857,10 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// Whether attacker <paramref name="a"/> alerts its target <paramref name="t"/> this pass: a melee fighter on taking it (<see cref="CombatSystem.Alerts"/>); a
-    /// shooter only once it has fired at it since (its target setter alerts nobody; the shot calls the victim's shot handler, docs/game/combat.md "Being
-    /// targeted"). The state read lags a tick, so a shot of the tick before the target was seen counts.
+    /// Whether attacker <paramref name="a"/> alerts its target <paramref name="t"/> this pass: a melee fighter on taking it
+    /// (<see cref="CombatSystem.Alerts"/>); a shooter only once it has fired at it since (its target setter alerts nobody; the shot calls the
+    /// victim's shot handler, docs/game/combat.md "Being targeted"). The state read lags a tick, so a shot of the tick before the target was seen
+    /// counts.
     /// </summary>
     bool AlertsNow(World world, int a, int t, in CombatSlot st)
     {
@@ -859,9 +870,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// The target's side of an alert (<c>AI::underMeleeAttack</c> for a melee attacker, the shot handler <c>FUN_140999d50</c> for a shooter): it senses the attacker
-    /// (seen), stops sneaking, its squad tags the attacker TEMP_ENEMY, and with its fight off it replans. Only a melee attacker makes one staying low stand and
-    /// rolls the knock-down of one getting up.
+    /// The target's side of an alert (<c>AI::underMeleeAttack</c> for a melee attacker, the shot handler <c>FUN_140999d50</c> for a shooter): it
+    /// senses the attacker (seen), stops sneaking, its squad tags the attacker TEMP_ENEMY, and with its fight off it replans. Only a melee attacker
+    /// makes one staying low stand and rolls the knock-down of one getting up.
     /// </summary>
     void Alert(World world, int a, int t, bool melee)
     {
@@ -882,8 +893,8 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
             combat.UnderAttackGettingUp(world, t, tc, (ulong)(uint)a);
         }
 
-        // With its fight off it replans, unless it is getting up or is player-side and moving (docs/game/combat.md "Being targeted"): an NPC's AI thinks at the
-        // next tick, where its Self preservation takes the attacker up.
+        // With its fight off it replans, unless it is getting up or is player-side and moving (docs/game/combat.md "Being targeted"): an NPC's AI
+        // thinks at the next tick, where its Self preservation takes the attacker up.
         if (!tc.InCombat && !gettingUp && !(tc.IsPlayer && world.Characters.Next[t].Velocity.LengthSquared() > 1))
         {
             DecisionSystem.Request(tc);
@@ -894,9 +905,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     /// <summary>
     /// The characters whose follow row (31 Staying close, 45 Bodyguard, 289) runs on <paramref name="slot"/> defend it against <paramref name="attacker"/> within
     /// <see cref="ImmediateReach"/> of it, in slot order, never against a character of their own faction: the rows need state 16 (no threat within 40 of the
-    /// followed character, <c>FUN_14059de10</c> on its <c>+0x2b0</c>), which 13 "Attacking attackers of" provides (docs/game/ai-tasks.md "Precedence"); the fight
-    /// is a step of the row, which the decision step follows again after it (<see cref="MovementSystem.FollowAgain"/>). A bodyguard's own attacker within 40
-    /// (45's <c>!39</c>) is <see cref="SelfDefends"/>.
+    /// followed character, <c>FUN_14059de10</c> on its <c>+0x2b0</c>), which 13 "Attacking attackers of" provides (docs/game/ai-tasks.md
+    /// "Precedence"); the fight is a step of the row, which the decision step follows again after it (<see cref="MovementSystem.FollowAgain"/>). A
+    /// bodyguard's own attacker within 40 (45's <c>!39</c>) is <see cref="SelfDefends"/>.
     /// </summary>
     static void Guards(World world, CharacterTable table, int slot, int attacker, List<CharacterId> defenders, HashSet<int> taken, List<int> guards)
     {
@@ -918,9 +929,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// An alert asks the squad mates of the attacked character and of the attacker that have a mind to think at the next tick (<see cref="Ai.AiMind.Replan"/>; a
-    /// replan trigger, engine stand-in for the original's), whatever their goals: their protect goals then decide in the chooser (AiSystem.Fights.cs). Others that
-    /// sense the fight (15, 288) weigh it at their next think. Not those fighting already.
+    /// An alert asks the squad mates of the attacked character and of the attacker that have a mind to think at the next tick
+    /// (<see cref="Ai.AiMind.Replan"/>; a replan trigger, engine stand-in for the original's), whatever their goals: their protect goals then decide
+    /// in the chooser (AiSystem.Fights.cs). Others that sense the fight (15, 288) weigh it at their next think. Not those fighting already.
     /// </summary>
     static void AskProtectors(World world, CharacterTable table, int attacker, int attacked)
     {
@@ -939,11 +950,12 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     }
 
     /// <summary>
-    /// Whether the attacked character itself answers here: an NPC without a mind at any distance (<b>engine choice</b>: the minimal answer of a character no chooser
-    /// runs); Passive does not stop it. An NPC with a mind defends itself by its Self preservation in the AI's chooser (<see cref="Ai.AiSystem.SelfDefencePick"/>).
-    /// A player character's own defence is the decision step's Self preservation (<see cref="SelfFoe"/>, docs/game/ai-tasks.md "Precedence": its orders outrank it,
-    /// it outranks the jobs), but a bodyguard following (row 45 running) answers here as a step of its row against an attacker within <see cref="ImmediateReach"/>
-    /// (45 needs <c>!39</c>, its own <c>+0x2b0</c>; farther ones are Self preservation's, which a Bodyguard order outranks and a Bodyguard job does not).
+    /// Whether the attacked character itself answers here: an NPC without a mind at any distance (<b>engine choice</b>: the minimal answer of a
+    /// character no chooser runs); Passive does not stop it. An NPC with a mind defends itself by its Self preservation in the AI's chooser
+    /// (<see cref="Ai.AiSystem.SelfDefencePick"/>). A player character's own defence is the decision step's Self preservation (<see cref="SelfFoe"/>,
+    /// docs/game/ai-tasks.md "Precedence": its orders outrank it, it outranks the jobs), but a bodyguard following (row 45 running) answers here as a
+    /// step of its row against an attacker within <see cref="ImmediateReach"/> (45 needs <c>!39</c>, its own <c>+0x2b0</c>; farther ones are Self
+    /// preservation's, which a Bodyguard order outranks and a Bodyguard job does not).
     /// </summary>
     static bool SelfDefends(CharacterTable table, int slot, HashSet<int> taken, Vector3 attacker)
     {
@@ -966,9 +978,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
         cold = table.Cold(slot)!;
         if (taken.Contains(slot) || task == (byte)CharacterTask.Attack) return false;
 
-        // a carried mate does not answer; a carrier does (no attack goal of the original's tests carrying, docs/game/carry-loot.md "A carrier in a fight"). A
-        // crippled NPC (a leg down, crawling) does not either (with a mind its Self preservation runs, FUN_1405a34e0 against FUN_1405a4260, Verified; without one
-        // it neither fights nor runs); a player character still fights.
+        // a carried mate does not answer; a carrier does (no attack goal of the original's tests carrying, docs/game/carry-loot.md "A carrier in a
+        // fight"). A crippled NPC (a leg down, crawling) does not either (with a mind its Self preservation runs, FUN_1405a34e0 against
+        // FUN_1405a4260, Verified; without one it neither fights nor runs); a player character still fights.
         return cold is { Fighter.CanAttack: true, Fleeing: false, IsImprisoned: false, Medical.Incapacitated: false, CarriedBy.IsNone: true }
             && (cold.IsPlayer || cold.Medical is not { Crawling: true } && !Ai.SelfPreservation.Flees(cold, 1));
     }
@@ -976,9 +988,9 @@ public sealed class RetaliationSystem(CombatSystem combat) : ITickSystem, IDecis
     #endregion
 
     /// <summary>
-    /// The towns, for the slave-defender gate: whether a helper may come to the defence of a slave or escaped slave (<c>FUN_140997e80</c> in the protect-allies
-    /// finder, <b>Verified</b>): its faction is a bandit one, or it stands in no town, or that town's owner books no bounties (a lawful town's people leave slaves
-    /// to their fate).
+    /// The towns, for the slave-defender gate: whether a helper may come to the defence of a slave or escaped slave (<c>FUN_140997e80</c> in the
+    /// protect-allies finder, <b>Verified</b>): its faction is a bandit one, or it stands in no town, or that town's owner books no bounties (a
+    /// lawful town's people leave slaves to their fate).
     /// </summary>
     bool SlaveHelpAllowed(World world, CharacterCold helper, Vector3 at) => SlaveHelpAllowed(world, Towns, combat.Relations, helper, at);
 

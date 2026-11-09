@@ -94,12 +94,10 @@ public sealed class Model
 
     /// <param name="boneCount">Bones in the skeleton the mesh will be skinned with, or null to drop skinning.</param>
     /// <param name="gameBinormals">Characters: the tangent's w makes cross(normal, tangent) × w the game's binormal, the mesh's BINORMAL × the
-    /// stored w (1 when the
-    /// tangent has three components; character.hlsl, skin.hlsl's skinning; docs/characters.md "Shading, poses and LOD"). Otherwise the stored w is
-    /// kept (objects).</param>
+    /// stored w (1 when the tangent has three components; character.hlsl, skin.hlsl's skinning; docs/characters.md "Shading, poses and LOD").
+    /// Otherwise the stored w is kept (objects).</param>
     /// <param name="tangentSign">Inventory icons (rtticons.hlsl): the tangent's own w, 1 when it has three components, the stored binormals ignored
-    /// (the shader takes
-    /// cross(tangent, normal) x w).</param>
+    /// (the shader takes cross(tangent, normal) x w).</param>
     public static Model Build(OgreMesh mesh, int? boneCount, bool gameBinormals = false, bool tangentSign = false)
     {
         var model = new Model();
@@ -221,8 +219,7 @@ public sealed class Model
             if (dropped > 0)
                 warnings.Add($"submesh {s}: {dropped} bone assignments name bones past the skeleton's {boneCount} and were dropped");
             // A vertex without assignments follows blend index 0 fully (Ogre's Mesh::compileBoneAssignments): the lowest bone the vertex data's
-            // assignments use
-            // (docs/formats/ogre-mesh.md "Bone assignments"), so a hair's unweighted cards move with its head.
+            // assignments use (docs/formats/ogre-mesh.md "Bone assignments"), so a hair's unweighted cards move with its head.
             int lowest = assignments
                 .Where(a => a.BoneIndex < boneCount!.Value && a.BoneIndex < 256)
                 .Select(a => (int)a.BoneIndex)

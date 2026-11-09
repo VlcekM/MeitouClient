@@ -7,8 +7,8 @@ namespace Meitou.Game.Ui;
 
 /// <summary>
 /// Conversations (docs/game/dialogue.md "UI", docs/simulation.md "Dialogue"), the same in both UI modes: while the world publishes a conversation the
-/// original's conversation panel (<c>Kenshi_ConversationPanel</c>) is open, modal, so the game is paused as the original pauses it. The NPC panel shows the
-/// speaker's name and line, the player panel the talker's name, the money and the choices (colours <c>DialogueTextOption</c> #b3b3b3,
+/// original's conversation panel (<c>Kenshi_ConversationPanel</c>) is open, modal, so the game is paused as the original pauses it. The NPC panel
+/// shows the speaker's name and line, the player panel the talker's name, the money and the choices (colours <c>DialogueTextOption</c> #b3b3b3,
 /// <c>DialogueTextOptionHover</c> #00ff00 from <c>kenshi_colours.xml</c>); a click on a choice says it, Esc or closing leaves the conversation. The portraits
 /// are the speaker's and the player character's, drawn into the last two cells of the portrait atlas.
 /// </summary>

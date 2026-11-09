@@ -3,8 +3,8 @@ namespace Meitou.Simulation.Saving;
 /// <summary>
 /// Where the game host keeps its quicksave (docs/formats/save.md "Autosave and quicksave"). The original saves a quicksave to
 /// <c>%LOCALAPPDATA%\kenshi\save\quicksave</c>; Meitou's own is <c>%LOCALAPPDATA%\Meitou\save\quicksave</c> (an engine choice, next to the other Meitou
-/// caches), so a Meitou quicksave never replaces the user's save of the original game and the original never meets a save with Meitou's differences. The
-/// slot name is the original's.
+/// caches), so a Meitou quicksave never replaces the user's save of the original game and the original never meets a save with Meitou's differences.
+/// The slot name is the original's.
 /// </summary>
 public static class QuickSave
 {

@@ -22,8 +22,8 @@ public interface IAppearanceSource
     CharacterAppearance? Create(string recordId, string? factionId, int seed);
 
     /// <summary>
-    /// As <see cref="Create(string, string?, int)"/> for a member of the SQUAD_TEMPLATE <paramref name="templateId"/>, whose <c>race override</c> wins over the
-    /// CHARACTER's races.
+    /// As <see cref="Create(string, string?, int)"/> for a member of the SQUAD_TEMPLATE <paramref name="templateId"/>, whose <c>race override</c>
+    /// wins over the CHARACTER's races.
     /// </summary>
     CharacterAppearance? Create(string recordId, string? factionId, int seed, string? templateId) => Create(recordId, factionId, seed);
 
@@ -38,8 +38,8 @@ public interface IAppearanceSource
     string? RandomName(bool female, ulong roll) => null;
 
     /// <summary>
-    /// A proposed CHARACTER_APPEARANCE made valid for <paramref name="race"/> (<see cref="CharacterDraft.Sanitize"/>, which needs the install's editor limits).
-    /// Null: not checked.
+    /// A proposed CHARACTER_APPEARANCE made valid for <paramref name="race"/> (<see cref="CharacterDraft.Sanitize"/>, which needs the install's
+    /// editor limits). Null: not checked.
     /// </summary>
     FcsRecord? Sanitize(FcsRecord proposed, GameRecord race) => null;
 }
@@ -118,8 +118,9 @@ public sealed class GeneratedAppearances(GameDatabase db, string installRoot) : 
 public sealed record TownSite(int Index, TownData Record, Vector3 Position, ZoneCoordinate Zone)
 {
     /// <summary>
-    /// The TOWN the town is now, as the original's <c>Town::getGameData</c> (its replacement, else its own record): <see cref="Replacement"/> with the placement's
-    /// id and names (engine choice: the override records' names are editor labels) and, when it names no faction, the faction the town had; else
+    /// The TOWN the town is now, as the original's <c>Town::getGameData</c> (its replacement, else its own record): <see cref="Replacement"/> with
+    /// the placement's id and names (engine choice: the override records' names are editor labels) and, when it names no faction, the faction the
+    /// town had; else
     /// <see cref="Record"/>.
     /// </summary>
     public TownData Town { get; private set; } = Record;
@@ -182,8 +183,8 @@ public sealed record TownSite(int Index, TownData Record, Vector3 Position, Zone
     }
 
     /// <summary>
-    /// The zones the town's level state lists, as the original files them at load, which discovery counts as well as <see cref="Zone"/> (docs/game/ui-screens.md
-    /// "Map"); empty for a Nest and when the host gave none.
+    /// The zones the town's level state lists, as the original files them at load, which discovery counts as well as <see cref="Zone"/>
+    /// (docs/game/ui-screens.md "Map"); empty for a Nest and when the host gave none.
     /// </summary>
     public IReadOnlyList<ZoneCoordinate> Coverage { get; init; } = [];
 }
@@ -203,8 +204,8 @@ public sealed class PopulationData
     public int BuildingsRevision => Volatile.Read(ref _buildingsRevision);
 
     /// <summary>
-    /// Puts <paramref name="building"/> into the list of the town with placement id <paramref name="town"/>, replacing one of its key; the town's index, -1 when
-    /// there is no such town.
+    /// Puts <paramref name="building"/> into the list of the town with placement id <paramref name="town"/>, replacing one of its key; the town's
+    /// index, -1 when there is no such town.
     /// </summary>
     internal int PutBuilding(string town, TownBuilding building)
     {
@@ -250,9 +251,9 @@ public sealed class PopulationData
     public int PlayerFaction { get; init; } = -1;
 
     /// <summary>
-    /// The live relation table of the game (who is hostile to whom: roaming squads avoid hostile towns, <see cref="AggroSystem"/> starts fights by it); it starts
-    /// as the data's (section 3.2), a loaded save replaces its values, and the player's deeds change it (<see cref="Combat.CombatSystem"/>). Worlds built on the
-    /// same data share it.
+    /// The live relation table of the game (who is hostile to whom: roaming squads avoid hostile towns, <see cref="AggroSystem"/> starts fights by
+    /// it); it starts as the data's (section 3.2), a loaded save replaces its values, and the player's deeds change it
+    /// (<see cref="Combat.CombatSystem"/>). Worlds built on the same data share it.
     /// </summary>
     public FactionRelations Relations { get; init; } = FactionRelations.Build([]);
 
@@ -264,8 +265,8 @@ public sealed class PopulationData
     int[] _siteFactions = [];
 
     /// <summary>
-    /// Puts <paramref name="replacement"/> in the town's place, or the town's own record back (null): the original's <c>FUN_1409fe7a0</c>, whose town then reads
-    /// everything from it and takes its <c>faction</c> when it names one (docs/game/factions-squads-towns.md "Town overrides").
+    /// Puts <paramref name="replacement"/> in the town's place, or the town's own record back (null): the original's <c>FUN_1409fe7a0</c>, whose town
+    /// then reads everything from it and takes its <c>faction</c> when it names one (docs/game/factions-squads-towns.md "Town overrides").
     /// </summary>
     public void SetReplacement(int site, TownData? replacement)
     {
@@ -293,8 +294,9 @@ public sealed class PopulationData
     public BuildingLayouts? Layouts { get; set; }
 
     /// <summary>
-    /// Lays building <paramref name="b"/> of town <paramref name="site"/> out with other layout names (a town override's or a loaded save's residents,
-    /// docs/game/factions-squads-towns.md "Town residents"), or only renamed (<paramref name="naming"/>): the new building takes its place in
+    /// Lays building <paramref name="b"/> of town <paramref name="site"/> out with other layout names (a town override's or a loaded save's
+    /// residents, docs/game/factions-squads-towns.md "Town residents"), or only renamed (<paramref name="naming"/>): the new building takes its place
+    /// in
     /// <see cref="TownSite.Buildings"/> and is returned; <paramref name="b"/> itself when the names are its own already or there are no layouts.
     /// </summary>
     public TownBuilding Relay(int site, TownBuilding b, string interior, string exterior, BuildingNaming? naming = null)
@@ -336,8 +338,8 @@ public sealed class PopulationData
     }
 
     /// <summary>
-    /// The area sectors and their BIOME_GROUPs (6.2, 6.3): when set, zones get their homeless squads and the biome groups their nests; null: no wild population
-    /// (the worlds of the pinned tests).
+    /// The area sectors and their BIOME_GROUPs (6.2, 6.3): when set, zones get their homeless squads and the biome groups their nests; null: no wild
+    /// population (the worlds of the pinned tests).
     /// </summary>
     public BiomeMap? Biomes { get; init; }
 
@@ -364,8 +366,8 @@ public sealed class PopulationData
     BodyOptions _bodyOptions = BodyOptions.Default;
 
     /// <summary>
-    /// A new world's body options without changing the data retained by the running world's systems: a shallow copy sharing every other member and cache, with
-    /// only the body factory built again; the same data when the options are unchanged.
+    /// A new world's body options without changing the data retained by the running world's systems: a shallow copy sharing every other member and
+    /// cache, with only the body factory built again; the same data when the options are unchanged.
     /// </summary>
     public PopulationData WithBodyOptions(BodyOptions options)
     {
@@ -383,8 +385,8 @@ public sealed class PopulationData
     readonly Dictionary<int, IReadOnlyList<TownBuilding>> _turrets = [];
 
     /// <summary>
-    /// The turret buildings of the site (<see cref="TownBuilding.Turret"/>), in placement order; empty for no site, no building data or none. Cached: the AI asks
-    /// the package cadence of every town squad.
+    /// The turret buildings of the site (<see cref="TownBuilding.Turret"/>), in placement order; empty for no site, no building data or none. Cached:
+    /// the AI asks the package cadence of every town squad.
     /// </summary>
     public IReadOnlyList<TownBuilding> Turrets(int site)
     {
@@ -411,12 +413,12 @@ public sealed class PopulationData
     }
 
     /// <summary>
-    /// The trader's next town (the town chooser <c>FUN_14092c5e0</c> as <c>Package_WanderingTrader</c> calls it, docs/game/ai.md "Package classes", Verified by
-    /// code): towns other than <paramref name="exclude"/> of type town, village, slave camp or military (mask 0x6c) or any player town
+    /// The trader's next town (the town chooser <c>FUN_14092c5e0</c> as <c>Package_WanderingTrader</c> calls it, docs/game/ai.md "Package classes",
+    /// Verified by code): towns other than <paramref name="exclude"/> of type town, village, slave camp or military (mask 0x6c) or any player town
     /// (<paramref name="outposts"/>), public or of <paramref name="faction"/>, not hostile to it and not in its <c>no-go zones</c>; the 4 nearest to
     /// <paramref name="at"/> (X/Z), one drawn uniformly by <paramref name="roll"/>. None when there is none. Placed towns come before the outposts in a tie
-    /// (engine choice: the original's order over its two lists is <b>Unknown</b>). Unread here: the town faction's flags +0x1d0 and type +0x34 (8 only for 8) and
-    /// a faction test <c>FUN_1406b26d0</c> (<b>Unknown</b>).
+    /// (engine choice: the original's order over its two lists is <b>Unknown</b>). Unread here: the town faction's flags +0x1d0 and type +0x34 (8
+    /// only for 8) and a faction test <c>FUN_1406b26d0</c> (<b>Unknown</b>).
     /// </summary>
     public CampaignTown TraderTown(int faction, Vector2 at, CampaignTown exclude, IReadOnlyList<Construction.PlayerTown> outposts, ulong roll)
     {
@@ -476,8 +478,9 @@ public sealed class PopulationData
     public float RoadPreferenceOf(int faction) => faction >= 0 && faction < Factions.Count ? Factions[faction].RoadPreference : 0;
 
     /// <summary>
-    /// The faction owning a town building before any saved owner: the player's faction when the level data names it, else the town's faction whatever the level
-    /// data says, since the town populate gives the town faction every non-player building of the town (<c>FUN_1409370d0</c>:35-75, <c>FUN_14092e4b0</c>:35-37).
+    /// The faction owning a town building before any saved owner: the player's faction when the level data names it, else the town's faction whatever
+    /// the level data says, since the town populate gives the town faction every non-player building of the town (<c>FUN_1409370d0</c>:35-75,
+    /// <c>FUN_14092e4b0</c>:35-37).
     /// </summary>
     public int LevelOwnerOf(TownBuilding b, int townFaction) =>
         b.OwnerFactionId is { } id && FactionIndex(id) is >= 0 and var faction && faction == PlayerFaction ? faction : townFaction;
@@ -515,8 +518,8 @@ public sealed class PopulationData
     }
 
     /// <summary>
-    /// The spawn faction of a squad template (<c>FUN_1408fe6b0</c>): the template's own <c>faction</c> (Wildlife when it does not resolve); without one the owning
-    /// town's (<paramref name="town"/>, when there is a town), else the first faction listing the template; failing those Wildlife.
+    /// The spawn faction of a squad template (<c>FUN_1408fe6b0</c>): the template's own <c>faction</c> (Wildlife when it does not resolve); without
+    /// one the owning town's (<paramref name="town"/>, when there is a town), else the first faction listing the template; failing those Wildlife.
     /// </summary>
     public int SpawnFactionOf(SquadTemplate template, int? town = null)
     {
@@ -525,8 +528,8 @@ public sealed class PopulationData
     }
 
     /// <summary>
-    /// The factions the player knows once the factions are set up (<c>FUN_1406b40d0</c>; docs/game/factions-squads-towns.md "Factions met"): those the player
-    /// faction's FACTION <c>relations</c> list names.
+    /// The factions the player knows once the factions are set up (<c>FUN_1406b40d0</c>; docs/game/factions-squads-towns.md "Factions met"): those
+    /// the player faction's FACTION <c>relations</c> list names.
     /// </summary>
     public HashSet<int> KnownAtSetup() => PlayerFaction < 0 ? [] : [.. Factions[PlayerFaction].Relations.Keys.Select(FactionIndex).Where(f => f >= 0)];
 
@@ -683,14 +686,14 @@ public sealed class PopulationSettings
     public bool FastZoneHopping { get; set; }
 
     /// <summary>
-    /// Game seconds a zone stays loaded after nothing asks for it. The original has three real-time countdowns whose lengths are Unknown (game-loop.md); this is
-    /// an engine choice, long enough that walking back and forth over a zone edge never reloads.
+    /// Game seconds a zone stays loaded after nothing asks for it. The original has three real-time countdowns whose lengths are Unknown
+    /// (game-loop.md); this is an engine choice, long enough that walking back and forth over a zone edge never reloads.
     /// </summary>
     public float UnloadGraceSeconds { get; init; } = 60;
 
     /// <summary>
-    /// Game seconds a town site stays loaded after its zones lapsed: 0, the original's rule (a town unloads with its zones, 4 to 6 s after the last request,
-    /// docs/game/character-stats.md "Which zones are loaded"). Wild sites and roaming squads keep <see cref="UnloadGraceSeconds"/>.
+    /// Game seconds a town site stays loaded after its zones lapsed: 0, the original's rule (a town unloads with its zones, 4 to 6 s after the last
+    /// request, docs/game/character-stats.md "Which zones are loaded"). Wild sites and roaming squads keep <see cref="UnloadGraceSeconds"/>.
     /// </summary>
     public float TownUnloadGraceSeconds { get; init; }
 
@@ -727,8 +730,8 @@ public sealed class PopulationSettings
     public float PopulationMultiplier { get; set; } = 1;
 
     /// <summary>
-    /// Game seconds a loaded roaming squad stays loaded after its zone stopped being active (the original's 4 to 5 s countdown, 6.x of game-loop.md; engine
-    /// choice 10).
+    /// Game seconds a loaded roaming squad stays loaded after its zone stopped being active (the original's 4 to 5 s countdown, 6.x of game-loop.md;
+    /// engine choice 10).
     /// </summary>
     public float RoamUnloadGraceSeconds { get; init; } = 10;
 
@@ -777,14 +780,15 @@ public sealed class PopulationSettings
     public bool CampaignAncestorsOnce { get; init; } = true;
 
     /// <summary>
-    /// Meitou: a wild site keeps its squads' characters while it is unloaded and makes the same ones again. Faithful: they are dropped (and a save's wild platoon
-    /// despawned on leaving), as the original.
+    /// Meitou: a wild site keeps its squads' characters while it is unloaded and makes the same ones again. Faithful: they are dropped (and a save's
+    /// wild platoon despawned on leaving), as the original.
     /// </summary>
     public bool KeepWild { get; init; } = true;
 
     /// <summary>
-    /// Meitou: a town's residents back from at least <see cref="PopulationSystem.ScheduleAfterHours"/> unloaded are where their schedule puts them now (in bed at
-    /// night, at the counter, at their node or seat). Faithful: where they stood when the town unloaded, as the original, which runs nothing for them off screen.
+    /// Meitou: a town's residents back from at least <see cref="PopulationSystem.ScheduleAfterHours"/> unloaded are where their schedule puts them
+    /// now (in bed at night, at the counter, at their node or seat). Faithful: where they stood when the town unloaded, as the original, which runs
+    /// nothing for them off screen.
     /// </summary>
     public bool ResidentSchedule { get; init; } = true;
 

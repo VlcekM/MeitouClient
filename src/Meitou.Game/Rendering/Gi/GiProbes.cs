@@ -158,8 +158,7 @@ internal sealed unsafe class GiProbes : IDisposable
 
     /// <summary>
     /// A probe that no surface the fog leaves visible can read (<see cref="GiFogHide"/>) is traced and blended only every <c>HiddenPeriod</c>-th of
-    /// its
-    /// updates, with the hysteresis of that many updates in one (0: every probe at its normal rate; the bench's gi-fog switch).
+    /// its updates, with the hysteresis of that many updates in one (0: every probe at its normal rate; the bench's gi-fog switch).
     /// </summary>
     public int HiddenPeriod { get; set; } = 16;
 
@@ -243,10 +242,8 @@ internal sealed unsafe class GiProbes : IDisposable
 
     /// <summary>
     /// This frame's share of the probes (every <paramref name="phases"/>-th from <paramref name="phase"/>) into the slot's list. A probe the fog
-    /// hides
-    /// (<see cref="GiFogHide"/>) is listed only on every <see cref="HiddenPeriod"/>-th of its rounds, with <see cref="GiFogHide.SlowBit"/> set (the
-    /// blend then uses
-    /// the hysteresis of that many updates).
+    /// hides (<see cref="GiFogHide"/>) is listed only on every <see cref="HiddenPeriod"/>-th of its rounds, with <see cref="GiFogHide.SlowBit"/> set
+    /// (the blend then uses the hysteresis of that many updates).
     /// </summary>
     void BuildList(int phases, int phase, FogVolumes? fog, Vector3 eye, bool scrolled)
     {
@@ -255,8 +252,7 @@ internal sealed unsafe class GiProbes : IDisposable
         {
             var now = fog!.CullState;
             // The cached answer holds while the eye has moved less than HiddenSlack and the hide distances have grown by no more than the margin left
-            // of
-            // the boxes' widening (twice the slack, less the move): the nearest point of a hidden box was at least cached + widening from the old
+            // of the boxes' widening (twice the slack, less the move): the nearest point of a hidden box was at least cached + widening from the old
             // eye.
             float moved = Vector3.Distance(eye, _hiddenEye), margin = 2 * HiddenSlack - moved;
             static bool Holds(float now, float cached, float margin) =>
@@ -329,10 +325,8 @@ internal sealed unsafe class GiProbes : IDisposable
 
     /// <summary>
     /// The hysteresis of one update. <see cref="Hysteresis"/> is the per-frame figure for 64 rays; with fewer rays the same noise needs a longer
-    /// memory: an exponential
-    /// average of independent samples has a variance of (1 - h) / (1 + h) of one sample's, and a sample of n rays has the variance of 64 / n times
-    /// that of 64 rays, so
-    /// (1 - h) / (1 + h) is scaled by n / 64.
+    /// memory: an exponential average of independent samples has a variance of (1 - h) / (1 + h) of one sample's, and a sample of n rays has the
+    /// variance of 64 / n times that of 64 rays, so (1 - h) / (1 + h) is scaled by n / 64.
     /// </summary>
     float UpdateHysteresis(int phases)
     {

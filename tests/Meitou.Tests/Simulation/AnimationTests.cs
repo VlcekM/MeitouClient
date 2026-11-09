@@ -179,8 +179,7 @@ public class AnimationTests
     public void A_leg_down_crawls_at_once_and_its_recovery_plays_the_get_up_clip()
     {
         // docs/game/ragdolls.md "Forced crawl": a leg below the KO point is no knockout and no fall clip, the character is a crawler (posture 2) from
-        // that tick; posture 2
-        // ending in 0 queues the get-up task 65 (FUN_1405c7e20), `standing up 3`, which holds the character still.
+        // that tick; posture 2 ending in 0 queues the get-up task 65 (FUN_1405c7e20), `standing up 3`, which holds the character still.
         var lib = new AnimationLibrary([Def("stand 1", AnimationArea.All, idle: true, right: 0),
                 Def("standing up 3", AnimationArea.All) with { DisablesMovement = true }]);
         var system = new AnimationSystem(lib, new AnimationLengths().Add("standing up 3", 2f));

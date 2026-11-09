@@ -30,8 +30,8 @@ public sealed class SaveCaptureOptions
     public IReadOnlyList<TownPlacement>? Placements { get; init; }
 
     /// <summary>
-    /// Supplies the stats and medical state of a character when it has none from a loaded save (the host's body systems). Null results fall back to the saved
-    /// ones, then to defaults.
+    /// Supplies the stats and medical state of a character when it has none from a loaded save (the host's body systems). Null results fall back to
+    /// the saved ones, then to defaults.
     /// </summary>
     public Func<CharacterId, (CharacterStats? Stats, MedicalState? Medical)>? Bodies { get; init; }
 
@@ -41,14 +41,14 @@ public sealed class SaveCaptureOptions
     public ulong Seed { get; init; }
 
     /// <summary>
-    /// The level data: the zone files of the visited zones a loaded save has none of are made from it (<see cref="ZoneSave"/>), and a new save's town states take
-    /// their level state's handle. Null: no zone files are made and new towns get new handles.
+    /// The level data: the zone files of the visited zones a loaded save has none of are made from it (<see cref="ZoneSave"/>), and a new save's town
+    /// states take their level state's handle. Null: no zone files are made and new towns get new handles.
     /// </summary>
     public WorldLevelData? Levels { get; init; }
 
     /// <summary>
-    /// The strategy camera's view, written into CAMERA <c>pos</c> / <c>rot</c> / <c>zoom</c> (docs/formats/camera.md "Saved camera"). Null: the record keeps what
-    /// it had.
+    /// The strategy camera's view, written into CAMERA <c>pos</c> / <c>rot</c> / <c>zoom</c> (docs/formats/camera.md "Saved camera"). Null: the
+    /// record keeps what it had.
     /// </summary>
     public SavedView? View { get; init; }
 }
@@ -59,21 +59,23 @@ public sealed class SaveCaptureOptions
 public readonly record struct SavedView(Vector3 Pivot, float Yaw, float Pitch, float Distance);
 
 /// <summary>
-/// Turns a <see cref="World"/> into a <see cref="SaveGame"/> (docs/simulation.md "Saves"). With the <see cref="LoadedSave"/> the world was loaded from, the save
-/// it came from is copied and the parts the world models are written over it: clock, money, the factions' relations and prosperity, the player's platoons and
-/// their characters (position, facing, stats, medical state, new recruits, removals), the selection, the save's NPC platoons (stand-in positions; the characters
-/// of those that were in the world) and the population's own town and roaming squads in the world as new platoons; everything else is carried through
-/// unchanged. Without one a new save is made from the game data: all factions with their relations, the player's platoons and the population's squads, a default
-/// state per placed town, and empty weather, research and decals. Either way every visited zone gets a zone file (<see cref="ZoneSave"/>).
+/// Turns a <see cref="World"/> into a <see cref="SaveGame"/> (docs/simulation.md "Saves"). With the <see cref="LoadedSave"/> the world was loaded
+/// from, the save it came from is copied and the parts the world models are written over it: clock, money, the factions' relations and prosperity,
+/// the player's platoons and their characters (position, facing, stats, medical state, new recruits, removals), the selection, the save's NPC
+/// platoons (stand-in positions; the characters of those that were in the world) and the population's own town and roaming squads in the world as new
+/// platoons; everything else is carried through unchanged. Without one a new save is made from the game data: all factions with their relations, the
+/// player's platoons and the population's squads, a default state per placed town, and empty weather, research and decals. Either way every visited
+/// zone gets a zone file (<see cref="ZoneSave"/>).
 /// </summary>
 public static partial class SaveCapture
 {
     #region Capture
 
     /// <summary>
-    /// The save a capture starts from: a copy of the loaded save, or a new one made from the data (all factions with the data's relations, a default state per
-    /// placed town). It holds nothing of the world, and costs tens of milliseconds, so a host makes it ahead on a worker and hands it to <see cref="Capture"/>
-    /// (which changes it: one use). Reads <paramref name="data"/>'s relations and the loaded save, neither of which a running world changes.
+    /// The save a capture starts from: a copy of the loaded save, or a new one made from the data (all factions with the data's relations, a default
+    /// state per placed town). It holds nothing of the world, and costs tens of milliseconds, so a host makes it ahead on a worker and hands it to
+    /// <see cref="Capture"/> (which changes it: one use). Reads <paramref name="data"/>'s relations and the loaded save, neither of which a running
+    /// world changes.
     /// </summary>
     public static SaveBuilder PrepareBase(PopulationData data, LoadedSave? loaded = null, SaveCaptureOptions? options = null)
     {
@@ -176,8 +178,8 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The buildings and their zones: the zone files, the locks, the research, the player's outposts, the machines and the ground items. Returns the outposts'
-    /// handles, the building states and the items a camp laid.
+    /// The buildings and their zones: the zone files, the locks, the research, the player's outposts, the machines and the ground items. Returns the
+    /// outposts' handles, the building states and the items a camp laid.
     /// </summary>
     static (IReadOnlyDictionary<int, Hand> Outposts, Dictionary<string, FcsRecord> Buildings,
         List<(SaveItem Item, int Camp)> CampItems) WriteBuildings(SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options)
@@ -249,8 +251,8 @@ public static partial class SaveCapture
     public const string MissionTownKey = "meitou mission town";
 
     /// <summary>
-    /// What a capture collects for the squads' memories: the handle every character written got, and the platoon records to put each squad's memory on once all
-    /// are written.
+    /// What a capture collects for the squads' memories: the handle every character written got, and the platoon records to put each squad's memory
+    /// on once all are written.
     /// </summary>
     sealed class MemoryPass
     {
@@ -299,8 +301,8 @@ public static partial class SaveCapture
     #region Factions and towns
 
     /// <summary>
-    /// The instance of a camp's town state in Meitou saves written before nests were saved the original's way (wild site and TOWN record): still read, and still
-    /// updated in a save that has one, never written new (camps are now their nest's state, <see cref="WriteNests"/>).
+    /// The instance of a camp's town state in Meitou saves written before nests were saved the original's way (wild site and TOWN record): still
+    /// read, and still updated in a save that has one, never written new (camps are now their nest's state, <see cref="WriteNests"/>).
     /// </summary>
     internal const string CampInstancePrefix = "meitou-nest:";
 
@@ -369,8 +371,8 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The towns' pools (<c>pop</c>, <c>popd</c>, <c>pop2</c>, <c>popd2</c>, <c>started</c>, <c>ded</c>, <c>tod</c>) into their states, for each town made or loaded
-    /// with pools.
+    /// The towns' pools (<c>pop</c>, <c>popd</c>, <c>pop2</c>, <c>popd2</c>, <c>started</c>, <c>ded</c>, <c>tod</c>) into their states, for each town
+    /// made or loaded with pools.
     /// </summary>
     static void WriteTownPools(SaveGame game, PopulationData data, PopulationSystem population)
     {
@@ -484,8 +486,8 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The player faction's <c>known</c> list (on the record a load reads it from, <see cref="SaveGame.PlayerFaction"/>): the factions met, in faction order,
-    /// after the ids the game data does not have (kept, as their faction states are).
+    /// The player faction's <c>known</c> list (on the record a load reads it from, <see cref="SaveGame.PlayerFaction"/>): the factions met, in
+    /// faction order, after the ids the game data does not have (kept, as their faction states are).
     /// </summary>
     static void WriteKnownFactions(SaveGame game, PopulationData data, PlayerState player)
     {
@@ -641,8 +643,9 @@ public static partial class SaveCapture
         bool isNew = sc is null;
         sc ??= builder.AddCharacter(platoon, cold.RecordId, cold.Name, ownerFactionId, hot.Position, SaveRotation.OfYaw(hot.Yaw), isLeader: isLeader, squadMemberType: cold.Role);
 
-        // The handle's own serial is "random" in the original, and the loader rolls a character's look from it: a character with a rolled look gets the look's
-        // seed as its serial, so loading a save without its items (one written before inventories were) rolls the same face, hair and clothes again.
+        // The handle's own serial is "random" in the original, and the loader rolls a character's look from it: a character with a rolled look gets
+        // the look's seed as its serial, so loading a save without its items (one written before inventories were) rolls the same face, hair and
+        // clothes again.
         if (isNew && cold.Appearance?.Loadout is { } loadout) sc.Handle = sc.Handle with { S = loadout.Seed };
 
         // Where and which way.
@@ -665,8 +668,8 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The character's GAMESTATE_CHARACTER keys: name, leader, bounties, crime marks, slave, dialogue, orders, jobs, queued orders, held state, carrying, ragdoll,
-    /// portrait and age.
+    /// The character's GAMESTATE_CHARACTER keys: name, leader, bounties, crime marks, slave, dialogue, orders, jobs, queued orders, held state,
+    /// carrying, ragdoll, portrait and age.
     /// </summary>
     static void WriteGameState(
         FcsRecord g, SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock,
@@ -746,10 +749,10 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The CHARACTER_APPEARANCE of a new character: the generated one when the character has a look (its sliders, head, hair, skin tone), else only the race and
-    /// the editor flags. With <paramref name="replace"/> (a loaded character edited in the character editor) the record's keys become the look's exactly: the
-    /// editor starts from a copy of the saved record, so the original's key set and order are kept. The loader reads the record back into the look
-    /// (<see cref="SavedKit"/>).
+    /// The CHARACTER_APPEARANCE of a new character: the generated one when the character has a look (its sliders, head, hair, skin tone), else only
+    /// the race and the editor flags. With <paramref name="replace"/> (a loaded character edited in the character editor) the record's keys become
+    /// the look's exactly: the editor starts from a copy of the saved record, so the original's key set and order are kept. The loader reads the
+    /// record back into the look (<see cref="SavedKit"/>).
     /// </summary>
     static void WriteAppearance(SaveCharacter sc, CharacterCold cold, GameDatabase db, Dictionary<string, RaceData?> races, bool replace = false)
     {
@@ -902,8 +905,8 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The PLATOON handle of every world platoon the save holds: the loaded save's (stand-ins and saved platoons, by name; not those despawned) and the ones just
-    /// written (<paramref name="fresh"/>).
+    /// The PLATOON handle of every world platoon the save holds: the loaded save's (stand-ins and saved platoons, by name; not those despawned) and
+    /// the ones just written (<paramref name="fresh"/>).
     /// </summary>
     static Dictionary<int, Hand> PlatoonHands(SaveGame game, World world, LoadedSave? loaded, Dictionary<int, SavePlatoon> fresh)
     {
@@ -932,11 +935,11 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The NPC squads the population made (a town's residents and bar squads, in the world or stored since their town unloaded, and roaming squads while they
-    /// are in the world) as new platoons, so a save keeps them where they are: a new PLATOON with its <c>basetown</c>, <c>is resident</c> for a town's residents
-    /// and the AI package running; its characters as new ones (look, kit, body). Wild squads and roaming stand-ins (no characters) are not written: the
-    /// population makes them again; but a campaign's stand-in is (its war state names it), as a PLATOON with no file, which the loader makes from its template.
-    /// Returns the platoons written by world platoon id.
+    /// The NPC squads the population made (a town's residents and bar squads, in the world or stored since their town unloaded, and roaming squads
+    /// while they are in the world) as new platoons, so a save keeps them where they are: a new PLATOON with its <c>basetown</c>, <c>is resident</c>
+    /// for a town's residents and the AI package running; its characters as new ones (look, kit, body). Wild squads and roaming stand-ins (no
+    /// characters) are not written: the population makes them again; but a campaign's stand-in is (its war state names it), as a PLATOON with no
+    /// file, which the loader makes from its template. Returns the platoons written by world platoon id.
     /// </summary>
     static Dictionary<int, SavePlatoon> WriteFreshNpcs(
         SaveBuilder builder, World world, PopulationData data, SaveCaptureOptions options, SaveClock clock, IReadOnlyDictionary<string, FcsRecord> buildings,
@@ -956,8 +959,9 @@ public static partial class SaveCapture
         var byName = new Dictionary<string, SavePlatoon>(StringComparer.Ordinal);
         foreach (var x in game.Platoons) byName.TryAdd(x.Name, x);
 
-        // A new record, or (`into`) a save's never-made platoon Meitou made from its template (Platoon.Unmade): its own record written back, as the original's
-        // saver does (FUN_140372ef0: `never been activated` 0, its file and char count); its pool, residency, town and home stay as the record has them.
+        // A new record, or (`into`) a save's never-made platoon Meitou made from its template (Platoon.Unmade): its own record written back, as the
+        // original's saver does (FUN_140372ef0: `never been activated` 0, its file and char count); its pool, residency, town and home stay as the
+        // record has them.
         SavePlatoon Write(int town, int factionIndex, string templateId, long money, bool roaming, TownBuilding? homeBuilding, string? package,
             List<(CharacterCold Cold, Vector3 Position, float Yaw, CharacterId Id, bool Leader)> members, Trading.Shop? shop, Vector3 at = default,
             AiSave? ai = null, SquadMemoryData? memory = null, bool imprisoned = false, bool dead = false, bool intact = true, SavePlatoon? into = null,
@@ -1007,17 +1011,17 @@ public static partial class SaveCapture
             {
                 int siteFaction = data.SiteFactions.Count > town ? data.SiteFactions[town] : -1;
 
-                // `sqt` is the town pool it counts against: 1 residents (and bar squads), 2 roaming (docs/formats/save.md "NPC platoons").
-                // A template with `roaming military` is made in mode 2 even from a town's resident list (FUN_140583a10, Verified), so its housing squads are
+                // `sqt` is the town pool it counts against: 1 residents (and bar squads), 2 roaming (docs/formats/save.md "NPC platoons"). A template
+                // with `roaming military` is made in mode 2 even from a town's resident list (FUN_140583a10, Verified), so its housing squads are
                 // roaming-pool platoons too.
                 record.Ints["sqt"] = roaming || data.Db.Find(templateId)?.GetBool("roaming military") == true ? 2 : 1;
 
-                // Residents and bar squads are persistent (the original keeps them off screen, docs/game/factions-squads-towns.md "Persistent platoons"),
-                // roaming ones not but while they occupy a town.
+                // Residents and bar squads are persistent (the original keeps them off screen, docs/game/factions-squads-towns.md "Persistent
+                // platoons"), roaming ones not but while they occupy a town.
                 record.Bools["persistent"] = !roaming || Ai.AiSystem.Occupies(data.Ai, package);
 
-                // A squad with a home is a resident (every platoon of the samples with a file and a `homebuilding` has `is resident`, and only those): a default
-                // resident too.
+                // A squad with a home is a resident (every platoon of the samples with a file and a `homebuilding` has `is resident`, and only
+                // those): a default resident too.
                 record.Bools["is resident"] = !roaming && (homeBuilding is not null
                     || ResidentHomes.Entries(site.Town, siteFaction >= 0 ? data.Factions[siteFaction] : null).Any(e => e.Id == templateId));
             }
@@ -1154,9 +1158,9 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// The handle a platoon's <c>homebuilding</c> names a town building by: its state's <c>handle</c> when the save's zone file holds the building, else the handle
-    /// of its level-data state, which the original gives the building when it loads a zone that has no saved state of it (docs/formats/save.md "Object
-    /// handles"). Null when it has neither.
+    /// The handle a platoon's <c>homebuilding</c> names a town building by: its state's <c>handle</c> when the save's zone file holds the building,
+    /// else the handle of its level-data state, which the original gives the building when it loads a zone that has no saved state of it
+    /// (docs/formats/save.md "Object handles"). Null when it has neither.
     /// </summary>
     static Hand? HomeHandle(SaveGame game, TownBuilding b)
     {
@@ -1194,9 +1198,9 @@ public static partial class SaveCapture
     #region Locks and buildings
 
     /// <summary>
-    /// The registered buildings' locks, doors and container contents, and the homes a lock-up round locked, into their zones' state records. A building the save
-    /// has no record of is left out, except a level placement (one placed during the session) whose containers hold items: it gets a state record in its zone's
-    /// file (<see cref="AddPlacedState"/>), since its level-edit state is rebuilt without them.
+    /// The registered buildings' locks, doors and container contents, and the homes a lock-up round locked, into their zones' state records. A
+    /// building the save has no record of is left out, except a level placement (one placed during the session) whose containers hold items: it gets
+    /// a state record in its zone's file (<see cref="AddPlacedState"/>), since its level-edit state is rebuilt without them.
     /// </summary>
     static void WriteLocks(SaveGame game, World world, Dictionary<string, FcsRecord> buildings, WorldLevelData? levels)
     {
@@ -1223,9 +1227,9 @@ public static partial class SaveCapture
     }
 
     /// <summary>
-    /// Puts a level placement into its zone's file of the save: its instance in the building list and a GAMESTATE_BUILDING of its own, with the keys the
-    /// building's fixtures read back (completeness, damage and height). Null when the zone has no file. The state has no handle, as a level building's state in
-    /// the level data has none.
+    /// Puts a level placement into its zone's file of the save: its instance in the building list and a GAMESTATE_BUILDING of its own, with the keys
+    /// the building's fixtures read back (completeness, damage and height). Null when the zone has no file. The state has no handle, as a level
+    /// building's state in the level data has none.
     /// </summary>
     static FcsRecord? AddPlacedState(SaveGame game, BuildingPlacement placement)
     {
@@ -1273,10 +1277,10 @@ public static partial class SaveCapture
     #region Uniques and selection
 
     /// <summary>
-    /// The unique-character table into the CAMERA record (docs/formats/save.md, <c>FUN_1409a8660</c>): <c>num usedUniques</c>, then per entry the CHARACTER id,
-    /// state, player flag and handle; unclaimed imprisoned entries (the <c>prisoners</c> uniques) are left out, the load derives them again. The handle is the
-    /// written character's when it is one of the player's squads, else the one the loaded save gave it, else null (engine: NPC handles are not tracked back from
-    /// the writer).
+    /// The unique-character table into the CAMERA record (docs/formats/save.md, <c>FUN_1409a8660</c>): <c>num usedUniques</c>, then per entry the
+    /// CHARACTER id, state, player flag and handle; unclaimed imprisoned entries (the <c>prisoners</c> uniques) are left out, the load derives them
+    /// again. The handle is the written character's when it is one of the player's squads, else the one the loaded save gave it, else null (engine:
+    /// NPC handles are not tracked back from the writer).
     /// </summary>
     static void WriteUniques(SaveGame game, World world, Dictionary<CharacterId, SaveCharacter> written)
     {

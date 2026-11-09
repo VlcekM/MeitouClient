@@ -7,8 +7,8 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The on-disk cache of built zone meshes, in our own format, keyed by the zone's building hash and the build settings (docs/simulation.md, stage 5). Lives
-/// outside the repository, by default under <c>%LOCALAPPDATA%\Meitou\navmesh</c>.
+/// The on-disk cache of built zone meshes, in our own format, keyed by the zone's building hash and the build settings (docs/simulation.md, stage 5).
+/// Lives outside the repository, by default under <c>%LOCALAPPDATA%\Meitou\navmesh</c>.
 /// </summary>
 public sealed class NavMeshCache
 {
@@ -45,9 +45,9 @@ public sealed class NavMeshCache
     }
 
     /// <summary>
-    /// Hash of the inputs every zone shares, by size and write time (not contents): the data files in load order (record contents: buildings, layouts,
-    /// foliage), the seed, height, biome, map feature and overlay files the gather and the foliage placer read, and the DotRecast version. Collision files are
-    /// not in it.
+    /// Hash of the inputs every zone shares, by size and write time (not contents): the data files in load order (record contents: buildings,
+    /// layouts, foliage), the seed, height, biome, map feature and overlay files the gather and the foliage placer read, and the DotRecast version.
+    /// Collision files are not in it.
     /// </summary>
     public static uint ContentHash(GameInstall install, GameDatabase db)
     {

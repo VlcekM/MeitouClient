@@ -16,8 +16,8 @@ public sealed partial class CombatSystem
     const int ZoneCapacity = 20;
 
     /// <summary>
-    /// The <see cref="Effect.Kind"/> of the walls and doors a blow's zone may still hit: the target is the attacker, <c>Arg</c> the blow (+0x100 when it hit a
-    /// character), <c>Amount</c> the attack number, <c>Position.X</c> the hits left, <c>Position.Y</c> the technique.
+    /// The <see cref="Effect.Kind"/> of the walls and doors a blow's zone may still hit: the target is the attacker, <c>Arg</c> the blow (+0x100 when
+    /// it hit a character), <c>Amount</c> the attack number, <c>Position.X</c> the hits left, <c>Position.Y</c> the technique.
     /// </summary>
     public const int ZoneBuildingsEffect = 4;
 
@@ -54,9 +54,9 @@ public sealed partial class CombatSystem
     #region Zone lists
 
     /// <summary>
-    /// The characters each fighter's attack zone held when it last looked (the original's list +0x1e0, <c>calculateTargetsInAttackZone</c> FUN_1406087a0: built
-    /// at the attack start and at each blow's impact), <see cref="ZoneCapacity"/> slots per fighter and a count; double-buffered like the slots, so a defender
-    /// reads the attacker's list of the last tick.
+    /// The characters each fighter's attack zone held when it last looked (the original's list +0x1e0, <c>calculateTargetsInAttackZone</c>
+    /// FUN_1406087a0: built at the attack start and at each blow's impact), <see cref="ZoneCapacity"/> slots per fighter and a count; double-buffered
+    /// like the slots, so a defender reads the attacker's list of the last tick.
     /// </summary>
     int[] _zoneRead = [], _zoneWrite = [];
     byte[] _zoneCountRead = [], _zoneCountWrite = [];
@@ -121,11 +121,11 @@ public sealed partial class CombatSystem
     /// Emits blow <paramref name="blow"/> of fighter <paramref name="i"/>'s attack to everyone in its attack zone (<b>Verified</b>,
     /// <c>calculateTargetsInAttackZone</c> FUN_1406087a0 and <c>attackImpactCheck</c> FUN_14060a2f0, docs/game/combat.md "Attack zone"), at most the technique's
     /// <c>max simultaneous hits</c>; nobody in it is a whiff and the swing keeps its 0.5 s pause. The zone is a box ahead along the heading, k the fighter's
-    /// size, s = lerp(k, 0.45, 1), r its footprint, L its weapon's length: its centre (L / 4 + r + max(0, attack distance − the distance moved since the swing
-    /// started)) s ahead, half-extents (r + 0.5, 25, L / 2) s, or (13, 8, L / 2) s for a left or right cut; then h = max(0, (offset − k r) / 2) moves the centre
-    /// back by h and deepens it by h. In it: a body not knocked out that is the fighter's target or an enemy that is not an ally. Engine readings: a body counts
-    /// when its footprint circle (size-scaled) meets the box, the height test is the box's half-height plus 9 from the fighter's feet, and the order is the
-    /// target first, then by distance (the original's is the physics query's).
+    /// size, s = lerp(k, 0.45, 1), r its footprint, L its weapon's length: its centre (L / 4 + r + max(0, attack distance − the distance moved since
+    /// the swing started)) s ahead, half-extents (r + 0.5, 25, L / 2) s, or (13, 8, L / 2) s for a left or right cut; then h = max(0, (offset − k r)
+    /// / 2) moves the centre back by h and deepens it by h. In it: a body not knocked out that is the fighter's target or an enemy that is not an
+    /// ally. Engine readings: a body counts when its footprint circle (size-scaled) meets the box, the height test is the box's half-height plus 9
+    /// from the fighter's feet, and the order is the target first, then by distance (the original's is the physics query's).
     /// </summary>
     void Strike(World world, int i, in CombatSlot s, CharacterCold cold, CombatTechnique tech, int blow, EffectBuffer effects)
     {
@@ -352,8 +352,9 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// A blow on a wall building (<c>WallBuilding</c> damage, docs/game/buildings-production.md): <paramref name="f"/> = 2 blunt + 0.5 cut of the attacker's
-    /// packet; clamp(f / 2, 10, 60) x 0.003 off the progress of the wall line (an attached piece's parent), destroyed at 0 with the wall-broken sound at
+    /// A blow on a wall building (<c>WallBuilding</c> damage, docs/game/buildings-production.md): <paramref name="f"/> = 2 blunt + 0.5 cut of the
+    /// attacker's packet; clamp(f / 2, 10, 60) x 0.003 off the progress of the wall line (an attached piece's parent), destroyed at 0 with the
+    /// wall-broken sound at
     /// <paramref name="attacker"/>. Shared by the fight's blows and the bashers' swings (Smashing, 272).
     /// </summary>
     internal static bool StrikeWall(World world, Construction.BuildSite wall, float f, int attacker)

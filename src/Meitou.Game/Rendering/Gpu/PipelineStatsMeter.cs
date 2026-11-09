@@ -7,14 +7,15 @@ namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The bench's triangles per pass (<c>--bench-tris</c>, docs/bench.md "Triangles per pass"): pipeline statistics queries (input assembly primitives,
-/// vertex shader invocations, clipping in and out, fragment shader invocations) around each part of a frame, read after the frame has been waited for.
-/// Only the bench's counting frames use it; nothing else is recorded in a normal frame (<see cref="Current"/> is null).
+/// vertex shader invocations, clipping in and out, fragment shader invocations) around each part of a frame, read after the frame has been waited
+/// for. Only the bench's counting frames use it; nothing else is recorded in a normal frame (<see cref="Current"/> is null).
 /// </summary>
 /// <remarks>
-/// The parts are the <see cref="StageClock"/> boundaries (<see cref="OnClose"/>: the stage laps, the shadow cascades, the parts of the foliage pass), as
-/// the pass meter takes them, and a query never crosses a rendering: <see cref="CommandList.BeginRendering"/> and <see cref="CommandList.EndRendering"/>
-/// end the open query before and begin the next after (the pieces of one part are summed). That needs the draws recorded straight into the frame's list,
-/// so the bench runs these frames with <see cref="Recording.Mode"/> 0 (secondaries could not hold a query that started in another command buffer).
+/// The parts are the <see cref="StageClock"/> boundaries (<see cref="OnClose"/>: the stage laps, the shadow cascades, the parts of the foliage pass),
+/// as the pass meter takes them, and a query never crosses a rendering: <see cref="CommandList.BeginRendering"/> and
+/// <see cref="CommandList.EndRendering"/> end the open query before and begin the next after (the pieces of one part are summed). That needs the
+/// draws recorded straight into the frame's list, so the bench runs these frames with <see cref="Recording.Mode"/> 0 (secondaries could not hold a
+/// query that started in another command buffer).
 /// </remarks>
 public sealed unsafe class PipelineStatsMeter : IDisposable
 {

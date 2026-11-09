@@ -22,8 +22,8 @@ public sealed unsafe partial class GpuContext
     public bool SegmentOpen => _segment is not null || _guest is not null;
 
     /// <summary>
-    /// The frame's command list for a segment of the caller's own (renderings, copies, dispatches): what was recorded before is complete and visible (a
-    /// full barrier), nothing is assumed bound. <see cref="EndNative"/> closes it with another full barrier.
+    /// The frame's command list for a segment of the caller's own (renderings, copies, dispatches): what was recorded before is complete and visible
+    /// (a full barrier), nothing is assumed bound. <see cref="EndNative"/> closes it with another full barrier.
     /// </summary>
     public IGpuCommandList BeginNative(string label)
     {
@@ -92,8 +92,8 @@ public sealed unsafe partial class GpuContext
     }
 
     /// <summary>
-    /// Records something that does not disturb a pass (a timestamp, a label) where the frame's commands go now: inside a host's rendering into its list
-    /// (with secondaries, a secondary of its own in its place), else into the frame's list.
+    /// Records something that does not disturb a pass (a timestamp, a label) where the frame's commands go now: inside a host's rendering into its
+    /// list (with secondaries, a secondary of its own in its place), else into the frame's list.
     /// </summary>
     public void Interleave(Action<IGpuCommandList> record)
     {

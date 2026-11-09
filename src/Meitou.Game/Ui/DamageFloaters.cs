@@ -83,8 +83,9 @@ sealed class DamageFloaters(PlayerInterface player)
 
     /// <summary>
     /// The floaters as the original draws them (<c>FUN_1406ea9f0</c>, <b>Verified</b>): a plain MyGUI text box (the <c>Kenshi_TextboxStandardText</c>
-    /// template: no shadow) in <c>Kenshi_FloaterFont_Medium</c> for Simple info, <c>Kenshi_FloaterFont_Small</c> for Full info, its top left at the screen
-    /// point of the rising anchor, sized to the text plus 20 pixels at the UI scale. Blows landing together print over each other, as in the original.
+    /// template: no shadow) in <c>Kenshi_FloaterFont_Medium</c> for Simple info, <c>Kenshi_FloaterFont_Small</c> for Full info, its top left at the
+    /// screen point of the rising anchor, sized to the text plus 20 pixels at the UI scale. Blows landing together print over each other, as in the
+    /// original.
     /// </summary>
     internal void AddFloaters(List<UiControl> controls)
     {

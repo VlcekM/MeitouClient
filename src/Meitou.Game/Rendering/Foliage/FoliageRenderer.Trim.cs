@@ -7,11 +7,10 @@ namespace Meitou.Game.Rendering.Foliage;
 
 public sealed unsafe partial class FoliageRenderer
 {
-    // ---- card trimming (docs/render-foliage.md, "Card trimming") ----
-    // The alpha-tested cards of a mesh (leaf quads, fern fronds) are cut down to the outline of what the cut-out lets through, so the rasteriser
-    // spends no fragments on the transparent corners. The mesh is trimmed when it is decoded (on the worker, with the masks read from
-    // FoliageCardMask's disk cache); the trimmed triangles follow the original ones in the part's index buffer, and a draw picks one range or the
-    // other, so the Meitou switch can flip it.
+    // ---- card trimming (docs/render-foliage.md, "Card trimming") ---- The alpha-tested cards of a mesh (leaf quads, fern fronds) are cut down to
+    // the outline of what the cut-out lets through, so the rasteriser spends no fragments on the transparent corners. The mesh is trimmed when it is
+    // decoded (on the worker, with the masks read from FoliageCardMask's disk cache); the trimmed triangles follow the original ones in the part's
+    // index buffer, and a draw picks one range or the other, so the Meitou switch can flip it.
 
     /// <summary>
     /// The Meitou <c>card-trim</c> switch: the alpha-tested cards of FOLIAGE-mode meshes and leaves are drawn cut to the opaque outline of their

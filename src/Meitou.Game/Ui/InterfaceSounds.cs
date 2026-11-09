@@ -168,8 +168,8 @@ sealed class InterfaceSounds(PlayerInterface player)
 
         if (action.StartsWith("speed:", StringComparison.Ordinal))
         {
-            // Game_Speed is a state; the exe sets it and posts for 1, 2 and 5 only (140787e40), its three speed buttons; Meitou posts per button, whatever
-            // its speed.
+            // Game_Speed is a state; the exe sets it and posts for 1, 2 and 5 only (140787e40), its three speed buttons; Meitou posts per button,
+            // whatever its speed.
             int index = int.Parse(action[6..], CultureInfo.InvariantCulture);
             if (index is > 0 and < PlayerInterface.SpeedButtons)
             {

@@ -23,9 +23,8 @@ namespace Meitou.Tests.Simulation;
 /// </summary>
 public class AggroTests
 {
-    // Factions: 0 raiders, 1 villagers (raiders hate them), 2 nomads (raiders hate them but coexist), 3 friends (allied to the raiders),
-    // 4 hermits (the raiders' own list says hostile, only the hermits list the raiders as coexisting: attacked), 5 the player (Nameless, no table of
-    // its own),
+    // Factions: 0 raiders, 1 villagers (raiders hate them), 2 nomads (raiders hate them but coexist), 3 friends (allied to the raiders), 4 hermits
+    // (the raiders' own list says hostile, only the hermits list the raiders as coexisting: attacked), 5 the player (Nameless, no table of its own),
     // 6 wildlife (not real), 7 townsfolk (neutral to everyone, the player's victims).
     const int Raiders = 0, Villagers = 1, Nomads = 2, Friends = 3, Hermits = 4, Player = 5, Wildlife = 6, Townsfolk = 7;
 
@@ -198,8 +197,7 @@ public class AggroTests
         a.World.RunTicks(60);
 
         // The raiders started it: every logged fight is a raider attacking a villager or a hermit (the hermits list the raiders as coexisting, but
-        // attack on sight reads only the
-        // looker's own list, FUN_1406b23c0), and both raiders took part (each by its own 16).
+        // attack on sight reads only the looker's own list, FUN_1406b23c0), and both raiders took part (each by its own 16).
         Assert.NotEmpty(a.Aggro.Log);
         Assert.All(a.Aggro.Log, e => { Assert.Equal(Raiders, e.AttackerFaction); Assert.Contains(e.TargetFaction, new[] { Villagers, Hermits }); });
         Assert.All(raiders.Members, m => Assert.True(a.Fighting(m), "both raiders fight"));

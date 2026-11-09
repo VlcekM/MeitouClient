@@ -46,9 +46,8 @@ public sealed partial class World
     volatile System.Collections.Concurrent.ConcurrentQueue<BloodMark>? _bloodMarks;
 
     /// <summary>
-    /// Where the bodies and combat queue the blood they leave on the ground; null (the default) records none,
-    /// which is also the game's <c>Blood</c> setting off. The host sets it and empties it every frame.
-    /// Nothing in the simulation reads it, so it cannot change a run.
+    /// Where the bodies and combat queue the blood they leave on the ground; null (the default) records none, which is also the game's <c>Blood</c>
+    /// setting off. The host sets it and empties it every frame. Nothing in the simulation reads it, so it cannot change a run.
     /// </summary>
     public System.Collections.Concurrent.ConcurrentQueue<BloodMark>? BloodMarks
     {

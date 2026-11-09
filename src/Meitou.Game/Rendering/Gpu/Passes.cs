@@ -4,8 +4,8 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// What a pass draws into (<see cref="GpuContext.CurrentTargets"/>): its attachments, their formats and size, and the viewport and scissor its host set
-/// (the scissor clipped to the target). A guest drawing into the current pass sets these.
+/// What a pass draws into (<see cref="GpuContext.CurrentTargets"/>): its attachments, their formats and size, and the viewport and scissor its host
+/// set (the scissor clipped to the target). A guest drawing into the current pass sets these.
 /// </summary>
 public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, AttachmentFormats Formats, int Width, int Height, PixelViewport Viewport,
     PixelRect Scissor, RenderTarget Extra = default)
@@ -21,8 +21,8 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
     public int ShadingRateTexel { get; init; }
 
     /// <summary>
-    /// These targets drawn with the shading rate image <paramref name="view"/> (texels of <paramref name="texel"/> pixels): the pipelines made for them are
-    /// the ones for a rendering with that attachment.
+    /// These targets drawn with the shading rate image <paramref name="view"/> (texels of <paramref name="texel"/> pixels): the pipelines made for
+    /// them are the ones for a rendering with that attachment.
     /// </summary>
     public PassTargets WithShadingRate(GpuView view, int texel) =>
         this with { ShadingRate = view, ShadingRateTexel = texel, Formats = Formats with { ShadingRate = true } };
@@ -41,8 +41,8 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
     }
 
     /// <summary>
-    /// The same targets with the viewport <paramref name="viewport"/> and the scissor <paramref name="scissor"/> (clipped to the targets), or the whole
-    /// viewport when the scissor is null.
+    /// The same targets with the viewport <paramref name="viewport"/> and the scissor <paramref name="scissor"/> (clipped to the targets), or the
+    /// whole viewport when the scissor is null.
     /// </summary>
     public PassTargets At(PixelViewport viewport, PixelRect? scissor = null)
     {
@@ -56,9 +56,9 @@ public sealed record PassTargets(RenderTarget Colour, RenderTarget Depth, Attach
 }
 
 /// <summary>
-/// The fixed-function state a guest draws with in its host's pass (<see cref="GpuContext.CurrentState"/>): what the host hands it, made by <see cref="For"/>
-/// with the rules VkGl applied to GL's state (depth test and write only with a depth attachment, write only while testing; blend only with a colour
-/// attachment; alpha-to-coverage only with more than one sample; depth clamp only where the device has it).
+/// The fixed-function state a guest draws with in its host's pass (<see cref="GpuContext.CurrentState"/>): what the host hands it, made by
+/// <see cref="For"/> with the rules VkGl applied to GL's state (depth test and write only with a depth attachment, write only while testing; blend
+/// only with a colour attachment; alpha-to-coverage only with more than one sample; depth clamp only where the device has it).
 /// </summary>
 public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool DepthTest, bool DepthWrite, DepthFunction Compare,
     bool BiasEnable, float BiasConstant, float BiasSlope, BlendState Blend, ColorMask ColourMask, PolygonKind Polygon,
@@ -88,15 +88,15 @@ public sealed record DrawState(CullMode Cull, FrontFaceDirection Front, bool Dep
     }
 
     /// <summary>
-    /// The scene's state (the main view's and the reflection's slices): depth tested with less-or-equal and written, no culling, blending or clamp, the
-    /// channels in <paramref name="mask"/> (default every one). Each guest puts in its own culling, blending and depth changes.
+    /// The scene's state (the main view's and the reflection's slices): depth tested with less-or-equal and written, no culling, blending or clamp,
+    /// the channels in <paramref name="mask"/> (default every one). Each guest puts in its own culling, blending and depth changes.
     /// </summary>
     public static DrawState Scene(in AttachmentFormats targets, ColorMask mask = Rgba) =>
         For(targets, false, depthTest: true, depthWrite: true, compare: DepthFunction.Lequal, mask: mask);
 
     /// <summary>
-    /// The scene's state on a target in the scene depth convention (the main view, the reflection, the hover mask): as <see cref="Scene"/> but compared
-    /// with <see cref="DepthConvention.SceneCompare"/> (GEQUAL when reversed). Conventional targets (previews, icons, the object stage) keep
+    /// The scene's state on a target in the scene depth convention (the main view, the reflection, the hover mask): as <see cref="Scene"/> but
+    /// compared with <see cref="DepthConvention.SceneCompare"/> (GEQUAL when reversed). Conventional targets (previews, icons, the object stage) keep
     /// <see cref="Scene"/>.
     /// </summary>
     public static DrawState SceneDepth(in AttachmentFormats targets, ColorMask mask = Rgba) =>
@@ -139,8 +139,8 @@ public sealed unsafe partial class GpuContext
     public bool PassOpen => _passList is not null;
 
     /// <summary>
-    /// The caller has begun a rendering instance on <paramref name="cmd"/> (inside its own <c>BeginNative</c> segment) into <paramref name="targets"/>:
-    /// until <see cref="EndHostPass"/> guests draw into it with <paramref name="state"/>.
+    /// The caller has begun a rendering instance on <paramref name="cmd"/> (inside its own <c>BeginNative</c> segment) into
+    /// <paramref name="targets"/>: until <see cref="EndHostPass"/> guests draw into it with <paramref name="state"/>.
     /// </summary>
     public void BeginHostPass(CommandList cmd, PassTargets targets, DrawState state) => BeginHostPass((IGpuCommandList)cmd, targets, state);
 

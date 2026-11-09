@@ -6,9 +6,9 @@ using EngineKey = Meitou.Game.Host.Input.Key;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The game view's hotkeys (docs/game/ui-input.md sections 4 and 6): each goes through the rebinding table (<see cref="InputBindings"/>), so the settings'
-/// Controls page rebinds them. The orders hotkeys run the orders panel's own button actions, as the game's handler <c>FUN_1407226e0</c> calls the buttons'
-/// handlers.
+/// The game view's hotkeys (docs/game/ui-input.md sections 4 and 6): each goes through the rebinding table (<see cref="InputBindings"/>), so the
+/// settings' Controls page rebinds them. The orders hotkeys run the orders panel's own button actions, as the game's handler <c>FUN_1407226e0</c>
+/// calls the buttons' handlers.
 /// </summary>
 sealed class GameHotkeys(PlayerInterface player)
 {
@@ -61,9 +61,9 @@ sealed class GameHotkeys(PlayerInterface player)
         : Bound(InputAction.ToggleTaunt, key) ? CharacterOrders.Taunt : null;
 
     /// <summary>
-    /// The double-tap pairing of <c>FUN_140788100</c>: the last single event's action is remembered (any bound hotkey, not only the digits) with its time; an
-    /// event is a double when it is the same action again less than half a second later. A double does not clear the memory (a third press is a double
-    /// again); a different action replaces it, and two events in one frame forget it.
+    /// The double-tap pairing of <c>FUN_140788100</c>: the last single event's action is remembered (any bound hotkey, not only the digits) with its
+    /// time; an event is a double when it is the same action again less than half a second later. A double does not clear the memory (a third press
+    /// is a double again); a different action replaces it, and two events in one frame forget it.
     /// </summary>
     bool HotkeyDoubleTap(EngineKey key)
     {
@@ -121,9 +121,9 @@ sealed class GameHotkeys(PlayerInterface player)
     }
 
     /// <summary>
-    /// character_next / character_prev (<c>FUN_1407f9130</c>, docs/game/ui-input.md section 6): nothing unless the active squad has two members; the HUD's
-    /// character, when it is a living one of the player's, gives way to the next (or previous) member of its own squad, wrapping; otherwise the selection
-    /// narrows to its first character.
+    /// character_next / character_prev (<c>FUN_1407f9130</c>, docs/game/ui-input.md section 6): nothing unless the active squad has two members; the
+    /// HUD's character, when it is a living one of the player's, gives way to the next (or previous) member of its own squad, wrapping; otherwise the
+    /// selection narrows to its first character.
     /// </summary>
     void StepCharacter(int step)
     {

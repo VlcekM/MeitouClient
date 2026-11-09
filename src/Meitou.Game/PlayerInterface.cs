@@ -320,8 +320,8 @@ sealed partial class PlayerInterface(WorldSession session, Func<float, float, fl
                 Say(new Simulation.Carrying.PickUpOrder([], lift) { Tick = Session.World.Tick });
 
             // Else the nearest target along the ray (PickAt). On a character: the quick order (trade with a trader, attack anyone else, treat a hurt
-            // ally, pick up a downed one of yours,
-            // loot anyone else's) is given when the button comes up before the context menu's hold time; held longer, the menu opens instead (ContextMenuWindow).
+            // ally, pick up a downed one of yours, loot anyone else's) is given when the button comes up before the context menu's hold time; held
+            // longer, the menu opens instead (ContextMenuWindow).
             else if (Picking.PickAt(p).Kind is var kind && kind == WorldPicking.Picked.Character) { var quick = QuickOrder(p)?.Do; if (!ContextMenuWindow.ContextPress(p, quick)) quick?.Invoke(); }
             else if (kind == WorldPicking.Picked.GroundItem && GroundItemPicks.GroundItemClick(p)) { }
             else if (kind == WorldPicking.Picked.Container && Furniture.ContainerClick(p, alt)) { }

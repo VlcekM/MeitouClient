@@ -10,23 +10,19 @@ namespace Meitou.Simulation.Crime;
 
 /// <summary>
 /// Crimes and bounties (docs/simulation.md "Crimes and bounties"; the original's rules in docs/game/economy.md section 11 and docs/game/carry-loot.md
-/// 4.3 and 4.6). Everything here runs in
-/// serial phases: the deeds are reported by the systems that see them (combat's <c>Inputs</c> and commit, the carry system's <c>SlowWorld</c>), the
-/// witness sweep and the bounty expiry run in
-/// this system's <c>SlowWorld</c>, in slot order. The state lives on the characters (<see cref="CharacterCold.Pending"/>,
+/// 4.3 and 4.6). Everything here runs in serial phases: the deeds are reported by the systems that see them (combat's <c>Inputs</c> and commit, the
+/// carry system's <c>SlowWorld</c>), the witness sweep and the bounty expiry run in this system's <c>SlowWorld</c>, in slot order. The state lives on
+/// the characters (<see cref="CharacterCold.Pending"/>,
 /// <see cref="CharacterCold.Bounties"/>) and is hashed only while set.
 /// <list type="bullet">
 /// <item><b>Pending</b> (<see cref="SetPending"/>, the game's <c>FUN_140852c80</c>): a deed first becomes a pending crime on the culprit, unless the
-/// culprit is police-like, the victim is
-/// of the culprit's own faction or of a lawless one. An Assault does not replace another pending crime.</item>
+/// culprit is police-like, the victim is of the culprit's own faction or of a lawless one. An Assault does not replace another pending crime.</item>
 /// <item><b>Witnesses</b> (<see cref="Sweep"/>, after <c>FUN_140854d10</c>): an awake NPC of another faction that sees the culprit and cares about
-/// the victim (by the crime) sets the timer
-/// to 20; only a police-like witness of a faction that books bounties books it (<see cref="Book"/>, <c>FUN_140853ec0</c>): the crime table's amount
-/// into the ledger entry of the
+/// the victim (by the crime) sets the timer to 20; only a police-like witness of a faction that books bounties books it (<see cref="Book"/>,
+/// <c>FUN_140853ec0</c>): the crime table's amount into the ledger entry of the
 /// <b>witness's</b> faction (<c>FUN_140852010</c>).</item>
 /// <item><b>Police</b>: a hit between a police-like character and another books an Assault on the other at once (<c>FUN_140665fa0</c>); police-like
-/// NPCs spot, fine and arrest a character wanted by
-/// their faction (<see cref="ArrestSystem"/>).</item>
+/// NPCs spot, fine and arrest a character wanted by their faction (<see cref="ArrestSystem"/>).</item>
 /// <item><b>Expiry</b>: an entry lasts 0.04 hours per cat since its last raise, for ever from 10000 (<see cref="CrimeTable.LifetimeHours"/>).</item>
 /// </list>
 /// The setter has no NPC test: an NPC is the culprit of every crime its callers set (a booking witness books an NPC's crime too, FUN_140854d10 has no

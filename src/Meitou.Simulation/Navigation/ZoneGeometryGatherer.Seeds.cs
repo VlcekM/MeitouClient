@@ -32,8 +32,8 @@ internal sealed partial class ZoneGeometryGatherer
     delegate bool BuildingRay(float x, float z, out float y);
 
     /// <summary>
-    /// The seed points either side of a door: the door shape's centre moved across its width axis past its faces, then dropped to the ground (docs: the original
-    /// takes the outer marker as an exterior seed and the inner one as the interior's). Only box doors are handled.
+    /// The seed points either side of a door: the door shape's centre moved across its width axis past its faces, then dropped to the ground (docs:
+    /// the original takes the outer marker as an exterior seed and the inner one as the interior's). Only box doors are handled.
     /// </summary>
     void AddDoorSeeds(ZoneGeometry g, GameRecord door, PreparedShape shape, Matrix4x4 node)
     {
@@ -237,8 +237,8 @@ internal sealed partial class ZoneGeometryGatherer
     }
 
     /// <summary>
-    /// The seeds of one point along a linked wall: on the wall top when it is walkable and the ray hits it, and a ground seed at its clamped point when the wall
-    /// leaves the zone.
+    /// The seeds of one point along a linked wall: on the wall top when it is walkable and the ray hits it, and a ground seed at its clamped point
+    /// when the wall leaves the zone.
     /// </summary>
     void AddWallSeedsAt(ZoneGeometry g, Vector2 at, bool walkable, bool leaves, BuildingRay hits, float water)
     {

@@ -88,8 +88,7 @@ public sealed unsafe partial class SkyRenderer
         _volumeImage = default;
         if (!reflection) CloudsFogged = SkySkipped = false;
         // Made with the first frame that could show it (under the loading cover), not when the weather first brings clouds: its noise atlas and three
-        // programs
-        // held that frame ~30 ms (docs/bench.md "Play benchmark").
+        // programs held that frame ~30 ms (docs/bench.md "Play benchmark").
         if (LitClouds && Physical && _state.Valid) _volume ??= new VolumetricCloudRenderer(Gpu);
         if (!VolumeEnabled) { _volume?.Invalidate(); return; }
         if (CloudFogSkip && !Warm && WeatherFogHidesSky(Uniforms()))

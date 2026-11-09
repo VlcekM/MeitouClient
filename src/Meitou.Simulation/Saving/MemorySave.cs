@@ -5,8 +5,9 @@ using Meitou.Simulation.Dialogue;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// A squad's memory of characters on its PLATOON record (docs/formats/save.md "Squad memory", docs/game/dialogue.md "Squad memory"). The original's keys
-/// (<c>FUN_1406789e0</c> writes, <c>FUN_140678cb0</c> reads, <b>Observed</b>), one set per remembered character <c>i</c> from 0: the character's handle under
+/// A squad's memory of characters on its PLATOON record (docs/formats/save.md "Squad memory", docs/game/dialogue.md "Squad memory"). The original's
+/// keys (<c>FUN_1406789e0</c> writes, <c>FUN_140678cb0</c> reads, <b>Observed</b>), one set per remembered character <c>i</c> from 0: the character's
+/// handle under
 /// <c>tags&lt;i&gt;</c> (the five handle ints), int <c>taglong&lt;i&gt;</c> and <c>tagshort&lt;i&gt;</c> (the tag bit sets), float <c>tagtime&lt;i&gt;</c> (the last
 /// note). Meitou's time is game hours. The original keeps one entry for the whole player faction under a key not seen; Meitou writes it as
 /// <c>meitou tags player long</c> / <c>short</c> / <c>time</c> and the squad's TEMP_ALLY flag for the player as <c>meitou temp ally</c> (bool). A character

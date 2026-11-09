@@ -9,8 +9,8 @@ namespace Meitou.Simulation.Construction;
 public sealed record PlannedBuilding(string Record, Vector3 Position, Quaternion Rotation, int Floor = 0, string? Parent = null, Vector3 BoundsSize = default);
 
 /// <summary>
-/// Build mode's Confirm: creates a site per plan, in order, for the player faction (docs/simulation.md "Buildings"). A plan failing the data rules is dropped with a
-/// message.
+/// Build mode's Confirm: creates a site per plan, in order, for the player faction (docs/simulation.md "Buildings"). A plan failing the data rules is
+/// dropped with a message.
 /// </summary>
 public sealed record PlaceBuildings(IReadOnlyList<PlannedBuilding> Plans) : SimCommand;
 
@@ -55,8 +55,8 @@ public sealed record DowngradeSite(string Site) : SimCommand;
 public sealed record SetBuildingPublic(string Building, bool Public) : SimCommand;
 
 /// <summary>
-/// The town panel's name box accepted (<c>FUN_140722d60</c>): the player's outpost <see cref="Town"/> is renamed (no uniqueness test; an empty name is ignored,
-/// engine choice).
+/// The town panel's name box accepted (<c>FUN_140722d60</c>): the player's outpost <see cref="Town"/> is renamed (no uniqueness test; an empty name
+/// is ignored, engine choice).
 /// </summary>
 public sealed record RenameTown(int Town, string Name) : SimCommand;
 

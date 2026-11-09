@@ -14,8 +14,8 @@ public static class NavArea
     public const byte Ground = 1;
 
     /// <summary>
-    /// Water by depth: shallow, waist-deep and deep, the wet water states 1..3 of a size-1 swimmer (<see cref="WetState"/>; docs/game/pathfinding.md "Water
-    /// costs").
+    /// Water by depth: shallow, waist-deep and deep, the wet water states 1..3 of a size-1 swimmer (<see cref="WetState"/>; docs/game/pathfinding.md
+    /// "Water costs").
     /// </summary>
     public const byte Water = 2, WaterWaist = 4, WaterDeep = 5;
 
@@ -81,9 +81,9 @@ internal sealed class NavSolid(Vector4[] planes, Vector2 min, Vector2 max)
 }
 
 /// <summary>
-/// A placed collision triangle mesh (a map feature's rock), as its triangles (three points each, outward-facing). The span of a column is inside when the
-/// nearest triangle above it faces up, i.e. the span sees its back: a rock sunk into the terrain is open at the bottom, so a parity count would not do; the
-/// underside of an overhang faces down and leaves the ground under it (docs/game/pathfinding.md, "Map features").
+/// A placed collision triangle mesh (a map feature's rock), as its triangles (three points each, outward-facing). The span of a column is inside when
+/// the nearest triangle above it faces up, i.e. the span sees its back: a rock sunk into the terrain is open at the bottom, so a parity count would
+/// not do; the underside of an overhang faces down and leaves the ground under it (docs/game/pathfinding.md, "Map features").
 /// </summary>
 internal sealed class NavMeshSolid(Vector3[] triangles, Vector2 min, Vector2 max)
 {
@@ -113,8 +113,8 @@ internal sealed class GatherStats
 }
 
 /// <summary>
-/// Everything the navmesh builder needs for one zone (docs/game/pathfinding.md, "What our builder needs"): triangles in world space (Y up, counter-clockwise
-/// seen from outside, so Recast's normal test works) with a per-triangle area, carvers, door painters and seed points.
+/// Everything the navmesh builder needs for one zone (docs/game/pathfinding.md, "What our builder needs"): triangles in world space (Y up,
+/// counter-clockwise seen from outside, so Recast's normal test works) with a per-triangle area, carvers, door painters and seed points.
 /// </summary>
 internal sealed class ZoneGeometry
 {
@@ -217,14 +217,14 @@ internal sealed class ZoneGeometry
     public bool InteriorDestroyed { get; init; }
 
     /// <summary>
-    /// For the interior of a destroyed building with a <c>destroyed boundary</c>: that wall ring's cross-section, the outline of the ruin's floor (its ruined
-    /// walls have no collision); only polygons inside it are kept (docs/game/pathfinding.md, "Destroyed interiors").
+    /// For the interior of a destroyed building with a <c>destroyed boundary</c>: that wall ring's cross-section, the outline of the ruin's floor
+    /// (its ruined walls have no collision); only polygons inside it are kept (docs/game/pathfinding.md, "Destroyed interiors").
     /// </summary>
     public List<(Vector2 A, Vector2 B)>? DestroyedOutline { get; init; }
 
     /// <summary>
-    /// For the interior of an intact building without doors (an open doorway, e.g. the Hive Commune Hut), or of a ruin: joined to the exterior wherever their
-    /// edges meet on the hull's line (docs/game/pathfinding.md, "Door joins").
+    /// For the interior of an intact building without doors (an open doorway, e.g. the Hive Commune Hut), or of a ruin: joined to the exterior
+    /// wherever their edges meet on the hull's line (docs/game/pathfinding.md, "Door joins").
     /// </summary>
     public bool InteriorDoorless { get; init; }
 
@@ -239,14 +239,14 @@ internal sealed class ZoneGeometry
     public int BuildingFirstTriangle, BuildingLastTriangle;
 
     /// <summary>
-    /// The triangle ranges of the exterior's floor-0 and floor-1 building parts (groups 9 and 10), what the seed ray rule tests; in an interior, its floor-0 parts
-    /// (group 9), what the origin ray seed tests.
+    /// The triangle ranges of the exterior's floor-0 and floor-1 building parts (groups 9 and 10), what the seed ray rule tests; in an interior, its
+    /// floor-0 parts (group 9), what the origin ray seed tests.
     /// </summary>
     public List<(int First, int Last)> FloorRanges { get; } = [];
 
     /// <summary>
-    /// Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh (<see cref="ZoneGeometryGatherer.BuildingHash"/>); 0 for an
-    /// interior mesh.
+    /// Hash of the zone's buildings (placement, rotation, record), the cache key of the built mesh (<see cref="ZoneGeometryGatherer.BuildingHash"/>);
+    /// 0 for an interior mesh.
     /// </summary>
     public uint BuildingHash { get; set; }
 

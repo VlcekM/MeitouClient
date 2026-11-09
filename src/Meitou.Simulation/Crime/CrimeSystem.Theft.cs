@@ -6,8 +6,8 @@ namespace Meitou.Simulation.Crime;
 public sealed partial class CrimeSystem
 {
     /// <summary>
-    /// What a successful fence gives the seller (<c>FUN_140793770</c>, <b>Observed</b>, only while the seller's chance of getting away is below 0.98): the generic
-    /// entry with 5 x 2, or 20 x 2 when the shop caught it.
+    /// What a successful fence gives the seller (<c>FUN_140793770</c>, <b>Observed</b>, only while the seller's chance of getting away is below
+    /// 0.98): the generic entry with 5 x 2, or 20 x 2 when the shop caught it.
     /// </summary>
     public const float FenceXp = 10, FenceCaughtXp = 40, FenceXpBelow = 0.98f;
 

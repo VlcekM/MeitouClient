@@ -29,8 +29,7 @@ namespace Meitou.Game.Rendering.Post;
 public sealed unsafe partial class PostProcess : IDisposable, IWorldPostChain
 {
     /// <summary>
-    /// A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped
-    /// minification).
+    /// A native target with the GL sampler state its GL texture had (linear or nearest, clamped; the luminance's mipmapped minification).
     /// </summary>
     sealed class Target2D(GpuTexture texture, TextureMinFilter min, TextureMagFilter mag)
     {

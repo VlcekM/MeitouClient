@@ -129,8 +129,7 @@ public static class FarmLayout
                 positions[i] = positions[i] with { Y = ground(positions[i].X, positions[i].Z) };
 
         // Each plant, per group: a roll in [0, amount) walks the parts (from the first, round twice at most) taking off their counts; the first part
-        // of the group
-        // the roll has gone below 0 at that still has plants to give is chosen.
+        // of the group the roll has gone below 0 at that still has plants to give is chosen.
         int[] counts = PartCounts(farm), left = (int[])counts.Clone();
         var groups = farm.Parts.Select(p => p.Group).Distinct().Where(g => counts.Where((_, i) => farm.Parts[i].Group == g).Sum() != 0).ToArray();
         var meshes = new List<FarmSubPlant>();

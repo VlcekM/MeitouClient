@@ -4,9 +4,9 @@ using Meitou.Data.World;
 namespace Meitou.Simulation.Movement;
 
 /// <summary>
-/// Splicing a long route (docs/game/pathfinding.md "Long routes", engine choice): when zones along a walker's path go live, or it reaches the provisional part,
-/// it asks for a path only to a point of its own path ahead and replaces the path up to that point, keeping the rest and following the old path until the
-/// answer comes. Asking for the whole way each time turned walkers about and dropped orders whenever one answer failed.
+/// Splicing a long route (docs/game/pathfinding.md "Long routes", engine choice): when zones along a walker's path go live, or it reaches the
+/// provisional part, it asks for a path only to a point of its own path ahead and replaces the path up to that point, keeping the rest and following
+/// the old path until the answer comes. Asking for the whole way each time turned walkers about and dropped orders whenever one answer failed.
 /// </summary>
 public sealed partial class MovementSystem
 {

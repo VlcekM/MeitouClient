@@ -114,8 +114,7 @@ public class GameDatabaseTests
             .Where(r => r.IsRemoved)
             .Select(r => r.StringId)
             .ToHashSet();
-        // The gear blueprints' research is made at load, one <id>.TECH.1 per ARMOUR, CONTAINER and CROSSBOW
-        // (GameDatabase.AddGearBlueprints).
+        // The gear blueprints' research is made at load, one <id>.TECH.1 per ARMOUR, CONTAINER and CROSSBOW (GameDatabase.AddGearBlueprints).
         defined.UnionWith(db.Records.Values
             .Where(r => r.Type is FcsRecordType.Armour or FcsRecordType.Container or FcsRecordType.Crossbow)
             .Select(r => r.StringId + ".TECH.1"));

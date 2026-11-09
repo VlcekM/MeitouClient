@@ -17,18 +17,18 @@ sealed class SpeechBubbles(PlayerInterface player)
     const int BubblePasses = 10;
 
     /// <summary>
-    /// The shown bubbles' fitted texts, so a line is wrapped and measured once rather than every frame; cleared when the screen size, UI mode or text size
-    /// changes.
+    /// The shown bubbles' fitted texts, so a line is wrapped and measured once rather than every frame; cleared when the screen size, UI mode or text
+    /// size changes.
     /// </summary>
     readonly Dictionary<(string Text, bool Large), FittedSpeech> _fittedSpeech = [];
     (int Width, int Height, UiMode Mode, float MinimumPixels) _fittedFor;
 
     /// <summary>
-    /// The bubble sits 4 units above the head and fades from opaque at 1000 units from the camera to gone at 2500, the distance counted x0.5 for the large
-    /// font's events, x0.75 for the rest of the interrupting set and x1 for the others; an interrupting bubble is kept on screen (<b>Verified</b>, the
-    /// original's bubble code). The box is the original's <c>Kenshi_SpeechPanel</c> layout (<b>Verified</b>): a <c>Kenshi_SpeechPanelSkin</c> at most
-    /// 0.2344 of the screen wide, the centred <c>DialogueBubbleText</c> in Kenshi_StandardFont_Large or _Medium with a black shadow in its 0.0689, 0.125,
-    /// 0.8556 x 0.75 box. Fitting the panel to its text is Meitou's (the original's sizing is not mapped).
+    /// The bubble sits 4 units above the head and fades from opaque at 1000 units from the camera to gone at 2500, the distance counted x0.5 for the
+    /// large font's events, x0.75 for the rest of the interrupting set and x1 for the others; an interrupting bubble is kept on screen
+    /// (<b>Verified</b>, the original's bubble code). The box is the original's <c>Kenshi_SpeechPanel</c> layout (<b>Verified</b>): a
+    /// <c>Kenshi_SpeechPanelSkin</c> at most 0.2344 of the screen wide, the centred <c>DialogueBubbleText</c> in Kenshi_StandardFont_Large or _Medium
+    /// with a black shadow in its 0.0689, 0.125, 0.8556 x 0.75 box. Fitting the panel to its text is Meitou's (the original's sizing is not mapped).
     /// </summary>
     internal void AddSpeech(List<UiControl> controls)
     {
@@ -82,9 +82,9 @@ sealed class SpeechBubbles(PlayerInterface player)
 
     /// <summary>
     /// Overlapping bubbles push each other apart (<c>FUN_140671f50</c>, once a frame): for every pair whose integer pixel rectangles intersect (edges
-    /// included) the shorter-overlap axis is used (horizontal when the width overlap is smaller) and each moves overlap / 2 + 1 pixels, the one with the
-    /// smaller coordinate toward smaller; whole passes repeat while any pair moved, at most ten. Positions are recomputed from the heads every frame, so
-    /// the shift does not persist.
+    /// included) the shorter-overlap axis is used (horizontal when the width overlap is smaller) and each moves overlap / 2 + 1 pixels, the one with
+    /// the smaller coordinate toward smaller; whole passes repeat while any pair moved, at most ten. Positions are recomputed from the heads every
+    /// frame, so the shift does not persist.
     /// </summary>
     internal static UiRect[] SeparateBubbles(UiRect[] panels)
     {

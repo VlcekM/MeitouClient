@@ -204,8 +204,7 @@ public sealed class ItemFactory(GameDatabase db, GameConstants constants, Func<M
         if (character is { Type: FcsRecordType.AnimalCharacter }) AddAnimalBackpacks(inventory, character);
 
         // The CHARACTER's blueprints come after the weapons and before its inventory list (CharacterHuman::setupInventorySections, Verified): one of
-        // each RESEARCH whose v0 is
-        // above 0, whatever the number.
+        // each RESEARCH whose v0 is above 0, whatever the number.
         if (character is not null)
             foreach (var r in character.GetReferences("blueprints"))
                 if (r.Values.Value0 > 0 && Db.Find(r.TargetStringId) is { Type: FcsRecordType.Research } research

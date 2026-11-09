@@ -8,8 +8,8 @@ namespace Meitou.Game.Rendering.Gpu.Shaders;
 public sealed record ShaderCompileOptions
 {
     /// <summary>
-    /// Defines <c>MEITOU_DEPTH_REVERSED</c> in every stage, which selects the reversed branch of <see cref="DepthConvention.Glsl"/>. Set by the Vulkan
-    /// backend (its scene depth is reversed), unset on Metal.
+    /// Defines <c>MEITOU_DEPTH_REVERSED</c> in every stage, which selects the reversed branch of <see cref="DepthConvention.Glsl"/>. Set by the
+    /// Vulkan backend (its scene depth is reversed), unset on Metal.
     /// </summary>
     public bool DepthReversed { get; init; }
 

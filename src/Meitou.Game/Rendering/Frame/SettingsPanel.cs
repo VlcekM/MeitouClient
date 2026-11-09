@@ -4,12 +4,10 @@ using Meitou.Game.Rendering.Overlays;
 namespace Meitou.Game.Rendering.Frame;
 
 /// <summary>
-/// One slider: a value between <see cref="Min"/> and <see cref="Max"/>, read and written through the callbacks. <see cref="Faithful"/> and <see
-/// cref="Meitou"/>, when known,
-/// are the game's value and Meitou's (the settings menu marks them on the track and offers a quick switch between them). <see cref="Reversed"/>: the
-/// value
-/// falls as the setting improves (terrain detail's error in pixels), so the track runs from <see cref="Max"/> on the left to <see cref="Min"/> on the
-/// right.
+/// One slider: a value between <see cref="Min"/> and <see cref="Max"/>, read and written through the callbacks. <see cref="Faithful"/> and
+/// <see cref="Meitou"/>, when known, are the game's value and Meitou's (the settings menu marks them on the track and offers a quick switch between
+/// them). <see cref="Reversed"/>: the value falls as the setting improves (terrain detail's error in pixels), so the track runs from
+/// <see cref="Max"/> on the left to <see cref="Min"/> on the right.
 /// <see cref="Scale"/>: what <see cref="Text"/> multiplies the value by (100 for a percentage), so a typed number is in the units shown.
 /// </summary>
 public sealed record Slider(string Label, float Min, float Max, Func<float> Get, Action<float> Set, string Format = "0.##", bool Logarithmic = false,
@@ -47,10 +45,9 @@ public sealed record Slider(string Label, float Min, float Max, Func<float> Get,
 
 /// <summary>
 /// One checkbox: on or off, read and written through the callbacks; <see cref="Text"/> describes the state beside it. <see cref="Remaster"/>: a
-/// Faithful / Meitou switch
-/// (on: Meitou); <see cref="OnOff"/>: one whose Faithful side is the feature off (the game has none), so its sides also read off / on. <see
-/// cref="Optional"/>:
-/// an optional effect, in neither the game nor the Meitou look (bloom): it reads Off / On, both looks have it off and a look preset may turn it on.
+/// Faithful / Meitou switch (on: Meitou); <see cref="OnOff"/>: one whose Faithful side is the feature off (the game has none), so its sides also read
+/// off / on. <see cref="Optional"/>: an optional effect, in neither the game nor the Meitou look (bloom): it reads Off / On, both looks have it off
+/// and a look preset may turn it on.
 /// </summary>
 public sealed record Toggle(string Label, Func<bool> Get, Action<bool> Set, Func<string>? Text = null, bool Remaster = false, bool OnOff = false,
         bool Optional = false);
@@ -67,11 +64,10 @@ public sealed record PanelChoice(Func<string> Label, Func<IReadOnlyList<string>>
 
 /// <summary>
 /// A panel of sliders drawn with the <see cref="DebugOverlay"/> in three columns in the top-left corner (the main sliders, then <c>sideSliders</c> at
-/// the end,
-/// down the first column, then the next), over the other panels. Drag a slider with the left mouse
-/// button; while the pointer is on the panel, the camera ignores the mouse. The button at the bottom puts every slider back to
-/// the value it had when the panel was made (before a saved config or a drag changed it). Below the sliders, optional checkboxes under their own
-/// heading (the Faithful / Meitou switches), toggled with a click and reset with the sliders. Beside the reset button, optional
+/// the end, down the first column, then the next), over the other panels. Drag a slider with the left mouse button; while the pointer is on the
+/// panel, the camera ignores the mouse. The button at the bottom puts every slider back to the value it had when the panel was made (before a saved
+/// config or a drag changed it). Below the sliders, optional checkboxes under their own heading (the Faithful / Meitou switches), toggled with a
+/// click and reset with the sliders. Beside the reset button, optional
 /// <see cref="PanelAction"/> buttons: a click shows the action's question with Yes / No on a row below, and the result there after Yes; then optional
 /// <see cref="PanelChoice"/> drop-down lists.
 /// </summary>

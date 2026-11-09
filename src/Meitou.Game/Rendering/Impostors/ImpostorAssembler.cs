@@ -4,27 +4,27 @@ using System.Numerics;
 namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
-/// The CPU half of a bake (docs/impostors.md, "Filtering"): takes the rendered rows of frames (each frame rendered at 2x the frame size with a hard cut-out
-/// and box-filtered to the frame size on the GPU), and per frame
+/// The CPU half of a bake (docs/impostors.md, "Filtering"): takes the rendered rows of frames (each frame rendered at 2x the frame size with a hard
+/// cut-out and box-filtered to the frame size on the GPU), and per frame
 /// <list type="number">
 /// <item>undoes the premultiplication: coverage = covered samples / 4; albedo the mean of the covered samples; the normal their normalised sum (stored
-/// octahedrally encoded in the frame's basis, so normals facing away from the frame keep their direction); the gloss the coverage-weighted mean over the
-/// whole atlas;</item>
+/// octahedrally encoded in the frame's basis, so normals facing away from the frame keep their direction); the gloss the coverage-weighted mean over
+/// the whole atlas;</item>
 /// <item>fills the empty pixels by pull-push from the covered ones, so bilinear filtering and the mips never pull in black or a wrong normal at the
 /// silhouette;</item>
 /// <item>builds the mip chain within the frame (coverage-weighted averages, so frames never bleed into each other), down to 4 x 4;</item>
 /// <item>scales each level's coverage (level 0's too) so the share of pixels at or above the 0.5 cut equals the frame's covered area (thin branches do not
 /// vanish: the alpha-test mip correction), then cuts it: a texel is covered or not (BC1's 1-bit alpha).</item>
 /// </list>
-/// Then <see cref="Finish"/> encodes the levels (BC1 albedo with the cut-out, BC5 normal). Frames are independent, so a row is processed in parallel. The
-/// per-frame arrays come from a shared pool (<see cref="Scratch"/>) and the atlas levels are not cleared before they are written: a large atlas used to
-/// allocate about 900 MB of short-lived large arrays, and the collections they caused stalled the render thread's frames.
+/// Then <see cref="Finish"/> encodes the levels (BC1 albedo with the cut-out, BC5 normal). Frames are independent, so a row is processed in parallel.
+/// The per-frame arrays come from a shared pool (<see cref="Scratch"/>) and the atlas levels are not cleared before they are written: a large atlas
+/// used to allocate about 900 MB of short-lived large arrays, and the collections they caused stalled the render thread's frames.
 /// </summary>
 public sealed class ImpostorAssembler
 {
     /// <summary>
-    /// The RGBA8 levels of finished bakes, kept for the next bake of the same size (a large atlas is two maps of about 50 MB: allocating them anew for every
-    /// bake made the collector stall the render thread).
+    /// The RGBA8 levels of finished bakes, kept for the next bake of the same size (a large atlas is two maps of about 50 MB: allocating them anew
+    /// for every bake made the collector stall the render thread).
     /// </summary>
     static readonly ConcurrentDictionary<(int Grid, int Frame, int Levels), ConcurrentBag<byte[][][]>> MapPools = new();
 
@@ -365,8 +365,8 @@ public sealed class ImpostorAssembler
             _glossWeight += glossCover;
         }
 
-        // The frame's covered area (the mean of the samples): every level's coverage, level 0's too, is scaled so that the runtime cut (coverage >= 0.5)
-        // keeps that share of its pixels. Without it branches thinner than half a pixel vanish (their 2 x 2 coverage is 0.25).
+        // The frame's covered area (the mean of the samples): every level's coverage, level 0's too, is scaled so that the runtime cut (coverage >=
+        // 0.5) keeps that share of its pixels. Without it branches thinner than half a pixel vanish (their 2 x 2 coverage is 0.25).
         float area = 0;
         foreach (float c in cov) area += c;
 

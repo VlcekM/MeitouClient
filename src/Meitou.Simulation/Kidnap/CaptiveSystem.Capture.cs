@@ -18,24 +18,21 @@ namespace Meitou.Simulation.Kidnap;
 /// and capture"; docs/simulation.md "Captives"):
 /// <list type="bullet">
 /// <item><b>Capture</b> (167 "Capturing slave", finder <c>FUN_1408cdd00</c>, <b>Observed</b>): the nearest downed (<see cref="Down"/>: a crawler out
-/// of combat mode too), uncarried, uncaged character
-/// on its sensed list (seen, so in its building or in the open; <see cref="NearestDown"/>) that is no animal, not of the capturer's faction or an
-/// ally (<b>engine reading</b> of the sensed-class masks), no slave already (slave state 1), of NPC class other than law
-/// enforcement, trader and diplomat, not maimed, and not in shackles (engine guard). The
-/// capturer walks to it, strips its weapons (the <c>hip</c> and <c>back</c> sections go to the capturer, after 0.8 s of <c>medic</c>,
+/// of combat mode too), uncarried, uncaged character on its sensed list (seen, so in its building or in the open; <see cref="NearestDown"/>) that is
+/// no animal, not of the capturer's faction or an ally (<b>engine reading</b> of the sensed-class masks), no slave already (slave state 1), of NPC
+/// class other than law enforcement, trader and diplomat, not maimed, and not in shackles (engine guard). The capturer walks to it, strips its
+/// weapons (the <c>hip</c> and <c>back</c> sections go to the capturer, after 0.8 s of <c>medic</c>,
 /// <c>Task_StripWeapons</c>), cuffs it
 /// (<c>Task_CuffTarget</c>: a "Restraining" bar, <c>medic</c>, event 37 to the captive when it is full; the shackles are an <b>engine choice</b>,
 /// their source in the original is <b>Unknown</b>)
 /// and the cuff makes it a slave of the capturer's faction (<c>setChainedMode</c>, see <see cref="Hand"/>).</item>
 /// <item><b>Carry</b> (168 "Carrying slaves", finder <c>FUN_1408cdf50</c>): a downed slave owned by the carrier's faction is lifted and carried along
-/// with the squad until a cage is
-/// found (goal 112 in the original, here <see cref="KidnapSystem.Carry"/> hauling).</item>
+/// with the squad until a cage is found (goal 112 in the original, here <see cref="KidnapSystem.Carry"/> hauling).</item>
 /// <item><b>Shout</b> (188 "Working the slaves", finder <c>FUN_1408cd940</c>): the worker says event 38 SHOUT_AT_SLAVE_WORKER to a random slave of
-/// its squad that is alive, uncarried and uncaged
-/// (the row's TaskData event, <b>Verified</b>: the registration of 188 stores 0x26 at <c>+0x130</c>) and keeps with it, saying the event
-/// again every <see cref="CaptiveSettings.ShoutSeconds"/>, until it says a line: the row's B list is <c>isDialogDelivered</c>, and the
-/// original's worker stays on 188 with one slave as target for long spells (<b>Observed</b>). The next sweep then picks a slave again, with no
-/// pause between.</item>
+/// its squad that is alive, uncarried and uncaged (the row's TaskData event, <b>Verified</b>: the registration of 188 stores 0x26 at <c>+0x130</c>)
+/// and keeps with it, saying the event again every <see cref="CaptiveSettings.ShoutSeconds"/>, until it says a line: the row's B list is
+/// <c>isDialogDelivered</c>, and the original's worker stays on 188 with one slave as target for long spells (<b>Observed</b>). The next sweep then
+/// picks a slave again, with no pause between.</item>
 /// </list>
 /// A job that gives up puts its target on the capturer's give-up list for <see cref="CaptiveSettings.GiveUpHours"/> (engine: the writer of the
 /// original's list is not traced).

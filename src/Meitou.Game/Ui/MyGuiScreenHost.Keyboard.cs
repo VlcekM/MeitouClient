@@ -5,10 +5,9 @@ using Meitou.Data.Ui;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// Keyboard side of the host: the edit boxes' clipboard (MyGUI 3.2.2 <c>EditBox</c>, docs/game/ui-input.md "Edit boxes") and Tab / Shift+Tab / Enter / Space
-/// over the top window's edit boxes and buttons.
-/// MyGUI has no key traversal and no key-focus look for buttons (<b>Verified</b>: <c>InputManager</c> and <c>Button</c> of 3.2.2), so the buttons' part is
-/// Meitou's.
+/// Keyboard side of the host: the edit boxes' clipboard (MyGUI 3.2.2 <c>EditBox</c>, docs/game/ui-input.md "Edit boxes") and Tab / Shift+Tab / Enter
+/// / Space over the top window's edit boxes and buttons. MyGUI has no key traversal and no key-focus look for buttons (<b>Verified</b>:
+/// <c>InputManager</c> and <c>Button</c> of 3.2.2), so the buttons' part is Meitou's.
 /// </summary>
 public sealed partial class MyGuiScreenHost
 {
@@ -44,8 +43,8 @@ public sealed partial class MyGuiScreenHost
     string _localClipboard = "";
 
     /// <summary>
-    /// The system clipboard's text (null: unavailable) and where copied text goes; the host that owns a window sets them. Without them the boxes share a
-    /// clipboard of their own.
+    /// The system clipboard's text (null: unavailable) and where copied text goes; the host that owns a window sets them. Without them the boxes
+    /// share a clipboard of their own.
     /// </summary>
     public Func<string?>? ClipboardReader { get; set; }
     public Action<string>? ClipboardWriter { get; set; }
@@ -72,8 +71,8 @@ public sealed partial class MyGuiScreenHost
     }
 
     /// <summary>
-    /// Puts the typing focus on an edit box; a read-only one (MyGUI focuses them to select and copy) keeps its text out of the screen's typed text, which
-    /// would freeze it.
+    /// Puts the typing focus on an edit box; a read-only one (MyGUI focuses them to select and copy) keeps its text out of the screen's typed text,
+    /// which would freeze it.
     /// </summary>
     void FocusEdit(string id, UiControl c)
     {
@@ -112,9 +111,9 @@ public sealed partial class MyGuiScreenHost
     }
 
     /// <summary>
-    /// Copy, Cut and Paste in the focused box (MyGUI <c>commandCopy</c>, <c>commandCut</c>, <c>commandPast</c>): a password box copies and cuts nothing, a
-    /// read-only one cuts as a copy and takes no paste, pasting replaces the selection.
-    /// Meitou leaves the clipboard alone when there is nothing to copy (MyGUI clears its own then).
+    /// Copy, Cut and Paste in the focused box (MyGUI <c>commandCopy</c>, <c>commandCut</c>, <c>commandPast</c>): a password box copies and cuts
+    /// nothing, a read-only one cuts as a copy and takes no paste, pasting replaces the selection. Meitou leaves the clipboard alone when there is
+    /// nothing to copy (MyGUI clears its own then).
     /// </summary>
     bool Clipboard(UiEditKey key)
     {
@@ -144,8 +143,8 @@ public sealed partial class MyGuiScreenHost
     }
 
     /// <summary>
-    /// Enter in the focused box (MyGUI): a multi-line box takes a line break (Ctrl+Enter accepts), any other accepts, which here is the default action; a
-    /// read-only box does nothing. True when the box took it.
+    /// Enter in the focused box (MyGUI): a multi-line box takes a line break (Ctrl+Enter accepts), any other accepts, which here is the default
+    /// action; a read-only box does nothing. True when the box took it.
     /// </summary>
     public bool EditEnter(bool ctrl)
     {
@@ -175,8 +174,8 @@ public sealed partial class MyGuiScreenHost
     (string Screen, string Widget)? _keyButton;
 
     /// <summary>
-    /// Draw a ring (2 px <c>brass-light</c>, offset 2) round the button the keyboard is on; the Meitou UI mode's focus look (docs/meitou-ui.md). The Faithful
-    /// mode has none.
+    /// Draw a ring (2 px <c>brass-light</c>, offset 2) round the button the keyboard is on; the Meitou UI mode's focus look (docs/meitou-ui.md). The
+    /// Faithful mode has none.
     /// </summary>
     public bool FocusRing { get; set; }
 
@@ -186,9 +185,9 @@ public sealed partial class MyGuiScreenHost
     public bool FocusReadOnly => _edit?.ReadOnly == true;
 
     /// <summary>
-    /// Tab / Shift+Tab over the top window's editable boxes and buttons in layout order (Meitou's; the first Tab goes to the first edit box, else the first
-    /// button). On a window that is not modal and has no edit box it does nothing until a button has the focus, so Tab stays the game's change-squad key
-    /// there; false: nothing taken.
+    /// Tab / Shift+Tab over the top window's editable boxes and buttons in layout order (Meitou's; the first Tab goes to the first edit box, else the
+    /// first button). On a window that is not modal and has no edit box it does nothing until a button has the focus, so Tab stays the game's
+    /// change-squad key there; false: nothing taken.
     /// </summary>
     bool CycleFocus(bool backwards)
     {
@@ -218,8 +217,8 @@ public sealed partial class MyGuiScreenHost
     }
 
     /// <summary>
-    /// Enter or Space on the button the keyboard is on: it is pressed like a click on its middle (so tabs, sounds and events run as for the pointer). False:
-    /// no button has the focus.
+    /// Enter or Space on the button the keyboard is on: it is pressed like a click on its middle (so tabs, sounds and events run as for the pointer).
+    /// False: no button has the focus.
     /// </summary>
     public bool ActivateFocused()
     {

@@ -39,8 +39,9 @@ public enum SenseTag : ushort
 }
 
 /// <summary>
-/// One sense entry (the original's 0x40-byte entry, <c>FUN_1408580d0</c>, <b>Verified</b> layout): the character, where it was last sensed (+0x0, followed for a
-/// while after, see <see cref="SenseBlock"/>), the tick it was last seen or heard (+0x10), whether the last look saw (+0x38) or heard (+0x39) it, and its tags.
+/// One sense entry (the original's 0x40-byte entry, <c>FUN_1408580d0</c>, <b>Verified</b> layout): the character, where it was last sensed (+0x0,
+/// followed for a while after, see <see cref="SenseBlock"/>), the tick it was last seen or heard (+0x10), whether the last look saw (+0x38) or heard
+/// (+0x39) it, and its tags.
 /// </summary>
 public struct SenseEntry
 {
@@ -51,8 +52,8 @@ public struct SenseEntry
     public SenseTag Tags;
 
     /// <summary>
-    /// The ENEMY / NEUTRAL / ALLY part of <see cref="Tags"/> from the relations, last worked out at a full look (<see cref="AggroSystem"/>; the fights override
-    /// it at every look).
+    /// The ENEMY / NEUTRAL / ALLY part of <see cref="Tags"/> from the relations, last worked out at a full look (<see cref="AggroSystem"/>; the
+    /// fights override it at every look).
     /// </summary>
     internal SenseTag Base;
 
@@ -70,8 +71,8 @@ public struct SenseEntry
 public sealed class SenseBlock
 {
     /// <summary>
-    /// The most entries a character keeps (engine choice: the original's map has no bound, <b>Verified</b>; it is fed by a gather that has none either). A new
-    /// sensed character past the cap replaces the entry sensed longest ago, when that one is older than the look.
+    /// The most entries a character keeps (engine choice: the original's map has no bound, <b>Verified</b>; it is fed by a gather that has none
+    /// either). A new sensed character past the cap replaces the entry sensed longest ago, when that one is older than the look.
     /// </summary>
     public const int Cap = 40;
 
@@ -106,8 +107,8 @@ public sealed class SenseBlock
     public int AlliesDown { get; internal set; }
 
     /// <summary>
-    /// The threat towards this character (+0x88, the AI's +0xb0) and towards characters of its faction (+0x8c): one per fighting threat (the original sums
-    /// aggression, Meitou has none).
+    /// The threat towards this character (+0x88, the AI's +0xb0) and towards characters of its faction (+0x8c): one per fighting threat (the original
+    /// sums aggression, Meitou has none).
     /// </summary>
     public float ThreatToMe { get; internal set; }
 
@@ -142,8 +143,8 @@ public sealed class SenseBlock
     }
 
     /// <summary>
-    /// Whether the block holds an entry of <paramref name="who"/> (the knows test <c>FUN_140855960</c> with its flag clear; with <paramref name="now"/> only one
-    /// sensed at the last look).
+    /// Whether the block holds an entry of <paramref name="who"/> (the knows test <c>FUN_140855960</c> with its flag clear; with
+    /// <paramref name="now"/> only one sensed at the last look).
     /// </summary>
     public bool Knows(CharacterId who, bool now = false)
     {

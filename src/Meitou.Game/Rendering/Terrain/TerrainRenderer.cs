@@ -184,8 +184,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
         _patchPrepassCut = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexNative(),
                 TerrainShaders.PrepassFragmentNative(interiorCut: true), "terrain prepass interior cut");
         // The ground displacement (GroundRelief): the colour and prepass programs tessellated, for the patches near the eye (the same stages in both,
-        // so the
-        // late colour's depth test meets the prepass's depths).
+        // so the late colour's depth test meets the prepass's depths).
         if (gpu.HasTessellation)
         {
             _patchPrepassTess = new TerrainProgram(gpu, sets, TerrainShaders.PatchVertexTessNative(), TerrainShaders.PrepassFragmentNative(),
@@ -489,8 +488,7 @@ public sealed unsafe partial class TerrainRenderer : IDisposable
             RecordPatches(_patchColourTess!, "terrain relief", PatchMode.Late, _reliefCount, _reliefDraws);
         // The cut patches' colour without the cut: their prepass discarded the cut fragments, so an equal depth test leaves them out early. The cut's
         // discard here turned the early depth test off, and the GPU drained between these draws (1.4 ms for 19 of them; docs/render-terrain.md
-        // "Registers").
-        // Both passes run the same vertex and tessellation stages (invariant positions): a kept fragment meets its own depth.
+        // "Registers"). Both passes run the same vertex and tessellation stages (invariant positions): a kept fragment meets its own depth.
         if (_cutCount > 0)
             RecordPatches(PatchColour, "terrain interior cut", PatchMode.LateEqual, _cutCount, _cutDraws);
         if (_cutReliefCount > 0)

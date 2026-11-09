@@ -1,12 +1,11 @@
 namespace Meitou.Simulation.Session;
 
 /// <summary>
-/// Fixed simulation step decoupled from rendering: the host feeds real frame time to <see cref="Advance"/>, which says how many
-/// simulation ticks to run and leaves <see cref="Alpha"/> (how far the next tick is) for drawing between the previous and the
-/// current tick's state. The accumulator counts in ticks, not seconds, and the result is rounded with a small tolerance, so the
-/// tick count depends only on the summed real time, not on how it was split into frames (60 x 1/60 s gives the same 30 ticks as
-/// one 1 s frame). Nothing reads a wall clock. The default 30 Hz is an engine choice for the real-time control tick
-/// (input actions, camera, UI); the world's own tick runs on a second instance fed game time
+/// Fixed simulation step decoupled from rendering: the host feeds real frame time to <see cref="Advance"/>, which says how many simulation ticks to
+/// run and leaves <see cref="Alpha"/> (how far the next tick is) for drawing between the previous and the current tick's state. The accumulator
+/// counts in ticks, not seconds, and the result is rounded with a small tolerance, so the tick count depends only on the summed real time, not on how
+/// it was split into frames (60 x 1/60 s gives the same 30 ticks as one 1 s frame). Nothing reads a wall clock. The default 30 Hz is an engine choice
+/// for the real-time control tick (input actions, camera, UI); the world's own tick runs on a second instance fed game time
 /// (<see cref="SimulationClock"/>; the original has no fixed rate, docs/game/game-loop.md).
 /// </summary>
 public sealed class FixedStepClock

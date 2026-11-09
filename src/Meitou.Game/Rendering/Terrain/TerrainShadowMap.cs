@@ -9,8 +9,8 @@ namespace Meitou.Game.Rendering.Terrain;
 /// <summary>
 /// The terrain's shadow over the whole world for the Meitou shadows (beyond the cascades' range): for the sun's direction, per sample of the world
 /// height grid (2049², 144 units apart) the height of the top of the shadow the land towards the sun casts there, and the distance to the land that
-/// casts it. A point below that top is in shadow; the distance widens the penumbra. Built on the GPU by a doubling sweep (each pass looks twice as far
-/// towards the sun: 12 passes cover the world) into two RG32F targets, again only when the sun has moved. The receiver reads it with one fetch
+/// casts it. A point below that top is in shadow; the distance widens the penumbra. Built on the GPU by a doubling sweep (each pass looks twice as
+/// far towards the sun: 12 passes cover the world) into two RG32F targets, again only when the sun has moved. The receiver reads it with one fetch
 /// (<see cref="MeitouShadowShaders.Functions"/>, <c>msTerrain</c>).
 /// <para>
 /// Phase 8 (docs/renderer-native.md 8): the heights and the targets are native textures and the sweep renders into them in one native segment of its

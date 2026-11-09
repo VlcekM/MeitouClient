@@ -4,11 +4,11 @@ using Meitou.Game.Rendering.Profiling;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// Where the time of an upload step goes (<c>--log-spikes</c> only; otherwise every call is a branch on a flag): per thread, the ticks and counts of the
-/// parts of a step that are not its own work (beginning a frame, waiting for a free frame slot, a new memory block, a block given back, a staging chunk,
-/// the copy into staging, image and buffer creation, a freed image) and the garbage collector's pauses. <see cref="Take"/> returns what the calling
-/// thread has spent since the last call, for the slow-step log lines; the steps' loops call it (and drop the result) before each step, so a step's line
-/// holds that step's parts only.
+/// Where the time of an upload step goes (<c>--log-spikes</c> only; otherwise every call is a branch on a flag): per thread, the ticks and counts of
+/// the parts of a step that are not its own work (beginning a frame, waiting for a free frame slot, a new memory block, a block given back, a staging
+/// chunk, the copy into staging, image and buffer creation, a freed image) and the garbage collector's pauses. <see cref="Take"/> returns what the
+/// calling thread has spent since the last call, for the slow-step log lines; the steps' loops call it (and drop the result) before each step, so a
+/// step's line holds that step's parts only.
 /// </summary>
 public static class UploadProfile
 {
@@ -53,8 +53,8 @@ public static class UploadProfile
     }
 
     /// <summary>
-    /// The calling thread's parts since the last call ("NewBlock 12.1 ms x1, StagingCopy 0.4 ms x2 (1.0 MB), GC pause 14.2 ms"); empty when nothing was
-    /// spent.
+    /// The calling thread's parts since the last call ("NewBlock 12.1 ms x1, StagingCopy 0.4 ms x2 (1.0 MB), GC pause 14.2 ms"); empty when nothing
+    /// was spent.
     /// </summary>
     public static string Take()
     {

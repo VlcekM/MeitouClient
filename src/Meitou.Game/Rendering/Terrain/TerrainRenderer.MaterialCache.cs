@@ -15,8 +15,8 @@ public static class TerrainMaterialCache
 /// <summary>
 /// The material cache (docs/render-terrain.md "Material cache"): the terrain's layered material (the biomes' layers blended, tinted, with their
 /// normal maps) baked into world-space levels round the eye, so a patch pixel near the eye reads two textures instead of shading up to five biomes of
-/// up to 14 layer samples. <see cref="CacheLevels"/> levels of <see cref="CacheSide"/>² texels, level k's texel <see cref="CacheTexel"/> × 2^k,
-/// each addressed toroidally: as the eye moves a level keeps its texels and bakes the strips it gains (every frame, as needed; it is built again only when
+/// up to 14 layer samples. <see cref="CacheLevels"/> levels of <see cref="CacheSide"/>² texels, level k's texel <see cref="CacheTexel"/> × 2^k, each
+/// addressed toroidally: as the eye moves a level keeps its texels and bakes the strips it gains (every frame, as needed; it is built again only when
 /// it moved a whole side). Besides those, a level's first bake gets <see cref="CacheBuildRows"/> rows a frame (until it is whole its pixels shade the
 /// layers; fewer and a moving eye outran it), and a refresh after the material's inputs changed (<see cref="CacheKey"/>: a biome loaded, a pair's
 /// near slot, the overlay window, the arrays) <see cref="CacheRows"/> rows, the finest level first, drawn from meanwhile.

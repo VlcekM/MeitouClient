@@ -108,9 +108,8 @@ internal sealed unsafe class GiScene : IDisposable
     /// True (default; the bench's gi-lazy-scene switch; needs <see cref="ReuseTop"/>): everything that changes the traced scene changes at once, when
     /// the eye crosses into another cell of
     /// <see cref="EpochSize"/>: the object selection, the foliage block, the origin and the terrain grids that have finished sampling. Between those
-    /// commits the instances stay as they are and
-    /// the top level is not built. A moving camera used to change one of them nearly every frame (the selection snap 128 units, the foliage 250, a
-    /// terrain grid 512 and its completion later).
+    /// commits the instances stay as they are and the top level is not built. A moving camera used to change one of them nearly every frame (the
+    /// selection snap 128 units, the foliage 250, a terrain grid 512 and its completion later).
     /// </summary>
     public bool LazyScene { get; set; } = true;
 
@@ -250,8 +249,7 @@ internal sealed unsafe class GiScene : IDisposable
         }
         var rounded = new Vector3(MathF.Round(eye.X / 64) * 64, MathF.Round(eye.Y / 64) * 64, MathF.Round(eye.Z / 64) * 64);
         // The origin follows the eye in steps of OriginSlack, not 64 units: the instances (their transforms are relative to it) then stay the same
-        // while the eye walks, and the top level of a frame whose instances
-        // are those of its slot's last build is not built again (ReuseTop).
+        // while the eye walks, and the top level of a frame whose instances are those of its slot's last build is not built again (ReuseTop).
         if (!ReuseTop || !_originSet || commit && MathF.Max(MathF.Abs(eye.X - Origin.X), MathF.Max(MathF.Abs(eye.Y - Origin.Y),
                 MathF.Abs(eye.Z - Origin.Z))) > OriginSlack) { Origin = rounded; _originSet = true; }
         var slot = _slots[_ctx.Frame.Slot];
@@ -339,8 +337,7 @@ internal sealed unsafe class GiScene : IDisposable
         Evict();
 
         // The top level, over this frame's instances: built again only when they are not those of its slot's last build (the eye still or walking,
-        // the
-        // origin and the object set hold, see ReuseTop). The instances are plain data, so equal bytes are an equal structure.
+        // the origin and the object set hold, see ReuseTop). The instances are plain data, so equal bytes are an equal structure.
         var bytes = MemoryMarshal.AsBytes(CollectionsMarshal.AsSpan(_instances));
         bool same = ReuseTop && topSlot.BuiltTrace == TopFastTrace && topSlot.BuiltBytes is { } built
             && topSlot.BuiltLength == bytes.Length && bytes.SequenceEqual(built.AsSpan(0, bytes.Length));
@@ -693,8 +690,7 @@ internal sealed unsafe class GiScene : IDisposable
                 && _vertices.Size == (ulong)(positions.Length * 12) && _refitsSinceBuild < FullRebuildEvery)
             {
                 // The same triangles over new heights: written into the vertex buffer in place and the structure refitted. The frame's full barrier
-                // (FrameLoop) orders both after the
-                // frames that traced the old ones; the vertex buffer's address, and so the geometry record, stay.
+                // (FrameLoop) orders both after the frames that traced the old ones; the vertex buffer's address, and so the geometry record, stay.
                 ctx.Uploads.Write(_vertices, 0, MemoryMarshal.AsBytes(positions.AsSpan()));
                 cmd.Barrier(BarrierBatch.Full);
                 Blas.RefitBottom(cmd, [new TriangleGeometry(ctx.Device.Address(_vertices.Handle), 12, (uint)positions.Length,

@@ -49,9 +49,9 @@ sealed record GameplaySettings(
     }
 
     /// <summary>
-    /// The NPC View Range (<c>npc range</c> of the install's settings.cfg; <c>FUN_1405c9f60</c>, <b>Verified</b>): 3250 when missing, 3000 when stored
-    /// below 1000. Characters farther from the eye than this are not drawn (<c>CharacterRenderer.DrawDistance</c>); the Characters page's slider sets it
-    /// from then on.
+    /// The NPC View Range (<c>npc range</c> of the install's settings.cfg; <c>FUN_1405c9f60</c>, <b>Verified</b>): 3250 when missing, 3000 when
+    /// stored below 1000. Characters farther from the eye than this are not drawn (<c>CharacterRenderer.DrawDistance</c>); the Characters page's
+    /// slider sets it from then on.
     /// </summary>
     public static float NpcRange(GameInstall install) =>
         ReadValues(install).TryGetValue("npc range", out float v) ? (v < 1000 ? 3000 : v) : DefaultNpcRange;

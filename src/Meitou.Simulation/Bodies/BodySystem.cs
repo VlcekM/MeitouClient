@@ -249,8 +249,7 @@ public sealed class BodySystem(GameConstants constants, BodyOptions? options = n
 
             // At 2x and 5x (World.SpeedSteps) a character no fight, injury or player touches steps on its slot's turn with the time since its last
             // step: the rates come out the same and the body costs per real second what it does at 1x. The rest step every tick, so knock-outs,
-            // deaths and the HUD keep their timing.
-            // a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
+            // deaths and the HUD keep their timing. a far character's step covers the ticks since its last (the far cadence, World.StepTicks)
             int steps = Math.Max(world.SpeedSteps, world.StepTicks(i));
             if (steps > 1 && world.StepTicks(i) == 1 && !cold.IsPlayer && !cold.InCombat && !medical.Incapacitated && !(medical.Bleeding > 0)
                 && i % steps != world.Tick % steps

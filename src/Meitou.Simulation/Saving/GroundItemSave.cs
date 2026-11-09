@@ -9,15 +9,15 @@ using Meitou.Simulation.Population;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// Loose items through the zone files' <c>1-itemlist</c> (docs/formats/save.md "Zone files"; docs/simulation.md "Ground items"): every listed item whose
-/// record the game data has lies in <see cref="World.GroundItems"/> after a load, with its saved position and rotation; a save writes each zone's list from
-/// them again. Entries whose item the data lacks (a missing mod) are written back as read.
+/// Loose items through the zone files' <c>1-itemlist</c> (docs/formats/save.md "Zone files"; docs/simulation.md "Ground items"): every listed item
+/// whose record the game data has lies in <see cref="World.GroundItems"/> after a load, with its saved position and rotation; a save writes each
+/// zone's list from them again. Entries whose item the data lacks (a missing mod) are written back as read.
 /// </summary>
 public static class GroundItemSave
 {
     /// <summary>
-    /// Puts the save's loose items on the ground, in zone and list order; returns how many the data could not make. <paramref name="factionOf"/> gives a
-    /// faction id's index for <see cref="GroundItem.OwnedBy"/>, -1 for one that does not count (unknown, or <c>not real</c>).
+    /// Puts the save's loose items on the ground, in zone and list order; returns how many the data could not make. <paramref name="factionOf"/>
+    /// gives a faction id's index for <see cref="GroundItem.OwnedBy"/>, -1 for one that does not count (unknown, or <c>not real</c>).
     /// </summary>
     public static int Load(SaveGame save, World world, ItemFactory factory, Func<string, int>? factionOf = null)
     {
@@ -43,9 +43,9 @@ public static class GroundItemSave
     }
 
     /// <summary>
-    /// The faction an item's <c>ownedby</c> handle names (docs/game/ui-input.md "Ground item labels"): the owning character's platoon's; a set handle whose
-    /// character the save no longer holds falls back to the <c>insideBuilding</c> building's <c>owner faction ID</c> (the label's fallback, used for the
-    /// pick-up too: engine choice). -1: none.
+    /// The faction an item's <c>ownedby</c> handle names (docs/game/ui-input.md "Ground item labels"): the owning character's platoon's; a set handle
+    /// whose character the save no longer holds falls back to the <c>insideBuilding</c> building's <c>owner faction ID</c> (the label's fallback,
+    /// used for the pick-up too: engine choice). -1: none.
     /// </summary>
     static int OwnerOf(FcsRecord item, SaveHandles handles, Func<string, int> factionOf)
     {
@@ -60,9 +60,10 @@ public static class GroundItemSave
     }
 
     /// <summary>
-    /// Writes each zone's list from the items lying in it (by position). A zone whose list would name the same records it does and gains no item is left as
-    /// it is (so an unchanged save keeps its zone files); a zone with items and no file gets one; a file left with no record goes (as the original deletes it).
-    /// Returns the new items a camp laid (<see cref="GroundItem.Camp"/>), for <see cref="WritePersist"/> once the nests have their handles.
+    /// Writes each zone's list from the items lying in it (by position). A zone whose list would name the same records it does and gains no item is
+    /// left as it is (so an unchanged save keeps its zone files); a zone with items and no file gets one; a file left with no record goes (as the
+    /// original deletes it). Returns the new items a camp laid (<see cref="GroundItem.Camp"/>), for <see cref="WritePersist"/> once the nests have
+    /// their handles.
     /// </summary>
     public static List<(SaveItem Item, int Camp)> Write(SaveGame game, World world, ItemFactory factory)
     {

@@ -375,9 +375,8 @@ public sealed unsafe partial class ShadowPass
         ShadowSchedule.Pick(want[..count], mustDraw[..count], _waited, FarBudget, MaxWait, drawNow, nearCount);
 
         // While the host flies the camera (a character flight, a squad tour hop) the far cascades are not drawn: a map drawn now covers the wrong
-        // ground the next frame, and the
-        // ones drawn before the flight shadow the ground kilometres back, so they are stale and not published until drawn again, once the camera
-        // lands (uncovered, over the budget's frames).
+        // ground the next frame, and the ones drawn before the flight shadow the ground kilometres back, so they are stale and not published until
+        // drawn again, once the camera lands (uncovered, over the budget's frames).
         bool flying = CameraFlying;
         if (flying)
         {

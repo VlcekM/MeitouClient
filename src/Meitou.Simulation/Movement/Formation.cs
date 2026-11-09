@@ -14,8 +14,8 @@ public enum SquadFormation { Random = 0, Caravan = 1, Military = 2 }
 public readonly record struct FormationMember(CharacterId Id, int Role, bool Animal, float Radius);
 
 /// <summary>
-/// Where a squad's followers keep station (<see cref="Layout"/>, the original's <c>Blackboard::buildFormation</c>, docs/game/pathfinding.md "Squads travelling
-/// together") and where the characters of a move order end up (<see cref="Scatter"/>, the original's ground-click spread).
+/// Where a squad's followers keep station (<see cref="Layout"/>, the original's <c>Blackboard::buildFormation</c>, docs/game/pathfinding.md "Squads
+/// travelling together") and where the characters of a move order end up (<see cref="Scatter"/>, the original's ground-click spread).
 /// </summary>
 public static class Formation
 {
@@ -304,10 +304,10 @@ public static class Formation
     }
 
     /// <summary>
-    /// The targets of a ground-click move order of <paramref name="count"/> characters (order 0x1d in <c>FUN_1407f9e20</c>, <b>Verified</b>): the C runtime's
-    /// rand is seeded with the count; the first character goes to the point, every other one to point + (sin a, cos a) x r on X/Z, with r = u x sqrt(60 x
-    /// count) + 5 and then a = u x 2 pi, each u a fresh rand() / 32768 (<c>DAT_141742b48</c>). Meitou replays the MSVC generator (state x 214013 + 2531011,
-    /// output bits 16 to 30), so the spread is a pure function of the count and the point.
+    /// The targets of a ground-click move order of <paramref name="count"/> characters (order 0x1d in <c>FUN_1407f9e20</c>, <b>Verified</b>): the C
+    /// runtime's rand is seeded with the count; the first character goes to the point, every other one to point + (sin a, cos a) x r on X/Z, with r =
+    /// u x sqrt(60 x count) + 5 and then a = u x 2 pi, each u a fresh rand() / 32768 (<c>DAT_141742b48</c>). Meitou replays the MSVC generator (state
+    /// x 214013 + 2531011, output bits 16 to 30), so the spread is a pure function of the count and the point.
     /// </summary>
     public static Vector2[] Scatter(int count, Vector2 target)
     {

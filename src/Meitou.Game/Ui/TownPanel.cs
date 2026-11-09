@@ -6,8 +6,9 @@ using Meitou.Simulation.Production;
 namespace Meitou.Game.Ui;
 
 /// <summary>
-/// The HUD's town panel (<c>TownPanel</c> of <c>Kenshi_MainPanel</c>, docs/game/ui-screens.md "Town panel"): the outpost the camera is in, its name box, the
-/// Open to public tick, the research, power and battery bars. It is taken out of the HUD as a screen panel so that its name box takes typing.
+/// The HUD's town panel (<c>TownPanel</c> of <c>Kenshi_MainPanel</c>, docs/game/ui-screens.md "Town panel"): the outpost the camera is in, its name
+/// box, the Open to public tick, the research, power and battery bars. It is taken out of the HUD as a screen panel so that its name box takes
+/// typing.
 /// </summary>
 sealed class TownPanel(PlayerInterface player)
 {
@@ -35,9 +36,9 @@ sealed class TownPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// Once a frame (<c>MainBarGUI</c>'s update, <c>FUN_140728d50</c>): the outpost still shown while the camera pivot is within its radius, else the nearest
-    /// outpost of the player's faction if the pivot is within its radius (<c>FUN_140927e40</c>), else none; the panel shows while there is one and the HUD
-    /// does.
+    /// Once a frame (<c>MainBarGUI</c>'s update, <c>FUN_140728d50</c>): the outpost still shown while the camera pivot is within its radius, else the
+    /// nearest outpost of the player's faction if the pivot is within its radius (<c>FUN_140927e40</c>), else none; the panel shows while there is
+    /// one and the HUD does.
     /// </summary>
     internal void SyncTownPanel(bool hud)
     {
@@ -65,9 +66,9 @@ sealed class TownPanel(PlayerInterface player)
     }
 
     /// <summary>
-    /// The panel's lines (<c>FUN_140722de0</c>, <c>FUN_140727380</c>): the name box and the tick, live only for a town of the player's faction; the research
-    /// being done and its progress, else "None"; generated / demanded power; the batteries' charge / capacity, " &gt;&gt;" after it while they charge,
-    /// "&lt;&lt; " before it while they drain.
+    /// The panel's lines (<c>FUN_140722de0</c>, <c>FUN_140727380</c>): the name box and the tick, live only for a town of the player's faction; the
+    /// research being done and its progress, else "None"; generated / demanded power; the batteries' charge / capacity, " &gt;&gt;" after it while
+    /// they charge, "&lt;&lt; " before it while they drain.
     /// </summary>
     internal void BindTownScreen(UiBindings b)
     {

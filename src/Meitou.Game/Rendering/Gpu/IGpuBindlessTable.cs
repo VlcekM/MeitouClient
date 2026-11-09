@@ -2,8 +2,8 @@ namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The bindless table as the renderers see it (docs/resource-layer.md): the arrays of textures a shader indexes by number, and the engine's own
-/// bookkeeping of what each index holds. The table's storage is the backend's: Vulkan's is a descriptor set per frame slot, Metal's an argument buffer
-/// with a texture array and a sampler array.
+/// bookkeeping of what each index holds. The table's storage is the backend's: Vulkan's is a descriptor set per frame slot, Metal's an argument
+/// buffer with a texture array and a sampler array.
 /// </summary>
 public interface IGpuBindlessTable : IDisposable
 {
@@ -18,8 +18,8 @@ public interface IGpuBindlessTable : IDisposable
     int Registered { get; }
 
     /// <summary>
-    /// Adds a texture to the array its kind names. Its index is valid in the frame that is open (when one is) and in every frame that begins after the
-    /// call.
+    /// Adds a texture to the array its kind names. Its index is valid in the frame that is open (when one is) and in every frame that begins after
+    /// the call.
     /// </summary>
     uint Register(BindlessKind kind, in SampledTexture texture);
 
@@ -29,8 +29,8 @@ public interface IGpuBindlessTable : IDisposable
     BindlessHandle Register(GpuTexture texture, GpuSampler sampler, bool shadow = false);
 
     /// <summary>
-    /// Replaces an entry's sampler or view (the upscaler's LOD bias changed, a texture was re-created). Takes effect in the frame that is open and in every
-    /// frame that begins after the call.
+    /// Replaces an entry's sampler or view (the upscaler's LOD bias changed, a texture was re-created). Takes effect in the frame that is open and in
+    /// every frame that begins after the call.
     /// </summary>
     void Update(BindlessKind kind, uint index, in SampledTexture texture);
 

@@ -13,9 +13,9 @@ public readonly record struct QuerySlot(long Frame, int Slot, uint Index)
 }
 
 /// <summary>
-/// GPU timestamps (docs/renderer-native.md 2.10): one pool per frame slot, reset from the host when the slot comes round (host query reset), after the
-/// slot's previous results were collected. Indices are handed out with an interlocked counter, so any recording thread may take them. Results are read a
-/// frame-ring later, never waited for: <see cref="TryRead"/> answers once the slot's frame has completed.
+/// GPU timestamps (docs/renderer-native.md 2.10): one pool per frame slot, reset from the host when the slot comes round (host query reset), after
+/// the slot's previous results were collected. Indices are handed out with an interlocked counter, so any recording thread may take them. Results are
+/// read a frame-ring later, never waited for: <see cref="TryRead"/> answers once the slot's frame has completed.
 /// </summary>
 public sealed unsafe class QueryArena : IGpuTimestamps, IDisposable
 {

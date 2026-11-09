@@ -9,10 +9,11 @@ namespace Meitou.Simulation.Combat;
 public sealed partial class CombatSystem
 {
     /// <summary>
-    /// One blow of <c>Task_KillPrisoner</c> (goals 134, 135, docs/game/ai-tasks.md "Prisoner fate", <b>Observed</b>): the attacker's weapon packet (or its fists')
-    /// lands on the target with no reach, block or dodge test (the target is caged), through its armour and toughness as a landed melee hit; the floater, sound,
-    /// blood, KO, death and severed-limb effects follow as in <see cref="Apply"/>. The killing of a captive is no crime (engine choice: the original's call
-    /// passes no crime). <paramref name="blow"/> numbers the blows for the armour cover roll. True when the target died of it. Serial phases only.
+    /// One blow of <c>Task_KillPrisoner</c> (goals 134, 135, docs/game/ai-tasks.md "Prisoner fate", <b>Observed</b>): the attacker's weapon packet
+    /// (or its fists') lands on the target with no reach, block or dodge test (the target is caged), through its armour and toughness as a landed
+    /// melee hit; the floater, sound, blood, KO, death and severed-limb effects follow as in <see cref="Apply"/>. The killing of a captive is no
+    /// crime (engine choice: the original's call passes no crime). <paramref name="blow"/> numbers the blows for the armour cover roll. True when the
+    /// target died of it. Serial phases only.
     /// </summary>
     public bool Execute(World world, int a, int d, int blow)
     {

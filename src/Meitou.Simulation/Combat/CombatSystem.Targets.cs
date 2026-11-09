@@ -70,13 +70,14 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// A fighter's target choice (<c>CombatClassAI::chooseAttackTarget</c> <c>FUN_140666ee0</c>, <b>Verified</b>; docs/game/combat.md "Target selection"), scored
-    /// by <see cref="TargetScore"/>: the best over its lists that scores above <see cref="PickFloor"/>. The lists: the attackers of its AI task's target, which
-    /// the original holds only for the goals 45 Bodyguard, 17, 87, 152 and 124 (<c>FUN_14050ca70</c>; Meitou: a bodyguard's protectee), the chooser's own
-    /// attackers and its threats (<see cref="SenseBlock.Threats"/>); a candidate must be sensed by the chooser or the protectee (<see cref="CharacterFacts.Knows"/>)
-    /// and not crippled. When none qualifies, the sensed-enemy finder (<c>FUN_14059fa70</c>, gated on <c>numEnemies</c>; the aggro mode it also tests is 0 by
-    /// construction): the entries tagged enemy, not down or imprisoned, seen or heard at the last look. The current target is scored as any other (its
-    /// stubbornness keeps it). Reads the last tick's state and the senses of the last look; -1 when none qualifies.
+    /// A fighter's target choice (<c>CombatClassAI::chooseAttackTarget</c> <c>FUN_140666ee0</c>, <b>Verified</b>; docs/game/combat.md "Target
+    /// selection"), scored by <see cref="TargetScore"/>: the best over its lists that scores above <see cref="PickFloor"/>. The lists: the attackers
+    /// of its AI task's target, which the original holds only for the goals 45 Bodyguard, 17, 87, 152 and 124 (<c>FUN_14050ca70</c>; Meitou: a
+    /// bodyguard's protectee), the chooser's own attackers and its threats (<see cref="SenseBlock.Threats"/>); a candidate must be sensed by the
+    /// chooser or the protectee (<see cref="CharacterFacts.Knows"/>) and not crippled. When none qualifies, the sensed-enemy finder
+    /// (<c>FUN_14059fa70</c>, gated on <c>numEnemies</c>; the aggro mode it also tests is 0 by construction): the entries tagged enemy, not down or
+    /// imprisoned, seen or heard at the last look. The current target is scored as any other (its stubbornness keeps it). Reads the last tick's state
+    /// and the senses of the last look; -1 when none qualifies.
     /// </summary>
     int ChooseTarget(World world, int i, in CombatSlot s, CharacterCold cold)
     {
@@ -139,12 +140,12 @@ public sealed partial class CombatSystem
     static bool Crippled(CharacterTable table, int c) => table.Cold(c)?.Medical is { Crawling: true };
 
     /// <summary>
-    /// Whether a fighter without a target leaves its fight (<c>Task_MeleeAttack</c> update <c>FUN_14034ca40</c>, <b>Verified</b>; docs/game/combat.md "Leaving a
-    /// fight"): its senses count no enemy (<see cref="SenseBlock.Enemies"/>) and no threat to its allies (<see cref="SenseBlock.ThreatToAllies"/>), nobody fights
-    /// it (<see cref="AttackerCount"/>, the engaged list), and its task target (<see cref="CombatSlot.TaskSlot"/>) is gone or down (dead or knocked out; carried
-    /// too, engine reading). Engine choice: a task target its senses hold no entry of counts as gone, so a fighter does not wait for ever on a live target it
-    /// lost (the entry decays 30 to 120 sense units after it was last sensed); a world without senses never holds it. Reads the last tick's fights and the
-    /// senses of the last look.
+    /// Whether a fighter without a target leaves its fight (<c>Task_MeleeAttack</c> update <c>FUN_14034ca40</c>, <b>Verified</b>; docs/game/combat.md
+    /// "Leaving a fight"): its senses count no enemy (<see cref="SenseBlock.Enemies"/>) and no threat to its allies
+    /// (<see cref="SenseBlock.ThreatToAllies"/>), nobody fights it (<see cref="AttackerCount"/>, the engaged list), and its task target
+    /// (<see cref="CombatSlot.TaskSlot"/>) is gone or down (dead or knocked out; carried too, engine reading). Engine choice: a task target its
+    /// senses hold no entry of counts as gone, so a fighter does not wait for ever on a live target it lost (the entry decays 30 to 120 sense units
+    /// after it was last sensed); a world without senses never holds it. Reads the last tick's fights and the senses of the last look.
     /// </summary>
     bool NothingLeft(World world, int i, in CombatSlot s)
     {
@@ -165,10 +166,11 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// <c>AI::findAttackerOf</c> (<c>FUN_14099c3b0</c>, <b>Verified</b>) for a character joining <paramref name="subject"/>'s fight: of those fighting the subject,
-    /// and the subject's own target while it fights, the best by <see cref="TargetScore"/> for <paramref name="looker"/>; for a looker other than the subject only
-    /// those within <see cref="RetaliationSystem.ProtectReach"/> of the subject, and never one the looker counts as an ally (the subject's own target also only
-    /// when either side is the other's enemy). -1 when none. The finder's sense tests and its fallback to the subject's threats are left out (an attacker is put
-    /// in the senses of whom it attacks). <paramref name="pending"/>: fights started this tick by target, counted as attackers of theirs (the AI's serial step).
+    /// and the subject's own target while it fights, the best by <see cref="TargetScore"/> for <paramref name="looker"/>; for a looker other than the
+    /// subject only those within <see cref="RetaliationSystem.ProtectReach"/> of the subject, and never one the looker counts as an ally (the
+    /// subject's own target also only when either side is the other's enemy). -1 when none. The finder's sense tests and its fallback to the
+    /// subject's threats are left out (an attacker is put in the senses of whom it attacks). <paramref name="pending"/>: fights started this tick by
+    /// target, counted as attackers of theirs (the AI's serial step).
     /// </summary>
     public int BestAttackerOf(World world, int subject, int looker, IReadOnlyDictionary<int, int>? pending = null)
     {
@@ -217,8 +219,8 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// The crippled flag of the target score (<c>FUN_14059e300</c> :249-252): vslot 0x360 (<c>isCrippled</c>: crawling, or unable to attack, stand-in) or the
-    /// maimed test <c>FUN_140644170</c> (<see cref="Bodies.MedicalState.Maimed"/>).
+    /// The crippled flag of the target score (<c>FUN_14059e300</c> :249-252): vslot 0x360 (<c>isCrippled</c>: crawling, or unable to attack,
+    /// stand-in) or the maimed test <c>FUN_140644170</c> (<see cref="Bodies.MedicalState.Maimed"/>).
     /// </summary>
     public static bool IsCrippled(CharacterCold c) => c.Medical is { Crawling: true } or { Maimed: true } || c.Fighter is not { CanAttack: true };
 
@@ -230,8 +232,7 @@ public sealed partial class CombatSystem
         if (c == i || (uint)c >= (uint)prev.Length || !prev[c].Alive || _read[c].Down) return;
         if (table.Cold(c) is not { Medical.Incapacitated: false, IsImprisoned: false, CarriedBy.IsNone: true } tc) return;
 
-        // A carried one is dropped by Act's target test.
-        // One it found no path to lately is left out (AITaskSytem::isPathImpossible).
+        // A carried one is dropped by Act's target test. One it found no path to lately is left out (AITaskSytem::isPathImpossible).
         if (PursuitSystem.PathImpossible(q.Cold, new CharacterId(c, prev[c].Generation), world.Tick)) return;
 
         // The current target is whoever the order named, of any faction.
@@ -274,13 +275,14 @@ public sealed partial class CombatSystem
     #region Threat and fight counts
 
     /// <summary>
-    /// The fight threat of a character (<c>FUN_14099a190</c> on its <c>CombatClassAI</c>, <b>Verified</b>; docs/game/ai-tasks.md "Combat goals"), the value the
-    /// protect finders give an ally or squad mate (143, 15, 288): 0 when it is down; 0.01 when exactly one attacker fights it and someone else already fights
-    /// that attacker; else 0.25 n - 0.2 for n attackers (at most 5; none: 0), raised to 0.1 x the threat sum of its senses (<see cref="SenseBlock.ThreatToMe"/>,
+    /// The fight threat of a character (<c>FUN_14099a190</c> on its <c>CombatClassAI</c>, <b>Verified</b>; docs/game/ai-tasks.md "Combat goals"), the
+    /// value the protect finders give an ally or squad mate (143, 15, 288): 0 when it is down; 0.01 when exactly one attacker fights it and someone
+    /// else already fights that attacker; else 0.25 n - 0.2 for n attackers (at most 5; none: 0), raised to 0.1 x the threat sum of its senses
+    /// (<see cref="SenseBlock.ThreatToMe"/>,
     /// <paramref name="senses"/>, its own); and 0.01 at least while it is in a fight. Engine reading: n is every standing fighter whose target it is
-    /// (<see cref="AttackerCount"/>; the original counts its engaged list of askers, at most 5), and "someone else fights the attacker" is that attacker's own
-    /// count above 1 (the original adds its refused askers, an approximation); Meitou's threat sum adds 1 per threat where the original adds its aggression.
-    /// As of the last tick; any thread after Schedule.
+    /// (<see cref="AttackerCount"/>; the original counts its engaged list of askers, at most 5), and "someone else fights the attacker" is that
+    /// attacker's own count above 1 (the original adds its refused askers, an approximation); Meitou's threat sum adds 1 per threat where the
+    /// original adds its aggression. As of the last tick; any thread after Schedule.
     /// </summary>
     public float FightThreat(World world, int slot, SenseBlock? senses)
     {
@@ -322,11 +324,11 @@ public sealed partial class CombatSystem
     #region Alerts and steering
 
     /// <summary>
-    /// Whether attacker <paramref name="a"/> taking <paramref name="t"/> as its target alerts it (<c>AI::underMeleeAttack</c> from the targeting path,
-    /// docs/game/combat.md "Fight lifecycle and orders"): always, unless the target is the player's, or the attacker is and the target is not aware of it
-    /// (fighting it, or hit by it); then only when both stand in the same place (<see cref="SightMap.PlaceOf"/>), on the same floor
-    /// (<see cref="SameFloorHeight"/>) and with a clear line between their eyes (terrain and buildings, <see cref="SolidHits"/>). A blow landed by the attacker
-    /// alerts in any case (the hit path). Reads the last tick's state; any thread after Schedule.
+    /// Whether attacker <paramref name="a"/> taking <paramref name="t"/> as its target alerts it (<c>AI::underMeleeAttack</c> from the targeting
+    /// path, docs/game/combat.md "Fight lifecycle and orders"): always, unless the target is the player's, or the attacker is and the target is not
+    /// aware of it (fighting it, or hit by it); then only when both stand in the same place (<see cref="SightMap.PlaceOf"/>), on the same floor
+    /// (<see cref="SameFloorHeight"/>) and with a clear line between their eyes (terrain and buildings, <see cref="SolidHits"/>). A blow landed by
+    /// the attacker alerts in any case (the hit path). Reads the last tick's state; any thread after Schedule.
     /// </summary>
     public bool Alerts(World world, int a, int t)
     {
@@ -348,8 +350,9 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Whether <paramref name="c"/> counts as an enemy of <paramref name="me"/> for the steering's repulsion (its <c>isEnemy</c>, engine reading): of a hostile
-    /// faction (another faction when there is no relation table), or fighting <paramref name="me"/>, or fought by it. Last tick's state; any thread after Schedule.
+    /// Whether <paramref name="c"/> counts as an enemy of <paramref name="me"/> for the steering's repulsion (its <c>isEnemy</c>, engine reading): of
+    /// a hostile faction (another faction when there is no relation table), or fighting <paramref name="me"/>, or fought by it. Last tick's state;
+    /// any thread after Schedule.
     /// </summary>
     public bool IsEnemyOf(World world, int c, CharacterCold oc, int me, int myFaction)
     {
@@ -362,7 +365,8 @@ public sealed partial class CombatSystem
 
     /// <summary>
     /// Whether fighter <paramref name="a"/> may steer at <paramref name="t"/> rather than walk a path (<c>CombatClassAI::vfunc_9</c>'s chase test,
-    /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>), within <see cref="SameFloorHeight"/> in height, and every
+    /// docs/game/combat.md "Combat stance"): the same place (<see cref="SightMap.PlaceOf"/>), within <see cref="SameFloorHeight"/> in height, and
+    /// every
     /// <see cref="SteerLineStep"/> of the straight line between them walkable from the last (engine stand-in for the navmesh line query). Last tick's places;
     /// any thread after Sight's update.
     /// </summary>
@@ -384,17 +388,17 @@ public sealed partial class CombatSystem
     }
 
     /// <summary>
-    /// Whether <paramref name="a"/> at <paramref name="from"/> and <paramref name="t"/> at <paramref name="to"/> stand on different floors (engine reading, #292):
-    /// either is in or on a building (<see cref="SightMap.Outdoors"/>) and they are over <see cref="SameFloorHeight"/> apart in height. A fighter does not swing
-    /// through a floor or stop its chase there; outdoors a ledge is reached by the 3D gap alone (<see cref="CombatTuning.Gap"/>). Last tick's places; any thread
-    /// after Sight's update.
+    /// Whether <paramref name="a"/> at <paramref name="from"/> and <paramref name="t"/> at <paramref name="to"/> stand on different floors (engine
+    /// reading, #292): either is in or on a building (<see cref="SightMap.Outdoors"/>) and they are over <see cref="SameFloorHeight"/> apart in
+    /// height. A fighter does not swing through a floor or stop its chase there; outdoors a ledge is reached by the 3D gap alone
+    /// (<see cref="CombatTuning.Gap"/>). Last tick's places; any thread after Sight's update.
     /// </summary>
     public static bool OtherFloor(World world, int a, Vector3 from, int t, Vector3 to) =>
         (!world.Sight.Outdoors(a) || !world.Sight.Outdoors(t)) && MathF.Abs(to.Y - from.Y) > SameFloorHeight;
 
     /// <summary>
-    /// Turns a fighter on a new target: it asks its target again for a place and weighs its techniques afresh. A crossbowman closing in on the old one has its
-    /// closing timer set to <see cref="RangedTuning.NewTargetClear"/> (<c>FUN_1404371f0</c>), so the first closing ray to pass stops it.
+    /// Turns a fighter on a new target: it asks its target again for a place and weighs its techniques afresh. A crossbowman closing in on the old
+    /// one has its closing timer set to <see cref="RangedTuning.NewTargetClear"/> (<c>FUN_1404371f0</c>), so the first closing ray to pass stops it.
     /// </summary>
     static void Retarget(ref CombatSlot s, int target, int generation, int now)
     {

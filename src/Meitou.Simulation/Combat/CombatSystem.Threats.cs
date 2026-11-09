@@ -7,11 +7,12 @@ namespace Meitou.Simulation.Combat;
 public sealed partial class CombatSystem
 {
     /// <summary>
-    /// Self preservation's desire for a character (goal 32, AI slot 17 <c>FUN_140599d20</c>, <b>Verified</b>; docs/game/combat.md "Fight lifecycle and orders"):
-    /// 1 while a threat stands within <see cref="RetaliationSystem.ImmediateReach"/> (Character <c>+0x2b0</c>, <c>iAmBeingMeleeAttacked immediate</c>), else 0.7
-    /// while one of positive aggression stands within <see cref="RetaliationSystem.SelfDefenceReach"/>, else 0. The threats are the senses' threats list
-    /// (<see cref="SenseBlock.Threats"/>, <c>SensoryData</c> +0x50: characters of another faction sensed at the last look whose fight targets this one; each counts
-    /// as of positive aggression) that still stand, at their places now; the immediate ones are those <see cref="ImmediateThreat"/> counts.
+    /// Self preservation's desire for a character (goal 32, AI slot 17 <c>FUN_140599d20</c>, <b>Verified</b>; docs/game/combat.md "Fight lifecycle
+    /// and orders"): 1 while a threat stands within <see cref="RetaliationSystem.ImmediateReach"/> (Character <c>+0x2b0</c>, <c>iAmBeingMeleeAttacked
+    /// immediate</c>), else 0.7 while one of positive aggression stands within <see cref="RetaliationSystem.SelfDefenceReach"/>, else 0. The threats
+    /// are the senses' threats list (<see cref="SenseBlock.Threats"/>, <c>SensoryData</c> +0x50: characters of another faction sensed at the last
+    /// look whose fight targets this one; each counts as of positive aggression) that still stand, at their places now; the immediate ones are those
+    /// <see cref="ImmediateThreat"/> counts.
     /// <paramref name="centre"/> is the mean position of the threats within reach (the origin <c>Task_Runaway</c> flees from, <c>FUN_14034b440</c>).
     /// Reads the last tick's state, so any thread after Schedule.
     /// </summary>

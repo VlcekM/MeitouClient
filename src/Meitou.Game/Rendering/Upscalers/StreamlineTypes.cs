@@ -206,9 +206,9 @@ static unsafe class SlTypes
     public static readonly Matrix4x4 FlipY = Matrix4x4.CreateScale(1, -1, 1);
 
     /// <summary>
-    /// The constants of one frame for images stored bottom-up (<paramref name="bottomUp"/>: the post chain's, as DLSS upscales them, so the matrices get
-    /// their y flipped and motion is scaled by −1, −1) or top-down (copied flipped, as frame generation takes them: no flip, motion −1, +1, jitter y
-    /// negated). Ours: motion in UV from previous to current; Streamline's: normalised, towards the previous position.
+    /// The constants of one frame for images stored bottom-up (<paramref name="bottomUp"/>: the post chain's, as DLSS upscales them, so the matrices
+    /// get their y flipped and motion is scaled by −1, −1) or top-down (copied flipped, as frame generation takes them: no flip, motion −1, +1,
+    /// jitter y negated). Ours: motion in UV from previous to current; Streamline's: normalised, towards the previous position.
     /// </summary>
     public static Constants CameraConstants(Matrix4x4 viewToClip, Matrix4x4 clipToPrevious, Vector2 jitterPixels, Vector3 eye, Vector3 up, Vector3 right,
         Vector3 forward, float near, float far, float fov, float aspect, bool reset, bool bottomUp)

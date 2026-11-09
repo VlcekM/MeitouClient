@@ -4,10 +4,10 @@ using Meitou.Simulation.Ragdolls;
 namespace Meitou.Simulation.Combat;
 
 /// <summary>
-/// Where a bolt or a line of fire meets the world's solid parts: the terrain (the walkability's <see cref="IWalkability.TerrainHeight"/>, not its walkable
-/// surfaces, which put a roof over whoever stands under one) and the buildings' collision (the ragdolls' <see cref="IRagdollEnvironment.Buildings"/>). Safe to
-/// call from the partitioned phases. A building whose collision is still being read is not there yet (it is gathered on a worker the first time it is asked
-/// for), so the first shots near it may pass it.
+/// Where a bolt or a line of fire meets the world's solid parts: the terrain (the walkability's <see cref="IWalkability.TerrainHeight"/>, not its
+/// walkable surfaces, which put a roof over whoever stands under one) and the buildings' collision (the ragdolls'
+/// <see cref="IRagdollEnvironment.Buildings"/>). Safe to call from the partitioned phases. A building whose collision is still being read is not
+/// there yet (it is gathered on a worker the first time it is asked for), so the first shots near it may pass it.
 /// </summary>
 static class SolidHits
 {

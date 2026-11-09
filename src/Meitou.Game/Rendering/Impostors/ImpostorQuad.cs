@@ -3,10 +3,10 @@ using System.Numerics;
 namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
-/// The tight billboard quad (docs/render-foliage.md "Foliage cost in the orbit"): a billboard spans the rectangle that holds the outline of the mesh's
-/// bounding box seen from the eye (the vertex stage works it out from the box's half extents) instead of the square of the bounding sphere's silhouette,
-/// so a tall tree or a flat bush has fewer transparent corners to sample and shade. The A/B <c>impostor-quad</c>. The half extents travel in the push
-/// constants' spare word, three 10-bit numbers (thousandths of the radius, rounded up) and the on bit.
+/// The tight billboard quad (docs/render-foliage.md "Foliage cost in the orbit"): a billboard spans the rectangle that holds the outline of the
+/// mesh's bounding box seen from the eye (the vertex stage works it out from the box's half extents) instead of the square of the bounding sphere's
+/// silhouette, so a tall tree or a flat bush has fewer transparent corners to sample and shade. The A/B <c>impostor-quad</c>. The half extents travel
+/// in the push constants' spare word, three 10-bit numbers (thousandths of the radius, rounded up) and the on bit.
 /// </summary>
 public static class ImpostorQuad
 {

@@ -109,14 +109,12 @@ public readonly record struct KidnapEvent(long Tick, KidnapEventKind Kind, Chara
 /// character, lift it, put it in a cage of the kidnapper's faction). Everything runs in <c>SlowWorld</c>, serially, after the carry system.
 /// <list type="bullet">
 /// <item><b>Duty</b>: the members of a squad whose package has goal 254 in the member's role list and hour window
-/// (<see cref="PopulationSystem.KidnapDuty"/>): a loaded campaign squad in the phase
-/// whose package lists it (the retreat package of the raids; the cannibal assault), or an AI squad whose running package does (cannibals on patrol
-/// and at home).</item>
+/// (<see cref="PopulationSystem.KidnapDuty"/>): a loaded campaign squad in the phase whose package lists it (the retreat package of the raids; the
+/// cannibal assault), or an AI squad whose running package does (cannibals on patrol and at home).</item>
 /// <item><b>Victim</b> (the finder of goal 132, <b>Verified</b>; <see cref="IsVictim"/>): the nearest character within sight that is alive, down, of
-/// a <c>carriable</c> race, not carried, not
-/// in a cage or a bed, not an animal, not already someone's pick; the sensed-list classes (<b>Unknown</b> bits) are read as "not of the kidnapper's
-/// faction or an ally". A free member
-/// (awake, not fighting, able to carry) lifts it (<see cref="CarrySystem.BeginPickUp"/>).</item>
+/// a <c>carriable</c> race, not carried, not in a cage or a bed, not an animal, not already someone's pick; the sensed-list classes (<b>Unknown</b>
+/// bits) are read as "not of the kidnapper's faction or an ally". A free member (awake, not fighting, able to carry) lifts it
+/// (<see cref="CarrySystem.BeginPickUp"/>).</item>
 /// <item><b>Carry</b>: a campaign carrier goes on with its squad (following its leader, else wandering home, <see cref="ResumeOf"/>) and, within a
 /// town of its faction (<see cref="KidnapSettings.TownSlack"/> x its radius), looks for a free
 /// cage there (its faction's or an ally's, <see cref="CageFor"/>); an AI squad's member starts only when such a cage is in range. At the cage it lets
@@ -355,13 +353,11 @@ public sealed class KidnapSystem(PopulationData data, PopulationSystem populatio
                                                                                                  // Every look the best free cage of its faction in
                                                                                                  // range. A marching carrier looks only within a town
                                                                                                  // of its faction (any on the way: the original's
-                                                                                                 // cage finder weighs
-                                                                                                 // the home x100 but does not require it) and drops
-                                                                                                 // the captive when its home town (any, without a
-                                                                                                 // HomeSite) has no free cage; any other carrier
-                                                                                                 // waits a while for one
-                                                                                                 // (engine choices; the original's give-up rule is
-                                                                                                 // Unknown).
+                                                                                                 // cage finder weighs the home x100 but does not
+                                                                                                 // require it) and drops the captive when its home
+                                                                                                 // town (any, without a HomeSite) has no free cage;
+                                                                                                 // any other carrier waits a while for one (engine
+                                                                                                 // choices; the original's give-up rule is Unknown).
                     if ((world.Tick + g) % world.Every(Settings.LookEveryTicks) != 0) return true;
                     if (a.Hauls) return CageFor(world, gn.Position, gc, a) is { } cageFound ? ToCage(world, a, g, cageFound) : true;
                     int town = TownOf(world, gn.Position, gc.Faction);

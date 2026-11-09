@@ -112,10 +112,9 @@ public sealed unsafe class AccelerationStructure : IDisposable
 
     /// <summary>
     /// Refits a structure made by <see cref="BuildBottom"/> with <c>updatable</c>, in place, over <paramref name="geometries"/>: the same triangles
-    /// with other vertex positions
-    /// (a height-field grid with new heights, its horizontal layout unchanged, so the tree keeps its shape). Much cheaper than a build. Whatever
-    /// reads it must be ordered after it
-    /// (the frame's full barrier before, <see cref="BuildToTrace"/> after) and every top level over it rebuilt.
+    /// with other vertex positions (a height-field grid with new heights, its horizontal layout unchanged, so the tree keeps its shape). Much cheaper
+    /// than a build. Whatever reads it must be ordered after it (the frame's full barrier before, <see cref="BuildToTrace"/> after) and every top
+    /// level over it rebuilt.
     /// </summary>
     public void RefitBottom(CommandList cmd, ReadOnlySpan<TriangleGeometry> geometries)
     {
@@ -216,8 +215,7 @@ public sealed unsafe class AccelerationStructure : IDisposable
     }
 
     /// <summary>Rebuilds a structure of <see cref="CreateTop"/> over <paramref name="count"/> (at most <see cref="MaxInstances"/>) <see
-    /// cref="InstanceRecord"/>s
-    /// at <paramref name="instancesAddress"/> into <paramref name="cmd"/>.</summary>
+    /// cref="InstanceRecord"/>s at <paramref name="instancesAddress"/> into <paramref name="cmd"/>.</summary>
     public void RebuildTop(CommandList cmd, ulong instancesAddress, uint count, bool fastTrace = false)
     {
         if (count > MaxInstances)

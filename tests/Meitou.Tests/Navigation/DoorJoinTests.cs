@@ -5,10 +5,9 @@ using Meitou.Simulation.Navigation;
 namespace Meitou.Tests.Navigation;
 
 /// <summary>
-/// Interiors joined to the street, on zones of the install built alone (docs/game/pathfinding.md "Door painters", "Join sweep", "Inner seams"):
-/// door painters swept into the hull and the polygon winding in double give the Sho-Battai Longhouses, Storm House Lagoon and Heft's bar
-/// their door joins, the seed ray rule on floor-0/1 parts keeps the Hive village's ground, and the seam rule joins Storm House 27.22's ramp
-/// to its door landing.
+/// Interiors joined to the street, on zones of the install built alone (docs/game/pathfinding.md "Door painters", "Join sweep", "Inner seams"): door
+/// painters swept into the hull and the polygon winding in double give the Sho-Battai Longhouses, Storm House Lagoon and Heft's bar their door joins,
+/// the seed ray rule on floor-0/1 parts keeps the Hive village's ground, and the seam rule joins Storm House 27.22's ramp to its door landing.
 /// </summary>
 [Slow]
 public class DoorJoinTests

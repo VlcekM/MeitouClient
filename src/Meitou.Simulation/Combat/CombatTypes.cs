@@ -9,20 +9,20 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Combat;
 
 /// <summary>
-/// Orders the characters to fight <see cref="Target"/> (the AI's "attack" task, a player's attack command): they draw their weapon, close in and attack until one
-/// of them is down.
+/// Orders the characters to fight <see cref="Target"/> (the AI's "attack" task, a player's attack command): they draw their weapon, close in and
+/// attack until one of them is down.
 /// </summary>
 public sealed record AttackOrder(IReadOnlyList<CharacterId> Attackers, CharacterId Target) : OrderCommand
 {
     /// <summary>
-    /// A fight the attackers did not pick: an answer to being attacked (<see cref="RetaliationSystem"/>). The player's defence does not count as an assault on
-    /// the other faction.
+    /// A fight the attackers did not pick: an answer to being attacked (<see cref="RetaliationSystem"/>). The player's defence does not count as an
+    /// assault on the other faction.
     /// </summary>
     public bool Defensive { get; init; }
 
     /// <summary>
-    /// The player picked this target (a right click, Attack Target, Attack Unprovoked): the attackers keep it rather than turning on one that lost the initiative
-    /// roll to them.
+    /// The player picked this target (a right click, Attack Target, Attack Unprovoked): the attackers keep it rather than turning on one that lost
+    /// the initiative roll to them.
     /// </summary>
     public bool Picked { get; init; }
 
@@ -45,9 +45,9 @@ public sealed record AttackOrder(IReadOnlyList<CharacterId> Attackers, Character
 }
 
 /// <summary>
-/// Shoot At (order 235, offered to a character on a turret): the gunners (the selection when empty) that man a turret fire at <see cref="Target"/> instead of
-/// choosing; the turret keeps the target while it scores for it and is no friend, and waits while it is out of range; otherwise it chooses itself
-/// (<see cref="CharacterCold.TurretTarget"/>).
+/// Shoot At (order 235, offered to a character on a turret): the gunners (the selection when empty) that man a turret fire at <see cref="Target"/>
+/// instead of choosing; the turret keeps the target while it scores for it and is no friend, and waits while it is out of range; otherwise it chooses
+/// itself (<see cref="CharacterCold.TurretTarget"/>).
 /// </summary>
 public sealed record ShootAtOrder(IReadOnlyList<CharacterId> Gunners, CharacterId Target) : OrderCommand;
 

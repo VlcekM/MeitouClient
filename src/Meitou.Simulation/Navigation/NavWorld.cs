@@ -17,8 +17,8 @@ public readonly record struct NavRef(int Zone, int Polygon)
 public readonly record struct NavLink(int Edge, NavRef To);
 
 /// <summary>
-/// An immutable set of loaded zone meshes with the links across zone borders. A new snapshot is made when a zone is added or removed, so readers on other
-/// threads never see a half-linked world.
+/// An immutable set of loaded zone meshes with the links across zone borders. A new snapshot is made when a zone is added or removed, so readers on
+/// other threads never see a half-linked world.
 /// </summary>
 public sealed class NavWorld
 {
@@ -219,8 +219,8 @@ public sealed class NavWorld
     /// Appends the mesh heights of every walkable surface at (x, z) (<see cref="ZoneNavMesh.HeightsAt"/>).
     /// </summary>
     /// <param name="nearY">
-    /// Off the mesh but within <paramref name="edge"/> of a polygon (a walker brushing a corner of its path), that polygon's height at its nearest point counts,
-    /// picked by this height.
+    /// Off the mesh but within <paramref name="edge"/> of a polygon (a walker brushing a corner of its path), that polygon's height at its nearest
+    /// point counts, picked by this height.
     /// </param>
     public void HeightsAt(float x, float z, List<float> heights, float nearY = 0, float edge = 0)
     {

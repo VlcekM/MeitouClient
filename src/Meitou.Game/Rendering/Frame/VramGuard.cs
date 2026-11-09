@@ -9,11 +9,9 @@ namespace Meitou.Game.Rendering.Frame;
 /// <list type="bullet">
 /// <item>It samples the memory in use of the budget a few times a second (<see cref="Tick"/>). At <see cref="High"/> (90%) it enters
 /// <see cref="Pressure"/>: <see cref="Streaming"/> goes false (no new zone layouts, grass pages, textures or mesh uploads are started, but for the
-/// zones and
-/// meshes within <see cref="NearReach"/> of the camera),
-/// the caches evict what has been idle for a couple of seconds instead of a minute, and <see cref="RangeScale"/> falls by about 12% every
-/// 0.75 s (down to <see cref="MinScale"/>) while the use stays high: every renderer multiplies the ranges it draws and streams to by it.
-/// The farthest things leave first because the ranges they were in end first.</item>
+/// zones and meshes within <see cref="NearReach"/> of the camera), the caches evict what has been idle for a couple of seconds instead of a minute,
+/// and <see cref="RangeScale"/> falls by about 12% every 0.75 s (down to <see cref="MinScale"/>) while the use stays high: every renderer multiplies
+/// the ranges it draws and streams to by it. The farthest things leave first because the ranges they were in end first.</item>
 /// <item>Pressure ends under <see cref="Low"/> (80%); streaming resumes. The ranges come back, 4% a second, only once the use has stayed
 /// under <see cref="Recover"/> (74%) for four seconds: the band between is where the system rests, so it does not swing.</item>
 /// <item>Allocations that can be large call <see cref="Allows"/> first (a texture's image, a bigger scratch buffer or instance arena): it asks
@@ -83,10 +81,8 @@ public sealed class VramGuard
 
     /// <summary>
     /// How far round the camera zones are still laid out and object meshes still decoded under <see cref="Pressure"/> (world units): a card that
-    /// never gets back
-    /// under <see cref="Low"/> would otherwise never load the town the player stands in (#336). The range clamp's floor (<see cref="MinScale"/> of
-    /// the default
-    /// object distance) is about this.
+    /// never gets back under <see cref="Low"/> would otherwise never load the town the player stands in (#336). The range clamp's floor
+    /// (<see cref="MinScale"/> of the default object distance) is about this.
     /// </summary>
     public const float NearReach = 3000;
 
@@ -184,8 +180,7 @@ public sealed class VramGuard
 
     /// <summary>
     /// Whether a lean texture (a small image of something drawn now, <see cref="WorldTextureCache.LeanSize"/>) may be loaded, under pressure too: the
-    /// use
-    /// with <paramref name="pending"/> stays under <see cref="PriorityCeiling"/>. Never enters pressure; reserves what it grants.
+    /// use with <paramref name="pending"/> stays under <see cref="PriorityCeiling"/>. Never enters pressure; reserves what it grants.
     /// </summary>
     public bool AllowsLean(ulong bytes, ulong pending)
     {

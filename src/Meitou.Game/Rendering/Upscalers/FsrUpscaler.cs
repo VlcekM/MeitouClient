@@ -8,9 +8,9 @@ using InternalFormat = Meitou.Game.Rendering.Gpu.InternalFormat;
 namespace Meitou.Game.Rendering.Upscalers;
 
 /// <summary>
-/// AMD FSR 3.1 upscaling through the FidelityFX API (<c>amd_fidelityfx_vk.dll</c>, MIT, from the FidelityFX SDK 1.1.x; never in the repository): loaded at
-/// run time from <c>MEITOU_FFX_PATH</c> (the DLL or its folder) or next to the executable. The context is created for the render and display size of the
-/// first dispatch and again when they change; the dispatch is recorded into the <see cref="GpuContext"/>'s frame. Inputs follow
+/// AMD FSR 3.1 upscaling through the FidelityFX API (<c>amd_fidelityfx_vk.dll</c>, MIT, from the FidelityFX SDK 1.1.x; never in the repository):
+/// loaded at run time from <c>MEITOU_FFX_PATH</c> (the DLL or its folder) or next to the executable. The context is created for the render and
+/// display size of the first dispatch and again when they change; the dispatch is recorded into the <see cref="GpuContext"/>'s frame. Inputs follow
 /// <see cref="UpscaleInputs"/>: images stay in GENERAL (declared as COMMON, which the backend reads as GENERAL and returns them to), motion is turned into
 /// FSR's convention (render pixels towards the previous position) by the motion-vector scale. docs/engine.md "Upscaling".
 /// </summary>
@@ -190,8 +190,8 @@ public sealed unsafe class FsrUpscaler : IUpscaler
             Reactive = i.Reactive is { } r ? Resource(r, false) : default,
             Output = Resource(i.Output, true),
 
-            // Both move the picture by +jitter along +column and +row of the image (ours is bottom-up GL, FSR's top-down D3D with the y offset negated
-            // in the projection: the same direction in image rows).
+            // Both move the picture by +jitter along +column and +row of the image (ours is bottom-up GL, FSR's top-down D3D with the y offset
+            // negated in the projection: the same direction in image rows).
             JitterOffset = new Coords { X = i.JitterPixels.X, Y = i.JitterPixels.Y },
 
             // Ours: UV from previous to current; FSR: render pixels from current towards previous.

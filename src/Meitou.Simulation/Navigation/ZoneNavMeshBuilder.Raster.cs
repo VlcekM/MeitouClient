@@ -52,10 +52,10 @@ internal static partial class ZoneNavMeshBuilder
     }
 
     /// <summary>
-    /// One column's spans of both fields (each sorted and apart) merged where they touch, as Recast merges them; a merged span takes the highest walkable area
-    /// whose top is within <paramref name="climb"/> of its own top, else none, and a walkable one stands at that walkable top, not on the cutting part over it:
-    /// the original cuts a face under cutting geometry rather than lifting it, so a steep collar rising from a roof is no stair of cutting tops onto the dome it
-    /// carries (docs/game/pathfinding.md, "Own builder", rasterization).
+    /// One column's spans of both fields (each sorted and apart) merged where they touch, as Recast merges them; a merged span takes the highest
+    /// walkable area whose top is within <paramref name="climb"/> of its own top, else none, and a walkable one stands at that walkable top, not on
+    /// the cutting part over it: the original cuts a face under cutting geometry rather than lifting it, so a steep collar rising from a roof is no
+    /// stair of cutting tops onto the dome it carries (docs/game/pathfinding.md, "Own builder", rasterization).
     /// </summary>
     static RcSpan? MergeColumn(RcSpan? walk, RcSpan? cut, int climb)
     {

@@ -12,10 +12,10 @@ namespace Meitou.Simulation.Saving;
 public sealed record SavedRagdoll(bool Frozen, float Age, RigidTransform[] Pose);
 
 /// <summary>
-/// A knocked-down or dead character's ragdoll in a save (docs/game/ragdolls.md "Saves"): Meitou's own GAMESTATE_CHARACTER string <c>meitou ragdoll</c>,
-/// "frozen age count" then position and rotation (x y z, x y z w) per body, invariant floats. Only a whole-body ragdoll is written (carried and limb ragdolls
-/// follow the animation and are made again); the original saves none and ignores the key. Read once, when the character is made from the save; the ragdoll
-/// system takes it the first time it sees the character.
+/// A knocked-down or dead character's ragdoll in a save (docs/game/ragdolls.md "Saves"): Meitou's own GAMESTATE_CHARACTER string <c>meitou
+/// ragdoll</c>, "frozen age count" then position and rotation (x y z, x y z w) per body, invariant floats. Only a whole-body ragdoll is written
+/// (carried and limb ragdolls follow the animation and are made again); the original saves none and ignores the key. Read once, when the character is
+/// made from the save; the ragdoll system takes it the first time it sees the character.
 /// </summary>
 public static class RagdollSave
 {

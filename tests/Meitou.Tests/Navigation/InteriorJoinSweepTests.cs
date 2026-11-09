@@ -4,12 +4,11 @@ using Meitou.Simulation.Navigation;
 namespace Meitou.Tests.Navigation;
 
 /// <summary>
-/// The join sweep (docs/game/pathfinding.md "Join sweep") over the interior coverage zones, the Ancient Labs (28.43, 37.35) and the
-/// Ash Domes (54.59) that the unseeded-interior rule freed: no intact interior the original connects (mesh connections in its tile's
-/// streaming set) is sealed in ours, i.e. not reached from the street in this zone's build resolved alone or a neighbour's.
-/// Ruins are left out (the original's own stitch cannot join 18 of them, "Ruin joins"). The floor on the connected intact interiors
-/// matched to ours keeps a silent drop in matching from passing vacuously; it is the count when the test was written less about a
-/// tenth (87 in all; The Hub has 2, its other 19 are ruins).
+/// The join sweep (docs/game/pathfinding.md "Join sweep") over the interior coverage zones, the Ancient Labs (28.43, 37.35) and the Ash Domes (54.59)
+/// that the unseeded-interior rule freed: no intact interior the original connects (mesh connections in its tile's streaming set) is sealed in ours,
+/// i.e. not reached from the street in this zone's build resolved alone or a neighbour's. Ruins are left out (the original's own stitch cannot join
+/// 18 of them, "Ruin joins"). The floor on the connected intact interiors matched to ours keeps a silent drop in matching from passing vacuously; it
+/// is the count when the test was written less about a tenth (87 in all; The Hub has 2, its other 19 are ruins).
 /// </summary>
 [Slow]
 public class InteriorJoinSweepTests

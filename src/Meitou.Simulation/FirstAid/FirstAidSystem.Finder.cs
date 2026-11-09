@@ -300,24 +300,20 @@ public sealed partial class FirstAidSystem
 
     /// <summary>
     /// The Medic / Robotics finder (<c>FUN_14099f690</c>; 58 passes <paramref name="robotics"/> false, 57 true) and the Medic button's one look.
-    /// Gates: awake and not fighting; an NPC medic
-    /// also waits while its squad fights or it carries someone (engine stand-ins for the goal's desire <c>FUN_140998410</c>: 0.01 with enemies about,
-    /// 0.1 while carrying someone, else 1). Returns the best patient's slot and score, -1 for none.
-    /// A patient whose (medic, patient) pair is already on the sub-target list (<paramref name="taken"/>) is returned at once from pass 1 or 2 with a
+    /// Gates: awake and not fighting; an NPC medic also waits while its squad fights or it carries someone (engine stand-ins for the goal's desire
+    /// <c>FUN_140998410</c>: 0.01 with enemies about, 0.1 while carrying someone, else 1). Returns the best patient's slot and score, -1 for none. A
+    /// patient whose (medic, patient) pair is already on the sub-target list (<paramref name="taken"/>) is returned at once from pass 1 or 2 with a
     /// score of at least 0.95; passes 1, 2 and 4 skip a patient being eaten.
     /// <list type="number">
     /// <item><b>Allies</b> (sensed allies, not dead): not a robot race unless robotics; not carried by an enemy of the medic; not fighting; an NPC
     /// medic skips the maimed (<see cref="MedicalState.Maimed"/>). Score =
     /// <see cref="Need"/> x <see cref="Nearness"/>; the same faction always counts, another one at 0.1 and, for a player medic, only with Heal
-    /// Allies; x 0.05 when another medic works on it.
-    /// The medic itself scores its plain need. The highest wins.</item>
+    /// Allies; x 0.05 when another medic works on it. The medic itself scores its plain need. The highest wins.</item>
     /// <item><b>Strangers</b>, when pass 1 found nobody: sensed neutral, knocked-out, imprisoned or crawling ones that are no enemy; not an animal or
-    /// a robot race, not of a not-real faction, not fighting.
-    /// A free one needs the medic's faction to <c>heal strangers</c>, to be down and to pass <c>FUN_14059a670</c> (same NPC class unless bandits, or
-    /// allied); a prisoner needs a cage of the medic's
-    /// faction and not to be a slave; a chained slave of the medic's faction counts too. Same building and town; a patient another medic works on is
-    /// skipped.
-    /// Meitou-only: a player medic with Heal Neutrals takes any free downed stranger not carried by an enemy, with Heal All enemies too.</item>
+    /// a robot race, not of a not-real faction, not fighting. A free one needs the medic's faction to <c>heal strangers</c>, to be down and to pass
+    /// <c>FUN_14059a670</c> (same NPC class unless bandits, or allied); a prisoner needs a cage of the medic's faction and not to be a slave; a
+    /// chained slave of the medic's faction counts too. Same building and town; a patient another medic works on is skipped. Meitou-only: a player
+    /// medic with Heal Neutrals takes any free downed stranger not carried by an enemy, with Heal All enemies too.</item>
     /// <item><b>The squad's chained slaves</b> in sight (<see cref="SquadSlave"/>), <b>carried</b> patients of the medic's faction (outdoors), then
     /// <b>prisoners in the cages</b> of the medic's faction in its place at a flat 0.25.</item>
     /// </list>
@@ -362,8 +358,7 @@ public sealed partial class FirstAidSystem
             world.Grid.Query(previous[i].Position.X, previous[i].Position.Z, range + PatientGridMargin, ref collector, CandidateCollector.Add);
 
             // What the snapshot cannot place: a character spawned, removed or moved farther than the margin allows since it was taken (spawns,
-            // teleports into a
-            // cage or an interior) is added by its slot; every other one moved less than PatientGridJump, inside the margin.
+            // teleports into a cage or an interior) is added by its slot; every other one moved less than PatientGridJump, inside the margin.
             for (int s = 0; s < previous.Length; s++)
                 if (previous[s].Alive != next[s].Alive
                         || (previous[s].Position - next[s].Position).LengthSquared() > PatientGridJump * PatientGridJump)

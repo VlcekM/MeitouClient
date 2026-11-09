@@ -257,8 +257,7 @@ internal sealed class FogVolumes
             case FogFeatureType.Block:
                 {
                     // The box: the sections at the lowest and the highest height (a convex block's sections in between lie within both boxes), up to
-                    // its
-                    // highest corner, or the highest height when it is open upwards ("Volcano01").
+                    // its highest corner, or the highest height when it is open upwards ("Volcano01").
                     var low = f.SectionBounds(SectionHeight);
                     var high = f.SectionBounds(HighHeight);
                     if ((low ?? high) is not { } first) return null;
@@ -401,9 +400,8 @@ internal sealed class FogVolumes
             {
                 var (radius, distance) = Faded(fog.Cylinder, fog.Radius, fog.Distance, fog.Fade);
                 if (radius <= 0 || fog.Alpha <= 0) continue;   // the game hides a volume at alpha 0 (FUN_140108f50)
-                // The game's inside test reads the node's position relative to the effect's node, so a camera inside an effect's
-                // sphere is never "inside" and the hull's back faces are culled: from inside, the sphere is not drawn (docs: Verified
-                // (decompiled)).
+                // The game's inside test reads the node's position relative to the effect's node, so a camera inside an effect's sphere is never
+                // "inside" and the hull's back faces are culled: from inside, the sphere is not drawn (docs: Verified (decompiled)).
                 if (!fog.Cylinder && Vector3.DistanceSquared(eye, fog.Position) < radius * radius) continue;
                 if (e == _effects.Count)
                     _effects.Add(new Volume("", fog.Cylinder ? FogVolumeShaders.BeamType : FogVolumeShaders.SphereType));
@@ -541,8 +539,7 @@ internal sealed class FogVolumes
         }
         float? plain = HideDistance(last.Data[1].W, last.Data[2].W, inside, far);
         float? byDirection = DirectionRadius(last, eye, far);
-        // Both bounds are proven: the smaller is used.
-        // No radius yet: a solve in flight will give one (the shadow cap waits for it).
+        // Both bounds are proven: the smaller is used. No radius yet: a solve in flight will give one (the shadow cap waits for it).
         if ((plain, byDirection) is (null, null))
         {
             ShadowHidePending = _solving is not null;

@@ -16,9 +16,8 @@ public sealed partial class World
     internal bool WantsCombatHits => _activeCombatHitObservers > 0 || _combatHitFeed is not null;
 
     /// <summary>
-    /// A copy of every resolved hit for the host (the mods' hit feeds, docs/modding.md); null (the default) records none.
-    /// The host sets it and empties it every frame. Display only like <see cref="BloodMarks"/>:
-    /// nothing in the simulation reads it, so it cannot change a run.
+    /// A copy of every resolved hit for the host (the mods' hit feeds, docs/modding.md); null (the default) records none. The host sets it and
+    /// empties it every frame. Display only like <see cref="BloodMarks"/>: nothing in the simulation reads it, so it cannot change a run.
     /// </summary>
     public System.Collections.Concurrent.ConcurrentQueue<CombatHit>? CombatHitFeed
     {

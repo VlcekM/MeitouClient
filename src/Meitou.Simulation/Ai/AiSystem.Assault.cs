@@ -20,8 +20,8 @@ public sealed partial class AiSystem
     /// <summary>
     /// A dialogue attack effect's Assault order for the speaker (<c>FUN_140680560</c> cases 6, 0x37 and 0x39: <c>FUN_1405d20d0(speaker, 0, 0x65 | 0xf8, target)</c>,
     /// <b>Verified</b>; goal 101, 248 for 0x37, whose extra list-B <c>!159</c> and commitment are not modelled): the speaker attacks the best known, in-area,
-    /// standing member of the target's squad. Given only to a speaker of a faction that is not the player's. False when the speaker has no AI mind (the
-    /// caller then attacks the target itself).
+    /// standing member of the target's squad. Given only to a speaker of a faction that is not the player's. False when the speaker has no AI mind
+    /// (the caller then attacks the target itself).
     /// </summary>
     public bool OrderAssault(World world, CharacterId speaker, CharacterId target)
     {
@@ -34,11 +34,11 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// The finder of DEFEAT_SQUAD 101 (<c>FUN_140793eb0</c>, docs/game/ai-tasks.md "Combat goals"): of the squad of the contract's mission target, the member
-    /// it would attack, or <see cref="CharacterId.None"/> (the factor 0). A member counts when the AI knows it (<c>FUN_140855960</c>), it passes the area
-    /// test (<c>FUN_140599f30</c>), is not imprisoned (Character +0x2f8 != 2) and is standing (vfunc 0x368 == 0: not crawling or ragdolled); the best by the
-    /// target score (<c>FUN_14059e300</c>) wins, which drops the faction's allies (unless slaves) and members it found no path to. Reads the last tick's state
-    /// only (any thread in the think).
+    /// The finder of DEFEAT_SQUAD 101 (<c>FUN_140793eb0</c>, docs/game/ai-tasks.md "Combat goals"): of the squad of the contract's mission target,
+    /// the member it would attack, or <see cref="CharacterId.None"/> (the factor 0). A member counts when the AI knows it (<c>FUN_140855960</c>), it
+    /// passes the area test (<c>FUN_140599f30</c>), is not imprisoned (Character +0x2f8 != 2) and is standing (vfunc 0x368 == 0: not crawling or
+    /// ragdolled); the best by the target score (<c>FUN_14059e300</c>) wins, which drops the faction's allies (unless slaves) and members it found no
+    /// path to. Reads the last tick's state only (any thread in the think).
     /// </summary>
     CharacterId AssaultTargetFor(World world, int slot, Blackboard? board, CharacterId? forcedMission = null)
     {
@@ -61,8 +61,8 @@ public sealed partial class AiSystem
             var fight = _combat?.StateOf(m) ?? CombatSlot.Fresh(m.Generation);
             var at = prev[m.Slot].Position;
 
-            // Known: an entry of its senses, any tag or age (FUN_140855960 without its flag), or the contract's own target (the branch of the test that
-            // reads a stored hand is Unknown, docs/game/ai-tasks.md).
+            // Known: an entry of its senses, any tag or age (FUN_140855960 without its flag), or the contract's own target (the branch of the test
+            // that reads a stored hand is Unknown, docs/game/ai-tasks.md).
             if (m != mission && !CharacterFacts.Knows(world, slot, m)) continue;
 
             // Area: its home town, or the manoeuvre mode's reach (ROAM_FAR by default), or fighting it.
@@ -100,8 +100,8 @@ public sealed partial class AiSystem
     }
 
     /// <summary>
-    /// Orders each assaulter that picked someone to attack it (serial; the attack is a new fight, not a defence). Fighting, it is the combat system's until
-    /// the fight ends.
+    /// Orders each assaulter that picked someone to attack it (serial; the attack is a new fight, not a defence). Fighting, it is the combat system's
+    /// until the fight ends.
     /// </summary>
     void SendAssaults(World world)
     {

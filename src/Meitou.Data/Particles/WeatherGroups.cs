@@ -5,14 +5,11 @@ namespace Meitou.Data.Particles;
 /// <summary>
 /// The weather's effect groups and when they change (docs/formats/particle-universe.md "Weather changes"). The game removes a region's groups and
 /// makes the new weather's the moment its weather changes; the viewer shows only the camera's region and cannot start a group with no particles, so a
-/// change
-/// costs a warm-up of up to 40 s of simulation. Two choices keep that off the frame (Observed, measured 2026-10-10; the sim need not be 1:1):
+/// change costs a warm-up of up to 40 s of simulation. Two choices keep that off the frame (Observed, measured 2026-10-10; the sim need not be 1:1):
 /// <list type="bullet">
 /// <item>A change is made on the side: the new groups are created on the render thread (microseconds, with the terrain's heights frozen for the
-/// worker),
-/// scheduled and simulated on a worker (<see cref="EffectSet"/>, <see cref="EffectWarmer"/>), and swapped for the old ones when they are ready; the
-/// old
-/// weather's particles are drawn meanwhile.</item>
+/// worker), scheduled and simulated on a worker (<see cref="EffectSet"/>, <see cref="EffectWarmer"/>), and swapped for the old ones when they are
+/// ready; the old weather's particles are drawn meanwhile.</item>
 /// <item>The camera crossing into another region waits for <see cref="RegionDwell"/> seconds before anything is made, and is forgotten if the weather
 /// returns to the shown one before: the checkerboard of small regions at a coast flipped the weather several times in a flight, and each flip
 /// would have made (and thrown away) a warm-up. A change inside the region the groups were made for (the scheduler's next weather, a forced

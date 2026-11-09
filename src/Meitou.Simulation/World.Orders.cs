@@ -25,9 +25,8 @@ public sealed partial class World
 
     /// <summary>
     /// <see cref="CanOrder(OrderEntry, CharacterId)"/> for an order row given by its parts (a target character, a site or fixture id,
-    /// a point) as the menu's verbs give them; false without a reason for a row no system owns as an order.
-    /// The variants an owner tells apart by its detail (loot against open inventory, a lock order in place or on a walk)
-    /// are read as their common case.
+    /// a point) as the menu's verbs give them; false without a reason for a row no system owns as an order. The variants an owner tells apart by its
+    /// detail (loot against open inventory, a lock order in place or on a walk) are read as their common case.
     /// </summary>
     public (bool Can, string? Why) CanOrder(TaskType row, CharacterId actor, CharacterId target = default, string? site = null, Vector3 point = default)
     {
@@ -41,8 +40,7 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// The system whose <see cref="IOrderOwner"/> checks and starts the order row (the one each owner gives its orders with),
-    /// or null when none does.
+    /// The system whose <see cref="IOrderOwner"/> checks and starts the order row (the one each owner gives its orders with), or null when none does.
     /// </summary>
     internal IOrderOwner? OrderOwnerOf(TaskType row) => row switch
     {

@@ -5,8 +5,8 @@ using Meitou.Data.Fcs;
 namespace Meitou.Simulation.Construction;
 
 /// <summary>
-/// Building upgrade chains (docs/game/buildings-production.md "Upgrades"): a BUILDING's upgrade is its first <c>upgrades to</c> reference (Building slot 77), its
-/// downgrade the first BUILDING whose <c>upgrades to</c> names it (slot 78). The reverse map is built once per database.
+/// Building upgrade chains (docs/game/buildings-production.md "Upgrades"): a BUILDING's upgrade is its first <c>upgrades to</c> reference (Building
+/// slot 77), its downgrade the first BUILDING whose <c>upgrades to</c> names it (slot 78). The reverse map is built once per database.
 /// </summary>
 public static class BuildingUpgrades
 {

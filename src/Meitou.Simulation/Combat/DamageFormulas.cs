@@ -3,8 +3,8 @@ using Meitou.Data.Gameplay.Combat;
 namespace Meitou.Simulation.Combat;
 
 /// <summary>
-/// What the target is, for the weapon's damage multipliers against robots, humans and animals; <see cref="None"/> for a blow with no character target (a wall, a
-/// door, the HUD's figure), multiplier 1.
+/// What the target is, for the weapon's damage multipliers against robots, humans and animals; <see cref="None"/> for a blow with no character target
+/// (a wall, a door, the HUD's figure), multiplier 1.
 /// </summary>
 public enum TargetKind
 {
@@ -15,8 +15,8 @@ public enum TargetKind
 }
 
 /// <summary>
-/// A blow as it leaves the weapon, before armour and toughness (<c>FUN_1408868b0</c>): cut, blunt and pierce damage, the stun it carries (0 for weapons), the
-/// bleed multiplier and the weapon's armour penetration.
+/// A blow as it leaves the weapon, before armour and toughness (<c>FUN_1408868b0</c>): cut, blunt and pierce damage, the stun it carries (0 for
+/// weapons), the bleed multiplier and the weapon's armour penetration.
 /// </summary>
 public readonly record struct DamagePacket(float Cut, float Blunt, float Pierce, float Stun, float BleedMultiplier, float ArmourPenetration)
 {
@@ -63,18 +63,18 @@ public static class DamageFormulas
         c.PierceDamageMultiplier * (skill + dexterity) * weaponPierceMultiplier + 10 * weaponPierceMultiplier;
 
     /// <summary>
-    /// The rating a fist blow is scaled by (<c>FUN_140884e00</c>, <b>Verified</b>): lerp(e, 0.2, 1) x (martial arts + the gear's <c>unarmed bonus</c> - the dust's
-    /// attack penalty), e the encumbrance factor (1 unburdened). <paramref name="unarmedBonus"/> carries the indoors modifier inside (<c>FUN_140884580</c> with the
-    /// flag every combat caller sets). <paramref name="martialArts"/> is the stat times the stats' read-time scale, without the injury multiplier (the owner's
-    /// slot 0x398 factor is 1 for a person, <c>FUN_1405e5990</c>).
+    /// The rating a fist blow is scaled by (<c>FUN_140884e00</c>, <b>Verified</b>): lerp(e, 0.2, 1) x (martial arts + the gear's <c>unarmed bonus</c>
+    /// - the dust's attack penalty), e the encumbrance factor (1 unburdened). <paramref name="unarmedBonus"/> carries the indoors modifier inside
+    /// (<c>FUN_140884580</c> with the flag every combat caller sets). <paramref name="martialArts"/> is the stat times the stats' read-time scale,
+    /// without the injury multiplier (the owner's slot 0x398 factor is 1 for a person, <c>FUN_1405e5990</c>).
     /// </summary>
     public static float UnarmedRating(float martialArts, float unarmedBonus, float dustPenalty, float encumbrance) =>
         Lerp(Math.Clamp(encumbrance, 0, 1), 0.2f, 1f) * (martialArts + unarmedBonus - dustPenalty);
 
     /// <summary>
-    /// A fist (<b>Verified</b>, <c>FUN_1408868b0</c> disassembled): with f = lerp(rating x 0.01, 0.25, 1), total = f x (<c>unarmed damage mult</c> x toughness +
-    /// strength + 10), at least 1; blunt share g = lerp(rating x 0.01, 1, 0.4); blunt = g x total, cut = (1 - g) x total. Toughness is the stat times the
-    /// read-time scale (no multiplier row); strength is the effective strength. No term is halved.
+    /// A fist (<b>Verified</b>, <c>FUN_1408868b0</c> disassembled): with f = lerp(rating x 0.01, 0.25, 1), total = f x (<c>unarmed damage mult</c> x
+    /// toughness + strength + 10), at least 1; blunt share g = lerp(rating x 0.01, 1, 0.4); blunt = g x total, cut = (1 - g) x total. Toughness is
+    /// the stat times the read-time scale (no multiplier row); strength is the effective strength. No term is halved.
     /// </summary>
     public static (float Cut, float Blunt) Unarmed(float rating, float toughness, float strength, CombatConstants c)
     {
@@ -91,8 +91,9 @@ public static class DamageFormulas
     public static float StumbleThreshold(float toughness, CombatConstants c) => toughness * 0.01f * c.StumbleDamageMax;
 
     /// <summary>
-    /// The packet of an armed blow: the three damages, scaled by the weapon's multiplier for the target kind, the weapon's per-race damage (percent x 0.01) and
-    /// the wearer's general damage multiplier (worn gear's <c>damage output mult</c>); the weapon's bleed multiplier and armour penetration ride along.
+    /// The packet of an armed blow: the three damages, scaled by the weapon's multiplier for the target kind, the weapon's per-race damage (percent x
+    /// 0.01) and the wearer's general damage multiplier (worn gear's <c>damage output mult</c>); the weapon's bleed multiplier and armour penetration
+    /// ride along.
     /// <paramref name="targetRace"/> is the target's RACE string id (null for none).
     /// </summary>
     public static DamagePacket Packet(
@@ -115,8 +116,8 @@ public static class DamageFormulas
     }
 
     /// <summary>
-    /// The packet of a fist: cut and blunt from <see cref="Unarmed"/> (<paramref name="rating"/> from <see cref="UnarmedRating"/>), no pierce, no stun, the fists
-    /// item's bleed multiplier and penetration (1 and 0 without one).
+    /// The packet of a fist: cut and blunt from <see cref="Unarmed"/> (<paramref name="rating"/> from <see cref="UnarmedRating"/>), no pierce, no
+    /// stun, the fists item's bleed multiplier and penetration (1 and 0 without one).
     /// </summary>
     public static DamagePacket UnarmedPacket(
         float rating,
@@ -146,8 +147,8 @@ public static class DamageFormulas
         targetRace is not null && weapon.RaceDamage.TryGetValue(targetRace, out int percent) ? percent * 0.01f : 1;
 
     /// <summary>
-    /// The wearer's general damage multiplier (CharStats +0x48): applied only when it is not 1 and above 0 (<c>FUN_1408868b0</c>, <b>Verified</b>), so a zero or
-    /// negative product counts as 1.
+    /// The wearer's general damage multiplier (CharStats +0x48): applied only when it is not 1 and above 0 (<c>FUN_1408868b0</c>, <b>Verified</b>),
+    /// so a zero or negative product counts as 1.
     /// </summary>
     static float GeneralMultiplier(float damageOutput) => damageOutput > 0 ? damageOutput : 1;
 

@@ -4,9 +4,9 @@ using Meitou.Simulation.Locks;
 namespace Meitou.Simulation.Saving;
 
 /// <summary>
-/// The bed rents the player's faction paid, on the CAMERA record (docs/formats/save.md "Bed rent"): Meitou's own keys, as the original saves none (its map
-/// of last payments, <c>FUN_1403576c0</c>, is referenced from nowhere else, <b>Verified</b> by references). <c>meitou rent bed&lt;i&gt;</c> (string, the
-/// bed's fixture id) and <c>meitou rent hours&lt;i&gt;</c> (float, the absolute game hour of the payment); only payments less than
+/// The bed rents the player's faction paid, on the CAMERA record (docs/formats/save.md "Bed rent"): Meitou's own keys, as the original saves none
+/// (its map of last payments, <c>FUN_1403576c0</c>, is referenced from nowhere else, <b>Verified</b> by references). <c>meitou rent bed&lt;i&gt;</c>
+/// (string, the bed's fixture id) and <c>meitou rent hours&lt;i&gt;</c> (float, the absolute game hour of the payment); only payments less than
 /// <see cref="BedSettings.RentHours"/> old are written, as an older one frees nothing.
 /// </summary>
 public static class BedSave

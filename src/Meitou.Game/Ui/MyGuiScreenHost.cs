@@ -37,8 +37,8 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     public Func<string, bool>? PassThrough { get; set; }
 
     /// <summary>
-    /// The text index under the pointer in the one-line edit box the renderer last drew there (null: none); a press places the caret, a drag selects (Meitou:
-    /// MyGUI does both).
+    /// The text index under the pointer in the one-line edit box the renderer last drew there (null: none); a press places the caret, a drag selects
+    /// (Meitou: MyGUI does both).
     /// </summary>
     public Func<Vector2, int?>? CaretAt { get; set; }
 
@@ -72,15 +72,15 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
         _screens.Add(id, new(MyGuiTemplates.Expand(layout, resources), modal, centreRoot));
 
     /// <summary>
-    /// Registers a HUD panel taken out of the HUD layout so that its edit boxes take typing (the town panel): drawn under every window, never raised, never
-    /// closed by Escape.
+    /// Registers a HUD panel taken out of the HUD layout so that its edit boxes take typing (the town panel): drawn under every window, never raised,
+    /// never closed by Escape.
     /// </summary>
     public void RegisterPanel(string id, MyGuiLayout layout) =>
         _screens.Add(id, new(MyGuiTemplates.Expand(layout, resources), false, false, panel: true));
 
     /// <summary>
-    /// Swaps a screen's layout for one composed at run time (rows the code makes from templates, as the original's <c>createWidgetT</c>); the screen's state
-    /// stays.
+    /// Swaps a screen's layout for one composed at run time (rows the code makes from templates, as the original's <c>createWidgetT</c>); the
+    /// screen's state stays.
     /// </summary>
     public void Replace(string id, MyGuiLayout layout) => _screens[id].Layout = MyGuiTemplates.Expand(layout, resources);
 
@@ -117,8 +117,8 @@ public sealed partial class MyGuiScreenHost(MyGuiResources resources)
     }
 
     /// <summary>
-    /// Marries <paramref name="id"/> to <paramref name="leader"/> (the original's bag window beside the inventory): a drag on either moves both, closing the
-    /// leader closes it and Escape on it closes the leader.
+    /// Marries <paramref name="id"/> to <paramref name="leader"/> (the original's bag window beside the inventory): a drag on either moves both,
+    /// closing the leader closes it and Escape on it closes the leader.
     /// </summary>
     public void Follow(string id, string leader) => _leaders[id] = leader;
 

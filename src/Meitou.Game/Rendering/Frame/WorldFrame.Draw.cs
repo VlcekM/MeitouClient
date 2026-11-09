@@ -60,8 +60,7 @@ static partial class WorldFrame
     /// reflection, shadows, GI, the scene passes, post-processing and the overlays, into a <paramref name="width"/> × <paramref name="height"/>
     /// output.
     /// <paramref name="hour"/> is the time of day, <paramref name="time"/> the animation clock in seconds, <paramref name="weatherHour"/> the hour
-    /// the weather
-    /// schedule reads when it is not <paramref name="hour"/>. Render thread.
+    /// the weather schedule reads when it is not <paramref name="hour"/>. Render thread.
     /// </summary>
     public static void Draw(Gpu gpu, WorldScene scene, WorldCamera camera, WorldRenderOptions render, int width, int height, float hour, float time,
         float fogDistance, float? weatherHour = null)
@@ -199,8 +198,7 @@ static partial class WorldFrame
             (aheadCharacters.Ahead, aheadCharacters.Kept, aheadCharacters.KeptViewDistance) = (gpu.Ahead, kept, camera.Distance);
 
         // The loading counts the eye's height over the ground beyond the game's cameras (EyeLift): terrain textures, object zones, foliage,
-        // characters.
-        // In flight the weather fog is off.
+        // characters. In flight the weather fog is off.
         float groundUnderEye = f.GroundUnderEye = gpu.Terrain.HeightAt(eye.X, eye.Z);
         if (gpu.Streamer is { } liftedTerrain) liftedTerrain.GroundUnderEye = groundUnderEye;
         if (gpu.Objects is { } liftedObjects) liftedObjects.GroundUnderEye = groundUnderEye;
@@ -588,9 +586,8 @@ static partial class WorldFrame
         var skyProjection = rotation * Jitter.Apply(camera.Projection(aspect, 1, 1000), f.Jitter, f.RenderWidth, f.RenderHeight);
 
         // The fog volume pass runs over this view's sky exactly when volumes are in view (RunFogVolumes below), so the march may leave out what they
-        // hide.
-        // With the placed fog block hiding the sky in every direction of the view, neither the sky nor its clouds can show: the clear colour stands
-        // in.
+        // hide. With the placed fog block hiding the sky in every direction of the view, neither the sky nor its clouds can show: the clear colour
+        // stands in.
         bool skyHidden = gpu.Sky.SkyFogSkip && gpu.FogVolumes is { SkyHidden: true };
         if (skyHidden) gpu.Sky.SkipMainSky();
         else gpu.Sky.PrepareClouds(skyProjection, f.RenderWidth, f.RenderHeight, gpu.Sky.Eye, fogVolumes: gpu.FogVolumes is { UsedData: > 0 });
@@ -884,8 +881,7 @@ static partial class WorldFrame
 
     /// <summary>
     /// After the scene's passes, over the finished scene: the GI resolve, the Meitou light shafts (docs/render-shafts.md: the haze darkened where the
-    /// sun is
-    /// shadowed along the view, before the fog volumes blend over it), the placed fog volumes, then the SSAO.
+    /// sun is shadowed along the view, before the fog volumes blend over it), the placed fog volumes, then the SSAO.
     /// </summary>
     static void FinishScene(ref FrameState f)
     {

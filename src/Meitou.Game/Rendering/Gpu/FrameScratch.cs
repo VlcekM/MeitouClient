@@ -4,8 +4,8 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// Device memory per frame slot for what a frame's compute passes write and its draws read (the GPU cull's per-view outputs, the grass kernels' lists):
-/// bump allocated, reset when the slot comes round, and sized by need instead of by a fixed chunk.
+/// Device memory per frame slot for what a frame's compute passes write and its draws read (the GPU cull's per-view outputs, the grass kernels'
+/// lists): bump allocated, reset when the slot comes round, and sized by need instead of by a fixed chunk.
 /// <list type="bullet">
 /// <item>A slot holds one buffer of the size the last frames needed (the largest need of the trailing <see cref="Window"/> frames, with 25% of headroom,
 /// in whole MB). A frame that needs more takes extra buffers sized to the request; when its slot comes round again the slot is made one buffer again,
@@ -115,8 +115,8 @@ public sealed class FrameScratch(IGpuContext ctx, string name, BufferUse use, ul
         OverflowedThisFrame = false;
         var s = _slots[_slot];
 
-        // The slot's previous frame has finished (its fence was waited for): its buffers may be replaced. One buffer of what the trailing window needed
-        // with headroom; more than that, or in pieces, or too small for what its last frame took: rebuilt.
+        // The slot's previous frame has finished (its fence was waited for): its buffers may be replaced. One buffer of what the trailing window
+        // needed with headroom; more than that, or in pieces, or too small for what its last frame took: rebuilt.
         ulong window = 0;
         foreach (ulong r in _recent) window = Math.Max(window, r);
 

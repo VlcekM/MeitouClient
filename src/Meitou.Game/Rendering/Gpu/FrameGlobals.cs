@@ -6,10 +6,10 @@ using Meitou.Game.Rendering.Gpu.Shaders;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// Frame-global resources by GLSL name (docs/renderer-native.md 4.3): the textures, uniform blocks and loose uniform values that reach every program of
-/// the frame (the atmosphere, the shadow maps and blocks, the terrain heights). Owners publish a getter once; consumers read the current value when they
-/// draw (<see cref="LegacyProgram"/> takes every name it finds in its reflection and was not given explicitly). While an owner is on VkGl its getters go
-/// through the interop's export calls; after its port they return native objects. Render thread only.
+/// Frame-global resources by GLSL name (docs/renderer-native.md 4.3): the textures, uniform blocks and loose uniform values that reach every program
+/// of the frame (the atmosphere, the shadow maps and blocks, the terrain heights). Owners publish a getter once; consumers read the current value
+/// when they draw (<see cref="LegacyProgram"/> takes every name it finds in its reflection and was not given explicitly). While an owner is on VkGl
+/// its getters go through the interop's export calls; after its port they return native objects. Render thread only.
 /// </summary>
 public sealed class FrameGlobals
 {
@@ -57,8 +57,8 @@ public sealed class FrameGlobals
     }
 
     /// <summary>
-    /// A loose <c>vec4</c> array uniform (<c>uniform vec4 name[storage.Length]</c>): its first <paramref name="count"/>() elements are written, the rest
-    /// keeps whatever it held (the shaders read only the used part).
+    /// A loose <c>vec4</c> array uniform (<c>uniform vec4 name[storage.Length]</c>): its first <paramref name="count"/>() elements are written, the
+    /// rest keeps whatever it held (the shaders read only the used part).
     /// </summary>
     public void PublishUniformArray(string name, Vector4[] storage, Func<int> count)
     {
@@ -88,8 +88,8 @@ public sealed class FrameGlobals
     }
 
     /// <summary>
-    /// Replaces a published block's value for the segments prepared until it is cleared (<c>null</c>): a pass that needs the frame's blocks otherwise,
-    /// as the water reflection's unshadowed receivers. Does not change <see cref="Version"/>; the name must be published.
+    /// Replaces a published block's value for the segments prepared until it is cleared (<c>null</c>): a pass that needs the frame's blocks
+    /// otherwise, as the water reflection's unshadowed receivers. Does not change <see cref="Version"/>; the name must be published.
     /// </summary>
     public void OverrideBlock(string name, Func<GpuBufferBinding>? getter)
     {
@@ -117,8 +117,8 @@ public sealed class FrameGlobals
         internal abstract void Write(LegacyProgram program, UniformHandle handle);
 
         /// <summary>
-        /// The value's bytes into <paramref name="destination"/> (its exact size), for a native constant block; false (nothing written) while the owner
-        /// would not set it, as <see cref="Write"/> skips it then.
+        /// The value's bytes into <paramref name="destination"/> (its exact size), for a native constant block; false (nothing written) while the
+        /// owner would not set it, as <see cref="Write"/> skips it then.
         /// </summary>
         internal abstract bool TryRead(Span<byte> destination);
     }

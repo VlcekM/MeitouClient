@@ -174,10 +174,8 @@ public sealed class ReflectionPass : IDisposable
 
     /// <summary>
     /// The host's loading warm-up: every frame draws the whole mirrored view, water in view or not (no crop, no cull, no reuse), so that the
-    /// pipelines it
-    /// draws with are made under the loading cover. Made the first time water came into view, they held that frame 2-4 s with a cold driver cache
-    /// (the
-    /// first run after an install, an update or a new driver; docs/bench.md "Play benchmark").
+    /// pipelines it draws with are made under the loading cover. Made the first time water came into view, they held that frame 2-4 s with a cold
+    /// driver cache (the first run after an install, an update or a new driver; docs/bench.md "Play benchmark").
     /// </summary>
     public bool Warm { get; set; }
 
@@ -194,10 +192,9 @@ public sealed class ReflectionPass : IDisposable
     public float? HideDistance { get; set; }
 
     /// <summary>
-    /// Meitou: the distance beyond which the haze has stopped growing (<see cref="SkyRenderer.HazeCompleteDistance"/>), set by
-    /// the frame loop; null: no cap. Water past it shows the haze whatever it reflects, so <see cref="WaterRect"/> leaves it out: the sea past the
-    /// map's
-    /// edge no longer keeps the pass alive at the Hub (docs/render-water.md).
+    /// Meitou: the distance beyond which the haze has stopped growing (<see cref="SkyRenderer.HazeCompleteDistance"/>), set by the frame loop; null:
+    /// no cap. Water past it shows the haze whatever it reflects, so <see cref="WaterRect"/> leaves it out: the sea past the map's edge no longer
+    /// keeps the pass alive at the Hub (docs/render-water.md).
     /// </summary>
     public float? WaterDistance { get; set; }
 
@@ -395,9 +392,8 @@ public sealed class ReflectionPass : IDisposable
             if (WaterRect(camera, (float)fullWidth / fullHeight, out float nearestWater) is { } wet) { rect = wet; NearestWater = nearestWater; }
             else
             {
-                // No water in view: nothing to reflect, and nothing for the water pass's ocean and refraction to serve (the water itself
-                // is still drawn: what is past WaterDistance shows the haze). The verdict is kept like an image, so the rays are not cast again next
-                // frame.
+                // No water in view: nothing to reflect, and nothing for the water pass's ocean and refraction to serve (the water itself is still
+                // drawn: what is past WaterDistance shows the haze). The verdict is kept like an image, so the rays are not cast again next frame.
                 NearestWater = float.PositiveInfinity;
                 (_noWater, _noWaterWidth, _noWaterHeight) = (true, fullWidth, fullHeight);
                 Valid = _hasImage = false;
@@ -676,11 +672,9 @@ public sealed class ReflectionPass : IDisposable
 
     /// <summary>
     /// Meitou: the placed fog volumes along the reflected rays (docs/render-water.md "Fog in the reflection"; the frame loop sets it while the Meitou
-    /// water
-    /// draws and volumes are in view). The game's reflection draws no volumes (queue 82 is past its queue 60), so in fog the mirror showed the open
-    /// sky
-    /// the eye cannot see. Each texel's ray from the mirrored eye crosses the water plane and runs on as the real reflected ray to what the texel
-    /// shows; the volumes along that part are laid over the texel (the main fog pass already fogs the part from the eye to the water).
+    /// water draws and volumes are in view). The game's reflection draws no volumes (queue 82 is past its queue 60), so in fog the mirror showed the
+    /// open sky the eye cannot see. Each texel's ray from the mirrored eye crosses the water plane and runs on as the real reflected ray to what the
+    /// texel shows; the volumes along that part are laid over the texel (the main fog pass already fogs the part from the eye to the water).
     /// </summary>
     public bool FogVolumes { get; set; }
     LegacyProgram? _fogProgram;

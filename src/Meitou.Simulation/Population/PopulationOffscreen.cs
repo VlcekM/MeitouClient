@@ -94,8 +94,9 @@ public sealed partial class PopulationSystem
     string NameOf(Platoon p) => p.Stored?.Name ?? p.Saved?.Name ?? _data.Db.Find(p.TemplateId)?.Name ?? p.TemplateId;
 
     /// <summary>
-    /// The strength of each member able to fight (alive and conscious): 10 + the mean of its melee attack, melee defence and toughness. A platoon whose
-    /// characters were never made (no stored state) counts <see cref="Platoon.Size"/> members of strength 25. The object identifies the member for
+    /// The strength of each member able to fight (alive and conscious): 10 + the mean of its melee attack, melee defence and toughness. A platoon
+    /// whose characters were never made (no stored state) counts <see cref="Platoon.Size"/> members of strength 25. The object identifies the member
+    /// for
     /// <see cref="Kill"/>.
     /// </summary>
     List<(object? Member, float Strength)> Strengths(Platoon p)
@@ -171,8 +172,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Heals a platoon's kept characters for the game hours since they left the world (<see cref="MedicalState.Recover"/>), just before they are made again.
-    /// Characters a save holds that were never in the world keep the save's state.
+    /// Heals a platoon's kept characters for the game hours since they left the world (<see cref="MedicalState.Recover"/>), just before they are made
+    /// again. Characters a save holds that were never in the world keep the save's state.
     /// </summary>
     void Recover(World world, Platoon p)
     {

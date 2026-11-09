@@ -1405,8 +1405,7 @@ static partial class TerrainShaders
             throw new InvalidOperationException("TerrainShaders.Fragment no longer declares uFeatureBiome.");
         string f = fragment.Replace(uniform, "flat in int vFeatureBiome;\n#define uFeatureBiome vFeatureBiome\nflat in float vFade;\n");
         // A rock crossfading with its impostor (docs/impostors.md section 13): the cull's dither threshold in the placement's row 1 w, as the foliage
-        // meshes dither
-        // (a threshold in (0, 1) keeps that share of the pixels; 0, what every other placement has, keeps all).
+        // meshes dither (a threshold in (0, 1) keeps that share of the pixels; 0, what every other placement has, keeps all).
         const string wireframe = "if (uWireframe) { fragColour = vec4(0.1, 0.1, 0.1, 1.0); return; }";
         int at = f.IndexOf(wireframe, StringComparison.Ordinal);
         if (at < 0)

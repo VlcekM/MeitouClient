@@ -85,11 +85,9 @@ public sealed class BedSettings
 /// <item><b>Sleep</b> (<see cref="UseBedOrder"/>, and the "Sleep when injured" option through <see cref="StartSleep"/>): the walker's task is
 /// <see cref="CharacterTask.Sleep"/>; in reach it pays
 /// the bed's rent (<see cref="Pay"/>) and lies in it (<see cref="FixtureRegistry.EnterBed"/>). It lies there until its task changes (any order), then
-/// gets up
-/// (<see cref="FixtureRegistry.LeaveBed"/>), as the original's 258 never completes and an order replaces it.</item>
+/// gets up (<see cref="FixtureRegistry.LeaveBed"/>), as the original's 258 never completes and an order replaces it.</item>
 /// <item><b>Put in bed</b> (<see cref="PutInBedOrder"/>, and the job 106 "Find and put in bed" for a carried friend): the carrier walks there, pays
-/// (the cheaper of its own and the body's
-/// rent, <c>FUN_140358170</c>), lets go and the body lies in the bed (<c>FUN_140358670</c>).</item>
+/// (the cheaper of its own and the body's rent, <c>FUN_140358170</c>), lets go and the body lies in the bed (<c>FUN_140358670</c>).</item>
 /// <item><b>Rent</b> (<see cref="Cost"/>): only the player's characters pay; refused for a bed that is not theirs to use.</item>
 /// </list>
 /// The player's own beds become bed fixtures when their buildings register (<see cref="FixtureRegistry.RegisterPlayerBuilding"/>, by the lock

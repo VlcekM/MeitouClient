@@ -12,16 +12,16 @@ public readonly record struct ImpostorCacheMaintenance(int Files, long Bytes, in
 /// The disk cache of baked atlases: <c>%LOCALAPPDATA%\Meitou\impostors\&lt;name&gt;_&lt;key&gt;.mimp</c> (overridden by <c>MEITOU_IMPOSTOR_CACHE</c> or the
 /// constructor; never inside the repository). Files are written to a temporary name and moved into place, so a crash leaves no half file.
 /// <para>
-/// The cache is kept in bounds (<see cref="Maintain"/>, docs/impostors.md section 4): files of an older format or baker version (their keys never match
-/// again), unreadable ones and abandoned temporary files are deleted, and when the files total more than <see cref="MaxBytes"/> the least recently used go
-/// first. A file's last use is its last write time: <see cref="TryLoad"/> and <see cref="Save"/> set it.
+/// The cache is kept in bounds (<see cref="Maintain"/>, docs/impostors.md section 4): files of an older format or baker version (their keys never
+/// match again), unreadable ones and abandoned temporary files are deleted, and when the files total more than <see cref="MaxBytes"/> the least
+/// recently used go first. A file's last use is its last write time: <see cref="TryLoad"/> and <see cref="Save"/> set it.
 /// </para>
 /// </summary>
 public sealed class ImpostorCache
 {
     /// <summary>
-    /// The default cap, 4096 MB: the 267 base-game atlases were 376 MB, but rocks are baked per biome and a long flight wanted more than 512 MB, so the old
-    /// cap evicted and re-baked atlases on every trip (docs/impostors.md section 3).
+    /// The default cap, 4096 MB: the 267 base-game atlases were 376 MB, but rocks are baked per biome and a long flight wanted more than 512 MB, so
+    /// the old cap evicted and re-baked atlases on every trip (docs/impostors.md section 3).
     /// </summary>
     public const long DefaultMaxBytes = 4096L << 20;
 
@@ -146,9 +146,9 @@ public sealed class ImpostorCache
     }
 
     /// <summary>
-    /// Deletes what the cache no longer needs: files of an older <see cref="ImpostorAtlas.FormatVersion"/> / <see cref="ImpostorAtlas.BakerVersion"/> than
-    /// this build's or not an atlas at all, temporary files an hour old, then, when what is left is over <see cref="MaxBytes"/>, the least recently used
-    /// files until it is under 90% of it. Other files in the folder are left alone.
+    /// Deletes what the cache no longer needs: files of an older <see cref="ImpostorAtlas.FormatVersion"/> / <see cref="ImpostorAtlas.BakerVersion"/>
+    /// than this build's or not an atlas at all, temporary files an hour old, then, when what is left is over <see cref="MaxBytes"/>, the least
+    /// recently used files until it is under 90% of it. Other files in the folder are left alone.
     /// </summary>
     public ImpostorCacheMaintenance Maintain(DateTime? now = null)
     {
@@ -216,8 +216,8 @@ public sealed class ImpostorCache
     }
 
     /// <summary>
-    /// Deletes every atlas file (the Tab panel's button): each is baked again the next time it is needed and not resident. Temporary files are left to the
-    /// save that is writing them; a file another process holds stays. Returns what was deleted.
+    /// Deletes every atlas file (the Tab panel's button): each is baked again the next time it is needed and not resident. Temporary files are left
+    /// to the save that is writing them; a file another process holds stays. Returns what was deleted.
     /// </summary>
     public (int Files, long Bytes) Clear()
     {
@@ -242,9 +242,9 @@ public sealed class ImpostorCache
     }
 
     /// <summary>
-    /// Whether the file is dead weight: not an atlas (short, wrong magic) or one of an older format or baker version than this build's (its key can never
-    /// match again). A newer version is left, since another build sharing the folder may still read it (the least-recently-used rule takes it in time). A
-    /// damaged body is found when the file is read.
+    /// Whether the file is dead weight: not an atlas (short, wrong magic) or one of an older format or baker version than this build's (its key can
+    /// never match again). A newer version is left, since another build sharing the folder may still read it (the least-recently-used rule takes it
+    /// in time). A damaged body is found when the file is read.
     /// </summary>
     static bool IsStale(FileInfo info)
     {

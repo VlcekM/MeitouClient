@@ -8,8 +8,9 @@ namespace Meitou.Simulation.Construction;
 public readonly record struct MaterialView(string Item, float Required, float Delivered);
 
 /// <summary>
-/// A player-built building or owned town-house repair as the host needs it after a tick (docs/simulation.md "Buildings"). <see cref="Id"/> is the instance id
-/// (<c>&lt;n&gt;-zoneX.Y-INGAME</c>), or a town house's zone-qualified key; also the render placement id and the navmesh instance id. Progress and
+/// A player-built building or owned town-house repair as the host needs it after a tick (docs/simulation.md "Buildings"). <see cref="Id"/> is the
+/// instance id (<c>&lt;n&gt;-zoneX.Y-INGAME</c>), or a town house's zone-qualified key; also the render placement id and the navmesh instance id.
+/// Progress and
 /// <see cref="Target"/> are in material units.
 /// </summary>
 public sealed record BuildingSnapshot(

@@ -26,9 +26,9 @@ public sealed partial class PopulationSystem
     sealed record BuiltTown(int Site, long LoadId, List<BuiltSquad> Squads, List<(TownBuilding Building, SquadTemplate Template)> Homes);
 
     /// <summary>
-    /// The town's residents and bar squads. <paramref name="held"/>: a loaded save holds squads of the town (its pinned saved platoons), which are then its whole
-    /// population and nothing is made (docs/formats/save.md "NPC platoons"). <paramref name="playerOwned"/>: the keys of the town's buildings the player owns,
-    /// which house nobody.
+    /// The town's residents and bar squads. <paramref name="held"/>: a loaded save holds squads of the town (its pinned saved platoons), which are
+    /// then its whole population and nothing is made (docs/formats/save.md "NPC platoons"). <paramref name="playerOwned"/>: the keys of the town's
+    /// buildings the player owns, which house nobody.
     /// </summary>
     BuiltTown BuildTown(TownSite site, long loadId, ulong seed, IWalkability walk, bool held = false, IReadOnlySet<string>? playerOwned = null)
     {
@@ -65,9 +65,9 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The bar squads of a town (Observed, <c>FUN_1409fcd20</c>): per entry floor(v0 x v1 / 200) when v0 &gt; 2, plus one more for each roll of 0..100 that is at
-    /// most v1, stopping at the first that is not, at most v0 in all. The original puts each at a random node of the town's node map (the town's own position
-    /// when none comes back), as Meitou.
+    /// The bar squads of a town (Observed, <c>FUN_1409fcd20</c>): per entry floor(v0 x v1 / 200) when v0 &gt; 2, plus one more for each roll of
+    /// 0..100 that is at most v1, stopping at the first that is not, at most v0 in all. The original puts each at a random node of the town's node
+    /// map (the town's own position when none comes back), as Meitou.
     /// </summary>
     void AddBarSquads(TownSite site, TownData town, FactionData? faction, int factionIndex, ulong seed, IWalkability walk, List<BuiltSquad> squads)
     {
@@ -84,8 +84,8 @@ public sealed partial class PopulationSystem
                 ulong key = Rng.Mix(SeedSalts.BarSquad ^ (ulong)site.Index << 40 ^ (ulong)e << 20 ^ (uint)k);
 
                 // A node of the town's node map, the guard nodes outside its doors, whether or not a bar has nodes (FUN_1409fcd20 via FUN_14038b000,
-                // FUN_14038b650); none: the town's own position with no random offset, the height the ground there (FUN_1409fcd20:197-205, Town slot 8
-                // FUN_1409272c0).
+                // FUN_14038b650); none: the town's own position with no random offset, the height the ground there (FUN_1409fcd20:197-205, Town slot
+                // 8 FUN_1409272c0).
                 if (GuardSpot(guardNodes ??= TownGuardNodes.Of(_data.Db, site.Buildings, walk), seed, key) is { } node)
                 {
                     if (BuildOne(template, factionIndex, faction, key, seed, new Vector2(node.X, node.Z)) is { } outside)
@@ -100,8 +100,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The original's per-cent constant, the double nearest the float 0.01 (<c>0x141748288</c>), so exact products like 100 x 0.5 x 4 fall just under their
-    /// integer as there.
+    /// The original's per-cent constant, the double nearest the float 0.01 (<c>0x141748288</c>), so exact products like 100 x 0.5 x 4 fall just under
+    /// their integer as there.
     /// </summary>
     const double BarShare = 0.009999999776482582;
 
@@ -132,8 +132,9 @@ public sealed partial class PopulationSystem
         nodes.Count == 0 ? null : nodes[Rng.Int(Rng.Hash(seed, key, RngPurpose.Spawn, SeedSalts.HomeSpot), nodes.Count)];
 
     /// <summary>
-    /// The bar squad entries of a town (Observed): without <c>residents override</c> the faction's <c>bar squads</c> (for towns of type Town only), then the
-    /// town's; with it the town's only. v0 = 0 entries are dropped. A town with no faction has none (its entry count is filled by the same builder,
+    /// The bar squad entries of a town (Observed): without <c>residents override</c> the faction's <c>bar squads</c> (for towns of type Town only),
+    /// then the town's; with it the town's only. v0 = 0 entries are dropped. A town with no faction has none (its entry count is filled by the same
+    /// builder,
     /// <c>FUN_140936e60</c>).
     /// </summary>
     public static List<RecordLink> BarEntries(TownData town, FactionData? faction)

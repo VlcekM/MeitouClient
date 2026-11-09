@@ -11,8 +11,7 @@ namespace Meitou.Game.Rendering.Gi;
 
 /// <summary>
 /// The global illumination's debug view (<c>--gi-debug &lt;mode&gt;</c>, docs/render-gi.md "Debug views"): <see cref="GiShaders.Debug"/> over the
-/// scene
-/// depth into a picture of the render size, scaled over the finished frame. Render thread only.
+/// scene depth into a picture of the render size, scaled over the finished frame. Render thread only.
 /// </summary>
 sealed unsafe class GiDebugPass : IDisposable
 {
@@ -56,9 +55,8 @@ sealed unsafe class GiDebugPass : IDisposable
 
     /// <summary>
     /// Traces <paramref name="mode"/> over <paramref name="depth"/> (the scene's, <paramref name="width"/> × <paramref name="height"/>) and scales
-    /// the
-    /// result over <paramref name="target"/>. <paramref name="inverse"/>: NDC to the position relative to the eye; <paramref name="eye"/> in world
-    /// space.
+    /// the result over <paramref name="target"/>. <paramref name="inverse"/>: NDC to the position relative to the eye; <paramref name="eye"/> in
+    /// world space.
     /// </summary>
     public void Run(int mode, GiScene scene, GpuTexture depth, GpuTexture target, int width, int height, Matrix4x4 inverse, Vector3 eye,
             WorldLighting light)

@@ -37,8 +37,7 @@ public class UserConfigTests : IDisposable
         Assert.False(config.Graphics.ContainsKey("Object draw distance"));
         Assert.Equal(json, System.IO.File.ReadAllText(Assert.Single(backups)));
 
-        // Unparsable json gives the defaults with a copy kept aside
-        // (the earlier copy goes first: their names are to the second).
+        // Unparsable json gives the defaults with a copy kept aside (the earlier copy goes first: their names are to the second).
         System.IO.File.Delete(backups[0]);
         const string broken = """{"fpsLimit": 60,""";
         (config, _, backups) = RoundTrip(broken);

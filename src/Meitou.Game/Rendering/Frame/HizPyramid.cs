@@ -18,9 +18,8 @@ public readonly struct OcclusionView(GpuBufferBinding buffer, Vector4[] vectors)
     public GpuBufferBinding Buffer { get; } = buffer;
 
     /// <summary><see cref="HizPyramid.ViewVectors"/> vec4s: [0] the previous eye and the eye's step, [1..3] the previous view's right, up and back
-    /// axes,
-    /// [4] tan x, tan y, width and height of the depth, [5] pixels per unit of tangent, level count, level 0's width and height, [6..8] the level
-    /// offsets (as uints).</summary>
+    /// axes, [4] tan x, tan y, width and height of the depth, [5] pixels per unit of tangent, level count, level 0's width and height, [6..8] the
+    /// level offsets (as uints).</summary>
     public Vector4[] Vectors { get; } = vectors;
     public bool IsEmpty => Buffer.IsNull;
 }
@@ -121,8 +120,7 @@ public sealed unsafe class HizPyramid : IDisposable
     /// <summary>
     /// Records the pyramid of the scene's depth <paramref name="depth"/>, drawn with the planes <paramref name="planes"/> (near, far), into
     /// <paramref name="cmd"/> (outside any rendering). <paramref name="viewRotation"/> is the camera's view without its translation (the world to
-    /// view
-    /// rotation, as <c>PostProcess</c> keeps it), <paramref name="fieldOfView"/> and <paramref name="aspect"/> the projection's.
+    /// view rotation, as <c>PostProcess</c> keeps it), <paramref name="fieldOfView"/> and <paramref name="aspect"/> the projection's.
     /// </summary>
     public void Build(IGpuCommandList cmd, GpuTexture depth, Vector2 planes, int w, int h, Vector3 eyePosition, Matrix4x4 viewRotation,
         float fieldOfView, float aspect)
@@ -319,8 +317,7 @@ static class HizShaders
 
     /// <summary>
     /// Levels 0 to 4: a workgroup of 16 x 16 threads takes 64 x 64 pixels. Each thread makes a texel of level 0 (the least and greatest view distance
-    /// over its 4 x 4
-    /// pixels; the distance is rebuilt from the scene depth as the velocity pass does, <c>UpscaleShaders.Velocity</c>, through
+    /// over its 4 x 4 pixels; the distance is rebuilt from the scene depth as the velocity pass does, <c>UpscaleShaders.Velocity</c>, through
     /// <see cref="DepthConvention.Glsl"/>; a cleared pixel, the sky, is infinitely far), and the later levels come through shared memory (a texel
     /// out of range is the neutral (+inf, 0), which gives the clamped result of a ceiling-sized level). Level k at (x, y) is written when it exists
     /// (k below the level count).

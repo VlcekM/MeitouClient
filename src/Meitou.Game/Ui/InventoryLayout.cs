@@ -52,10 +52,10 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// Lays the open character, loot and bag windows out in one row, left to right: the limbs window, the character's bag, the character, the looted or traded
-    /// character, its bag. The row is centred with the character's top (the limbs window keeps its margin top), so no window slides over another when the row
-    /// is wider than the pair that placed them. A row wider than the screen spans it, its windows overlapping evenly rather than the host stacking the last
-    /// ones on the right edge.
+    /// Lays the open character, loot and bag windows out in one row, left to right: the limbs window, the character's bag, the character, the looted
+    /// or traded character, its bag. The row is centred with the character's top (the limbs window keeps its margin top), so no window slides over
+    /// another when the row is wider than the pair that placed them. A row wider than the screen spans it, its windows overlapping evenly rather than
+    /// the host stacking the last ones on the right edge.
     /// </summary>
     internal void PlaceWindowRow()
     {
@@ -83,9 +83,9 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// The limbs window's place (<c>FUN_1406e4960</c>, <b>Verified</b>): its right edge on the left edge of the inventory (of its bag window when that is open),
-    /// its top at the margin (5% of the smaller screen side); when that is off the screen, at the left edge with the inventory and its bag pushed right of it.
-    /// Not moved with the inventory afterwards. With a loot window open it joins the window row instead.
+    /// The limbs window's place (<c>FUN_1406e4960</c>, <b>Verified</b>): its right edge on the left edge of the inventory (of its bag window when
+    /// that is open), its top at the margin (5% of the smaller screen side); when that is off the screen, at the left edge with the inventory and its
+    /// bag pushed right of it. Not moved with the inventory afterwards. With a loot window open it joins the window row instead.
     /// </summary>
     internal void PlaceLimbsWindow()
     {
@@ -115,8 +115,8 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// A machine or container window's place (<b>Observed</b> on the original's 2026-10-26 screenshot of a mined iron rock): at the screen's left edge,
-    /// vertically centred; an open inventory (with its bag) under it moves right of it.
+    /// A machine or container window's place (<b>Observed</b> on the original's 2026-10-26 screenshot of a mined iron rock): at the screen's left
+    /// edge, vertically centred; an open inventory (with its bag) under it moves right of it.
     /// </summary>
     internal void PlaceMachineWindow(string id)
     {
@@ -163,8 +163,8 @@ sealed class InventoryLayout(PlayerInterface player)
     #region Equipment
 
     /// <summary>
-    /// The four prosthetic slots (<c>FUN_1400d04d0</c>, <c>FUN_1401534f0</c>, <b>Verified</b>): arms 2 x 6 cells, legs 2 x 7; a slot is enabled only for a stump
-    /// or a fitted prosthetic, else drawn with the skin's disabled tile and refusing drops (the simulation's check).
+    /// The four prosthetic slots (<c>FUN_1400d04d0</c>, <c>FUN_1401534f0</c>, <b>Verified</b>): arms 2 x 6 cells, legs 2 x 7; a slot is enabled only
+    /// for a stump or a fitted prosthetic, else drawn with the skin's disabled tile and refusing drops (the simulation's check).
     /// </summary>
     internal void ArrangeLimbSlots(List<UiControl> controls, CharacterSnapshot lead)
     {
@@ -190,8 +190,8 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// The equipment slots disabled for the character (<see cref="CharacterSnapshot.ClosedSlots"/>): the skin's disabled (red) tile, and drops find no section
-    /// there.
+    /// The equipment slots disabled for the character (<see cref="CharacterSnapshot.ClosedSlots"/>): the skin's disabled (red) tile, and drops find
+    /// no section there.
     /// </summary>
     internal static void CloseSlots(List<UiControl> controls, CharacterSnapshot lead)
     {
@@ -292,11 +292,11 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// The data panel's lines (<c>FUN_1405d4260</c> mask 0xf, called through Character slot 40 for the window's owner, <b>Verified</b> by disassembly,
-    /// docs/game/ui-screens.md): Total Weight and the burden row for every character; for a character of the player's faction also Disguise (no disguise:
-    /// "None" and a "-" value on a blank-labelled row; the disguise percent is not simulated), Slave of (free: "-" greyed; a slave or escaped slave: its owner
-    /// faction's name in Bad, no line without an owner) and Looks like slave (free: "-" greyed; else the level in percent, Bad above 10 %). A character of
-    /// another faction has only the weight rows (and, for a trader, its money lines, not built).
+    /// The data panel's lines (<c>FUN_1405d4260</c> mask 0xf, called through Character slot 40 for the window's owner, <b>Verified</b> by
+    /// disassembly, docs/game/ui-screens.md): Total Weight and the burden row for every character; for a character of the player's faction also
+    /// Disguise (no disguise: "None" and a "-" value on a blank-labelled row; the disguise percent is not simulated), Slave of (free: "-" greyed; a
+    /// slave or escaped slave: its owner faction's name in Bad, no line without an owner) and Looks like slave (free: "-" greyed; else the level in
+    /// percent, Bad above 10 %). A character of another faction has only the weight rows (and, for a trader, its money lines, not built).
     /// </summary>
     List<PlayerInterface.HudLine> InventorySummaryLines(CharacterSnapshot lead, string weight, string burdenWord, string? burdenColour, bool animal)
     {
@@ -324,10 +324,11 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// The Disguise row and the blank-labelled row under it (<c>FUN_1405d4260</c>, <b>Verified</b> strings, docs/game/ui-screens.md "Which lines"): the uniform
-    /// faction's name (Main), else "None"; the tooltip "Not currently in disguise." at level 0, else the rows Clothing disguise (level %, Good), In secure
-    /// location -25%, Same faction -40%, Slave owner recognition -50%, Someone knows me personally -80% (Bad, each multiplying the total), Disguise blown
-    /// (seconds, Bad, total 0) and Total (Main). The second row: "-" at level 0, else the level in percent (Main) or Blown! (Bad) while blown.
+    /// The Disguise row and the blank-labelled row under it (<c>FUN_1405d4260</c>, <b>Verified</b> strings, docs/game/ui-screens.md "Which lines"):
+    /// the uniform faction's name (Main), else "None"; the tooltip "Not currently in disguise." at level 0, else the rows Clothing disguise (level %,
+    /// Good), In secure location -25%, Same faction -40%, Slave owner recognition -50%, Someone knows me personally -80% (Bad, each multiplying the
+    /// total), Disguise blown (seconds, Bad, total 0) and Total (Main). The second row: "-" at level 0, else the level in percent (Main) or Blown!
+    /// (Bad) while blown.
     /// </summary>
     static IEnumerable<PlayerInterface.HudLine> DisguiseLines(DisguiseView? disguise)
     {
@@ -369,8 +370,8 @@ sealed class InventoryLayout(PlayerInterface player)
     }
 
     /// <summary>
-    /// The burden row under Total Weight (<c>FUN_1405d4260</c>, <b>Verified</b> by decompile): by the carry speed factor (1 unburdened), at least 0.95
-    /// "-Weightless", 0.75 "-Lightweight", 0.5 "-Moderate" (Main colour), 0.1 "-Heavy", below "-Overloaded" (both Bad colour).
+    /// The burden row under Total Weight (<c>FUN_1405d4260</c>, <b>Verified</b> by decompile): by the carry speed factor (1 unburdened), at least
+    /// 0.95 "-Weightless", 0.75 "-Lightweight", 0.5 "-Moderate" (Main colour), 0.1 "-Heavy", below "-Overloaded" (both Bad colour).
     /// </summary>
     internal static (string Text, string? Colour) BurdenText(float factor) => factor switch
     {

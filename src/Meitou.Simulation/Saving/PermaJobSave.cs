@@ -52,8 +52,9 @@ public static class PermaJobSave
     }
 
     /// <summary>
-    /// Reads them back as the original does: each job is added again through <see cref="PermaJobs.Add"/> (which turns the switch on), then the switch is read.
-    /// Meitou's <see cref="Orders.JobsKey"/> in <paramref name="state"/> wins when present (older Meitou saves have only it, with a stale <c>jobs</c>).
+    /// Reads them back as the original does: each job is added again through <see cref="PermaJobs.Add"/> (which turns the switch on), then the switch
+    /// is read. Meitou's <see cref="Orders.JobsKey"/> in <paramref name="state"/> wins when present (older Meitou saves have only it, with a stale
+    /// <c>jobs</c>).
     /// </summary>
     public static void Read(
         FcsRecord ai, FcsRecord? state, CharacterCold cold, BuildingRegistry sites, SaveHandles handles, IReadOnlyDictionary<FcsRecord, string> instanceOf,

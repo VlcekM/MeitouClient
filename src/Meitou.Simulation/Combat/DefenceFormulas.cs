@@ -13,9 +13,10 @@ public static class DefenceFormulas
     public const float GuardBonus = 20;
 
     /// <summary>
-    /// The block chance in per cent (<c>FUN_1408862d0</c>) from the defender's defence D and the attacker's skill: d = D - skill; p = base + increase x d when
-    /// d &gt; 0, else base + reduction x d (the increase and reduction are the stored per-level 1.2 and 1.5); above 90, p = 90 + 0.2 (p - 90); clamped to
-    /// [5, 95]. <paramref name="min"/> and <paramref name="max"/> are the clamp: the variant used by unarmed fighters (<c>FUN_140885d80</c>) clamps to [0, 95].
+    /// The block chance in per cent (<c>FUN_1408862d0</c>) from the defender's defence D and the attacker's skill: d = D - skill; p = base + increase
+    /// x d when d &gt; 0, else base + reduction x d (the increase and reduction are the stored per-level 1.2 and 1.5); above 90, p = 90 + 0.2 (p -
+    /// 90); clamped to [5, 95]. <paramref name="min"/> and <paramref name="max"/> are the clamp: the variant used by unarmed fighters
+    /// (<c>FUN_140885d80</c>) clamps to [0, 95].
     /// </summary>
     public static float BlockChance(float defence, float attackerSkill, CombatConstants c, float min = 5, float max = 95)
     {
@@ -34,16 +35,17 @@ public static class DefenceFormulas
     public static float FistBlockFactor(float defenderMartialArts) => MathF.Max(MathF.Min((defenderMartialArts - 0.75f) / (1.1f - 0.75f), 1.1f), 0.5f);
 
     /// <summary>
-    /// The defender's defence D (<c>FUN_1408862d0</c>): the melee defence stat (effective) plus the weapon's defence mod (dropped when the weapon cannot block; an
-    /// unarmed fighter has none) plus the worn gear's equipment bonus, plus <see cref="GuardBonus"/> in a guarding state.
+    /// The defender's defence D (<c>FUN_1408862d0</c>): the melee defence stat (effective) plus the weapon's defence mod (dropped when the weapon
+    /// cannot block; an unarmed fighter has none) plus the worn gear's equipment bonus, plus <see cref="GuardBonus"/> in a guarding state.
     /// </summary>
     public static float Defence(float meleeDefence, int weaponDefenceMod, bool weaponCanBlock, float equipmentBonus, bool guarding) =>
         meleeDefence + (weaponCanBlock ? weaponDefenceMod : 0) + equipmentBonus + (guarding ? GuardBonus : 0);
 
     /// <summary>
-    /// The "effective defence" of the unarmed variant (<c>FUN_140885190</c>): the stat minus (1 - e) x stat minus (1 - l) x stat plus the multiplier term, with e
-    /// the encumbrance factor clamped to [0.4, 1] and l the leg factor (the worse leg's health fraction x 1.8, clamped to [0, 1] by <c>FUN_140884970</c>, then to
-    /// [0.5, 1] here). The multiplier term is not decoded: <paramref name="bonus"/> is added as given. Plus <see cref="GuardBonus"/> when guarding.
+    /// The "effective defence" of the unarmed variant (<c>FUN_140885190</c>): the stat minus (1 - e) x stat minus (1 - l) x stat plus the multiplier
+    /// term, with e the encumbrance factor clamped to [0.4, 1] and l the leg factor (the worse leg's health fraction x 1.8, clamped to [0, 1] by
+    /// <c>FUN_140884970</c>, then to [0.5, 1] here). The multiplier term is not decoded: <paramref name="bonus"/> is added as given. Plus
+    /// <see cref="GuardBonus"/> when guarding.
     /// </summary>
     public static float EffectiveDefence(float stat, float encumbrance, float legFactor, float bonus, bool guarding)
     {
@@ -54,8 +56,8 @@ public static class DefenceFormulas
     }
 
     /// <summary>
-    /// The probability that <see cref="SkillRoll"/> is true (derived by hand from the comparison): with k = B / A, 1 - 1 / (2k) for k &gt;= 1, else k / 2. 0.5 at
-    /// equal skill.
+    /// The probability that <see cref="SkillRoll"/> is true (derived by hand from the comparison): with k = B / A, 1 - 1 / (2k) for k &gt;= 1, else k
+    /// / 2. 0.5 at equal skill.
     /// </summary>
     public static float SkillRollChance(float skill1, float skill2, CombatConstants c)
     {

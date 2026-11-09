@@ -9,8 +9,8 @@ using Meitou.Simulation.Items;
 namespace Meitou.Simulation.Population;
 
 /// <summary>
-/// The towns' artifacts (docs/game/economy.md "Artifacts"): each town's list, made for a new game (<see cref="Artifacts.Plan"/>) or read from a loaded save's town
-/// states, and given out into the town's buildings when it makes its residents.
+/// The towns' artifacts (docs/game/economy.md "Artifacts"): each town's list, made for a new game (<see cref="Artifacts.Plan"/>) or read from a
+/// loaded save's town states, and given out into the town's buildings when it makes its residents.
 /// </summary>
 public sealed partial class PopulationSystem
 {
@@ -112,9 +112,10 @@ public sealed partial class PopulationSystem
     readonly record struct MadeArtifact(uint Value, ItemInstance Item);
 
     /// <summary>
-    /// Gives a town's artifacts out into the buildings it housed residents in, as the original's distribution (docs/game/economy.md "Artifacts"); a town with no
-    /// building that takes them keeps its list. Engine choices: ties and the buildings' turns follow the town's building order, the candidates are those Meitou
-    /// housed a template in, and what goes to a building whose interior the level data does not name (the original generates one, Meitou has none) is lost.
+    /// Gives a town's artifacts out into the buildings it housed residents in, as the original's distribution (docs/game/economy.md "Artifacts"); a
+    /// town with no building that takes them keeps its list. Engine choices: ties and the buildings' turns follow the town's building order, the
+    /// candidates are those Meitou housed a template in, and what goes to a building whose interior the level data does not name (the original
+    /// generates one, Meitou has none) is lost.
     /// </summary>
     void GiveArtifacts(World world, BuiltTown town)
     {
@@ -141,8 +142,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The buildings of a town that take item and gear artifacts, the first worth most first: those Meitou housed a template in, that are furnished and not the
-    /// player's.
+    /// The buildings of a town that take item and gear artifacts, the first worth most first: those Meitou housed a template in, that are furnished
+    /// and not the player's.
     /// </summary>
     (List<(uint Base, TownBuilding Building)> Items, List<(uint Base, TownBuilding Building)> Gear) ArtifactHomes(
         World world, BuiltTown town, TownSite site, int player, string? playerId)
@@ -203,8 +204,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Within each building that was given artifacts: its stock containers emptied, strongest lock first; each item into one of the first 1, 2, 4... drawn,
-    /// else the others in a shuffled order; the containers that hold something are locked.
+    /// Within each building that was given artifacts: its stock containers emptied, strongest lock first; each item into one of the first 1, 2, 4...
+    /// drawn, else the others in a shuffled order; the containers that hold something are locked.
     /// </summary>
     void PlaceInBoxes(World world, TownSite site, Dictionary<TownBuilding, List<MadeArtifact>> given, BoostRandom rng)
     {

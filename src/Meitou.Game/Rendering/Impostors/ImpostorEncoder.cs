@@ -4,8 +4,8 @@ using Meitou.Data.Textures;
 namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
-/// Block compression of the atlas levels: BC3 for the albedo and coverage (<see cref="EncodeBc3"/>), BC5 for the two-channel maps (two BC4 blocks, red
-/// then green: the same eight-value encoding as BC3's alpha block). Width and height are multiples of 4.
+/// Block compression of the atlas levels: BC3 for the albedo and coverage (<see cref="EncodeBc3"/>), BC5 for the two-channel maps (two BC4 blocks,
+/// red then green: the same eight-value encoding as BC3's alpha block). Width and height are multiples of 4.
 /// </summary>
 public static class ImpostorEncoder
 {
@@ -19,9 +19,9 @@ public static class ImpostorEncoder
     };
 
     /// <summary>
-    /// RGBA8 pixels as BC3 blocks: the alpha block as BC4; the colour endpoints along the principal axis of the block's covered pixels (all pixels when
-    /// none is covered). <see cref="BlockCompression.EncodeBc3"/>'s bounding-box endpoints turn a block of orange leaves and blue-grey twigs into olive and
-    /// pink greys (its box corners are neither colour); the impostors' frames are full of such blocks.
+    /// RGBA8 pixels as BC3 blocks: the alpha block as BC4; the colour endpoints along the principal axis of the block's covered pixels (all pixels
+    /// when none is covered). <see cref="BlockCompression.EncodeBc3"/>'s bounding-box endpoints turn a block of orange leaves and blue-grey twigs
+    /// into olive and pink greys (its box corners are neither colour); the impostors' frames are full of such blocks.
     /// </summary>
     public static byte[] EncodeBc3(byte[] rgba, int size)
     {
@@ -49,9 +49,9 @@ public static class ImpostorEncoder
     }
 
     /// <summary>
-    /// RGBA8 pixels as BC1 blocks with a 1-bit alpha (alpha of 128 and above is covered): a block with every texel covered is a four-colour block; any
-    /// other is a three-colour block whose fourth code is transparent black, so the sampler's filtering returns colour x coverage (the shader divides by
-    /// the alpha). Endpoints are fitted to the covered texels only.
+    /// RGBA8 pixels as BC1 blocks with a 1-bit alpha (alpha of 128 and above is covered): a block with every texel covered is a four-colour block;
+    /// any other is a three-colour block whose fourth code is transparent black, so the sampler's filtering returns colour x coverage (the shader
+    /// divides by the alpha). Endpoints are fitted to the covered texels only.
     /// </summary>
     public static byte[] EncodeBc1(byte[] rgba, int size)
     {
@@ -167,8 +167,8 @@ public static class ImpostorEncoder
     }
 
     /// <summary>
-    /// A level back to RGBA8 (BC3 colour decoded with the 4-colour rule BC3 always uses; BC1 with its 1-bit alpha: the three-colour mode's fourth code is
-    /// transparent black, alpha 0; BC5 into R and G, B 0, A 255).
+    /// A level back to RGBA8 (BC3 colour decoded with the 4-colour rule BC3 always uses; BC1 with its 1-bit alpha: the three-colour mode's fourth
+    /// code is transparent black, alpha 0; BC5 into R and G, B 0, A 255).
     /// </summary>
     public static byte[] Decode(ImpostorEncoding encoding, byte[] data, int size)
     {
@@ -257,8 +257,8 @@ public static class ImpostorEncoder
     }
 
     /// <summary>
-    /// A BC1 colour block (four-colour mode, or with <paramref name="punch"/> the three-colour mode with a transparent code), endpoints from the principal
-    /// axis of the pixels with alpha above 0 (or all of them).
+    /// A BC1 colour block (four-colour mode, or with <paramref name="punch"/> the three-colour mode with a transparent code), endpoints from the
+    /// principal axis of the pixels with alpha above 0 (or all of them).
     /// </summary>
     static void EncodeColourBlock(ReadOnlySpan<Vector3> colours, ReadOnlySpan<byte> alpha, Span<byte> dst, bool punch = false)
     {

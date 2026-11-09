@@ -21,10 +21,9 @@ namespace Meitou.Simulation.FirstAid;
 /// <item><b>Treat</b> (<see cref="CharacterTask.Treat"/>): <see cref="TreatOrder"/> (the player), the medic job and the NPC rule start it.
 /// <c>Schedule</c> walks the medic to the patient
 /// (the pursuit system's pattern: a path at free speed, asked again when the patient has moved) and, in reach, asks the patient to stand still
-/// (<see cref="CharacterCold.StandStillUntil"/>); <c>Act</c> (own slot, read-only on the patient) emits one effect per tick while the medic
-/// is in reach, awake, not fighting and still, and the patient is still or down; <c>Apply</c> (serial commit, in target / source order) picks the
-/// kit, bandages the patient, drains the kit
-/// and trains the medic. So nothing on another character is written in a parallel phase.</item>
+/// (<see cref="CharacterCold.StandStillUntil"/>); <c>Act</c> (own slot, read-only on the patient) emits one effect per tick while the medic is in
+/// reach, awake, not fighting and still, and the patient is still or down; <c>Apply</c> (serial commit, in target / source order) picks the kit,
+/// bandages the patient, drains the kit and trains the medic. So nothing on another character is written in a parallel phase.</item>
 /// <item><b>Rate</b> (<b>Observed</b>, character-stats.md): <c>lerp(1, 15, min(skill, kit quality) x 0.01) x medic speed mult</c> (x <c>robot medic
 /// speed mult</c> for a robot kit) per unit of <c>dt</c> on the first part with room (the next only once it fills), after any open wound is closed;
 /// the kit's <c>charges</c> fall by <c>lerp(medkit drain 99, medkit drain 1, (100 - skill) / 100) x dt</c> per wound step or part bandaged (bandaging
@@ -33,9 +32,8 @@ namespace Meitou.Simulation.FirstAid;
 /// <c>dt</c> is the character's update time, the scaled frame time summed over the frames it was not visited (<c>FUN_1405cf130</c>, <b>Verified</b>),
 /// so <see cref="World.TickSeconds"/> in the long run.</item>
 /// <item><b>Auto</b> (<c>SlowWorld</c>, each NPC every <see cref="FirstAidSettings.AutoEveryTicks"/> ticks on its slot's turn, serial in slot order):
-/// an idle, wandering or following NPC looks for a patient with the original's
-/// Medic finder (<see cref="FindPatient"/>, FirstAidSystem.Finder.cs), as the decision step asks for the player characters' medic, robotics and
-/// splint jobs (<see cref="RegisterSources"/>).</item>
+/// an idle, wandering or following NPC looks for a patient with the original's Medic finder (<see cref="FindPatient"/>, FirstAidSystem.Finder.cs), as
+/// the decision step asks for the player characters' medic, robotics and splint jobs (<see cref="RegisterSources"/>).</item>
 /// <item><b>Rest</b> (<see cref="CharacterTask.Rest"/>): <see cref="RestOrder"/>; <see cref="BodySystem"/> reads the task as
 /// <see cref="MedicalContext.Resting"/>. Lying in a bed is
 /// <see cref="Locks.BedSystem"/>'s (<see cref="CharacterTask.Sleep"/>); <see cref="BodySystem"/> gives it the bed's healing.</item>
@@ -341,9 +339,8 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             if (t == i || InReach(next[i], spot))
             {
                 // In reach (or treating itself): stand still and let the Act step work, and ask the patient to stand still too. The medic kneels only
-                // while the patient
-                // keeps still (the original plays the clip in the first aid task's update, which runs once the target stands still, row 25's state
-                // 42).
+                // while the patient keeps still (the original plays the clip in the first aid task's update, which runs once the target stands still,
+                // row 25's state 42).
                 if (t != i) AskToStandStill(world, table.Cold(t)!);
                 bool patientStill = Speed2(table.Previous[t].Velocity) <= Settings.StillSpeed * Settings.StillSpeed;
                 cold.TreatKneels = t == i || table.Cold(t)!.Medical!.Incapacitated || patientStill;
@@ -362,10 +359,9 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
             bool asking = (n.Flags & (ushort)(MoveFlags.NeedPath | MoveFlags.Pending)) != 0;
 
             // No way to the patient: no path, or one that ends short of the asked goal (the walkability answers an unreachable goal with the way to
-            // the reachable point nearest it). The
-            // original's task walk reports it (notifyPathImpossible): the patient goes on the medic's path failures for 20 s, which the finder skips,
-            // and the treatment ends. Without it
-            // a medic asked for the same hopeless path every half second (issue #124: searches run to the iteration limit, ~280 MB/s of garbage).
+            // the reachable point nearest it). The original's task walk reports it (notifyPathImpossible): the patient goes on the medic's path
+            // failures for 20 s, which the finder skips, and the treatment ends. Without it a medic asked for the same hopeless path every half
+            // second (issue #124: searches run to the iteration limit, ~280 MB/s of garbage).
             if (!asking
                     && (cold.PathFailed || (n.Flags & (ushort)MoveFlags.HasPath) != 0 && cold.Path.Length > 0
                             && EndsShort(ReachedEnd(cold, n), n.Goal, spot.Y)))
@@ -690,8 +686,7 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
     public void SlowWorld(World world)
     {
         // Each NPC looks every AutoEveryTicks ticks, a slot's turn falling on its own tick (slot mod the period), so the looks spread over the ticks
-        // instead of all landing on one
-        // (the original runs its AI updates 8 characters a frame in turn, FUN_140786e30).
+        // instead of all landing on one (the original runs its AI updates 8 characters a frame in turn, FUN_140786e30).
         if (Settings.AutoEveryTicks <= 0) return;
         int every = world.Every(Settings.AutoEveryTicks);
         var table = world.Characters;

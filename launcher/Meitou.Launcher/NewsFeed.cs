@@ -60,8 +60,8 @@ public sealed class NewsFeed(HttpClient http)
     }
 
     /// <summary>
-    /// Asks GitHub for the article list, conditionally on the saved ETag, and keeps a fresh copy. A failure keeps the list read before (null when there
-    /// was none) with a problem line.
+    /// Asks GitHub for the article list, conditionally on the saved ETag, and keeps a fresh copy. A failure keeps the list read before (null when
+    /// there was none) with a problem line.
     /// </summary>
     async Task<(string? Json, string? Problem)> FetchListAsync(string? listJson, string listFile, string etagFile, CancellationToken ct)
     {
@@ -129,8 +129,8 @@ public sealed class NewsFeed(HttpClient http)
     }
 
     /// <summary>
-    /// The article folders of the list (named by date, newest first, at most <see cref="MaxPosts"/>): their name and tree hash, which changes whenever
-    /// anything in them does.
+    /// The article folders of the list (named by date, newest first, at most <see cref="MaxPosts"/>): their name and tree hash, which changes
+    /// whenever anything in them does.
     /// </summary>
     static List<(string Name, string Sha)> ArticleFolders(JsonDocument doc) =>
         doc.RootElement.ValueKind == JsonValueKind.Array

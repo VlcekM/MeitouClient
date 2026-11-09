@@ -13,8 +13,8 @@ sealed class AdvancedOptions(PlayerInterface player)
     #region State
 
     /// <summary>
-    /// The New game window's advanced options. Plain globals in the original (set to the defaults once at start-up, rewritten when a save is loaded, by
-    /// the import window and by the options window): opening the window keeps the last edit or the last loaded save's values
+    /// The New game window's advanced options. Plain globals in the original (set to the defaults once at start-up, rewritten when a save is loaded,
+    /// by the import window and by the options window): opening the window keeps the last edit or the last loaded save's values
     /// (docs/game/character-stats.md).
     /// </summary>
     internal NewGameSettings NewGameOptions { get; set; } = new();
@@ -22,8 +22,8 @@ sealed class AdvancedOptions(PlayerInterface player)
     internal bool AdvancedOpen;
 
     /// <summary>
-    /// The option whose help the panel shows: the last one under the pointer, kept while the panel is open (so the pointer can reach the help's scroll
-    /// bar); -1: none.
+    /// The option whose help the panel shows: the last one under the pointer, kept while the panel is open (so the pointer can reach the help's
+    /// scroll bar); -1: none.
     /// </summary>
     internal int AdvancedHelp = -1;
 
@@ -45,8 +45,9 @@ sealed class AdvancedOptions(PlayerInterface player)
     internal void BindNewGamePanels(UiBindings b) => BindAdvancedPanels("new-game", b);
 
     /// <summary>
-    /// The start window (and the import window) with the advanced options under it: the layout's size, its top left at 0.5 and 0.05 of the screen on the
-    /// title (FUN_140918ef0, FUN_140481130), at 0.6 and 0.05 from the in-game menu (FUN_1409180e0); the options panel at its bottom left (FUN_14047ab70).
+    /// The start window (and the import window) with the advanced options under it: the layout's size, its top left at 0.5 and 0.05 of the screen on
+    /// the title (FUN_140918ef0, FUN_140481130), at 0.6 and 0.05 from the in-game menu (FUN_1409180e0); the options panel at its bottom left
+    /// (FUN_14047ab70).
     /// </summary>
     internal void BindAdvancedPanels(string id, UiBindings b)
     {
@@ -116,8 +117,8 @@ sealed class AdvancedOptions(PlayerInterface player)
         float s = player.Height / 1080f;
         var area = panel.Bounds;
 
-        // The labels sit on Kenshi_GenericTextBoxFlatSkin, the help panel on Kenshi_GenericTextBoxSkin; the value boxes' skin names no text colour, so they
-        // keep the palette ink.
+        // The labels sit on Kenshi_GenericTextBoxFlatSkin, the help panel on Kenshi_GenericTextBoxSkin; the value boxes' skin names no text colour,
+        // so they keep the palette ink.
         string labelInk = MyGuiColours.TemplateInk(player.UiResources, "Kenshi_GenericTextBoxFlatSkin");
         AddOptionRows(controls, area, s, screen, labelInk);
         AddTickRows(controls, area, s, screen, labelInk);

@@ -46,8 +46,8 @@ public sealed record GpuFeatures(bool Bindless, bool MultiDrawIndirect, bool Dra
 }
 
 /// <summary>
-/// The native renderer API for one device (docs/renderer-native.md 2.2): what every renderer shares. The display (or a test) makes it from the device and
-/// drives its frames (<see cref="BeginFrame"/>, <see cref="EndFrame"/>).
+/// The native renderer API for one device (docs/renderer-native.md 2.2): what every renderer shares. The display (or a test) makes it from the device
+/// and drives its frames (<see cref="BeginFrame"/>, <see cref="EndFrame"/>).
 /// </summary>
 public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
 {
@@ -497,10 +497,10 @@ public sealed unsafe partial class GpuContext : IDisposable, IGpuContext
     readonly JobPool<ClearJob> _clearJobs = new();
 
     /// <summary>
-    /// Records a prepared guest segment into the pass being drawn now (docs/renderer-native.md 6.2, wave 4): inside a host's rendering with secondaries
-    /// (<see cref="GpuFrame.Parallel"/>) it is queued and recorded when the host ends it, in this order, possibly on a job thread; otherwise at once into the
-    /// host's open pass, as a guest segment (<see cref="BeginGuest"/>). Either way <see cref="RecordJob.Record"/> runs with <see cref="RenderJobs.InJob"/> set,
-    /// so a job that reaches for render-thread state throws.
+    /// Records a prepared guest segment into the pass being drawn now (docs/renderer-native.md 6.2, wave 4): inside a host's rendering with
+    /// secondaries (<see cref="GpuFrame.Parallel"/>) it is queued and recorded when the host ends it, in this order, possibly on a job thread;
+    /// otherwise at once into the host's open pass, as a guest segment (<see cref="BeginGuest"/>). Either way <see cref="RecordJob.Record"/> runs
+    /// with <see cref="RenderJobs.InJob"/> set, so a job that reaches for render-thread state throws.
     /// </summary>
     public void Record(string label, RecordJob job)
     {

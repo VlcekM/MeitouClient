@@ -7,8 +7,8 @@ using Meitou.Simulation.Factions;
 namespace Meitou.Simulation.Population;
 
 /// <summary>
-/// Town residents in their buildings (docs/game/factions-squads-towns.md "Town residents"): which building each resident entry's squads get, and where in it
-/// they are made. Pure given the seed (runs on the build thread).
+/// Town residents in their buildings (docs/game/factions-squads-towns.md "Town residents"): which building each resident entry's squads get, and
+/// where in it they are made. Pure given the seed (runs on the build thread).
 /// </summary>
 public sealed partial class PopulationSystem
 {
@@ -23,8 +23,9 @@ public sealed partial class PopulationSystem
     const int DesignationBar = 3;
 
     /// <summary>
-    /// Houses the town's resident entries in its buildings (<see cref="ResidentHomes.Assign"/>) and builds their squads into <paramref name="squads"/>, each
-    /// building with its template into <paramref name="homes"/>; returns the town's bars (for the bar squads). Each housed template's squads: its
+    /// Houses the town's resident entries in its buildings (<see cref="ResidentHomes.Assign"/>) and builds their squads into
+    /// <paramref name="squads"/>, each building with its template into <paramref name="homes"/>; returns the town's bars (for the bar squads). Each
+    /// housed template's squads: its
     /// <c>housemates</c> (v0, or v0..v1 when v1 &gt; 0), then itself. The buildings in <paramref name="playerOwned"/> (the player's) house nobody.
     /// </summary>
     List<TownBuilding> HouseResidents(TownSite site, FactionData? faction, int factionIndex, ulong seed, IWalkability walk,
@@ -124,9 +125,10 @@ public sealed partial class PopulationSystem
     const float RaisedFloor = 12, FloorScanStep = 4, FloorScanReach = 60, FloorScanRadius = 40;
 
     /// <summary>
-    /// The platoon point of a resident squad of <paramref name="b"/> (<c>FUN_14057f820</c>:86-103, <c>FUN_140583a10</c>:413-420, Verified): a random free node of
-    /// type 0 (shopkeeper), else 2 (guard post), else 1 (general), else its origin; the height to find the floor from (its Y plus <see cref="SpotLift"/>). The
-    /// members are placed apart in the original, each at a random general node, else a shopkeeper node (<see cref="MemberSpot"/>).
+    /// The platoon point of a resident squad of <paramref name="b"/> (<c>FUN_14057f820</c>:86-103, <c>FUN_140583a10</c>:413-420, Verified): a random
+    /// free node of type 0 (shopkeeper), else 2 (guard post), else 1 (general), else its origin; the height to find the floor from (its Y plus
+    /// <see cref="SpotLift"/>). The members are placed apart in the original, each at a random general node, else a shopkeeper node
+    /// (<see cref="MemberSpot"/>).
     /// </summary>
     static (Vector2 At, float? NearY) SpotIn(TownBuilding b, ulong seed, ulong key)
     {
@@ -148,8 +150,9 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The spot of one member of a resident squad of <paramref name="b"/> (<c>FUN_14057f820</c>:86-103, Verified): a random general (1) node, else a shopkeeper
-    /// (0) node, at the node plus <see cref="SpotLift"/>; null: the building has neither and the member stands at the platoon point. One draw per member, from
+    /// The spot of one member of a resident squad of <paramref name="b"/> (<c>FUN_14057f820</c>:86-103, Verified): a random general (1) node, else a
+    /// shopkeeper (0) node, at the node plus <see cref="SpotLift"/>; null: the building has neither and the member stands at the platoon point. One
+    /// draw per member, from
     /// <paramref name="salt"/>.
     /// </summary>
     internal static Vector3? MemberSpot(TownBuilding b, ulong seed, ulong salt)

@@ -192,8 +192,7 @@ public sealed class MetalShaders : IGpuShaders
     internal static uint TableTextureId(int kind) => TablePrefix[kind];
 
     /// <summary>
-    /// The argument buffer's id of kind <paramref name="kind"/>'s first sampler (the sampler arrays come after all the
-    /// textures).
+    /// The argument buffer's id of kind <paramref name="kind"/>'s first sampler (the sampler arrays come after all the textures).
     /// </summary>
     internal static uint TableSamplerId(int kind) => TableTotal + TableTextureId(kind);
 

@@ -19,8 +19,8 @@ namespace Meitou.Game.Title;
 sealed class TitleMenu(PlayerInterface player)
 {
     /// <summary>
-    /// An upper-case button or title (<c>NEW GAME</c>, <c>YES</c>) in the active language: the catalog's message of the same text (<c>CONTINUE</c> is one),
-    /// else of its capitalised form (<c>New game</c>) in upper case. Text that is not a message is unchanged.
+    /// An upper-case button or title (<c>NEW GAME</c>, <c>YES</c>) in the active language: the catalog's message of the same text (<c>CONTINUE</c> is
+    /// one), else of its capitalised form (<c>New game</c>) in upper case. Text that is not a message is unchanged.
     /// </summary>
     internal static string UpperTr(string upper)
     {

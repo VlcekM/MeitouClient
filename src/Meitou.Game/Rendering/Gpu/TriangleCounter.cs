@@ -6,12 +6,12 @@ using Silk.NET.Vulkan;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// The bench's triangle size histogram (<c>--bench-tris</c>, docs/bench.md "Triangle size histogram"): while <see cref="Begin"/> is in effect the colour
-/// programs of the main view (<see cref="TriangleBins.CategoryOf"/>) are made with a fragment shader that runs the original and then adds one to a
-/// counter in a storage buffer, by category and by the area of the sample's triangle (<see cref="TriangleBins.Instrument"/>). The buffer is reached by
-/// its device address, written into the shader text, so no renderer's layout or sets change. Normal programs and pipelines are never touched: the
-/// instrumented ones are separate pipelines (<see cref="PipelineLibrary.GetWithFragment"/>, swapped in at <see cref="CommandList.BindPipeline(GpuPipeline)"/>),
-/// made only while it is on.
+/// The bench's triangle size histogram (<c>--bench-tris</c>, docs/bench.md "Triangle size histogram"): while <see cref="Begin"/> is in effect the
+/// colour programs of the main view (<see cref="TriangleBins.CategoryOf"/>) are made with a fragment shader that runs the original and then adds one
+/// to a counter in a storage buffer, by category and by the area of the sample's triangle (<see cref="TriangleBins.Instrument"/>). The buffer is
+/// reached by its device address, written into the shader text, so no renderer's layout or sets change. Normal programs and pipelines are never
+/// touched: the instrumented ones are separate pipelines (<see cref="PipelineLibrary.GetWithFragment"/>, swapped in at
+/// <see cref="CommandList.BindPipeline(GpuPipeline)"/>), made only while it is on.
 /// </summary>
 public sealed unsafe class TriangleCounter : IDisposable
 {

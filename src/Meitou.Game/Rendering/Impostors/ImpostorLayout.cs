@@ -3,9 +3,10 @@ using System.Numerics;
 namespace Meitou.Game.Rendering.Impostors;
 
 /// <summary>
-/// The geometry of a far billboard ("impostor") atlas (docs/impostors.md): a grid of <c>Grid × Grid</c> orthographic views of a mesh, one per direction of
-/// the upper hemisphere, laid out by the hemi-octahedral map. Frame (i, j) sits at atlas UV <c>[i, i + 1] / Grid × [j, j + 1] / Grid</c> (GL order, row 0
-/// at the bottom) and looks at the mesh from <see cref="FrameDirection"/>(i, j). Each frame covers the bounding sphere: frame-local UV
+/// The geometry of a far billboard ("impostor") atlas (docs/impostors.md): a grid of <c>Grid × Grid</c> orthographic views of a mesh, one per
+/// direction of the upper hemisphere, laid out by the hemi-octahedral map. Frame (i, j) sits at atlas UV <c>[i, i + 1] / Grid × [j, j + 1] / Grid</c>
+/// (GL order, row 0 at the bottom) and looks at the mesh from <see cref="FrameDirection"/>(i, j). Each frame covers the bounding sphere: frame-local
+/// UV
 /// <c>(dot(p − c, right), dot(p − c, up)) / 2r + 0.5</c>, depth <c>dot(p − c, dir) / r × 0.5 + 0.5</c> (1 towards the viewer). The GLSL in
 /// <see cref="ImpostorShaders"/> computes the same things; the C# here is the reference the tests check (and what the baker places its cameras with).
 /// </summary>
@@ -36,8 +37,8 @@ public static class ImpostorLayout
     }
 
     /// <summary>
-    /// A unit vector to full-sphere octahedral coordinates in [−1, 1]² (how the normal map stores the frame-space normal; the fold is at z = −1, facing
-    /// away from the frame).
+    /// A unit vector to full-sphere octahedral coordinates in [−1, 1]² (how the normal map stores the frame-space normal; the fold is at z = −1,
+    /// facing away from the frame).
     /// </summary>
     public static Vector2 EncodeNormal(Vector3 n)
     {
@@ -65,8 +66,8 @@ public static class ImpostorLayout
     public static Vector3 FrameDirection(int i, int j, int grid) => Decode(new Vector2(i, j) / (grid - 1));
 
     /// <summary>
-    /// A frame's image axes: <paramref name="right"/> and <paramref name="up"/> span the image, <paramref name="d"/> points to the viewer. Up is the object's
-    /// +Y projected onto the image plane (−Z when looking straight down).
+    /// A frame's image axes: <paramref name="right"/> and <paramref name="up"/> span the image, <paramref name="d"/> points to the viewer. Up is the
+    /// object's +Y projected onto the image plane (−Z when looking straight down).
     /// </summary>
     public static void Basis(Vector3 d, out Vector3 right, out Vector3 up)
     {
@@ -76,9 +77,9 @@ public static class ImpostorLayout
     }
 
     /// <summary>
-    /// The three frames to blend for a view direction (object space, towards the eye) and their weights (sum 1): the grid cell around the direction's UV is
-    /// split along its anti-diagonal and the frames at the corners of the half it falls in are weighted barycentrically. At a frame's own direction that
-    /// frame has weight 1.
+    /// The three frames to blend for a view direction (object space, towards the eye) and their weights (sum 1): the grid cell around the direction's
+    /// UV is split along its anti-diagonal and the frames at the corners of the half it falls in are weighted barycentrically. At a frame's own
+    /// direction that frame has weight 1.
     /// </summary>
     public static (Vector2 A, Vector2 B, Vector2 C, Vector3 Weights) Select(Vector3 viewDirection, int grid)
     {
@@ -93,8 +94,8 @@ public static class ImpostorLayout
 
     /// <summary>
     /// The ground distance beyond which an instance of bounding radius <paramref name="worldRadius"/> (mesh radius × instance scale) is drawn as its
-    /// impostor: where the frame's <paramref name="framePixels"/> cover the sphere's projected diameter at a screen <paramref name="screenHeight"/> pixels
-    /// high with a vertical field of view <paramref name="fieldOfView"/> (one atlas texel per pixel or fewer), and never nearer than
+    /// impostor: where the frame's <paramref name="framePixels"/> cover the sphere's projected diameter at a screen <paramref name="screenHeight"/>
+    /// pixels high with a vertical field of view <paramref name="fieldOfView"/> (one atlas texel per pixel or fewer), and never nearer than
     /// <paramref name="minimum"/>.
     /// </summary>
     public static float TransitionDistance(float worldRadius, int framePixels, float screenHeight, float fieldOfView, float minimum) =>
@@ -111,8 +112,8 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     /// <summary>
     /// The small class (docs/impostors.md section 11): meshes whose largest instance is under <see cref="MinimumRadius"/> but at least
     /// <see cref="SmallMinimumRadius"/> and that have at least <see cref="SmallMinimumTriangles"/> triangles (a few triangles cost less than the impostor's
-    /// quad). Small frames (<see cref="SmallFrame"/>), and a transition distance of its own, proportional to the size (<see cref="Transition"/>): the largest
-    /// instance is <c>27.8</c> pixels across at its transition whatever its size, as the smallest medium mesh (radius 48) is at 4000.
+    /// quad). Small frames (<see cref="SmallFrame"/>), and a transition distance of its own, proportional to the size (<see cref="Transition"/>): the
+    /// largest instance is <c>27.8</c> pixels across at its transition whatever its size, as the smallest medium mesh (radius 48) is at 4000.
     /// </summary>
     public const float SmallMinimumRadius = 2;
 
@@ -155,8 +156,8 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     public static readonly ImpostorClass Large = new("large", 256, DefaultGrid);
 
     /// <summary>
-    /// The largest frame of a TERRAIN-mode rock's atlas (256; docs/impostors.md section 13): the rocks that are mountains define the skyline, and at the
-    /// transition distance a radius of 600 to 1000 units is 350 to 580 pixels across, more than a 256 pixel frame magnifies well.
+    /// The largest frame of a TERRAIN-mode rock's atlas (256; docs/impostors.md section 13): the rocks that are mountains define the skyline, and at
+    /// the transition distance a radius of 600 to 1000 units is 350 to 580 pixels across, more than a 256 pixel frame magnifies well.
     /// </summary>
     public const int RockMaxFrame = 256;
 
@@ -166,8 +167,9 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
     public bool IsSmall => Name == "small";
 
     /// <summary>
-    /// The ground distance from which a mesh of this class is its impostor, given the user's impostor distance (<paramref name="impostorDistance"/>, 4000
-    /// by default) and the radius of its largest instance: that distance for medium and large atlases, and in proportion to the radius for the small class.
+    /// The ground distance from which a mesh of this class is its impostor, given the user's impostor distance (<paramref name="impostorDistance"/>,
+    /// 4000 by default) and the radius of its largest instance: that distance for medium and large atlases, and in proportion to the radius for the
+    /// small class.
     /// </summary>
     public float Transition(float worldRadius, float impostorDistance) =>
         IsSmall ? impostorDistance * worldRadius / MinimumRadius
@@ -181,17 +183,17 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
         worldRadius * ReferenceHeight / (HalfFovTan * Math.Max(distance, 1));
 
     /// <summary>
-    /// The class for a largest instance radius, or null when the mesh is too small to need an impostor: under <see cref="MinimumRadius"/> only the small
-    /// class (<see cref="SmallMinimumRadius"/> and up, and <paramref name="triangles"/> at least <see cref="SmallMinimumTriangles"/>; the count is optional,
-    /// a caller that does not know it gets the class by size alone).
+    /// The class for a largest instance radius, or null when the mesh is too small to need an impostor: under <see cref="MinimumRadius"/> only the
+    /// small class (<see cref="SmallMinimumRadius"/> and up, and <paramref name="triangles"/> at least <see cref="SmallMinimumTriangles"/>; the count
+    /// is optional, a caller that does not know it gets the class by size alone).
     /// </summary>
     public static ImpostorClass? For(float worldRadius, int triangles = int.MaxValue) => For(worldRadius, triangles, MaxFrame);
 
     /// <summary>
     /// <see cref="For"/> for a TERRAIN-mode rock (docs/impostors.md section 13): the same size rule, except that a rock too large for
     /// <see cref="RockMaxFrame"/> (a radius of about 620 units and more at the reference distance) is not magnified more than the rule allows but switches
-    /// to its impostor further out, in proportion to its radius (<see cref="Knee"/>): the owner's rule of one atlas texel per pixel at the transition, the
-    /// one the small class has the other way round.
+    /// to its impostor further out, in proportion to its radius (<see cref="Knee"/>): the owner's rule of one atlas texel per pixel at the
+    /// transition, the one the small class has the other way round.
     /// </summary>
     public static ImpostorClass? ForRock(float worldRadius, int triangles = int.MaxValue) => For(worldRadius, triangles, RockMaxFrame, rock: true);
 
@@ -211,17 +213,17 @@ public readonly record struct ImpostorClass(string Name, int FramePixels, int Gr
         string name = frame.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (!rock || need <= frame) return new ImpostorClass(name, frame, DefaultGrid);
 
-        // The radius at which this frame is magnified exactly as much as allowed at the reference distance: beyond it the transition (and the distance the
-        // bake's texture detail is matched to) grows with the radius.
+        // The radius at which this frame is magnified exactly as much as allowed at the reference distance: beyond it the transition (and the
+        // distance the bake's texture detail is matched to) grows with the radius.
         float knee = ScreenDiameter(1) > 0 ? frame * Magnification / ScreenDiameter(1) : float.MaxValue;
         return new ImpostorClass(name, frame, DefaultGrid, ReferenceDistance * worldRadius / knee, knee);
     }
 
     /// <summary>
-    /// The texture LOD bias the bake uses (docs/impostors.md "Look"): the bake draws the mesh at 2 x the frame size, far finer than the screen shows it at
-    /// the transition, so its cut-out (the leaves' mip alpha) and its colours (the leaf texture's mips) would be those of a near mesh, and the impostor
-    /// fuller and brighter than the mesh at the same distance. The bias is log2 of the ratio of the bake's texel density to the screen's at the reference
-    /// distance for an instance of <paramref name="meanWorldRadius"/> (mesh radius x the mean scale).
+    /// The texture LOD bias the bake uses (docs/impostors.md "Look"): the bake draws the mesh at 2 x the frame size, far finer than the screen shows
+    /// it at the transition, so its cut-out (the leaves' mip alpha) and its colours (the leaf texture's mips) would be those of a near mesh, and the
+    /// impostor fuller and brighter than the mesh at the same distance. The bias is log2 of the ratio of the bake's texel density to the screen's at
+    /// the reference distance for an instance of <paramref name="meanWorldRadius"/> (mesh radius x the mean scale).
     /// </summary>
     public float LodBias(float meanWorldRadius) =>
         Math.Clamp(MathF.Log2(2 * FramePixels / Math.Max(ScreenDiameter(meanWorldRadius, BakeDistance), 1e-3f)), 0, 4);

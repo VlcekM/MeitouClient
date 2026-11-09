@@ -9,8 +9,8 @@ using Meitou.Simulation.Locks;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// Where a building's doors are: the box of door i's collision (the shapes the navmesh paints as the door, docs/game/pathfinding.md) in the building's frame,
-/// scaled by the building's <c>scale</c>, not rotated or moved. Read once per (BUILDING, door) from the data; safe from any thread.
+/// Where a building's doors are: the box of door i's collision (the shapes the navmesh paints as the door, docs/game/pathfinding.md) in the
+/// building's frame, scaled by the building's <c>scale</c>, not rotated or moved. Read once per (BUILDING, door) from the data; safe from any thread.
 /// </summary>
 public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
 {
@@ -24,8 +24,8 @@ public sealed class NavDoorGeometry(GameInstall install, GameDatabase db)
     public DoorSpot? Spot(string buildingRecordId, int doorIndex) => _spots.GetOrAdd((buildingRecordId, doorIndex), Find);
 
     /// <summary>
-    /// Door i's collision triangles in the same frame as <see cref="Spot"/> (the leaf closed), for the pointer's ray (docs/game/ui-input.md "Building picking and
-    /// selection"); empty when it has none.
+    /// Door i's collision triangles in the same frame as <see cref="Spot"/> (the leaf closed), for the pointer's ray (docs/game/ui-input.md "Building
+    /// picking and selection"); empty when it has none.
     /// </summary>
     public IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Shape(string buildingRecordId, int doorIndex) =>
         _shapes.GetOrAdd((buildingRecordId, doorIndex), FindShape);

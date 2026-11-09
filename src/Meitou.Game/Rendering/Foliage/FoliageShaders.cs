@@ -49,12 +49,10 @@ static class FoliageShaders
 
     /// <summary>
     /// The depth prepass's fragment stage (<see cref="FoliagePrepass"/>): only what decides whether a fragment is seen, no lighting. The fade dither
-    /// and the
-    /// cut-out's hard alpha test are those of <see cref="MeshFragment"/>, on the same interpolants and samples (the colour pass has neither and tests
-    /// depth EQUAL,
-    /// so this is the one visibility test). <paramref name="solid"/>: nothing at all (an empty program keeps the early depth test) for the instances
-    /// that are
-    /// fully visible in a part without a cut-out. Only normal-map alpha (<c>uAlphaSource</c> 2) is handled, which is all the foliage meshes use.
+    /// and the cut-out's hard alpha test are those of <see cref="MeshFragment"/>, on the same interpolants and samples (the colour pass has neither
+    /// and tests depth EQUAL, so this is the one visibility test). <paramref name="solid"/>: nothing at all (an empty program keeps the early depth
+    /// test) for the instances that are fully visible in a part without a cut-out. Only normal-map alpha (<c>uAlphaSource</c> 2) is handled, which is
+    /// all the foliage meshes use.
     /// </summary>
     public static string MeshPrepassFragment(bool solid = false)
     {

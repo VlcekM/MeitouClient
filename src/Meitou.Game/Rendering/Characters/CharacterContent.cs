@@ -443,8 +443,8 @@ internal sealed class CharacterContent : IDisposable
             var levels = close ? [FullLevel(mesh)] : GeneratedLevels(path, mesh, model, radius, pixelsPerRadian * lodScale, LodSettings);
 
             // Shadow-only levels (the body, which has no cut-outs): built without the texture guard, whose refusals stop the body at about 1300
-            // triangles, so a crowd's
-            // shadows can be coarser than its picture; never picked by the picture (distance infinity), the depth pass chooses among them by ShadowDistances.
+            // triangles, so a crowd's shadows can be coarser than its picture; never picked by the picture (distance infinity), the depth pass
+            // chooses among them by ShadowDistances.
             float[]? shadowDistances = null;
             int shadowFirst = levels.Count;
             if (shadowLevels && !close && GeneratedLevels(path, mesh, model, radius, pixelsPerRadian, ShadowSettings) is { Count: > 1 } shadow)
@@ -454,8 +454,7 @@ internal sealed class CharacterContent : IDisposable
             }
 
             // The file's own reduced levels (Faithful character LOD, CharacterRenderer.GeneratedLod off): appended like the shadow-only ones, never
-            // picked by the
-            // generated distances; manual levels (another mesh file) are left out (no character mesh has one, docs/characters.md).
+            // picked by the generated distances; manual levels (another mesh file) are left out (no character mesh has one, docs/characters.md).
             float[]? fileDistances = null;
             int fileFirst = levels.Count;
             if (!close && MeshLod.Levels(mesh) is { Count: > 1 } own && own.Skip(1).All(l => l.ManualMesh is null))
@@ -1171,9 +1170,9 @@ internal sealed class CharacterContent : IDisposable
             Race = c.Race.StringId,
         };
 
-        // Animal meshes put the mirrored half of the body at u 1..2 (goat, bull, beak thing: Observed, the meshes' texture coordinates), so their textures repeat; a
-        // person's body texture has the transparent border (the head sits beside it at v -1..0). That Kenshi repeats them is an engine reading (the
-        // animal material was not read).
+        // Animal meshes put the mirrored half of the body at u 1..2 (goat, bull, beak thing: Observed, the meshes' texture coordinates), so their
+        // textures repeat; a person's body texture has the transparent border (the head sits beside it at v -1..0). That Kenshi repeats them is an
+        // engine reading (the animal material was not read).
         m.Tex[CharacterShaders.SlotDiffuse] = Texture(c.BodyTexture, c.Animal is null);
         m.Tex[CharacterShaders.SlotNormal] = Texture(c.BodyNormal, c.Animal is null);
         m.Tex[CharacterShaders.SlotBodyMask] = Texture(c.BodyMask, true);

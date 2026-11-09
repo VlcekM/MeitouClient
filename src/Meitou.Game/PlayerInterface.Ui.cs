@@ -694,8 +694,7 @@ sealed partial class PlayerInterface
             if (AdvancedOptions.AdvancedOpen && FaithfulScreens.OpenScreens.LastOrDefault() == "new-game") { AdvancedOptions.AdvancedOpen = false; return true; }
 
             // The bare title: Esc hides the credits and quits at once, no confirmation (FUN_14082b010 sets the quit flag unless FUN_140914a90 closed
-            // a title
-            // window; hiding the credits does not count as closing one). With a title window open the generic Esc below closes it.
+            // a title window; hiding the credits does not count as closing one). With a title window open the generic Esc below closes it.
             if (FaithfulScreens.IsOpen("title") && FaithfulScreens.OpenScreens.Count == 1)
             {
                 Frontend.ShowCredits = false;

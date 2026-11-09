@@ -85,15 +85,12 @@ public sealed class FrameProfiler : IDisposable
     double _frameMs;
 
     // The whole frame's wall time, from one BeginFrame to the next (the simulation, the host, the waits for a free frame and for the GPU included):
-    // kept with the render
-    // thread's history, a frame late, and drawn on both charts.
+    // kept with the render thread's history, a frame late, and drawn on both charts.
     readonly float[] _frameTime = new float[History];
 
     // The simulation's parts (Outside with parts): the names, how many lead as phases (the last of them the time outside the world's ticks), how many
-    // systems follow (listed by
-    // cost; the rest are parts of systems, listed in order), each one's ms and the world ticks per frame, listed under sim in the legend, not
-    // plotted. simNow is the newest
-    // call's, kept with the frame at EndFrame.
+    // systems follow (listed by cost; the rest are parts of systems, listed in order), each one's ms and the world ticks per frame, listed under sim
+    // in the legend, not plotted. simNow is the newest call's, kept with the frame at EndFrame.
     string[] _simNames = [];
     int _simPhases, _simSystems, _simPaths;
     float[][] _simParts = [];

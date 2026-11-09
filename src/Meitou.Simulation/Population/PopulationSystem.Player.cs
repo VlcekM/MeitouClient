@@ -64,13 +64,14 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// Starts the player (a new game, before the first tick) as docs/game/ui-screens.md "New game" describes: their faction, their money and their squad, made
-    /// from the start-off's <c>squad</c> list (a SQUAD_TEMPLATE is planned by the squad factory, a CHARACTER makes v0 members) as one squad of the player's
-    /// faction, standing idle, selected for them, at <see cref="NewGameStart.ForceStartPos"/>'s place or a town drawn from the start's list
-    /// (<see cref="StartPlace"/>). The start research is applied (<see cref="Meitou.Data.Gameplay.Construction.ResearchGate.StartResearch"/>) and the start-off's
+    /// Starts the player (a new game, before the first tick) as docs/game/ui-screens.md "New game" describes: their faction, their money and their
+    /// squad, made from the start-off's <c>squad</c> list (a SQUAD_TEMPLATE is planned by the squad factory, a CHARACTER makes v0 members) as one
+    /// squad of the player's faction, standing idle, selected for them, at <see cref="NewGameStart.ForceStartPos"/>'s place or a town drawn from the
+    /// start's list (<see cref="StartPlace"/>). The start research is applied
+    /// (<see cref="Meitou.Data.Gameplay.Construction.ResearchGate.StartResearch"/>) and the start-off's
     /// <c>faction relations</c>, whose factions are known with <see cref="PopulationData.KnownAtNewGame"/>'s; <c>force race</c> is kept as the races the
-    /// character creation offers (<see cref="PlayerState.CreationRaces"/>). The characters' items are what the generator rolls for their look; their inventory is
-    /// built like everybody's (<see cref="CharacterAssembly"/>).
+    /// character creation offers (<see cref="PlayerState.CreationRaces"/>). The characters' items are what the generator rolls for their look; their
+    /// inventory is built like everybody's (<see cref="CharacterAssembly"/>).
     /// </summary>
     public Squad StartPlayer(World world, NewGameStart start)
     {
@@ -192,8 +193,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A start slave (CHARACTER <c>slave</c>, set for every new character in SpawnSquad) belongs to the start town's faction (engine choice: the original's owner
-    /// is Unknown); an escaped one is stamped now (lie low, FixtureRegistry.LayLow); an ex-slave start is left free.
+    /// A start slave (CHARACTER <c>slave</c>, set for every new character in SpawnSquad) belongs to the start town's faction (engine choice: the
+    /// original's owner is Unknown); an escaped one is stamped now (lie low, FixtureRegistry.LayLow); an ex-slave start is left free.
     /// </summary>
     void SetStartSlaves(World world, Squad squad, TownSite? town)
     {

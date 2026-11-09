@@ -27,15 +27,12 @@ namespace Meitou.Simulation.Kidnap;
 /// faction's slave and joins the gatherer's squad as a slave member, whose Slave AI Goals then follow the squad (171). Player characters are not
 /// gathered (engine choice).</item>
 /// <item><b>Deliver</b> (192 "Delivering slaves", wanted at 0.25 per slave, AI slot 65; then 194 / 218 "Selling slaves", 218 only in a prison or
-/// slave camp, AI slot 66): the leader walks to
-/// the shipping package's town (<see cref="Blackboard.MissionTown"/>); there it says event 39 SLAVE_DELIVERY to the nearest member of an allied squad
-/// of the town and hands its slaves
-/// over: each leaves the squad for a squad of its own, owned by the town's faction and put into a free cage of the town (<b>engine choice</b>: the
-/// original's handover goes through
-/// that dialogue, and no base-game dialogue answers event 39, <b>Unknown</b>).</item>
+/// slave camp, AI slot 66): the leader walks to the shipping package's town (<see cref="Blackboard.MissionTown"/>); there it says event 39
+/// SLAVE_DELIVERY to the nearest member of an allied squad of the town and hands its slaves over: each leaves the squad for a squad of its own, owned
+/// by the town's faction and put into a free cage of the town (<b>engine choice</b>: the original's handover goes through that dialogue, and no
+/// base-game dialogue answers event 39, <b>Unknown</b>).</item>
 /// <item><b>Get in the cage</b> (172 "Getting in my cage", a Slave AI Goal; <c>FUN_1408caaf0</c>, <b>Observed</b>): a slave not held walks to the
-/// nearest free cage of its owner's faction
-/// in the 3x3 zone cells round it, in any town, and gets in (<c>Task_UseCage</c>).</item>
+/// nearest free cage of its owner's faction in the 3x3 zone cells round it, in any town, and gets in (<c>Task_UseCage</c>).</item>
 /// </list>
 /// </summary>
 public sealed partial class CaptiveSystem

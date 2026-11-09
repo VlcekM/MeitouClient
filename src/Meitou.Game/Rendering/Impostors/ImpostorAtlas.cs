@@ -17,8 +17,8 @@ public enum ImpostorMap
     Albedo = 0,
 
     /// <summary>
-    /// RG: the shading normal in the frame's basis (x right, y up, z towards the viewer), octahedrally encoded (<see cref="ImpostorLayout.EncodeNormal"/>),
-    /// x 0.5 + 0.5.
+    /// RG: the shading normal in the frame's basis (x right, y up, z towards the viewer), octahedrally encoded
+    /// (<see cref="ImpostorLayout.EncodeNormal"/>), x 0.5 + 0.5.
     /// </summary>
     Normal = 1,
 }
@@ -72,11 +72,11 @@ public sealed class ImpostorTexture
 }
 
 /// <summary>
-/// A baked impostor atlas and its file format (<c>.mimp</c>, docs/impostors.md "File format"): a small header (magic, versions, grid, frame size, levels,
-/// the bounding sphere in object space, the gloss, the source's name), the per-map level sizes, then the level data, deflated, with an FNV-1a checksum of
-/// the inflated data. <see cref="Read"/> returns null for anything that does not match (wrong magic, version, sizes, checksum, truncation): the caller bakes
-/// again. A read atlas holds its levels in one native block that <see cref="Dispose"/> frees (docs/engine.md, "Native buffers"): its owner disposes it once
-/// the levels are uploaded or it is dropped. A baked one is managed; disposing it does nothing.
+/// A baked impostor atlas and its file format (<c>.mimp</c>, docs/impostors.md "File format"): a small header (magic, versions, grid, frame size,
+/// levels, the bounding sphere in object space, the gloss, the source's name), the per-map level sizes, then the level data, deflated, with an FNV-1a
+/// checksum of the inflated data. <see cref="Read"/> returns null for anything that does not match (wrong magic, version, sizes, checksum,
+/// truncation): the caller bakes again. A read atlas holds its levels in one native block that <see cref="Dispose"/> frees (docs/engine.md, "Native
+/// buffers"): its owner disposes it once the levels are uploaded or it is dropped. A baked one is managed; disposing it does nothing.
 /// </summary>
 public sealed class ImpostorAtlas : IDisposable
 {
@@ -118,8 +118,8 @@ public sealed class ImpostorAtlas : IDisposable
     public required ImpostorTexture[] Textures { get; init; }
 
     /// <summary>
-    /// The first level that has data: the levels below it are empty (an atlas read with <c>firstLevel</c>, <see cref="Read"/>), because nothing built from it
-    /// asked for them. 0 for a baked atlas or one read whole.
+    /// The first level that has data: the levels below it are empty (an atlas read with <c>firstLevel</c>, <see cref="Read"/>), because nothing built
+    /// from it asked for them. 0 for a baked atlas or one read whole.
     /// </summary>
     public int FirstLevel { get; init; }
 
@@ -190,8 +190,8 @@ public sealed class ImpostorAtlas : IDisposable
     /// <summary>
     /// The atlas in <paramref name="stream"/>, or null when it is not a valid atlas of this format and baker version. Levels below
     /// <paramref name="firstLevel"/> are inflated into one scratch buffer (they are part of the checksum) and left empty: the textures leave their top
-    /// levels out (<see cref="ImpostorTextures"/>' skip), and the top level is three quarters of a map's bytes, a refine of a far atlas read 3 to 20 MB to
-    /// use a few hundred KB.
+    /// levels out (<see cref="ImpostorTextures"/>' skip), and the top level is three quarters of a map's bytes, a refine of a far atlas read 3 to 20
+    /// MB to use a few hundred KB.
     /// </summary>
     public static ImpostorAtlas? Read(Stream stream, int firstLevel = 0)
     {

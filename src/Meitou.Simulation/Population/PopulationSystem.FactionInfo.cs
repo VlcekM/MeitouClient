@@ -3,9 +3,9 @@ namespace Meitou.Simulation.Population;
 public sealed partial class PopulationSystem
 {
     /// <summary>
-    /// Upcoming Events (<c>FUN_1407f2ef0</c> per faction's <c>FactionWarMgr</c>, <c>FUN_1407ac9c0</c>): for a faction with running or queued campaigns a
-    /// "-{name}-" heading; per running campaign against the player's faction that is not ending, its name, "Target:" with the target's faction and name (??? when
-    /// gone) and a spacer; per queued one (no player filter) its display name and the time until it starts.
+    /// Upcoming Events (<c>FUN_1407f2ef0</c> per faction's <c>FactionWarMgr</c>, <c>FUN_1407ac9c0</c>): for a faction with running or queued
+    /// campaigns a "-{name}-" heading; per running campaign against the player's faction that is not ending, its name, "Target:" with the target's
+    /// faction and name (??? when gone) and a spacer; per queued one (no player filter) its display name and the time until it starts.
     /// </summary>
     public List<FactionInfoLine> UpcomingEvents(World world, Func<int, string?> factionName)
     {

@@ -1,8 +1,8 @@
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// How a pass uses a resource (docs/renderer-native.md 2.9). The backend turns it into its own masks; a combination says what one side of a dependency
-/// reads or writes (the stages are merged).
+/// How a pass uses a resource (docs/renderer-native.md 2.9). The backend turns it into its own masks; a combination says what one side of a
+/// dependency reads or writes (the stages are merged).
 /// </summary>
 [Flags]
 public enum Access
@@ -38,8 +38,8 @@ public readonly record struct GpuRange(uint BaseLevel, uint Levels, uint BaseLay
 public readonly record struct PassUse(object Resource, Access Access, GpuRange? Range = null);
 
 /// <summary>
-/// A dependency the backend turns into its own barrier: what happened before (<see cref="From"/>) and what happens now (<see cref="To"/>). The backend
-/// decides whether it needs one at all (on Metal, Apple silicon tracks the hazards itself).
+/// A dependency the backend turns into its own barrier: what happened before (<see cref="From"/>) and what happens now (<see cref="To"/>). The
+/// backend decides whether it needs one at all (on Metal, Apple silicon tracks the hazards itself).
 /// </summary>
 public readonly record struct GpuDependency(Access From, Access To)
 {
@@ -51,15 +51,16 @@ public readonly record struct GpuDependency(Access From, Access To)
 
 /// <summary>
 /// The last access of every resource a frame's native passes touched, and the dependency a new access needs (a read after a read needs none; anything
-/// involving a write gets an execution and a memory dependency). A seam crossing orders everything (<see cref="AssumeFullBarrier"/>). Render thread only.
+/// involving a write gets an execution and a memory dependency). A seam crossing orders everything (<see cref="AssumeFullBarrier"/>). Render thread
+/// only.
 /// </summary>
 public sealed class ResourceStates
 {
     readonly Dictionary<object, Access> _last = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
-    /// The dependencies <paramref name="uses"/> needs after what was recorded, in <paramref name="dependencies"/> (the count returned); the new accesses
-    /// become the last ones.
+    /// The dependencies <paramref name="uses"/> needs after what was recorded, in <paramref name="dependencies"/> (the count returned); the new
+    /// accesses become the last ones.
     /// </summary>
     public int Plan(ReadOnlySpan<PassUse> uses, Span<GpuDependency> dependencies)
     {

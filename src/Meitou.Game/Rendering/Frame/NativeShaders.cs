@@ -312,8 +312,7 @@ static partial class NativeShaders
     /// <paramref name="pushMembers"/>; a text without a version line, such as <see cref="AtmosphereShaders.Functions"/>, gets none), each
     /// loose <c>uniform T a, b;</c> becomes <c>#define a ...</c> lines from <paramref name="map"/> (default: <see cref="Map"/>), and each
     /// <c>layout(std140) uniform Block</c> gets set <see cref="FrameSet"/> and its binding from <see cref="BlockBindings"/>. Nothing else is touched.
-    /// Throws when a
-    /// uniform or a block is not mapped.
+    /// Throws when a uniform or a block is not mapped.
     /// </summary>
     public static string Port(string legacy, IReadOnlyDictionary<string, string>? map = null, string pushMembers = MeshPushMembers)
     {

@@ -16,15 +16,15 @@ namespace Meitou.Simulation.Combat;
 /// Melee combat (docs/simulation.md "Combat", docs/game/combat.md). One system, three parts per tick:
 /// <list type="bullet">
 /// <item><b>Act</b> (parallel, per character, reading the last tick's <see cref="CombatSlot"/> array and the table's previous state, writing only its own): the
-/// medical tick; a defender looks for blows coming at it and picks a reaction (block roll, wrong-direction block on a failure, dodge for fists); an attacker keeps
-/// its swing going and, when the animation reaches a blow's <c>anim blocked frame</c>, emits a <see cref="BlowEffect"/> to the target; a free attacker in reach
-/// picks a technique and starts it.</item>
+/// medical tick; a defender looks for blows coming at it and picks a reaction (block roll, wrong-direction block on a failure, dodge for fists); an
+/// attacker keeps its swing going and, when the animation reaches a blow's <c>anim blocked frame</c>, emits a <see cref="BlowEffect"/> to the target;
+/// a free attacker in reach picks a technique and starts it.</item>
 /// <item><b>Apply</b> (serial, in the commit's order: target, source, system, sequence): the outcome from the defender's reaction progress ("blocked", "dodged" or
 /// "hit", combat.md), then for a hit the damage packet, part choice, armour, toughness and the medical hit, a stagger for a heavy hit, and XP for both sides.</item>
 /// <item><b>Move</b>: faces the target and, with <see cref="CombatOptions.SelfApproach"/>, walks up to it.</item>
 /// </list>
-/// Everything random is a function of (seed, character, kind, counter) so the result does not depend on the thread count. Stats, bodies and gear change only here
-/// in the commit and in the owner's own Act (the medical tick); other characters only read the <see cref="CombatSlot"/> copy.
+/// Everything random is a function of (seed, character, kind, counter) so the result does not depend on the thread count. Stats, bodies and gear
+/// change only here in the commit and in the owner's own Act (the medical tick); other characters only read the <see cref="CombatSlot"/> copy.
 /// </summary>
 public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner, ITaskHandler, IOrderOwner
 {
@@ -89,8 +89,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public CombatOptions Settings { get; }
 
     /// <summary>
-    /// How many enemies may melee one target at once, before the target race's <c>extra attack slots</c>: CONSTANTS <c>max num attack slots</c> (1, Faithful)
-    /// unless a setting changes it.
+    /// How many enemies may melee one target at once, before the target race's <c>extra attack slots</c>: CONSTANTS <c>max num attack slots</c> (1,
+    /// Faithful) unless a setting changes it.
     /// </summary>
     public int AttackSlots { get; set; }
 
@@ -101,8 +101,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public void UseAttackSlots(int? slots) => AttackSlots = Math.Max(1, slots ?? _combat.MaxNumAttackSlots);
 
     /// <summary>
-    /// Stuck bolts kept in the world per bolt mesh (the settings' <c>harpoonLimit</c>, <see cref="CombatOptions.StuckLimit"/>): past it the one that flew longest
-    /// goes (<c>FUN_14043acf0</c>).
+    /// Stuck bolts kept in the world per bolt mesh (the settings' <c>harpoonLimit</c>, <see cref="CombatOptions.StuckLimit"/>): past it the one that
+    /// flew longest goes (<c>FUN_14043acf0</c>).
     /// </summary>
     public int StuckLimit { get; set; }
 
@@ -117,8 +117,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public bool GunnerFacesBarrel { get; set; }
 
     /// <summary>
-    /// A fist attack whose <c>attack distance</c> is negative but above -100 (base data: "ma badpunch", -4, the only punch up to martial arts 20) reads it as
-    /// positive (<see cref="CombatOptions.PunchReachFix"/>, Meitou fix; docs/game/combat.md "Attack technique choice"); off: as written, as the game does.
+    /// A fist attack whose <c>attack distance</c> is negative but above -100 (base data: "ma badpunch", -4, the only punch up to martial arts 20)
+    /// reads it as positive (<see cref="CombatOptions.PunchReachFix"/>, Meitou fix; docs/game/combat.md "Attack technique choice"); off: as written,
+    /// as the game does.
     /// </summary>
     public bool PunchReachFix
     {
@@ -156,15 +157,15 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     public Crime.CrimeSystem? Crimes { get; set; }
 
     /// <summary>
-    /// Picks the hit reaction clip of a hit (set by the animation system, which owns the clips): the defender, the hit part's LOCATIONAL_DAMAGE id, big stumble,
-    /// the side (0 front, 1 rear) and a roll in [0, 1); returns the clip (an animation library index) and its length in seconds, or null when none fits. Null:
-    /// hits play no clip.
+    /// Picks the hit reaction clip of a hit (set by the animation system, which owns the clips): the defender, the hit part's LOCATIONAL_DAMAGE id,
+    /// big stumble, the side (0 front, 1 rear) and a roll in [0, 1); returns the clip (an animation library index) and its length in seconds, or null
+    /// when none fits. Null: hits play no clip.
     /// </summary>
     public Func<CharacterCold, string, bool, int, float, (int Clip, float Seconds)?>? StumbleChooser { get; set; }
 
     /// <summary>
-    /// How long the get-up clip plays (the animation system sets it from <c>standing up 3</c>: its length to <c>GetUpEnd</c> over the record's play speed); 0:
-    /// no get-up. A ragdoll's bone blend comes before it.
+    /// How long the get-up clip plays (the animation system sets it from <c>standing up 3</c>: its length to <c>GetUpEnd</c> over the record's play
+    /// speed); 0: no get-up. A ragdoll's bone blend comes before it.
     /// </summary>
     public float GetUpClipSeconds { get; set; }
 
@@ -261,8 +262,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
-    /// The combat state as of now in a serial phase: <c>read</c> in the inputs (and between ticks) and after this tick's swap, <c>write</c> from the schedule until
-    /// the swap.
+    /// The combat state as of now in a serial phase: <c>read</c> in the inputs (and between ticks) and after this tick's swap, <c>write</c> from the
+    /// schedule until the swap.
     /// </summary>
     CombatSlot[] Live(World world) =>
         world.Characters.Phase is TablePhase.Inputs or TablePhase.Outside || world.Characters.Phase == TablePhase.SlowWorld && _swappedTick == world.Tick
@@ -292,9 +293,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
                     foreach (var id in stop.Characters) Disengage(table, id);
                     break;
 
-                // A move or follow order replaces the fight (the original's new task drops the fight task, and a new movement goal clears the stance): the
-                // runner neither swings at a chaser that comes into reach nor defends; its weapon stays out until it idles (docs/game/combat.md "Fight
-                // lifecycle and orders").
+                // A move or follow order replaces the fight (the original's new task drops the fight task, and a new movement goal clears the
+                // stance): the runner neither swings at a chaser that comes into reach nor defends; its weapon stays out until it idles
+                // (docs/game/combat.md "Fight lifecycle and orders").
                 case MoveOrder move:
                     foreach (var id in move.Characters.Count > 0 ? move.Characters : world.Player.Selection.ToArray()) LeaveFight(table, id);
                     break;
@@ -348,9 +349,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
-    /// Starts the fight of <paramref name="attacker"/> on the order's target through <see cref="TaskStart.Start"/>: row 5 (a target the player picked: the order),
-    /// 13 Attacking attackers of (a defence: a reaction) or 16 Attacking enemies (a goal's fight; an NPC's engine fight, <see cref="AttackOrder.Source"/>). False
-    /// when it cannot fight.
+    /// Starts the fight of <paramref name="attacker"/> on the order's target through <see cref="TaskStart.Start"/>: row 5 (a target the player
+    /// picked: the order), 13 Attacking attackers of (a defence: a reaction) or 16 Attacking enemies (a goal's fight; an NPC's engine fight,
+    /// <see cref="AttackOrder.Source"/>). False when it cannot fight.
     /// </summary>
     bool Engage(World world, CharacterTable table, CharacterId attacker, AttackOrder order, int now)
     {
@@ -365,9 +366,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         // a carried mate does not fight (a prisoner neither: rows 5, 13 and 16 are not registered for the imprisoned; it may still be attacked, engine choice)
         if (!cold.CarriedBy.IsNone) return false;
 
-        // A fighter turns on no one it found no path to lately unless the player picked it (isPathImpossible in every finder's score, docs/game/combat.md
-        // "Target score"): a mate that is called in on a sighting or an attack and cannot reach the enemy (a cage, a locked room) would otherwise stand at the
-        // nearest spot for ever.
+        // A fighter turns on no one it found no path to lately unless the player picked it (isPathImpossible in every finder's score,
+        // docs/game/combat.md "Target score"): a mate that is called in on a sighting or an attack and cannot reach the enemy (a cage, a locked room)
+        // would otherwise stand at the nearest spot for ever.
         if (!order.Picked && PursuitSystem.PathImpossible(cold, target, now)) return false;
 
         var (row, source) = order.Picked
@@ -387,9 +388,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         table.TryResolveNext(target, out int vs) && table.Cold(vs) is { } vc && IsInCombatMode(table, target, vc, melee: true, ranged: false);
 
     /// <summary>
-    /// The order itself changes no relation (the original's relation events come from the blows, Deeds). Only Attack Unprovoked (row 61) is an assault at its start
-    /// (<c>FUN_140334070</c>) and marks the attacker ordered whether or not the booking passes (<c>FUN_14033c1e0</c>); rows 5, 4, 13 and 16 do neither
-    /// (<b>Verified</b>, flag <c>+0x98</c> of the task).
+    /// The order itself changes no relation (the original's relation events come from the blows, Deeds). Only Attack Unprovoked (row 61) is an
+    /// assault at its start (<c>FUN_140334070</c>) and marks the attacker ordered whether or not the booking passes (<c>FUN_14033c1e0</c>); rows 5,
+    /// 4, 13 and 16 do neither (<b>Verified</b>, flag <c>+0x98</c> of the task).
     /// </summary>
     void Assaulted(World world, CharacterTable table, CharacterId attacker, AttackOrder order, bool victimFighting)
     {
@@ -413,8 +414,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         new PickedAttack(new AttackOrder([self], target) { Picked = true, Unprovoked = row == TaskType.UnprovokedFocusedMeleeAttack, Tick = world.Tick }, false, -1);
 
     /// <summary>
-    /// The attack order (row 5) needs a target that is there, awake and has a body (else it leaves the queue), and an attacker able to fight: a fighter, awake,
-    /// not carried (<see cref="Engage"/>).
+    /// The attack order (row 5) needs a target that is there, awake and has a body (else it leaves the queue), and an attacker able to fight: a
+    /// fighter, awake, not carried (<see cref="Engage"/>).
     /// </summary>
     OrderCheck IOrderOwner.CanRun(World world, int slot, OrderEntry order)
     {
@@ -443,8 +444,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
 
     /// <summary>
     /// <c>AI::underMeleeAttack</c> on <paramref name="t"/> getting up with its fight off (targeted by a melee attacker, or hit by a blow; <paramref name="counter"/>
-    /// tells the attacks of one tick apart): a <see cref="KnockDownChance"/> roll knocks it out for <see cref="KnockDownSeconds"/> (its KO timer set). A shooter's
-    /// target and a bolt go through the shot handler instead, which has no roll. Serial phases.
+    /// tells the attacks of one tick apart): a <see cref="KnockDownChance"/> roll knocks it out for <see cref="KnockDownSeconds"/> (its KO timer
+    /// set). A shooter's target and a bolt go through the shot handler instead, which has no roll. Serial phases.
     /// </summary>
     internal void UnderAttackGettingUp(World world, int t, CharacterCold tc, ulong counter)
     {
@@ -458,9 +459,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
-    /// The hit path of <c>AI::underMeleeAttack</c> (a landed blow, <c>FUN_1404394f0</c>; a bolt, <c>FUN_140999d50</c>): an NPC hit with its fight off, not getting
-    /// up, has its AI think at the next tick (<see cref="Ai.AiMind.Replan"/>), where its Self preservation weighs the attacker the hit made a threat
-    /// (<see cref="AggroSystem.Force"/>). Serial phases.
+    /// The hit path of <c>AI::underMeleeAttack</c> (a landed blow, <c>FUN_1404394f0</c>; a bolt, <c>FUN_140999d50</c>): an NPC hit with its fight
+    /// off, not getting up, has its AI think at the next tick (<see cref="Ai.AiMind.Replan"/>), where its Self preservation weighs the attacker the
+    /// hit made a threat (<see cref="AggroSystem.Force"/>). Serial phases.
     /// </summary>
     static void HitReplan(CharacterCold dc, long tick)
     {
@@ -515,8 +516,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
-    /// The end of the fight task (<c>Character::endCombatMode</c>), from any serial phase: the target and the swing dropped in both the last tick's and this tick's
-    /// combat state (the one a phase reads differs), then <see cref="EndFight(CharacterTable, int)"/>.
+    /// The end of the fight task (<c>Character::endCombatMode</c>), from any serial phase: the target and the swing dropped in both the last tick's
+    /// and this tick's combat state (the one a phase reads differs), then <see cref="EndFight(CharacterTable, int)"/>.
     /// </summary>
     internal void Disengage(CharacterTable table, CharacterId id)
     {
@@ -556,8 +557,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
-    /// The end of the fight task of <paramref name="slot"/> also zeroes its engaged list (<c>FUN_1406659b0</c> mode 2): everyone who let close in on it is out of
-    /// it, by a new <see cref="CombatSlot.ListEpoch"/> the fighters read (<see cref="CombatSlot.JoinedEpoch"/>); they keep their target and ask again.
+    /// The end of the fight task of <paramref name="slot"/> also zeroes its engaged list (<c>FUN_1406659b0</c> mode 2): everyone who let close in on
+    /// it is out of it, by a new <see cref="CombatSlot.ListEpoch"/> the fighters read (<see cref="CombatSlot.JoinedEpoch"/>); they keep their target
+    /// and ask again.
     /// </summary>
     static void EndFight(CharacterTable table, int slot, ref CombatSlot s)
     {
@@ -577,9 +579,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
         cold.RangedCombatMode = false;
         cold.TargetFleeingTime = 0;
 
-        // The fight's end sheathes nothing (docs/game/combat.md "Fight lifecycle and orders", weapon away): the planner puts it away before a goal that needs it
-        // away (the AI's UNEQUIP_WEAPON step), a player's character once it stops moving on an order (Act). A character without either (no mind, or one whose
-        // routine is the engine's) sheathes now.
+        // The fight's end sheathes nothing (docs/game/combat.md "Fight lifecycle and orders", weapon away): the planner puts it away before a goal
+        // that needs it away (the AI's UNEQUIP_WEAPON step), a player's character once it stops moving on an order (Act). A character without either
+        // (no mind, or one whose routine is the engine's) sheathes now.
         if (!cold.IsPlayer && cold.Ai is null or { Engine: true }) cold.DrawnWeapon = WeaponKinds.None;
 
         // the fight's own end: idle, its provenance kept (a follow row's, FollowResume)
@@ -631,8 +633,8 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
             var dir = delta / distance;
             ref var n = ref next[i];
 
-            // On a path to the target (the pursuit's) the movement system steers it: facing the target here would undo each tick's turn towards a waypoint that
-            // lies well off the straight line, and a walker more than 90 degrees off its waypoint does not step (MovementSystem.Turn).
+            // On a path to the target (the pursuit's) the movement system steers it: facing the target here would undo each tick's turn towards a
+            // waypoint that lies well off the straight line, and a walker more than 90 degrees off its waypoint does not step (MovementSystem.Turn).
             if (!Settings.SelfApproach && (n.Flags & (ushort)MoveFlags.HasPath) != 0) continue;
 
             n.Yaw = MathF.Atan2(dir.X, dir.Y);
@@ -690,9 +692,9 @@ public sealed partial class CombatSystem : ITickSystem, IStateHashed, ITaskOwner
     }
 
     /// <summary>
-    /// Attack Unprovoked (row 61) books its Assault again on every update of the task (<c>FUN_14033c250</c> runs <c>FUN_140334070</c> each time, <b>Verified</b>),
-    /// so the pending crime's timer is refreshed for as long as the attacker fights a victim that stays passive; <see cref="Assaulted"/> is the booking, with its
-    /// own gates (the victim fighting, wanted, a bandit).
+    /// Attack Unprovoked (row 61) books its Assault again on every update of the task (<c>FUN_14033c250</c> runs <c>FUN_140334070</c> each time,
+    /// <b>Verified</b>), so the pending crime's timer is refreshed for as long as the attacker fights a victim that stays passive;
+    /// <see cref="Assaulted"/> is the booking, with its own gates (the victim fighting, wanted, a bandit).
     /// </summary>
     void RepeatAssaults(World world)
     {

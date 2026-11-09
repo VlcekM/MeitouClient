@@ -503,8 +503,7 @@ public sealed partial class NavmeshWalkability : IWalkability
     public RoadNetwork? Roads { get; set; }
 
     /// <summary>How far (units) along a road route its navmesh part reaches at most (engine choice: the navmesh path to a far point would cut the
-    /// road's bends,
-    /// so the walker asks again every so often and keeps to the road).</summary>
+    /// road's bends, so the walker asks again every so often and keeps to the road).</summary>
     public const float RoadHandover = 1500;
 
     /// <summary>

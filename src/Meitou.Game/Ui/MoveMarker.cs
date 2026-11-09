@@ -31,9 +31,9 @@ sealed class MoveMarker(PlayerInterface player)
         _markerFrame = now;
         if (player.Markers is null) return;
 
-        // The rotation marker: while the rotate button is held (FUN_1406b0f90); the renderer lays it over the pivot of the camera it draws with, which a
-        // followed character moves every frame. Not in the free camera, which turns about its own eye, nor under the title or the editor, whose views are
-        // not the rig's.
+        // The rotation marker: while the rotate button is held (FUN_1406b0f90); the renderer lays it over the pivot of the camera it draws with,
+        // which a followed character moves every frame. Not in the free camera, which turns about its own eye, nor under the title or the editor,
+        // whose views are not the rig's.
         bool orbitHeld = player.Session.Bindings.Get(Host.Input.InputAction.Orbit).Any(player.Session.Input.IsHeld);
         player.Markers.Rotation = orbitHeld && player.RotationMarker
             && !player.Session.Camera.IsFree && !player.TitleOpen && !player.CharacterEditor.EditorOpen;

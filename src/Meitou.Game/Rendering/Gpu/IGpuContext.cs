@@ -5,8 +5,8 @@ using Meitou.Game.Rendering.Profiling;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// The seam between the renderers and a graphics API (docs/resource-layer.md): what the renderers may ask of a backend. The Vulkan context implements it
-/// as it is; the Metal one grows a pass at a time, and an operation it does not have yet throws.
+/// The seam between the renderers and a graphics API (docs/resource-layer.md): what the renderers may ask of a backend. The Vulkan context implements
+/// it as it is; the Metal one grows a pass at a time, and an operation it does not have yet throws.
 /// </summary>
 public interface IGpuContext
 {
@@ -18,8 +18,8 @@ public interface IGpuContext
     GpuTexture CreateTexture(TextureDesc desc);
 
     /// <summary>
-    /// A new texture made on any thread, with nothing recorded: it is not used before <see cref="IGpuCommandList.InitTexture"/> records its layout on the
-    /// render thread. Null where the backend has no such path (the caller makes it with <see cref="IGpuCommandList.CreateTexture"/>).
+    /// A new texture made on any thread, with nothing recorded: it is not used before <see cref="IGpuCommandList.InitTexture"/> records its layout on
+    /// the render thread. Null where the backend has no such path (the caller makes it with <see cref="IGpuCommandList.CreateTexture"/>).
     /// </summary>
     GpuTexture? CreateTextureOffThread(TextureDesc desc) => null;
 
@@ -92,14 +92,14 @@ public interface IGpuContext
 
     /// <summary>
     /// Whether a texture written by a render pass has its row 0 at the bottom (Vulkan's backbuffer and targets) rather than at the top (Metal's). UI
-    /// images made by the renderer (portraits, icons, the editor stage) flip their V coordinate on a bottom-up target (<c>ImageFlipV</c>), but must be drawn
-    /// as stored on Metal.
+    /// images made by the renderer (portraits, icons, the editor stage) flip their V coordinate on a bottom-up target (<c>ImageFlipV</c>), but must
+    /// be drawn as stored on Metal.
     /// </summary>
     bool RenderTargetsBottomUp { get; }
 
     /// <summary>
-    /// The buffer a disabled attribute of <paramref name="kind"/> reads where a stride-0 binding is impossible (Metal: the value repeated at every 16-byte
-    /// stride).
+    /// The buffer a disabled attribute of <paramref name="kind"/> reads where a stride-0 binding is impossible (Metal: the value repeated at every
+    /// 16-byte stride).
     /// </summary>
     GpuBuffer DummyVertexArray(ScalarKind kind);
 
@@ -178,8 +178,8 @@ public interface IGpuContext
 
     /// <summary>
     /// A guest's segment in the open host pass: draws only (no rendering, barriers, copies or dispatches), with the host's targets and state
-    /// (<see cref="CurrentTargets"/>, <see cref="CurrentState"/>). Inside a rendering with secondaries it is a secondary of its own, executed in its place.
-    /// Without a host pass it throws. Closed by <see cref="EndGuest"/>.
+    /// (<see cref="CurrentTargets"/>, <see cref="CurrentState"/>). Inside a rendering with secondaries it is a secondary of its own, executed in its
+    /// place. Without a host pass it throws. Closed by <see cref="EndGuest"/>.
     /// </summary>
     IGpuCommandList BeginGuest(string label);
 
@@ -236,8 +236,8 @@ public interface IGpuContext
     void EndGuest(IGpuCommandList cmd);
 
     /// <summary>
-    /// A native segment of its own outside any pass (a full barrier before and after; nothing is assumed bound): copies, dispatches and the renderers' own
-    /// renderings. Closed by <see cref="EndNative"/>.
+    /// A native segment of its own outside any pass (a full barrier before and after; nothing is assumed bound): copies, dispatches and the
+    /// renderers' own renderings. Closed by <see cref="EndNative"/>.
     /// </summary>
     IGpuCommandList BeginNative(string label);
 
@@ -267,8 +267,8 @@ public interface IGpuContext
     void Interleave(Action<IGpuCommandList> record);
 
     /// <summary>
-    /// Records a prepared guest segment into the pass being drawn now (docs/renderer-native.md 6.2): into the host's open pass as a guest segment, or (the
-    /// backend's own choosing) queued and recorded elsewhere; the job goes back to its pool afterwards.
+    /// Records a prepared guest segment into the pass being drawn now (docs/renderer-native.md 6.2): into the host's open pass as a guest segment, or
+    /// (the backend's own choosing) queued and recorded elsewhere; the job goes back to its pool afterwards.
     /// </summary>
     void Record(string label, RecordJob job);
 

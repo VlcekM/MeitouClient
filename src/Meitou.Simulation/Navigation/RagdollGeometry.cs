@@ -9,8 +9,8 @@ namespace Meitou.Simulation.Navigation;
 
 /// <summary>
 /// What ragdolls fall onto in the world: the terrain heightmap, and the collision of the buildings and map features
-/// (<see cref="ZoneGeometryGatherer.RagdollTriangles"/>), gathered per zone on a worker the first time a ragdoll moves near it and kept in 32-unit cells
-/// (<see cref="RagdollPhysics"/>' tiles). Until a zone is gathered its buildings are reported not ready, and the tile asks again.
+/// (<see cref="ZoneGeometryGatherer.RagdollTriangles"/>), gathered per zone on a worker the first time a ragdoll moves near it and kept in 32-unit
+/// cells (<see cref="RagdollPhysics"/>' tiles). Until a zone is gathered its buildings are reported not ready, and the tile asks again.
 /// </summary>
 public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
 {
@@ -44,8 +44,8 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     /// The simulation's ground height, used only where the full heightmap cannot be opened: it is the coarse world grid away from the loaded area.
     /// </param>
     /// <param name="runtime">
-    /// The buildings placed at run time (built, bought or ruined houses), which the zones' collision includes as the navmesh does; a change drops the zone's
-    /// gathered collision and bumps <see cref="Generation"/>.
+    /// The buildings placed at run time (built, bought or ruined houses), which the zones' collision includes as the navmesh does; a change drops the
+    /// zone's gathered collision and bumps <see cref="Generation"/>.
     /// </param>
     public RagdollGeometry(GameInstall install, GameDatabase db, WorldLevelData levels, Func<float, float, float> terrainHeight, NavRuntimeBuildings? runtime = null)
     {
@@ -75,9 +75,9 @@ public sealed class RagdollGeometry : IRagdollEnvironment, IDisposable
     }
 
     /// <summary>
-    /// The terrain at full resolution, from blocks of the heightmap read as they are needed (the simulation's own height is the coarse grid, a sample in every
-    /// 144 units, outside the area the game loaded at the start: a body would meet a ground metres off the one the character stands on and drawn terrain).
-    /// Called from the simulation thread only.
+    /// The terrain at full resolution, from blocks of the heightmap read as they are needed (the simulation's own height is the coarse grid, a sample
+    /// in every 144 units, outside the area the game loaded at the start: a body would meet a ground metres off the one the character stands on and
+    /// drawn terrain). Called from the simulation thread only.
     /// </summary>
     public float GroundHeight(float x, float z, float nearY)
     {

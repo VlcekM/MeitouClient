@@ -6,8 +6,8 @@ namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
 /// The frame being recorded (docs/renderer-native.md 2.2): its number and slot, the primary command list, per-frame constants, timestamps, resource
-/// states and statistics. Begun and ended by the context's frame loop (<see cref="GpuContext.BeginFrame"/> / <see cref="GpuContext.EndFrame"/>), driven by
-/// the display or a test.
+/// states and statistics. Begun and ended by the context's frame loop (<see cref="GpuContext.BeginFrame"/> / <see cref="GpuContext.EndFrame"/>),
+/// driven by the display or a test.
 /// </summary>
 public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
 {
@@ -107,18 +107,18 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
     internal CommandBuffer UploadCommands { get; private set; }
 
     /// <summary>
-    /// (Added for GPU-driven foliage, docs/renderer-native.md 5.3 as built.) A command list recording into <see cref="UploadCommands"/>: the buffer the host
-    /// submits ahead of the frame's own, in the same submission, with a full barrier at its end (VkGl). Whatever is recorded here, at any point of the
-    /// frame's recording (inside a native segment or a host pass too), executes before every command of the frame's own list, after the uploads recorded
-    /// before it. For transfers and compute whose results the frame's passes read (a cull per view that writes instance lists and indirect arguments): no
-    /// rendering, and the caller places its own barriers between its commands (uploads place transfer-to-transfer ones only). Valid while the frame is
-    /// open; render thread only.
+    /// (Added for GPU-driven foliage, docs/renderer-native.md 5.3 as built.) A command list recording into <see cref="UploadCommands"/>: the buffer
+    /// the host submits ahead of the frame's own, in the same submission, with a full barrier at its end (VkGl). Whatever is recorded here, at any
+    /// point of the frame's recording (inside a native segment or a host pass too), executes before every command of the frame's own list, after the
+    /// uploads recorded before it. For transfers and compute whose results the frame's passes read (a cull per view that writes instance lists and
+    /// indirect arguments): no rendering, and the caller places its own barriers between its commands (uploads place transfer-to-transfer ones only).
+    /// Valid while the frame is open; render thread only.
     /// </summary>
     public CommandList PreFrame { get; }
 
     /// <summary>
-    /// Per recording thread (<see cref="RenderJobs.ThreadIndex"/>): a command pool per frame slot and its secondaries, reused when the slot comes round
-    /// (docs/renderer-native.md 6.3). Each thread only touches its own entry; the render thread resets them at the frame's begin.
+    /// Per recording thread (<see cref="RenderJobs.ThreadIndex"/>): a command pool per frame slot and its secondaries, reused when the slot comes
+    /// round (docs/renderer-native.md 6.3). Each thread only touches its own entry; the render thread resets them at the frame's begin.
     /// </summary>
     sealed class ThreadPools(GpuContext ctx, int slots)
     {
@@ -257,8 +257,8 @@ public sealed unsafe class GpuFrame : IDisposable, IGpuFrame
     }
 
     /// <summary>
-    /// As <see cref="AllocateSet(DescriptorSetLayout)"/> from any thread: a recording job writes a set it cannot push (<see cref="CommandList.BindProgramResources"/>
-    /// on a device or layout without push descriptors). Serialized: the pools are shared.
+    /// As <see cref="AllocateSet(DescriptorSetLayout)"/> from any thread: a recording job writes a set it cannot push
+    /// (<see cref="CommandList.BindProgramResources"/> on a device or layout without push descriptors). Serialized: the pools are shared.
     /// </summary>
     internal DescriptorSet AllocateSetAnyThread(DescriptorSetLayout layout)
     {

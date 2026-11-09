@@ -153,27 +153,23 @@ public readonly record struct ArrestEvent(long Tick, ArrestEventKind Kind, Chara
 
 /// <summary>
 /// The police and wanted characters (docs/simulation.md "Arrest and jail"; the original's rules in docs/game/economy.md 11.5, 11.7, 11.8). Everything
-/// runs in <c>SlowWorld</c>, serially,
-/// in slot order, after the crime system's sweep.
+/// runs in <c>SlowWorld</c>, serially, in slot order, after the crime system's sweep.
 /// <list type="bullet">
 /// <item><b>Spotting</b> (11.8): an awake NPC within 400 that sees a player character whose bounty with its faction reaches its class's threshold
-/// (<see cref="SpotThreshold"/>) fills the
-/// target's recognition meter, or recognises it at once while it is recently wanted. The nearest free police-like looker fires event 44
-/// BOUNTY_SPOTTED at it through the
+/// (<see cref="SpotThreshold"/>) fills the target's recognition meter, or recognises it at once while it is recently wanted. The nearest free
+/// police-like looker fires event 44 BOUNTY_SPOTTED at it through the
 /// <see cref="Talk"/> dialogue; a police-like NPC in its own town fires event 45 ESCAPED_PRISONER_SPOTTED at an escaped prisoner it sees there. The
 /// data's lines then fine (DA 2 and
 /// the "Bounty extortion pay" talk), arrest (DA 29, <see cref="ArrestFromDialogue"/>) or do nothing. A booking witness is left to its witness event;
 /// one already fighting arrests at once.</item>
 /// <item><b>Fine or arrest</b> (11.7; the engine's fallback for a world without dialogue events): outside his town the guard just attacks, with his
 /// squad. In it, a bounty of 1..1049 is a fine (<see cref="FineFor"/>): he walks up and takes it when the player's money is more than it, clearing
-/// his faction's entry; otherwise, and for
-/// a bigger bounty, he arrests: fights until the target is down, lifts it (<see cref="Carrying.CarrySystem"/>), carries it to the best free cage
-/// (<see cref="FixtureRegistry.FindCage"/>)
-/// and imprisons it with its sentence. No free cage: he drops the captive (engine choice; the original's is Unknown).</item>
+/// his faction's entry; otherwise, and for a bigger bounty, he arrests: fights until the target is down, lifts it
+/// (<see cref="Carrying.CarrySystem"/>), carries it to the best free cage (<see cref="FixtureRegistry.FindCage"/>) and imprisons it with its
+/// sentence. No free cage: he drops the captive (engine choice; the original's is Unknown).</item>
 /// <item><b>Release</b> (11.5, goal 211): a player character whose sentence is served and who is awake is freed by the jail's faction (an NPC of it
-/// near the cage that holds goal 211, else the
-/// system in its name for a faction that books bounties; engine choice), which erases its and the jail's bounty entries. NPC prisoners stay (their
-/// jailers' AI is not built).</item>
+/// near the cage that holds goal 211, else the system in its name for a faction that books bounties; engine choice), which erases its and the jail's
+/// bounty entries. NPC prisoners stay (their jailers' AI is not built).</item>
 /// <item><b>Bail, claims, hunters</b> (11.4, 11.5, 11.8; ArrestSystem.Bounties.cs): <see cref="PayBailOrder"/>, the player's
 /// <see cref="PutInCageOrder"/> with its reward
 /// (<see cref="Claim"/>), and bounty hunters that chase a recognised bounty above <see cref="HuntLimit"/> until the target is down.</item>

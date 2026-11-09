@@ -40,8 +40,7 @@ public sealed record VertexArrayBindings(LegacyProgram.Attribute?[] Attributes, 
 /// and samplers at glslang's bindings, pushed; set 1 the default blocks as dynamic uniform buffers), driven without lookups while drawing.
 /// It keeps VkGl's rules: the CPU copy of each default block persists for the program's lifetime (values set once stay set), conversions follow
 /// <see cref="GlUniforms.Scatter"/>, inactive uniforms are ignored, a sampler with nothing bound reads the GL default
-/// (<see cref="GpuContext.Dummy"/>), and set 0 is pushed whole when anything in it changed (or another program's layout was bound in
-/// between).
+/// (<see cref="GpuContext.Dummy"/>), and set 0 is pushed whole when anything in it changed (or another program's layout was bound in between).
 /// </summary>
 public sealed unsafe class LegacyProgram : IDisposable
 {

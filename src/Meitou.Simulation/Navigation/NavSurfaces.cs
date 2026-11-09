@@ -3,9 +3,10 @@ using System.Numerics;
 namespace Meitou.Simulation.Navigation;
 
 /// <summary>
-/// The walkable collision triangles of a zone's buildings and foliage (exterior and interiors), kept beside the navmesh for heights. The mesh's polygons are
-/// only planar between their corners, so on stairs and ramps a polygon spanning several steps lies several units above or below the treads; a character's
-/// height is taken from the real surface the polygon stands for (<see cref="NavmeshWalkability.GroundHeight(float, float, float)"/>).
+/// The walkable collision triangles of a zone's buildings and foliage (exterior and interiors), kept beside the navmesh for heights. The mesh's
+/// polygons are only planar between their corners, so on stairs and ramps a polygon spanning several steps lies several units above or below the
+/// treads; a character's height is taken from the real surface the polygon stands for
+/// (<see cref="NavmeshWalkability.GroundHeight(float, float, float)"/>).
 /// </summary>
 public sealed class NavSurfaces
 {
@@ -15,8 +16,8 @@ public sealed class NavSurfaces
     const float Cell = 32;
 
     /// <summary>
-    /// How far (units) beside a surface's edge its edge height still counts (engine choice: two Recast cells). The mesh reaches a cell or two past the edge of
-    /// a raised floor (Observed: the landing at the Hub bar's door), where nothing but the terrain far below is under it.
+    /// How far (units) beside a surface's edge its edge height still counts (engine choice: two Recast cells). The mesh reaches a cell or two past
+    /// the edge of a raised floor (Observed: the landing at the Hub bar's door), where nothing but the terrain far below is under it.
     /// </summary>
     public const float EdgeReach = 4;
 
@@ -194,9 +195,9 @@ public sealed class NavSurfaces
     }
 
     /// <summary>
-    /// The walkable non-terrain triangles of gathered geometry (buildings and foliage) whose box touches the zone box grown by <paramref name="margin"/>, without
-    /// their parts inside a solid (<see cref="ZoneGeometry.Solids"/>, the builder's rule): a stair box's top face goes on inside the foundation it leans on, and
-    /// a walker's height followed it down under the floor (docs/game/pathfinding.md, "Solids").
+    /// The walkable non-terrain triangles of gathered geometry (buildings and foliage) whose box touches the zone box grown by
+    /// <paramref name="margin"/>, without their parts inside a solid (<see cref="ZoneGeometry.Solids"/>, the builder's rule): a stair box's top face
+    /// goes on inside the foundation it leans on, and a walker's height followed it down under the floor (docs/game/pathfinding.md, "Solids").
     /// </summary>
     internal static Vector3[] From(ZoneGeometry g, Vector2 zoneMin, Vector2 zoneMax, float margin = 8)
     {
@@ -254,8 +255,8 @@ public sealed class NavSurfaces
     }
 
     /// <summary>
-    /// Adds the parts of a convex polygon outside the solid to <paramref name="output"/> (convex pieces). Inside means as in the builder: below every face, by more
-    /// than <see cref="ZoneNavMeshBuilder.SolidTopInset"/> under the upward ones, so the solid's own top stays.
+    /// Adds the parts of a convex polygon outside the solid to <paramref name="output"/> (convex pieces). Inside means as in the builder: below every
+    /// face, by more than <see cref="ZoneNavMeshBuilder.SolidTopInset"/> under the upward ones, so the solid's own top stays.
     /// </summary>
     static void Outside(List<Vector3> polygon, NavSolid solid, List<List<Vector3>> output)
     {

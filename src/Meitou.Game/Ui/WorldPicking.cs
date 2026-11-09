@@ -28,8 +28,8 @@ sealed class WorldPicking(PlayerInterface player)
     public Func<Vector3?, bool>? WorldClick { get; set; }
 
     /// <summary>
-    /// The renderer's test of a ray against a character's posed mesh (<c>CharacterRenderer.RayHit</c>): the distance, +infinity for a miss, null when it does
-    /// not draw that character (the capsule decides then). Null without a renderer.
+    /// The renderer's test of a ray against a character's posed mesh (<c>CharacterRenderer.RayHit</c>): the distance, +infinity for a miss, null when
+    /// it does not draw that character (the capsule decides then). Null without a renderer.
     /// </summary>
     public Func<CharacterId, Vector3, Vector3, float?>? MeshHit { get; set; }
 
@@ -137,22 +137,22 @@ sealed class WorldPicking(PlayerInterface player)
     public CharacterId? PickTarget(Vector2 pixel) => PickWhere(pixel, c => !c.IsPlayer && c.Standing);
 
     /// <summary>
-    /// A living trader under the pixel (a member of a squad with a shop): a right click trades with it, or attacks it when its faction is hostile (the world
-    /// decides).
+    /// A living trader under the pixel (a member of a squad with a shop): a right click trades with it, or attacks it when its faction is hostile
+    /// (the world decides).
     /// </summary>
     public CharacterId? PickTrader(Vector2 pixel) => PickWhere(pixel, c => c.IsTrader && c.Standing);
 
     /// <summary>
-    /// A knocked-out or dead character under the pixel that nobody carries (what a pick-up or a loot is for); <paramref name="ownOnly"/> takes only the
-    /// player's.
+    /// A knocked-out or dead character under the pixel that nobody carries (what a pick-up or a loot is for); <paramref name="ownOnly"/> takes only
+    /// the player's.
     /// </summary>
     public CharacterId? PickDowned(Vector2 pixel, bool ownOnly = false) =>
         PickWhere(pixel, c => c.Body is { } b && (b.Unconscious || b.Dead) && c.CarriedBy.IsNone && (!ownOnly || c.IsPlayer))
         ?? (ownOnly ? null : PickWhere(pixel, c => !c.CarriedBy.IsNone));
 
     /// <summary>
-    /// One of the player's own living characters under the pixel that first aid has something to bandage on (a right click on it orders the selection to
-    /// treat it).
+    /// One of the player's own living characters under the pixel that first aid has something to bandage on (a right click on it orders the selection
+    /// to treat it).
     /// </summary>
     public CharacterId? PickHurtAlly(Vector2 pixel) => PickWhere(pixel, c => c.IsPlayer && c.Body is { Dead: false, NeedsAid: true });
 
@@ -219,9 +219,10 @@ sealed class WorldPicking(PlayerInterface player)
     internal enum Picked { None, Character, GroundItem, Container, Door, Rock, Site, Bed, Cage, Dummy, Seat }
 
     /// <summary>
-    /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest along the ray
-    /// of a character with a quick order, a ground item, a container, a door, a rock and a site that is an object (unfinished, a machine, storage, furnace or
-    /// turret), as the original's pick walks its hits nearest first. What a building seen from outside hides is left out (each helper's
+    /// The right button's target under the pixel, with characters selected (docs/game/ui-input.md "Building picking and selection"): the nearest
+    /// along the ray of a character with a quick order, a ground item, a container, a door, a rock and a site that is an object (unfinished, a
+    /// machine, storage, furnace or turret), as the original's pick walks its hits nearest first. What a building seen from outside hides is left out
+    /// (each helper's
     /// <see cref="PlayerInterface.Hidden"/> test, the original's floor rule). A plain building is not a candidate: it takes the click only when nothing is
     /// (<see cref="BuildMode.SitePress"/>). Hover and click share it, as in the original.
     /// </summary>
@@ -287,8 +288,8 @@ sealed class WorldPicking(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether a point lies inside the box of a building's collision placed at <paramref name="position"/> turned by <paramref name="yaw"/> (its footprint,
-    /// from its lowest to its highest point).
+    /// Whether a point lies inside the box of a building's collision placed at <paramref name="position"/> turned by <paramref name="yaw"/> (its
+    /// footprint, from its lowest to its highest point).
     /// </summary>
     bool Holds(string record, Vector3 position, float yaw, Vector3 point) =>
         player.Build.Services?.Placement.Footprint(record) is { } f && point.Y >= position.Y + f.YMin && point.Y <= position.Y + f.YMax
@@ -314,9 +315,9 @@ sealed class WorldPicking(PlayerInterface player)
 
     #region Buildings
 
-    // Picking buildings against their collision triangles (docs/game/ui-input.md "Building picking and selection"): the original's pick is a raycast against
-    // the collision shapes, not a prism over their merged hull. The hull prism stays as the first, cheap test; a building that has collision files is then
-    // tested triangle by triangle, so ground, characters and neighbours next to a building are not taken for it.
+    // Picking buildings against their collision triangles (docs/game/ui-input.md "Building picking and selection"): the original's pick is a raycast
+    // against the collision shapes, not a prism over their merged hull. The hull prism stays as the first, cheap test; a building that has collision
+    // files is then tested triangle by triangle, so ground, characters and neighbours next to a building are not taken for it.
     readonly Dictionary<string, IReadOnlyList<(Vector3[] Vertices, int[] Indices)>> _collisionMeshes = [];
 
     IReadOnlyList<(Vector3[] Vertices, int[] Indices)> CollisionMeshOf(string record)
@@ -329,8 +330,8 @@ sealed class WorldPicking(PlayerInterface player)
     }
 
     /// <summary>
-    /// Where the ray meets a building: its hull prism first (null: no hit), then, when the record has collision triangles, the nearest of those (null: the ray
-    /// passes through the prism without touching the building). <paramref name="y"/> is the building's base height.
+    /// Where the ray meets a building: its hull prism first (null: no hit), then, when the record has collision triangles, the nearest of those
+    /// (null: the ray passes through the prism without touching the building). <paramref name="y"/> is the building's base height.
     /// </summary>
     internal float? BuildingRayT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float yMin, float yMax, string? record, Vector3 position, float y, Quaternion rotation)
     {
@@ -342,8 +343,8 @@ sealed class WorldPicking(PlayerInterface player)
     }
 
     /// <summary>
-    /// Where the ray meets a building without collision (a farm) by its plot (<see cref="Building.PlacementServices.Plot"/>, an engine stand-in): just before
-    /// the ground, when the ground the ray meets at <paramref name="ground"/> lies inside the placed hull; null otherwise.
+    /// Where the ray meets a building without collision (a farm) by its plot (<see cref="Building.PlacementServices.Plot"/>, an engine stand-in):
+    /// just before the ground, when the ground the ray meets at <paramref name="ground"/> lies inside the placed hull; null otherwise.
     /// </summary>
     internal static float? PlotT((Vector3 Origin, Vector3 Direction) ray, Vector2[] hull, float? ground)
     {

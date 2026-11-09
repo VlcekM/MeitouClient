@@ -16,12 +16,12 @@ public readonly record struct ZoneBlood(float Value, Vector2 Position);
 /// <summary>
 /// The blood smell of the zones (<c>ZoneSmell</c>, <b>Verified</b> decompile) and the blood hunters that follow it (goal 176 HUNTING_BLOODSMELL,
 /// <c>Task_HuntingSmell</c>). Serial, in <c>SlowWorld</c> every <see cref="EveryTicks"/> ticks, the zones stepping once per <see cref="StepSeconds"/> with the
-/// elapsed time: each zone's target is its corpses with flies (1 each; the bleeders the original posts are skipped by its accumulation); its position is the
-/// corpses' centroid, or (0, 0) without corpses (the original's zero vector); the value rises toward the target at 1/60 a game second and falls at 1/240. A zone
-/// not loaded is dropped once its target is 0 (<c>FUN_1408f85f0</c>). An animal whose squad's package lists 176 hunts the zone with the best weighted value (its
-/// own x1, a neighbour x0.8, any other x0.5) above its race's ANIMAL_CHARACTER <c>smell blood</c>, keeps it while the value stays at the threshold, and runs to
-/// its position. Engine choices: every loaded zone is a candidate (the original's active zone island); all zones step together, the original one zone per kick
-/// in a cycle.
+/// elapsed time: each zone's target is its corpses with flies (1 each; the bleeders the original posts are skipped by its accumulation); its position
+/// is the corpses' centroid, or (0, 0) without corpses (the original's zero vector); the value rises toward the target at 1/60 a game second and
+/// falls at 1/240. A zone not loaded is dropped once its target is 0 (<c>FUN_1408f85f0</c>). An animal whose squad's package lists 176 hunts the zone
+/// with the best weighted value (its own x1, a neighbour x0.8, any other x0.5) above its race's ANIMAL_CHARACTER <c>smell blood</c>, keeps it while
+/// the value stays at the threshold, and runs to its position. Engine choices: every loaded zone is a candidate (the original's active zone island);
+/// all zones step together, the original one zone per kick in a cycle.
 /// </summary>
 public sealed class SmellSystem(PopulationData data, PopulationSystem? population) : ITickSystem, IStateHashed
 {
@@ -59,8 +59,8 @@ public sealed class SmellSystem(PopulationData data, PopulationSystem? populatio
         if (world.Tick % EveryTicks != 0)
             return;
 
-        // The sources step once per 10 game seconds with the whole time since the last step as dt (FUN_1408f85f0: its timer runs to DAT_14167fad4 = 10 and
-        // the step takes the frozen value).
+        // The sources step once per 10 game seconds with the whole time since the last step as dt (FUN_1408f85f0: its timer runs to DAT_14167fad4 =
+        // 10 and the step takes the frozen value).
         _elapsed += EveryTicks * world.TickSeconds;
         if (_elapsed >= StepSeconds)
         {

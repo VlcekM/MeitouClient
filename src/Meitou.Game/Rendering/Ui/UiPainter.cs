@@ -1116,8 +1116,7 @@ public sealed partial class UiPainter : IDisposable
     }
 
     /// <summary>
-    /// The <paramref name="source"/> part of <paramref name="sheet"/> scaled to <paramref name="width"/> × <paramref name="height"/> (nearest
-    /// texel).
+    /// The <paramref name="source"/> part of <paramref name="sheet"/> scaled to <paramref name="width"/> × <paramref name="height"/> (nearest texel).
     /// </summary>
     static RgbaImage Crop(RgbaImage sheet, UiRect source, int width, int height)
     {

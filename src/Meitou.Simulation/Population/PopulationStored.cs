@@ -7,16 +7,16 @@ using Meitou.Simulation.Player;
 namespace Meitou.Simulation.Population;
 
 /// <summary>
-/// Town squads kept as their characters (docs/simulation.md "Population"): when a town unloads, each squad it made becomes a pinned <see cref="Platoon"/> holding
-/// a <see cref="StoredSquad"/>, and when the town loads again the platoon is made of those same characters (name, look, body, kit, bounties, place), never
-/// rolled anew.
+/// Town squads kept as their characters (docs/simulation.md "Population"): when a town unloads, each squad it made becomes a pinned
+/// <see cref="Platoon"/> holding a <see cref="StoredSquad"/>, and when the town loads again the platoon is made of those same characters (name, look,
+/// body, kit, bounties, place), never rolled anew.
 /// </summary>
 public sealed partial class PopulationSystem
 {
     /// <summary>
-    /// Takes the squad's characters out of the world into <paramref name="stored"/> (serial phase): each living member's cold state, cleared of what referred to
-    /// the world, with its place; the dead are kept too, apart (<see cref="StoredSquad.Dead"/>), and their bodies leave the world with the others. Returns where
-    /// the leader (else the first member) stood.
+    /// Takes the squad's characters out of the world into <paramref name="stored"/> (serial phase): each living member's cold state, cleared of what
+    /// referred to the world, with its place; the dead are kept too, apart (<see cref="StoredSquad.Dead"/>), and their bodies leave the world with
+    /// the others. Returns where the leader (else the first member) stood.
     /// </summary>
     static Vector2 Store(World world, Squad squad, StoredSquad stored)
     {
@@ -58,7 +58,8 @@ public sealed partial class PopulationSystem
 
     /// <summary>
     /// A squad's member leaves the world with its squad, the dead too: the unload destroys every member of the active platoon with no dead test
-    /// (<c>FUN_1404feed0</c>, docs/game/character-stats.md "Corpses"). A squad that stays keeps its corpses to the 12 hour rule (<see cref="BodySystem"/>).
+    /// (<c>FUN_1404feed0</c>, docs/game/character-stats.md "Corpses"). A squad that stays keeps its corpses to the 12 hour rule
+    /// (<see cref="BodySystem"/>).
     /// </summary>
     static void RemoveMember(World world, CharacterId id) => world.Characters.Remove(id);
 
@@ -106,10 +107,10 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// The stored characters into the world as the squad of <paramref name="p"/> (serial phase), each where it stood, the leader wandering round the town and the
-    /// rest following it (a roaming one waits for its orders), moved along with a stand-in that travelled; the stored list is emptied (the characters are the
-    /// world's again). Null when no one is left. One with no town (a prisoner split off a save's wild platoon keeps its <see cref="Platoon.Origin"/> -1) is
-    /// homed round where it stands, as a homeless wild one is.
+    /// The stored characters into the world as the squad of <paramref name="p"/> (serial phase), each where it stood, the leader wandering round the
+    /// town and the rest following it (a roaming one waits for its orders), moved along with a stand-in that travelled; the stored list is emptied
+    /// (the characters are the world's again). Null when no one is left. One with no town (a prisoner split off a save's wild platoon keeps its
+    /// <see cref="Platoon.Origin"/> -1) is homed round where it stands, as a homeless wild one is.
     /// </summary>
     Squad? SpawnStored(World world, Platoon p, StoredSquad stored)
     {
@@ -128,8 +129,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// A stored dead member back in the world as a corpse of <paramref name="squad"/> where it lay (moved along with the squad's stand-in, as the living are),
-    /// still counted on the squad's list.
+    /// A stored dead member back in the world as a corpse of <paramref name="squad"/> where it lay (moved along with the squad's stand-in, as the
+    /// living are), still counted on the squad's list.
     /// </summary>
     void SpawnCorpse(World world, Squad squad, StoredMember m, Vector2 delta, bool moved, Vector2 position)
     {
@@ -214,8 +215,8 @@ public sealed partial class PopulationSystem
     }
 
     /// <summary>
-    /// One stored member back in the world as a member of <paramref name="squad"/>: the leader (or the successor) wanders when its squad is pinned, the rest
-    /// follow it.
+    /// One stored member back in the world as a member of <paramref name="squad"/>: the leader (or the successor) wanders when its squad is pinned,
+    /// the rest follow it.
     /// </summary>
     void SpawnKeptMember(
         World world, Squad squad, StoredSquad stored, StoredMember m, StoredMember? successor, Vector2 delta, bool moved, Vector2 position)

@@ -20,8 +20,8 @@ public sealed record ImpostorMaterial(string? Diffuse, string? Normal, string? D
 }
 
 /// <summary>
-/// One thing to bake: a FOLIAGE_MESH's mesh (and leaves mesh) with its materials, the record's largest scale (which picks the size class) and the files
-/// they resolve to. <see cref="Key"/> identifies the atlas in the cache.
+/// One thing to bake: a FOLIAGE_MESH's mesh (and leaves mesh) with its materials, the record's largest scale (which picks the size class) and the
+/// files they resolve to. <see cref="Key"/> identifies the atlas in the cache.
 /// </summary>
 public sealed class ImpostorSource
 {
@@ -51,9 +51,9 @@ public sealed class ImpostorSource
     public IReadOnlyList<string?> TexturePaths { get; init; } = [];
 
     /// <summary>
-    /// For a TERRAIN-mode rock (docs/impostors.md section 13): the terrain's parameter row of the biome whose material it is baked with (-1: not a rock; the
-    /// source is an ordinary mesh) and the text that identifies that material (<c>TerrainTextures.BiomeKey</c>), part of the cache key. The rock is baked
-    /// with the terrain's mesh material, so the textures its record names (none are used in TERRAIN mode) are not part of it.
+    /// For a TERRAIN-mode rock (docs/impostors.md section 13): the terrain's parameter row of the biome whose material it is baked with (-1: not a
+    /// rock; the source is an ordinary mesh) and the text that identifies that material (<c>TerrainTextures.BiomeKey</c>), part of the cache key. The
+    /// rock is baked with the terrain's mesh material, so the textures its record names (none are used in TERRAIN mode) are not part of it.
     /// </summary>
     public int RockBiome { get; init; } = -1;
 
@@ -67,8 +67,8 @@ public sealed class ImpostorSource
     public const int RockBakerVersion = 1;
 
     /// <summary>
-    /// Why a FOLIAGE_MESH gets no impostor, or null when it can have one: TERRAIN-mode meshes are textured by the biome under each instance (one atlas per
-    /// mesh cannot be right) and EMISSIVE ones glow (not baked).
+    /// Why a FOLIAGE_MESH gets no impostor, or null when it can have one: TERRAIN-mode meshes are textured by the biome under each instance (one
+    /// atlas per mesh cannot be right) and EMISSIVE ones glow (not baked).
     /// </summary>
     public static string? Ineligible(FoliageMesh mesh) => mesh.MaterialType switch
     {
@@ -83,9 +83,9 @@ public sealed class ImpostorSource
     public static ImpostorSource? From(FoliageMesh mesh, AssetLocator assets) => From(mesh, assets, -1, null);
 
     /// <summary>
-    /// The source of a TERRAIN-mode rock for the biome of terrain row <paramref name="rockBiome"/> (<paramref name="rockMaterial"/>: its identity): the mesh
-    /// and its scales, no textures of its own (the material is the biome's). <see cref="Ineligible"/> still says no for the tools, which have no terrain to
-    /// bake with.
+    /// The source of a TERRAIN-mode rock for the biome of terrain row <paramref name="rockBiome"/> (<paramref name="rockMaterial"/>: its identity):
+    /// the mesh and its scales, no textures of its own (the material is the biome's). <see cref="Ineligible"/> still says no for the tools, which
+    /// have no terrain to bake with.
     /// </summary>
     public static ImpostorSource? ForRock(FoliageMesh mesh, AssetLocator assets, int rockBiome, string rockMaterial) => From(mesh, assets, rockBiome, rockMaterial);
 
@@ -126,8 +126,8 @@ public sealed class ImpostorSource
     }
 
     /// <summary>
-    /// The cache key: SHA-256 (hex) of the baker and format versions, every source file's path, length and last write time, the materials and the largest
-    /// scale. A changed file, a mod overriding one, a new baker or a different record gives a different key.
+    /// The cache key: SHA-256 (hex) of the baker and format versions, every source file's path, length and last write time, the materials and the
+    /// largest scale. A changed file, a mod overriding one, a new baker or a different record gives a different key.
     /// </summary>
     public string Key
     {

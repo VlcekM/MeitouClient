@@ -16,9 +16,10 @@ public static partial class SaveCapture
     const string TownStateSuffix = "-S5e";   // the hex of GAMESTATE_TOWN (94)
 
     /// <summary>
-    /// The nests made so far in <c>quick.save</c>'s town list, the original's way (docs/formats/save.md "Nests"): a nest the save already holds keeps its entry
-    /// and state, and gets the player's knowledge of it; a rolled one that has loaded (a rolled one that has not is left out: the layout rolls it again) gets an
-    /// entry <c>&lt;n&gt;-quick.save-INGAME</c> (target the TOWN record, its position, a zero quaternion) and a GAMESTATE_TOWN <c>&lt;entry&gt;-S5e</c> named
+    /// The nests made so far in <c>quick.save</c>'s town list, the original's way (docs/formats/save.md "Nests"): a nest the save already holds keeps
+    /// its entry and state, and gets the player's knowledge of it; a rolled one that has loaded (a rolled one that has not is left out: the layout
+    /// rolls it again) gets an entry <c>&lt;n&gt;-quick.save-INGAME</c> (target the TOWN record, its position, a zero quaternion) and a
+    /// GAMESTATE_TOWN <c>&lt;entry&gt;-S5e</c> named
     /// <c>Nest state &lt;name&gt; &lt;k&gt;</c> with a type-85 <c>hand</c> and the key set of the samples. The population remembers each one, so the next save
     /// reuses it. Returns each nest site's handle (what its platoons' <c>hometown</c> names).
     /// </summary>
@@ -57,8 +58,8 @@ public static partial class SaveCapture
         {
             if (site.Kind != WildKind.Nest || site.Nest is not { } nest) continue;
 
-            // Only the nests made so far, as the original holds: the save's and the ones that have loaded. The others roll again at the same places when the save
-            // loads.
+            // Only the nests made so far, as the original holds: the save's and the ones that have loaded. The others roll again at the same places
+            // when the save loads.
             bool held = population.NestSaveId(site.Index, out var id);
             if (!held && population.WildCentreOf(site.Index) is null) continue;
 
@@ -210,9 +211,9 @@ public static partial class SaveCapture
             }
         }
 
-        // NPC squads of no town, platoon or wild site: a dismissed character's "Wandering Squad" (the original's FUN_14048fa30 makes it a persistent platoon,
-        // which saveGame writes like any other), a slave bought free or handed over, one separated by dialogue. Written homeless and persistent; loaded again
-        // they are homeless wild platoons.
+        // NPC squads of no town, platoon or wild site: a dismissed character's "Wandering Squad" (the original's FUN_14048fa30 makes it a persistent
+        // platoon, which saveGame writes like any other), a slave bought free or handed over, one separated by dialogue. Written homeless and
+        // persistent; loaded again they are homeless wild platoons.
         var wild = new HashSet<int>();
         foreach (var site in population.WildSites) wild.UnionWith(population.WildSquadsOf(site.Index));
         foreach (var squad in world.Squads.All)

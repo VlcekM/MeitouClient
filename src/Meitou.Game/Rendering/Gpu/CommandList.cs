@@ -18,11 +18,9 @@ public readonly record struct RenderTarget(GpuView View, LoadOp Load = LoadOp.Lo
 }
 
 /// <summary>What <see cref="CommandList.BeginRendering"/> renders into: up to one colour and one depth attachment over an area, optionally a second
-/// colour attachment
-/// (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment (<c>ShadingRate</c>, an
-/// R8_UINT view in GENERAL
-/// layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been made for it, <see
-/// cref="AttachmentFormats.ShadingRate"/>).</summary>
+/// colour attachment (<c>Extra</c>, location 1: the GI resolve's surface target, docs/render-gi.md) and a fragment shading rate attachment
+/// (<c>ShadingRate</c>, an R8_UINT view in GENERAL layout whose texels are <c>ShadingRateTexel</c> pixels on a side; the pipelines must have been
+/// made for it, <see cref="AttachmentFormats.ShadingRate"/>).</summary>
 public readonly record struct RenderingDesc(RenderTarget Colour, RenderTarget Depth, int Width, int Height, int X = 0, int Y = 0,
         GpuView ShadingRate = default, int ShadingRateTexel = 0, RenderTarget Extra = default);
 

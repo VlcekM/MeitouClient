@@ -5,9 +5,9 @@ using Sampler = Silk.NET.Vulkan.Sampler;
 namespace Meitou.Game.Rendering.Gpu;
 
 /// <summary>
-/// GL's sampler state as a value (docs/renderer-native.md 2.4). <see cref="FromGl"/> is the rule VkGl used in <c>SamplerFor</c>, moved here so translated
-/// and native draws share it: integer formats sample nearest, a sampler without mipmaps clamps its LOD to 0.25 (GL's "no mips" behaviour), the LOD bias
-/// applies to mipmapped samplers only, anisotropy is clamped to 16, and the compare mode is used only by shadow samplers.
+/// GL's sampler state as a value (docs/renderer-native.md 2.4). <see cref="FromGl"/> is the rule VkGl used in <c>SamplerFor</c>, moved here so
+/// translated and native draws share it: integer formats sample nearest, a sampler without mipmaps clamps its LOD to 0.25 (GL's "no mips" behaviour),
+/// the LOD bias applies to mipmapped samplers only, anisotropy is clamped to 16, and the compare mode is used only by shadow samplers.
 /// </summary>
 public readonly record struct SamplerDesc(TextureMinFilter Min, TextureMagFilter Mag, bool Mipmapped,
     TextureWrapMode U, TextureWrapMode V, TextureWrapMode W, bool Compare, DepthFunction Op, bool TransparentBorder,
@@ -28,8 +28,9 @@ public readonly record struct SamplerDesc(TextureMinFilter Min, TextureMagFilter
 }
 
 /// <summary>
-/// One Vulkan sampler per <see cref="SamplerDesc"/>, for the device's lifetime. Applies the device rules: anisotropy only where the device has it, and on
-/// NVIDIA a −0.25 LOD bias for anisotropic samplers (its OpenGL picked mips a quarter level finer than its Vulkan driver; DECISIONS 9). Render thread only.
+/// One Vulkan sampler per <see cref="SamplerDesc"/>, for the device's lifetime. Applies the device rules: anisotropy only where the device has it,
+/// and on NVIDIA a −0.25 LOD bias for anisotropic samplers (its OpenGL picked mips a quarter level finer than its Vulkan driver; DECISIONS 9). Render
+/// thread only.
 /// </summary>
 public sealed unsafe class SamplerCache : IGpuSamplers, IDisposable
 {

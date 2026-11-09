@@ -11,9 +11,10 @@ internal sealed partial class ZoneGeometryGatherer
     MapFeatureFile? _features;
 
     /// <summary>
-    /// The collision of the map features (<c>features.dat</c>: rocks, cliffs, the Rebirth statue, gravel piles, trestle bridges) placed in the zone and its eight
-    /// neighbours, walkable up to the terrain's slope like walkable foliage (docs/game/pathfinding.md, "Map features"): an owner-less collision object, group 14,
-    /// material −1 to the original's generator, cutting and walkable. A closed convex shape is a <see cref="NavSolid"/>; a triangle mesh a
+    /// The collision of the map features (<c>features.dat</c>: rocks, cliffs, the Rebirth statue, gravel piles, trestle bridges) placed in the zone
+    /// and its eight neighbours, walkable up to the terrain's slope like walkable foliage (docs/game/pathfinding.md, "Map features"): an owner-less
+    /// collision object, group 14, material −1 to the original's generator, cutting and walkable. A closed convex shape is a <see cref="NavSolid"/>;
+    /// a triangle mesh a
     /// <see cref="NavMeshSolid"/>, so the ground inside the rock is removed (Observed: Rebirth, zone 21.19, the statue's foundation and the gravel piles).
     /// </summary>
     void AddMapFeatures(ZoneGeometry g)
@@ -68,9 +69,9 @@ internal sealed partial class ZoneGeometryGatherer
         _features ??= File.Exists(Path.Combine(_install.DataDirectory, MapFeatureFile.RelativePath)) ? MapFeatureFile.Open(_install) : new MapFeatureFile();
 
     /// <summary>
-    /// The collision triangles of the map features that ragdolls land on (docs/game/ragdolls.md "Collision groups": an outdoor body, group 3, hits group 14, the
-    /// features' group), from the placements in the zone and its neighbours: each triangle once, in the zone its centre lies in (a feature can be thousands of
-    /// units across, more than a building's reach). Three points per triangle, world space.
+    /// The collision triangles of the map features that ragdolls land on (docs/game/ragdolls.md "Collision groups": an outdoor body, group 3, hits
+    /// group 14, the features' group), from the placements in the zone and its neighbours: each triangle once, in the zone its centre lies in (a
+    /// feature can be thousands of units across, more than a building's reach). Three points per triangle, world space.
     /// </summary>
     internal void AddRagdollFeatures(ZoneCoordinate zone, List<Vector3> output)
     {

@@ -6,16 +6,16 @@ namespace Meitou.Game.Ui;
 
 /// <summary>
 /// Loose items under the pointer (docs/simulation.md "Ground items"): a right click on one sends the nearest selected character to pick it up
-/// (pointer <c>pick_item</c>).
-/// While the Highlight key is held each one near the focus shows its name label (docs/game/ui-input.md "Ground item labels"), which picks like the item.
+/// (pointer <c>pick_item</c>). While the Highlight key is held each one near the focus shows its name label (docs/game/ui-input.md "Ground item
+/// labels"), which picks like the item.
 /// </summary>
 sealed class GroundItemPicks(PlayerInterface player)
 {
     #region Host hooks
 
     /// <summary>
-    /// What the ray meets of a ground item where it is drawn: its triangles in its own space, its place and turn (the host sets it; null: no item is picked
-    /// but by its label).
+    /// What the ray meets of a ground item where it is drawn: its triangles in its own space, its place and turn (the host sets it; null: no item is
+    /// picked but by its label).
     /// </summary>
     public Func<Simulation.Items.GroundItemSnapshot,
         (IReadOnlyList<(Vector3[] Vertices, int[] Indices)> Mesh, Vector3 At, Quaternion Rotation)?>? GroundItemShape { get; set; }
@@ -46,8 +46,8 @@ sealed class GroundItemPicks(PlayerInterface player)
         new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
-    /// The ground item whose label is under the pixel, else the nearest the ray meets on its collision (<see cref="GroundItemShape"/>), as the original's pick
-    /// hits an item's shapes; one inside or behind a building seen from outside does not count.
+    /// The ground item whose label is under the pixel, else the nearest the ray meets on its collision (<see cref="GroundItemShape"/>), as the
+    /// original's pick hits an item's shapes; one inside or behind a building seen from outside does not count.
     /// </summary>
     internal int? PickGroundItem(Vector2 pixel) => PickGroundItemAt(pixel)?.Id;
 
@@ -75,8 +75,8 @@ sealed class GroundItemPicks(PlayerInterface player)
     }
 
     /// <summary>
-    /// Whether the ray passes through the bounding sphere of the shape put at <paramref name="at"/> turned by <paramref name="rotation"/> (a hit on its
-    /// triangles is inside it).
+    /// Whether the ray passes through the bounding sphere of the shape put at <paramref name="at"/> turned by <paramref name="rotation"/> (a hit on
+    /// its triangles is inside it).
     /// </summary>
     internal bool RayNears((Vector3 Origin, Vector3 Direction) ray, IReadOnlyList<(Vector3[] Vertices, int[] Indices)> mesh, Vector3 at, Quaternion rotation)
     {
@@ -109,9 +109,9 @@ sealed class GroundItemPicks(PlayerInterface player)
     }
 
     /// <summary>
-    /// A right click on a ground item, with a selection (true): the pick-up order at once. A plain item has no inventory, so the original adds no verb and a
-    /// held press shows no menu (<c>FUN_1407a6bc0</c> adds Pick Up / Steal and Loot only for an item with an inventory; docs/game/ui-input.md "Ground item
-    /// labels").
+    /// A right click on a ground item, with a selection (true): the pick-up order at once. A plain item has no inventory, so the original adds no
+    /// verb and a held press shows no menu (<c>FUN_1407a6bc0</c> adds Pick Up / Steal and Loot only for an item with an inventory;
+    /// docs/game/ui-input.md "Ground item labels").
     /// </summary>
     internal bool GroundItemClick(Vector2 p)
     {
@@ -122,8 +122,8 @@ sealed class GroundItemPicks(PlayerInterface player)
     }
 
     /// <summary>
-    /// The ground item under <paramref name="pixel"/> belongs to another faction: its pointer is <c>steal</c> (<c>FUN_1407fc440</c>), and a right click
-    /// without Alt only walks to it.
+    /// The ground item under <paramref name="pixel"/> belongs to another faction: its pointer is <c>steal</c> (<c>FUN_1407fc440</c>), and a right
+    /// click without Alt only walks to it.
     /// </summary>
     internal bool StealsGroundItem(Vector2 pixel) =>
         PickGroundItem(pixel) is { } id
@@ -165,9 +165,9 @@ sealed class GroundItemPicks(PlayerInterface player)
     }
 
     /// <summary>
-    /// A left click released on an item's name label (<c>FUN_1401638f0</c>, the label's eventMouseButtonReleased handler, button Left only): the pick-up order
-    /// for the selection, as the right click on the item. The original shows the "Hold down the ALT key to steal items" hint instead of stealing when Alt is not
-    /// held; the label exists only while Highlight is held, so that cannot arise here.
+    /// A left click released on an item's name label (<c>FUN_1401638f0</c>, the label's eventMouseButtonReleased handler, button Left only): the
+    /// pick-up order for the selection, as the right click on the item. The original shows the "Hold down the ALT key to steal items" hint instead of
+    /// stealing when Alt is not held; the label exists only while Highlight is held, so that cannot arise here.
     /// </summary>
     internal void LabelPickUp(int item)
     {
@@ -179,8 +179,9 @@ sealed class GroundItemPicks(PlayerInterface player)
     /// <summary>
     /// The name label over each ground item within <see cref="PointerView.HighlightRadius"/> of the focus while the Highlight key is held: the original's
     /// <c>Kenshi_ItemDropLabel</c> (<b>Verified</b>), a <c>Kenshi_GenericTextBoxFlatSmallSkin</c> 0.0259 of the screen high and fitted to the name, centred in
-    /// Kenshi_StandardFont_Medium; plate and text in the item's <see cref="ItemLabelColour"/>, both green (<c>...Selected</c>, #66ff66) for the one the pointer
-    /// picks, the plate red for a stolen one. Labels that would overlap the nearer one's are lifted above it, and hidden ones are skipped (engine choices).
+    /// Kenshi_StandardFont_Medium; plate and text in the item's <see cref="ItemLabelColour"/>, both green (<c>...Selected</c>, #66ff66) for the one
+    /// the pointer picks, the plate red for a stolen one. Labels that would overlap the nearer one's are lifted above it, and hidden ones are skipped
+    /// (engine choices).
     /// </summary>
     internal void AddItemLabels(List<UiControl> controls)
     {
@@ -264,9 +265,10 @@ sealed class GroundItemPicks(PlayerInterface player)
     }
 
     /// <summary>
-    /// A label's own colour (docs/game/ui-input.md "Ground item labels"): a plain ITEM's <c>ItemArtifact</c> or <c>ItemStandard</c>; a weapon, armour, backpack,
-    /// nest item, map item, crossbow or limb its <c>ItemGrade</c> by its <see cref="Meitou.Simulation.Items.ItemInstance.GearLevel"/> below 16/36/51/66/81
-    /// (grades 4 and 5 share the yellow); anything else <c>DropItemLabelBackDefault</c>.
+    /// A label's own colour (docs/game/ui-input.md "Ground item labels"): a plain ITEM's <c>ItemArtifact</c> or <c>ItemStandard</c>; a weapon,
+    /// armour, backpack, nest item, map item, crossbow or limb its <c>ItemGrade</c> by its
+    /// <see cref="Meitou.Simulation.Items.ItemInstance.GearLevel"/> below 16/36/51/66/81 (grades 4 and 5 share the yellow); anything else
+    /// <c>DropItemLabelBackDefault</c>.
     /// </summary>
     string ItemLabelColour(Simulation.Items.GroundItemSnapshot g)
     {

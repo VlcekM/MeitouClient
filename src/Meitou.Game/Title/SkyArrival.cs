@@ -5,8 +5,8 @@ namespace Meitou.Game.Title;
 
 /// <summary>
 /// Presentation-only flight through the sky; the simulation clock and camera rig never change. From the title the hour runs forward to the
-/// destination's, then a hold; in play, or when the hour is near, the view climbs at once, the hour running on as it goes. The view pans up to the sky
-/// and waits there for the load; the destination fades in from black with the camera high over it, which comes down orbiting onto the view.
+/// destination's, then a hold; in play, or when the hour is near, the view climbs at once, the hour running on as it goes. The view pans up to the
+/// sky and waits there for the load; the destination fades in from black with the camera high over it, which comes down orbiting onto the view.
 /// </summary>
 sealed class SkyArrival(WorldCamera source, float hour, float speed = 1, bool immediate = false)
 {
@@ -116,8 +116,8 @@ sealed class SkyArrival(WorldCamera source, float hour, float speed = 1, bool im
     }
 
     /// <summary>
-    /// Places the camera for this frame and returns the hour to light it with. <paramref name="destinationReady"/>: the destination warms up under the
-    /// black, seen from where the descent lands (what streams and is waited for is what the view will show).
+    /// Places the camera for this frame and returns the hour to light it with. <paramref name="destinationReady"/>: the destination warms up under
+    /// the black, seen from where the descent lands (what streams and is waited for is what the view will show).
     /// </summary>
     public float Apply(WorldCamera camera, float destination, bool destinationReady = false)
     {

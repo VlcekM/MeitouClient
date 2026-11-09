@@ -324,9 +324,8 @@ public sealed record AnimationDefinition
     {
         if (v < min) return 0;
         if (v <= peak) return flatBelow || peak <= min ? 1 : (v - min) / (peak - min);
-        // Past the peak the original (FUN_14051cd10) falls along the line through (peak, 1) and (max, 0), also beyond max when max is under 0.5:
-        // with a max
-        // left at 0 that line rises (the fastest clip stays at 1), with a negative max (a backing-off clip) it falls on (0 at forward speeds).
+        // Past the peak the original (FUN_14051cd10) falls along the line through (peak, 1) and (max, 0), also beyond max when max is under 0.5: with
+        // a max left at 0 that line rises (the fastest clip stays at 1), with a negative max (a backing-off clip) it falls on (0 at forward speeds).
         if (lineAbove) return max == peak ? 0 : Math.Clamp(1 - (v - peak) / (max - peak), 0, 1);
         if (v >= max) return 0;
         return max <= peak ? 1 : (max - v) / (max - peak);
@@ -424,9 +423,8 @@ public sealed class AnimationLibrary
 {
     readonly List<AnimationDefinition> _all;
 
-    // The leg health values the records' ranges are cut at (sorted, distinct), per leg.
-    // A stance is cached by the interval of these its leg values fall
-    // in, not by the values: they change every tick of an injury that heals or rots, and a key per value would grow the caches without bound.
+    // The leg health values the records' ranges are cut at (sorted, distinct), per leg. A stance is cached by the interval of these its leg values
+    // fall in, not by the values: they change every tick of an injury that heals or rots, and a key per value would grow the caches without bound.
     readonly float[] _leftBounds, _rightBounds;
     readonly int[] _swimming, _grounded;
 
@@ -534,8 +532,7 @@ public sealed class AnimationLibrary
                 .Select(r => AnimationDefinition.From(r) with { StumbleCategory = r.GetInt("category"), Category = WeatherCategory })));
         library.BuildAnimals(db);
         // The order the original lists ANIMATION records in: its per-type map of records by string id (GameDataContainer +0x90), a boost hash map
-        // filled
-        // in load order.
+        // filled in load order.
         int rank = 0;
         var animationIds = db.OfType(FcsRecordType.Animation).Select(r => r.StringId);
         foreach (var id in BoostHashOrder.Of(animationIds, BoostHashOrder.StringHash))

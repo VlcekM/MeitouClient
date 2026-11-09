@@ -89,8 +89,7 @@ public sealed unsafe class MetalDisplay : IDisposable
     static readonly Selector ValueForKey = new("valueForKey:");
 
     /// <summary>
-    /// What AppKit sees right now; a zoom/fullscreen can change the content view or detach the layer without GLFW
-    /// reporting a framebuffer size.
+    /// What AppKit sees right now; a zoom/fullscreen can change the content view or detach the layer without GLFW reporting a framebuffer size.
     /// </summary>
     public string NativeWindowState()
     {

@@ -3,9 +3,9 @@ using System.Numerics;
 namespace Meitou.Simulation;
 
 /// <summary>
-/// A change one character asks of another entity (a hit, an item handed over, a relation change, a spawn), queued during the parallel Act phase and applied in
-/// the serial commit (docs/simulation.md, "Threading" step 6). The meaning of <see cref="Kind"/>, <see cref="Amount"/>, <see cref="Position"/> and <see cref="Arg"/>
-/// belongs to the system that emitted it.
+/// A change one character asks of another entity (a hit, an item handed over, a relation change, a spawn), queued during the parallel Act phase and
+/// applied in the serial commit (docs/simulation.md, "Threading" step 6). The meaning of <see cref="Kind"/>, <see cref="Amount"/>,
+/// <see cref="Position"/> and <see cref="Arg"/> belongs to the system that emitted it.
 /// </summary>
 public struct Effect
 {
@@ -36,9 +36,9 @@ public struct Effect
 }
 
 /// <summary>
-/// Where a partition's Act phase puts its effects. Effects are ordered by (target, source, system, sequence), none of which depends on how the work was
-/// partitioned or which thread ran it, so the commit applies them in the same order at any thread count. A source must emit all its effects together (it does:
-/// a character is handled by one partition, in one go).
+/// Where a partition's Act phase puts its effects. Effects are ordered by (target, source, system, sequence), none of which depends on how the work
+/// was partitioned or which thread ran it, so the commit applies them in the same order at any thread count. A source must emit all its effects
+/// together (it does: a character is handled by one partition, in one go).
 /// </summary>
 public sealed class EffectBuffer
 {

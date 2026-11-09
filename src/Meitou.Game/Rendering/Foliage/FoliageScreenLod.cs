@@ -2,12 +2,10 @@ namespace Meitou.Game.Rendering.Foliage;
 
 /// <summary>
 /// The pure rules of the foliage <c>screen-lod</c> switch (docs/render-foliage.md, "Screen-size LOD"): when the triangles of a foliage mesh are so
-/// small on the screen that
-/// their detail cannot be seen, a coarser generated level is allowed sooner (<see cref="EffectiveErrors"/>) and the billboard takes over sooner (<see
-/// cref="Transition"/>).
-/// A triangle's size is its mean world area: a mesh unit triangle of edge <c>e</c> (the square root of the mean area) on an instance of bounding
-/// radius <c>R</c> (the
-/// mesh's radius <c>r</c> times the instance scale) is <c>e / r * R * pixelsPerRadian / distance</c> pixels across.
+/// small on the screen that their detail cannot be seen, a coarser generated level is allowed sooner (<see cref="EffectiveErrors"/>) and the
+/// billboard takes over sooner (<see cref="Transition"/>). A triangle's size is its mean world area: a mesh unit triangle of edge <c>e</c> (the
+/// square root of the mean area) on an instance of bounding radius <c>R</c> (the mesh's radius <c>r</c> times the instance scale) is <c>e / r * R *
+/// pixelsPerRadian / distance</c> pixels across.
 /// </summary>
 public static class FoliageScreenLod
 {
@@ -45,9 +43,8 @@ public static class FoliageScreenLod
 
     /// <summary>
     /// <c>s</c> of a level: the distance, in units of <c>R * pixelsPerRadian</c>, beyond which its mean triangle projects to less than <paramref
-    /// name="triPixels"/> square pixels
-    /// (<paramref name="extentOverRadius"/>: <see cref="TriangleExtent"/> over the mesh's radius). Infinity (no push) for a mesh without a known size
-    /// or with the rule off (<paramref name="triPixels"/> 0).
+    /// name="triPixels"/> square pixels (<paramref name="extentOverRadius"/>: <see cref="TriangleExtent"/> over the mesh's radius). Infinity (no
+    /// push) for a mesh without a known size or with the rule off (<paramref name="triPixels"/> 0).
     /// </summary>
     public static float SubPixelDistance(float extentOverRadius, float triPixels) =>
         triPixels > 0 && extentOverRadius > 0 ? extentOverRadius * MathF.Sqrt(Coverage / triPixels) : float.PositiveInfinity;
@@ -58,9 +55,8 @@ public static class FoliageScreenLod
     /// <paramref name="subPixel"/>[level - 1] (<see cref="SubPixelDistance"/> per level, level 0 first): a level is allowed (the cull's rule
     /// <c>relative * radius * ppr / distance &lt;= tolerance</c>)
     /// where the old rule allows it, or where the level before is sub-pixel and the deviation stays within <paramref name="multiple"/> times the
-    /// tolerance. As a
-    /// threshold that is <c>min(relative, max(tolerance * subPixel[level - 1], relative / multiple))</c>; never decreasing with the level, so exactly
-    /// one level takes an instance.
+    /// tolerance. As a threshold that is <c>min(relative, max(tolerance * subPixel[level - 1], relative / multiple))</c>; never decreasing with the
+    /// level, so exactly one level takes an instance.
     /// </summary>
     public static float[] EffectiveErrors(IReadOnlyList<float> relative, IReadOnlyList<float> subPixel, float tolerance, float multiple)
     {
@@ -94,10 +90,9 @@ public static class FoliageScreenLod
         pixelsPerRadian * SubPixelDistance(extentOverRadius, triPixels);
 
     /// <summary>
-    /// The ground distance per unit of radius at which an atlas frame of <paramref name="framePixels"/> is magnified by <paramref
-    /// name="magnification"/> (a sphere of that
-    /// radius is <c>framePixels * magnification</c> pixels across): a billboard is never used nearer, so it never looks coarser than the atlas was
-    /// made for.
+    /// The ground distance per unit of radius at which an atlas frame of <paramref name="framePixels"/> is magnified by
+    /// <paramref name="magnification"/> (a sphere of that radius is <c>framePixels * magnification</c> pixels across): a billboard is never used
+    /// nearer, so it never looks coarser than the atlas was made for.
     /// </summary>
     public static float FloorPerRadius(int framePixels, float pixelsPerRadian, float magnification) =>
         2 * pixelsPerRadian / (framePixels * magnification);

@@ -77,8 +77,7 @@ public static class BuildingIconStyle
         }
 
         // FUN_140845bf0: from the centre, back along the view axis by the largest distance at which a corner's ray meets a frustum plane (the far
-        // plane left
-        // out): the front face's corners land on the side planes, or on the near plane.
+        // plane left out): the front face's corners land on the side planes, or on the near plane.
         var centre = (min + max) * 0.5f;
         float tan = MathF.Tan(FieldOfView * rad / 2);
         float back = half.Z + MathF.Max(MathF.Max(half.X / tan, half.Y / tan), Near);

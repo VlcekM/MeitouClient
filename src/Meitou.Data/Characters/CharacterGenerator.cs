@@ -384,8 +384,8 @@ public static class CharacterGenerator
     }
 
     /// <summary>
-    /// The weapons: one per pool (hip, then back) that fits where it goes, and extra copies the back pool has room for. The back weapon goes below the
-    /// crossbow: a crossbow two rows tall fills the back section (10 x 2), so the weapon then takes the hip or is left out.
+    /// The weapons: one per pool (hip, then back) that fits where it goes, and extra copies the back pool has room for. The back weapon goes below
+    /// the crossbow: a crossbow two rows tall fills the back section (10 x 2), so the weapon then takes the hip or is left out.
     /// </summary>
     static void RollWeapons(GameDatabase db, GameRecord character, MsvcRandom rng, Loadout loadout, GameRecord? crossbow)
     {

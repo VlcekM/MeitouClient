@@ -55,9 +55,9 @@ public enum GpuSlotKind
 public readonly record struct GpuSlot(uint Binding, GpuSlotKind Kind, GpuStage Stages, uint Count = 1, bool OffsetAtBind = false);
 
 /// <summary>
-/// A set of a program's resources, in the engine's words (docs/resource-layer.md): the slots it has and whether the renderers write it for every draw.
-/// The backend turns it into whatever its own model needs (Vulkan: a descriptor set layout; Metal: the program's argument table). Two sets with the
-/// same slots are the same set.
+/// A set of a program's resources, in the engine's words (docs/resource-layer.md): the slots it has and whether the renderers write it for every
+/// draw. The backend turns it into whatever its own model needs (Vulkan: a descriptor set layout; Metal: the program's argument table). Two sets with
+/// the same slots are the same set.
 /// </summary>
 public sealed class GpuSetLayout : IEquatable<GpuSetLayout>
 {
