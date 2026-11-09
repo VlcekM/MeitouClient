@@ -581,6 +581,9 @@ public sealed partial class AiSystem(PopulationData data, AiSettings? settings =
             AiBehaviour.Follow when targeting == TaskTargetType.SquadMission =>
                 board.MissionTarget.IsNone || board.MissionTarget == self || !world.Characters.IsAlive(board.MissionTarget) ? 0 : 1,
             AiBehaviour.Follow => squad.Leader.IsNone || squad.Leader == self || !world.Characters.IsAlive(squad.Leader) ? 0 : 1,
+            // Sleeping on the ground has row 98's desire (AI slot 30): the registry gives rows 98, 153, 175, 239 and 261 the same desire
+            // (FUN_140319a60, Verified).
+            AiBehaviour.Sleep when type == TaskType.SleepOnFloor => SleepingDesire(world, board, self.Slot),
             AiBehaviour.GoHome => AtHomeTown(world, squad, board, self) ? 0 : GoHomeDesire(world, self),
             // Static guard's finder (FUN_14099edd0, Verified; 38 and 268 both register it, 268 with the indoors flag; 157 has its own, FUN_14099f1a0)
             // returns 0.5 on its normal exit; only its visitor branch (a node beside a neutral stranger, not modelled) returns 1. Staying home needs

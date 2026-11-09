@@ -758,6 +758,9 @@ by it when the row has an effect, `FUN_14060fd80`);
 - Desires (`AI` vtable slots): 19 = 1, 39 = 0.1 (Idleness), 40 = 0.25 (Patrolling, Patrolling town), 41 = 0.5 (Stand at node, Shopkeeper, Static guard,
   general node), 48 = 0.01 + 0.4 x rand (Wandering town, Staying home, Sitting around, Static town guard, Shopping 119). 125 rows desire 1; 102 call a
   function of their own (sleeping, following, retreating, turrets, Shopping 118: 1 until the shopping list is done, see its entry below).
+- Shared desires (**Verified**: the desire member of each registration in `FUN_140319a60` and the thunks' AI vtable slots): rows 98, 153,
+  175, 239 and 261 have Sleeping's desire (AI slot 30, [row 98](#slave-work-shout-and-capture)), so Sleeping on ground weighs danger and the last
+  sleep as a bed does. Meitou: `AiSystem.SleepingDesire` for 175.
 
 | Type | Commitment (h) | Crowd |
 |---|---|---|
