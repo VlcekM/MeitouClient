@@ -719,6 +719,10 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
                     continue;
                 }
 
+                // A character whose mind the AI is about to make (none yet, in a squad the AI runs: after a join, a recruit or a lift from a
+                // cage) waits for it: its goal lists decide whether it treats.
+                if (MindPending(world, cold)) continue;
+
                 // An NPC the AI does not run (an engine mind, or none) treats when idle: no task, following, wandering or an implicit job.
                 bool idle = next[i].Task is (byte)CharacterTask.Idle or (byte)CharacterTask.Wander or (byte)CharacterTask.Follow
                         || Production.PermaJobs.ListJob(cold, (CharacterTask)next[i].Task) is { Implicit: true };
@@ -733,6 +737,13 @@ public sealed partial class FirstAidSystem(GameConstants constants, BodyOptions 
         }
         finally { EndSweep(); }
     }
+
+    /// <summary>
+    /// Whether the AI makes this character's mind on its squad's next package step: it has none and its squad runs a blackboard (the AI gives every
+    /// member of such a squad a mind, a full one or an engine one, <see cref="AiSystem"/>). A slave lifted from a cage is one: in the original it
+    /// plans with its master's slave list and never treats on its own.
+    /// </summary>
+    static bool MindPending(World world, CharacterCold cold) => cold.Ai is null && world.Squads.Find(cold.SquadId) is { Ai: not null };
 
     /// <summary>
     /// The Medic goal's finder result for the think (<see cref="AiMind.MedicPatient"/>, <see cref="AiMind.MedicScore"/>; none and 0 without a
