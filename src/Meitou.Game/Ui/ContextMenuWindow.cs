@@ -229,8 +229,8 @@ sealed class ContextMenuWindow(PlayerInterface player)
     /// A caged character: Talk To (12) and Loot (26). Meitou points at an occupied cage with occupant selection as its occupant and shows one menu,
     /// so the cage's own verbs come here (engine stand-ins for the original's cage menu beside the occupant's): Unlock or Lock the player's own cage
     /// (78, 77), Pick Lock another faction's locked one (the prisoner its own, a mate from outside), Use Tools and Use Strength on it (285, 286, from
-    /// outside), and once it is open Escape (207, the prisoner when selected; an escape unless served) or Pick Up (225, a mate lifts it out; out of
-    /// another faction's cage a crime, locks.md "Cages and beds").
+    /// outside), and once it is open Escape (207, the prisoner when selected; an escape unless served), or Set Free (110) and Pick Up (225, a mate
+    /// lifts it out; out of another faction's cage a crime, locks.md "Cages and beds").
     /// </summary>
     void PrisonerVerbs(List<(string, Action)> verbs, CharacterSnapshot target, PrisonView prison, IReadOnlyList<CharacterId> selection, bool down)
     {
@@ -269,9 +269,9 @@ sealed class ContextMenuWindow(PlayerInterface player)
             verbs.Add(("Escape", () => player.Say(new Simulation.Locks.GetOutOrder([id]) { Tick = player.Session.World.Tick }))); }
         else if (target.CarriedBy.IsNone)
         {
-            // Its cage the player's: Set Free (110) and the pick-up verb; another faction's: the pick-up verb alone (the cage's own menu has Set
-            // Free).
-            if (ownCage && !down)
+            // Open, whoever's cage: Set Free (110) and the pick-up verb. The pointer picks the occupant over its cage, so the cage's own menu,
+            // which offers Set Free on these terms, is not reached while it is occupied (#435).
+            if (!down)
                 verbs.Add(("Set Free", () => player.Say(new Simulation.Locks.SetFreeOrder([], id) { Tick = player.Session.World.Tick })));
 
             verbs.Add(PickUpVerb(target));
