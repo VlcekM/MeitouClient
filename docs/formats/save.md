@@ -332,7 +332,7 @@ character that changed squads is written anew in its new platoon and leaves the 
 
 ### NPC platoons (Meitou mapping)
 
-Every saved NPC platoon with a `basetown` naming a placed town is restored (a characterless town-bound one is skipped); town-bound ones (template does not travel) are pinned to their town, and a town holding any
+Every saved NPC platoon with a `basetown` naming a placed town is restored (a characterless town-bound one is skipped); town-bound ones (an `sqt` 1 platoon, or a template that does not travel) are pinned to their town, and a town holding any
 is made of them alone: it makes no residents, default residents, housemates or bar squads (**engine rule**, after the original's: a zone with a save file makes no town
 population, [Zone files](#zone-files) Load; Meitou keys it on the saved platoons). A town Meitou made and unloaded before saving keeps its squads as stored
 platoons, which the save writes like the town's squads in the world, so a Meitou save holds the residents of every town it made a zone file for
@@ -406,7 +406,9 @@ platoons with `persistent` true (as the original's dismissed platoon; engine cho
 (counted among its squads); a save's platoon with `persistent` set is never despawned off screen (`PopulationRoaming.Kept`, as the original keeps persistent platoons).
 **Observed** (headless, saves 2, wade, 1, the player moved next to each wild platoon): 41 of 49, 10 of 10, 67 of 67 saved wild characters made (the rest dead in the
 save), each at its saved position (0 units off); a held nest or sector made only its remainder; a Meitou save → load gives the same wild characters at the same places
-(78, 10, 96) and no fresh wild squads.
+(78, 10, 96) and no fresh wild squads. A wild platoon with no file, `never been activated` and a `char count` (`SaveLoader.UnmadeWild`) is a stand-in the same way, made
+from its template into the platoon when it activates, at load wherever it is wanted (`FUN_1404ffad0`, above; `PopulationSystem.ActivatesAtLoad`); Meitou does not write a made one back with its characters, so the next load makes it again.
+**Observed** (a save at Sho-Battai): 12 such `sqt` 2 platoons in the desert round the town, which the original makes at their saved places.
 
 ### Nests (town list)
 

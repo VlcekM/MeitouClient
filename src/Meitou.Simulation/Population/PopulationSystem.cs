@@ -124,6 +124,10 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
         /// </summary>
         public int Made;
         /// <summary>
+        /// A sector's squads asked for at its load and not spawned yet (counted in the island's load, <see cref="IslandRoom"/>).
+        /// </summary>
+        public int Planned;
+        /// <summary>
         /// Replaced, its new residents not made yet (the original's <c>updatedTownOverrides</c>; not saved, as there).
         /// </summary>
         public bool Repopulate;
@@ -1103,11 +1107,11 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// Makes a built squad in the world: its members as characters at their spots, its home noted for its template.
     /// </summary>
     Squad SpawnSquad(World world, BuiltSquad built, TownSite? site, float radius, bool player = false, int platoonId = -1, bool idle = false,
-        float yaw = 0, bool pinned = false, HashSet<int>? gated = null)
+        float yaw = 0, bool pinned = false, HashSet<int>? gated = null, bool wild = false)
     {
         var table = world.Characters;
         var walk = world.Walkability;
-        var squad = NewSquad(world, built, site, radius, platoonId, pinned);
+        var squad = NewSquad(world, built, site, radius, platoonId, pinned, wild);
         if (built.Home is { } residence0)
         {
             world.Fixtures.NoteMade(residence0.Key, built.Plan.Template);
@@ -1172,7 +1176,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
     /// <summary>
     /// A new squad for the built one, at its position, homed round the town (else its own spot) and in its home building.
     /// </summary>
-    Squad NewSquad(World world, BuiltSquad built, TownSite? site, float radius, int platoonId, bool pinned)
+    Squad NewSquad(World world, BuiltSquad built, TownSite? site, float radius, int platoonId, bool pinned, bool wild)
     {
         var walk = world.Walkability;
         return new Squad
@@ -1184,6 +1188,7 @@ public sealed partial class PopulationSystem : ITickSystem, IDisposable
             Town = site?.Index ?? -1,
             PlatoonId = platoonId,
             Pinned = pinned,
+            Wild = wild,
             Position = new Vector3(built.Position.X, Ground(walk, built.Position.X, built.Position.Y, built.NearY), built.Position.Y),
             HomeCentre = site is null ? built.Position : new Vector2(site.Position.X, site.Position.Z),
             HomeRadius = Math.Max(radius * 0.8f, 40),

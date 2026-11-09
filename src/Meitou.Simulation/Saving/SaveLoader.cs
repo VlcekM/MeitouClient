@@ -688,14 +688,17 @@ public static class SaveLoader
 
     /// <summary>
     /// Whether a saved NPC platoon travels and so gets a roaming stand-in (<b>engine rule</b>, from the five saves of docs/formats/save.md: residents
-    /// are marked <c>is resident</c>, and the bar squads, slaves and farm animals of a town have a package whose unloaded func keeps them home, 4, or
-    /// 0): not a resident, and an off-screen job that moves it (unloaded func 2, 5 or 6) and not a bar squad of the town or its faction (which the
-    /// population makes with the town), or a template of its base town's <c>roaming squads</c>.
+    /// are marked <c>is resident</c> and counted in the town's <c>sqt</c> 1 pool, and the bar squads, slaves and farm animals of a town have a
+    /// package whose unloaded func keeps them home, 4, or 0): not a resident, and an off-screen job that moves it (unloaded func 2, 5 or 6) and not a
+    /// bar squad of the town or its faction (which the population makes with the town), or a template of its base town's <c>roaming squads</c>.
     /// </summary>
     internal static bool Travels(SavePlatoon platoon, Ai.PlatoonJob job, TownData baseTown, FactionData? townFaction)
     {
         string template = platoon.SquadTemplate;
         if (platoon.Record.Bools.GetValueOrDefault("is resident")) return false;
+        // `sqt` 1 is the town's resident pool (residents and bar squads, docs/formats/save.md "PLATOON keys"): the platoon belongs to its town,
+        // wherever its package walks it.
+        if (platoon.Record.Ints.GetValueOrDefault("sqt", 2) == 1) return false;
         if (baseTown.RoamingSquads.Any(r => r.Id == template)) return true;
         if (baseTown.BarSquads.Any(r => r.Id == template) || townFaction?.BarSquads.Any(r => r.Id == template) == true)
             return false;
@@ -755,7 +758,9 @@ public static class SaveLoader
         if (data.Db.Find(platoon.SquadTemplate) is not { } templateRecord || !SquadFactory.IsTemplate(templateRecord))
             return false;
 
-        if (!platoon.IsLoaded || platoon.Characters.Count == 0)
+        bool hasCharacters = platoon.IsLoaded && platoon.Characters.Count > 0;
+        bool unmade = !hasCharacters && UnmadeWild(platoon);
+        if (!hasCharacters && !unmade)
             return true;   // nothing to make: it stays in the save as it is
 
         var kind = nest is null ? WildKind.Sector : WildKind.Nest;
@@ -768,7 +773,7 @@ public static class SaveLoader
         int faction = data.FactionIndex(platoon.FactionId);
         var p = new Platoon
         {
-            Id = world.Platoons.NextId(),
+            Id = unmade ? world.Platoons.NextReservedId() : world.Platoons.NextId(),
             Origin = -1,
             TemplateId = platoon.SquadTemplate,
             Faction = faction,
@@ -783,12 +788,23 @@ public static class SaveLoader
             Imprisoned = platoon.Record.Bools.GetValueOrDefault("imprisoned"),
             Dead = platoon.Record.Bools.GetValueOrDefault("dead"),
             IntactFlag = platoon.Record.Bools.GetValueOrDefault("intact", true),
+            Unmade = unmade,
         };
         world.Platoons.Add(p);
         sp.PlatoonId = p.Id;
         context.Platoons.Add(sp);
         context.ByName[sp.Name] = sp;
         loaded.WildPlatoons++;
+        if (unmade)
+            loaded.Notes.Add($"{platoon.Name}: a wild platoon never made by the game; made from its template where it was saved when it activates.");
         return true;
     }
+
+    /// <summary>
+    /// Whether a saved wild platoon with no file is one the game never made (<c>never been activated</c> and a <c>char count</c>): the original
+    /// builds it from its template into the same platoon on activation (<c>FUN_1404ffad0</c>, <b>Verified</b>, docs/formats/save.md "PLATOON keys"),
+    /// at its saved place.
+    /// </summary>
+    internal static bool UnmadeWild(SavePlatoon platoon) =>
+        !platoon.IsLoaded && platoon.Record.Bools.GetValueOrDefault("never been activated") && platoon.CharCount > 0;
 }
